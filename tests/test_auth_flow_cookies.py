@@ -1,10 +1,7 @@
 """Tests for auth_flow cookie settings - domain/samesite/secure and concurrent refresh."""
 
-import os
 import uuid
 from datetime import datetime, timedelta, timezone
-from unittest.mock import MagicMock, patch
-
 import pytest
 from starlette.requests import Request
 
@@ -283,18 +280,19 @@ class TestConcurrentRefreshRotation:
         session = db_session.query(AuthSession).filter(
             AuthSession.person_id == person.id
         ).first()
-        original_last_seen = session.last_seen_at
-
-        # Wait a tiny bit to ensure time difference
-        import time
-        time.sleep(0.01)
+        # Use naive datetime for SQLite compatibility
+        past = datetime(2000, 1, 1)
+        session.last_seen_at = past
+        db_session.commit()
 
         request2 = self._make_request(user_agent="client2")
         AuthFlow.refresh(db_session, tokens["refresh_token"], request2)
 
         db_session.refresh(session)
         assert session.user_agent == "client2"
-        assert session.last_seen_at > original_last_seen
+        # Compare as naive datetime (SQLite returns naive datetimes)
+        last_seen = session.last_seen_at.replace(tzinfo=None) if session.last_seen_at.tzinfo else session.last_seen_at
+        assert last_seen > past
 
     def test_refresh_expired_token_fails(self, db_session, person):
         """Test that expired refresh token fails."""

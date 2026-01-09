@@ -1,0 +1,1 @@
+"""IFRS Accounting System Tests."""

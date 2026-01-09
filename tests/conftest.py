@@ -69,14 +69,35 @@ os.environ["TOTP_ISSUER"] = "StarterTemplate"
 
 # Now import the models - they'll use our mocked db module
 from app.models.person import Person
-from app.models.auth import UserCredential, Session as AuthSession, SessionStatus
+from app.models.auth import UserCredential, Session as AuthSession, SessionStatus, ApiKey, MFAMethod
 from app.models.rbac import Role, Permission, RolePermission, PersonRole
 from app.models.audit import AuditEvent, AuditActorType
 from app.models.domain_settings import DomainSetting, SettingDomain
 from app.models.scheduler import ScheduledTask, ScheduleType
 
-# Create all tables
-TestBase.metadata.create_all(_test_engine)
+# List of tables that are SQLite-compatible (public schema models only)
+# IFRS models use PostgreSQL-specific types (JSONB, ARRAY) that SQLite doesn't support
+SQLITE_COMPATIBLE_TABLES = [
+    Person.__table__,
+    UserCredential.__table__,
+    AuthSession.__table__,
+    ApiKey.__table__,
+    MFAMethod.__table__,
+    Role.__table__,
+    Permission.__table__,
+    RolePermission.__table__,
+    PersonRole.__table__,
+    AuditEvent.__table__,
+    DomainSetting.__table__,
+    ScheduledTask.__table__,
+]
+
+# Create only SQLite-compatible tables
+try:
+    TestBase.metadata.create_all(_test_engine, tables=SQLITE_COMPATIBLE_TABLES)
+except Exception as e:
+    import warnings
+    warnings.warn(f"Could not create test tables: {e}")
 
 # Re-export Base for compatibility
 Base = TestBase
@@ -140,6 +161,7 @@ def client(db_session):
     from app.api.settings import get_db as settings_get_db
     from app.api.scheduler import get_db as scheduler_get_db
     from app.services.auth_dependencies import _get_db as auth_deps_get_db
+    from app.services.settings_seed import seed_auth_settings, seed_audit_settings, seed_scheduler_settings
 
     def override_get_db():
         yield db_session
@@ -153,8 +175,18 @@ def client(db_session):
     app.dependency_overrides[scheduler_get_db] = override_get_db
     app.dependency_overrides[auth_deps_get_db] = override_get_db
 
-    with TestClient(app, raise_server_exceptions=False) as test_client:
-        yield test_client
+    # Seed the settings in the test database
+    seed_auth_settings(db_session)
+    seed_audit_settings(db_session)
+    seed_scheduler_settings(db_session)
+
+    # Mock the app startup seeding to avoid duplicate seeding
+    with patch('app.main.seed_auth_settings'), \
+         patch('app.main.seed_audit_settings'), \
+         patch('app.main.seed_scheduler_settings'), \
+         patch('app.main.SessionLocal', return_value=MagicMock()):
+        with TestClient(app, raise_server_exceptions=False) as test_client:
+            yield test_client
 
     app.dependency_overrides.clear()
 
@@ -182,7 +214,7 @@ def auth_session(db_session, person):
     """Create an authenticated session for a person."""
     session = AuthSession(
         person_id=person.id,
-        token_hash="test-token-hash",
+        token_hash=f"test-token-{uuid.uuid4().hex}",
         status=SessionStatus.active,
         ip_address="127.0.0.1",
         user_agent="pytest",
@@ -244,7 +276,7 @@ def admin_session(db_session, admin_person):
     """Create an authenticated session for admin."""
     session = AuthSession(
         person_id=admin_person.id,
-        token_hash="admin-token-hash",
+        token_hash=f"admin-token-{uuid.uuid4().hex}",
         status=SessionStatus.active,
         ip_address="127.0.0.1",
         user_agent="pytest",
