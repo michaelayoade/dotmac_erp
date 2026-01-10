@@ -1,0 +1,69 @@
+{% extends "ifrs/base_ifrs.html" %}
+
+{% block page_title %}Financial Instruments{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-2xl font-semibold text-slate-900 dark:text-white font-display">Financial Instruments</h1>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Manage loans, bonds, and other financial instruments</p>
+        </div>
+        <a href="/fin-inst/instruments/new" class="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700">
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+            </svg>
+            New Instrument
+        </a>
+    </div>
+
+    {% if instruments %}
+    <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50">
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead>
+                    <tr class="border-b border-slate-200 dark:border-slate-700">
+                        <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Code</th>
+                        <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Instrument</th>
+                        <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Type</th>
+                        <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Classification</th>
+                        <th class="px-6 py-4 text-right text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Carrying Amount</th>
+                        <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Status</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                    {% for instrument in instruments %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <span class="font-mono text-sm font-medium text-slate-900 dark:text-white">{{ instrument.instrument_code }}</span>
+                        </td>
+                        <td class="px-6 py-4">
+                            <p class="text-sm font-medium text-slate-900 dark:text-white">{{ instrument.instrument_name }}</p>
+                        </td>
+                        <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{{ instrument.instrument_type | replace('_', ' ') | title }}</td>
+                        <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{{ instrument.classification | replace('_', ' ') | title }}</td>
+                        <td class="px-6 py-4 text-right text-sm font-medium text-slate-900 dark:text-white">{{ instrument.carrying_amount }}</td>
+                        <td class="px-6 py-4">
+                            {% if instrument.status == 'ACTIVE' %}
+                            <span class="inline-flex rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">Active</span>
+                            {% else %}
+                            <span class="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-400">{{ instrument.status | replace('_', ' ') | title }}</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% else %}
+    <div class="rounded-xl border border-slate-200 bg-white p-12 text-center dark:border-slate-800 dark:bg-slate-800/50">
+        <svg class="mx-auto h-12 w-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+        </svg>
+        <h3 class="mt-4 text-lg font-medium text-slate-900 dark:text-white">No instruments yet</h3>
+        <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">Get started by adding your first financial instrument.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

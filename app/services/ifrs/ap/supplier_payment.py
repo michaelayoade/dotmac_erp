@@ -1,0 +1,522 @@
+"""
+SupplierPaymentService - AP payment processing.
+
+Manages payment creation, approval, posting, and allocation to invoices.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from datetime import date, datetime, timezone
+from decimal import Decimal
+from typing import Optional
+from uuid import UUID
+import uuid as uuid_lib
+
+from fastapi import HTTPException
+from sqlalchemy import and_
+from sqlalchemy.orm import Session
+
+from app.models.ifrs.ap.supplier import Supplier
+from app.models.ifrs.ap.supplier_invoice import (
+    SupplierInvoice,
+    SupplierInvoiceStatus,
+)
+from app.models.ifrs.ap.supplier_payment import (
+    SupplierPayment,
+    APPaymentMethod,
+    APPaymentStatus,
+)
+from app.models.ifrs.ap.ap_payment_allocation import APPaymentAllocation
+from app.models.ifrs.core_config.numbering_sequence import SequenceType
+from app.services.common import coerce_uuid
+from app.services.ifrs.platform.sequence import SequenceService
+from app.services.response import ListResponseMixin
+
+
+@dataclass
+class PaymentAllocationInput:
+    """Input for allocating payment to an invoice."""
+
+    invoice_id: UUID
+    amount: Decimal
+
+
+@dataclass
+class SupplierPaymentInput:
+    """Input for creating a supplier payment."""
+
+    supplier_id: UUID
+    payment_date: date
+    payment_method: APPaymentMethod
+    currency_code: str
+    amount: Decimal
+    bank_account_id: UUID
+    allocations: list[PaymentAllocationInput] = field(default_factory=list)
+    exchange_rate: Optional[Decimal] = None
+    reference: Optional[str] = None
+    withholding_tax_amount: Decimal = Decimal("0")
+    correlation_id: Optional[str] = None
+
+
+class SupplierPaymentService(ListResponseMixin):
+    """
+    Service for supplier payment processing.
+
+    Manages payment creation, approval, posting, and invoice allocation.
+    """
+
+    @staticmethod
+    def create_payment(
+        db: Session,
+        organization_id: UUID,
+        input: SupplierPaymentInput,
+        created_by_user_id: UUID,
+    ) -> SupplierPayment:
+        """
+        Create a new supplier payment.
+
+        Args:
+            db: Database session
+            organization_id: Organization scope
+            input: Payment input data
+            created_by_user_id: User creating the payment
+
+        Returns:
+            Created SupplierPayment
+
+        Raises:
+            HTTPException(400): If validation fails
+            HTTPException(404): If supplier not found
+        """
+        org_id = coerce_uuid(organization_id)
+        user_id = coerce_uuid(created_by_user_id)
+        supplier_id = coerce_uuid(input.supplier_id)
+
+        # Validate supplier
+        supplier = db.get(Supplier, supplier_id)
+        if not supplier or supplier.organization_id != org_id:
+            raise HTTPException(status_code=404, detail="Supplier not found")
+
+        if not supplier.is_active:
+            raise HTTPException(status_code=400, detail="Supplier is not active")
+
+        # Validate allocations total
+        if input.allocations:
+            allocation_total = sum(a.amount for a in input.allocations)
+            if allocation_total > input.amount:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Allocation total exceeds payment amount",
+                )
+
+            # Validate invoices exist and are payable
+            for alloc in input.allocations:
+                invoice = db.get(SupplierInvoice, coerce_uuid(alloc.invoice_id))
+                if not invoice or invoice.organization_id != org_id:
+                    raise HTTPException(
+                        status_code=404,
+                        detail=f"Invoice {alloc.invoice_id} not found",
+                    )
+                if invoice.supplier_id != supplier_id:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Invoice {invoice.invoice_number} belongs to different supplier",
+                    )
+                if invoice.status not in [
+                    SupplierInvoiceStatus.POSTED,
+                    SupplierInvoiceStatus.PARTIALLY_PAID,
+                ]:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Invoice {invoice.invoice_number} is not payable",
+                    )
+                if alloc.amount > invoice.balance_due:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Allocation exceeds balance due on {invoice.invoice_number}",
+                    )
+
+        # Generate payment number
+        payment_number = SequenceService.get_next_number(
+            db, org_id, SequenceType.PAYMENT
+        )
+
+        # Calculate functional currency amount
+        exchange_rate = input.exchange_rate or Decimal("1.0")
+        functional_amount = input.amount * exchange_rate
+
+        # Create payment
+        payment = SupplierPayment(
+            organization_id=org_id,
+            supplier_id=supplier_id,
+            payment_number=payment_number,
+            payment_date=input.payment_date,
+            payment_method=input.payment_method,
+            currency_code=input.currency_code,
+            amount=input.amount,
+            exchange_rate=exchange_rate,
+            functional_currency_amount=functional_amount,
+            bank_account_id=input.bank_account_id,
+            reference=input.reference,
+            status=APPaymentStatus.DRAFT,
+            withholding_tax_amount=input.withholding_tax_amount,
+            created_by_user_id=user_id,
+            correlation_id=input.correlation_id or str(uuid_lib.uuid4()),
+        )
+
+        db.add(payment)
+        db.flush()  # Get payment ID
+
+        # Create allocations
+        for alloc in input.allocations:
+            allocation = APPaymentAllocation(
+                payment_id=payment.payment_id,
+                invoice_id=coerce_uuid(alloc.invoice_id),
+                allocated_amount=alloc.amount,
+            )
+            db.add(allocation)
+
+        db.commit()
+        db.refresh(payment)
+
+        return payment
+
+    @staticmethod
+    def approve_payment(
+        db: Session,
+        organization_id: UUID,
+        payment_id: UUID,
+        approved_by_user_id: UUID,
+    ) -> SupplierPayment:
+        """
+        Approve a payment for processing.
+
+        Args:
+            db: Database session
+            organization_id: Organization scope
+            payment_id: Payment to approve
+            approved_by_user_id: User approving
+
+        Returns:
+            Updated SupplierPayment
+
+        Raises:
+            HTTPException: If validation fails
+        """
+        org_id = coerce_uuid(organization_id)
+        pay_id = coerce_uuid(payment_id)
+        user_id = coerce_uuid(approved_by_user_id)
+
+        payment = db.get(SupplierPayment, pay_id)
+        if not payment or payment.organization_id != org_id:
+            raise HTTPException(status_code=404, detail="Payment not found")
+
+        if payment.status not in [APPaymentStatus.DRAFT, APPaymentStatus.PENDING]:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot approve payment with status '{payment.status.value}'",
+            )
+
+        # Segregation of Duties check
+        if payment.created_by_user_id == user_id:
+            raise HTTPException(
+                status_code=400,
+                detail="Segregation of duties violation: creator cannot approve",
+            )
+
+        payment.status = APPaymentStatus.APPROVED
+        payment.approved_by_user_id = user_id
+        payment.approved_at = datetime.now(timezone.utc)
+
+        db.commit()
+        db.refresh(payment)
+
+        return payment
+
+    @staticmethod
+    def post_payment(
+        db: Session,
+        organization_id: UUID,
+        payment_id: UUID,
+        posted_by_user_id: UUID,
+        posting_date: Optional[date] = None,
+    ) -> SupplierPayment:
+        """
+        Post an approved payment to the general ledger.
+
+        Args:
+            db: Database session
+            organization_id: Organization scope
+            payment_id: Payment to post
+            posted_by_user_id: User posting
+            posting_date: Optional posting date
+
+        Returns:
+            Updated SupplierPayment
+        """
+        from app.services.ifrs.ap.ap_posting_adapter import APPostingAdapter
+
+        org_id = coerce_uuid(organization_id)
+        pay_id = coerce_uuid(payment_id)
+        user_id = coerce_uuid(posted_by_user_id)
+
+        payment = db.get(SupplierPayment, pay_id)
+        if not payment or payment.organization_id != org_id:
+            raise HTTPException(status_code=404, detail="Payment not found")
+
+        if payment.status != APPaymentStatus.APPROVED:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot post payment with status '{payment.status.value}'",
+            )
+
+        # Post via adapter
+        result = APPostingAdapter.post_payment(
+            db=db,
+            organization_id=org_id,
+            payment_id=pay_id,
+            posting_date=posting_date or payment.payment_date,
+            posted_by_user_id=user_id,
+        )
+
+        if not result.success:
+            raise HTTPException(status_code=400, detail=result.message)
+
+        # Update payment status
+        payment.status = APPaymentStatus.SENT
+        payment.posted_by_user_id = user_id
+        payment.posted_at = datetime.now(timezone.utc)
+        payment.journal_entry_id = result.journal_entry_id
+        payment.posting_batch_id = result.posting_batch_id
+
+        # Apply allocations to invoices
+        allocations = (
+            db.query(APPaymentAllocation)
+            .filter(APPaymentAllocation.payment_id == pay_id)
+            .all()
+        )
+
+        for alloc in allocations:
+            invoice = db.get(SupplierInvoice, alloc.invoice_id)
+            if invoice:
+                invoice.amount_paid += alloc.allocated_amount
+                if invoice.amount_paid >= invoice.total_amount:
+                    invoice.status = SupplierInvoiceStatus.PAID
+                else:
+                    invoice.status = SupplierInvoiceStatus.PARTIALLY_PAID
+
+        db.commit()
+        db.refresh(payment)
+
+        return payment
+
+    @staticmethod
+    def void_payment(
+        db: Session,
+        organization_id: UUID,
+        payment_id: UUID,
+        voided_by_user_id: UUID,
+        reason: str,
+    ) -> SupplierPayment:
+        """
+        Void a payment.
+
+        Args:
+            db: Database session
+            organization_id: Organization scope
+            payment_id: Payment to void
+            voided_by_user_id: User voiding
+            reason: Reason for voiding
+
+        Returns:
+            Updated SupplierPayment
+        """
+        org_id = coerce_uuid(organization_id)
+        pay_id = coerce_uuid(payment_id)
+
+        payment = db.get(SupplierPayment, pay_id)
+        if not payment or payment.organization_id != org_id:
+            raise HTTPException(status_code=404, detail="Payment not found")
+
+        if payment.status in [APPaymentStatus.CLEARED, APPaymentStatus.VOID]:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot void payment with status '{payment.status.value}'",
+            )
+
+        # If payment was posted, reverse the allocations
+        if payment.status == APPaymentStatus.SENT:
+            allocations = (
+                db.query(APPaymentAllocation)
+                .filter(APPaymentAllocation.payment_id == pay_id)
+                .all()
+            )
+
+            for alloc in allocations:
+                invoice = db.get(SupplierInvoice, alloc.invoice_id)
+                if invoice:
+                    invoice.amount_paid -= alloc.allocated_amount
+                    if invoice.amount_paid <= Decimal("0"):
+                        invoice.status = SupplierInvoiceStatus.POSTED
+                    else:
+                        invoice.status = SupplierInvoiceStatus.PARTIALLY_PAID
+
+        payment.status = APPaymentStatus.VOID
+
+        db.commit()
+        db.refresh(payment)
+
+        return payment
+
+    @staticmethod
+    def mark_cleared(
+        db: Session,
+        organization_id: UUID,
+        payment_id: UUID,
+        cleared_date: date,
+    ) -> SupplierPayment:
+        """
+        Mark a payment as cleared (bank reconciliation).
+
+        Args:
+            db: Database session
+            organization_id: Organization scope
+            payment_id: Payment to mark cleared
+            cleared_date: Date cleared
+
+        Returns:
+            Updated SupplierPayment
+        """
+        org_id = coerce_uuid(organization_id)
+        pay_id = coerce_uuid(payment_id)
+
+        payment = db.get(SupplierPayment, pay_id)
+        if not payment or payment.organization_id != org_id:
+            raise HTTPException(status_code=404, detail="Payment not found")
+
+        if payment.status != APPaymentStatus.SENT:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot clear payment with status '{payment.status.value}'",
+            )
+
+        payment.status = APPaymentStatus.CLEARED
+
+        db.commit()
+        db.refresh(payment)
+
+        return payment
+
+    @staticmethod
+    def get(
+        db: Session,
+        payment_id: str,
+    ) -> SupplierPayment:
+        """
+        Get a payment by ID.
+
+        Args:
+            db: Database session
+            payment_id: Payment ID
+
+        Returns:
+            SupplierPayment
+
+        Raises:
+            HTTPException(404): If not found
+        """
+        payment = db.get(SupplierPayment, coerce_uuid(payment_id))
+        if not payment:
+            raise HTTPException(status_code=404, detail="Payment not found")
+        return payment
+
+    @staticmethod
+    def get_payment_allocations(
+        db: Session,
+        organization_id: UUID,
+        payment_id: UUID,
+    ) -> list[APPaymentAllocation]:
+        """
+        Get allocations for a payment.
+
+        Args:
+            db: Database session
+            organization_id: Organization scope
+            payment_id: Payment ID
+
+        Returns:
+            List of APPaymentAllocation objects
+        """
+        org_id = coerce_uuid(organization_id)
+        pay_id = coerce_uuid(payment_id)
+
+        payment = db.get(SupplierPayment, pay_id)
+        if not payment or payment.organization_id != org_id:
+            raise HTTPException(status_code=404, detail="Payment not found")
+
+        return (
+            db.query(APPaymentAllocation)
+            .filter(APPaymentAllocation.payment_id == pay_id)
+            .all()
+        )
+
+    @staticmethod
+    def list(
+        db: Session,
+        organization_id: Optional[str] = None,
+        supplier_id: Optional[str] = None,
+        status: Optional[APPaymentStatus] = None,
+        payment_method: Optional[APPaymentMethod] = None,
+        from_date: Optional[date] = None,
+        to_date: Optional[date] = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[SupplierPayment]:
+        """
+        List payments with optional filters.
+
+        Args:
+            db: Database session
+            organization_id: Filter by organization
+            supplier_id: Filter by supplier
+            status: Filter by status
+            payment_method: Filter by payment method
+            from_date: Filter by payment date from
+            to_date: Filter by payment date to
+            limit: Maximum results
+            offset: Pagination offset
+
+        Returns:
+            List of SupplierPayment objects
+        """
+        query = db.query(SupplierPayment)
+
+        if organization_id:
+            query = query.filter(
+                SupplierPayment.organization_id == coerce_uuid(organization_id)
+            )
+
+        if supplier_id:
+            query = query.filter(
+                SupplierPayment.supplier_id == coerce_uuid(supplier_id)
+            )
+
+        if status:
+            query = query.filter(SupplierPayment.status == status)
+
+        if payment_method:
+            query = query.filter(SupplierPayment.payment_method == payment_method)
+
+        if from_date:
+            query = query.filter(SupplierPayment.payment_date >= from_date)
+
+        if to_date:
+            query = query.filter(SupplierPayment.payment_date <= to_date)
+
+        query = query.order_by(SupplierPayment.payment_date.desc())
+        return query.limit(limit).offset(offset).all()
+
+
+# Module-level singleton instance
+supplier_payment_service = SupplierPaymentService()

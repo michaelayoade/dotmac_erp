@@ -1,9 +1,11 @@
 import enum
 import uuid
 from datetime import date, datetime, timezone
+from typing import Optional
 
-from sqlalchemy import JSON, Boolean, Date, DateTime, Enum, String, Text
+from sqlalchemy import JSON, Boolean, Date, DateTime, Enum, ForeignKey, Index, String, Text
 from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.ext.mutable import MutableDict
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
@@ -35,6 +37,14 @@ class Person(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+
+    # Multi-tenant: links person to their organization (required for tenant isolation)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("core_org.organization.organization_id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
     )
 
     first_name: Mapped[str] = mapped_column(String(80), nullable=False)
@@ -70,7 +80,9 @@ class Person(Base):
     marketing_opt_in: Mapped[bool] = mapped_column(Boolean, default=False)
 
     notes: Mapped[str | None] = mapped_column(Text)
-    metadata_: Mapped[dict | None] = mapped_column("metadata", JSON)
+    metadata_: Mapped[dict | None] = mapped_column(
+        "metadata", MutableDict.as_mutable(JSON)
+    )
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
@@ -78,3 +90,10 @@ class Person(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
     )
+
+    @property
+    def name(self) -> str:
+        """Get full name for display."""
+        if self.display_name:
+            return self.display_name
+        return f"{self.first_name} {self.last_name}".strip()

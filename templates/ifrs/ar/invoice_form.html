@@ -1,0 +1,1037 @@
+{% extends "ifrs/base_ifrs.html" %}
+
+{% block page_title %}{{ "Edit AR Invoice" if invoice else "New AR Invoice" }}{% endblock %}
+
+{% block page_styles %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+    :root {
+        --ink: #1a1f36;
+        --ink-light: #3d4663;
+        --ink-muted: #6b7194;
+        --gold: #d4a853;
+        --gold-light: #e8c985;
+        --gold-dark: #b8923f;
+        --teal: #0d9488;
+        --teal-light: #14b8a6;
+        --cream: #faf9f7;
+        --cream-dark: #f0eeea;
+        --ruby: #dc2626;
+        --amber: #d97706;
+        --emerald: #059669;
+    }
+
+    .font-display { font-family: 'Fraunces', Georgia, serif; }
+    .font-body { font-family: 'DM Sans', system-ui, sans-serif; }
+
+    body {
+        font-family: 'DM Sans', system-ui, sans-serif;
+        background: var(--cream);
+    }
+
+    .dark body { background: var(--ink); }
+
+    /* Grain texture overlay */
+    .grain-overlay {
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        opacity: 0.03;
+        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+        z-index: 1000;
+    }
+
+    /* Form card styling */
+    .form-card {
+        position: relative;
+        background: white;
+        border-radius: 1rem;
+        padding: 2rem;
+        border: 1px solid rgba(26, 31, 54, 0.08);
+        box-shadow: 0 1px 3px rgba(26, 31, 54, 0.04);
+        overflow: hidden;
+    }
+
+    .form-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+        background: linear-gradient(90deg, var(--emerald), var(--teal));
+        opacity: 0;
+        transition: opacity 0.3s ease;
+    }
+
+    .form-card:hover::before { opacity: 1; }
+    .form-card:focus-within::before { opacity: 1; }
+
+    .dark .form-card {
+        background: rgba(26, 31, 54, 0.6);
+        border-color: rgba(255, 255, 255, 0.08);
+    }
+
+    /* Section title */
+    .section-title {
+        font-family: 'Fraunces', Georgia, serif;
+        font-weight: 600;
+        font-size: 1.25rem;
+        color: var(--ink);
+        letter-spacing: -0.01em;
+    }
+
+    .dark .section-title { color: white; }
+
+    .section-subtitle {
+        font-size: 0.875rem;
+        color: var(--ink-muted);
+        margin-top: 0.25rem;
+    }
+
+    .dark .section-subtitle { color: rgba(255, 255, 255, 0.5); }
+
+    /* Form labels */
+    .form-label {
+        display: block;
+        font-weight: 500;
+        font-size: 0.8125rem;
+        color: var(--ink-light);
+        margin-bottom: 0.5rem;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+    }
+
+    .dark .form-label { color: rgba(255, 255, 255, 0.7); }
+
+    .form-label .required {
+        color: var(--ruby);
+        margin-left: 0.25rem;
+    }
+
+    /* Input styling */
+    .form-input {
+        width: 100%;
+        padding: 0.75rem 1rem;
+        border: 1px solid rgba(26, 31, 54, 0.15);
+        border-radius: 0.5rem;
+        font-size: 0.9375rem;
+        color: var(--ink);
+        background: white;
+        transition: all 0.2s ease;
+    }
+
+    .form-input:hover {
+        border-color: rgba(26, 31, 54, 0.25);
+    }
+
+    .form-input:focus {
+        outline: none;
+        border-color: var(--emerald);
+        box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.15);
+    }
+
+    .form-input::placeholder {
+        color: var(--ink-muted);
+    }
+
+    .dark .form-input {
+        background: rgba(255, 255, 255, 0.05);
+        border-color: rgba(255, 255, 255, 0.1);
+        color: white;
+    }
+
+    .dark .form-input:hover {
+        border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .dark .form-input:focus {
+        border-color: var(--emerald);
+        box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.2);
+    }
+
+    .dark .form-input::placeholder {
+        color: rgba(255, 255, 255, 0.4);
+    }
+
+    /* Table inputs - compact */
+    .table-input {
+        width: 100%;
+        padding: 0.5rem 0.75rem;
+        border: 1px solid rgba(26, 31, 54, 0.12);
+        border-radius: 0.375rem;
+        font-size: 0.875rem;
+        color: var(--ink);
+        background: white;
+        transition: all 0.15s ease;
+    }
+
+    .table-input:hover {
+        border-color: rgba(26, 31, 54, 0.2);
+    }
+
+    .table-input:focus {
+        outline: none;
+        border-color: var(--emerald);
+        box-shadow: 0 0 0 2px rgba(5, 150, 105, 0.12);
+    }
+
+    .dark .table-input {
+        background: rgba(255, 255, 255, 0.04);
+        border-color: rgba(255, 255, 255, 0.08);
+        color: white;
+    }
+
+    .dark .table-input:focus {
+        border-color: var(--emerald);
+        box-shadow: 0 0 0 2px rgba(5, 150, 105, 0.15);
+    }
+
+    /* Select dropdown arrow */
+    select.form-input, select.table-input {
+        appearance: none;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7194'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 0.75rem center;
+        background-size: 1rem;
+        padding-right: 2.5rem;
+    }
+
+    /* Help text */
+    .form-help {
+        font-size: 0.75rem;
+        color: var(--ink-muted);
+        margin-top: 0.375rem;
+    }
+
+    .dark .form-help { color: rgba(255, 255, 255, 0.4); }
+
+    /* Credit warning */
+    .credit-warning {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.5rem;
+        margin-top: 0.75rem;
+        padding: 0.75rem 1rem;
+        background: rgba(217, 119, 6, 0.08);
+        border: 1px solid rgba(217, 119, 6, 0.2);
+        border-radius: 0.5rem;
+        font-size: 0.8125rem;
+        color: var(--amber);
+    }
+
+    .credit-warning svg {
+        flex-shrink: 0;
+        width: 1rem;
+        height: 1rem;
+        margin-top: 0.125rem;
+    }
+
+    .dark .credit-warning {
+        background: rgba(217, 119, 6, 0.15);
+        border-color: rgba(217, 119, 6, 0.25);
+    }
+
+    /* Lines table */
+    .lines-table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+    }
+
+    .lines-table th {
+        padding: 0.75rem 0.5rem;
+        text-align: left;
+        font-size: 0.6875rem;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--ink-muted);
+        border-bottom: 2px solid rgba(26, 31, 54, 0.08);
+    }
+
+    .lines-table th.text-right { text-align: right; }
+
+    .dark .lines-table th {
+        color: rgba(255, 255, 255, 0.5);
+        border-bottom-color: rgba(255, 255, 255, 0.08);
+    }
+
+    .lines-table td {
+        padding: 0.75rem 0.5rem;
+        vertical-align: middle;
+        border-bottom: 1px solid rgba(26, 31, 54, 0.05);
+    }
+
+    .dark .lines-table td {
+        border-bottom-color: rgba(255, 255, 255, 0.05);
+    }
+
+    .lines-table tbody tr {
+        transition: background-color 0.15s ease;
+    }
+
+    .lines-table tbody tr:hover {
+        background-color: rgba(5, 150, 105, 0.03);
+    }
+
+    .dark .lines-table tbody tr:hover {
+        background-color: rgba(5, 150, 105, 0.05);
+    }
+
+    /* Amount display */
+    .amount-display {
+        padding: 0.5rem 0.75rem;
+        background: var(--cream-dark);
+        border-radius: 0.375rem;
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: var(--ink);
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .dark .amount-display {
+        background: rgba(255, 255, 255, 0.05);
+        color: white;
+    }
+
+    /* Totals section */
+    .totals-section {
+        background: linear-gradient(135deg, rgba(5, 150, 105, 0.08), rgba(13, 148, 136, 0.08));
+        border-radius: 0.75rem;
+        padding: 1.25rem;
+    }
+
+    .dark .totals-section {
+        background: linear-gradient(135deg, rgba(5, 150, 105, 0.12), rgba(13, 148, 136, 0.12));
+    }
+
+    .total-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.5rem 0;
+    }
+
+    .total-label {
+        font-size: 0.875rem;
+        color: var(--ink-muted);
+    }
+
+    .dark .total-label { color: rgba(255, 255, 255, 0.6); }
+
+    .total-value {
+        font-weight: 600;
+        color: var(--ink);
+        font-variant-numeric: tabular-nums;
+    }
+
+    .dark .total-value { color: white; }
+
+    .total-final {
+        border-top: 2px solid rgba(26, 31, 54, 0.1);
+        padding-top: 0.75rem;
+        margin-top: 0.5rem;
+    }
+
+    .dark .total-final {
+        border-top-color: rgba(255, 255, 255, 0.1);
+    }
+
+    .total-final .total-label {
+        font-family: 'Fraunces', Georgia, serif;
+        font-weight: 600;
+        font-size: 1rem;
+        color: var(--ink);
+    }
+
+    .dark .total-final .total-label { color: white; }
+
+    .total-final .total-value {
+        font-family: 'Fraunces', Georgia, serif;
+        font-size: 1.375rem;
+        font-weight: 700;
+        color: var(--emerald);
+    }
+
+    .dark .total-final .total-value {
+        color: var(--teal-light);
+    }
+
+    /* Buttons */
+    .btn-primary {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.75rem 1.5rem;
+        background: linear-gradient(135deg, var(--emerald), var(--teal));
+        color: white;
+        font-weight: 600;
+        font-size: 0.875rem;
+        border-radius: 0.5rem;
+        border: none;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        box-shadow: 0 2px 8px rgba(5, 150, 105, 0.3);
+    }
+
+    .btn-primary:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 16px rgba(5, 150, 105, 0.4);
+    }
+
+    .btn-secondary {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.75rem 1.5rem;
+        background: white;
+        color: var(--ink-light);
+        font-weight: 500;
+        font-size: 0.875rem;
+        border-radius: 0.5rem;
+        border: 1px solid rgba(26, 31, 54, 0.15);
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .btn-secondary:hover {
+        border-color: var(--ink-muted);
+        color: var(--ink);
+    }
+
+    .dark .btn-secondary {
+        background: rgba(255, 255, 255, 0.05);
+        border-color: rgba(255, 255, 255, 0.1);
+        color: rgba(255, 255, 255, 0.7);
+    }
+
+    .dark .btn-secondary:hover {
+        border-color: rgba(255, 255, 255, 0.2);
+        color: white;
+    }
+
+    .btn-outline {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.625rem 1rem;
+        background: transparent;
+        color: var(--emerald);
+        font-weight: 500;
+        font-size: 0.875rem;
+        border-radius: 0.5rem;
+        border: 1px solid var(--emerald);
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .btn-outline:hover {
+        background: var(--emerald);
+        color: white;
+    }
+
+    .dark .btn-outline {
+        color: var(--teal-light);
+        border-color: var(--teal-light);
+    }
+
+    .dark .btn-outline:hover {
+        background: var(--teal-light);
+        color: var(--ink);
+    }
+
+    .btn-ghost-danger {
+        padding: 0.375rem;
+        color: var(--ink-muted);
+        border-radius: 0.375rem;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        background: transparent;
+        border: none;
+    }
+
+    .btn-ghost-danger:hover {
+        background: rgba(220, 38, 38, 0.1);
+        color: var(--ruby);
+    }
+
+    .dark .btn-ghost-danger:hover {
+        background: rgba(220, 38, 38, 0.2);
+    }
+
+    /* Animation classes */
+    .fade-up {
+        opacity: 0;
+        transform: translateY(20px);
+        animation: fadeUp 0.5s ease forwards;
+    }
+
+    @keyframes fadeUp {
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .delay-1 { animation-delay: 0.1s; }
+    .delay-2 { animation-delay: 0.2s; }
+    .delay-3 { animation-delay: 0.3s; }
+    .delay-4 { animation-delay: 0.4s; }
+
+    /* Breadcrumb styling */
+    .breadcrumb {
+        font-size: 0.8125rem;
+        color: var(--ink-muted);
+    }
+
+    .breadcrumb a {
+        color: var(--ink-muted);
+        transition: color 0.15s ease;
+    }
+
+    .breadcrumb a:hover { color: var(--emerald); }
+    .breadcrumb .current { color: var(--ink); font-weight: 500; }
+
+    .dark .breadcrumb { color: rgba(255, 255, 255, 0.5); }
+    .dark .breadcrumb a { color: rgba(255, 255, 255, 0.5); }
+    .dark .breadcrumb a:hover { color: var(--teal-light); }
+    .dark .breadcrumb .current { color: white; }
+</style>
+{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="breadcrumb flex items-center gap-2">
+    <a href="/ifrs" class="hover:text-emerald-600">Dashboard</a>
+    <span>/</span>
+    <a href="/ar/invoices" class="hover:text-emerald-600">AR Invoices</a>
+    <span>/</span>
+    <span class="current">{{ "Edit" if invoice else "New Invoice" }}</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="grain-overlay"></div>
+
+<div x-data="invoiceForm()" class="max-w-5xl mx-auto space-y-8">
+    <form @submit.prevent="submitForm" class="space-y-8">
+
+        <!-- Page Header -->
+        <div class="fade-up">
+            <h1 class="font-display text-3xl font-bold text-[var(--ink)] dark:text-white tracking-tight">
+                {{ "Edit Invoice" if invoice else "New Sales Invoice" }}
+            </h1>
+            <p class="mt-2 text-[var(--ink-muted)] dark:text-white/50">
+                Create a new invoice for your customer with line items and taxes.
+            </p>
+        </div>
+
+        <!-- Form Result Messages -->
+        <div id="form-result"></div>
+
+        <!-- Header Information -->
+        <div class="form-card fade-up delay-1">
+            <h2 class="section-title">Invoice Details</h2>
+            <p class="section-subtitle">Customer and invoice information</p>
+
+            <div class="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                <!-- Customer -->
+                <div class="lg:col-span-2">
+                    <label for="customer_id" class="form-label">
+                        Customer <span class="required">*</span>
+                    </label>
+                    <select id="customer_id"
+                            x-model="form.customer_id"
+                            @change="onCustomerChange"
+                            required
+                            class="form-input">
+                        <option value="">Select customer</option>
+                        {% for customer in customers_list %}
+                        <option value="{{ customer.customer_id }}"
+                                data-currency="{{ customer.currency_code }}"
+                                data-terms="{{ customer.payment_terms_days }}"
+                                data-credit-limit="{{ customer.credit_limit }}"
+                                data-balance="{{ customer.balance }}">
+                            {{ customer.customer_code }} - {{ customer.customer_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <!-- Credit Warning -->
+                    <div x-show="creditWarning" x-cloak class="credit-warning">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                        </svg>
+                        <span x-text="creditWarning"></span>
+                    </div>
+                </div>
+
+                <!-- Currency -->
+                <div>
+                    <label for="currency_code" class="form-label">
+                        Currency <span class="required">*</span>
+                    </label>
+                    <select id="currency_code"
+                            x-model="form.currency_code"
+                            required
+                            class="form-input">
+                        <option value="USD">USD - US Dollar</option>
+                        <option value="EUR">EUR - Euro</option>
+                        <option value="GBP">GBP - British Pound</option>
+                        <option value="NGN">NGN - Nigerian Naira</option>
+                    </select>
+                </div>
+
+                <!-- Invoice Date -->
+                <div>
+                    <label for="invoice_date" class="form-label">
+                        Invoice Date <span class="required">*</span>
+                    </label>
+                    <input type="date"
+                           id="invoice_date"
+                           x-model="form.invoice_date"
+                           @change="calculateDueDate"
+                           required
+                           class="form-input">
+                </div>
+
+                <!-- Due Date -->
+                <div>
+                    <label for="due_date" class="form-label">
+                        Due Date <span class="required">*</span>
+                    </label>
+                    <input type="date"
+                           id="due_date"
+                           x-model="form.due_date"
+                           required
+                           class="form-input">
+                </div>
+
+                <!-- PO Number -->
+                <div>
+                    <label for="po_number" class="form-label">
+                        Customer PO #
+                    </label>
+                    <input type="text"
+                           id="po_number"
+                           x-model="form.po_number"
+                           maxlength="50"
+                           placeholder="Customer's PO number"
+                           class="form-input">
+                </div>
+
+                <!-- Description -->
+                <div class="sm:col-span-2 lg:col-span-3">
+                    <label for="description" class="form-label">
+                        Description
+                    </label>
+                    <input type="text"
+                           id="description"
+                           x-model="form.description"
+                           maxlength="500"
+                           placeholder="Invoice description or reference"
+                           class="form-input">
+                </div>
+            </div>
+        </div>
+
+        <!-- Invoice Lines -->
+        <div class="form-card fade-up delay-2">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h2 class="section-title">Invoice Lines</h2>
+                    <p class="section-subtitle">Add products or services to this invoice</p>
+                </div>
+                <button type="button" @click="addLine" class="btn-outline">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                    </svg>
+                    Add Line
+                </button>
+            </div>
+
+            <div class="mt-8 overflow-x-auto -mx-2 px-2">
+                <table class="lines-table min-w-[900px]">
+                    <thead>
+                        <tr>
+                            <th style="width: 20%">Revenue Account</th>
+                            <th style="width: 22%">Description</th>
+                            <th class="text-right" style="width: 8%">Qty</th>
+                            <th class="text-right" style="width: 12%">Unit Price</th>
+                            <th style="width: 14%">Tax Code</th>
+                            <th class="text-right" style="width: 14%">Amount</th>
+                            <th class="text-right" style="width: 10%"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="(line, index) in form.lines" :key="index">
+                            <tr>
+                                <td>
+                                    <select x-model="line.revenue_account_id"
+                                            required
+                                            class="table-input">
+                                        <option value="">Select account</option>
+                                        {% for account in revenue_accounts %}
+                                        <option value="{{ account.account_id }}">{{ account.account_code }} - {{ account.account_name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </td>
+                                <td>
+                                    <input type="text"
+                                           x-model="line.description"
+                                           required
+                                           placeholder="Product or service"
+                                           class="table-input">
+                                </td>
+                                <td>
+                                    <input type="number"
+                                           x-model.number="line.quantity"
+                                           @input="calculateLineAmount(index)"
+                                           required
+                                           min="0.01"
+                                           step="0.01"
+                                           class="table-input text-right">
+                                </td>
+                                <td>
+                                    <input type="number"
+                                           x-model.number="line.unit_price"
+                                           @input="calculateLineAmount(index)"
+                                           required
+                                           min="0"
+                                           step="0.01"
+                                           class="table-input text-right">
+                                </td>
+                                <td>
+                                    <select x-model="line.tax_code_id"
+                                            @change="calculateLineAmount(index)"
+                                            class="table-input">
+                                        <option value="">No Tax</option>
+                                        {% for tax in tax_codes %}
+                                        <option value="{{ tax.tax_code_id }}" data-rate="{{ tax.rate }}">{{ tax.tax_code }} ({{ tax.rate }}%)</option>
+                                        {% endfor %}
+                                    </select>
+                                </td>
+                                <td>
+                                    <div class="amount-display" x-text="formatCurrency(line.amount + (line.tax_amount || 0))"></div>
+                                </td>
+                                <td class="text-right">
+                                    <button type="button"
+                                            @click="removeLine(index)"
+                                            x-show="form.lines.length > 1"
+                                            class="btn-ghost-danger">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                        </svg>
+                                    </button>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Totals -->
+            <div class="mt-8 flex justify-end">
+                <div class="w-80 totals-section">
+                    <div class="total-row">
+                        <span class="total-label">Subtotal</span>
+                        <span class="total-value" x-text="formatCurrency(subtotal)"></span>
+                    </div>
+                    <div class="total-row">
+                        <span class="total-label">Tax</span>
+                        <span class="total-value" x-text="formatCurrency(taxAmount)"></span>
+                    </div>
+                    <div class="total-row total-final">
+                        <span class="total-label">Total</span>
+                        <span class="total-value" x-text="formatCurrency(total)"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Additional Options -->
+        <div class="form-card fade-up delay-3">
+            <h2 class="section-title">Additional Options</h2>
+            <p class="section-subtitle">Cost allocation, terms, and notes</p>
+
+            <div class="mt-8 grid gap-6 sm:grid-cols-2">
+                <!-- Cost Center -->
+                <div>
+                    <label for="cost_center_id" class="form-label">
+                        Cost Center
+                    </label>
+                    <select id="cost_center_id"
+                            x-model="form.cost_center_id"
+                            class="form-input">
+                        <option value="">No cost center</option>
+                        {% for cc in cost_centers %}
+                        <option value="{{ cc.cost_center_id }}">{{ cc.cost_center_code }} - {{ cc.cost_center_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- Project -->
+                <div>
+                    <label for="project_id" class="form-label">
+                        Project
+                    </label>
+                    <select id="project_id"
+                            x-model="form.project_id"
+                            class="form-input">
+                        <option value="">No project</option>
+                        {% for project in projects %}
+                        <option value="{{ project.project_id }}">{{ project.project_code }} - {{ project.project_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- Terms & Conditions -->
+                <div class="sm:col-span-2">
+                    <label for="terms" class="form-label">
+                        Terms & Conditions
+                    </label>
+                    <textarea id="terms"
+                              x-model="form.terms"
+                              rows="3"
+                              placeholder="Payment terms and conditions visible to the customer"
+                              class="form-input resize-none"></textarea>
+                </div>
+
+                <!-- Internal Notes -->
+                <div class="sm:col-span-2">
+                    <label for="notes" class="form-label">
+                        Internal Notes
+                    </label>
+                    <textarea id="notes"
+                              x-model="form.notes"
+                              rows="2"
+                              placeholder="Notes (not visible to customer)"
+                              class="form-input resize-none"></textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- Form Actions -->
+        <div class="fade-up delay-4 flex items-center justify-between py-4">
+            <div class="text-sm text-[var(--ink-muted)] dark:text-white/50">
+                <span class="text-[var(--ruby)]">*</span> Required fields
+            </div>
+            <div class="flex items-center gap-4">
+                <a href="/ar/invoices" class="btn-secondary">
+                    Cancel
+                </a>
+                <button type="button" @click="saveAsDraft" class="btn-secondary">
+                    Save as Draft
+                </button>
+                <button type="submit" class="btn-primary">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                    </svg>
+                    {{ "Update Invoice" if invoice else "Create Invoice" }}
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function invoiceForm() {
+    return {
+        form: {
+            customer_id: '{{ invoice.customer_id if invoice else "" }}',
+            invoice_date: '{{ invoice.invoice_date if invoice else "" }}',
+            due_date: '{{ invoice.due_date if invoice else "" }}',
+            currency_code: '{{ invoice.currency_code if invoice else "USD" }}',
+            po_number: '{{ invoice.po_number if invoice else "" }}',
+            description: '{{ invoice.description if invoice else "" }}',
+            cost_center_id: '{{ invoice.cost_center_id if invoice else "" }}',
+            project_id: '{{ invoice.project_id if invoice else "" }}',
+            terms: '{{ invoice.terms if invoice else "" }}',
+            notes: '{{ invoice.notes if invoice else "" }}',
+            lines: [
+                { revenue_account_id: '', description: '', quantity: 1, unit_price: 0, amount: 0, tax_code_id: '', tax_amount: 0 }
+            ]
+        },
+        paymentTermsDays: 30,
+        customerCreditLimit: 0,
+        customerBalance: 0,
+        creditWarning: '',
+
+        init() {
+            if (!this.form.invoice_date) {
+                this.form.invoice_date = new Date().toISOString().split('T')[0];
+                this.calculateDueDate();
+            }
+            {% if invoice and invoice.lines %}
+            this.form.lines = [
+                {% for line in invoice.lines %}
+                {
+                    revenue_account_id: '{{ line.revenue_account_id }}',
+                    description: '{{ line.description }}',
+                    quantity: {{ line.quantity }},
+                    unit_price: {{ line.unit_price }},
+                    amount: {{ line.quantity * line.unit_price }},
+                    tax_code_id: '{{ line.tax_code_id or "" }}',
+                    tax_amount: {{ line.tax_amount or 0 }}
+                },
+                {% endfor %}
+            ];
+            {% endif %}
+        },
+
+        get subtotal() {
+            return this.form.lines.reduce((sum, line) => sum + ((line.quantity || 0) * (line.unit_price || 0)), 0);
+        },
+
+        get taxAmount() {
+            return this.form.lines.reduce((sum, line) => sum + (line.tax_amount || 0), 0);
+        },
+
+        get total() {
+            return this.subtotal + this.taxAmount;
+        },
+
+        formatCurrency(amount) {
+            const currency = this.form.currency_code || 'USD';
+            return new Intl.NumberFormat('en-US', {
+                style: 'currency',
+                currency: currency
+            }).format(amount || 0);
+        },
+
+        onCustomerChange() {
+            const select = document.getElementById('customer_id');
+            const option = select.options[select.selectedIndex];
+            if (option && option.value) {
+                const currency = option.dataset.currency;
+                const terms = parseInt(option.dataset.terms) || 30;
+                this.customerCreditLimit = parseFloat(option.dataset.creditLimit) || 0;
+                this.customerBalance = parseFloat(option.dataset.balance) || 0;
+
+                if (currency) this.form.currency_code = currency;
+                this.paymentTermsDays = terms;
+                this.calculateDueDate();
+                this.checkCredit();
+            } else {
+                this.creditWarning = '';
+            }
+        },
+
+        checkCredit() {
+            if (this.customerCreditLimit > 0) {
+                const projectedBalance = this.customerBalance + this.total;
+                if (projectedBalance > this.customerCreditLimit) {
+                    this.creditWarning = `This invoice would exceed the customer's credit limit (${this.formatCurrency(this.customerCreditLimit)}). Current balance: ${this.formatCurrency(this.customerBalance)}`;
+                } else if (this.customerBalance > this.customerCreditLimit * 0.8) {
+                    this.creditWarning = `Customer is approaching credit limit (${this.formatCurrency(this.customerBalance)} of ${this.formatCurrency(this.customerCreditLimit)})`;
+                } else {
+                    this.creditWarning = '';
+                }
+            } else {
+                this.creditWarning = '';
+            }
+        },
+
+        calculateDueDate() {
+            if (this.form.invoice_date) {
+                const invoiceDate = new Date(this.form.invoice_date);
+                invoiceDate.setDate(invoiceDate.getDate() + this.paymentTermsDays);
+                this.form.due_date = invoiceDate.toISOString().split('T')[0];
+            }
+        },
+
+        addLine() {
+            this.form.lines.push({
+                revenue_account_id: '',
+                description: '',
+                quantity: 1,
+                unit_price: 0,
+                amount: 0,
+                tax_code_id: '',
+                tax_amount: 0
+            });
+        },
+
+        removeLine(index) {
+            if (this.form.lines.length > 1) {
+                this.form.lines.splice(index, 1);
+                this.checkCredit();
+            }
+        },
+
+        calculateLineAmount(index) {
+            const line = this.form.lines[index];
+            const baseAmount = (line.quantity || 0) * (line.unit_price || 0);
+
+            // Calculate tax if tax code selected
+            if (line.tax_code_id) {
+                const taxSelect = document.querySelectorAll('select[x-model="line.tax_code_id"]')[index];
+                if (taxSelect) {
+                    const option = taxSelect.options[taxSelect.selectedIndex];
+                    const rate = parseFloat(option?.dataset?.rate) || 0;
+                    line.tax_amount = baseAmount * (rate / 100);
+                }
+            } else {
+                line.tax_amount = 0;
+            }
+
+            line.amount = baseAmount;
+            this.checkCredit();
+        },
+
+        async saveAsDraft() {
+            this.form.status = 'DRAFT';
+            await this.submitForm();
+        },
+
+        async submitForm() {
+            if (!this.form.customer_id || !this.form.invoice_date) {
+                window.dispatchEvent(new CustomEvent('show-toast', {
+                    detail: { message: 'Please fill in all required fields', type: 'error' }
+                }));
+                return;
+            }
+
+            if (this.form.lines.length === 0 || this.form.lines.every(l => !l.revenue_account_id)) {
+                window.dispatchEvent(new CustomEvent('show-toast', {
+                    detail: { message: 'Please add at least one invoice line', type: 'error' }
+                }));
+                return;
+            }
+
+            try {
+                const response = await fetch('/ar/invoices/new', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(this.form)
+                });
+
+                if (response.ok) {
+                    window.dispatchEvent(new CustomEvent('show-toast', {
+                        detail: { message: 'Invoice created successfully', type: 'success' }
+                    }));
+                    setTimeout(() => {
+                        window.location.href = '/ar/invoices';
+                    }, 1000);
+                } else {
+                    const data = await response.json();
+                    window.dispatchEvent(new CustomEvent('show-toast', {
+                        detail: { message: data.detail || 'Error saving invoice', type: 'error' }
+                    }));
+                }
+            } catch (error) {
+                window.dispatchEvent(new CustomEvent('show-toast', {
+                    detail: { message: 'Error saving invoice', type: 'error' }
+                }));
+            }
+        }
+    }
+}
+</script>
+{% endblock %}

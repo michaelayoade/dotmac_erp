@@ -15,9 +15,23 @@ from app.api.rbac import router as rbac_router
 from app.api.scheduler import router as scheduler_router
 from app.api.settings import router as settings_router
 from app.web_home import router as web_home_router
+from app.web.ifrs import router as ifrs_web_router
+from app.api.ifrs import (
+    gl_router,
+    ap_router,
+    ar_router,
+    fa_router,
+    inv_router,
+    lease_router,
+    fin_inst_router,
+    tax_router,
+    cons_router,
+    rpt_router,
+    banking_router,
+)
 from app.db import SessionLocal
 from app.services import audit as audit_service
-from app.api.deps import require_role, require_user_auth
+from app.api.deps import require_role, require_user_auth, require_tenant_auth
 from app.models.domain_settings import DomainSetting, SettingDomain
 from sqlalchemy.orm import Session
 from app.services.settings_seed import (
@@ -176,12 +190,26 @@ def _include_api_router(router, dependencies=None):
 
 _include_api_router(auth_router, dependencies=[Depends(require_role("admin"))])
 _include_api_router(auth_flow_router)
-_include_api_router(rbac_router, dependencies=[Depends(require_user_auth)])
-_include_api_router(people_router, dependencies=[Depends(require_user_auth)])
+_include_api_router(rbac_router, dependencies=[Depends(require_tenant_auth)])
+_include_api_router(people_router, dependencies=[Depends(require_tenant_auth)])
 _include_api_router(audit_router)
-_include_api_router(settings_router, dependencies=[Depends(require_user_auth)])
-_include_api_router(scheduler_router, dependencies=[Depends(require_user_auth)])
+_include_api_router(settings_router, dependencies=[Depends(require_tenant_auth)])
+_include_api_router(scheduler_router, dependencies=[Depends(require_tenant_auth)])
 app.include_router(web_home_router)
+app.include_router(ifrs_web_router)
+
+# IFRS Accounting Routers (authenticated with tenant context)
+_include_api_router(gl_router, dependencies=[Depends(require_tenant_auth)])
+_include_api_router(ap_router, dependencies=[Depends(require_tenant_auth)])
+_include_api_router(ar_router, dependencies=[Depends(require_tenant_auth)])
+_include_api_router(fa_router, dependencies=[Depends(require_tenant_auth)])
+_include_api_router(inv_router, dependencies=[Depends(require_tenant_auth)])
+_include_api_router(lease_router, dependencies=[Depends(require_tenant_auth)])
+_include_api_router(fin_inst_router, dependencies=[Depends(require_tenant_auth)])
+_include_api_router(tax_router, dependencies=[Depends(require_tenant_auth)])
+_include_api_router(cons_router, dependencies=[Depends(require_tenant_auth)])
+_include_api_router(rpt_router, dependencies=[Depends(require_tenant_auth)])
+_include_api_router(banking_router, dependencies=[Depends(require_tenant_auth)])
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 

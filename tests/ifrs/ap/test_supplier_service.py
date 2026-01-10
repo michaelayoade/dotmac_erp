@@ -168,6 +168,8 @@ class TestDeactivateSupplier:
         """Test successful supplier deactivation."""
         supplier = MockSupplier(organization_id=org_id, is_active=True)
         mock_db.get.return_value = supplier
+        # Mock the query chain for outstanding balance check
+        mock_db.query.return_value.filter.return_value.scalar.return_value = Decimal("0")
 
         with patch("app.services.ifrs.ap.supplier.Supplier"):
             result = SupplierService.deactivate_supplier(

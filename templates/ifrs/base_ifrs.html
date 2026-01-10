@@ -1,0 +1,243 @@
+{% extends "base.html" %}
+
+{% block body %}
+<div class="flex min-h-screen">
+    <!-- Sidebar Navigation -->
+    <aside x-data="{ collapsed: localStorage.getItem('sidebarCollapsed') === 'true', activeModule: '{{ active_module | default('dashboard') }}' }"
+           x-init="$watch('collapsed', val => localStorage.setItem('sidebarCollapsed', val))"
+           :class="collapsed ? 'w-16' : 'w-64'"
+           class="fixed inset-y-0 left-0 z-30 flex flex-col border-r border-slate-200 bg-white transition-all duration-300 dark:border-slate-800 dark:bg-slate-900">
+
+        <!-- Logo/Brand -->
+        <div class="flex h-16 items-center justify-between border-b border-slate-200 px-4 dark:border-slate-800">
+            <a href="/dashboard" class="flex items-center gap-3" x-show="!collapsed">
+                <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-primary-500 to-primary-600 text-white shadow-lg shadow-primary-500/25">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+                    </svg>
+                </div>
+                <span class="font-display font-semibold text-slate-900 dark:text-white">IFRS Accounting</span>
+            </a>
+            <button @click="collapsed = !collapsed"
+                    class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300"
+                    :class="collapsed ? 'mx-auto' : ''">
+                <svg class="h-5 w-5 transition-transform" :class="collapsed ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"/>
+                </svg>
+            </button>
+        </div>
+
+        <!-- Navigation -->
+        <nav class="flex-1 space-y-1 overflow-y-auto p-3">
+            <!-- Dashboard -->
+            <a href="/dashboard"
+               :class="activeModule === 'dashboard' ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/50 dark:text-primary-300' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'"
+               class="flex items-center gap-3 rounded-lg px-3 py-2.5 font-medium transition-colors">
+                <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+                </svg>
+                <span x-show="!collapsed" class="truncate">Dashboard</span>
+            </a>
+
+            <!-- GL Module -->
+            <div x-data="{ open: activeModule === 'gl' }">
+                <button @click="open = !open"
+                        :class="activeModule === 'gl' ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/50 dark:text-primary-300' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'"
+                        class="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 font-medium transition-colors">
+                    <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+                    </svg>
+                    <span x-show="!collapsed" class="flex-1 truncate text-left">General Ledger</span>
+                    <svg x-show="!collapsed" class="h-4 w-4 transition-transform" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                </button>
+                <div x-show="open && !collapsed" x-collapse class="ml-8 mt-1 space-y-1">
+                    <a href="/gl/accounts" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">Chart of Accounts</a>
+                    <a href="/gl/journals" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">Journal Entries</a>
+                    <a href="/gl/periods" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">Fiscal Periods</a>
+                    <a href="/gl/trial-balance" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">Trial Balance</a>
+                </div>
+            </div>
+
+            <!-- AP Module -->
+            <div x-data="{ open: activeModule === 'ap' }">
+                <button @click="open = !open"
+                        :class="activeModule === 'ap' ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/50 dark:text-primary-300' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'"
+                        class="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 font-medium transition-colors">
+                    <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/>
+                    </svg>
+                    <span x-show="!collapsed" class="flex-1 truncate text-left">Accounts Payable</span>
+                    <svg x-show="!collapsed" class="h-4 w-4 transition-transform" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                </button>
+                <div x-show="open && !collapsed" x-collapse class="ml-8 mt-1 space-y-1">
+                    <a href="/ap/suppliers" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">Suppliers</a>
+                    <a href="/ap/invoices" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">Invoices</a>
+                    <a href="/ap/payments" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">Payments</a>
+                    <a href="/ap/aging" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">Aging Report</a>
+                </div>
+            </div>
+
+            <!-- AR Module -->
+            <div x-data="{ open: activeModule === 'ar' }">
+                <button @click="open = !open"
+                        :class="activeModule === 'ar' ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/50 dark:text-primary-300' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'"
+                        class="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 font-medium transition-colors">
+                    <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
+                    </svg>
+                    <span x-show="!collapsed" class="flex-1 truncate text-left">Accounts Receivable</span>
+                    <svg x-show="!collapsed" class="h-4 w-4 transition-transform" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                </button>
+                <div x-show="open && !collapsed" x-collapse class="ml-8 mt-1 space-y-1">
+                    <a href="/ar/customers" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">Customers</a>
+                    <a href="/ar/invoices" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">Invoices</a>
+                    <a href="/ar/receipts" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">Receipts</a>
+                    <a href="/ar/aging" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">Aging Report</a>
+                </div>
+            </div>
+
+            <!-- Inventory Module -->
+            <div x-data="{ open: activeModule === 'inv' }">
+                <button @click="open = !open"
+                        :class="activeModule === 'inv' ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/50 dark:text-primary-300' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'"
+                        class="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 font-medium transition-colors">
+                    <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+                    </svg>
+                    <span x-show="!collapsed" class="flex-1 truncate text-left">Inventory</span>
+                    <svg x-show="!collapsed" class="h-4 w-4 transition-transform" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                </button>
+                <div x-show="open && !collapsed" x-collapse class="ml-8 mt-1 space-y-1">
+                    <a href="/inv/items" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">Items</a>
+                    <a href="/inv/transactions" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">Transactions</a>
+                </div>
+            </div>
+
+            <!-- Fixed Assets Module -->
+            <div x-data="{ open: activeModule === 'fa' }">
+                <button @click="open = !open"
+                        :class="activeModule === 'fa' ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/50 dark:text-primary-300' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'"
+                        class="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 font-medium transition-colors">
+                    <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+                    </svg>
+                    <span x-show="!collapsed" class="flex-1 truncate text-left">Fixed Assets</span>
+                    <svg x-show="!collapsed" class="h-4 w-4 transition-transform" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                </button>
+                <div x-show="open && !collapsed" x-collapse class="ml-8 mt-1 space-y-1">
+                    <a href="/fa/assets" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">Assets</a>
+                    <a href="/fa/depreciation" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">Depreciation</a>
+                </div>
+            </div>
+
+            <!-- Financial Instruments Module -->
+            <div x-data="{ open: activeModule === 'fin_inst' }">
+                <button @click="open = !open"
+                        :class="activeModule === 'fin_inst' ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/50 dark:text-primary-300' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'"
+                        class="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 font-medium transition-colors">
+                    <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+                    </svg>
+                    <span x-show="!collapsed" class="flex-1 truncate text-left">Financial Instruments</span>
+                    <svg x-show="!collapsed" class="h-4 w-4 transition-transform" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                </button>
+                <div x-show="open && !collapsed" x-collapse class="ml-8 mt-1 space-y-1">
+                    <a href="/fin-inst/instruments" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">Instruments</a>
+                    <a href="/fin-inst/hedges" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">Hedges</a>
+                </div>
+            </div>
+
+            <!-- Banking Module -->
+            <div x-data="{ open: activeModule === 'banking' }">
+                <button @click="open = !open"
+                        :class="activeModule === 'banking' ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/50 dark:text-primary-300' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'"
+                        class="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 font-medium transition-colors">
+                    <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
+                    </svg>
+                    <span x-show="!collapsed" class="flex-1 truncate text-left">Banking</span>
+                    <svg x-show="!collapsed" class="h-4 w-4 transition-transform" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                </button>
+                <div x-show="open && !collapsed" x-collapse class="ml-8 mt-1 space-y-1">
+                    <a href="/banking/accounts" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">Bank Accounts</a>
+                    <a href="/banking/statements" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">Statements</a>
+                    <a href="/banking/reconciliations" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">Reconciliations</a>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Footer -->
+        <div class="border-t border-slate-200 p-3 dark:border-slate-800">
+            <button @click="darkMode = !darkMode"
+                    class="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">
+                <svg x-show="!darkMode" class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+                </svg>
+                <svg x-show="darkMode" class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
+                </svg>
+                <span x-show="!collapsed" class="truncate" x-text="darkMode ? 'Light Mode' : 'Dark Mode'"></span>
+            </button>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <div :class="collapsed ? 'ml-16' : 'ml-64'" class="flex-1 transition-all duration-300"
+         x-data="{ collapsed: localStorage.getItem('sidebarCollapsed') === 'true' }"
+         x-init="window.addEventListener('storage', () => collapsed = localStorage.getItem('sidebarCollapsed') === 'true')">
+
+        <!-- Top Bar -->
+        <header class="sticky top-0 z-20 border-b border-slate-200 bg-white/80 backdrop-blur dark:border-slate-800 dark:bg-slate-900/80">
+            <div class="flex h-16 items-center justify-between px-6">
+                <div>
+                    <h1 class="text-xl font-semibold text-slate-900 dark:text-white font-display">
+                        {% block page_title %}{{ page_title | default("Dashboard") }}{% endblock %}
+                    </h1>
+                    {% block breadcrumbs %}{% endblock %}
+                </div>
+                <div class="flex items-center gap-4">
+                    {% block header_actions %}{% endblock %}
+                    <!-- User Menu -->
+                    <div x-data="{ open: false }" class="relative">
+                        <button @click="open = !open" class="flex items-center gap-2 rounded-lg px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800">
+                            <div class="h-8 w-8 rounded-full bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center text-white text-sm font-medium">
+                                {{ user.initials | default("U") }}
+                            </div>
+                            <span class="text-sm font-medium text-slate-700 dark:text-slate-300">{{ user.name | default("User") }}</span>
+                            <svg class="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                            </svg>
+                        </button>
+                        <div x-show="open" @click.away="open = false" x-transition
+                             class="absolute right-0 mt-2 w-48 rounded-lg border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-800">
+                            <a href="/settings" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700">Settings</a>
+                            <a href="/logout" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700">Sign out</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Page Content -->
+        <main class="bg-mesh bg-noise min-h-[calc(100vh-4rem)]">
+            <div class="p-6">
+                {% block content %}{% endblock %}
+            </div>
+        </main>
+    </div>
+</div>
+{% endblock %}

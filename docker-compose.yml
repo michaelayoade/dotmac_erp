@@ -1,12 +1,12 @@
 services:
   app:
     build: .
-    container_name: starter_template_app
+    container_name: dotmac_books_app
     restart: unless-stopped
     ports:
       - "8001:8001"
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://postgres:postgres@db:5432/starter_template}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://postgres:postgres@db:5432/dotmac_books}
       REDIS_URL: ${REDIS_URL:-redis://:redis@redis:6379/0}
       CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://:redis@redis:6379/0}
       CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://:redis@redis:6379/1}
@@ -23,10 +23,10 @@ services:
 
   worker:
     build: .
-    container_name: starter_template_worker
+    container_name: dotmac_books_worker
     restart: unless-stopped
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://postgres:postgres@db:5432/starter_template}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://postgres:postgres@db:5432/dotmac_books}
       REDIS_URL: ${REDIS_URL:-redis://:redis@redis:6379/0}
       CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://:redis@redis:6379/0}
       CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://:redis@redis:6379/1}
@@ -39,10 +39,10 @@ services:
 
   beat:
     build: .
-    container_name: starter_template_beat
+    container_name: dotmac_books_beat
     restart: unless-stopped
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://postgres:postgres@db:5432/starter_template}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://postgres:postgres@db:5432/dotmac_books}
       REDIS_URL: ${REDIS_URL:-redis://:redis@redis:6379/0}
       CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://:redis@redis:6379/0}
       CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://:redis@redis:6379/1}
@@ -55,24 +55,24 @@ services:
 
   db:
     image: postgres:16
-    container_name: starter_template_db
+    container_name: dotmac_books_db
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_DB: ${POSTGRES_DB:-starter_template}
+      POSTGRES_DB: ${POSTGRES_DB:-dotmac_books}
     ports:
       - "5434:5432"
     volumes:
-      - starter_template_db_data:/var/lib/postgresql/data
+      - dotmac_books_db_data:/var/lib/postgresql/data
 
   redis:
     image: redis:7
-    container_name: starter_template_redis
+    container_name: dotmac_books_redis
     restart: unless-stopped
     command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:-redis}"]
     ports:
       - "6379:6379"
 
 volumes:
-  starter_template_db_data:
+  dotmac_books_db_data:

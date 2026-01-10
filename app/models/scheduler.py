@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import Boolean, DateTime, Enum, Integer, JSON, String
 from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.ext.mutable import MutableDict, MutableList
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
@@ -25,8 +26,8 @@ class ScheduledTask(Base):
         Enum(ScheduleType), default=ScheduleType.interval
     )
     interval_seconds: Mapped[int] = mapped_column(Integer, default=3600)
-    args_json: Mapped[list | None] = mapped_column(JSON)
-    kwargs_json: Mapped[dict | None] = mapped_column(JSON)
+    args_json: Mapped[list | None] = mapped_column(MutableList.as_mutable(JSON))
+    kwargs_json: Mapped[dict | None] = mapped_column(MutableDict.as_mutable(JSON))
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     last_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 

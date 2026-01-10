@@ -119,6 +119,16 @@ def _ensure_person(db: Session, person_id: str):
         raise HTTPException(status_code=404, detail="Person not found")
 
 
+def _validate_local_credentials(
+    provider: AuthProvider, username: str | None, password_hash: str | None
+) -> None:
+    if provider == AuthProvider.local and (not username or not password_hash):
+        raise HTTPException(
+            status_code=400,
+            detail="Local credentials require username and password_hash",
+        )
+
+
 class UserCredentials(ListResponseMixin):
     @staticmethod
     def create(db: Session, payload: UserCredentialCreate):
@@ -133,9 +143,19 @@ class UserCredentials(ListResponseMixin):
                 data["provider"] = _validate_enum(
                     default_provider, AuthProvider, "provider"
                 )
+        provider = data.get("provider", AuthProvider.local)
+        _validate_local_credentials(
+            provider, data.get("username"), data.get("password_hash")
+        )
         credential = UserCredential(**data)
         db.add(credential)
-        db.commit()
+        try:
+            db.commit()
+        except IntegrityError as exc:
+            db.rollback()
+            raise HTTPException(
+                status_code=409, detail="User credential already exists"
+            ) from exc
         db.refresh(credential)
         return credential
 
@@ -189,9 +209,19 @@ class UserCredentials(ListResponseMixin):
         data = payload.model_dump(exclude_unset=True)
         if "person_id" in data:
             _ensure_person(db, str(data["person_id"]))
+        provider = data.get("provider", credential.provider)
+        username = data.get("username", credential.username)
+        password_hash = data.get("password_hash", credential.password_hash)
+        _validate_local_credentials(provider, username, password_hash)
         for key, value in data.items():
             setattr(credential, key, value)
-        db.commit()
+        try:
+            db.commit()
+        except IntegrityError as exc:
+            db.rollback()
+            raise HTTPException(
+                status_code=409, detail="User credential already exists"
+            ) from exc
         db.refresh(credential)
         return credential
 

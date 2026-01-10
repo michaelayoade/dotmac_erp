@@ -2,11 +2,22 @@ import enum
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, Enum, JSON, String, Text, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    Enum,
+    JSON,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
+
+
 class SettingValueType(enum.Enum):
     string = "string"
     integer = "integer"
@@ -24,6 +35,12 @@ class DomainSetting(Base):
     __tablename__ = "domain_settings"
     __table_args__ = (
         UniqueConstraint("domain", "key", name="uq_domain_settings_domain_key"),
+        CheckConstraint(
+            "(value_type = 'json' AND value_text IS NULL) "
+            "OR (value_type IN ('string', 'integer') AND value_json IS NULL) "
+            "OR (value_type = 'boolean')",
+            name="ck_domain_settings_value_storage",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(

@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import Boolean, DateTime, Enum, Integer, JSON, String
 from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.ext.mutable import MutableDict
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
@@ -38,4 +39,6 @@ class AuditEvent(Base):
     ip_address: Mapped[str | None] = mapped_column(String(64))
     user_agent: Mapped[str | None] = mapped_column(String(255))
     request_id: Mapped[str | None] = mapped_column(String(120))
-    metadata_: Mapped[dict | None] = mapped_column("metadata", JSON)
+    metadata_: Mapped[dict | None] = mapped_column(
+        "metadata", MutableDict.as_mutable(JSON)
+    )

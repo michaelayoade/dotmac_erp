@@ -1,0 +1,590 @@
+{% extends "ifrs/base_ifrs.html" %}
+
+{% block page_title %}{{ "Edit Supplier" if supplier else "New Supplier" }}{% endblock %}
+
+{% block head %}
+<!-- Premium Typography -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap" rel="stylesheet">
+
+<style>
+    .form-container {
+        font-family: 'DM Sans', system-ui, sans-serif;
+    }
+    .form-title {
+        font-family: 'Fraunces', Georgia, serif;
+        font-optical-sizing: auto;
+    }
+
+    /* Refined Color System */
+    :root {
+        --ink: #1a1f36;
+        --ink-light: #3d4663;
+        --ink-muted: #6b7280;
+        --parchment: #fafaf9;
+        --parchment-dark: #f5f5f4;
+        --gold: #d4a853;
+        --gold-light: #fef3c7;
+        --gold-dark: #b8860b;
+        --teal: #0d9488;
+        --teal-light: #ccfbf1;
+        --card-shadow: 0 1px 3px rgba(26, 31, 54, 0.04), 0 4px 12px rgba(26, 31, 54, 0.06);
+        --card-shadow-hover: 0 4px 12px rgba(26, 31, 54, 0.08), 0 8px 24px rgba(26, 31, 54, 0.1);
+    }
+
+    .dark {
+        --ink: #f8fafc;
+        --ink-light: #cbd5e1;
+        --ink-muted: #94a3b8;
+        --parchment: #0f172a;
+        --parchment-dark: #1e293b;
+        --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.2), 0 4px 12px rgba(0, 0, 0, 0.3);
+        --card-shadow-hover: 0 4px 12px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.4);
+    }
+
+    /* Elegant Form Cards */
+    .form-card {
+        background: white;
+        border-radius: 16px;
+        box-shadow: var(--card-shadow);
+        border: 1px solid rgba(26, 31, 54, 0.06);
+        transition: box-shadow 0.3s ease, transform 0.3s ease;
+        position: relative;
+        overflow: hidden;
+    }
+    .dark .form-card {
+        background: #1e293b;
+        border-color: rgba(255, 255, 255, 0.06);
+    }
+    .form-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+        background: linear-gradient(90deg, var(--gold), var(--teal));
+        opacity: 0;
+        transition: opacity 0.3s ease;
+    }
+    .form-card:hover::before {
+        opacity: 1;
+    }
+    .form-card:hover {
+        box-shadow: var(--card-shadow-hover);
+    }
+
+    /* Section Headers */
+    .section-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 24px;
+        padding-bottom: 16px;
+        border-bottom: 1px solid rgba(26, 31, 54, 0.08);
+    }
+    .dark .section-header {
+        border-color: rgba(255, 255, 255, 0.08);
+    }
+    .section-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, var(--gold-light), #fff);
+        color: var(--gold-dark);
+    }
+    .dark .section-icon {
+        background: linear-gradient(135deg, rgba(212, 168, 83, 0.2), rgba(212, 168, 83, 0.1));
+        color: var(--gold);
+    }
+
+    /* Premium Input Styling */
+    .form-input {
+        width: 100%;
+        padding: 14px 16px;
+        font-size: 15px;
+        font-family: 'DM Sans', system-ui, sans-serif;
+        color: var(--ink);
+        background: var(--parchment);
+        border: 1.5px solid rgba(26, 31, 54, 0.12);
+        border-radius: 10px;
+        transition: all 0.2s ease;
+        outline: none;
+    }
+    .dark .form-input {
+        background: #0f172a;
+        border-color: rgba(255, 255, 255, 0.12);
+        color: var(--ink);
+    }
+    .form-input::placeholder {
+        color: var(--ink-muted);
+    }
+    .form-input:hover {
+        border-color: rgba(26, 31, 54, 0.24);
+    }
+    .form-input:focus {
+        border-color: var(--gold);
+        box-shadow: 0 0 0 3px rgba(212, 168, 83, 0.15);
+    }
+    .dark .form-input:focus {
+        box-shadow: 0 0 0 3px rgba(212, 168, 83, 0.25);
+    }
+
+    /* Label styling */
+    .form-label {
+        display: block;
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--ink-light);
+        margin-bottom: 8px;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+    }
+    .form-label .required {
+        color: #ef4444;
+        margin-left: 2px;
+    }
+
+    /* Field hints */
+    .form-hint {
+        font-size: 12px;
+        color: var(--ink-muted);
+        margin-top: 6px;
+        line-height: 1.4;
+    }
+
+    /* Select styling */
+    .form-select {
+        appearance: none;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 12px center;
+        background-size: 18px;
+        padding-right: 44px;
+    }
+
+    /* Toggle Switch - Premium Style */
+    .toggle-wrapper {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+    .toggle-switch {
+        position: relative;
+        width: 52px;
+        height: 28px;
+        background: #e2e8f0;
+        border-radius: 14px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+    .dark .toggle-switch {
+        background: #334155;
+    }
+    .toggle-switch::after {
+        content: '';
+        position: absolute;
+        top: 3px;
+        left: 3px;
+        width: 22px;
+        height: 22px;
+        background: white;
+        border-radius: 11px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        transition: transform 0.3s ease;
+    }
+    .toggle-switch.active {
+        background: linear-gradient(135deg, var(--teal), #0d9488);
+    }
+    .toggle-switch.active::after {
+        transform: translateX(24px);
+    }
+
+    /* Primary Button */
+    .btn-primary {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 14px 28px;
+        font-size: 15px;
+        font-weight: 600;
+        font-family: 'DM Sans', system-ui, sans-serif;
+        color: white;
+        background: linear-gradient(135deg, var(--ink) 0%, #2d3450 100%);
+        border: none;
+        border-radius: 10px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 12px rgba(26, 31, 54, 0.25);
+    }
+    .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(26, 31, 54, 0.35);
+    }
+    .btn-primary:active {
+        transform: translateY(0);
+    }
+
+    /* Secondary Button */
+    .btn-secondary {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 14px 24px;
+        font-size: 15px;
+        font-weight: 500;
+        font-family: 'DM Sans', system-ui, sans-serif;
+        color: var(--ink-light);
+        background: transparent;
+        border: 1.5px solid rgba(26, 31, 54, 0.15);
+        border-radius: 10px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+    .btn-secondary:hover {
+        border-color: var(--ink-light);
+        background: var(--parchment);
+    }
+
+    /* Staggered Animation */
+    .fade-up {
+        opacity: 0;
+        transform: translateY(20px);
+        animation: fadeUp 0.5s ease forwards;
+    }
+    @keyframes fadeUp {
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+    .delay-1 { animation-delay: 0.1s; }
+    .delay-2 { animation-delay: 0.2s; }
+    .delay-3 { animation-delay: 0.3s; }
+    .delay-4 { animation-delay: 0.4s; }
+    .delay-5 { animation-delay: 0.5s; }
+
+    /* Grain Texture Overlay */
+    .grain-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        pointer-events: none;
+        opacity: 0.03;
+        z-index: 1000;
+        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+    }
+</style>
+{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center text-sm" style="color: var(--ink-muted);">
+    <a href="/ifrs" class="hover:text-[var(--gold)] transition-colors">Dashboard</a>
+    <svg class="w-4 h-4 mx-2 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <a href="/ap/suppliers" class="hover:text-[var(--gold)] transition-colors">Suppliers</a>
+    <svg class="w-4 h-4 mx-2 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span style="color: var(--ink);">{{ "Edit" if supplier else "New" }}</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="grain-overlay"></div>
+
+<div class="form-container max-w-3xl mx-auto pb-12">
+    <!-- Page Header -->
+    <div class="mb-10 fade-up">
+        <h1 class="form-title text-4xl font-semibold tracking-tight" style="color: var(--ink);">
+            {{ "Edit Supplier" if supplier else "New Supplier" }}
+        </h1>
+        <p class="mt-3 text-lg" style="color: var(--ink-muted);">
+            {{ "Update supplier information and settings" if supplier else "Add a new supplier to your accounts payable" }}
+        </p>
+    </div>
+
+    <form method="post"
+          action="{{ '/ap/suppliers/' ~ supplier.supplier_id ~ '/edit' if supplier else '/ap/suppliers/new' }}"
+          class="space-y-8">
+
+        <div id="form-result">
+            {% if error %}
+            <div class="mb-6 p-4 rounded-lg bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-800">
+                <div class="flex items-start gap-3">
+                    <svg class="w-5 h-5 text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <div>
+                        <h3 class="font-medium text-red-800 dark:text-red-300">Error</h3>
+                        <p class="mt-1 text-sm text-red-700 dark:text-red-400">{{ error }}</p>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Basic Information -->
+        <div class="form-card p-8 fade-up delay-1">
+            <div class="section-header">
+                <div class="section-icon">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+                    </svg>
+                </div>
+                <div>
+                    <h2 class="form-title text-xl font-medium" style="color: var(--ink);">Company Details</h2>
+                    <p class="text-sm mt-1" style="color: var(--ink-muted);">Basic supplier identification</p>
+                </div>
+            </div>
+
+            <div class="grid gap-6 sm:grid-cols-2">
+                <div>
+                    <label class="form-label">
+                        Supplier Code <span class="required">*</span>
+                    </label>
+                    <input type="text"
+                           name="supplier_code"
+                           value="{{ supplier.supplier_code if supplier else '' }}"
+                           required
+                           maxlength="30"
+                           placeholder="SUP-001"
+                           class="form-input">
+                    <p class="form-hint">Unique identifier for this supplier</p>
+                </div>
+
+                <div>
+                    <label class="form-label">
+                        Supplier Name <span class="required">*</span>
+                    </label>
+                    <input type="text"
+                           name="supplier_name"
+                           value="{{ supplier.supplier_name if supplier else '' }}"
+                           required
+                           maxlength="200"
+                           placeholder="Acme Corporation"
+                           class="form-input">
+                </div>
+
+                <div>
+                    <label class="form-label">Tax ID</label>
+                    <input type="text"
+                           name="tax_id"
+                           value="{{ supplier.tax_id if supplier else '' }}"
+                           maxlength="50"
+                           placeholder="12-3456789"
+                           class="form-input">
+                </div>
+
+                <div>
+                    <label class="form-label">
+                        Currency <span class="required">*</span>
+                    </label>
+                    <select name="currency_code" required class="form-input form-select">
+                        <option value="">Select currency</option>
+                        <option value="USD" {{ 'selected' if (supplier and supplier.currency_code == 'USD') or not supplier else '' }}>USD — US Dollar</option>
+                        <option value="EUR" {{ 'selected' if supplier and supplier.currency_code == 'EUR' else '' }}>EUR — Euro</option>
+                        <option value="GBP" {{ 'selected' if supplier and supplier.currency_code == 'GBP' else '' }}>GBP — British Pound</option>
+                        <option value="NGN" {{ 'selected' if supplier and supplier.currency_code == 'NGN' else '' }}>NGN — Nigerian Naira</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Payment Terms -->
+        <div class="form-card p-8 fade-up delay-2">
+            <div class="section-header">
+                <div class="section-icon">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+                <div>
+                    <h2 class="form-title text-xl font-medium" style="color: var(--ink);">Payment Terms</h2>
+                    <p class="text-sm mt-1" style="color: var(--ink-muted);">Configure payment schedule</p>
+                </div>
+            </div>
+
+            <div class="grid gap-6 sm:grid-cols-2">
+                <div>
+                    <label class="form-label">Payment Terms (Days)</label>
+                    <input type="number"
+                           name="payment_terms_days"
+                           value="{{ supplier.payment_terms_days if supplier else 30 }}"
+                           min="0"
+                           max="365"
+                           class="form-input">
+                    <p class="form-hint">Net days until payment is due</p>
+                </div>
+
+                <div>
+                    <label class="form-label">Preferred Payment Method</label>
+                    <select name="payment_method" class="form-input form-select">
+                        <option value="">Select method</option>
+                        <option value="BANK_TRANSFER" {{ 'selected' if supplier and supplier.payment_method == 'BANK_TRANSFER' else '' }}>Bank Transfer</option>
+                        <option value="CHECK" {{ 'selected' if supplier and supplier.payment_method == 'CHECK' else '' }}>Check</option>
+                        <option value="WIRE" {{ 'selected' if supplier and supplier.payment_method == 'WIRE' else '' }}>Wire Transfer</option>
+                        <option value="CASH" {{ 'selected' if supplier and supplier.payment_method == 'CASH' else '' }}>Cash</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- GL Accounts -->
+        <div class="form-card p-8 fade-up delay-3">
+            <div class="section-header">
+                <div class="section-icon">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+                    </svg>
+                </div>
+                <div>
+                    <h2 class="form-title text-xl font-medium" style="color: var(--ink);">GL Accounts</h2>
+                    <p class="text-sm mt-1" style="color: var(--ink-muted);">Default posting accounts</p>
+                </div>
+            </div>
+
+            <div class="grid gap-6 sm:grid-cols-2">
+                <div>
+                    <label class="form-label">Default Expense Account</label>
+                    <select name="default_expense_account_id" class="form-input form-select">
+                        <option value="">Select account</option>
+                        {% for account in expense_accounts %}
+                        <option value="{{ account.account_id }}" {{ 'selected' if supplier and supplier.default_expense_account_id == account.account_id else '' }}>
+                            {{ account.account_code }} — {{ account.account_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label class="form-label">Default Payable Account</label>
+                    <select name="default_payable_account_id" class="form-input form-select">
+                        <option value="">Select account</option>
+                        {% for account in payable_accounts %}
+                        <option value="{{ account.account_id }}" {{ 'selected' if supplier and supplier.default_payable_account_id == account.account_id else '' }}>
+                            {{ account.account_code }} — {{ account.account_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Contact Information -->
+        <div class="form-card p-8 fade-up delay-4">
+            <div class="section-header">
+                <div class="section-icon">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                    </svg>
+                </div>
+                <div>
+                    <h2 class="form-title text-xl font-medium" style="color: var(--ink);">Contact Details</h2>
+                    <p class="text-sm mt-1" style="color: var(--ink-muted);">Communication information</p>
+                </div>
+            </div>
+
+            <div class="grid gap-6 sm:grid-cols-2">
+                <div>
+                    <label class="form-label">Email Address</label>
+                    <input type="email"
+                           name="email"
+                           value="{{ supplier.email if supplier else '' }}"
+                           placeholder="accounts@supplier.com"
+                           class="form-input">
+                </div>
+
+                <div>
+                    <label class="form-label">Phone Number</label>
+                    <input type="tel"
+                           name="phone"
+                           value="{{ supplier.phone if supplier else '' }}"
+                           placeholder="+1 (555) 123-4567"
+                           class="form-input">
+                </div>
+
+                <div class="sm:col-span-2">
+                    <label class="form-label">Business Address</label>
+                    <textarea name="address"
+                              rows="3"
+                              placeholder="Enter complete business address"
+                              class="form-input resize-none">{{ supplier.address if supplier else '' }}</textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- Status Toggle (Edit only) -->
+        {% if supplier %}
+        <div class="form-card p-8 fade-up delay-5">
+            <div class="section-header">
+                <div class="section-icon" style="background: linear-gradient(135deg, var(--teal-light), #fff);">
+                    <svg class="w-5 h-5" style="color: var(--teal);" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+                <div>
+                    <h2 class="form-title text-xl font-medium" style="color: var(--ink);">Status</h2>
+                    <p class="text-sm mt-1" style="color: var(--ink-muted);">Supplier availability</p>
+                </div>
+            </div>
+
+            <div x-data="{ active: {{ 'true' if supplier.is_active else 'false' }} }">
+                <div class="toggle-wrapper">
+                    <div class="toggle-switch"
+                         :class="{ 'active': active }"
+                         @click="active = !active">
+                    </div>
+                    <input type="hidden" name="is_active" :value="active">
+                    <span class="text-sm font-medium" style="color: var(--ink);" x-text="active ? 'Active' : 'Inactive'"></span>
+                </div>
+                <p class="form-hint mt-3">Inactive suppliers cannot be used in new transactions</p>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Form Actions -->
+        <div class="flex items-center justify-between pt-6 fade-up delay-5">
+            <p class="text-sm" style="color: var(--ink-muted);">
+                <span class="text-red-500">*</span> Required fields
+            </p>
+            <div class="flex items-center gap-4">
+                <a href="/ap/suppliers" class="btn-secondary">
+                    Cancel
+                </a>
+                <button type="submit" class="btn-primary">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                    </svg>
+                    {{ "Update Supplier" if supplier else "Create Supplier" }}
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('htmx:afterRequest', function(evt) {
+        if (evt.detail.successful) {
+            window.dispatchEvent(new CustomEvent('show-toast', {
+                detail: { message: 'Supplier saved successfully', type: 'success' }
+            }));
+            setTimeout(() => window.location.href = '/ap/suppliers', 1000);
+        } else {
+            const response = JSON.parse(evt.detail.xhr.responseText);
+            window.dispatchEvent(new CustomEvent('show-toast', {
+                detail: { message: response.detail || 'Error saving supplier', type: 'error' }
+            }));
+        }
+    });
+</script>
+{% endblock %}

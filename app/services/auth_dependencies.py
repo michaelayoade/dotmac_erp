@@ -1,14 +1,22 @@
 from datetime import datetime, timezone
+from typing import Optional
+from uuid import UUID
 
-from fastapi import Depends, Header, HTTPException, Request
+from fastapi import Cookie, Depends, Header, HTTPException, Request
+from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
 from app.models.auth import ApiKey, Session as AuthSession, SessionStatus
+from app.models.person import Person
 from app.models.rbac import Permission, PersonRole, RolePermission, Role
+from app.rls import set_current_organization_sync, enable_rls_bypass_sync
 from app.services.auth import hash_api_key
 from app.services.auth_flow import decode_access_token, hash_session_token
 from app.services.common import coerce_uuid
+
+# Cookie name for web session
+WEB_SESSION_COOKIE = "session_token"
 
 
 def _make_aware(dt: datetime) -> datetime:
@@ -224,3 +232,367 @@ def require_permission(permission_key: str):
         return auth
 
     return _require_permission
+
+
+def require_tenant_auth(
+    authorization: str | None = Header(default=None),
+    request: Request = None,
+    db: Session = Depends(_get_db),
+):
+    """
+    Authenticate user and set RLS tenant context.
+
+    This dependency:
+    1. Validates the user's JWT token
+    2. Looks up the user's organization_id
+    3. Sets the PostgreSQL session variable for RLS
+    4. Returns auth dict with organization_id included
+
+    Usage:
+        @app.get("/items")
+        def list_items(auth=Depends(require_tenant_auth), db: Session = Depends(get_db)):
+            # All queries in this request are automatically scoped to the user's org
+            return db.query(Item).all()
+    """
+    token = _extract_bearer_token(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    payload = decode_access_token(db, token)
+    person_id = payload.get("sub")
+    session_id = payload.get("session_id")
+    if not person_id or not session_id:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    now = datetime.now(timezone.utc)
+    person_uuid = coerce_uuid(person_id)
+    session_uuid = coerce_uuid(session_id)
+    session = (
+        db.query(AuthSession)
+        .filter(AuthSession.id == session_uuid)
+        .filter(AuthSession.person_id == person_uuid)
+        .filter(AuthSession.status == SessionStatus.active)
+        .filter(AuthSession.revoked_at.is_(None))
+        .filter(AuthSession.expires_at > now)
+        .first()
+    )
+    if not session:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    # Look up the user's organization
+    person = db.get(Person, person_uuid)
+    organization_id = person.organization_id if person else None
+
+    # Set RLS context if user has an organization
+    if organization_id:
+        set_current_organization_sync(db, organization_id)
+        if request is not None:
+            request.state.organization_id = str(organization_id)
+
+    roles_value = payload.get("roles")
+    scopes_value = payload.get("scopes")
+    roles = [str(role) for role in roles_value] if isinstance(roles_value, list) else []
+    scopes = [str(scope) for scope in scopes_value] if isinstance(scopes_value, list) else []
+    actor_id = str(person_id)
+    if request is not None:
+        request.state.actor_id = actor_id
+    return {
+        "person_id": str(person_id),
+        "session_id": str(session_id),
+        "organization_id": str(organization_id) if organization_id else None,
+        "roles": roles,
+        "scopes": scopes,
+    }
+
+
+def require_tenant_role(role_name: str):
+    """
+    Require a specific role with tenant context set.
+
+    Combines require_tenant_auth with role checking.
+    """
+    def _require_tenant_role(
+        auth=Depends(require_tenant_auth),
+        db: Session = Depends(_get_db),
+    ):
+        person_id = coerce_uuid(auth["person_id"])
+        roles = set(auth.get("roles") or [])
+        if role_name in roles:
+            return auth
+        role = (
+            db.query(Role)
+            .filter(Role.name == role_name)
+            .filter(Role.is_active.is_(True))
+            .first()
+        )
+        if not role:
+            raise HTTPException(status_code=403, detail="Role not found")
+        link = (
+            db.query(PersonRole)
+            .filter(PersonRole.person_id == person_id)
+            .filter(PersonRole.role_id == role.id)
+            .first()
+        )
+        if not link:
+            raise HTTPException(status_code=403, detail="Forbidden")
+        return auth
+
+    return _require_tenant_role
+
+
+def require_tenant_permission(permission_key: str):
+    """
+    Require a specific permission with tenant context set.
+
+    Combines require_tenant_auth with permission checking.
+    """
+    def _require_tenant_permission(
+        auth=Depends(require_tenant_auth),
+        db: Session = Depends(_get_db),
+    ):
+        person_id = coerce_uuid(auth["person_id"])
+        roles = set(auth.get("roles") or [])
+        scopes = set(auth.get("scopes") or [])
+        if "admin" in roles or permission_key in scopes:
+            return auth
+        permission = (
+            db.query(Permission)
+            .filter(Permission.key == permission_key)
+            .filter(Permission.is_active.is_(True))
+            .first()
+        )
+        if not permission:
+            raise HTTPException(status_code=403, detail="Permission not found")
+        has_permission = (
+            db.query(RolePermission)
+            .join(Role, RolePermission.role_id == Role.id)
+            .join(PersonRole, PersonRole.role_id == Role.id)
+            .filter(PersonRole.person_id == person_id)
+            .filter(RolePermission.permission_id == permission.id)
+            .filter(Role.is_active.is_(True))
+            .first()
+        )
+        if not has_permission:
+            raise HTTPException(status_code=403, detail="Forbidden")
+        return auth
+
+    return _require_tenant_permission
+
+
+def require_admin_bypass(
+    authorization: str | None = Header(default=None),
+    request: Request = None,
+    db: Session = Depends(_get_db),
+):
+    """
+    Admin-only dependency that bypasses RLS.
+
+    Use this for system administration endpoints that need to see
+    data across all tenants. Requires the 'admin' role.
+
+    WARNING: Use with extreme caution! This bypasses tenant isolation.
+
+    Usage:
+        @app.get("/admin/all-organizations")
+        def list_all_orgs(auth=Depends(require_admin_bypass), db: Session = Depends(get_db)):
+            # Can see all organizations across tenants
+            return db.query(Organization).all()
+    """
+    token = _extract_bearer_token(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    payload = decode_access_token(db, token)
+    person_id = payload.get("sub")
+    session_id = payload.get("session_id")
+    if not person_id or not session_id:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    now = datetime.now(timezone.utc)
+    person_uuid = coerce_uuid(person_id)
+    session_uuid = coerce_uuid(session_id)
+    session = (
+        db.query(AuthSession)
+        .filter(AuthSession.id == session_uuid)
+        .filter(AuthSession.person_id == person_uuid)
+        .filter(AuthSession.status == SessionStatus.active)
+        .filter(AuthSession.revoked_at.is_(None))
+        .filter(AuthSession.expires_at > now)
+        .first()
+    )
+    if not session:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    # Check for admin role
+    roles_value = payload.get("roles")
+    roles = [str(role) for role in roles_value] if isinstance(roles_value, list) else []
+    if "admin" not in roles:
+        # Also check database for admin role
+        admin_role = (
+            db.query(Role)
+            .filter(Role.name == "admin")
+            .filter(Role.is_active.is_(True))
+            .first()
+        )
+        if admin_role:
+            link = (
+                db.query(PersonRole)
+                .filter(PersonRole.person_id == person_uuid)
+                .filter(PersonRole.role_id == admin_role.id)
+                .first()
+            )
+            if not link:
+                raise HTTPException(status_code=403, detail="Admin access required")
+        else:
+            raise HTTPException(status_code=403, detail="Admin access required")
+
+    # Enable RLS bypass for admin operations
+    enable_rls_bypass_sync(db)
+
+    scopes_value = payload.get("scopes")
+    scopes = [str(scope) for scope in scopes_value] if isinstance(scopes_value, list) else []
+    actor_id = str(person_id)
+    if request is not None:
+        request.state.actor_id = actor_id
+        request.state.is_admin_bypass = True
+    return {
+        "person_id": str(person_id),
+        "session_id": str(session_id),
+        "organization_id": None,  # Not scoped to an org
+        "roles": roles,
+        "scopes": scopes,
+        "is_admin_bypass": True,
+    }
+
+
+def require_web_session(
+    request: Request,
+    session_token: Optional[str] = Cookie(default=None, alias=WEB_SESSION_COOKIE),
+    db: Session = Depends(_get_db),
+):
+    """
+    Web session authentication for HTML routes.
+
+    This dependency:
+    1. Reads the session token from a cookie
+    2. Validates the session against the database
+    3. Looks up the user's organization_id
+    4. Sets the PostgreSQL session variable for RLS
+    5. Returns auth dict with user and organization info
+
+    If authentication fails, redirects to login page instead of returning 401.
+
+    Usage:
+        @app.get("/dashboard", response_class=HTMLResponse)
+        def dashboard(request: Request, auth=Depends(require_web_session)):
+            # User is authenticated, org context is set
+            return templates.TemplateResponse(request, "dashboard.html", {"user": auth})
+    """
+    if not session_token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    now = datetime.now(timezone.utc)
+
+    # Look up session by token hash
+    session = (
+        db.query(AuthSession)
+        .filter(AuthSession.token_hash == hash_session_token(session_token))
+        .filter(AuthSession.status == SessionStatus.active)
+        .filter(AuthSession.revoked_at.is_(None))
+        .filter(AuthSession.expires_at > now)
+        .first()
+    )
+
+    if not session:
+        raise HTTPException(status_code=401, detail="Invalid or expired session")
+
+    # Get the person and their organization
+    person = db.get(Person, session.person_id)
+    if not person:
+        raise HTTPException(status_code=401, detail="User not found")
+
+    organization_id = person.organization_id
+
+    # Set RLS context if user has an organization
+    if organization_id:
+        set_current_organization_sync(db, organization_id)
+        request.state.organization_id = str(organization_id)
+
+    request.state.actor_id = str(person.id)
+
+    return {
+        "person_id": str(person.id),
+        "session_id": str(session.id),
+        "organization_id": str(organization_id) if organization_id else None,
+        "user_name": person.display_name or f"{person.first_name} {person.last_name}".strip(),
+        "user_initials": _get_initials(person),
+    }
+
+
+def _get_initials(person: Person) -> str:
+    """Get user initials from person record."""
+    if person.first_name and person.last_name:
+        return f"{person.first_name[0]}{person.last_name[0]}".upper()
+    if person.display_name:
+        parts = person.display_name.split()
+        if len(parts) >= 2:
+            return f"{parts[0][0]}{parts[-1][0]}".upper()
+        return person.display_name[:2].upper()
+    return "??"
+
+
+def optional_web_session(
+    request: Request,
+    session_token: Optional[str] = Cookie(default=None, alias=WEB_SESSION_COOKIE),
+    db: Session = Depends(_get_db),
+):
+    """
+    Optional web session authentication.
+
+    Like require_web_session but returns None instead of raising an exception
+    when not authenticated. Useful for pages that work with or without auth.
+
+    Usage:
+        @app.get("/public-page", response_class=HTMLResponse)
+        def public_page(request: Request, auth=Depends(optional_web_session)):
+            if auth:
+                # User is logged in
+                ...
+            else:
+                # Anonymous user
+                ...
+    """
+    if not session_token:
+        return None
+
+    now = datetime.now(timezone.utc)
+
+    session = (
+        db.query(AuthSession)
+        .filter(AuthSession.token_hash == hash_session_token(session_token))
+        .filter(AuthSession.status == SessionStatus.active)
+        .filter(AuthSession.revoked_at.is_(None))
+        .filter(AuthSession.expires_at > now)
+        .first()
+    )
+
+    if not session:
+        return None
+
+    person = db.get(Person, session.person_id)
+    if not person:
+        return None
+
+    organization_id = person.organization_id
+
+    if organization_id:
+        set_current_organization_sync(db, organization_id)
+        request.state.organization_id = str(organization_id)
+
+    request.state.actor_id = str(person.id)
+
+    return {
+        "person_id": str(person.id),
+        "session_id": str(session.id),
+        "organization_id": str(organization_id) if organization_id else None,
+        "user_name": person.display_name or f"{person.first_name} {person.last_name}".strip(),
+        "user_initials": _get_initials(person),
+    }

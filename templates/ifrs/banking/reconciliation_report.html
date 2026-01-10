@@ -1,0 +1,303 @@
+{% extends "ifrs/base_ifrs.html" %}
+
+{% block page_title %}Reconciliation Report{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400">
+    <a href="/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/banking/reconciliations" class="hover:text-primary-600 dark:hover:text-primary-400">Reconciliations</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white">Report</span>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<button onclick="window.print()"
+        class="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-primary-600 to-primary-500 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-primary-500/25 btn-hover print:hidden">
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
+    </svg>
+    Print Report
+</button>
+{% endblock %}
+
+{% block content %}
+{% if report %}
+<div class="space-y-6 print:space-y-4">
+    <!-- Report Header -->
+    <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800/50 print:border-0 print:p-0">
+        <div class="text-center mb-6">
+            <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Bank Reconciliation Report</h1>
+            <p class="text-slate-500">As of {{ report.reconciliation.reconciliation_date }}</p>
+        </div>
+
+        <div class="grid gap-6 sm:grid-cols-2 print:grid-cols-2">
+            <div>
+                <h3 class="text-sm font-medium text-slate-500 mb-2">Bank Account</h3>
+                <p class="text-slate-900 dark:text-white font-medium">{{ report.reconciliation.bank_name | default("Bank Account") }}</p>
+                <p class="text-sm text-slate-600">Account #: {{ report.reconciliation.account_number | default("N/A") }}</p>
+            </div>
+            <div class="text-right">
+                <h3 class="text-sm font-medium text-slate-500 mb-2">Reconciliation Period</h3>
+                <p class="text-slate-900 dark:text-white">{{ report.reconciliation.period_start }} to {{ report.reconciliation.period_end }}</p>
+                <p class="text-sm text-slate-600">Currency: {{ report.reconciliation.currency_code }}</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Summary Section -->
+    <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800/50 print:border print:border-slate-300">
+        <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Reconciliation Summary</h2>
+
+        <div class="grid gap-4 sm:grid-cols-2 print:grid-cols-2">
+            <!-- Statement Side -->
+            <div class="border-r border-slate-200 pr-4 dark:border-slate-700">
+                <h3 class="text-sm font-medium text-slate-500 mb-3">Per Bank Statement</h3>
+                <table class="w-full text-sm">
+                    <tr>
+                        <td class="py-1 text-slate-600">Statement Closing Balance</td>
+                        <td class="py-1 text-right font-medium text-slate-900 dark:text-white">{{ report.summary.statement_balance }}</td>
+                    </tr>
+                    <tr class="border-t border-slate-100">
+                        <td class="py-1 text-slate-600">Less: Outstanding Payments</td>
+                        <td class="py-1 text-right font-medium text-red-600">-{{ report.outstanding_payments.total }}</td>
+                    </tr>
+                    <tr class="border-t border-slate-100">
+                        <td class="py-1 text-slate-600">Add: Outstanding Deposits</td>
+                        <td class="py-1 text-right font-medium text-green-600">+{{ report.outstanding_deposits.total }}</td>
+                    </tr>
+                    <tr class="border-t-2 border-slate-200">
+                        <td class="py-2 font-medium text-slate-900 dark:text-white">Adjusted Bank Balance</td>
+                        <td class="py-2 text-right font-bold text-slate-900 dark:text-white">{{ report.summary.adjusted_book_balance }}</td>
+                    </tr>
+                </table>
+            </div>
+
+            <!-- GL Side -->
+            <div class="pl-4">
+                <h3 class="text-sm font-medium text-slate-500 mb-3">Per General Ledger</h3>
+                <table class="w-full text-sm">
+                    <tr>
+                        <td class="py-1 text-slate-600">GL Closing Balance</td>
+                        <td class="py-1 text-right font-medium text-slate-900 dark:text-white">{{ report.summary.gl_balance }}</td>
+                    </tr>
+                    <tr class="border-t border-slate-100">
+                        <td class="py-1 text-slate-600">Add/Less: Adjustments</td>
+                        <td class="py-1 text-right font-medium text-slate-900 dark:text-white">{{ report.adjustments.total }}</td>
+                    </tr>
+                    <tr class="border-t-2 border-slate-200">
+                        <td class="py-2 font-medium text-slate-900 dark:text-white">Adjusted Book Balance</td>
+                        <td class="py-2 text-right font-bold text-slate-900 dark:text-white">{{ report.summary.adjusted_book_balance }}</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+
+        <!-- Difference -->
+        <div class="mt-6 pt-4 border-t-2 border-slate-200 dark:border-slate-700">
+            <div class="flex justify-between items-center">
+                <span class="text-lg font-medium text-slate-900 dark:text-white">Reconciliation Difference</span>
+                <span class="text-xl font-bold {{ 'text-green-600' if report.summary.is_reconciled else 'text-red-600' }}">
+                    {{ report.summary.difference }}
+                    {% if report.summary.is_reconciled %}
+                    <svg class="inline-block ml-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    {% endif %}
+                </span>
+            </div>
+            {% if report.summary.is_reconciled %}
+            <p class="mt-2 text-sm text-green-600">The bank account is fully reconciled.</p>
+            {% else %}
+            <p class="mt-2 text-sm text-red-600">There is an unreconciled difference that needs to be investigated.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Matched Items -->
+    <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50 print:border print:border-slate-300 print:break-inside-avoid">
+        <div class="border-b border-slate-200 px-6 py-4 dark:border-slate-700">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Matched Items ({{ report.matched_items.count }})</h2>
+            <p class="text-sm text-slate-500">Total: {{ report.matched_items.total }}</p>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="border-b border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800">
+                        <th class="px-4 py-2 text-left font-medium text-slate-500">Date</th>
+                        <th class="px-4 py-2 text-left font-medium text-slate-500">Description</th>
+                        <th class="px-4 py-2 text-right font-medium text-slate-500">Statement</th>
+                        <th class="px-4 py-2 text-right font-medium text-slate-500">GL</th>
+                        <th class="px-4 py-2 text-left font-medium text-slate-500">Type</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+                    {% for item in report.matched_items.items %}
+                    <tr>
+                        <td class="px-4 py-2 text-slate-600">{{ item.transaction_date }}</td>
+                        <td class="px-4 py-2 text-slate-900 dark:text-white">{{ item.description | default("-") }}</td>
+                        <td class="px-4 py-2 text-right text-slate-900 dark:text-white">{{ item.statement_amount | default("-") }}</td>
+                        <td class="px-4 py-2 text-right text-slate-900 dark:text-white">{{ item.gl_amount | default("-") }}</td>
+                        <td class="px-4 py-2 text-slate-600">{{ item.match_type | title }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5" class="px-4 py-4 text-center text-slate-500">No matched items</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Outstanding Deposits -->
+    <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50 print:border print:border-slate-300 print:break-inside-avoid">
+        <div class="border-b border-slate-200 px-6 py-4 dark:border-slate-700">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Outstanding Deposits ({{ report.outstanding_deposits.count }})</h2>
+            <p class="text-sm text-green-600">Total: +{{ report.outstanding_deposits.total }}</p>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="border-b border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800">
+                        <th class="px-4 py-2 text-left font-medium text-slate-500">Date</th>
+                        <th class="px-4 py-2 text-left font-medium text-slate-500">Description</th>
+                        <th class="px-4 py-2 text-left font-medium text-slate-500">Reference</th>
+                        <th class="px-4 py-2 text-right font-medium text-slate-500">Amount</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+                    {% for item in report.outstanding_deposits.items %}
+                    <tr>
+                        <td class="px-4 py-2 text-slate-600">{{ item.transaction_date }}</td>
+                        <td class="px-4 py-2 text-slate-900 dark:text-white">{{ item.description | default("-") }}</td>
+                        <td class="px-4 py-2 text-slate-600">{{ item.reference | default("-") }}</td>
+                        <td class="px-4 py-2 text-right font-medium text-green-600">+{{ item.statement_amount or item.gl_amount }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="4" class="px-4 py-4 text-center text-slate-500">No outstanding deposits</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Outstanding Payments -->
+    <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50 print:border print:border-slate-300 print:break-inside-avoid">
+        <div class="border-b border-slate-200 px-6 py-4 dark:border-slate-700">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Outstanding Payments ({{ report.outstanding_payments.count }})</h2>
+            <p class="text-sm text-red-600">Total: -{{ report.outstanding_payments.total }}</p>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="border-b border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800">
+                        <th class="px-4 py-2 text-left font-medium text-slate-500">Date</th>
+                        <th class="px-4 py-2 text-left font-medium text-slate-500">Description</th>
+                        <th class="px-4 py-2 text-left font-medium text-slate-500">Reference</th>
+                        <th class="px-4 py-2 text-right font-medium text-slate-500">Amount</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+                    {% for item in report.outstanding_payments.items %}
+                    <tr>
+                        <td class="px-4 py-2 text-slate-600">{{ item.transaction_date }}</td>
+                        <td class="px-4 py-2 text-slate-900 dark:text-white">{{ item.description | default("-") }}</td>
+                        <td class="px-4 py-2 text-slate-600">{{ item.reference | default("-") }}</td>
+                        <td class="px-4 py-2 text-right font-medium text-red-600">-{{ item.statement_amount or item.gl_amount }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="4" class="px-4 py-4 text-center text-slate-500">No outstanding payments</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Adjustments -->
+    {% if report.adjustments.count > 0 %}
+    <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50 print:border print:border-slate-300 print:break-inside-avoid">
+        <div class="border-b border-slate-200 px-6 py-4 dark:border-slate-700">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Adjustments ({{ report.adjustments.count }})</h2>
+            <p class="text-sm text-slate-500">Total: {{ report.adjustments.total }}</p>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="border-b border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800">
+                        <th class="px-4 py-2 text-left font-medium text-slate-500">Date</th>
+                        <th class="px-4 py-2 text-left font-medium text-slate-500">Description</th>
+                        <th class="px-4 py-2 text-left font-medium text-slate-500">Type</th>
+                        <th class="px-4 py-2 text-right font-medium text-slate-500">Amount</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+                    {% for item in report.adjustments.items %}
+                    <tr>
+                        <td class="px-4 py-2 text-slate-600">{{ item.transaction_date }}</td>
+                        <td class="px-4 py-2 text-slate-900 dark:text-white">{{ item.description | default("-") }}</td>
+                        <td class="px-4 py-2 text-slate-600">{{ item.adjustment_type | default("-") }}</td>
+                        <td class="px-4 py-2 text-right font-medium text-slate-900 dark:text-white">{{ item.statement_amount or item.gl_amount }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Approval Section -->
+    <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800/50 print:border print:border-slate-300">
+        <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Approvals</h2>
+
+        <div class="grid gap-6 sm:grid-cols-3 print:grid-cols-3">
+            <div class="border-t border-slate-300 pt-3">
+                <p class="text-sm font-medium text-slate-900 dark:text-white">Prepared By</p>
+                {% if report.reconciliation.prepared_by %}
+                <p class="text-sm text-slate-600">{{ report.reconciliation.prepared_by }}</p>
+                <p class="text-xs text-slate-500">{{ report.reconciliation.prepared_at }}</p>
+                {% else %}
+                <p class="text-sm text-slate-400">_______________________</p>
+                <p class="text-xs text-slate-400 mt-4">Date: _______________</p>
+                {% endif %}
+            </div>
+            <div class="border-t border-slate-300 pt-3">
+                <p class="text-sm font-medium text-slate-900 dark:text-white">Reviewed By</p>
+                {% if report.reconciliation.reviewed_by %}
+                <p class="text-sm text-slate-600">{{ report.reconciliation.reviewed_by }}</p>
+                <p class="text-xs text-slate-500">{{ report.reconciliation.reviewed_at }}</p>
+                {% else %}
+                <p class="text-sm text-slate-400">_______________________</p>
+                <p class="text-xs text-slate-400 mt-4">Date: _______________</p>
+                {% endif %}
+            </div>
+            <div class="border-t border-slate-300 pt-3">
+                <p class="text-sm font-medium text-slate-900 dark:text-white">Approved By</p>
+                {% if report.reconciliation.approved_by %}
+                <p class="text-sm text-slate-600">{{ report.reconciliation.approved_by }}</p>
+                <p class="text-xs text-slate-500">{{ report.reconciliation.approved_at }}</p>
+                {% else %}
+                <p class="text-sm text-slate-400">_______________________</p>
+                <p class="text-xs text-slate-400 mt-4">Date: _______________</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="py-12 text-center">
+    <svg class="mx-auto h-12 w-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+    </svg>
+    <p class="mt-2 text-sm text-slate-500">Report not found</p>
+    <a href="/banking/reconciliations" class="mt-4 inline-flex items-center text-sm font-medium text-primary-600 hover:text-primary-700">
+        Back to Reconciliations
+    </a>
+</div>
+{% endif %}
+{% endblock %}

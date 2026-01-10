@@ -1,6 +1,5 @@
 import uuid
-
-import pytest
+from unittest.mock import patch
 
 from app.models.scheduler import ScheduledTask, ScheduleType
 
@@ -181,17 +180,25 @@ class TestScheduledTasksAPI:
 
     def test_refresh_schedule(self, client, auth_headers):
         """Test refreshing the scheduler."""
-        response = client.post("/scheduler/tasks/refresh", headers=auth_headers)
-        # May return 200 or 500 depending on Celery availability
-        assert response.status_code in [200, 500]
+        with patch(
+            "app.api.scheduler.scheduler_service.refresh_schedule",
+            return_value={"detail": "ok"},
+        ):
+            response = client.post("/scheduler/tasks/refresh", headers=auth_headers)
+        assert response.status_code == 200
+        assert response.json()["detail"] == "ok"
 
     def test_enqueue_scheduled_task(self, client, auth_headers, scheduled_task):
         """Test manually enqueuing a scheduled task."""
-        response = client.post(
-            f"/scheduler/tasks/{scheduled_task.id}/enqueue", headers=auth_headers
-        )
-        # May return 202 or 500 depending on Celery availability
-        assert response.status_code in [202, 500]
+        with patch(
+            "app.api.scheduler.scheduler_service.enqueue_task",
+            return_value={"queued": True, "task_id": "test-task"},
+        ):
+            response = client.post(
+                f"/scheduler/tasks/{scheduled_task.id}/enqueue", headers=auth_headers
+            )
+        assert response.status_code == 202
+        assert response.json()["queued"] is True
 
 
 class TestSchedulerAPIV1:

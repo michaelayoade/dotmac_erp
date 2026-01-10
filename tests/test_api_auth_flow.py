@@ -12,6 +12,7 @@ from app.models.auth import (
 )
 from app.models.person import Person
 from app.services import auth_flow as auth_flow_service
+from tests.conftest import DEFAULT_TEST_ORG_ID
 from app.services.auth_flow import hash_password
 
 
@@ -470,6 +471,7 @@ class TestMFAAPI:
             first_name="Other",
             last_name="User",
             email=f"other_{uuid.uuid4().hex[:8]}@example.com",
+            organization_id=DEFAULT_TEST_ORG_ID,
         )
         db_session.add(other_person)
         db_session.commit()
@@ -490,6 +492,7 @@ class TestMFAAPI:
             first_name="Other",
             last_name="User",
             email=f"other_{uuid.uuid4().hex[:8]}@example.com",
+            organization_id=DEFAULT_TEST_ORG_ID,
         )
         db_session.add(other_person)
         db_session.commit()

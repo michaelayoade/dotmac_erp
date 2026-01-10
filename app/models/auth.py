@@ -4,12 +4,14 @@ from datetime import datetime, timezone
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     DateTime,
     Enum,
     ForeignKey,
     Index,
     Integer,
     String,
+    UniqueConstraint,
     text,
 )
 from sqlalchemy.dialects.postgresql import UUID
@@ -37,6 +39,22 @@ class SessionStatus(enum.Enum):
 
 class UserCredential(Base):
     __tablename__ = "user_credentials"
+    __table_args__ = (
+        UniqueConstraint(
+            "person_id",
+            "provider",
+            name="uq_user_credentials_person_provider",
+        ),
+        UniqueConstraint(
+            "provider",
+            "username",
+            name="uq_user_credentials_provider_username",
+        ),
+        CheckConstraint(
+            "(provider != 'local') OR (username IS NOT NULL AND password_hash IS NOT NULL)",
+            name="ck_user_credentials_local_requirements",
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
@@ -115,7 +133,7 @@ class MFAMethod(Base):
 class Session(Base):
     __tablename__ = "sessions"
     __table_args__ = (
-        Index("ix_sessions_token_hash", "token_hash"),
+        Index("ix_sessions_token_hash", "token_hash", unique=True),
         Index("ix_sessions_previous_token_hash", "previous_token_hash"),
     )
 
@@ -153,7 +171,7 @@ class ApiKey(Base):
         UUID(as_uuid=True), ForeignKey("people.id")
     )
     label: Mapped[str | None] = mapped_column(String(120))
-    key_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    key_hash: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)

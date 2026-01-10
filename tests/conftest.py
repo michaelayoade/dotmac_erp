@@ -8,9 +8,49 @@ from types import ModuleType
 import pytest
 from fastapi.testclient import TestClient
 from jose import jwt
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, String, TypeDecorator
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 from sqlalchemy.pool import StaticPool
+from sqlalchemy import dialects
+
+
+# Create a SQLite-compatible UUID type that stores as VARCHAR
+class SQLiteUUID(TypeDecorator):
+    """UUID type that works with SQLite by storing as VARCHAR."""
+    impl = String(36)
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if value is not None:
+            if isinstance(value, uuid.UUID):
+                return str(value)
+            return str(value)
+        return value
+
+    def process_result_value(self, value, dialect):
+        if value is not None:
+            if not isinstance(value, uuid.UUID):
+                return uuid.UUID(value)
+        return value
+
+
+# Monkey-patch the postgresql UUID import to use our SQLite-compatible version
+# This is done BEFORE any app model imports so they use the patched version
+import sqlalchemy.dialects.postgresql as pg_dialect
+_original_uuid = pg_dialect.UUID
+
+
+class PatchedUUID(SQLiteUUID):
+    """Patched UUID that uses SQLite-compatible storage."""
+    cache_ok = True
+
+    def __init__(self, as_uuid=True):
+        super().__init__()
+        self.as_uuid = as_uuid
+
+
+# Replace the PostgreSQL UUID with our patched version
+pg_dialect.UUID = PatchedUUID
 
 
 # Create a test engine BEFORE any app imports
@@ -38,6 +78,62 @@ mock_db_module.get_engine = lambda: _test_engine
 # Also mock app.config to prevent .env loading
 mock_config_module = ModuleType('app.config')
 
+# Mock app.rls module with no-op functions for SQLite (RLS uses PostgreSQL-specific features)
+mock_rls_module = ModuleType('app.rls')
+
+
+# No-op sync RLS functions for SQLite
+def _noop_set_org_sync(db, organization_id):
+    """No-op for SQLite: PostgreSQL RLS not available."""
+    pass
+
+
+def _noop_clear_org_sync(db):
+    """No-op for SQLite: PostgreSQL RLS not available."""
+    pass
+
+
+def _noop_enable_bypass_sync(db):
+    """No-op for SQLite: PostgreSQL RLS not available."""
+    pass
+
+
+def _noop_disable_bypass_sync(db):
+    """No-op for SQLite: PostgreSQL RLS not available."""
+    pass
+
+
+# No-op async RLS functions for SQLite
+async def _noop_set_org_async(db, organization_id):
+    """No-op for SQLite: PostgreSQL RLS not available."""
+    pass
+
+
+async def _noop_clear_org_async(db):
+    """No-op for SQLite: PostgreSQL RLS not available."""
+    pass
+
+
+async def _noop_enable_bypass_async(db):
+    """No-op for SQLite: PostgreSQL RLS not available."""
+    pass
+
+
+async def _noop_disable_bypass_async(db):
+    """No-op for SQLite: PostgreSQL RLS not available."""
+    pass
+
+
+# Assign mock functions to the module
+mock_rls_module.set_current_organization_sync = _noop_set_org_sync
+mock_rls_module.clear_organization_context_sync = _noop_clear_org_sync
+mock_rls_module.enable_rls_bypass_sync = _noop_enable_bypass_sync
+mock_rls_module.disable_rls_bypass_sync = _noop_disable_bypass_sync
+mock_rls_module.set_current_organization = _noop_set_org_async
+mock_rls_module.clear_organization_context = _noop_clear_org_async
+mock_rls_module.enable_rls_bypass = _noop_enable_bypass_async
+mock_rls_module.disable_rls_bypass = _noop_disable_bypass_async
+
 
 class MockSettings:
     database_url = "sqlite+pysqlite:///:memory:"
@@ -60,6 +156,7 @@ mock_config_module.Settings = MockSettings
 # Insert mocks before any app imports
 sys.modules['app.config'] = mock_config_module
 sys.modules['app.db'] = mock_db_module
+sys.modules['app.rls'] = mock_rls_module
 
 # Set environment variables
 os.environ["JWT_SECRET"] = "test-secret"
@@ -127,12 +224,16 @@ def _unique_email() -> str:
     return f"test-{uuid.uuid4().hex}@example.com"
 
 
+DEFAULT_TEST_ORG_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
+
+
 @pytest.fixture()
 def person(db_session):
     person = Person(
         first_name="Test",
         last_name="User",
         email=_unique_email(),
+        organization_id=DEFAULT_TEST_ORG_ID,
     )
     db_session.add(person)
     db_session.commit()
@@ -258,6 +359,7 @@ def admin_person(db_session, admin_role):
         first_name="Admin",
         last_name="User",
         email=_unique_email(),
+        organization_id=DEFAULT_TEST_ORG_ID,
     )
     db_session.add(person)
     db_session.commit()

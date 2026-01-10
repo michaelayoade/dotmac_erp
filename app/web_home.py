@@ -49,9 +49,9 @@ def home(request: Request, db: Session = Depends(get_db)):
         "mark": _brand_mark(brand_name),
     }
     return templates.TemplateResponse(
+        request,
         "index.html",
         {
-            "request": request,
             "title": brand_name,
             "people": people,
             "brand": brand,

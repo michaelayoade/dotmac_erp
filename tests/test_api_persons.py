@@ -2,6 +2,8 @@ import uuid
 
 import pytest
 
+from tests.conftest import DEFAULT_TEST_ORG_ID
+
 
 class TestPersonsAPI:
     """Tests for the /people API endpoints."""
@@ -12,6 +14,7 @@ class TestPersonsAPI:
             "first_name": "John",
             "last_name": "Doe",
             "email": f"john.doe.{uuid.uuid4().hex[:8]}@example.com",
+            "organization_id": str(DEFAULT_TEST_ORG_ID),
         }
         response = client.post("/people", json=payload, headers=auth_headers)
         assert response.status_code == 201
@@ -30,6 +33,7 @@ class TestPersonsAPI:
             "display_name": "Jane S.",
             "locale": "en-US",
             "timezone": "America/New_York",
+            "organization_id": str(DEFAULT_TEST_ORG_ID),
         }
         response = client.post("/people", json=payload, headers=auth_headers)
         assert response.status_code == 201
@@ -81,6 +85,7 @@ class TestPersonsAPI:
                 first_name=f"Test{i}",
                 last_name="User",
                 email=f"test{i}_{uuid.uuid4().hex[:8]}@example.com",
+                organization_id=DEFAULT_TEST_ORG_ID,
             )
             db_session.add(p)
         db_session.commit()
@@ -150,6 +155,7 @@ class TestPersonsAPI:
             first_name="ToDelete",
             last_name="User",
             email=f"delete_{uuid.uuid4().hex[:8]}@example.com",
+            organization_id=DEFAULT_TEST_ORG_ID,
         )
         db_session.add(person)
         db_session.commit()
@@ -174,6 +180,7 @@ class TestPersonsAPIV1:
             "first_name": "V1",
             "last_name": "User",
             "email": f"v1_{uuid.uuid4().hex[:8]}@example.com",
+            "organization_id": str(DEFAULT_TEST_ORG_ID),
         }
         response = client.post("/api/v1/people", json=payload, headers=auth_headers)
         assert response.status_code == 201
