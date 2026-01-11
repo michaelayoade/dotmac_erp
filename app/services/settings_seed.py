@@ -69,7 +69,7 @@ def seed_auth_settings(db: Session) -> None:
         db,
         key="totp_issuer",
         value_type=SettingValueType.string,
-        value_text=os.getenv("TOTP_ISSUER", "starter_template"),
+        value_text=os.getenv("TOTP_ISSUER", "dotmac_books"),
     )
     auth_settings.ensure_by_key(
         db,

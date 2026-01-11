@@ -132,7 +132,7 @@ def _refresh_ttl_days(db: Session | None) -> int:
 
 
 def _totp_issuer(db: Session | None) -> str:
-    return _env_value("TOTP_ISSUER") or _setting_value(db, "totp_issuer") or "starter_template"
+    return _env_value("TOTP_ISSUER") or _setting_value(db, "totp_issuer") or "dotmac_books"
 
 
 def _refresh_cookie_name(db: Session | None) -> str:

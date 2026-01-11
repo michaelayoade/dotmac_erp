@@ -10,7 +10,7 @@ load_dotenv()
 class Settings:
     database_url: str = os.getenv(
         "DATABASE_URL",
-        "postgresql+psycopg://postgres:postgres@localhost:5434/starter_template",
+        "postgresql+psycopg://postgres:postgres@localhost:5434/dotmac_books",
     )
     db_pool_size: int = int(os.getenv("DB_POOL_SIZE", "5"))
     db_max_overflow: int = int(os.getenv("DB_MAX_OVERFLOW", "10"))
@@ -24,8 +24,8 @@ class Settings:
     avatar_url_prefix: str = os.getenv("AVATAR_URL_PREFIX", "/static/avatars")
 
     # Branding
-    brand_name: str = os.getenv("BRAND_NAME", "Starter Template")
-    brand_tagline: str = os.getenv("BRAND_TAGLINE", "FastAPI starter")
+    brand_name: str = os.getenv("BRAND_NAME", "DotMac Books")
+    brand_tagline: str = os.getenv("BRAND_TAGLINE", "IFRS-Based Accounting Software")
     brand_logo_url: str | None = os.getenv("BRAND_LOGO_URL") or None
 
 

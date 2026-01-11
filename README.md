@@ -1,8 +1,59 @@
-# Starter Template
+# DotMac Books
 
-A production-ready FastAPI starter template with enterprise-grade features including authentication, RBAC, audit logging, background jobs, and full observability.
+IFRS-based multi-tenant accounting software built with FastAPI, featuring comprehensive financial modules, authentication, RBAC, audit logging, background jobs, and full observability.
 
 ## Features
+
+### IFRS Accounting Modules
+
+- **General Ledger (GL)**
+  - Chart of Accounts management
+  - Journal entries with double-entry validation
+  - Fiscal periods and year-end closing
+  - Trial balance and financial reporting
+
+- **Accounts Payable (AP)**
+  - Supplier management
+  - Purchase orders and goods receipts
+  - Supplier invoices and payment processing
+  - AP aging reports
+
+- **Accounts Receivable (AR)**
+  - Customer management
+  - Quotes and sales orders
+  - Customer invoices and receipts
+  - Credit notes and AR aging
+
+- **Inventory (INV)**
+  - Item management with FIFO valuation
+  - Lot and serial tracking
+  - Stock movements and adjustments
+  - Bill of Materials (BOM)
+
+- **Banking**
+  - Bank account management
+  - Statement import and reconciliation
+  - Transaction categorization rules
+
+- **Fixed Assets (FA)**
+  - Asset registration and categorization
+  - Depreciation schedules (straight-line, declining balance)
+  - Revaluation and disposal
+
+- **Tax**
+  - Tax configuration and rates
+  - Tax transaction tracking
+  - Tax return preparation
+
+- **Expenses**
+  - Expense tracking and categorization
+  - Cost allocation
+
+- **Leases (IFRS 16)**
+  - Lease contract management
+  - Right-of-use asset and liability calculation
+
+### Platform Features
 
 - **Authentication & Security**
   - JWT-based authentication with refresh token rotation
@@ -14,7 +65,7 @@ A production-ready FastAPI starter template with enterprise-grade features inclu
 - **Authorization**
   - Role-based access control (RBAC)
   - Fine-grained permissions system
-  - Scope-based API access
+  - Multi-tenant organization support
 
 - **Audit & Compliance**
   - Comprehensive audit logging
@@ -24,17 +75,12 @@ A production-ready FastAPI starter template with enterprise-grade features inclu
 - **Background Jobs**
   - Celery workers with Redis broker
   - Database-backed Beat scheduler
-  - Persistent scheduled tasks
+  - Recurring transaction automation
 
 - **Observability**
   - Prometheus metrics
   - OpenTelemetry distributed tracing
   - Structured JSON logging
-
-- **Web UI**
-  - Jinja2 server-side rendering
-  - Static file serving
-  - Avatar upload handling
 
 ## Tech Stack
 
@@ -49,26 +95,33 @@ A production-ready FastAPI starter template with enterprise-grade features inclu
 | Auth | python-jose, passlib, pyotp |
 | Tracing | OpenTelemetry |
 | Metrics | Prometheus |
+| Frontend | Jinja2, TailwindCSS |
 
 ## Project Structure
 
 ```
 ├── app/
-│   ├── api/              # Route handlers
+│   ├── api/              # API route handlers
 │   ├── models/           # SQLAlchemy ORM models
+│   │   └── ifrs/         # IFRS module models (gl, ap, ar, inv, etc.)
 │   ├── schemas/          # Pydantic validation schemas
 │   ├── services/         # Business logic layer
-│   ├── tasks/            # Celery background tasks
+│   │   └── ifrs/         # IFRS module services
+│   ├── web/              # Web UI route handlers
+│   │   └── ifrs/         # IFRS module web handlers
 │   ├── main.py           # FastAPI app initialization
 │   ├── config.py         # Application settings
 │   ├── db.py             # Database configuration
 │   ├── celery_app.py     # Celery configuration
 │   └── telemetry.py      # OpenTelemetry setup
 ├── templates/            # Jinja2 HTML templates
+│   └── ifrs/             # IFRS module templates
 ├── static/               # Static assets
 ├── alembic/              # Database migrations
 ├── scripts/              # Utility scripts
 ├── tests/                # Test suite
+│   ├── e2e/              # End-to-end Playwright tests
+│   └── ifrs/             # IFRS module unit tests
 ├── docker-compose.yml    # Container orchestration
 └── Dockerfile            # Container image
 ```
@@ -86,8 +139,8 @@ A production-ready FastAPI starter template with enterprise-grade features inclu
 
 1. **Clone the repository**
    ```bash
-   git clone <repository-url>
-   cd starter_template
+   git clone https://github.com/michaelayoade/dotmac_books.git
+   cd dotmac_books
    ```
 
 2. **Set up environment variables**
@@ -139,14 +192,13 @@ Services:
 
 3. **Seed initial data**
    ```bash
-   # Initialize RBAC roles and permissions
-   python scripts/seed_rbac.py
+   # Create E2E test user with admin role
+   python scripts/setup_e2e_user.py
 
-   # Create admin user
-   python scripts/seed_admin.py --username admin --password <password>
-
-   # Sync settings
-   python scripts/settings_sync.py
+   # Or create custom admin user
+   python scripts/seed_admin.py --email admin@example.com \
+     --first-name Admin --last-name User \
+     --username admin --password YourPassword123
    ```
 
 4. **Start the application**
@@ -170,7 +222,7 @@ Services:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `DATABASE_URL` | PostgreSQL connection string | `postgresql+psycopg://postgres:postgres@localhost:5434/starter_template` |
+| `DATABASE_URL` | PostgreSQL connection string | `postgresql+psycopg://postgres:postgres@localhost:5434/dotmac_books` |
 | `REDIS_URL` | Redis connection string | `redis://:redis@localhost:6379/0` |
 | `CELERY_BROKER_URL` | Celery broker URL | `redis://:redis@localhost:6379/0` |
 | `CELERY_RESULT_BACKEND` | Celery result backend | `redis://:redis@localhost:6379/1` |
@@ -178,10 +230,12 @@ Services:
 | `JWT_ALGORITHM` | JWT algorithm | `HS256` |
 | `JWT_ACCESS_TTL_MINUTES` | Access token TTL | `15` |
 | `JWT_REFRESH_TTL_DAYS` | Refresh token TTL | `30` |
-| `TOTP_ISSUER` | TOTP issuer name | `starter_template` |
+| `TOTP_ISSUER` | TOTP issuer name | `dotmac_books` |
 | `TOTP_ENCRYPTION_KEY` | TOTP secret encryption key | Required |
+| `BRAND_NAME` | Application brand name | `DotMac Books` |
+| `BRAND_TAGLINE` | Application tagline | `IFRS-Based Accounting Software` |
 | `OTEL_ENABLED` | Enable OpenTelemetry | `false` |
-| `OTEL_SERVICE_NAME` | Service name for tracing | `starter_template` |
+| `OTEL_SERVICE_NAME` | Service name for tracing | `dotmac_books` |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP collector endpoint | - |
 
 ### OpenBao Integration
@@ -189,105 +243,55 @@ Services:
 Secrets can be resolved from OpenBao by using the `openbao://` prefix:
 
 ```bash
-JWT_SECRET=openbao://secret/data/starter_template#jwt_secret
+JWT_SECRET=openbao://secret/data/dotmac_books#jwt_secret
 ```
 
-Configure OpenBao connection:
-```bash
-OPENBAO_ADDR=https://vault.example.com
-OPENBAO_TOKEN=<token>
-OPENBAO_NAMESPACE=<namespace>
-OPENBAO_KV_VERSION=2
-```
+## Default Credentials
 
-## API Endpoints
+For development and testing:
 
-### Authentication (`/auth`)
+| Username | Password | Role |
+|----------|----------|------|
+| `admin` | `admin123` | admin |
+| `e2e_testuser` | `e2e_testpassword123` | admin |
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/auth/login` | User login |
-| POST | `/auth/refresh` | Refresh access token |
-| POST | `/auth/logout` | Logout and revoke session |
-| GET | `/auth/me` | Get current user profile |
-| PUT | `/auth/me` | Update current user profile |
-| POST | `/auth/password-change` | Change password |
-| POST | `/auth/password-reset-request` | Request password reset |
-| POST | `/auth/password-reset` | Complete password reset |
-| POST | `/auth/mfa/setup` | Setup MFA |
-| POST | `/auth/mfa/verify` | Verify MFA code |
-| GET | `/auth/sessions` | List user sessions |
-| DELETE | `/auth/sessions/{id}` | Revoke session |
+## Database Schemas
 
-### People (`/people`)
+The application uses PostgreSQL schemas for domain separation:
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/people` | Create person |
-| GET | `/people` | List people |
-| GET | `/people/{id}` | Get person |
-| PUT | `/people/{id}` | Update person |
-| DELETE | `/people/{id}` | Delete person |
-
-### RBAC (`/roles`, `/permissions`)
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/roles` | Create role |
-| GET | `/roles` | List roles |
-| PUT | `/roles/{id}` | Update role |
-| DELETE | `/roles/{id}` | Delete role |
-| POST | `/permissions` | Create permission |
-| GET | `/permissions` | List permissions |
-
-### Monitoring
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/health` | Health check |
-| GET | `/metrics` | Prometheus metrics |
-
-## Development
-
-### Code Style
-
-The project follows standard Python conventions with:
-- Type hints throughout
-- Pydantic for data validation
-- SQLAlchemy 2.0 mapped column syntax
-
-### Adding New Endpoints
-
-1. Create model in `app/models/`
-2. Create schemas in `app/schemas/`
-3. Implement service logic in `app/services/`
-4. Add route handlers in `app/api/`
-5. Register router in `app/main.py`
-
-### Database Migrations
-
-```bash
-# Create a new migration
-alembic revision --autogenerate -m "description"
-
-# Apply migrations
-alembic upgrade head
-
-# Rollback one migration
-alembic downgrade -1
-```
+| Schema | Description |
+|--------|-------------|
+| `public` | Core auth, RBAC, and platform tables |
+| `gl` | General Ledger |
+| `ap` | Accounts Payable |
+| `ar` | Accounts Receivable |
+| `inv` | Inventory |
+| `banking` | Banking and reconciliation |
+| `fa` | Fixed Assets |
+| `tax` | Tax management |
+| `exp` | Expenses |
+| `lease` | Lease accounting (IFRS 16) |
+| `fin_inst` | Financial instruments |
+| `cons` | Consolidation |
+| `core_org` | Organization management |
+| `core_config` | Configuration |
+| `automation` | Recurring templates and workflows |
+| `rpt` | Reporting |
+| `audit` | Audit logging |
+| `platform` | Event sourcing |
 
 ## Testing
 
 ```bash
-# Run all tests
-pytest
+# Run all unit tests
+pytest tests/ --ignore=tests/e2e/
 
 # Run with coverage
 pytest --cov=app --cov-report=html
 
-# Run specific test file
-pytest tests/test_auth_flow.py
+# Run E2E tests (requires running server)
+python scripts/setup_e2e_user.py
+pytest tests/e2e/ -v
 ```
 
 ## Scripts
@@ -295,10 +299,10 @@ pytest tests/test_auth_flow.py
 | Script | Description |
 |--------|-------------|
 | `scripts/seed_admin.py` | Create admin user |
+| `scripts/setup_e2e_user.py` | Create E2E test user with admin role |
 | `scripts/seed_rbac.py` | Initialize roles and permissions |
-| `scripts/settings_sync.py` | Sync settings with database |
-| `scripts/settings_validate.py` | Validate settings configuration |
+| `scripts/seed_nigeria.py` | Seed Nigerian tax configuration |
 
 ## License
 
-[Add your license here]
+Proprietary - All rights reserved.
