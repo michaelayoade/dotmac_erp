@@ -7,8 +7,8 @@ from app.services.scheduler_config import build_beat_schedule
 
 class DbScheduler(Scheduler):
     def __init__(self, *args, **kwargs):
+        self._last_refresh_at = 0.0  # Must be set before super().__init__()
         super().__init__(*args, **kwargs)
-        self._last_refresh_at = 0.0
 
     def setup_schedule(self):
         self._refresh_schedule()
