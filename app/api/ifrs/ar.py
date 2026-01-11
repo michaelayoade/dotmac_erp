@@ -76,10 +76,11 @@ def create_customer(
 @router.get("/customers/{customer_id}", response_model=CustomerRead)
 def get_customer(
     customer_id: UUID,
+    organization_id: UUID = Query(...),
     db: Session = Depends(get_db),
 ):
     """Get a customer by ID."""
-    return customer_service.get(db, str(customer_id))
+    return customer_service.get(db, organization_id, str(customer_id))
 
 
 @router.get("/customers", response_model=ListResponse[CustomerRead])
@@ -170,10 +171,11 @@ def create_ar_invoice(
 @router.get("/invoices/{invoice_id}", response_model=ARInvoiceRead)
 def get_ar_invoice(
     invoice_id: UUID,
+    organization_id: UUID = Query(...),
     db: Session = Depends(get_db),
 ):
     """Get an AR invoice by ID."""
-    return ar_invoice_service.get(db, str(invoice_id))
+    return ar_invoice_service.get(db, organization_id, str(invoice_id))
 
 
 @router.get("/invoices", response_model=ListResponse[ARInvoiceRead])

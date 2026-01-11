@@ -20,6 +20,7 @@ from app.models.ifrs.inv.item import Item, CostingMethod
 from app.models.ifrs.inv.item_category import ItemCategory
 from app.models.ifrs.inv.warehouse import Warehouse
 from app.models.ifrs.inv.inventory_transaction import InventoryTransaction, TransactionType
+from app.models.ifrs.inv.inventory_lot import InventoryLot
 from app.services.common import coerce_uuid
 from app.services.response import ListResponseMixin
 
@@ -241,7 +242,7 @@ class InventoryTransactionService(ListResponseMixin):
         # Create transaction
         transaction = InventoryTransaction(
             organization_id=org_id,
-            transaction_type=TransactionType.RECEIPT,
+            transaction_type=input.transaction_type,
             transaction_date=input.transaction_date,
             fiscal_period_id=coerce_uuid(input.fiscal_period_id),
             item_id=itm_id,
@@ -276,10 +277,76 @@ class InventoryTransactionService(ListResponseMixin):
         # Update last purchase cost
         item.last_purchase_cost = input.unit_cost
 
+        # Handle FIFO/lot tracking
+        if item.costing_method == CostingMethod.FIFO or item.track_lots:
+            InventoryTransactionService._create_or_update_lot_for_receipt(
+                db=db,
+                item=item,
+                transaction=transaction,
+                input=input,
+            )
+
         db.commit()
         db.refresh(transaction)
 
         return transaction
+
+    @staticmethod
+    def _create_or_update_lot_for_receipt(
+        db: Session,
+        item: Item,
+        transaction: InventoryTransaction,
+        input: TransactionInput,
+    ) -> Optional[InventoryLot]:
+        """
+        Create or update a lot for a receipt transaction.
+
+        For FIFO items without explicit lot, creates a FIFO layer lot.
+        For lot-tracked items with explicit lot_id, updates the lot quantity.
+        """
+        import uuid as uuid_lib
+
+        if input.lot_id:
+            # Update existing lot
+            lot = db.get(InventoryLot, coerce_uuid(input.lot_id))
+            if lot and lot.item_id == item.item_id:
+                if lot.organization_id is None:
+                    lot.organization_id = item.organization_id
+                lot.quantity_on_hand = (lot.quantity_on_hand or Decimal("0")) + input.quantity
+                lot.quantity_available = lot.quantity_on_hand - (lot.quantity_allocated or Decimal("0"))
+                if lot.warehouse_id is None:
+                    lot.warehouse_id = coerce_uuid(input.warehouse_id)
+                return lot
+
+        # Create new lot for FIFO or lot-tracked items
+        if item.costing_method == CostingMethod.FIFO:
+            lot_number = f"FIFO-{input.transaction_date.strftime('%Y%m%d')}-{uuid_lib.uuid4().hex[:8]}"
+        elif item.track_lots:
+            # For lot-tracked items without lot_id, generate one
+            lot_number = f"LOT-{input.transaction_date.strftime('%Y%m%d')}-{uuid_lib.uuid4().hex[:8]}"
+        else:
+            return None
+
+        lot = InventoryLot(
+            organization_id=item.organization_id,
+            item_id=item.item_id,
+            warehouse_id=coerce_uuid(input.warehouse_id),
+            lot_number=lot_number,
+            received_date=input.transaction_date.date() if hasattr(input.transaction_date, 'date') else input.transaction_date,
+            unit_cost=input.unit_cost,
+            initial_quantity=input.quantity,
+            quantity_on_hand=input.quantity,
+            quantity_allocated=Decimal("0"),
+            quantity_available=input.quantity,
+            is_active=True,
+        )
+        db.add(lot)
+        db.flush()  # Get lot_id
+
+        # Update transaction with lot reference
+        transaction.lot_id = lot.lot_id
+
+        return lot
 
     @staticmethod
     def create_issue(
@@ -326,16 +393,71 @@ class InventoryTransactionService(ListResponseMixin):
                 detail=f"Insufficient inventory: {qty_before} available, {input.quantity} requested",
             )
 
-        # Determine unit cost based on costing method
+        # Handle lot-tracked items - enforce lot selection
+        lot_id = None
+        if item.track_lots:
+            if not input.lot_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Lot ID is required for lot-tracked items",
+                )
+            lot = db.get(InventoryLot, coerce_uuid(input.lot_id))
+            if not lot or lot.item_id != itm_id:
+                raise HTTPException(status_code=404, detail="Lot not found")
+            if lot.is_quarantined:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Cannot issue from quarantined lot",
+                )
+            if lot.quantity_available < input.quantity:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Insufficient quantity in lot: {lot.quantity_available} available",
+                )
+            lot_id = lot.lot_id
+
+        # Determine unit cost and consume from lots based on costing method
+        fifo_layers_used = None
         if item.costing_method == CostingMethod.STANDARD_COST:
             unit_cost = item.standard_cost or Decimal("0")
+            total_cost = input.quantity * unit_cost
         elif item.costing_method == CostingMethod.WEIGHTED_AVERAGE:
             unit_cost = item.average_cost or Decimal("0")
+            total_cost = input.quantity * unit_cost
+        elif item.costing_method == CostingMethod.FIFO:
+            # Consume using FIFO - get cost from oldest layers
+            fifo_result = InventoryTransactionService._consume_fifo(
+                db=db,
+                item_id=itm_id,
+                quantity=input.quantity,
+            )
+            unit_cost = fifo_result["unit_cost"]
+            total_cost = fifo_result["total_cost"]
+            fifo_layers_used = fifo_result["layers_used"]
+            # Use the first lot from FIFO if not lot-tracked
+            if not lot_id and fifo_result.get("first_lot_id"):
+                lot_id = fifo_result["first_lot_id"]
+        elif item.costing_method == CostingMethod.SPECIFIC_IDENTIFICATION:
+            # For specific identification, must have lot_id
+            if not lot_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Lot ID required for specific identification costing",
+                )
+            lot = db.get(InventoryLot, lot_id)
+            unit_cost = lot.unit_cost if lot else (input.unit_cost or Decimal("0"))
+            total_cost = input.quantity * unit_cost
+            # Consume from the specific lot
+            InventoryTransactionService._consume_from_lot(db, lot_id, input.quantity)
         else:
-            # FIFO/Specific - use provided cost or average
             unit_cost = input.unit_cost or item.average_cost or Decimal("0")
+            total_cost = input.quantity * unit_cost
 
-        total_cost = input.quantity * unit_cost
+        # For lot-tracked items (not FIFO or Specific), consume from lot
+        if item.track_lots and lot_id and item.costing_method not in [
+            CostingMethod.FIFO, CostingMethod.SPECIFIC_IDENTIFICATION
+        ]:
+            InventoryTransactionService._consume_from_lot(db, lot_id, input.quantity)
 
         # Create transaction
         transaction = InventoryTransaction(
@@ -346,7 +468,7 @@ class InventoryTransactionService(ListResponseMixin):
             item_id=itm_id,
             warehouse_id=wh_id,
             location_id=input.location_id,
-            lot_id=input.lot_id,
+            lot_id=lot_id,
             quantity=input.quantity,
             uom=input.uom,
             unit_cost=unit_cost,
@@ -368,6 +490,83 @@ class InventoryTransactionService(ListResponseMixin):
         db.refresh(transaction)
 
         return transaction
+
+    @staticmethod
+    def _consume_fifo(
+        db: Session,
+        item_id: UUID,
+        quantity: Decimal,
+    ) -> dict:
+        """
+        Consume inventory using FIFO method and return cost details.
+
+        Returns dict with unit_cost, total_cost, layers_used, first_lot_id.
+        """
+        itm_id = coerce_uuid(item_id)
+
+        # Get lots ordered by received date (oldest first)
+        lots = db.query(InventoryLot).filter(
+            InventoryLot.item_id == itm_id,
+            InventoryLot.quantity_on_hand > 0,
+            InventoryLot.is_active == True,
+            InventoryLot.is_quarantined == False,
+        ).order_by(InventoryLot.received_date.asc()).all()
+
+        total_available = sum(lot.quantity_on_hand for lot in lots)
+        if total_available < quantity:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Insufficient FIFO inventory: {total_available} available",
+            )
+
+        remaining = quantity
+        total_cost = Decimal("0")
+        layers_used = []
+        first_lot_id = None
+
+        for lot in lots:
+            if remaining <= 0:
+                break
+
+            consume_qty = min(lot.quantity_on_hand, remaining)
+            layer_cost = consume_qty * lot.unit_cost
+
+            lot.quantity_on_hand -= consume_qty
+            lot.quantity_available = lot.quantity_on_hand - (lot.quantity_allocated or Decimal("0"))
+
+            remaining -= consume_qty
+            total_cost += layer_cost
+
+            if first_lot_id is None:
+                first_lot_id = lot.lot_id
+
+            layers_used.append({
+                "lot_id": str(lot.lot_id),
+                "lot_number": lot.lot_number,
+                "quantity": str(consume_qty),
+                "unit_cost": str(lot.unit_cost),
+            })
+
+        unit_cost = (total_cost / quantity).quantize(Decimal("0.000001"), rounding=ROUND_HALF_UP)
+
+        return {
+            "unit_cost": unit_cost,
+            "total_cost": total_cost,
+            "layers_used": layers_used,
+            "first_lot_id": first_lot_id,
+        }
+
+    @staticmethod
+    def _consume_from_lot(
+        db: Session,
+        lot_id: UUID,
+        quantity: Decimal,
+    ) -> None:
+        """Consume quantity from a specific lot."""
+        lot = db.get(InventoryLot, coerce_uuid(lot_id))
+        if lot:
+            lot.quantity_on_hand = (lot.quantity_on_hand or Decimal("0")) - quantity
+            lot.quantity_available = lot.quantity_on_hand - (lot.quantity_allocated or Decimal("0"))
 
     @staticmethod
     def create_adjustment(
@@ -424,7 +623,7 @@ class InventoryTransactionService(ListResponseMixin):
         # Create transaction
         transaction = InventoryTransaction(
             organization_id=org_id,
-            transaction_type=TransactionType.ADJUSTMENT,
+            transaction_type=input.transaction_type,
             transaction_date=input.transaction_date,
             fiscal_period_id=coerce_uuid(input.fiscal_period_id),
             item_id=itm_id,
@@ -572,6 +771,65 @@ class InventoryTransactionService(ListResponseMixin):
         return (issue_txn, receipt_txn)
 
     @staticmethod
+    def get(
+        db: Session,
+        transaction_id: str,
+    ) -> InventoryTransaction:
+        """Get an inventory transaction by ID."""
+        txn = db.get(InventoryTransaction, coerce_uuid(transaction_id))
+        if not txn:
+            raise HTTPException(status_code=404, detail="Transaction not found")
+        return txn
+
+    @staticmethod
+    def create_transaction(
+        db: Session,
+        organization_id: UUID,
+        input: TransactionInput,
+        created_by_user_id: UUID,
+    ) -> InventoryTransaction:
+        """
+        Create an inventory transaction based on transaction type.
+
+        Routes to the appropriate create method based on transaction type.
+
+        Args:
+            db: Database session
+            organization_id: Organization scope
+            input: Transaction input data
+            created_by_user_id: User creating
+
+        Returns:
+            Created InventoryTransaction
+        """
+        if input.transaction_type in [TransactionType.RECEIPT, TransactionType.RETURN]:
+            return InventoryTransactionService.create_receipt(
+                db, organization_id, input, created_by_user_id
+            )
+        elif input.transaction_type in [TransactionType.ISSUE, TransactionType.SALE]:
+            return InventoryTransactionService.create_issue(
+                db, organization_id, input, created_by_user_id
+            )
+        elif input.transaction_type == TransactionType.TRANSFER:
+            issue_txn, _ = InventoryTransactionService.create_transfer(
+                db, organization_id, input, created_by_user_id
+            )
+            return issue_txn
+        elif input.transaction_type in [
+            TransactionType.ADJUSTMENT,
+            TransactionType.COUNT_ADJUSTMENT,
+            TransactionType.SCRAP,
+        ]:
+            return InventoryTransactionService.create_adjustment(
+                db, organization_id, input, created_by_user_id
+            )
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unsupported transaction type: {input.transaction_type}",
+            )
+
+    @staticmethod
     def list(
         db: Session,
         organization_id: Optional[str] = None,
@@ -579,10 +837,14 @@ class InventoryTransactionService(ListResponseMixin):
         warehouse_id: Optional[str] = None,
         transaction_type: Optional[TransactionType] = None,
         fiscal_period_id: Optional[str] = None,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
         limit: int = 50,
         offset: int = 0,
     ) -> list[InventoryTransaction]:
         """List inventory transactions with optional filters."""
+        from datetime import date, datetime
+
         query = db.query(InventoryTransaction)
 
         if organization_id:
@@ -601,12 +863,29 @@ class InventoryTransactionService(ListResponseMixin):
             )
 
         if transaction_type:
-            query = query.filter(InventoryTransaction.transaction_type == transaction_type)
+            # Handle both enum and string
+            if isinstance(transaction_type, str):
+                try:
+                    transaction_type = TransactionType(transaction_type)
+                except ValueError:
+                    pass  # Invalid type, skip filter
+            if isinstance(transaction_type, TransactionType):
+                query = query.filter(InventoryTransaction.transaction_type == transaction_type)
 
         if fiscal_period_id:
             query = query.filter(
                 InventoryTransaction.fiscal_period_id == coerce_uuid(fiscal_period_id)
             )
+
+        if start_date:
+            # Convert date to datetime for comparison
+            start_dt = datetime.combine(start_date, datetime.min.time())
+            query = query.filter(InventoryTransaction.transaction_date >= start_dt)
+
+        if end_date:
+            # End date is inclusive, so use end of day
+            end_dt = datetime.combine(end_date, datetime.max.time())
+            query = query.filter(InventoryTransaction.transaction_date <= end_dt)
 
         query = query.order_by(InventoryTransaction.transaction_date.desc())
         return query.limit(limit).offset(offset).all()

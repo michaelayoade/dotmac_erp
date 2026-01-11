@@ -92,6 +92,27 @@ class Organization(Base):
     # Status
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
+    # Regional settings
+    timezone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    date_format: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    number_format: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+
+    # Contact information
+    contact_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    contact_phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+
+    # Address
+    address_line1: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    address_line2: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    city: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    state: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    postal_code: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    country: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+
+    # Branding
+    logo_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    website_url: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

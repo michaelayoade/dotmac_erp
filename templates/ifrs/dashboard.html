@@ -3,89 +3,129 @@
 {% block page_title %}Dashboard{% endblock %}
 
 {% block content %}
-<div class="space-y-6">
-    <!-- Stats Grid -->
-    <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+<div class="space-y-8">
+    <!-- Stats Grid with Sparklines -->
+    <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-4" data-testid="dashboard-stats">
         <!-- Total Revenue -->
-        <div class="stagger-in card-hover rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800/50">
-            <div class="flex items-center justify-between">
-                <div>
-                    <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Total Revenue</p>
-                    <p class="mt-2 text-2xl font-bold text-slate-900 dark:text-white font-display counter-animate">
+        <div class="stagger-in card card-hover group" style="animation-delay: 0ms;" data-testid="dashboard-stat-total-revenue">
+            <div class="flex items-start justify-between">
+                <div class="flex-1">
+                    <p class="text-sm font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Total Revenue</p>
+                    <p class="mt-2 text-3xl font-bold text-slate-900 dark:text-white font-display">
                         {{ stats.total_revenue | default("$0.00") }}
                     </p>
+                    <div class="mt-3 flex items-center gap-2">
+                        <span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400">
+                            <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/>
+                            </svg>
+                            +12.5%
+                        </span>
+                        <span class="text-xs text-slate-500 dark:text-slate-400">vs last period</span>
+                    </div>
                 </div>
-                <div class="rounded-xl bg-green-100 p-3 dark:bg-green-900/30">
-                    <svg class="h-6 w-6 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div class="card-icon bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
+                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
                     </svg>
                 </div>
             </div>
-            <div class="mt-4 flex items-center text-sm">
-                <span class="text-green-600 dark:text-green-400">+12.5%</span>
-                <span class="ml-2 text-slate-500 dark:text-slate-400">from last period</span>
+            <!-- Sparkline -->
+            <div class="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
+                <svg class="sparkline sparkline-success" viewBox="0 0 100 24" preserveAspectRatio="none">
+                    <polyline points="0,20 10,18 20,15 30,17 40,12 50,10 60,14 70,8 80,6 90,9 100,4" />
+                </svg>
             </div>
         </div>
 
         <!-- Total Expenses -->
-        <div class="stagger-in card-hover rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800/50">
-            <div class="flex items-center justify-between">
-                <div>
-                    <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Total Expenses</p>
-                    <p class="mt-2 text-2xl font-bold text-slate-900 dark:text-white font-display counter-animate">
+        <div class="stagger-in card card-hover group" style="animation-delay: 50ms;" data-testid="dashboard-stat-total-expenses">
+            <div class="flex items-start justify-between">
+                <div class="flex-1">
+                    <p class="text-sm font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Total Expenses</p>
+                    <p class="mt-2 text-3xl font-bold text-slate-900 dark:text-white font-display">
                         {{ stats.total_expenses | default("$0.00") }}
                     </p>
+                    <div class="mt-3 flex items-center gap-2">
+                        <span class="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2 py-0.5 text-xs font-semibold text-rose-700 dark:bg-rose-900/40 dark:text-rose-400">
+                            <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/>
+                            </svg>
+                            +8.2%
+                        </span>
+                        <span class="text-xs text-slate-500 dark:text-slate-400">vs last period</span>
+                    </div>
                 </div>
-                <div class="rounded-xl bg-red-100 p-3 dark:bg-red-900/30">
-                    <svg class="h-6 w-6 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div class="card-icon bg-rose-50 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400">
+                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6"/>
                     </svg>
                 </div>
             </div>
-            <div class="mt-4 flex items-center text-sm">
-                <span class="text-red-600 dark:text-red-400">+8.2%</span>
-                <span class="ml-2 text-slate-500 dark:text-slate-400">from last period</span>
+            <!-- Sparkline -->
+            <div class="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
+                <svg class="sparkline sparkline-danger" viewBox="0 0 100 24" preserveAspectRatio="none">
+                    <polyline points="0,18 10,16 20,14 30,15 40,12 50,14 60,10 70,12 80,8 90,6 100,4" />
+                </svg>
             </div>
         </div>
 
         <!-- Net Income -->
-        <div class="stagger-in card-hover rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800/50">
-            <div class="flex items-center justify-between">
-                <div>
-                    <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Net Income</p>
-                    <p class="mt-2 text-2xl font-bold text-slate-900 dark:text-white font-display counter-animate">
+        <div class="stagger-in card card-hover group" style="animation-delay: 100ms;" data-testid="dashboard-stat-net-income">
+            <div class="flex items-start justify-between">
+                <div class="flex-1">
+                    <p class="text-sm font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Net Income</p>
+                    <p class="mt-2 text-3xl font-bold text-slate-900 dark:text-white font-display">
                         {{ stats.net_income | default("$0.00") }}
                     </p>
+                    <div class="mt-3 flex items-center gap-2">
+                        <span class="inline-flex items-center gap-1 rounded-full bg-teal-100 px-2 py-0.5 text-xs font-semibold text-teal-700 dark:bg-teal-900/40 dark:text-teal-400">
+                            <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/>
+                            </svg>
+                            +15.3%
+                        </span>
+                        <span class="text-xs text-slate-500 dark:text-slate-400">vs last period</span>
+                    </div>
                 </div>
-                <div class="rounded-xl bg-primary-100 p-3 dark:bg-primary-900/30">
-                    <svg class="h-6 w-6 text-primary-600 dark:text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div class="card-icon bg-teal-50 text-teal-600 dark:bg-teal-900/30 dark:text-teal-400">
+                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
                     </svg>
                 </div>
             </div>
-            <div class="mt-4 flex items-center text-sm">
-                <span class="text-green-600 dark:text-green-400">+15.3%</span>
-                <span class="ml-2 text-slate-500 dark:text-slate-400">from last period</span>
+            <!-- Sparkline -->
+            <div class="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
+                <svg class="sparkline sparkline-info" viewBox="0 0 100 24" preserveAspectRatio="none">
+                    <polyline points="0,22 10,20 20,18 30,16 40,18 50,14 60,12 70,10 80,8 90,6 100,2" />
+                </svg>
             </div>
         </div>
 
         <!-- Open Invoices -->
-        <div class="stagger-in card-hover rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800/50">
-            <div class="flex items-center justify-between">
-                <div>
-                    <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Open Invoices</p>
-                    <p class="mt-2 text-2xl font-bold text-slate-900 dark:text-white font-display counter-animate">
+        <div class="stagger-in card card-hover group" style="animation-delay: 150ms;" data-testid="dashboard-stat-open-invoices">
+            <div class="flex items-start justify-between">
+                <div class="flex-1">
+                    <p class="text-sm font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Open Invoices</p>
+                    <p class="mt-2 text-3xl font-bold text-slate-900 dark:text-white font-display">
                         {{ stats.open_invoices | default(0) }}
                     </p>
+                    <div class="mt-3 flex items-center gap-2">
+                        <span class="text-sm font-medium text-amber-600 dark:text-amber-400">{{ stats.pending_amount | default("$0.00") }}</span>
+                        <span class="text-xs text-slate-500 dark:text-slate-400">pending</span>
+                    </div>
                 </div>
-                <div class="rounded-xl bg-accent-100 p-3 dark:bg-accent-900/30">
-                    <svg class="h-6 w-6 text-accent-600 dark:text-accent-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div class="card-icon bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">
+                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                     </svg>
                 </div>
             </div>
-            <div class="mt-4 flex items-center text-sm">
-                <span class="text-slate-500 dark:text-slate-400">{{ stats.pending_amount | default("$0.00") }} pending</span>
+            <!-- Sparkline -->
+            <div class="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
+                <svg class="sparkline sparkline-warning" viewBox="0 0 100 24" preserveAspectRatio="none">
+                    <polyline points="0,12 10,10 20,14 30,8 40,12 50,6 60,10 70,8 80,12 90,10 100,8" />
+                </svg>
             </div>
         </div>
     </div>
@@ -93,84 +133,141 @@
     <!-- Quick Actions and Recent Activity -->
     <div class="grid gap-6 lg:grid-cols-3">
         <!-- Quick Actions -->
-        <div class="lg:col-span-1">
-            <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800/50">
-                <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display">Quick Actions</h2>
-                <div class="mt-4 space-y-3">
-                    <a href="/gl/journals/new" class="flex items-center gap-3 rounded-lg border border-slate-200 p-3 transition hover:border-primary-300 hover:bg-primary-50 dark:border-slate-700 dark:hover:border-primary-500/50 dark:hover:bg-primary-900/20">
-                        <div class="rounded-lg bg-primary-100 p-2 dark:bg-primary-900/30">
-                            <svg class="h-5 w-5 text-primary-600 dark:text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div class="lg:col-span-1 stagger-in" style="animation-delay: 200ms;">
+            <div class="card h-full" data-testid="dashboard-quick-actions">
+                <div class="card-header">
+                    <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display">Quick Actions</h2>
+                </div>
+                <div class="p-4 space-y-3">
+                    <a href="/gl/journals/new" class="group flex items-center gap-4 rounded-xl border-2 border-dashed border-slate-200 p-4 transition-all hover:border-emerald-400 hover:bg-emerald-50/50 dark:border-slate-700 dark:hover:border-emerald-500 dark:hover:bg-emerald-900/20">
+                        <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600 transition-transform group-hover:scale-110 dark:bg-emerald-900/40 dark:text-emerald-400">
+                            <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
                             </svg>
                         </div>
-                        <span class="font-medium text-slate-700 dark:text-slate-300">New Journal Entry</span>
+                        <div>
+                            <span class="block font-semibold text-slate-800 dark:text-slate-200">New Journal Entry</span>
+                            <span class="text-sm text-slate-500 dark:text-slate-400">Create GL transaction</span>
+                        </div>
                     </a>
-                    <a href="/ar/invoices/new" class="flex items-center gap-3 rounded-lg border border-slate-200 p-3 transition hover:border-primary-300 hover:bg-primary-50 dark:border-slate-700 dark:hover:border-primary-500/50 dark:hover:bg-primary-900/20">
-                        <div class="rounded-lg bg-green-100 p-2 dark:bg-green-900/30">
-                            <svg class="h-5 w-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+
+                    <a href="/ar/invoices/new" class="group flex items-center gap-4 rounded-xl border-2 border-dashed border-slate-200 p-4 transition-all hover:border-teal-400 hover:bg-teal-50/50 dark:border-slate-700 dark:hover:border-teal-500 dark:hover:bg-teal-900/20">
+                        <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-teal-100 text-teal-600 transition-transform group-hover:scale-110 dark:bg-teal-900/40 dark:text-teal-400">
+                            <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                             </svg>
                         </div>
-                        <span class="font-medium text-slate-700 dark:text-slate-300">Create AR Invoice</span>
+                        <div>
+                            <span class="block font-semibold text-slate-800 dark:text-slate-200">Create AR Invoice</span>
+                            <span class="text-sm text-slate-500 dark:text-slate-400">Bill a customer</span>
+                        </div>
                     </a>
-                    <a href="/ap/invoices/new" class="flex items-center gap-3 rounded-lg border border-slate-200 p-3 transition hover:border-primary-300 hover:bg-primary-50 dark:border-slate-700 dark:hover:border-primary-500/50 dark:hover:bg-primary-900/20">
-                        <div class="rounded-lg bg-red-100 p-2 dark:bg-red-900/30">
-                            <svg class="h-5 w-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+
+                    <a href="/ap/invoices/new" class="group flex items-center gap-4 rounded-xl border-2 border-dashed border-slate-200 p-4 transition-all hover:border-rose-400 hover:bg-rose-50/50 dark:border-slate-700 dark:hover:border-rose-500 dark:hover:bg-rose-900/20">
+                        <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-rose-100 text-rose-600 transition-transform group-hover:scale-110 dark:bg-rose-900/40 dark:text-rose-400">
+                            <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2z"/>
                             </svg>
                         </div>
-                        <span class="font-medium text-slate-700 dark:text-slate-300">Enter AP Invoice</span>
+                        <div>
+                            <span class="block font-semibold text-slate-800 dark:text-slate-200">Enter AP Invoice</span>
+                            <span class="text-sm text-slate-500 dark:text-slate-400">Record vendor bill</span>
+                        </div>
                     </a>
-                    <a href="/gl/trial-balance" class="flex items-center gap-3 rounded-lg border border-slate-200 p-3 transition hover:border-primary-300 hover:bg-primary-50 dark:border-slate-700 dark:hover:border-primary-500/50 dark:hover:bg-primary-900/20">
-                        <div class="rounded-lg bg-accent-100 p-2 dark:bg-accent-900/30">
-                            <svg class="h-5 w-5 text-accent-600 dark:text-accent-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+
+                    <a href="/gl/trial-balance" class="group flex items-center gap-4 rounded-xl border-2 border-dashed border-slate-200 p-4 transition-all hover:border-violet-400 hover:bg-violet-50/50 dark:border-slate-700 dark:hover:border-violet-500 dark:hover:bg-violet-900/20">
+                        <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-violet-100 text-violet-600 transition-transform group-hover:scale-110 dark:bg-violet-900/40 dark:text-violet-400">
+                            <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                             </svg>
                         </div>
-                        <span class="font-medium text-slate-700 dark:text-slate-300">View Trial Balance</span>
+                        <div>
+                            <span class="block font-semibold text-slate-800 dark:text-slate-200">Trial Balance</span>
+                            <span class="text-sm text-slate-500 dark:text-slate-400">View account balances</span>
+                        </div>
                     </a>
+                </div>
+                <div class="px-4 pb-4 pt-2 border-t border-slate-100 dark:border-slate-700/60">
+                    <div class="flex flex-wrap gap-4 text-sm">
+                        <a href="/gl/journals" data-testid="dashboard-link-journals" class="font-medium text-slate-600 hover:text-teal-600 dark:text-slate-300 dark:hover:text-teal-400">
+                            View Journals
+                        </a>
+                        <a href="/ar/aging" data-testid="dashboard-link-ar-aging" class="font-medium text-slate-600 hover:text-teal-600 dark:text-slate-300 dark:hover:text-teal-400">
+                            AR Aging
+                        </a>
+                        <a href="/ap/aging" data-testid="dashboard-link-ap-aging" class="font-medium text-slate-600 hover:text-teal-600 dark:text-slate-300 dark:hover:text-teal-400">
+                            AP Aging
+                        </a>
+                    </div>
                 </div>
             </div>
         </div>
 
         <!-- Recent Journal Entries -->
-        <div class="lg:col-span-2">
-            <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800/50">
-                <div class="flex items-center justify-between">
+        <div class="lg:col-span-2 stagger-in" style="animation-delay: 250ms;">
+            <div class="card h-full" data-testid="dashboard-recent-journals">
+                <div class="card-header">
                     <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display">Recent Journal Entries</h2>
-                    <a href="/gl/journals" class="text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300">View all</a>
+                    <a href="/gl/journals" class="text-sm font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300 transition-colors">
+                        View all &rarr;
+                    </a>
                 </div>
-                <div class="mt-4 overflow-x-auto">
-                    <table class="w-full">
+                <div class="table-container">
+                    <table class="table">
                         <thead>
-                            <tr class="border-b border-slate-200 dark:border-slate-700">
-                                <th class="pb-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Entry #</th>
-                                <th class="pb-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Date</th>
-                                <th class="pb-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Description</th>
-                                <th class="pb-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Amount</th>
-                                <th class="pb-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Status</th>
+                            <tr>
+                                <th class="sortable">
+                                    Entry #
+                                    <svg class="inline h-3 w-3 ml-1 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
+                                    </svg>
+                                </th>
+                                <th class="sortable">Date</th>
+                                <th>Description</th>
+                                <th class="text-right sortable">Amount</th>
+                                <th>Status</th>
                             </tr>
                         </thead>
-                        <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                        <tbody>
                             {% for entry in recent_journals %}
-                            <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                                <td class="py-3 text-sm font-medium text-slate-900 dark:text-white">{{ entry.entry_number }}</td>
-                                <td class="py-3 text-sm text-slate-600 dark:text-slate-400">{{ entry.entry_date }}</td>
-                                <td class="py-3 text-sm text-slate-600 dark:text-slate-400">{{ entry.description | truncate(40) }}</td>
-                                <td class="py-3 text-right text-sm font-medium text-slate-900 dark:text-white">{{ entry.total_debit | default("$0.00") }}</td>
-                                <td class="py-3">
+                            <tr class="group">
+                                <td>
+                                    <a href="/gl/journals/{{ entry.id }}" class="font-semibold text-teal-600 hover:text-teal-700 dark:text-teal-400">
+                                        {{ entry.entry_number }}
+                                    </a>
+                                </td>
+                                <td class="text-slate-500 dark:text-slate-400">{{ entry.entry_date }}</td>
+                                <td class="max-w-xs truncate text-slate-600 dark:text-slate-300">{{ entry.description | truncate(40) }}</td>
+                                <td class="text-right font-mono font-medium text-slate-900 dark:text-white">{{ entry.total_debit | default("$0.00") }}</td>
+                                <td>
                                     {% if entry.status == 'POSTED' %}
-                                    <span class="inline-flex rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">Posted</span>
+                                    <span class="badge-success">Posted</span>
                                     {% elif entry.status == 'DRAFT' %}
-                                    <span class="inline-flex rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">Draft</span>
+                                    <span class="badge-warning">Draft</span>
                                     {% else %}
-                                    <span class="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-400">{{ entry.status }}</span>
+                                    <span class="badge-info">{{ entry.status }}</span>
                                     {% endif %}
                                 </td>
                             </tr>
                             {% else %}
                             <tr>
-                                <td colspan="5" class="py-8 text-center text-sm text-slate-500 dark:text-slate-400">No recent journal entries</td>
+                                <td colspan="5" class="py-12">
+                                    <div class="empty-state">
+                                        <div class="empty-state-icon">
+                                            <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+                                            </svg>
+                                        </div>
+                                        <p class="mt-4 text-sm font-medium text-slate-900 dark:text-white">No journal entries yet</p>
+                                        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Create your first journal entry to get started</p>
+                                        <a href="/gl/journals/new" class="mt-4 btn btn-primary">
+                                            <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                                            </svg>
+                                            New Journal Entry
+                                        </a>
+                                    </div>
+                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -180,27 +277,168 @@
         </div>
     </div>
 
-    <!-- Period Status -->
-    <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800/50">
-        <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display">Fiscal Period Status</h2>
-        <div class="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {% for period in fiscal_periods %}
-            <div class="rounded-lg border border-slate-200 p-4 dark:border-slate-700">
-                <div class="flex items-center justify-between">
-                    <span class="text-sm font-medium text-slate-900 dark:text-white">{{ period.period_name }}</span>
-                    {% if period.status == 'OPEN' %}
-                    <span class="inline-flex rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">Open</span>
-                    {% elif period.status == 'CLOSED' %}
-                    <span class="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-400">Closed</span>
-                    {% else %}
-                    <span class="inline-flex rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">{{ period.status }}</span>
-                    {% endif %}
-                </div>
-                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ period.start_date }} - {{ period.end_date }}</p>
+    <!-- Period Status with Progress Indicators -->
+    <div class="stagger-in" style="animation-delay: 300ms;">
+        <div class="card" data-testid="dashboard-period-status">
+            <div class="card-header">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display">Fiscal Period Status</h2>
+                <a href="/gl/periods" class="text-sm font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300 transition-colors">
+                    Manage periods &rarr;
+                </a>
             </div>
-            {% else %}
-            <div class="col-span-full py-4 text-center text-sm text-slate-500 dark:text-slate-400">No fiscal periods configured</div>
-            {% endfor %}
+            <div class="p-6">
+                <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    {% for period in fiscal_periods %}
+                    <div class="group relative overflow-hidden rounded-xl border-2 border-slate-200 p-5 transition-all hover:border-teal-400 hover:shadow-lg dark:border-slate-700 dark:hover:border-teal-500">
+                        <!-- Status indicator bar -->
+                        {% if period.status == 'OPEN' %}
+                        <div class="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-emerald-400 to-teal-500"></div>
+                        {% elif period.status == 'CLOSED' %}
+                        <div class="absolute inset-x-0 top-0 h-1 bg-slate-300 dark:bg-slate-600"></div>
+                        {% else %}
+                        <div class="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-amber-400 to-orange-500"></div>
+                        {% endif %}
+
+                        <div class="flex items-start justify-between">
+                            <div>
+                                <span class="text-lg font-semibold text-slate-900 dark:text-white font-display">{{ period.period_name }}</span>
+                                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ period.start_date }} - {{ period.end_date }}</p>
+                            </div>
+                            {% if period.status == 'OPEN' %}
+                            <span class="badge-success">Open</span>
+                            {% elif period.status == 'CLOSED' %}
+                            <span class="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-600 dark:bg-slate-700 dark:text-slate-300">Closed</span>
+                            {% else %}
+                            <span class="badge-warning">{{ period.status }}</span>
+                            {% endif %}
+                        </div>
+
+                        <!-- Period stats (placeholder) -->
+                        <div class="mt-4 flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400">
+                            <span class="flex items-center gap-1">
+                                <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                </svg>
+                                {{ period.journal_count | default(0) }} entries
+                            </span>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="col-span-full">
+                        <div class="empty-state py-12">
+                            <div class="empty-state-icon">
+                                <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                                </svg>
+                            </div>
+                            <p class="mt-4 text-sm font-medium text-slate-900 dark:text-white">No fiscal periods configured</p>
+                            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Set up your fiscal calendar to start recording transactions</p>
+                            <a href="/gl/periods/new" class="mt-4 btn btn-primary">
+                                <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                                </svg>
+                                Create Fiscal Period
+                            </a>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Additional Dashboard Widgets Row -->
+    <div class="grid gap-6 lg:grid-cols-2 stagger-in" style="animation-delay: 350ms;">
+        <!-- Cash Flow Summary -->
+        <div class="card" data-testid="dashboard-cash-flow">
+            <div class="card-header">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display">Cash Flow Summary</h2>
+                <span class="text-sm text-slate-500 dark:text-slate-400">Last 30 days</span>
+            </div>
+            <div class="p-6">
+                <div class="flex items-center justify-between mb-6">
+                    <div>
+                        <p class="text-sm text-slate-500 dark:text-slate-400">Net Cash Flow</p>
+                        <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ stats.net_cash_flow | default("$0.00") }}</p>
+                    </div>
+                    <div class="h-16 w-32">
+                        <svg class="sparkline sparkline-success w-full h-full" viewBox="0 0 100 40" preserveAspectRatio="none">
+                            <defs>
+                                <linearGradient id="cashFlowGradient" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stop-color="rgb(16, 185, 129)" stop-opacity="0.3"/>
+                                    <stop offset="100%" stop-color="rgb(16, 185, 129)" stop-opacity="0"/>
+                                </linearGradient>
+                            </defs>
+                            <path fill="url(#cashFlowGradient)" d="M0,35 L10,30 L20,25 L30,28 L40,20 L50,22 L60,15 L70,18 L80,10 L90,12 L100,5 L100,40 L0,40 Z"/>
+                            <polyline points="0,35 10,30 20,25 30,28 40,20 50,22 60,15 70,18 80,10 90,12 100,5" />
+                        </svg>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="rounded-lg bg-emerald-50 p-4 dark:bg-emerald-900/20">
+                        <p class="text-sm text-emerald-600 dark:text-emerald-400">Cash In</p>
+                        <p class="mt-1 text-xl font-semibold text-emerald-700 dark:text-emerald-300">{{ stats.cash_in | default("$0.00") }}</p>
+                    </div>
+                    <div class="rounded-lg bg-rose-50 p-4 dark:bg-rose-900/20">
+                        <p class="text-sm text-rose-600 dark:text-rose-400">Cash Out</p>
+                        <p class="mt-1 text-xl font-semibold text-rose-700 dark:text-rose-300">{{ stats.cash_out | default("$0.00") }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Aging Overview -->
+        <div class="card" data-testid="dashboard-aging-overview">
+            <div class="card-header">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display">Aging Overview</h2>
+                <a href="/ar/aging" class="text-sm font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400 transition-colors">
+                    View details &rarr;
+                </a>
+            </div>
+            <div class="p-6">
+                <div class="space-y-4">
+                    <!-- Current -->
+                    <div>
+                        <div class="flex items-center justify-between text-sm mb-2">
+                            <span class="font-medium text-slate-700 dark:text-slate-300">Current</span>
+                            <span class="font-semibold text-slate-900 dark:text-white">{{ stats.aging_current | default("$0.00") }}</span>
+                        </div>
+                        <div class="h-2 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden">
+                            <div class="h-full rounded-full bg-emerald-500" style="width: 70%"></div>
+                        </div>
+                    </div>
+                    <!-- 1-30 Days -->
+                    <div>
+                        <div class="flex items-center justify-between text-sm mb-2">
+                            <span class="font-medium text-slate-700 dark:text-slate-300">1-30 Days</span>
+                            <span class="font-semibold text-slate-900 dark:text-white">{{ stats.aging_30 | default("$0.00") }}</span>
+                        </div>
+                        <div class="h-2 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden">
+                            <div class="h-full rounded-full bg-amber-500" style="width: 20%"></div>
+                        </div>
+                    </div>
+                    <!-- 31-60 Days -->
+                    <div>
+                        <div class="flex items-center justify-between text-sm mb-2">
+                            <span class="font-medium text-slate-700 dark:text-slate-300">31-60 Days</span>
+                            <span class="font-semibold text-slate-900 dark:text-white">{{ stats.aging_60 | default("$0.00") }}</span>
+                        </div>
+                        <div class="h-2 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden">
+                            <div class="h-full rounded-full bg-orange-500" style="width: 7%"></div>
+                        </div>
+                    </div>
+                    <!-- 60+ Days -->
+                    <div>
+                        <div class="flex items-center justify-between text-sm mb-2">
+                            <span class="font-medium text-slate-700 dark:text-slate-300">60+ Days</span>
+                            <span class="font-semibold text-rose-600 dark:text-rose-400">{{ stats.aging_90 | default("$0.00") }}</span>
+                        </div>
+                        <div class="h-2 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden">
+                            <div class="h-full rounded-full bg-rose-500" style="width: 3%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>

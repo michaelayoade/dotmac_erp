@@ -35,11 +35,27 @@ class SequenceType(str, enum.Enum):
     ASSET = "ASSET"
     LEASE = "LEASE"
     GOODS_RECEIPT = "GOODS_RECEIPT"
+    QUOTE = "QUOTE"
+    SALES_ORDER = "SALES_ORDER"
+    SHIPMENT = "SHIPMENT"
+    EXPENSE = "EXPENSE"
+
+
+class ResetFrequency(str, enum.Enum):
+    """When to reset the sequence counter."""
+    NEVER = "NEVER"
+    YEARLY = "YEARLY"
+    MONTHLY = "MONTHLY"
 
 
 class NumberingSequence(Base):
     """
     Numbering sequence for document generation.
+
+    Supports flexible formatting with patterns like:
+    - {PREFIX}{YYYY}{MM}-{SEQ} -> INV202501-0001
+    - {PREFIX}-{SEQ} -> INV-000001
+    - {PREFIX}{YY}-{SEQ}{SUFFIX} -> QT25-0001A
     """
 
     __tablename__ = "numbering_sequence"
@@ -47,8 +63,7 @@ class NumberingSequence(Base):
         UniqueConstraint(
             "organization_id",
             "sequence_type",
-            "fiscal_year_id",
-            name="uq_sequence",
+            name="uq_sequence_type",
         ),
         {"schema": "core_config"},
     )
@@ -70,12 +85,30 @@ class NumberingSequence(Base):
         nullable=False,
     )
 
-    prefix: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
-    suffix: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
+    # Format components
+    prefix: Mapped[str] = mapped_column(String(20), nullable=False, default="")
+    suffix: Mapped[str] = mapped_column(String(10), nullable=False, default="")
+    separator: Mapped[str] = mapped_column(String(5), nullable=False, default="-")
+    min_digits: Mapped[int] = mapped_column(Integer, nullable=False, default=4)
+
+    # Date inclusion
+    include_year: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    include_month: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    year_format: Mapped[int] = mapped_column(Integer, nullable=False, default=4)  # 2 or 4
+
+    # Current sequence tracking
     current_number: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
-    min_digits: Mapped[int] = mapped_column(Integer, nullable=False, default=6)
+    current_year: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    current_month: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     # Reset behavior
+    reset_frequency: Mapped[ResetFrequency] = mapped_column(
+        Enum(ResetFrequency, name="reset_frequency"),
+        nullable=False,
+        default=ResetFrequency.MONTHLY,
+    )
+
+    # Legacy field (for backward compatibility)
     fiscal_year_reset: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     fiscal_year_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
@@ -91,3 +124,53 @@ class NumberingSequence(Base):
         nullable=False,
         server_default=func.now(),
     )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        onupdate=func.now(),
+    )
+
+    @property
+    def preview(self) -> str:
+        """Generate a preview of the number format."""
+        from datetime import date
+        today = date.today()
+        parts = []
+
+        if self.prefix:
+            parts.append(self.prefix)
+
+        if self.include_year:
+            if self.year_format == 2:
+                parts.append(str(today.year)[-2:])
+            else:
+                parts.append(str(today.year))
+
+        if self.include_month:
+            parts.append(f"{today.month:02d}")
+
+        # Add separator before sequence if we have date parts
+        if self.include_year or self.include_month:
+            seq_part = f"{self.separator}{'0' * self.min_digits}"
+        else:
+            seq_part = '0' * self.min_digits
+
+        parts.append(seq_part[1:] if seq_part.startswith(self.separator) else seq_part)
+
+        if self.suffix:
+            parts.append(self.suffix)
+
+        # Build the format
+        if self.include_year or self.include_month:
+            # prefix + year + month + separator + seq + suffix
+            result = self.prefix
+            if self.include_year:
+                result += str(today.year) if self.year_format == 4 else str(today.year)[-2:]
+            if self.include_month:
+                result += f"{today.month:02d}"
+            result += self.separator + "0001"
+            if self.suffix:
+                result += self.suffix
+            return result
+        else:
+            return f"{self.prefix}{'0' * (self.min_digits - 1)}1{self.suffix}"

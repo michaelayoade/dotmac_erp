@@ -36,7 +36,7 @@ def _get_setting_value(db, domain: SettingDomain, key: str) -> str | None:
     if not setting:
         return None
     if setting.value_text:
-        return setting.value_text
+        return str(setting.value_text)
     if setting.value_json is not None:
         return str(setting.value_json)
     return None
@@ -120,9 +120,13 @@ def get_celery_config() -> dict:
         or "redis://localhost:6379/1"
     )
     timezone = timezone or "UTC"
-    config = {"broker_url": broker, "result_backend": backend, "timezone": timezone}
-    config["beat_max_loop_interval"] = beat_max_loop_interval
-    config["beat_refresh_seconds"] = beat_refresh_seconds
+    config: dict[str, str | int] = {
+        "broker_url": broker,
+        "result_backend": backend,
+        "timezone": timezone,
+        "beat_max_loop_interval": beat_max_loop_interval,
+        "beat_refresh_seconds": beat_refresh_seconds,
+    }
     return config
 
 

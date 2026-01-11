@@ -131,6 +131,7 @@ class LotSerialService(ListResponseMixin):
             )
 
         lot = InventoryLot(
+            organization_id=org_id,
             item_id=item_id,
             lot_number=input.lot_number,
             manufacture_date=input.manufacture_date,
@@ -142,6 +143,7 @@ class LotSerialService(ListResponseMixin):
             unit_cost=input.unit_cost,
             initial_quantity=input.initial_quantity,
             quantity_on_hand=input.initial_quantity,
+            quantity_allocated=Decimal("0"),
             quantity_available=input.initial_quantity,
             certificate_of_analysis=input.certificate_of_analysis,
         )
@@ -194,6 +196,8 @@ class LotSerialService(ListResponseMixin):
 
         lot.quantity_allocated += quantity
         lot.quantity_available = lot.quantity_on_hand - lot.quantity_allocated
+        if reference:
+            lot.allocation_reference = reference
 
         db.commit()
         db.refresh(lot)

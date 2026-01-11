@@ -1,0 +1,101 @@
+{% extends "ifrs/base_ifrs.html" %}
+
+{% block page_title %}Numbering Sequences{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <a href="/settings" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Settings</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="font-medium text-slate-900 dark:text-white">Numbering Sequences</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6 stagger-in">
+    <!-- Header -->
+    <div>
+        <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Numbering Sequences</h1>
+        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+            Configure document number formats for invoices, quotes, orders, and more. Each sequence automatically increments when new documents are created.
+        </p>
+    </div>
+
+    <!-- Sequences Grid -->
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {% for item in sequences %}
+        <div class="card p-5 hover:border-teal-300 dark:hover:border-teal-700 transition-all group">
+            <div class="flex items-start justify-between mb-4">
+                <div>
+                    <h3 class="font-semibold text-slate-900 dark:text-white">{{ item.label }}</h3>
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ item.sequence.sequence_type.value }}</p>
+                </div>
+                <a href="/settings/numbering/{{ item.sequence.sequence_id }}"
+                   class="p-2 rounded-lg text-slate-400 hover:text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-900/30 dark:hover:text-teal-400 transition-colors">
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                    </svg>
+                </a>
+            </div>
+
+            <!-- Preview -->
+            <div class="mb-4">
+                <div class="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Preview</div>
+                <div class="font-mono text-lg font-semibold text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/20 px-3 py-2 rounded-lg">
+                    {{ item.preview }}
+                </div>
+            </div>
+
+            <!-- Format Details -->
+            <div class="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                    <div class="text-xs text-slate-500 dark:text-slate-400">Prefix</div>
+                    <div class="font-medium text-slate-900 dark:text-white font-mono">{{ item.sequence.prefix or "-" }}</div>
+                </div>
+                <div>
+                    <div class="text-xs text-slate-500 dark:text-slate-400">Separator</div>
+                    <div class="font-medium text-slate-900 dark:text-white font-mono">"{{ item.sequence.separator }}"</div>
+                </div>
+                <div>
+                    <div class="text-xs text-slate-500 dark:text-slate-400">Digits</div>
+                    <div class="font-medium text-slate-900 dark:text-white">{{ item.sequence.min_digits }}</div>
+                </div>
+                <div>
+                    <div class="text-xs text-slate-500 dark:text-slate-400">Resets</div>
+                    <div class="font-medium text-slate-900 dark:text-white">{{ item.reset_label }}</div>
+                </div>
+            </div>
+
+            <!-- Current Counter -->
+            <div class="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <div class="text-xs text-slate-500 dark:text-slate-400">Current Counter</div>
+                        <div class="font-mono font-medium text-slate-900 dark:text-white">{{ item.sequence.current_number }}</div>
+                    </div>
+                    {% if item.sequence.last_used_at %}
+                    <div class="text-right">
+                        <div class="text-xs text-slate-500 dark:text-slate-400">Last Used</div>
+                        <div class="text-xs text-slate-700 dark:text-slate-300">{{ item.sequence.last_used_at.strftime('%Y-%m-%d') }}</div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="col-span-full text-center py-12">
+            <svg class="mx-auto h-12 w-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14"/>
+            </svg>
+            <h3 class="mt-4 text-sm font-medium text-slate-900 dark:text-white">No sequences configured</h3>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Sequences will be created automatically when you save settings.</p>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

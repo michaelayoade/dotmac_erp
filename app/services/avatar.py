@@ -26,7 +26,7 @@ async def save_avatar(file: UploadFile, person_id: str) -> str:
     upload_dir = Path(settings.avatar_upload_dir)
     upload_dir.mkdir(parents=True, exist_ok=True)
 
-    ext = _get_extension(file.content_type)
+    ext = _get_extension(file.content_type or "image/jpeg")
     filename = f"{person_id}_{uuid.uuid4().hex[:8]}{ext}"
     file_path = upload_dir / filename
 

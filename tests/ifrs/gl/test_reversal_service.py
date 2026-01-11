@@ -15,39 +15,10 @@ from app.services.ifrs.gl.reversal import (
 )
 
 
-class MockEnumValue:
-    """A mock enum value with .value attribute."""
-    def __init__(self, value: str):
-        self.value = value
+from app.models.ifrs.gl.journal_entry import JournalStatus, JournalType
 
-    def __eq__(self, other):
-        if isinstance(other, MockEnumValue):
-            return self.value == other.value
-        return self.value == other
-
-    def __hash__(self):
-        return hash(self.value)
-
-    def __repr__(self):
-        return f"MockEnumValue({self.value})"
-
-
-class MockJournalStatus:
-    """Mock journal status enum."""
-    DRAFT = MockEnumValue("DRAFT")
-    SUBMITTED = MockEnumValue("SUBMITTED")
-    APPROVED = MockEnumValue("APPROVED")
-    POSTED = MockEnumValue("POSTED")
-    VOIDED = MockEnumValue("VOIDED")
-    REVERSED = MockEnumValue("REVERSED")
-
-
-class MockJournalType:
-    """Mock journal type enum."""
-    STANDARD = MockEnumValue("STANDARD")
-    ADJUSTING = MockEnumValue("ADJUSTING")
-    CLOSING = MockEnumValue("CLOSING")
-    REVERSAL = MockEnumValue("REVERSAL")
+MockJournalStatus = JournalStatus
+MockJournalType = JournalType
 
 
 class MockFiscalPeriod:

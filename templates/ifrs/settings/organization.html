@@ -1,0 +1,282 @@
+{% extends "ifrs/base_ifrs.html" %}
+
+{% block page_title %}Organization Profile{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <a href="/settings" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Settings</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="font-medium text-slate-900 dark:text-white">Organization Profile</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-6 stagger-in">
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Organization Profile</h1>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                Manage your company information, contact details, and branding.
+            </p>
+        </div>
+    </div>
+
+    <!-- Success Message -->
+    {% if request.query_params.get('saved') %}
+    <div class="rounded-lg bg-green-50 border border-green-200 p-4 dark:bg-green-900/20 dark:border-green-800">
+        <div class="flex items-center gap-3">
+            <svg class="h-5 w-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+            </svg>
+            <p class="text-sm text-green-700 dark:text-green-300">Organization profile updated successfully.</p>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Error Message -->
+    {% if error %}
+    <div class="rounded-lg bg-red-50 border border-red-200 p-4 dark:bg-red-900/20 dark:border-red-800">
+        <div class="flex items-center gap-3">
+            <svg class="h-5 w-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <p class="text-sm text-red-700 dark:text-red-300">{{ error }}</p>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if organization %}
+    <form method="POST" action="/settings/organization" class="space-y-6">
+        <!-- Company Identity -->
+        <div class="card p-6">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Company Identity</h2>
+            <div class="grid gap-6 sm:grid-cols-2">
+                <div>
+                    <label for="legal_name" class="form-label">Legal Name <span class="text-red-500">*</span></label>
+                    <input type="text" id="legal_name" name="legal_name" required
+                           value="{{ organization.legal_name or '' }}"
+                           class="form-input">
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Official registered company name</p>
+                </div>
+                <div>
+                    <label for="trading_name" class="form-label">Trading Name</label>
+                    <input type="text" id="trading_name" name="trading_name"
+                           value="{{ organization.trading_name or '' }}"
+                           class="form-input">
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Name used for day-to-day operations</p>
+                </div>
+                <div>
+                    <label for="registration_number" class="form-label">Registration Number</label>
+                    <input type="text" id="registration_number" name="registration_number"
+                           value="{{ organization.registration_number or '' }}"
+                           class="form-input">
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Company registration/incorporation number</p>
+                </div>
+                <div>
+                    <label for="tax_identification_number" class="form-label">Tax ID Number</label>
+                    <input type="text" id="tax_identification_number" name="tax_identification_number"
+                           value="{{ organization.tax_identification_number or '' }}"
+                           class="form-input">
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">VAT/GST/TIN number</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Currency & Fiscal Year -->
+        <div class="card p-6">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Currency & Fiscal Year</h2>
+            <div class="grid gap-6 sm:grid-cols-2">
+                <div>
+                    <label for="functional_currency_code" class="form-label">Functional Currency <span class="text-red-500">*</span></label>
+                    <input type="text" id="functional_currency_code" name="functional_currency_code" required
+                           value="{{ organization.functional_currency_code or '' }}"
+                           maxlength="3" placeholder="USD"
+                           class="form-input uppercase">
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Primary operating currency (ISO 4217)</p>
+                </div>
+                <div>
+                    <label for="presentation_currency_code" class="form-label">Presentation Currency <span class="text-red-500">*</span></label>
+                    <input type="text" id="presentation_currency_code" name="presentation_currency_code" required
+                           value="{{ organization.presentation_currency_code or '' }}"
+                           maxlength="3" placeholder="USD"
+                           class="form-input uppercase">
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Currency for financial statements</p>
+                </div>
+                <div>
+                    <label for="fiscal_year_end_month" class="form-label">Fiscal Year End Month</label>
+                    <select id="fiscal_year_end_month" name="fiscal_year_end_month" class="form-input form-select">
+                        {% for month in range(1, 13) %}
+                        <option value="{{ month }}" {{ 'selected' if organization.fiscal_year_end_month == month else '' }}>
+                            {{ ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][month-1] }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label for="fiscal_year_end_day" class="form-label">Fiscal Year End Day</label>
+                    <input type="number" id="fiscal_year_end_day" name="fiscal_year_end_day"
+                           value="{{ organization.fiscal_year_end_day or 31 }}"
+                           min="1" max="31"
+                           class="form-input">
+                </div>
+            </div>
+        </div>
+
+        <!-- Regional Settings -->
+        <div class="card p-6">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Regional Settings</h2>
+            <div class="grid gap-6 sm:grid-cols-3">
+                <div>
+                    <label for="timezone" class="form-label">Timezone</label>
+                    <select id="timezone" name="timezone" class="form-input form-select">
+                        <option value="">-- Select Timezone --</option>
+                        {% for tz_value, tz_label in timezones %}
+                        <option value="{{ tz_value }}" {{ 'selected' if organization.timezone == tz_value else '' }}>{{ tz_label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label for="date_format" class="form-label">Date Format</label>
+                    <select id="date_format" name="date_format" class="form-input form-select">
+                        <option value="">-- Select Format --</option>
+                        {% for fmt_value, fmt_label in date_formats %}
+                        <option value="{{ fmt_value }}" {{ 'selected' if organization.date_format == fmt_value else '' }}>{{ fmt_value }} ({{ fmt_label }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label for="number_format" class="form-label">Number Format</label>
+                    <select id="number_format" name="number_format" class="form-input form-select">
+                        <option value="">-- Select Format --</option>
+                        {% for fmt_value, fmt_label in number_formats %}
+                        <option value="{{ fmt_value }}" {{ 'selected' if organization.number_format == fmt_value else '' }}>{{ fmt_value }} - {{ fmt_label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Contact Information -->
+        <div class="card p-6">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Contact Information</h2>
+            <div class="grid gap-6 sm:grid-cols-2">
+                <div>
+                    <label for="contact_email" class="form-label">Email Address</label>
+                    <input type="email" id="contact_email" name="contact_email"
+                           value="{{ organization.contact_email or '' }}"
+                           placeholder="info@company.com"
+                           class="form-input">
+                </div>
+                <div>
+                    <label for="contact_phone" class="form-label">Phone Number</label>
+                    <input type="tel" id="contact_phone" name="contact_phone"
+                           value="{{ organization.contact_phone or '' }}"
+                           placeholder="+1 234 567 8900"
+                           class="form-input">
+                </div>
+                <div>
+                    <label for="website_url" class="form-label">Website</label>
+                    <input type="url" id="website_url" name="website_url"
+                           value="{{ organization.website_url or '' }}"
+                           placeholder="https://www.company.com"
+                           class="form-input">
+                </div>
+            </div>
+        </div>
+
+        <!-- Address -->
+        <div class="card p-6">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Address</h2>
+            <div class="grid gap-6 sm:grid-cols-2">
+                <div class="sm:col-span-2">
+                    <label for="address_line1" class="form-label">Address Line 1</label>
+                    <input type="text" id="address_line1" name="address_line1"
+                           value="{{ organization.address_line1 or '' }}"
+                           placeholder="123 Main Street"
+                           class="form-input">
+                </div>
+                <div class="sm:col-span-2">
+                    <label for="address_line2" class="form-label">Address Line 2</label>
+                    <input type="text" id="address_line2" name="address_line2"
+                           value="{{ organization.address_line2 or '' }}"
+                           placeholder="Suite 100"
+                           class="form-input">
+                </div>
+                <div>
+                    <label for="city" class="form-label">City</label>
+                    <input type="text" id="city" name="city"
+                           value="{{ organization.city or '' }}"
+                           class="form-input">
+                </div>
+                <div>
+                    <label for="state" class="form-label">State/Province</label>
+                    <input type="text" id="state" name="state"
+                           value="{{ organization.state or '' }}"
+                           class="form-input">
+                </div>
+                <div>
+                    <label for="postal_code" class="form-label">Postal Code</label>
+                    <input type="text" id="postal_code" name="postal_code"
+                           value="{{ organization.postal_code or '' }}"
+                           class="form-input">
+                </div>
+                <div>
+                    <label for="country" class="form-label">Country</label>
+                    <input type="text" id="country" name="country"
+                           value="{{ organization.country or '' }}"
+                           class="form-input">
+                </div>
+            </div>
+        </div>
+
+        <!-- Branding -->
+        <div class="card p-6">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Branding</h2>
+            <div>
+                <label for="logo_url" class="form-label">Logo URL</label>
+                <input type="url" id="logo_url" name="logo_url"
+                       value="{{ organization.logo_url or '' }}"
+                       placeholder="https://www.company.com/logo.png"
+                       class="form-input">
+                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">URL to your company logo for use in reports and documents</p>
+            </div>
+            {% if organization.logo_url %}
+            <div class="mt-4 p-4 bg-slate-50 dark:bg-slate-900 rounded-lg">
+                <p class="text-xs text-slate-500 dark:text-slate-400 mb-2">Current Logo Preview:</p>
+                <img src="{{ organization.logo_url }}" alt="Company Logo" class="max-h-20 object-contain">
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Actions -->
+        <div class="flex items-center justify-end gap-4 py-4">
+            <a href="/settings" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">
+                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                </svg>
+                Save Changes
+            </button>
+        </div>
+    </form>
+    {% else %}
+    <div class="card p-12 text-center">
+        <svg class="mx-auto h-12 w-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        <h3 class="mt-4 text-lg font-medium text-slate-900 dark:text-white">Organization Not Found</h3>
+        <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">Unable to load organization profile.</p>
+        <a href="/settings" class="mt-4 inline-block text-teal-600 hover:text-teal-700 dark:text-teal-400">
+            &larr; Back to Settings
+        </a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

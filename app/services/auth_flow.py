@@ -4,6 +4,7 @@ import hashlib
 import os
 import secrets
 from datetime import datetime, timedelta, timezone
+from typing import Any, cast
 
 import pyotp
 from cryptography.fernet import Fernet, InvalidToken
@@ -94,7 +95,7 @@ def _setting_value(db: Session | None, key: str) -> str | None:
 
 def _jwt_secret(db: Session | None) -> str:
     secret = _env_value("JWT_SECRET") or _setting_value(db, "jwt_secret")
-    secret = resolve_secret(secret)
+    secret = resolve_secret(secret, db)
     if not secret:
         raise HTTPException(status_code=500, detail="JWT secret not configured")
     return secret
@@ -176,7 +177,7 @@ def _refresh_cookie_path(db: Session | None) -> str:
 
 def _mfa_key(db: Session | None) -> bytes:
     key = _env_value("TOTP_ENCRYPTION_KEY") or _setting_value(db, "totp_encryption_key")
-    key = resolve_secret(key)
+    key = resolve_secret(key, db)
     if not key:
         raise HTTPException(status_code=500, detail="TOTP encryption key not configured")
     return key.encode()
@@ -216,7 +217,7 @@ def _issue_access_token(
         payload["roles"] = roles
     if permissions:
         payload["scopes"] = permissions
-    return jwt.encode(payload, _jwt_secret(db), algorithm=_jwt_algorithm(db))
+    return cast(str, jwt.encode(payload, _jwt_secret(db), algorithm=_jwt_algorithm(db)))
 
 
 def _issue_mfa_token(db: Session | None, person_id: str) -> str:
@@ -227,7 +228,7 @@ def _issue_mfa_token(db: Session | None, person_id: str) -> str:
         "iat": int(now.timestamp()),
         "exp": int((now + timedelta(minutes=5)).timestamp()),
     }
-    return jwt.encode(payload, _jwt_secret(db), algorithm=_jwt_algorithm(db))
+    return cast(str, jwt.encode(payload, _jwt_secret(db), algorithm=_jwt_algorithm(db)))
 
 
 def _password_reset_ttl_minutes(db: Session | None) -> int:
@@ -252,16 +253,19 @@ def _issue_password_reset_token(db: Session | None, person_id: str, email: str) 
         "iat": int(now.timestamp()),
         "exp": int((now + timedelta(minutes=_password_reset_ttl_minutes(db))).timestamp()),
     }
-    return jwt.encode(payload, _jwt_secret(db), algorithm=_jwt_algorithm(db))
+    return cast(str, jwt.encode(payload, _jwt_secret(db), algorithm=_jwt_algorithm(db)))
 
 
-def _decode_password_reset_token(db: Session | None, token: str) -> dict:
+def _decode_password_reset_token(db: Session | None, token: str) -> dict[str, Any]:
     return _decode_jwt(db, token, "password_reset")
 
 
-def _decode_jwt(db: Session | None, token: str, expected_type: str) -> dict:
+def _decode_jwt(db: Session | None, token: str, expected_type: str) -> dict[str, Any]:
     try:
-        payload = jwt.decode(token, _jwt_secret(db), algorithms=[_jwt_algorithm(db)])
+        payload = cast(
+            dict[str, Any],
+            jwt.decode(token, _jwt_secret(db), algorithms=[_jwt_algorithm(db)]),
+        )
     except JWTError as exc:
         raise HTTPException(status_code=401, detail="Invalid token") from exc
     if payload.get("typ") != expected_type:
@@ -269,7 +273,7 @@ def _decode_jwt(db: Session | None, token: str, expected_type: str) -> dict:
     return payload
 
 
-def decode_access_token(db: Session | None, token: str) -> dict:
+def decode_access_token(db: Session | None, token: str) -> dict[str, Any]:
     return _decode_jwt(db, token, "access")
 
 
@@ -330,13 +334,13 @@ def _decrypt_secret(db: Session | None, secret: str) -> str:
 
 
 def hash_password(password: str) -> str:
-    return PASSWORD_CONTEXT.hash(password)
+    return cast(str, PASSWORD_CONTEXT.hash(password))
 
 
 def verify_password(password: str, password_hash: str | None) -> bool:
     if not password_hash:
         return False
-    return PASSWORD_CONTEXT.verify(password, password_hash)
+    return bool(PASSWORD_CONTEXT.verify(password, password_hash))
 
 
 def revoke_sessions_for_person(
@@ -374,7 +378,13 @@ class AuthFlow(ListResponseMixin):
         status_code: int = status.HTTP_200_OK,
     ) -> Response:
         settings = AuthFlow.refresh_cookie_settings(db)
-        response = Response(status_code=status_code)
+        payload_without_refresh = {**payload, "refresh_token": None}
+        body_content = model_cls(**payload_without_refresh).model_dump_json()
+        response = Response(
+            content=body_content,
+            status_code=status_code,
+            media_type="application/json",
+        )
         response.set_cookie(
             key=settings["key"],
             value=payload["refresh_token"],
@@ -385,9 +395,6 @@ class AuthFlow(ListResponseMixin):
             path=settings["path"],
             max_age=settings["max_age"],
         )
-        response.media_type = "application/json"
-        payload = {**payload, "refresh_token": None}
-        response.body = model_cls(**payload).model_dump_json().encode("utf-8")
         return response
 
     @staticmethod
@@ -398,14 +405,17 @@ class AuthFlow(ListResponseMixin):
         status_code: int = status.HTTP_200_OK,
     ) -> Response:
         settings = AuthFlow.refresh_cookie_settings(db)
-        response = Response(status_code=status_code)
+        body_content = model_cls(**payload).model_dump_json()
+        response = Response(
+            content=body_content,
+            status_code=status_code,
+            media_type="application/json",
+        )
         response.delete_cookie(
             key=settings["key"],
             domain=settings["domain"],
             path=settings["path"],
         )
-        response.media_type = "application/json"
-        response.body = model_cls(**payload).model_dump_json().encode("utf-8")
         return response
 
     @staticmethod
@@ -472,7 +482,7 @@ class AuthFlow(ListResponseMixin):
                 "mfa_token": _issue_mfa_token(db, str(credential.person_id)),
             }
 
-        return AuthFlow._issue_tokens(db, credential.person_id, request)
+        return AuthFlow._issue_tokens(db, str(credential.person_id), request)
 
     @staticmethod
     def mfa_setup(db: Session, person_id: str, label: str | None):

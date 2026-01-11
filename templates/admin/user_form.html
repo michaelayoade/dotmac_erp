@@ -1,0 +1,382 @@
+{% extends "admin/base_admin.html" %}
+
+{% block page_title %}{{ 'Edit User' if user_data else 'Add New User' }}{% endblock %}
+{% block page_subtitle %}{{ 'Update user information and settings' if user_data else 'Create a new user account' }}{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl">
+    <!-- Back Link -->
+    <div class="mb-6">
+        <a href="/admin/users" class="inline-flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200 transition-colors">
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+            </svg>
+            Back to Users
+        </a>
+    </div>
+
+    <form action="{{ '/admin/users/' ~ user_data.id ~ '/edit' if user_data else '/admin/users/new' }}" method="POST" class="space-y-6" x-data="userForm()">
+        <!-- Error Alert -->
+        {% if error %}
+        <div class="rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-4">
+            <div class="flex items-start gap-3">
+                <svg class="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <p class="text-sm text-red-700 dark:text-red-300">{{ error }}</p>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Success Alert -->
+        {% if success %}
+        <div class="rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 p-4">
+            <div class="flex items-start gap-3">
+                <svg class="h-5 w-5 text-emerald-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <p class="text-sm text-emerald-700 dark:text-emerald-300">{{ success }}</p>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Personal Information -->
+        <div class="admin-card p-6">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display mb-6">Personal Information</h2>
+
+            <div class="grid gap-6 sm:grid-cols-2">
+                <!-- First Name -->
+                <div>
+                    <label for="first_name" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                        First Name <span class="text-red-500">*</span>
+                    </label>
+                    <input
+                        type="text"
+                        id="first_name"
+                        name="first_name"
+                        value="{{ user_data.first_name if user_data else '' }}"
+                        required
+                        class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all"
+                        placeholder="Enter first name"
+                    />
+                </div>
+
+                <!-- Last Name -->
+                <div>
+                    <label for="last_name" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                        Last Name <span class="text-red-500">*</span>
+                    </label>
+                    <input
+                        type="text"
+                        id="last_name"
+                        name="last_name"
+                        value="{{ user_data.last_name if user_data else '' }}"
+                        required
+                        class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all"
+                        placeholder="Enter last name"
+                    />
+                </div>
+
+                <!-- Display Name -->
+                <div>
+                    <label for="display_name" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                        Display Name
+                    </label>
+                    <input
+                        type="text"
+                        id="display_name"
+                        name="display_name"
+                        value="{{ user_data.display_name if user_data else '' }}"
+                        class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all"
+                        placeholder="Optional display name"
+                    />
+                    <p class="mt-1.5 text-xs text-slate-500 dark:text-slate-400">If left blank, full name will be used</p>
+                </div>
+
+                <!-- Phone -->
+                <div>
+                    <label for="phone" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                        Phone Number
+                    </label>
+                    <input
+                        type="tel"
+                        id="phone"
+                        name="phone"
+                        value="{{ user_data.phone if user_data else '' }}"
+                        class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all"
+                        placeholder="+1 (555) 123-4567"
+                    />
+                </div>
+            </div>
+        </div>
+
+        <!-- Account Information -->
+        <div class="admin-card p-6">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display mb-6">Account Information</h2>
+
+            <div class="grid gap-6 sm:grid-cols-2">
+                <!-- Email -->
+                <div>
+                    <label for="email" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                        Email Address <span class="text-red-500">*</span>
+                    </label>
+                    <input
+                        type="email"
+                        id="email"
+                        name="email"
+                        value="{{ user_data.email if user_data else '' }}"
+                        required
+                        class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all"
+                        placeholder="user@example.com"
+                    />
+                </div>
+
+                <!-- Username -->
+                <div>
+                    <label for="username" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                        Username <span class="text-red-500">*</span>
+                    </label>
+                    <input
+                        type="text"
+                        id="username"
+                        name="username"
+                        value="{{ user_data.username if user_data else '' }}"
+                        required
+                        autocomplete="off"
+                        class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all"
+                        placeholder="Enter username"
+                    />
+                    <p class="mt-1.5 text-xs text-slate-500 dark:text-slate-400">Used for login. Must be unique.</p>
+                </div>
+
+                <!-- Organization -->
+                <div>
+                    <label for="organization_id" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                        Organization <span class="text-red-500">*</span>
+                    </label>
+                    <select
+                        id="organization_id"
+                        name="organization_id"
+                        required
+                        class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all"
+                    >
+                        <option value="">Select organization...</option>
+                        {% for org in organizations %}
+                        <option value="{{ org.id }}" {{ 'selected' if user_data and user_data.organization_id == org.id else '' }}>
+                            {{ org.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- Status -->
+                <div>
+                    <label for="status" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                        Status
+                    </label>
+                    <select
+                        id="status"
+                        name="status"
+                        class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all"
+                    >
+                        <option value="active" {{ 'selected' if not user_data or user_data.status == 'active' else '' }}>Active</option>
+                        <option value="inactive" {{ 'selected' if user_data and user_data.status == 'inactive' else '' }}>Inactive</option>
+                        <option value="archived" {{ 'selected' if user_data and user_data.status == 'archived' else '' }}>Archived</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Password Section -->
+        <div class="admin-card p-6">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display mb-2">
+                {{ 'Change Password' if user_data else 'Set Password' }}
+            </h2>
+            {% if user_data %}
+            <p class="text-sm text-slate-500 dark:text-slate-400 mb-6">Leave blank to keep the current password</p>
+            {% else %}
+            <p class="text-sm text-slate-500 dark:text-slate-400 mb-6">Set the initial password for this user</p>
+            {% endif %}
+
+            <div class="grid gap-6 sm:grid-cols-2">
+                <!-- Password -->
+                <div>
+                    <label for="password" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                        Password {{ '' if user_data else '<span class="text-red-500">*</span>' | safe }}
+                    </label>
+                    <div class="relative">
+                        <input
+                            :type="showPassword ? 'text' : 'password'"
+                            id="password"
+                            name="password"
+                            {{ '' if user_data else 'required' }}
+                            minlength="8"
+                            autocomplete="new-password"
+                            class="w-full px-4 py-2.5 pr-12 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all"
+                            placeholder="{{ 'Enter new password' if user_data else 'Enter password' }}"
+                            x-model="password"
+                        />
+                        <button
+                            type="button"
+                            @click="showPassword = !showPassword"
+                            class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                            tabindex="-1"
+                        >
+                            <svg x-show="!showPassword" class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                            </svg>
+                            <svg x-show="showPassword" x-cloak class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <p class="mt-1.5 text-xs text-slate-500 dark:text-slate-400">Minimum 8 characters</p>
+                </div>
+
+                <!-- Confirm Password -->
+                <div>
+                    <label for="password_confirm" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                        Confirm Password {{ '' if user_data else '<span class="text-red-500">*</span>' | safe }}
+                    </label>
+                    <div class="relative">
+                        <input
+                            :type="showPassword ? 'text' : 'password'"
+                            id="password_confirm"
+                            name="password_confirm"
+                            {{ '' if user_data else 'required' }}
+                            autocomplete="new-password"
+                            class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all"
+                            :class="{ 'border-red-500 focus:border-red-500 focus:ring-red-500/20': password && passwordConfirm && password !== passwordConfirm }"
+                            placeholder="Confirm password"
+                            x-model="passwordConfirm"
+                        />
+                    </div>
+                    <p class="mt-1.5 text-xs text-red-500" x-show="password && passwordConfirm && password !== passwordConfirm" x-cloak>
+                        Passwords do not match
+                    </p>
+                </div>
+            </div>
+
+            <!-- Password Options -->
+            <div class="mt-6 pt-6 border-t border-slate-200 dark:border-slate-700">
+                <label class="flex items-center gap-3 cursor-pointer">
+                    <input
+                        type="checkbox"
+                        name="must_change_password"
+                        value="1"
+                        {{ 'checked' if user_data and user_data.must_change_password else '' }}
+                        class="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800"
+                    />
+                    <span class="text-sm text-slate-700 dark:text-slate-300">Require password change on next login</span>
+                </label>
+            </div>
+        </div>
+
+        <!-- Roles -->
+        <div class="admin-card p-6">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display mb-2">Roles & Permissions</h2>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mb-6">Assign roles to control what this user can access</p>
+
+            <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {% for role in roles %}
+                <label class="flex items-start gap-3 p-4 rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-primary-400 dark:hover:border-primary-500 cursor-pointer transition-colors has-[:checked]:border-primary-500 has-[:checked]:bg-primary-50 dark:has-[:checked]:bg-primary-900/20">
+                    <input
+                        type="checkbox"
+                        name="roles"
+                        value="{{ role.id }}"
+                        {{ 'checked' if user_data and role.id in user_data.role_ids else '' }}
+                        class="mt-0.5 h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800"
+                    />
+                    <div>
+                        <span class="block text-sm font-medium text-slate-900 dark:text-white">{{ role.name | capitalize }}</span>
+                        {% if role.description %}
+                        <span class="block text-xs text-slate-500 dark:text-slate-400 mt-0.5">{{ role.description }}</span>
+                        {% endif %}
+                    </div>
+                </label>
+                {% else %}
+                <div class="col-span-full text-center py-8">
+                    <p class="text-sm text-slate-500 dark:text-slate-400">No roles available. Create roles first.</p>
+                    <a href="/admin/roles/new" class="inline-flex items-center gap-2 mt-3 text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                        </svg>
+                        Create Role
+                    </a>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Email Verification -->
+        {% if user_data %}
+        <div class="admin-card p-6">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display mb-6">Email Verification</h2>
+
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    {% if user_data.email_verified %}
+                    <div class="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="text-sm font-medium text-slate-900 dark:text-white">Email Verified</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">This user's email has been verified</p>
+                    </div>
+                    {% else %}
+                    <div class="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="text-sm font-medium text-slate-900 dark:text-white">Email Not Verified</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">This user hasn't verified their email yet</p>
+                    </div>
+                    {% endif %}
+                </div>
+                <label class="flex items-center gap-3 cursor-pointer">
+                    <input
+                        type="checkbox"
+                        name="email_verified"
+                        value="1"
+                        {{ 'checked' if user_data.email_verified else '' }}
+                        class="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800"
+                    />
+                    <span class="text-sm text-slate-700 dark:text-slate-300">Mark as verified</span>
+                </label>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Form Actions -->
+        <div class="flex items-center justify-end gap-3">
+            <a href="/admin/users" class="px-6 py-2.5 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800 transition-colors">
+                Cancel
+            </a>
+            <button
+                type="submit"
+                :disabled="password && passwordConfirm && password !== passwordConfirm"
+                class="px-6 py-2.5 rounded-xl bg-accent-500 hover:bg-accent-600 text-white text-sm font-medium shadow-lg shadow-accent-500/25 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+                {{ 'Update User' if user_data else 'Create User' }}
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function userForm() {
+    return {
+        password: '',
+        passwordConfirm: '',
+        showPassword: false,
+    }
+}
+</script>
+{% endblock %}

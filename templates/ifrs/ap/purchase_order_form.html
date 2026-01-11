@@ -1,0 +1,335 @@
+{% extends "ifrs/base_ifrs.html" %}
+
+{% block page_title %}{{ "Edit Purchase Order" if order else "New Purchase Order" }}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <a href="/ap/purchase-orders" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Purchase Orders</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="font-medium text-slate-900 dark:text-white">{{ "Edit" if order else "New" }}</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto pb-12" x-data="purchaseOrderForm()">
+    <!-- Page Header -->
+    <div class="mb-10 stagger-in" style="animation-delay: 0ms;">
+        <h1 class="text-3xl font-bold text-slate-900 dark:text-white font-display tracking-tight">
+            {{ "Edit Purchase Order" if order else "New Purchase Order" }}
+        </h1>
+        <p class="mt-2 text-lg text-slate-600 dark:text-slate-400">
+            {{ "Update purchase order details" if order else "Create a new purchase order for your supplier" }}
+        </p>
+    </div>
+
+    {% if error %}
+    <div class="mb-6 p-4 rounded-xl bg-rose-50 border border-rose-200 dark:bg-rose-900/20 dark:border-rose-800 stagger-in" style="animation-delay: 25ms;">
+        <div class="flex items-start gap-3">
+            <svg class="w-5 h-5 text-rose-600 dark:text-rose-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <div>
+                <h3 class="font-semibold text-rose-800 dark:text-rose-300">Error</h3>
+                <p class="mt-1 text-sm text-rose-700 dark:text-rose-400">{{ error }}</p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <form @submit.prevent="submitForm" class="space-y-8">
+        <!-- Header Information -->
+        <div class="card stagger-in" style="animation-delay: 50ms;">
+            <div class="card-header border-b border-slate-100 dark:border-slate-700">
+                <div class="flex items-center gap-4">
+                    <div class="card-icon bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display">Order Details</h2>
+                        <p class="text-sm text-slate-500 dark:text-slate-400">Basic purchase order information</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-6 grid gap-6 sm:grid-cols-2">
+                <div>
+                    <label class="form-label">
+                        Supplier <span class="text-rose-500">*</span>
+                    </label>
+                    <select x-model="formData.supplier_id" required class="form-select" @change="onSupplierChange">
+                        <option value="">Select supplier</option>
+                        {% for s in suppliers_list %}
+                        <option value="{{ s.supplier_id }}" data-currency="{{ s.currency_code }}">
+                            {{ s.supplier_code }} - {{ s.supplier_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label class="form-label">
+                        Currency <span class="text-rose-500">*</span>
+                    </label>
+                    <select x-model="formData.currency_code" required class="form-select">
+                        <option value="USD">USD - US Dollar</option>
+                        <option value="EUR">EUR - Euro</option>
+                        <option value="GBP">GBP - British Pound</option>
+                        <option value="NGN">NGN - Nigerian Naira</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="form-label">
+                        PO Date <span class="text-rose-500">*</span>
+                    </label>
+                    <input type="date" x-model="formData.po_date" required class="form-input">
+                </div>
+
+                <div>
+                    <label class="form-label">Expected Delivery Date</label>
+                    <input type="date" x-model="formData.expected_delivery_date" class="form-input">
+                </div>
+
+                <div class="sm:col-span-2">
+                    <label class="form-label">Terms & Conditions</label>
+                    <textarea x-model="formData.terms_and_conditions" rows="3" class="form-input resize-none" placeholder="Payment terms, delivery instructions, etc."></textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- Order Lines -->
+        <div class="card stagger-in" style="animation-delay: 100ms;">
+            <div class="card-header border-b border-slate-100 dark:border-slate-700">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-4">
+                        <div class="card-icon bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
+                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 6h16M4 10h16M4 14h16M4 18h16"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display">Order Lines</h2>
+                            <p class="text-sm text-slate-500 dark:text-slate-400">Items to purchase</p>
+                        </div>
+                    </div>
+                    <button type="button" @click="addLine" class="btn btn-ghost text-sm">
+                        <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                        </svg>
+                        Add Line
+                    </button>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead>
+                        <tr class="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+                            <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 w-1/4">Item</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Description</th>
+                            <th class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 w-24">Qty</th>
+                            <th class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 w-32">Unit Price</th>
+                            <th class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 w-32">Amount</th>
+                            <th class="px-4 py-3 w-12"></th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                        <template x-for="(line, index) in lines" :key="index">
+                            <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                                <td class="px-4 py-3">
+                                    <select x-model="line.item_id" @change="onItemChange(index)" class="w-full rounded border border-slate-300 bg-white px-2 py-1.5 text-sm focus:border-primary-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                                        <option value="">-- Select Item --</option>
+                                        {% for item in items_list %}
+                                        <option value="{{ item.item_id }}" data-name="{{ item.item_name }}" data-cost="{{ item.standard_cost or 0 }}">
+                                            {{ item.item_code }} - {{ item.item_name }}
+                                        </option>
+                                        {% endfor %}
+                                    </select>
+                                </td>
+                                <td class="px-4 py-3">
+                                    <input type="text" x-model="line.description" required class="w-full rounded border border-slate-300 bg-white px-2 py-1.5 text-sm focus:border-primary-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-white" placeholder="Description">
+                                </td>
+                                <td class="px-4 py-3">
+                                    <input type="number" x-model.number="line.quantity" @input="calculateLineAmount(index)" min="0" step="0.01" required class="w-full rounded border border-slate-300 bg-white px-2 py-1.5 text-sm text-right focus:border-primary-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                                </td>
+                                <td class="px-4 py-3">
+                                    <input type="number" x-model.number="line.unit_price" @input="calculateLineAmount(index)" min="0" step="0.01" required class="w-full rounded border border-slate-300 bg-white px-2 py-1.5 text-sm text-right focus:border-primary-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                                </td>
+                                <td class="px-4 py-3 text-right text-sm font-medium text-slate-900 dark:text-white" x-text="formatCurrency(line.quantity * line.unit_price)">
+                                </td>
+                                <td class="px-4 py-3">
+                                    <button type="button" @click="removeLine(index)" class="rounded p-1 text-slate-400 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900/30 dark:hover:text-red-400">
+                                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                        </svg>
+                                    </button>
+                                </td>
+                            </tr>
+                        </template>
+                        <tr x-show="lines.length === 0">
+                            <td colspan="6" class="px-4 py-8 text-center text-sm text-slate-500 dark:text-slate-400">
+                                No lines added yet. Click "Add Line" to get started.
+                            </td>
+                        </tr>
+                    </tbody>
+                    <tfoot x-show="lines.length > 0" class="border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+                        <tr>
+                            <td colspan="4" class="px-4 py-3 text-right text-sm font-bold text-slate-900 dark:text-white">Total</td>
+                            <td class="px-4 py-3 text-right text-sm font-bold text-slate-900 dark:text-white" x-text="formatCurrency(calculateTotal())"></td>
+                            <td></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+
+        <!-- Form Actions -->
+        <div class="flex items-center justify-between pt-4 stagger-in" style="animation-delay: 150ms;">
+            <p class="text-sm text-slate-500 dark:text-slate-400">
+                <span class="text-rose-500">*</span> Required fields
+            </p>
+            <div class="flex items-center gap-4">
+                <a href="/ap/purchase-orders" class="btn btn-ghost">
+                    Cancel
+                </a>
+                <button type="submit" class="btn btn-primary" :disabled="submitting">
+                    <svg x-show="submitting" class="animate-spin h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <svg x-show="!submitting" class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                    </svg>
+                    <span x-text="submitting ? 'Saving...' : '{{ 'Update Order' if order else 'Create Order' }}'"></span>
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<script>
+function purchaseOrderForm() {
+    const today = new Date().toISOString().split('T')[0];
+
+    // Initialize with existing data if editing
+    const existingOrder = {{ order | tojson | safe if order else 'null' }};
+    const existingLines = {{ lines | tojson | safe if lines else '[]' }};
+
+    return {
+        submitting: false,
+        formData: {
+            supplier_id: existingOrder?.supplier_id || '',
+            currency_code: existingOrder?.currency_code || 'USD',
+            po_date: existingOrder?.po_date || today,
+            expected_delivery_date: existingOrder?.expected_delivery_date || '',
+            terms_and_conditions: existingOrder?.terms_and_conditions || '',
+        },
+        lines: existingLines.length > 0 ? existingLines : [
+            { item_id: '', description: '', quantity: 1, unit_price: 0, expense_account_id: '' }
+        ],
+
+        addLine() {
+            this.lines.push({ item_id: '', description: '', quantity: 1, unit_price: 0, expense_account_id: '' });
+        },
+
+        removeLine(index) {
+            if (this.lines.length > 1) {
+                this.lines.splice(index, 1);
+            }
+        },
+
+        onSupplierChange(event) {
+            const option = event.target.selectedOptions[0];
+            if (option && option.dataset.currency) {
+                this.formData.currency_code = option.dataset.currency;
+            }
+        },
+
+        onItemChange(index) {
+            const select = document.querySelectorAll('select[x-model="line.item_id"]')[index];
+            if (select) {
+                const option = select.selectedOptions[0];
+                if (option && option.dataset.name) {
+                    this.lines[index].description = option.dataset.name;
+                    if (option.dataset.cost) {
+                        this.lines[index].unit_price = parseFloat(option.dataset.cost) || 0;
+                    }
+                }
+            }
+        },
+
+        calculateLineAmount(index) {
+            // Trigger reactivity
+            this.lines[index] = { ...this.lines[index] };
+        },
+
+        calculateTotal() {
+            return this.lines.reduce((sum, line) => sum + (line.quantity * line.unit_price), 0);
+        },
+
+        formatCurrency(amount) {
+            return new Intl.NumberFormat('en-US', {
+                style: 'currency',
+                currency: this.formData.currency_code || 'USD',
+                minimumFractionDigits: 2
+            }).format(amount || 0);
+        },
+
+        async submitForm() {
+            // Validate
+            if (!this.formData.supplier_id) {
+                alert('Please select a supplier');
+                return;
+            }
+
+            const validLines = this.lines.filter(l => l.description && l.quantity > 0);
+            if (validLines.length === 0) {
+                alert('Please add at least one line item');
+                return;
+            }
+
+            this.submitting = true;
+
+            const payload = {
+                ...this.formData,
+                lines: validLines
+            };
+
+            try {
+                const url = '{{ "/ap/purchase-orders/" ~ order.po_id ~ "/edit" if order else "/ap/purchase-orders/new" }}';
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success && data.po_id) {
+                        window.location.href = '/ap/purchase-orders/' + data.po_id;
+                    } else {
+                        window.location.href = '/ap/purchase-orders';
+                    }
+                } else {
+                    const errorData = await response.json();
+                    alert(errorData.detail || 'Failed to save purchase order');
+                    this.submitting = false;
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('An error occurred while saving');
+                this.submitting = false;
+            }
+        }
+    };
+}
+</script>
+{% endblock %}

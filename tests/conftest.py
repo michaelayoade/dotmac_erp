@@ -69,11 +69,25 @@ class TestBase(DeclarativeBase):
 _TestSessionLocal = sessionmaker(bind=_test_engine, autoflush=False, autocommit=False)
 
 
+# Mock AsyncSessionLocal for tests (SQLite doesn't support async)
+class MockAsyncSessionLocalProxy:
+    """Mock proxy class for tests that don't actually use async sessions."""
+
+    def __call__(self):
+        # Return a sync session wrapped to look like async session
+        return _TestSessionLocal()
+
+
+_MockAsyncSessionLocal = MockAsyncSessionLocalProxy()
+
+
 # Create a mock db module
 mock_db_module = ModuleType('app.db')
 mock_db_module.Base = TestBase
 mock_db_module.SessionLocal = _TestSessionLocal
+mock_db_module.AsyncSessionLocal = _MockAsyncSessionLocal
 mock_db_module.get_engine = lambda: _test_engine
+mock_db_module.get_async_session_local = lambda: _TestSessionLocal
 
 # Also mock app.config to prevent .env loading
 mock_config_module = ModuleType('app.config')

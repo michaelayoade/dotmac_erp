@@ -133,7 +133,7 @@ def get_bank_account(
     db: Session = Depends(get_db),
 ):
     """Get a bank account by ID."""
-    result = bank_account_service.get(db, bank_account_id)
+    result = bank_account_service.get(db, _get_org_id(auth), bank_account_id)
     if not result:
         raise HTTPException(status_code=404, detail="Bank account not found")
     # Verify tenant ownership
@@ -164,7 +164,14 @@ def list_bank_accounts(
         limit=limit,
         offset=offset,
     )
-    return ListResponse(items=accounts, count=len(accounts))
+    total_count = bank_account_service.count(
+        db=db,
+        organization_id=organization_id,
+        status=status,
+        currency_code=currency_code,
+        account_type=account_type,
+    )
+    return ListResponse(items=accounts, count=total_count, limit=limit, offset=offset)
 
 
 @router.put("/accounts/{bank_account_id}", response_model=BankAccountRead)
@@ -178,7 +185,7 @@ def update_bank_account(
     organization_id = _get_org_id(auth)
     user_id = _get_user_id(auth)
 
-    existing = bank_account_service.get(db, bank_account_id)
+    existing = bank_account_service.get(db, organization_id, bank_account_id)
     if not existing:
         raise HTTPException(status_code=404, detail="Bank account not found")
     # Verify tenant ownership
@@ -204,7 +211,7 @@ def update_bank_account(
         allow_overdraft=payload.allow_overdraft if payload.allow_overdraft is not None else existing.allow_overdraft,
         overdraft_limit=payload.overdraft_limit if payload.overdraft_limit is not None else existing.overdraft_limit,
     )
-    result = bank_account_service.update(db, bank_account_id, input_data, user_id)
+    result = bank_account_service.update(db, organization_id, bank_account_id, input_data, user_id)
     db.commit()
     return result
 
@@ -220,11 +227,17 @@ def update_bank_account_status(
     organization_id = _get_org_id(auth)
     user_id = _get_user_id(auth)
 
-    existing = bank_account_service.get(db, bank_account_id)
+    existing = bank_account_service.get(db, organization_id, bank_account_id)
     if not existing or existing.organization_id != organization_id:
         raise HTTPException(status_code=404, detail="Bank account not found")
 
-    result = bank_account_service.update_status(db, bank_account_id, payload.status, user_id)
+    result = bank_account_service.update_status(
+        db,
+        organization_id,
+        bank_account_id,
+        payload.status,
+        user_id,
+    )
     db.commit()
     return result
 
@@ -239,11 +252,11 @@ def get_bank_account_gl_balance(
     """Get GL balance for a bank account."""
     organization_id = _get_org_id(auth)
 
-    existing = bank_account_service.get(db, bank_account_id)
+    existing = bank_account_service.get(db, organization_id, bank_account_id)
     if not existing or existing.organization_id != organization_id:
         raise HTTPException(status_code=404, detail="Bank account not found")
 
-    balance = bank_account_service.get_gl_balance(db, bank_account_id, as_of_date)
+    balance = bank_account_service.get_gl_balance(db, organization_id, bank_account_id, as_of_date)
     return {"bank_account_id": bank_account_id, "as_of_date": as_of_date, "balance": balance}
 
 
@@ -267,7 +280,7 @@ def import_bank_statement(
     user_id = _get_user_id(auth)
 
     # Verify bank account belongs to org
-    account = bank_account_service.get(db, payload.bank_account_id)
+    account = bank_account_service.get(db, _get_org_id(auth), payload.bank_account_id)
     if not account or account.organization_id != organization_id:
         raise HTTPException(status_code=404, detail="Bank account not found")
 
@@ -369,7 +382,15 @@ def list_bank_statements(
         limit=limit,
         offset=offset,
     )
-    return ListResponse(items=statements, count=len(statements))
+    total_count = bank_statement_service.count(
+        db=db,
+        organization_id=organization_id,
+        bank_account_id=bank_account_id,
+        status=status,
+        start_date=start_date,
+        end_date=end_date,
+    )
+    return ListResponse(items=statements, count=total_count, limit=limit, offset=offset)
 
 
 @router.get(
@@ -418,7 +439,7 @@ def get_statement_summary(
     """Get statement summary statistics for a bank account."""
     organization_id = _get_org_id(auth)
 
-    account = bank_account_service.get(db, bank_account_id)
+    account = bank_account_service.get(db, _get_org_id(auth), bank_account_id)
     if not account or account.organization_id != organization_id:
         raise HTTPException(status_code=404, detail="Bank account not found")
 
@@ -445,7 +466,7 @@ def create_reconciliation(
     user_id = _get_user_id(auth)
 
     # Verify bank account belongs to org
-    account = bank_account_service.get(db, payload.bank_account_id)
+    account = bank_account_service.get(db, _get_org_id(auth), payload.bank_account_id)
     if not account or account.organization_id != organization_id:
         raise HTTPException(status_code=404, detail="Bank account not found")
 
@@ -529,7 +550,15 @@ def list_reconciliations(
         limit=limit,
         offset=offset,
     )
-    return ListResponse(items=reconciliations, count=len(reconciliations))
+    total_count = bank_reconciliation_service.count(
+        db=db,
+        organization_id=organization_id,
+        bank_account_id=bank_account_id,
+        status=status,
+        start_date=start_date,
+        end_date=end_date,
+    )
+    return ListResponse(items=reconciliations, count=total_count, limit=limit, offset=offset)
 
 
 @router.post(

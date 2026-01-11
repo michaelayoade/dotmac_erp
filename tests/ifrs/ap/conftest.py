@@ -16,72 +16,15 @@ import pytest
 
 # ============ Mock Enums ============
 
+from app.models.ifrs.ap.supplier import SupplierType
+from app.models.ifrs.ap.supplier_invoice import SupplierInvoiceStatus, SupplierInvoiceType
+from app.models.ifrs.ap.supplier_payment import APPaymentStatus, APPaymentMethod
 
-class MockEnumValue:
-    """A mock enum value with .value attribute."""
-    def __init__(self, value: str):
-        self.value = value
-
-    def __eq__(self, other):
-        if isinstance(other, MockEnumValue):
-            return self.value == other.value
-        return self.value == other
-
-    def __hash__(self):
-        return hash(self.value)
-
-    def __repr__(self):
-        return f"MockEnumValue({self.value})"
-
-
-class MockSupplierType:
-    """Mock supplier type enum."""
-    VENDOR = MockEnumValue("VENDOR")
-    CONTRACTOR = MockEnumValue("CONTRACTOR")
-    SERVICE_PROVIDER = MockEnumValue("SERVICE_PROVIDER")
-    UTILITY = MockEnumValue("UTILITY")
-    GOVERNMENT = MockEnumValue("GOVERNMENT")
-    RELATED_PARTY = MockEnumValue("RELATED_PARTY")
-
-
-class MockSupplierInvoiceStatus:
-    """Mock supplier invoice status enum."""
-    DRAFT = MockEnumValue("DRAFT")
-    SUBMITTED = MockEnumValue("SUBMITTED")
-    PENDING_APPROVAL = MockEnumValue("PENDING_APPROVAL")
-    APPROVED = MockEnumValue("APPROVED")
-    POSTED = MockEnumValue("POSTED")
-    PARTIALLY_PAID = MockEnumValue("PARTIALLY_PAID")
-    PAID = MockEnumValue("PAID")
-    ON_HOLD = MockEnumValue("ON_HOLD")
-    VOID = MockEnumValue("VOID")
-    DISPUTED = MockEnumValue("DISPUTED")
-
-
-class MockSupplierInvoiceType:
-    """Mock supplier invoice type enum."""
-    STANDARD = MockEnumValue("STANDARD")
-    CREDIT_NOTE = MockEnumValue("CREDIT_NOTE")
-    DEBIT_NOTE = MockEnumValue("DEBIT_NOTE")
-
-
-class MockAPPaymentStatus:
-    """Mock AP payment status enum."""
-    DRAFT = MockEnumValue("DRAFT")
-    PENDING = MockEnumValue("PENDING")
-    APPROVED = MockEnumValue("APPROVED")
-    SENT = MockEnumValue("SENT")
-    CLEARED = MockEnumValue("CLEARED")
-    VOID = MockEnumValue("VOID")
-    REJECTED = MockEnumValue("REJECTED")
-
-
-class MockAPPaymentMethod:
-    """Mock AP payment method enum."""
-    CHECK = MockEnumValue("CHECK")
-    ACH = MockEnumValue("ACH")
-    WIRE = MockEnumValue("WIRE")
-    CREDIT_CARD = MockEnumValue("CREDIT_CARD")
+MockSupplierType = SupplierType
+MockSupplierInvoiceStatus = SupplierInvoiceStatus
+MockSupplierInvoiceType = SupplierInvoiceType
+MockAPPaymentStatus = APPaymentStatus
+MockAPPaymentMethod = APPaymentMethod
 
 
 # ============ Mock Model Classes ============
@@ -95,7 +38,7 @@ class MockSupplier:
         supplier_id: uuid.UUID = None,
         organization_id: uuid.UUID = None,
         supplier_code: str = "SUP001",
-        supplier_type: str = "VENDOR",
+        supplier_type: SupplierType = SupplierType.VENDOR,
         legal_name: str = "Test Supplier",
         trading_name: Optional[str] = None,
         tax_identification_number: Optional[str] = None,
@@ -153,7 +96,7 @@ class MockSupplierInvoice:
         supplier_id: uuid.UUID = None,
         invoice_number: str = "APINV-0001",
         supplier_invoice_number: Optional[str] = None,
-        invoice_type: str = "STANDARD",
+        invoice_type: SupplierInvoiceType = SupplierInvoiceType.STANDARD,
         invoice_date: date = None,
         received_date: date = None,
         due_date: date = None,
@@ -164,7 +107,7 @@ class MockSupplierInvoice:
         total_amount: Decimal = Decimal("1000.00"),
         amount_paid: Decimal = Decimal("0"),
         functional_currency_amount: Decimal = Decimal("1000.00"),
-        status: str = "DRAFT",
+        status: SupplierInvoiceStatus = SupplierInvoiceStatus.DRAFT,
         ap_control_account_id: Optional[uuid.UUID] = None,
         journal_entry_id: Optional[uuid.UUID] = None,
         posting_batch_id: Optional[uuid.UUID] = None,
@@ -252,12 +195,12 @@ class MockSupplierPayment:
         supplier_id: uuid.UUID = None,
         payment_number: str = "PAY-0001",
         payment_date: date = None,
-        payment_method: str = "CHECK",
+        payment_method: APPaymentMethod = APPaymentMethod.CHECK,
         currency_code: str = "USD",
         exchange_rate: Decimal = Decimal("1.0"),
         amount: Decimal = Decimal("1000.00"),
         functional_currency_amount: Decimal = Decimal("1000.00"),
-        status: str = "DRAFT",
+        status: APPaymentStatus = APPaymentStatus.DRAFT,
         bank_account_id: Optional[uuid.UUID] = None,
         reference: Optional[str] = None,
         created_by_user_id: Optional[uuid.UUID] = None,

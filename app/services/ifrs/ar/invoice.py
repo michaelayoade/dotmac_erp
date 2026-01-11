@@ -17,10 +17,18 @@ from fastapi import HTTPException
 from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
+from app.models.ifrs.ar.contract import Contract
 from app.models.ifrs.ar.customer import Customer
 from app.models.ifrs.ar.invoice import Invoice, InvoiceStatus, InvoiceType
 from app.models.ifrs.ar.invoice_line import InvoiceLine
+from app.models.ifrs.ar.performance_obligation import PerformanceObligation
 from app.models.ifrs.core_config.numbering_sequence import SequenceType
+from app.models.ifrs.core_org.cost_center import CostCenter
+from app.models.ifrs.core_org.project import Project
+from app.models.ifrs.core_org.reporting_segment import ReportingSegment
+from app.models.ifrs.gl.account import Account
+from app.models.ifrs.inv.item import Item
+from app.models.ifrs.tax.tax_code import TaxCode
 from app.services.common import coerce_uuid
 from app.services.ifrs.platform.sequence import SequenceService
 from app.services.response import ListResponseMixin
@@ -68,6 +76,21 @@ class ARInvoiceInput:
     correlation_id: Optional[str] = None
 
 
+def _require_org_match(
+    db: Session,
+    organization_id: UUID,
+    model: type,
+    record_id: Optional[UUID],
+    label: str,
+) -> None:
+    """Ensure a referenced record belongs to the organization."""
+    if not record_id:
+        return
+    record = db.get(model, coerce_uuid(record_id))
+    if not record or getattr(record, "organization_id", None) != organization_id:
+        raise HTTPException(status_code=404, detail=f"{label} not found")
+
+
 class ARInvoiceService(ListResponseMixin):
     """
     Service for AR invoice lifecycle management.
@@ -112,12 +135,29 @@ class ARInvoiceService(ListResponseMixin):
                 status_code=400, detail="Invoice must have at least one line"
             )
 
+        if input.contract_id:
+            _require_org_match(db, org_id, Contract, input.contract_id, "Contract")
+
         # Calculate totals
         subtotal = Decimal("0")
         tax_total = Decimal("0")
         discount_total = Decimal("0")
 
         for line in input.lines:
+            _require_org_match(db, org_id, Account, line.revenue_account_id, "Revenue account")
+            _require_org_match(db, org_id, TaxCode, line.tax_code_id, "Tax code")
+            _require_org_match(db, org_id, Item, line.item_id, "Item")
+            _require_org_match(db, org_id, CostCenter, line.cost_center_id, "Cost center")
+            _require_org_match(db, org_id, Project, line.project_id, "Project")
+            _require_org_match(db, org_id, ReportingSegment, line.segment_id, "Reporting segment")
+            _require_org_match(
+                db,
+                org_id,
+                PerformanceObligation,
+                line.performance_obligation_id,
+                "Performance obligation",
+            )
+
             line_amount = line.quantity * line.unit_price - line.discount_amount
             subtotal += line_amount
             tax_total += line.tax_amount
@@ -445,11 +485,13 @@ class ARInvoiceService(ListResponseMixin):
     @staticmethod
     def get(
         db: Session,
+        organization_id: UUID,
         invoice_id: str,
     ) -> Invoice:
         """Get an invoice by ID."""
+        org_id = coerce_uuid(organization_id)
         invoice = db.get(Invoice, coerce_uuid(invoice_id))
-        if not invoice:
+        if not invoice or invoice.organization_id != org_id:
             raise HTTPException(status_code=404, detail="Invoice not found")
         return invoice
 
@@ -477,7 +519,7 @@ class ARInvoiceService(ListResponseMixin):
     @staticmethod
     def list(
         db: Session,
-        organization_id: Optional[str] = None,
+        organization_id: str,
         customer_id: Optional[str] = None,
         status: Optional[InvoiceStatus] = None,
         invoice_type: Optional[InvoiceType] = None,
@@ -488,12 +530,11 @@ class ARInvoiceService(ListResponseMixin):
         offset: int = 0,
     ) -> list[Invoice]:
         """List invoices with optional filters."""
-        query = db.query(Invoice)
+        if not organization_id:
+            raise HTTPException(status_code=400, detail="organization_id is required")
 
-        if organization_id:
-            query = query.filter(
-                Invoice.organization_id == coerce_uuid(organization_id)
-            )
+        org_id = coerce_uuid(organization_id)
+        query = db.query(Invoice).filter(Invoice.organization_id == org_id)
 
         if customer_id:
             query = query.filter(Invoice.customer_id == coerce_uuid(customer_id))

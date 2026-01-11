@@ -1,0 +1,196 @@
+{% extends "admin/base_admin.html" %}
+
+{% block page_title %}{{ 'Edit Role' if role_data else 'Create Role' }}{% endblock %}
+{% block page_subtitle %}{{ 'Update role settings and permissions' if role_data else 'Define a new role with permissions' }}{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl">
+    <!-- Back Link -->
+    <div class="mb-6">
+        <a href="/admin/roles" class="inline-flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200 transition-colors">
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+            </svg>
+            Back to Roles
+        </a>
+    </div>
+
+    <form action="{{ '/admin/roles/' ~ role_data.id ~ '/edit' if role_data else '/admin/roles/new' }}" method="POST" class="space-y-6">
+        <!-- Error Alert -->
+        {% if error %}
+        <div class="rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-4">
+            <div class="flex items-start gap-3">
+                <svg class="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <p class="text-sm text-red-700 dark:text-red-300">{{ error }}</p>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Success Alert -->
+        {% if success %}
+        <div class="rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 p-4">
+            <div class="flex items-start gap-3">
+                <svg class="h-5 w-5 text-emerald-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <p class="text-sm text-emerald-700 dark:text-emerald-300">{{ success }}</p>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Role Information -->
+        <div class="admin-card p-6">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display mb-6">Role Information</h2>
+
+            <div class="grid gap-6">
+                <!-- Role Name -->
+                <div>
+                    <label for="name" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                        Role Name <span class="text-red-500">*</span>
+                    </label>
+                    <input
+                        type="text"
+                        id="name"
+                        name="name"
+                        value="{{ role_data.name if role_data else '' }}"
+                        required
+                        pattern="[a-z0-9_-]+"
+                        class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all"
+                        placeholder="e.g., manager, editor, viewer"
+                    />
+                    <p class="mt-1.5 text-xs text-slate-500 dark:text-slate-400">Lowercase letters, numbers, hyphens, and underscores only</p>
+                </div>
+
+                <!-- Description -->
+                <div>
+                    <label for="description" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                        Description
+                    </label>
+                    <textarea
+                        id="description"
+                        name="description"
+                        rows="3"
+                        class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all resize-none"
+                        placeholder="Describe what this role is for and what access it provides..."
+                    >{{ role_data.description if role_data else '' }}</textarea>
+                </div>
+
+                <!-- Status -->
+                <div>
+                    <label class="flex items-center gap-3 cursor-pointer">
+                        <input
+                            type="checkbox"
+                            name="is_active"
+                            value="1"
+                            {{ 'checked' if not role_data or role_data.is_active else '' }}
+                            class="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800"
+                        />
+                        <span class="text-sm text-slate-700 dark:text-slate-300">Role is active</span>
+                    </label>
+                    <p class="mt-1.5 ml-7 text-xs text-slate-500 dark:text-slate-400">Inactive roles won't grant any permissions to users</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Permissions -->
+        <div class="admin-card p-6">
+            <div class="flex items-center justify-between mb-6">
+                <div>
+                    <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display">Permissions</h2>
+                    <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Select the permissions this role should have</p>
+                </div>
+                <div x-data="{ selectAll: false }">
+                    <button type="button" @click="selectAll = !selectAll; document.querySelectorAll('[name=permissions]').forEach(cb => cb.checked = selectAll)" class="text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">
+                        <span x-text="selectAll ? 'Deselect All' : 'Select All'">Select All</span>
+                    </button>
+                </div>
+            </div>
+
+            {% if permissions_by_category %}
+            <div class="space-y-6">
+                {% for category, perms in permissions_by_category.items() %}
+                <div>
+                    <h3 class="text-sm font-semibold text-slate-900 dark:text-white uppercase tracking-wider mb-3">{{ category | capitalize }}</h3>
+                    <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                        {% for perm in perms %}
+                        <label class="flex items-start gap-3 p-4 rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-primary-400 dark:hover:border-primary-500 cursor-pointer transition-colors has-[:checked]:border-primary-500 has-[:checked]:bg-primary-50 dark:has-[:checked]:bg-primary-900/20">
+                            <input
+                                type="checkbox"
+                                name="permissions"
+                                value="{{ perm.id }}"
+                                {{ 'checked' if role_data and perm.id in role_data.permission_ids else '' }}
+                                class="mt-0.5 h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800"
+                            />
+                            <div>
+                                <code class="text-sm font-mono text-slate-900 dark:text-white">{{ perm.key }}</code>
+                                {% if perm.description %}
+                                <span class="block text-xs text-slate-500 dark:text-slate-400 mt-0.5">{{ perm.description }}</span>
+                                {% endif %}
+                            </div>
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="text-center py-8">
+                <div class="mx-auto h-12 w-12 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-3">
+                    <svg class="h-6 w-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/>
+                    </svg>
+                </div>
+                <p class="text-sm font-medium text-slate-900 dark:text-white">No permissions available</p>
+                <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Create permissions first to assign them to roles</p>
+                <a href="/admin/permissions/new" class="inline-flex items-center gap-2 mt-3 text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                    </svg>
+                    Create Permission
+                </a>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Members Preview (Edit Mode Only) -->
+        {% if role_data and role_data.members %}
+        <div class="admin-card p-6">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display mb-4">Current Members</h2>
+            <div class="flex flex-wrap gap-2">
+                {% for member in role_data.members[:10] %}
+                <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800">
+                    <div class="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-primary-500 to-primary-600 text-xs font-semibold text-white">
+                        {{ member.initials }}
+                    </div>
+                    <span class="text-sm text-slate-700 dark:text-slate-300">{{ member.name }}</span>
+                </div>
+                {% endfor %}
+                {% if role_data.members | length > 10 %}
+                <div class="inline-flex items-center px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800">
+                    <span class="text-sm text-slate-500 dark:text-slate-400">+{{ role_data.members | length - 10 }} more</span>
+                </div>
+                {% endif %}
+            </div>
+            <p class="mt-3 text-xs text-slate-500 dark:text-slate-400">
+                Changing this role will affect all {{ role_data.members | length }} member{{ 's' if role_data.members | length != 1 else '' }}
+            </p>
+        </div>
+        {% endif %}
+
+        <!-- Form Actions -->
+        <div class="flex items-center justify-end gap-3">
+            <a href="/admin/roles" class="px-6 py-2.5 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800 transition-colors">
+                Cancel
+            </a>
+            <button
+                type="submit"
+                class="px-6 py-2.5 rounded-xl bg-accent-500 hover:bg-accent-600 text-white text-sm font-medium shadow-lg shadow-accent-500/25 transition-all"
+            >
+                {{ 'Update Role' if role_data else 'Create Role' }}
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

@@ -436,7 +436,7 @@ class ApiKeys(ListResponseMixin):
         window = max(window_seconds, 1)
         key = f"api_key_rl:{client_ip}:{int(time.time() // window)}"
         try:
-            count = redis_client.incr(key)
+            count = int(redis_client.incr(key))  # type: ignore[arg-type]
             if count == 1:
                 redis_client.expire(key, window)
             if count > max(max_per_window, 1):

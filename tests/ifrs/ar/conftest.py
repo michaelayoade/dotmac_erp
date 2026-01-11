@@ -16,77 +16,16 @@ import pytest
 
 # ============ Mock Enums ============
 
+from app.models.ifrs.ar.customer import CustomerType, RiskCategory
+from app.models.ifrs.ar.customer_payment import PaymentMethod, PaymentStatus
+from app.models.ifrs.ar.invoice import InvoiceStatus, InvoiceType
 
-class MockEnumValue:
-    """A mock enum value with .value attribute."""
-    def __init__(self, value: str):
-        self.value = value
-
-    def __eq__(self, other):
-        if isinstance(other, MockEnumValue):
-            return self.value == other.value
-        return self.value == other
-
-    def __hash__(self):
-        return hash(self.value)
-
-    def __repr__(self):
-        return f"MockEnumValue({self.value})"
-
-
-class MockCustomerType:
-    """Mock customer type enum."""
-    INDIVIDUAL = MockEnumValue("INDIVIDUAL")
-    CORPORATE = MockEnumValue("CORPORATE")
-    GOVERNMENT = MockEnumValue("GOVERNMENT")
-    NON_PROFIT = MockEnumValue("NON_PROFIT")
-
-
-class MockRiskCategory:
-    """Mock risk category enum."""
-    LOW = MockEnumValue("LOW")
-    MEDIUM = MockEnumValue("MEDIUM")
-    HIGH = MockEnumValue("HIGH")
-    VERY_HIGH = MockEnumValue("VERY_HIGH")
-
-
-class MockInvoiceStatus:
-    """Mock invoice status enum."""
-    DRAFT = MockEnumValue("DRAFT")
-    SUBMITTED = MockEnumValue("SUBMITTED")
-    APPROVED = MockEnumValue("APPROVED")
-    POSTED = MockEnumValue("POSTED")
-    PARTIALLY_PAID = MockEnumValue("PARTIALLY_PAID")
-    PAID = MockEnumValue("PAID")
-    OVERDUE = MockEnumValue("OVERDUE")
-    VOID = MockEnumValue("VOID")
-    DISPUTED = MockEnumValue("DISPUTED")
-
-
-class MockInvoiceType:
-    """Mock invoice type enum."""
-    STANDARD = MockEnumValue("STANDARD")
-    CREDIT_NOTE = MockEnumValue("CREDIT_NOTE")
-    DEBIT_NOTE = MockEnumValue("DEBIT_NOTE")
-    PROFORMA = MockEnumValue("PROFORMA")
-
-
-class MockPaymentStatus:
-    """Mock payment status enum."""
-    PENDING = MockEnumValue("PENDING")
-    CLEARED = MockEnumValue("CLEARED")
-    BOUNCED = MockEnumValue("BOUNCED")
-    REVERSED = MockEnumValue("REVERSED")
-    VOID = MockEnumValue("VOID")
-
-
-class MockPaymentMethod:
-    """Mock payment method enum."""
-    CASH = MockEnumValue("CASH")
-    CHECK = MockEnumValue("CHECK")
-    WIRE = MockEnumValue("WIRE")
-    CREDIT_CARD = MockEnumValue("CREDIT_CARD")
-    ACH = MockEnumValue("ACH")
+MockCustomerType = CustomerType
+MockRiskCategory = RiskCategory
+MockInvoiceStatus = InvoiceStatus
+MockInvoiceType = InvoiceType
+MockPaymentStatus = PaymentStatus
+MockPaymentMethod = PaymentMethod
 
 
 # ============ Mock Model Classes ============
@@ -100,7 +39,7 @@ class MockCustomer:
         customer_id: uuid.UUID = None,
         organization_id: uuid.UUID = None,
         customer_code: str = "CUS001",
-        customer_type: str = "CORPORATE",
+        customer_type: CustomerType = CustomerType.COMPANY,
         legal_name: str = "Test Customer",
         trading_name: Optional[str] = None,
         tax_identification_number: Optional[str] = None,
@@ -114,7 +53,7 @@ class MockCustomer:
         default_revenue_account_id: Optional[uuid.UUID] = None,
         sales_rep_user_id: Optional[uuid.UUID] = None,
         customer_group_id: Optional[uuid.UUID] = None,
-        risk_category = None,
+        risk_category: Optional[RiskCategory] = None,
         is_related_party: bool = False,
         related_party_type: Optional[str] = None,
         related_party_relationship: Optional[str] = None,
@@ -143,7 +82,7 @@ class MockCustomer:
         self.default_revenue_account_id = default_revenue_account_id
         self.sales_rep_user_id = sales_rep_user_id
         self.customer_group_id = customer_group_id
-        self.risk_category = risk_category or MockEnumValue("MEDIUM")
+        self.risk_category = risk_category or RiskCategory.MEDIUM
         self.is_related_party = is_related_party
         self.related_party_type = related_party_type
         self.related_party_relationship = related_party_relationship
@@ -165,7 +104,7 @@ class MockInvoice:
         organization_id: uuid.UUID = None,
         customer_id: uuid.UUID = None,
         invoice_number: str = "INV-0001",
-        invoice_type: str = "STANDARD",
+        invoice_type: InvoiceType = InvoiceType.STANDARD,
         invoice_date: date = None,
         due_date: date = None,
         currency_code: str = "USD",
@@ -175,7 +114,7 @@ class MockInvoice:
         total_amount: Decimal = Decimal("1000.00"),
         amount_paid: Decimal = Decimal("0"),
         functional_currency_amount: Decimal = Decimal("1000.00"),
-        status: str = "DRAFT",
+        status: InvoiceStatus = InvoiceStatus.DRAFT,
         ar_control_account_id: Optional[uuid.UUID] = None,
         journal_entry_id: Optional[uuid.UUID] = None,
         posting_batch_id: Optional[uuid.UUID] = None,
@@ -265,12 +204,12 @@ class MockCustomerPayment:
         customer_id: uuid.UUID = None,
         payment_number: str = "RCP-0001",
         payment_date: date = None,
-        payment_method: str = "CHECK",
+        payment_method: PaymentMethod = PaymentMethod.CHECK,
         currency_code: str = "USD",
         exchange_rate: Decimal = Decimal("1.0"),
         amount: Decimal = Decimal("1000.00"),
         functional_currency_amount: Decimal = Decimal("1000.00"),
-        status: str = "DRAFT",
+        status: PaymentStatus = PaymentStatus.PENDING,
         bank_account_id: Optional[uuid.UUID] = None,
         reference: Optional[str] = None,
         created_by_user_id: Optional[uuid.UUID] = None,

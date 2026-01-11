@@ -544,6 +544,7 @@
                         Customer <span class="required">*</span>
                     </label>
                     <select id="customer_id"
+                            name="customer_id"
                             x-model="form.customer_id"
                             @change="onCustomerChange"
                             required
@@ -574,6 +575,7 @@
                         Currency <span class="required">*</span>
                     </label>
                     <select id="currency_code"
+                            name="currency_code"
                             x-model="form.currency_code"
                             required
                             class="form-input">
@@ -591,6 +593,7 @@
                     </label>
                     <input type="date"
                            id="invoice_date"
+                           name="invoice_date"
                            x-model="form.invoice_date"
                            @change="calculateDueDate"
                            required
@@ -604,6 +607,7 @@
                     </label>
                     <input type="date"
                            id="due_date"
+                           name="due_date"
                            x-model="form.due_date"
                            required
                            class="form-input">
@@ -616,6 +620,7 @@
                     </label>
                     <input type="text"
                            id="po_number"
+                           name="po_number"
                            x-model="form.po_number"
                            maxlength="50"
                            placeholder="Customer's PO number"
@@ -629,6 +634,7 @@
                     </label>
                     <input type="text"
                            id="description"
+                           name="description"
                            x-model="form.description"
                            maxlength="500"
                            placeholder="Invoice description or reference"

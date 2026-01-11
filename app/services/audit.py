@@ -130,7 +130,7 @@ class AuditEvents(ListResponseMixin):
             ip_address=ip_address,
             user_agent=user_agent,
             request_id=request_id,
-            metadata={
+            metadata_={
                 "path": request.url.path,
                 "query": query_params,
             },

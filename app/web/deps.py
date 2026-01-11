@@ -10,10 +10,11 @@ from typing import Optional
 from uuid import UUID
 
 from fastapi import Depends, Header, HTTPException, Request, Cookie
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.db import SessionLocal
+from app.db import AsyncSessionLocal, SessionLocal
 from app.models.auth import Session as AuthSession, SessionStatus
 from app.models.person import Person
 from app.rls import set_current_organization_sync
@@ -28,6 +29,15 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+async def get_async_db():
+    """Get async database session for web routes."""
+    async with AsyncSessionLocal() as db:
+        try:
+            yield db
+        finally:
+            await db.close()
 
 
 def brand_context() -> dict:
@@ -64,6 +74,7 @@ def base_context(
         "brand": brand_context(),
         "active_module": active_module,
         "user": auth.user,
+        "csrf_token": getattr(request.state, "csrf_token", ""),
     }
 
 
@@ -77,7 +88,7 @@ class WebAuthContext:
         organization_id: Optional[UUID] = None,
         user_name: str = "Guest",
         user_initials: str = "GU",
-        roles: list[str] = None,
+        roles: Optional[list[str]] = None,
     ):
         self.is_authenticated = is_authenticated
         self.person_id = person_id

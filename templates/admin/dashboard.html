@@ -1,0 +1,314 @@
+{% extends "admin/base_admin.html" %}
+
+{% block page_title %}Dashboard{% endblock %}
+{% block page_subtitle %}System overview and quick stats{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Stats Grid -->
+    <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        <!-- Total Users -->
+        <div class="admin-card stat-card p-6">
+            <div class="flex items-start justify-between">
+                <div>
+                    <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Total Users</p>
+                    <p class="mt-2 text-3xl font-bold text-slate-900 dark:text-white font-display">{{ stats.total_users | default(0) }}</p>
+                    <p class="mt-1 text-sm text-emerald-600 dark:text-emerald-400">
+                        <span class="inline-flex items-center gap-1">
+                            <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/>
+                            </svg>
+                            +{{ stats.new_users_week | default(0) }} this week
+                        </span>
+                    </p>
+                </div>
+                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
+                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
+                    </svg>
+                </div>
+            </div>
+        </div>
+
+        <!-- Active Sessions -->
+        <div class="admin-card stat-card p-6">
+            <div class="flex items-start justify-between">
+                <div>
+                    <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Active Sessions</p>
+                    <p class="mt-2 text-3xl font-bold text-slate-900 dark:text-white font-display">{{ stats.active_sessions | default(0) }}</p>
+                    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                        {{ stats.unique_users_today | default(0) }} unique users today
+                    </p>
+                </div>
+                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
+                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.636 18.364a9 9 0 010-12.728m12.728 0a9 9 0 010 12.728m-9.9-2.829a5 5 0 010-7.07m7.072 0a5 5 0 010 7.07M13 12a1 1 0 11-2 0 1 1 0 012 0z"/>
+                    </svg>
+                </div>
+            </div>
+        </div>
+
+        <!-- Organizations -->
+        <div class="admin-card stat-card p-6">
+            <div class="flex items-start justify-between">
+                <div>
+                    <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Organizations</p>
+                    <p class="mt-2 text-3xl font-bold text-slate-900 dark:text-white font-display">{{ stats.total_organizations | default(0) }}</p>
+                    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                        {{ stats.active_organizations | default(0) }} active
+                    </p>
+                </div>
+                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-violet-100 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400">
+                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+                    </svg>
+                </div>
+            </div>
+        </div>
+
+        <!-- System Health -->
+        <div class="admin-card stat-card p-6">
+            <div class="flex items-start justify-between">
+                <div>
+                    <p class="text-sm font-medium text-slate-500 dark:text-slate-400">System Health</p>
+                    <p class="mt-2 text-3xl font-bold text-emerald-600 dark:text-emerald-400 font-display">{{ stats.system_health | default("Good") }}</p>
+                    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                        All services operational
+                    </p>
+                </div>
+                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
+                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions & Recent Activity -->
+    <div class="grid gap-6 lg:grid-cols-3">
+        <!-- Quick Actions -->
+        <div class="admin-card p-6">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display mb-4">Quick Actions</h2>
+            <div class="space-y-3">
+                <a href="/admin/users/new" class="flex items-center gap-3 p-3 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-blue-50/50 dark:hover:bg-blue-900/20 transition-all group">
+                    <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400 group-hover:scale-110 transition-transform">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <span class="block font-medium text-slate-800 dark:text-slate-200">Add New User</span>
+                        <span class="text-sm text-slate-500 dark:text-slate-400">Create user account</span>
+                    </div>
+                </a>
+
+                <a href="/admin/roles/new" class="flex items-center gap-3 p-3 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700 hover:border-violet-400 dark:hover:border-violet-500 hover:bg-violet-50/50 dark:hover:bg-violet-900/20 transition-all group">
+                    <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-violet-100 text-violet-600 dark:bg-violet-900/40 dark:text-violet-400 group-hover:scale-110 transition-transform">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <span class="block font-medium text-slate-800 dark:text-slate-200">Create Role</span>
+                        <span class="text-sm text-slate-500 dark:text-slate-400">Define permissions</span>
+                    </div>
+                </a>
+
+                <a href="/admin/settings" class="flex items-center gap-3 p-3 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700 hover:border-amber-400 dark:hover:border-amber-500 hover:bg-amber-50/50 dark:hover:bg-amber-900/20 transition-all group">
+                    <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-400 group-hover:scale-110 transition-transform">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <span class="block font-medium text-slate-800 dark:text-slate-200">System Settings</span>
+                        <span class="text-sm text-slate-500 dark:text-slate-400">Configure system</span>
+                    </div>
+                </a>
+
+                <a href="/admin/audit-logs" class="flex items-center gap-3 p-3 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700 hover:border-slate-400 dark:hover:border-slate-500 hover:bg-slate-50/50 dark:hover:bg-slate-700/20 transition-all group">
+                    <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400 group-hover:scale-110 transition-transform">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <span class="block font-medium text-slate-800 dark:text-slate-200">View Audit Logs</span>
+                        <span class="text-sm text-slate-500 dark:text-slate-400">System activity</span>
+                    </div>
+                </a>
+            </div>
+        </div>
+
+        <!-- Recent Activity -->
+        <div class="lg:col-span-2 admin-card p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display">Recent Activity</h2>
+                <a href="/admin/audit-logs" class="text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">
+                    View all &rarr;
+                </a>
+            </div>
+            <div class="space-y-4">
+                {% for activity in recent_activity %}
+                <div class="flex items-start gap-4 p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                    <div class="flex h-9 w-9 items-center justify-center rounded-full
+                        {% if activity.type == 'user_created' %}bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400
+                        {% elif activity.type == 'login' %}bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400
+                        {% elif activity.type == 'settings_changed' %}bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400
+                        {% elif activity.type == 'error' %}bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400
+                        {% else %}bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400{% endif %}">
+                        {% if activity.type == 'user_created' %}
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/>
+                        </svg>
+                        {% elif activity.type == 'login' %}
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"/>
+                        </svg>
+                        {% else %}
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        {% endif %}
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm font-medium text-slate-900 dark:text-white">{{ activity.message }}</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{{ activity.actor }} &middot; {{ activity.timestamp }}</p>
+                    </div>
+                </div>
+                {% else %}
+                <!-- Empty state -->
+                <div class="text-center py-12">
+                    <div class="mx-auto h-12 w-12 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-3">
+                        <svg class="h-6 w-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </div>
+                    <p class="text-sm font-medium text-slate-900 dark:text-white">No recent activity</p>
+                    <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Activity will appear here as users interact with the system</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- System Status Row -->
+    <div class="grid gap-6 lg:grid-cols-2">
+        <!-- Recent Users -->
+        <div class="admin-card p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display">Recent Users</h2>
+                <a href="/admin/users" class="text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">
+                    View all &rarr;
+                </a>
+            </div>
+            <div class="space-y-3">
+                {% for user in recent_users %}
+                <div class="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                    <div class="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-primary-500 to-primary-600 text-xs font-semibold text-white flex-shrink-0">
+                        {{ user.initials }}
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm font-medium text-slate-900 dark:text-white truncate">{{ user.name }}</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 truncate">{{ user.email }}</p>
+                    </div>
+                    <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium
+                        {% if user.status == 'active' %}bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400
+                        {% else %}bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400{% endif %}">
+                        {{ user.status | capitalize }}
+                    </span>
+                </div>
+                {% else %}
+                <div class="text-center py-8">
+                    <p class="text-sm text-slate-500 dark:text-slate-400">No users yet</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- System Services -->
+        <div class="admin-card p-6">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display mb-4">System Services</h2>
+            <div class="space-y-3">
+                <!-- Database -->
+                <div class="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50">
+                    <div class="flex items-center gap-3">
+                        <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
+                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <p class="text-sm font-medium text-slate-900 dark:text-white">Database</p>
+                            <p class="text-xs text-slate-500 dark:text-slate-400">PostgreSQL</p>
+                        </div>
+                    </div>
+                    <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+                        <span class="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                        Healthy
+                    </span>
+                </div>
+
+                <!-- Cache -->
+                <div class="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50">
+                    <div class="flex items-center gap-3">
+                        <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
+                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <p class="text-sm font-medium text-slate-900 dark:text-white">Cache</p>
+                            <p class="text-xs text-slate-500 dark:text-slate-400">Redis</p>
+                        </div>
+                    </div>
+                    <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+                        <span class="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                        Connected
+                    </span>
+                </div>
+
+                <!-- Task Queue -->
+                <div class="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50">
+                    <div class="flex items-center gap-3">
+                        <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
+                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <p class="text-sm font-medium text-slate-900 dark:text-white">Task Queue</p>
+                            <p class="text-xs text-slate-500 dark:text-slate-400">Celery</p>
+                        </div>
+                    </div>
+                    <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+                        <span class="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                        Running
+                    </span>
+                </div>
+
+                <!-- Email Service -->
+                <div class="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50">
+                    <div class="flex items-center gap-3">
+                        <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
+                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <p class="text-sm font-medium text-slate-900 dark:text-white">Email Service</p>
+                            <p class="text-xs text-slate-500 dark:text-slate-400">SMTP</p>
+                        </div>
+                    </div>
+                    <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+                        <span class="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                        Configured
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

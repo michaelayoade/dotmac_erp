@@ -3,6 +3,9 @@ from urllib.parse import urlparse
 
 import httpx
 from fastapi import HTTPException
+from sqlalchemy.orm import Session
+
+from app.models.domain_settings import DomainSetting, SettingDomain
 
 
 def is_openbao_ref(value: str | None) -> bool:
@@ -11,7 +14,40 @@ def is_openbao_ref(value: str | None) -> bool:
     return value.startswith(("bao://", "openbao://", "vault://"))
 
 
-def _openbao_config():
+def _coerce_bool(value: object | None, default: bool = False) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    normalized = str(value).strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    return default
+
+
+def _openbao_allow_insecure(db: Session | None) -> bool:
+    if db is not None:
+        try:
+            setting = (
+                db.query(DomainSetting)
+                .filter(DomainSetting.domain == SettingDomain.automation)
+                .filter(DomainSetting.key == "openbao_allow_insecure")
+                .filter(DomainSetting.is_active.is_(True))
+                .first()
+            )
+            if setting:
+                raw = setting.value_json if setting.value_json is not None else setting.value_text
+                return _coerce_bool(raw, default=False)
+        except Exception:
+            pass
+    return _coerce_bool(os.getenv("OPENBAO_ALLOW_INSECURE"), default=False)
+
+
+def _openbao_config(db: Session | None):
     addr = os.getenv("OPENBAO_ADDR") or os.getenv("VAULT_ADDR")
     token = os.getenv("OPENBAO_TOKEN") or os.getenv("VAULT_TOKEN")
     namespace = os.getenv("OPENBAO_NAMESPACE") or os.getenv("VAULT_NAMESPACE")
@@ -20,6 +56,13 @@ def _openbao_config():
         raise HTTPException(status_code=500, detail="OpenBao address not configured")
     if not token:
         raise HTTPException(status_code=500, detail="OpenBao token not configured")
+    parsed = urlparse(addr)
+    allow_insecure = _openbao_allow_insecure(db)
+    if parsed.scheme and parsed.scheme != "https" and not allow_insecure:
+        raise HTTPException(
+            status_code=500,
+            detail="OpenBao address must use https",
+        )
     return addr.rstrip("/"), token, namespace, kv_version
 
 
@@ -33,8 +76,8 @@ def _parse_ref(reference: str) -> tuple[str, str, str]:
     return mount, path, field
 
 
-def resolve_openbao_ref(reference: str) -> str:
-    addr, token, namespace, kv_version = _openbao_config()
+def resolve_openbao_ref(reference: str, db: Session | None = None) -> str:
+    addr, token, namespace, kv_version = _openbao_config(db)
     mount, path, field = _parse_ref(reference)
     if str(kv_version) == "1":
         url = f"{addr}/v1/{mount}/{path}"
@@ -63,9 +106,9 @@ def resolve_openbao_ref(reference: str) -> str:
     return str(secret_data[field])
 
 
-def resolve_secret(value: str | None) -> str | None:
+def resolve_secret(value: str | None, db: Session | None = None) -> str | None:
     if not value:
         return value
     if is_openbao_ref(value):
-        return resolve_openbao_ref(value)
+        return resolve_openbao_ref(value, db)
     return value

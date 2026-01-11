@@ -1,0 +1,259 @@
+{% extends "ifrs/base_ifrs.html" %}
+
+{% block page_title %}{{ "Edit Journal Entry" if entry else "New Journal Entry" }}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400">
+    <a href="/ifrs" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/gl/journals" class="hover:text-primary-600 dark:hover:text-primary-400">Journal Entries</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white">{{ "Edit" if entry else "New" }}</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto space-y-6" x-data="journalForm()">
+    {% if error %}
+    <div class="rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20">
+        <div class="flex items-center gap-3">
+            <svg class="h-5 w-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <p class="text-sm font-medium text-red-700 dark:text-red-400">{{ error }}</p>
+        </div>
+    </div>
+    {% endif %}
+
+    <form method="POST" action="/gl/journals/{% if entry %}{{ entry.journal_entry_id }}/edit{% else %}new{% endif %}" @submit="prepareSubmit">
+        <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800/50">
+            <h2 class="text-xl font-semibold text-slate-900 dark:text-white">Journal Header</h2>
+            <p class="mt-1 text-sm text-slate-500">Enter journal entry header details.</p>
+            <div class="mt-6 space-y-6">
+                <div class="grid gap-4 sm:grid-cols-2">
+                    <div>
+                        <label class="form-label">Journal Type</label>
+                        <select name="journal_type" class="form-select form-input" required>
+                            <option value="">Select type</option>
+                            {% set selected_type = form_data.journal_type if form_data else (entry.journal_type if entry else '') %}
+                            {% for value in journal_types %}
+                            <option value="{{ value }}" {% if selected_type == value %}selected{% endif %}>{{ value }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label">Fiscal Period</label>
+                        <select name="fiscal_period_id" class="form-select form-input" required>
+                            <option value="">Select period</option>
+                            {% set selected_period = form_data.fiscal_period_id if form_data else '' %}
+                            {% for period in fiscal_periods %}
+                            <option value="{{ period.period_id }}" {% if selected_period == period.period_id|string %}selected{% endif %}>
+                                {{ period.period_name }} ({{ period.start_date }} - {{ period.end_date }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label">Entry Date</label>
+                        <input type="date" name="entry_date" class="form-input"
+                               value="{{ form_data.entry_date if form_data else (entry.entry_date if entry else '') }}" required>
+                    </div>
+                    <div>
+                        <label class="form-label">Posting Date</label>
+                        <input type="date" name="posting_date" class="form-input"
+                               value="{{ form_data.posting_date if form_data else (entry.posting_date if entry else '') }}" required>
+                    </div>
+                    <div class="sm:col-span-2">
+                        <label class="form-label">Description</label>
+                        <input type="text" name="description" class="form-input"
+                               value="{{ form_data.description if form_data else (entry.description if entry else '') }}"
+                               placeholder="Describe the journal entry" required>
+                    </div>
+                    <div>
+                        <label class="form-label">Reference</label>
+                        <input type="text" name="reference" class="form-input"
+                               value="{{ form_data.reference if form_data else (entry.reference if entry else '') }}"
+                               placeholder="Reference number">
+                    </div>
+                    <div>
+                        <label class="form-label">Currency</label>
+                        <input type="text" name="currency_code" class="form-input"
+                               value="{{ form_data.currency_code if form_data else (entry.currency_code if entry else 'USD') }}"
+                               placeholder="USD">
+                    </div>
+                    <div>
+                        <label class="form-label">Exchange Rate</label>
+                        <input type="text" name="exchange_rate" class="form-input"
+                               value="{{ form_data.exchange_rate if form_data else (entry.exchange_rate if entry else '1.0') }}">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-6 rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800/50">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-medium text-slate-900 dark:text-white">Journal Lines</h3>
+                <button type="button" @click="addLine()"
+                        class="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-700 transition-colors">
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                    </svg>
+                    Add Line
+                </button>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead>
+                        <tr class="border-b border-slate-200 text-left text-xs uppercase tracking-wider text-slate-500 dark:border-slate-700">
+                            <th class="px-4 py-3 w-1/3">Account</th>
+                            <th class="px-4 py-3">Description</th>
+                            <th class="px-4 py-3 text-right w-32">Debit</th>
+                            <th class="px-4 py-3 text-right w-32">Credit</th>
+                            <th class="px-4 py-3 w-16"></th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                        <template x-for="(line, index) in lines" :key="index">
+                            <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                                <td class="px-4 py-3">
+                                    <select x-model="line.account_id"
+                                            class="w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                                        <option value="">Select account</option>
+                                        {% for account in accounts %}
+                                        <option value="{{ account.account_id }}">{{ account.account_code }} - {{ account.account_name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </td>
+                                <td class="px-4 py-3">
+                                    <input type="text" x-model="line.description"
+                                           class="w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                                           placeholder="Line description">
+                                </td>
+                                <td class="px-4 py-3">
+                                    <input type="number" x-model="line.debit" step="0.01" min="0"
+                                           @input="if(line.debit > 0) line.credit = 0"
+                                           class="w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-right focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                                           placeholder="0.00">
+                                </td>
+                                <td class="px-4 py-3">
+                                    <input type="number" x-model="line.credit" step="0.01" min="0"
+                                           @input="if(line.credit > 0) line.debit = 0"
+                                           class="w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-right focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                                           placeholder="0.00">
+                                </td>
+                                <td class="px-4 py-3 text-center">
+                                    <button type="button" @click="removeLine(index)"
+                                            class="rounded p-1 text-red-400 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900/20">
+                                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                        </svg>
+                                    </button>
+                                </td>
+                            </tr>
+                        </template>
+                        <tr x-show="lines.length === 0">
+                            <td colspan="5" class="px-4 py-8 text-center text-sm text-slate-500">
+                                No journal lines. Click "Add Line" to add entries.
+                            </td>
+                        </tr>
+                    </tbody>
+                    <tfoot class="border-t-2 border-slate-300 dark:border-slate-600">
+                        <tr class="bg-slate-50 dark:bg-slate-800/50">
+                            <td colspan="2" class="px-4 py-3 text-right text-sm font-medium text-slate-700 dark:text-slate-300">
+                                Totals
+                            </td>
+                            <td class="px-4 py-3 text-right text-sm font-bold text-slate-900 dark:text-white" x-text="formatCurrency(totalDebit)"></td>
+                            <td class="px-4 py-3 text-right text-sm font-bold text-slate-900 dark:text-white" x-text="formatCurrency(totalCredit)"></td>
+                            <td></td>
+                        </tr>
+                        <tr x-show="!isBalanced" class="bg-red-50 dark:bg-red-900/20">
+                            <td colspan="5" class="px-4 py-2 text-center text-sm font-medium text-red-600 dark:text-red-400">
+                                Journal is out of balance. Difference: <span x-text="formatCurrency(Math.abs(totalDebit - totalCredit))"></span>
+                            </td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+
+        <input type="hidden" name="lines_json" x-model="linesJson">
+
+        <div class="mt-6 flex items-center justify-between">
+            <a href="/gl/journals" class="text-sm text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">
+                Cancel
+            </a>
+            <button type="submit" :disabled="!isBalanced || lines.length === 0"
+                    :class="{'opacity-50 cursor-not-allowed': !isBalanced || lines.length === 0}"
+                    class="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-primary-600/25 hover:bg-primary-700 transition-colors">
+                {{ "Update Journal" if entry else "Create Journal" }}
+            </button>
+        </div>
+    </form>
+</div>
+
+<script>
+function journalForm() {
+    // Initialize lines from existing data
+    const existingLines = {{ lines | tojson | safe if lines else '[]' }};
+    const formDataLines = {{ form_data.lines_json | safe if form_data and form_data.lines_json else 'null' }};
+
+    let initialLines = [];
+    if (formDataLines) {
+        try {
+            initialLines = JSON.parse(formDataLines);
+        } catch (e) {
+            initialLines = [];
+        }
+    } else if (existingLines && existingLines.length > 0) {
+        initialLines = existingLines.map(line => ({
+            account_id: line.account_id || '',
+            description: line.description || '',
+            debit: parseFloat(line.debit_amount?.replace(/[^0-9.-]/g, '') || '0') || 0,
+            credit: parseFloat(line.credit_amount?.replace(/[^0-9.-]/g, '') || '0') || 0
+        }));
+    }
+
+    return {
+        lines: initialLines.length > 0 ? initialLines : [],
+
+        get totalDebit() {
+            return this.lines.reduce((sum, line) => sum + (parseFloat(line.debit) || 0), 0);
+        },
+
+        get totalCredit() {
+            return this.lines.reduce((sum, line) => sum + (parseFloat(line.credit) || 0), 0);
+        },
+
+        get isBalanced() {
+            return Math.abs(this.totalDebit - this.totalCredit) < 0.01;
+        },
+
+        get linesJson() {
+            return JSON.stringify(this.lines);
+        },
+
+        addLine() {
+            this.lines.push({
+                account_id: '',
+                description: '',
+                debit: 0,
+                credit: 0
+            });
+        },
+
+        removeLine(index) {
+            this.lines.splice(index, 1);
+        },
+
+        formatCurrency(amount) {
+            return '$' + amount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+        },
+
+        prepareSubmit() {
+            // Lines are already in linesJson via the getter
+            return true;
+        }
+    };
+}
+</script>
+{% endblock %}

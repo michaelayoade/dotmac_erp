@@ -634,6 +634,123 @@ class JournalService(ListResponseMixin):
         query = query.order_by(JournalEntry.created_at.desc())
         return query.limit(limit).offset(offset).all()
 
+    @staticmethod
+    def create_entry(
+        db: Session,
+        organization_id: UUID,
+        input: JournalInput,
+        created_by_user_id: UUID,
+    ) -> JournalEntry:
+        """
+        Create a new journal entry (alias for create_journal).
+
+        Args:
+            db: Database session
+            organization_id: Organization scope
+            input: Journal input data
+            created_by_user_id: User creating the journal
+
+        Returns:
+            Created JournalEntry
+        """
+        return JournalService.create_journal(db, organization_id, input, created_by_user_id)
+
+    @staticmethod
+    def reverse_entry(
+        db: Session,
+        organization_id: UUID,
+        entry_id: UUID,
+        reversal_date: date,
+        reversed_by_user_id: UUID,
+    ) -> JournalEntry:
+        """
+        Reverse a posted journal entry.
+
+        Args:
+            db: Database session
+            organization_id: Organization scope
+            entry_id: Journal to reverse
+            reversal_date: Date for reversal entry
+            reversed_by_user_id: User performing reversal
+
+        Returns:
+            Reversal JournalEntry
+
+        Raises:
+            HTTPException(404): If journal not found
+            HTTPException(400): If journal cannot be reversed
+        """
+        org_id = coerce_uuid(organization_id)
+        journal_id = coerce_uuid(entry_id)
+        user_id = coerce_uuid(reversed_by_user_id)
+
+        journal = db.get(JournalEntry, journal_id)
+        if not journal or journal.organization_id != org_id:
+            raise HTTPException(status_code=404, detail="Journal entry not found")
+
+        if journal.status != JournalStatus.POSTED:
+            raise HTTPException(
+                status_code=400,
+                detail="Only posted journals can be reversed"
+            )
+
+        if journal.reversal_journal_id:
+            raise HTTPException(
+                status_code=400,
+                detail="Journal has already been reversed"
+            )
+
+        # Create reversal entry
+        reversal = JournalEntry(
+            organization_id=org_id,
+            fiscal_period_id=journal.fiscal_period_id,
+            journal_type=JournalType.REVERSAL,
+            journal_number=f"REV-{journal.journal_number}",
+            entry_date=reversal_date,
+            posting_date=reversal_date,
+            description=f"Reversal of {journal.journal_number}: {journal.description}",
+            reference=journal.journal_number,
+            total_debit=journal.total_credit,
+            total_credit=journal.total_debit,
+            total_debit_functional=journal.total_credit_functional,
+            total_credit_functional=journal.total_debit_functional,
+            currency_code=journal.currency_code,
+            exchange_rate=journal.exchange_rate,
+            status=JournalStatus.POSTED,
+            is_reversal=True,
+            reversed_journal_id=journal.journal_entry_id,
+            source_module=journal.source_module,
+            created_by_user_id=user_id,
+        )
+
+        # Reverse the lines (swap debits and credits)
+        for line in journal.lines:
+            reversal_line = JournalEntryLine(
+                account_id=line.account_id,
+                debit_amount=line.credit_amount,
+                credit_amount=line.debit_amount,
+                debit_amount_functional=line.credit_amount_functional,
+                credit_amount_functional=line.debit_amount_functional,
+                currency_code=line.currency_code,
+                exchange_rate=line.exchange_rate,
+                description=f"Reversal: {line.description or ''}",
+                business_unit_id=line.business_unit_id,
+                cost_center_id=line.cost_center_id,
+                project_id=line.project_id,
+                segment_id=line.segment_id,
+            )
+            reversal.lines.append(reversal_line)
+
+        # Mark original as reversed
+        journal.reversal_journal_id = reversal.journal_entry_id
+        journal.status = JournalStatus.REVERSED
+
+        db.add(reversal)
+        db.commit()
+        db.refresh(reversal)
+
+        return reversal
+
 
 # Module-level singleton instance
 journal_service = JournalService()

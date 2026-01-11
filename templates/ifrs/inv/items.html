@@ -35,9 +35,9 @@
                 </thead>
                 <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
                     {% for item in items %}
-                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors" onclick="window.location='/inv/items/{{ item.item_id }}'">
                         <td class="px-6 py-4 whitespace-nowrap">
-                            <span class="font-mono text-sm font-medium text-slate-900 dark:text-white">{{ item.item_code }}</span>
+                            <a href="/inv/items/{{ item.item_id }}" class="font-mono text-sm font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300">{{ item.item_code }}</a>
                         </td>
                         <td class="px-6 py-4">
                             <p class="text-sm font-medium text-slate-900 dark:text-white">{{ item.item_name }}</p>

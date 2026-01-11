@@ -160,6 +160,7 @@ class TaxTransactionService(ListResponseMixin):
         transaction_date: date,
         is_purchase: bool,
         base_amount: Decimal,
+        currency_code: str,
         counterparty_name: Optional[str] = None,
         counterparty_tax_id: Optional[str] = None,
         exchange_rate: Decimal = Decimal("1.0"),
@@ -178,6 +179,7 @@ class TaxTransactionService(ListResponseMixin):
             transaction_date: Transaction date
             is_purchase: True for purchase (input), False for sale (output)
             base_amount: Amount to calculate tax on
+            currency_code: Invoice currency code
             counterparty_name: Supplier/customer name
             counterparty_tax_id: Supplier/customer tax ID
             exchange_rate: Exchange rate to functional currency
@@ -231,7 +233,7 @@ class TaxTransactionService(ListResponseMixin):
             counterparty_type="SUPPLIER" if is_purchase else "CUSTOMER",
             counterparty_name=counterparty_name,
             counterparty_tax_id=counterparty_tax_id,
-            currency_code=tax_code.jurisdiction_id and "USD",  # Would need to lookup
+            currency_code=currency_code,
             base_amount=base_amount,
             tax_rate=tax_code.tax_rate,
             tax_amount=tax_amount,
@@ -539,6 +541,267 @@ class TaxTransactionService(ListResponseMixin):
             .order_by(TaxTransaction.transaction_date)
             .all()
         )
+
+    @staticmethod
+    def get_vat_register(
+        db: Session,
+        organization_id: str,
+        start_date: date,
+        end_date: date,
+        transaction_type: Optional[TaxTransactionType] = None,
+        tax_code_id: Optional[str] = None,
+        page: int = 1,
+        limit: int = 50,
+    ) -> tuple[list[dict], int]:
+        """
+        Get VAT register - detailed list of all tax transactions.
+
+        Args:
+            db: Database session
+            organization_id: Organization scope
+            start_date: Start of date range
+            end_date: End of date range
+            transaction_type: Filter by INPUT/OUTPUT/WITHHOLDING
+            tax_code_id: Filter by specific tax code
+            page: Page number (1-based)
+            limit: Records per page
+
+        Returns:
+            Tuple of (list of transaction dicts, total count)
+        """
+        org_id = coerce_uuid(organization_id)
+        offset = (page - 1) * limit
+
+        # Base query with join to tax code
+        query = (
+            db.query(TaxTransaction, TaxCode)
+            .join(TaxCode, TaxTransaction.tax_code_id == TaxCode.tax_code_id)
+            .filter(
+                TaxTransaction.organization_id == org_id,
+                TaxTransaction.transaction_date >= start_date,
+                TaxTransaction.transaction_date <= end_date,
+            )
+        )
+
+        if transaction_type:
+            query = query.filter(TaxTransaction.transaction_type == transaction_type)
+
+        if tax_code_id:
+            query = query.filter(TaxTransaction.tax_code_id == coerce_uuid(tax_code_id))
+
+        # Get total count
+        total = query.count()
+
+        # Get paginated results
+        results = (
+            query.order_by(TaxTransaction.transaction_date.desc())
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )
+
+        transactions = []
+        for txn, code in results:
+            transactions.append({
+                "transaction_id": str(txn.transaction_id),
+                "transaction_date": txn.transaction_date.isoformat(),
+                "transaction_type": txn.transaction_type.value,
+                "tax_code": code.tax_code,
+                "tax_name": code.tax_name,
+                "tax_rate": str(code.tax_rate),
+                "source_document_type": txn.source_document_type,
+                "source_document_id": str(txn.source_document_id) if txn.source_document_id else None,
+                "source_document_reference": txn.source_document_reference,
+                "counterparty_name": txn.counterparty_name,
+                "counterparty_tax_id": txn.counterparty_tax_id,
+                "base_amount": str(txn.base_amount),
+                "tax_amount": str(txn.tax_amount),
+                "functional_tax_amount": str(txn.functional_tax_amount),
+                "recoverable_amount": str(txn.recoverable_amount) if txn.recoverable_amount else "0",
+                "non_recoverable_amount": str(txn.non_recoverable_amount) if txn.non_recoverable_amount else "0",
+                "currency_code": txn.currency_code,
+                "tax_return_box": txn.tax_return_box,
+                "is_included_in_return": txn.is_included_in_return,
+            })
+
+        return transactions, total
+
+    @staticmethod
+    def get_tax_liability_summary(
+        db: Session,
+        organization_id: str,
+        start_date: date,
+        end_date: date,
+        group_by: str = "period",
+    ) -> list[dict]:
+        """
+        Get tax liability summary (Output Tax - Input Tax = Net Payable).
+
+        Args:
+            db: Database session
+            organization_id: Organization scope
+            start_date: Start of date range
+            end_date: End of date range
+            group_by: Grouping ('period', 'tax_code', 'month')
+
+        Returns:
+            List of summary dicts with output_tax, input_tax, net_payable
+        """
+        from app.models.ifrs.gl.fiscal_period import FiscalPeriod
+
+        org_id = coerce_uuid(organization_id)
+
+        if group_by == "month":
+            # Group by year-month
+            results = (
+                db.query(
+                    func.date_trunc("month", TaxTransaction.transaction_date).label("period"),
+                    TaxTransaction.transaction_type,
+                    func.sum(TaxTransaction.functional_tax_amount).label("tax_amount"),
+                    func.sum(TaxTransaction.recoverable_amount).label("recoverable"),
+                )
+                .filter(
+                    TaxTransaction.organization_id == org_id,
+                    TaxTransaction.transaction_date >= start_date,
+                    TaxTransaction.transaction_date <= end_date,
+                )
+                .group_by(
+                    func.date_trunc("month", TaxTransaction.transaction_date),
+                    TaxTransaction.transaction_type,
+                )
+                .order_by(func.date_trunc("month", TaxTransaction.transaction_date))
+                .all()
+            )
+
+            # Aggregate by period
+            period_data: dict = {}
+            for row in results:
+                period_key = row.period.strftime("%Y-%m") if row.period else "Unknown"
+                if period_key not in period_data:
+                    period_data[period_key] = {
+                        "period": period_key,
+                        "output_tax": Decimal("0"),
+                        "input_tax": Decimal("0"),
+                        "input_tax_recoverable": Decimal("0"),
+                        "net_payable": Decimal("0"),
+                    }
+
+                if row.transaction_type == TaxTransactionType.OUTPUT:
+                    period_data[period_key]["output_tax"] += row.tax_amount or Decimal("0")
+                elif row.transaction_type == TaxTransactionType.INPUT:
+                    period_data[period_key]["input_tax"] += row.tax_amount or Decimal("0")
+                    period_data[period_key]["input_tax_recoverable"] += row.recoverable or Decimal("0")
+
+            # Calculate net payable
+            for data in period_data.values():
+                data["net_payable"] = data["output_tax"] - data["input_tax_recoverable"]
+                # Convert decimals to strings for JSON
+                data["output_tax"] = str(data["output_tax"])
+                data["input_tax"] = str(data["input_tax"])
+                data["input_tax_recoverable"] = str(data["input_tax_recoverable"])
+                data["net_payable"] = str(data["net_payable"])
+
+            return list(period_data.values())
+
+        elif group_by == "tax_code":
+            # Group by tax code
+            results = (
+                db.query(
+                    TaxCode.tax_code,
+                    TaxCode.tax_name,
+                    TaxTransaction.transaction_type,
+                    func.sum(TaxTransaction.functional_tax_amount).label("tax_amount"),
+                    func.sum(TaxTransaction.recoverable_amount).label("recoverable"),
+                )
+                .join(TaxCode, TaxTransaction.tax_code_id == TaxCode.tax_code_id)
+                .filter(
+                    TaxTransaction.organization_id == org_id,
+                    TaxTransaction.transaction_date >= start_date,
+                    TaxTransaction.transaction_date <= end_date,
+                )
+                .group_by(
+                    TaxCode.tax_code,
+                    TaxCode.tax_name,
+                    TaxTransaction.transaction_type,
+                )
+                .order_by(TaxCode.tax_code)
+                .all()
+            )
+
+            # Aggregate by tax code
+            code_data: dict = {}
+            for row in results:
+                code_key = row.tax_code
+                if code_key not in code_data:
+                    code_data[code_key] = {
+                        "tax_code": row.tax_code,
+                        "tax_name": row.tax_name,
+                        "output_tax": Decimal("0"),
+                        "input_tax": Decimal("0"),
+                        "input_tax_recoverable": Decimal("0"),
+                        "net_payable": Decimal("0"),
+                    }
+
+                if row.transaction_type == TaxTransactionType.OUTPUT:
+                    code_data[code_key]["output_tax"] += row.tax_amount or Decimal("0")
+                elif row.transaction_type == TaxTransactionType.INPUT:
+                    code_data[code_key]["input_tax"] += row.tax_amount or Decimal("0")
+                    code_data[code_key]["input_tax_recoverable"] += row.recoverable or Decimal("0")
+
+            # Calculate net payable and convert to strings
+            for data in code_data.values():
+                data["net_payable"] = data["output_tax"] - data["input_tax_recoverable"]
+                data["output_tax"] = str(data["output_tax"])
+                data["input_tax"] = str(data["input_tax"])
+                data["input_tax_recoverable"] = str(data["input_tax_recoverable"])
+                data["net_payable"] = str(data["net_payable"])
+
+            return list(code_data.values())
+
+        else:
+            # Default: overall summary for the period
+            output_result = (
+                db.query(func.sum(TaxTransaction.functional_tax_amount))
+                .filter(
+                    TaxTransaction.organization_id == org_id,
+                    TaxTransaction.transaction_date >= start_date,
+                    TaxTransaction.transaction_date <= end_date,
+                    TaxTransaction.transaction_type == TaxTransactionType.OUTPUT,
+                )
+                .scalar()
+            ) or Decimal("0")
+
+            input_result = (
+                db.query(func.sum(TaxTransaction.functional_tax_amount))
+                .filter(
+                    TaxTransaction.organization_id == org_id,
+                    TaxTransaction.transaction_date >= start_date,
+                    TaxTransaction.transaction_date <= end_date,
+                    TaxTransaction.transaction_type == TaxTransactionType.INPUT,
+                )
+                .scalar()
+            ) or Decimal("0")
+
+            recoverable_result = (
+                db.query(func.sum(TaxTransaction.recoverable_amount))
+                .filter(
+                    TaxTransaction.organization_id == org_id,
+                    TaxTransaction.transaction_date >= start_date,
+                    TaxTransaction.transaction_date <= end_date,
+                    TaxTransaction.transaction_type == TaxTransactionType.INPUT,
+                )
+                .scalar()
+            ) or Decimal("0")
+
+            net_payable = output_result - recoverable_result
+
+            return [{
+                "period": f"{start_date.isoformat()} to {end_date.isoformat()}",
+                "output_tax": str(output_result),
+                "input_tax": str(input_result),
+                "input_tax_recoverable": str(recoverable_result),
+                "net_payable": str(net_payable),
+            }]
 
 
 # Module-level singleton instance

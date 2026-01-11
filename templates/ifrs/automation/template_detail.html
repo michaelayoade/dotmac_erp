@@ -1,0 +1,246 @@
+{% extends "ifrs/base_ifrs.html" %}
+
+{% block page_title %}{{ template.template_name }}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/automation" class="hover:text-teal-600 dark:hover:text-teal-400">Automation</a>
+    <span class="mx-2">/</span>
+    <a href="/automation/templates" class="hover:text-teal-600 dark:hover:text-teal-400">Document Templates</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white">{{ template.template_name }}</span>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<div class="flex items-center gap-2">
+    <a href="/automation/templates/{{ template.template_id }}/preview"
+       class="inline-flex items-center gap-2 rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300">
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+        </svg>
+        Preview
+    </a>
+    <a href="/automation/templates/{{ template.template_id }}/edit"
+       class="inline-flex items-center gap-2 rounded-lg bg-rose-50 px-4 py-2 text-sm font-medium text-rose-700 hover:bg-rose-100 dark:bg-rose-900/20 dark:text-rose-400">
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+        </svg>
+        Edit
+    </a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="grid gap-6 lg:grid-cols-3">
+        <div class="lg:col-span-2 space-y-6">
+            <!-- Template Details -->
+            <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50">
+                <div class="border-b border-slate-200 px-6 py-4 dark:border-slate-700">
+                    <div class="flex items-center justify-between">
+                        <h3 class="font-semibold text-slate-900 dark:text-white">Template Details</h3>
+                        <div class="flex items-center gap-2">
+                            {% if template.is_default %}
+                            <span class="inline-flex items-center gap-1 rounded-full bg-rose-100 px-3 py-1 text-sm font-medium text-rose-700 dark:bg-rose-900/30 dark:text-rose-400">
+                                <svg class="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" clip-rule="evenodd"/>
+                                </svg>
+                                Default
+                            </span>
+                            {% endif %}
+                            <span class="inline-flex rounded-full px-3 py-1 text-sm font-medium
+                                {% if template.is_active %}bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400
+                                {% else %}bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-400{% endif %}">
+                                {% if template.is_active %}Active{% else %}Inactive{% endif %}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                <div class="p-6">
+                    <dl class="grid gap-4 sm:grid-cols-2">
+                        <div>
+                            <dt class="text-sm text-slate-500 dark:text-slate-400">Template Type</dt>
+                            <dd class="mt-1 font-medium text-slate-900 dark:text-white">{{ template.template_type }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm text-slate-500 dark:text-slate-400">Created</dt>
+                            <dd class="mt-1 font-medium text-slate-900 dark:text-white">{{ template.created_at }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm text-slate-500 dark:text-slate-400">Last Updated</dt>
+                            <dd class="mt-1 font-medium text-slate-900 dark:text-white">{{ template.updated_at }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm text-slate-500 dark:text-slate-400">Created By</dt>
+                            <dd class="mt-1 font-medium text-slate-900 dark:text-white">{{ template.created_by_name }}</dd>
+                        </div>
+                    </dl>
+                    {% if template.description %}
+                    <div class="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+                        <dt class="text-sm text-slate-500 dark:text-slate-400">Description</dt>
+                        <dd class="mt-1 text-slate-900 dark:text-white">{{ template.description }}</dd>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Template Preview -->
+            <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50">
+                <div class="border-b border-slate-200 px-6 py-4 dark:border-slate-700">
+                    <div class="flex items-center justify-between">
+                        <h3 class="font-semibold text-slate-900 dark:text-white">Template Content</h3>
+                        <div class="flex items-center gap-2">
+                            <button type="button" onclick="copyContent()"
+                                    class="rounded-lg bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300">
+                                Copy
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="p-6">
+                    <div class="rounded-lg bg-slate-900 p-4 overflow-x-auto">
+                        <pre id="template-content" class="text-sm text-slate-300 whitespace-pre-wrap"><code>{{ template.template_content }}</code></pre>
+                    </div>
+                </div>
+            </div>
+
+            {% if template.css_styles %}
+            <!-- CSS Styles -->
+            <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50">
+                <div class="border-b border-slate-200 px-6 py-4 dark:border-slate-700">
+                    <h3 class="font-semibold text-slate-900 dark:text-white">Additional CSS Styles</h3>
+                </div>
+                <div class="p-6">
+                    <div class="rounded-lg bg-slate-900 p-4 overflow-x-auto">
+                        <pre class="text-sm text-slate-300 whitespace-pre-wrap"><code>{{ template.css_styles }}</code></pre>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Sidebar -->
+        <div class="space-y-6">
+            <!-- Quick Actions -->
+            <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800/50">
+                <h3 class="font-semibold text-slate-900 dark:text-white mb-4">Quick Actions</h3>
+                <div class="space-y-3">
+                    <a href="/automation/templates/{{ template.template_id }}/preview"
+                       class="flex w-full items-center gap-3 rounded-lg border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">
+                        <svg class="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                        </svg>
+                        Preview with Sample Data
+                    </a>
+                    <a href="/automation/templates/{{ template.template_id }}/duplicate"
+                       class="flex w-full items-center gap-3 rounded-lg border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">
+                        <svg class="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                        </svg>
+                        Duplicate Template
+                    </a>
+                    <a href="/automation/templates/{{ template.template_id }}/export"
+                       class="flex w-full items-center gap-3 rounded-lg border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">
+                        <svg class="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                        </svg>
+                        Export Template
+                    </a>
+                </div>
+            </div>
+
+            <!-- Header Configuration -->
+            {% if template.header_config %}
+            <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800/50">
+                <h3 class="font-semibold text-slate-900 dark:text-white mb-4">Header Configuration</h3>
+                <dl class="space-y-3">
+                    {% if template.header_config.logo_url %}
+                    <div>
+                        <dt class="text-sm text-slate-500 dark:text-slate-400">Logo</dt>
+                        <dd class="mt-1">
+                            <img src="{{ template.header_config.logo_url }}" alt="Logo" class="h-10 rounded">
+                        </dd>
+                    </div>
+                    {% endif %}
+                    <div class="flex items-center justify-between">
+                        <dt class="text-sm text-slate-500 dark:text-slate-400">Show Company Info</dt>
+                        <dd class="{% if template.header_config.show_company_info %}text-emerald-600 dark:text-emerald-400{% else %}text-slate-500{% endif %}">
+                            {% if template.header_config.show_company_info %}Yes{% else %}No{% endif %}
+                        </dd>
+                    </div>
+                </dl>
+            </div>
+            {% endif %}
+
+            <!-- Footer Configuration -->
+            {% if template.footer_config %}
+            <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800/50">
+                <h3 class="font-semibold text-slate-900 dark:text-white mb-4">Footer Configuration</h3>
+                <dl class="space-y-3">
+                    {% if template.footer_config.footer_text %}
+                    <div>
+                        <dt class="text-sm text-slate-500 dark:text-slate-400">Footer Text</dt>
+                        <dd class="mt-1 text-sm text-slate-900 dark:text-white">{{ template.footer_config.footer_text }}</dd>
+                    </div>
+                    {% endif %}
+                    <div class="flex items-center justify-between">
+                        <dt class="text-sm text-slate-500 dark:text-slate-400">Page Numbers</dt>
+                        <dd class="{% if template.footer_config.show_page_numbers %}text-emerald-600 dark:text-emerald-400{% else %}text-slate-500{% endif %}">
+                            {% if template.footer_config.show_page_numbers %}Yes{% else %}No{% endif %}
+                        </dd>
+                    </div>
+                </dl>
+            </div>
+            {% endif %}
+
+            <!-- Set as Default -->
+            {% if not template.is_default and template.is_active %}
+            <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800/50">
+                <h3 class="font-semibold text-slate-900 dark:text-white mb-4">Make Default</h3>
+                <p class="text-sm text-slate-500 dark:text-slate-400 mb-4">
+                    Set this template as the default for {{ template.template_type }} documents.
+                </p>
+                <form method="post" action="/automation/templates/{{ template.template_id }}/set-default">
+                    <button type="submit" class="w-full rounded-lg bg-rose-50 px-4 py-2 text-sm font-medium text-rose-700 hover:bg-rose-100 dark:bg-rose-900/20 dark:text-rose-400">
+                        Set as Default
+                    </button>
+                </form>
+            </div>
+            {% endif %}
+
+            <!-- Danger Zone -->
+            {% if not template.is_default %}
+            <div class="rounded-xl border border-rose-200 bg-rose-50 p-6 dark:border-rose-800 dark:bg-rose-900/20">
+                <h3 class="font-semibold text-rose-700 dark:text-rose-400 mb-4">Danger Zone</h3>
+                <form method="post" action="/automation/templates/{{ template.template_id }}/delete"
+                      onsubmit="return confirm('Are you sure you want to delete this template? This action cannot be undone.')">
+                    <button type="submit" class="w-full rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-700">
+                        Delete Template
+                    </button>
+                </form>
+            </div>
+            {% else %}
+            <div class="rounded-xl border border-slate-200 bg-slate-50 p-6 dark:border-slate-700 dark:bg-slate-800">
+                <p class="text-sm text-slate-500 dark:text-slate-400">
+                    Default templates cannot be deleted. Set another template as default first.
+                </p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+function copyContent() {
+    const content = document.getElementById('template-content').innerText;
+    navigator.clipboard.writeText(content).then(() => {
+        alert('Template content copied to clipboard');
+    });
+}
+</script>
+{% endblock %}

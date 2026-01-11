@@ -343,11 +343,11 @@ class TestGetCustomer:
         mock_db.get.return_value = customer
 
         with patch("app.services.ifrs.ar.customer.Customer"):
-            result = CustomerService.get(mock_db, str(customer.customer_id))
+            result = CustomerService.get(mock_db, org_id, str(customer.customer_id))
 
         assert result == customer
 
-    def test_get_nonexistent_customer_raises(self, mock_db):
+    def test_get_nonexistent_customer_raises(self, mock_db, org_id):
         """Test getting non-existent customer raises exception."""
         from fastapi import HTTPException
 
@@ -355,7 +355,7 @@ class TestGetCustomer:
 
         with patch("app.services.ifrs.ar.customer.Customer"):
             with pytest.raises(HTTPException) as exc:
-                CustomerService.get(mock_db, str(uuid4()))
+                CustomerService.get(mock_db, org_id, str(uuid4()))
 
         assert exc.value.status_code == 404
 

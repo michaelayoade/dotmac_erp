@@ -492,6 +492,203 @@ class TaxReturnService(ListResponseMixin):
         return sorted(result, key=lambda x: x.box_number)
 
     @staticmethod
+    def recalculate(
+        db: Session,
+        organization_id: UUID,
+        return_id: UUID,
+    ) -> TaxReturn:
+        """
+        Recalculate a draft return from current transaction data.
+
+        Args:
+            db: Database session
+            organization_id: Organization scope
+            return_id: Return to recalculate
+
+        Returns:
+            Updated TaxReturn
+        """
+        org_id = coerce_uuid(organization_id)
+        ret_id = coerce_uuid(return_id)
+
+        tax_return = db.query(TaxReturn).filter(
+            TaxReturn.return_id == ret_id,
+            TaxReturn.organization_id == org_id,
+        ).first()
+
+        if not tax_return:
+            raise HTTPException(status_code=404, detail="Tax return not found")
+
+        if tax_return.status not in [TaxReturnStatus.DRAFT, TaxReturnStatus.PREPARED]:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot recalculate return in {tax_return.status.value} status"
+            )
+
+        # Get fiscal period for this tax period
+        period = db.query(TaxPeriod).filter(
+            TaxPeriod.period_id == tax_return.tax_period_id
+        ).first()
+
+        if not period:
+            raise HTTPException(status_code=404, detail="Tax period not found")
+
+        # Recalculate output tax
+        output_result = db.query(
+            func.sum(TaxTransaction.functional_tax_amount)
+        ).filter(
+            TaxTransaction.organization_id == org_id,
+            TaxTransaction.fiscal_period_id == period.fiscal_period_id,
+            TaxTransaction.transaction_type == TaxTransactionType.OUTPUT,
+        ).scalar()
+        total_output = output_result or Decimal("0")
+
+        # Recalculate input tax (recoverable)
+        input_result = db.query(
+            func.sum(TaxTransaction.recoverable_amount)
+        ).filter(
+            TaxTransaction.organization_id == org_id,
+            TaxTransaction.fiscal_period_id == period.fiscal_period_id,
+            TaxTransaction.transaction_type == TaxTransactionType.INPUT,
+        ).scalar()
+        total_input = input_result or Decimal("0")
+
+        # Update return
+        tax_return.total_output_tax = total_output
+        tax_return.total_input_tax = total_input
+        tax_return.net_tax_payable = total_output - total_input
+        tax_return.final_amount = tax_return.net_tax_payable + tax_return.adjustments
+
+        # Recalculate box values
+        tax_return.box_values = TaxReturnService._calculate_box_values(
+            db, org_id, period.fiscal_period_id, tax_return.return_type
+        )
+
+        db.commit()
+        db.refresh(tax_return)
+
+        return tax_return
+
+    @staticmethod
+    def get_return_transactions(
+        db: Session,
+        organization_id: UUID,
+        return_id: UUID,
+        page: int = 1,
+        limit: int = 50,
+    ) -> tuple[list[TaxTransaction], int]:
+        """
+        Get transactions that are/would be included in a return.
+
+        Args:
+            db: Database session
+            organization_id: Organization scope
+            return_id: Return ID
+            page: Page number (1-based)
+            limit: Results per page
+
+        Returns:
+            Tuple of (transactions list, total count)
+        """
+        org_id = coerce_uuid(organization_id)
+        ret_id = coerce_uuid(return_id)
+
+        tax_return = db.query(TaxReturn).filter(
+            TaxReturn.return_id == ret_id,
+            TaxReturn.organization_id == org_id,
+        ).first()
+
+        if not tax_return:
+            raise HTTPException(status_code=404, detail="Tax return not found")
+
+        # Get fiscal period
+        period = db.query(TaxPeriod).filter(
+            TaxPeriod.period_id == tax_return.tax_period_id
+        ).first()
+
+        if not period:
+            return [], 0
+
+        # Build query for transactions in this period
+        query = db.query(TaxTransaction).filter(
+            TaxTransaction.organization_id == org_id,
+            TaxTransaction.fiscal_period_id == period.fiscal_period_id,
+        )
+
+        # Get total count
+        total_count = query.count()
+
+        # Get paginated results
+        offset = (page - 1) * limit
+        transactions = query.order_by(
+            TaxTransaction.transaction_date.desc()
+        ).offset(offset).limit(limit).all()
+
+        return transactions, total_count
+
+    @staticmethod
+    def get_unreported_transaction_count(
+        db: Session,
+        organization_id: UUID,
+        tax_period_id: UUID,
+    ) -> dict:
+        """
+        Get count and totals of unreported transactions for a period.
+
+        Args:
+            db: Database session
+            organization_id: Organization scope
+            tax_period_id: Tax period ID
+
+        Returns:
+            Dict with transaction_count, output_total, input_total
+        """
+        org_id = coerce_uuid(organization_id)
+        period_id = coerce_uuid(tax_period_id)
+
+        # Get fiscal period
+        period = db.query(TaxPeriod).filter(
+            TaxPeriod.period_id == period_id,
+            TaxPeriod.organization_id == org_id,
+        ).first()
+
+        if not period:
+            return {"transaction_count": 0, "output_total": Decimal("0"), "input_total": Decimal("0")}
+
+        # Get unreported transactions count
+        count = db.query(TaxTransaction).filter(
+            TaxTransaction.organization_id == org_id,
+            TaxTransaction.fiscal_period_id == period.fiscal_period_id,
+            TaxTransaction.is_included_in_return == False,
+        ).count()
+
+        # Output tax total
+        output_result = db.query(
+            func.sum(TaxTransaction.functional_tax_amount)
+        ).filter(
+            TaxTransaction.organization_id == org_id,
+            TaxTransaction.fiscal_period_id == period.fiscal_period_id,
+            TaxTransaction.transaction_type == TaxTransactionType.OUTPUT,
+            TaxTransaction.is_included_in_return == False,
+        ).scalar()
+
+        # Input tax total (recoverable)
+        input_result = db.query(
+            func.sum(TaxTransaction.recoverable_amount)
+        ).filter(
+            TaxTransaction.organization_id == org_id,
+            TaxTransaction.fiscal_period_id == period.fiscal_period_id,
+            TaxTransaction.transaction_type == TaxTransactionType.INPUT,
+            TaxTransaction.is_included_in_return == False,
+        ).scalar()
+
+        return {
+            "transaction_count": count,
+            "output_total": output_result or Decimal("0"),
+            "input_total": input_result or Decimal("0"),
+        }
+
+    @staticmethod
     def get(db: Session, return_id: str) -> Optional[TaxReturn]:
         """Get a tax return by ID."""
         return db.query(TaxReturn).filter(

@@ -218,11 +218,11 @@ class TestGetSupplier:
         mock_db.get.return_value = supplier
 
         with patch("app.services.ifrs.ap.supplier.Supplier"):
-            result = SupplierService.get(mock_db, str(supplier.supplier_id))
+            result = SupplierService.get(mock_db, org_id, str(supplier.supplier_id))
 
         assert result == supplier
 
-    def test_get_nonexistent_supplier_raises(self, mock_db):
+    def test_get_nonexistent_supplier_raises(self, mock_db, org_id):
         """Test getting non-existent supplier raises exception."""
         from fastapi import HTTPException
 
@@ -230,7 +230,7 @@ class TestGetSupplier:
 
         with patch("app.services.ifrs.ap.supplier.Supplier"):
             with pytest.raises(HTTPException) as exc:
-                SupplierService.get(mock_db, str(uuid4()))
+                SupplierService.get(mock_db, org_id, str(uuid4()))
 
         assert exc.value.status_code == 404
 

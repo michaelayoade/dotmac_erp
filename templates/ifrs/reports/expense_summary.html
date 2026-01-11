@@ -1,0 +1,184 @@
+{% extends "ifrs/base_ifrs.html" %}
+
+{% block page_title %}Expense Summary{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 mt-1">
+    <a href="/dashboard" class="hover:text-slate-700 dark:hover:text-slate-300">Dashboard</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <a href="/reports" class="hover:text-slate-700 dark:hover:text-slate-300">Reports</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="text-slate-700 dark:text-slate-300">Expense Summary</span>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<button onclick="window.print()" class="btn btn-secondary h-9 px-3">
+    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
+    </svg>
+    Print
+</button>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto space-y-6">
+    <!-- Filter Card -->
+    <div class="card p-4">
+        <form method="get" class="flex flex-wrap items-end gap-4">
+            <div class="flex-1 min-w-[150px]">
+                <label class="form-label">Start Date</label>
+                <input type="date" name="start_date" value="{{ start_date }}" class="form-input">
+            </div>
+            <div class="flex-1 min-w-[150px]">
+                <label class="form-label">End Date</label>
+                <input type="date" name="end_date" value="{{ end_date }}" class="form-input">
+            </div>
+            <button type="submit" class="btn btn-primary">
+                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+                Refresh
+            </button>
+        </form>
+    </div>
+
+    <!-- Total Expenses Card -->
+    <div class="card p-6">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Total Expenses</p>
+                <p class="text-3xl font-bold text-rose-600 dark:text-rose-400 font-mono mt-1">{{ total_expenses }}</p>
+                <p class="text-xs text-slate-400 dark:text-slate-500 mt-1">{{ start_date }} to {{ end_date }}</p>
+            </div>
+            <div class="flex h-16 w-16 items-center justify-center rounded-xl bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400">
+                <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2z"/>
+                </svg>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid gap-6 lg:grid-cols-3">
+        <!-- Top Expenses -->
+        <div class="lg:col-span-1 card p-6">
+            <h3 class="font-semibold text-slate-900 dark:text-white mb-4">Top Expense Categories</h3>
+            {% if top_expenses %}
+            <div class="space-y-4">
+                {% for expense in top_expenses %}
+                <div>
+                    <div class="flex items-center justify-between mb-1">
+                        <span class="text-sm text-slate-700 dark:text-slate-300 truncate">{{ expense.account_name }}</span>
+                        <span class="text-sm font-mono font-medium text-slate-900 dark:text-white">{{ expense.amount }}</span>
+                    </div>
+                    <div class="h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                        {% set percentage = (expense.amount_raw / total_expenses_raw * 100) if total_expenses_raw > 0 else 0 %}
+                        <div class="h-full bg-gradient-to-r from-rose-500 to-pink-500 rounded-full" style="width: {{ percentage }}%"></div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="empty-state py-8">
+                <p class="text-sm text-slate-500 dark:text-slate-400">No expenses recorded</p>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Expense Table -->
+        <div class="lg:col-span-2 card p-6">
+            <h3 class="font-semibold text-slate-900 dark:text-white mb-4">All Expense Accounts</h3>
+            {% if expense_items %}
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="border-b border-slate-200 dark:border-slate-700">
+                            <th class="text-left py-2 px-2 font-semibold text-slate-700 dark:text-slate-300">Code</th>
+                            <th class="text-left py-2 px-2 font-semibold text-slate-700 dark:text-slate-300">Account</th>
+                            <th class="text-left py-2 px-2 font-semibold text-slate-700 dark:text-slate-300">Category</th>
+                            <th class="text-right py-2 px-2 font-semibold text-slate-700 dark:text-slate-300">Amount</th>
+                            <th class="text-right py-2 px-2 font-semibold text-slate-700 dark:text-slate-300">%</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for expense in expense_items %}
+                        <tr class="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/30">
+                            <td class="py-2 px-2 font-mono text-xs text-slate-500 dark:text-slate-400">{{ expense.account_code }}</td>
+                            <td class="py-2 px-2 text-slate-900 dark:text-white">{{ expense.account_name }}</td>
+                            <td class="py-2 px-2 text-slate-500 dark:text-slate-400">{{ expense.category }}</td>
+                            <td class="py-2 px-2 text-right font-mono text-slate-900 dark:text-white">{{ expense.amount }}</td>
+                            <td class="py-2 px-2 text-right font-mono text-slate-500 dark:text-slate-400">
+                                {% set percentage = (expense.amount_raw / total_expenses_raw * 100) if total_expenses_raw > 0 else 0 %}
+                                {{ "%.1f"|format(percentage) }}%
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot>
+                        <tr class="border-t-2 border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800">
+                            <td colspan="3" class="py-3 px-2 font-bold text-slate-900 dark:text-white">Total</td>
+                            <td class="py-3 px-2 text-right font-mono font-bold text-rose-600 dark:text-rose-400">{{ total_expenses }}</td>
+                            <td class="py-3 px-2 text-right font-mono font-bold text-slate-500">100%</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+            {% else %}
+            <div class="empty-state py-8">
+                <div class="empty-state-icon">
+                    <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                </div>
+                <h3 class="empty-state-title">No Expenses</h3>
+                <p class="empty-state-description">No expense data available for the selected period.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Quick Links -->
+    <div class="card p-6">
+        <h3 class="font-semibold text-slate-900 dark:text-white mb-4">Related Reports</h3>
+        <div class="grid gap-4 sm:grid-cols-3">
+            <a href="/reports/income-statement" class="flex items-center gap-3 p-3 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="font-medium text-slate-900 dark:text-white">Profit or Loss</p>
+                    <p class="text-xs text-slate-500">Revenue vs expenses</p>
+                </div>
+            </a>
+            <a href="/ap/invoices" class="flex items-center gap-3 p-3 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="font-medium text-slate-900 dark:text-white">AP Invoices</p>
+                    <p class="text-xs text-slate-500">Supplier bills</p>
+                </div>
+            </a>
+            <a href="/gl/journals" class="flex items-center gap-3 p-3 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="font-medium text-slate-900 dark:text-white">Journal Entries</p>
+                    <p class="text-xs text-slate-500">All transactions</p>
+                </div>
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

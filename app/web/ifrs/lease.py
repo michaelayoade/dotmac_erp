@@ -5,21 +5,16 @@ HTML template routes for lease contracts, schedules, and modifications.
 """
 
 from datetime import date
-from decimal import Decimal
 from typing import Optional
-from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app.web.deps import get_db, require_web_auth, WebAuthContext, base_context
-from app.services.ifrs.lease import (
-    lease_contract_service,
-    lease_modification_service,
-    lease_variable_payment_service,
-)
+from app.services.ifrs.lease import lease_modification_service, lease_variable_payment_service
+from app.services.ifrs.lease.web import lease_web_service
 
 templates = Jinja2Templates(directory="templates")
 
@@ -41,30 +36,17 @@ def list_contracts(
     db: Session = Depends(get_db),
 ):
     """Lease contracts list page."""
-    limit = 50
-    offset = (page - 1) * limit
-
-    contracts = lease_contract_service.list(
-        db=db,
-        organization_id=str(auth.organization_id),
-        status=status,
-        lease_type=lease_type,
-        limit=limit,
-        offset=offset,
-    )
-
     context = base_context(request, auth, "Lease Contracts", "lease")
-    context.update({
-        "contracts": contracts,
-        "search": search,
-        "status": status,
-        "lease_type": lease_type,
-        "page": page,
-        "limit": limit,
-        "offset": offset,
-        "total_count": len(contracts),
-        "total_pages": 1,
-    })
+    context.update(
+        lease_web_service.list_contracts_context(
+            db,
+            str(auth.organization_id),
+            search=search,
+            status=status,
+            lease_type=lease_type,
+            page=page,
+        )
+    )
 
     return templates.TemplateResponse(request, "ifrs/lease/contracts.html", context)
 
@@ -79,10 +61,14 @@ def new_contract_form(request: Request, auth: WebAuthContext = Depends(require_w
 @router.get("/contracts/{lease_id}", response_class=HTMLResponse)
 def view_contract(request: Request, lease_id: str, auth: WebAuthContext = Depends(require_web_auth), db: Session = Depends(get_db)):
     """Lease contract detail page."""
-    contract = lease_contract_service.get(db, lease_id)
-
     context = base_context(request, auth, "Lease Details", "lease")
-    context["contract"] = contract
+    context.update(
+        lease_web_service.contract_detail_context(
+            db,
+            str(auth.organization_id),
+            lease_id,
+        )
+    )
 
     return templates.TemplateResponse(request, "ifrs/lease/contract_detail.html", context)
 
@@ -90,13 +76,15 @@ def view_contract(request: Request, lease_id: str, auth: WebAuthContext = Depend
 @router.get("/contracts/{lease_id}/schedule", response_class=HTMLResponse)
 def view_schedule(request: Request, lease_id: str, auth: WebAuthContext = Depends(require_web_auth), db: Session = Depends(get_db)):
     """Lease payment schedule page."""
-    schedules = lease_variable_payment_service.get_scheduled_payments(
-        db, UUID(lease_id), include_paid=True
-    )
-
     context = base_context(request, auth, "Payment Schedule", "lease")
+    context.update(
+        lease_web_service.schedule_context(
+            db,
+            str(auth.organization_id),
+            lease_id,
+        )
+    )
     context["lease_id"] = lease_id
-    context["schedules"] = schedules
 
     return templates.TemplateResponse(request, "ifrs/lease/schedule.html", context)
 

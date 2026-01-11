@@ -371,11 +371,13 @@ class CustomerService(ListResponseMixin):
     @staticmethod
     def get(
         db: Session,
+        organization_id: UUID,
         customer_id: str,
     ) -> Customer:
         """Get a customer by ID."""
+        org_id = coerce_uuid(organization_id)
         customer = db.get(Customer, coerce_uuid(customer_id))
-        if not customer:
+        if not customer or customer.organization_id != org_id:
             raise HTTPException(status_code=404, detail="Customer not found")
         return customer
 
@@ -402,7 +404,7 @@ class CustomerService(ListResponseMixin):
     @staticmethod
     def list(
         db: Session,
-        organization_id: Optional[str] = None,
+        organization_id: str,
         customer_type: Optional[CustomerType] = None,
         risk_category: Optional[RiskCategory] = None,
         is_active: Optional[bool] = None,
@@ -412,12 +414,11 @@ class CustomerService(ListResponseMixin):
         offset: int = 0,
     ) -> list[Customer]:
         """List customers with optional filters."""
-        query = db.query(Customer)
+        if not organization_id:
+            raise HTTPException(status_code=400, detail="organization_id is required")
 
-        if organization_id:
-            query = query.filter(
-                Customer.organization_id == coerce_uuid(organization_id)
-            )
+        org_id = coerce_uuid(organization_id)
+        query = db.query(Customer).filter(Customer.organization_id == org_id)
 
         if customer_type:
             query = query.filter(Customer.customer_type == customer_type)

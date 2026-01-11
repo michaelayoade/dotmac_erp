@@ -19,6 +19,7 @@ from app.services.ifrs.inv import (
     item_service,
     inventory_transaction_service,
     inv_posting_adapter,
+    inventory_balance_service,
     ItemInput,
     TransactionInput,
 )
@@ -56,7 +57,7 @@ class InventoryItemCreate(BaseModel):
 
 
 class InventoryItemRead(BaseModel):
-    """Inventory item response."""
+    """Inventory item response (model fields only)."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -64,13 +65,39 @@ class InventoryItemRead(BaseModel):
     organization_id: UUID
     item_code: str
     item_name: str
-    unit_of_measure: str
+    base_uom: str
     costing_method: str
     standard_cost: Optional[Decimal]
-    current_cost: Decimal
+    average_cost: Optional[Decimal]
+    last_purchase_cost: Optional[Decimal]
+    list_price: Optional[Decimal]
+    reorder_point: Optional[Decimal]
+    reorder_quantity: Optional[Decimal]
+    minimum_stock: Optional[Decimal]
+    maximum_stock: Optional[Decimal]
+    track_inventory: bool
+    track_lots: bool
+    track_serial_numbers: bool
+    is_active: bool
+    is_purchaseable: bool
+    is_saleable: bool
+
+
+class InventoryItemWithBalanceRead(BaseModel):
+    """Inventory item with computed stock levels."""
+
+    item_id: UUID
+    organization_id: UUID
+    item_code: str
+    item_name: str
+    base_uom: str
+    costing_method: str
+    standard_cost: Optional[Decimal]
+    average_cost: Optional[Decimal]
     quantity_on_hand: Decimal
     quantity_reserved: Decimal
     quantity_available: Decimal
+    total_value: Decimal
     is_active: bool
 
 
@@ -102,7 +129,9 @@ class TransactionRead(BaseModel):
     quantity: Decimal
     unit_cost: Decimal
     total_cost: Decimal
-    running_quantity: Decimal
+    quantity_before: Decimal
+    quantity_after: Decimal
+    reference: Optional[str] = None
 
 
 class CostingResultRead(BaseModel):
@@ -134,15 +163,23 @@ class InventoryValuationRead(BaseModel):
 def create_inventory_item(
     payload: InventoryItemCreate,
     organization_id: UUID = Query(...),
+    category_id: UUID = Query(..., description="Item category ID"),
+    currency_code: str = Query(default="USD"),
     db: Session = Depends(get_db),
 ):
     """Create a new inventory item."""
+    from app.models.ifrs.inv.item import CostingMethod
+
+    # Map costing method string to enum
+    costing_method = CostingMethod(payload.costing_method) if payload.costing_method else CostingMethod.WEIGHTED_AVERAGE
+
     input_data = ItemInput(
         item_code=payload.item_code,
         item_name=payload.item_name,
-        item_category_id=payload.item_category_id,
-        unit_of_measure=payload.unit_of_measure,
-        costing_method=payload.costing_method,
+        category_id=payload.item_category_id or category_id,
+        base_uom=payload.unit_of_measure,
+        currency_code=currency_code,
+        costing_method=costing_method,
         standard_cost=payload.standard_cost,
         reorder_point=payload.reorder_point,
         reorder_quantity=payload.reorder_quantity,
@@ -165,9 +202,11 @@ def get_inventory_item(
 @router.get("/items", response_model=ListResponse[InventoryItemRead])
 def list_inventory_items(
     organization_id: UUID = Query(...),
-    item_category_id: Optional[UUID] = None,
-    costing_method: Optional[str] = None,
+    category_id: Optional[UUID] = Query(default=None, description="Filter by item category"),
     is_active: Optional[bool] = None,
+    is_purchaseable: Optional[bool] = None,
+    is_saleable: Optional[bool] = None,
+    search: Optional[str] = Query(default=None, description="Search by code, name, or barcode"),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
@@ -176,9 +215,11 @@ def list_inventory_items(
     items = item_service.list(
         db=db,
         organization_id=str(organization_id),
-        item_category_id=str(item_category_id) if item_category_id else None,
-        costing_method=costing_method,
+        category_id=str(category_id) if category_id else None,
         is_active=is_active,
+        is_purchaseable=is_purchaseable,
+        is_saleable=is_saleable,
+        search=search,
         limit=limit,
         offset=offset,
     )
@@ -199,19 +240,34 @@ def create_inventory_transaction(
     payload: TransactionCreate,
     organization_id: UUID = Query(...),
     created_by_user_id: UUID = Query(...),
+    fiscal_period_id: UUID = Query(..., description="Fiscal period ID"),
+    uom: str = Query(default="EACH", description="Unit of measure"),
+    currency_code: str = Query(default="USD"),
     db: Session = Depends(get_db),
 ):
     """Create an inventory transaction."""
+    from app.models.ifrs.inv.inventory_transaction import TransactionType as TxnType
+    from datetime import datetime
+
+    # Map transaction type string to enum
+    txn_type = TxnType(payload.transaction_type)
+
+    # Convert date to datetime for transaction_date
+    txn_datetime = datetime.combine(payload.transaction_date, datetime.min.time())
+
     input_data = TransactionInput(
+        transaction_type=txn_type,
+        transaction_date=txn_datetime,
+        fiscal_period_id=fiscal_period_id,
         item_id=payload.item_id,
         warehouse_id=payload.warehouse_id,
-        transaction_type=payload.transaction_type,
-        transaction_date=payload.transaction_date,
         quantity=payload.quantity,
-        unit_cost=payload.unit_cost,
-        reference_type=payload.reference_type,
-        reference_id=payload.reference_id,
-        notes=payload.notes,
+        unit_cost=payload.unit_cost or Decimal("0"),
+        uom=uom,
+        currency_code=currency_code,
+        source_document_type=payload.reference_type,
+        source_document_id=payload.reference_id,
+        reference=payload.notes,
     )
     return inventory_transaction_service.create_transaction(
         db=db,
@@ -284,6 +340,173 @@ def post_inventory_transaction(
         entry_number=result.entry_number,
         message=result.message,
     )
+
+
+# =============================================================================
+# Stock Balances
+# =============================================================================
+
+class StockBalanceRead(BaseModel):
+    """Stock balance response."""
+    item_id: UUID
+    item_code: str
+    item_name: str
+    warehouse_id: Optional[UUID]
+    warehouse_code: Optional[str]
+    quantity_on_hand: Decimal
+    quantity_reserved: Decimal
+    quantity_available: Decimal
+    average_cost: Decimal
+    total_value: Decimal
+
+
+class LowStockItemRead(BaseModel):
+    """Low stock alert item."""
+    item_id: UUID
+    item_code: str
+    item_name: str
+    quantity_on_hand: Decimal
+    quantity_available: Decimal
+    reorder_point: Decimal
+    reorder_quantity: Optional[Decimal]
+    suggested_order_qty: Decimal
+    default_supplier_id: Optional[UUID]
+    lead_time_days: Optional[int]
+
+
+@router.get("/stock/item/{item_id}", response_model=StockBalanceRead)
+def get_item_stock_balance(
+    item_id: UUID,
+    organization_id: UUID = Query(...),
+    warehouse_id: Optional[UUID] = None,
+    db: Session = Depends(get_db),
+):
+    """Get stock balance for an item, optionally filtered by warehouse."""
+    balance = inventory_balance_service.get_item_balance(
+        db=db,
+        organization_id=organization_id,
+        item_id=item_id,
+        warehouse_id=warehouse_id,
+    )
+    if not balance:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Item not found")
+    return StockBalanceRead(
+        item_id=balance.item_id,
+        item_code=balance.item_code,
+        item_name=balance.item_name,
+        warehouse_id=balance.warehouse_id,
+        warehouse_code=balance.warehouse_code,
+        quantity_on_hand=balance.quantity_on_hand,
+        quantity_reserved=balance.quantity_reserved,
+        quantity_available=balance.quantity_available,
+        average_cost=balance.average_cost,
+        total_value=balance.total_value,
+    )
+
+
+@router.get("/stock/warehouse/{warehouse_id}", response_model=ListResponse[StockBalanceRead])
+def get_warehouse_inventory(
+    warehouse_id: UUID,
+    organization_id: UUID = Query(...),
+    db: Session = Depends(get_db),
+):
+    """Get all inventory balances for a warehouse."""
+    balances = inventory_balance_service.get_warehouse_inventory(
+        db=db,
+        organization_id=organization_id,
+        warehouse_id=warehouse_id,
+    )
+    items = [
+        StockBalanceRead(
+            item_id=b.item_id,
+            item_code=b.item_code,
+            item_name=b.item_name,
+            warehouse_id=b.warehouse_id,
+            warehouse_code=b.warehouse_code,
+            quantity_on_hand=b.quantity_on_hand,
+            quantity_reserved=b.quantity_reserved,
+            quantity_available=b.quantity_available,
+            average_cost=b.average_cost,
+            total_value=b.total_value,
+        )
+        for b in balances
+    ]
+    return ListResponse(items=items, count=len(items), limit=len(items), offset=0)
+
+
+@router.get("/stock/low-stock", response_model=ListResponse[LowStockItemRead])
+def get_low_stock_items(
+    organization_id: UUID = Query(...),
+    include_below_minimum: bool = Query(default=True),
+    db: Session = Depends(get_db),
+):
+    """Get items at or below reorder point."""
+    low_stock = inventory_balance_service.get_low_stock_items(
+        db=db,
+        organization_id=organization_id,
+        include_below_minimum=include_below_minimum,
+    )
+    items = [
+        LowStockItemRead(
+            item_id=item.item_id,
+            item_code=item.item_code,
+            item_name=item.item_name,
+            quantity_on_hand=item.quantity_on_hand,
+            quantity_available=item.quantity_available,
+            reorder_point=item.reorder_point,
+            reorder_quantity=item.reorder_quantity,
+            suggested_order_qty=item.suggested_order_qty,
+            default_supplier_id=item.default_supplier_id,
+            lead_time_days=item.lead_time_days,
+        )
+        for item in low_stock
+    ]
+    return ListResponse(items=items, count=len(items), limit=len(items), offset=0)
+
+
+@router.post("/stock/allocate")
+def allocate_stock(
+    item_id: UUID = Query(...),
+    quantity: Decimal = Query(...),
+    reference_type: str = Query(..., description="e.g., SALES_ORDER"),
+    reference_id: UUID = Query(...),
+    organization_id: UUID = Query(...),
+    warehouse_id: Optional[UUID] = None,
+    lot_id: Optional[UUID] = None,
+    db: Session = Depends(get_db),
+):
+    """Allocate (reserve) inventory for a sales order or other document."""
+    success = inventory_balance_service.allocate_inventory(
+        db=db,
+        organization_id=organization_id,
+        item_id=item_id,
+        quantity=quantity,
+        reference_type=reference_type,
+        reference_id=reference_id,
+        warehouse_id=warehouse_id,
+        lot_id=lot_id,
+    )
+    return {"success": success}
+
+
+@router.post("/stock/deallocate")
+def deallocate_stock(
+    item_id: UUID = Query(...),
+    quantity: Decimal = Query(...),
+    organization_id: UUID = Query(...),
+    lot_id: Optional[UUID] = None,
+    db: Session = Depends(get_db),
+):
+    """Release an inventory allocation."""
+    success = inventory_balance_service.deallocate_inventory(
+        db=db,
+        organization_id=organization_id,
+        item_id=item_id,
+        quantity=quantity,
+        lot_id=lot_id,
+    )
+    return {"success": success}
 
 
 # =============================================================================
@@ -374,16 +597,6 @@ def consume_fifo(
     return fifo_valuation_service.consume_inventory_fifo(db, organization_id, item_id, quantity)
 
 
-@router.get("/fifo/{item_id}", response_model=FIFOInventoryRead)
-def get_fifo_inventory(
-    item_id: UUID,
-    organization_id: UUID = Query(...),
-    db: Session = Depends(get_db),
-):
-    """Get current FIFO inventory state for an item."""
-    return fifo_valuation_service.get_fifo_inventory(db, organization_id, item_id)
-
-
 @router.post("/fifo/calculate-nrv", response_model=NRVCalculationRead)
 def calculate_nrv_write_down(
     item_id: UUID = Query(...),
@@ -410,6 +623,7 @@ def calculate_nrv_write_down(
     )
 
 
+# Note: Specific routes must come before parameterized routes to avoid matching issues
 @router.get("/fifo/valuation-summary")
 def get_fifo_valuation_summary(
     organization_id: UUID = Query(...),
@@ -418,6 +632,16 @@ def get_fifo_valuation_summary(
 ):
     """Get valuation summary for a period."""
     return fifo_valuation_service.get_valuation_summary(db, organization_id, fiscal_period_id)
+
+
+@router.get("/fifo/{item_id}", response_model=FIFOInventoryRead)
+def get_fifo_inventory(
+    item_id: UUID,
+    organization_id: UUID = Query(...),
+    db: Session = Depends(get_db),
+):
+    """Get current FIFO inventory state for an item."""
+    return fifo_valuation_service.get_fifo_inventory(db, organization_id, item_id)
 
 
 # =============================================================================
@@ -493,6 +717,28 @@ def create_lot(
         certificate_of_analysis=payload.certificate_of_analysis,
     )
     return lot_serial_service.create_lot(db, organization_id, input_data)
+
+
+# Note: Specific routes must come before parameterized routes to avoid matching issues
+@router.get("/lots/expiring", response_model=ListResponse[LotRead])
+def get_expiring_lots(
+    organization_id: UUID = Query(...),
+    days_ahead: int = Query(default=30),
+    db: Session = Depends(get_db),
+):
+    """Get lots expiring within specified days."""
+    lots = lot_serial_service.get_expiring_lots(db, organization_id, days_ahead)
+    return ListResponse(items=lots, count=len(lots), limit=len(lots), offset=0)
+
+
+@router.get("/lots/expired", response_model=ListResponse[LotRead])
+def get_expired_lots(
+    organization_id: UUID = Query(...),
+    db: Session = Depends(get_db),
+):
+    """Get already expired lots."""
+    lots = lot_serial_service.get_expired_lots(db, organization_id)
+    return ListResponse(items=lots, count=len(lots), limit=len(lots), offset=0)
 
 
 @router.get("/lots/{lot_id}", response_model=LotRead)
@@ -586,22 +832,4 @@ def get_lot_traceability(
     return lot_serial_service.get_traceability(db, lot_id)
 
 
-@router.get("/lots/expiring", response_model=ListResponse[LotRead])
-def get_expiring_lots(
-    organization_id: UUID = Query(...),
-    days_ahead: int = Query(default=30),
-    db: Session = Depends(get_db),
-):
-    """Get lots expiring within specified days."""
-    lots = lot_serial_service.get_expiring_lots(db, organization_id, days_ahead)
-    return ListResponse(items=lots, count=len(lots), limit=len(lots), offset=0)
-
-
-@router.get("/lots/expired", response_model=ListResponse[LotRead])
-def get_expired_lots(
-    organization_id: UUID = Query(...),
-    db: Session = Depends(get_db),
-):
-    """Get already expired lots."""
-    lots = lot_serial_service.get_expired_lots(db, organization_id)
-    return ListResponse(items=lots, count=len(lots), limit=len(lots), offset=0)
+# Note: /lots/expiring and /lots/expired routes moved to earlier in file for proper route matching

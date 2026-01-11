@@ -1,5 +1,5 @@
 """
-IFRS Data Models - 100 Tables across 15 PostgreSQL Schemas.
+IFRS Data Models - SQLAlchemy tables across multiple PostgreSQL schemas.
 
 This module exports all IFRS-compliant SQLAlchemy models organized by schema.
 
@@ -15,9 +15,10 @@ Part 1 - Core Infrastructure (33 tables, 6 schemas):
 - core_config: System configuration (2 tables)
 - gl: General Ledger (11 tables + 3 views)
 
-Part 2 - Business Modules (67 tables, 9 schemas):
+Part 2 - Business Modules (schemas below):
 - ar: Accounts Receivable - IFRS 9, IFRS 15 (11 tables)
 - ap: Accounts Payable (11 tables)
+- banking: Banking & cash management (4 tables)
 - fa: Fixed Assets - IAS 16, IAS 36, IAS 38 (9 tables)
 - lease: Leases - IFRS 16 (5 tables)
 - inv: Inventory - IAS 2 (9 tables)
@@ -203,6 +204,21 @@ from app.models.ifrs.inv import (
     InventoryCountLine,
 )
 
+# Banking Schema
+from app.models.ifrs.banking import (
+    BankAccount,
+    BankAccountStatus,
+    BankAccountType,
+    BankStatement,
+    BankStatementLine,
+    BankStatementStatus,
+    StatementLineType,
+    BankReconciliation,
+    BankReconciliationLine,
+    ReconciliationStatus,
+    ReconciliationMatchType,
+)
+
 # Financial Instruments Schema
 from app.models.ifrs.fin_inst import (
     FinancialInstrument,
@@ -222,6 +238,12 @@ from app.models.ifrs.tax import (
     TaxJurisdiction,
     TaxCode,
     TaxType,
+    TaxPeriod,
+    TaxPeriodFrequency,
+    TaxPeriodStatus,
+    TaxReturn,
+    TaxReturnStatus,
+    TaxReturnType,
     TaxTransaction,
     TaxTransactionType,
     DeferredTaxBasis,
@@ -256,6 +278,40 @@ from app.models.ifrs.rpt import (
     StatementType,
     DisclosureChecklist,
     DisclosureStatus,
+)
+
+# Expense Schema
+from app.models.ifrs.exp import (
+    ExpenseEntry,
+    ExpenseStatus,
+    PaymentMethod as ExpensePaymentMethod,
+)
+
+# Common Schema
+from app.models.ifrs.common import (
+    Attachment,
+    AttachmentCategory,
+)
+
+# Automation Schema
+from app.models.ifrs.automation import (
+    RecurringTemplate,
+    RecurringEntityType,
+    RecurringFrequency,
+    RecurringStatus,
+    RecurringLog,
+    RecurringLogStatus,
+    WorkflowRule,
+    WorkflowEntityType,
+    TriggerEvent,
+    ActionType,
+    WorkflowExecution,
+    ExecutionStatus,
+    CustomFieldDefinition,
+    CustomFieldEntityType,
+    CustomFieldType,
+    DocumentTemplate,
+    TemplateType,
 )
 
 __all__ = [
@@ -441,4 +497,29 @@ __all__ = [
     "StatementType",
     "DisclosureChecklist",
     "DisclosureStatus",
+    # Expense
+    "ExpenseEntry",
+    "ExpenseStatus",
+    "ExpensePaymentMethod",
+    # Common
+    "Attachment",
+    "AttachmentCategory",
+    # Automation
+    "RecurringTemplate",
+    "RecurringEntityType",
+    "RecurringFrequency",
+    "RecurringStatus",
+    "RecurringLog",
+    "RecurringLogStatus",
+    "WorkflowRule",
+    "WorkflowEntityType",
+    "TriggerEvent",
+    "ActionType",
+    "WorkflowExecution",
+    "ExecutionStatus",
+    "CustomFieldDefinition",
+    "CustomFieldEntityType",
+    "CustomFieldType",
+    "DocumentTemplate",
+    "TemplateType",
 ]

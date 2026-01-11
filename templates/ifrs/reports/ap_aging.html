@@ -1,0 +1,288 @@
+{% extends "ifrs/base_ifrs.html" %}
+
+{% block page_title %}AP Aging Report{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 mt-1">
+    <a href="/dashboard" class="hover:text-slate-700 dark:hover:text-slate-300">Dashboard</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <a href="/reports" class="hover:text-slate-700 dark:hover:text-slate-300">Reports</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="text-slate-700 dark:text-slate-300">AP Aging</span>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<button onclick="window.print()" class="btn btn-secondary h-9 px-3">
+    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
+    </svg>
+    Print
+</button>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto space-y-6">
+    <!-- Filter Card -->
+    <div class="card p-4">
+        <form method="get" class="flex flex-wrap items-end gap-4">
+            <div class="flex-1 min-w-[200px]">
+                <label class="form-label">As of Date</label>
+                <input type="date" name="as_of_date" value="{{ as_of_date }}" class="form-input">
+            </div>
+            <button type="submit" class="btn btn-primary">
+                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+                Refresh
+            </button>
+        </form>
+    </div>
+
+    <!-- Report Header -->
+    <div class="card p-6 print:shadow-none print:border-0">
+        <div class="text-center mb-6 print:mb-4">
+            <h1 class="text-2xl font-semibold text-slate-900 dark:text-white font-display">Accounts Payable Aging Report</h1>
+            <p class="text-slate-500 dark:text-slate-400 mt-1">As of {{ as_of_date }}</p>
+        </div>
+
+        <!-- Summary Cards -->
+        <div class="grid gap-4 sm:grid-cols-3 lg:grid-cols-6 mb-8">
+            {% for bucket in summary %}
+            <div class="rounded-xl p-4 {% if bucket.bucket == 'Over 90 Days' %}bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800{% elif bucket.bucket == '61-90 Days' %}bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800{% elif bucket.bucket == '31-60 Days' %}bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800{% else %}bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700{% endif %}">
+                <p class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">{{ bucket.bucket }}</p>
+                <p class="text-lg font-bold mt-1 {% if bucket.bucket == 'Over 90 Days' %}text-rose-600 dark:text-rose-400{% elif bucket.bucket == '61-90 Days' %}text-amber-600 dark:text-amber-400{% else %}text-slate-900 dark:text-white{% endif %}">{{ bucket.amount }}</p>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Aging Buckets Accordion -->
+        <div class="space-y-4" x-data="{ openBucket: 'over_90' }">
+            <!-- Over 90 Days -->
+            {% if over_90 %}
+            <div class="border border-rose-200 dark:border-rose-800 rounded-xl overflow-hidden">
+                <button @click="openBucket = openBucket === 'over_90' ? '' : 'over_90'"
+                        class="w-full flex items-center justify-between p-4 bg-rose-50 dark:bg-rose-900/20 text-left">
+                    <span class="font-semibold text-rose-700 dark:text-rose-400">Over 90 Days ({{ over_90 | length }} invoices)</span>
+                    <div class="flex items-center gap-3">
+                        <span class="font-mono font-bold text-rose-600 dark:text-rose-400">{{ total_over_90 }}</span>
+                        <svg class="h-5 w-5 text-rose-500 transition-transform" :class="openBucket === 'over_90' ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                        </svg>
+                    </div>
+                </button>
+                <div x-show="openBucket === 'over_90'" x-collapse>
+                    <table class="w-full text-sm">
+                        <thead class="bg-slate-50 dark:bg-slate-800/50">
+                            <tr>
+                                <th class="text-left py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Invoice #</th>
+                                <th class="text-left py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Supplier</th>
+                                <th class="text-left py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Due Date</th>
+                                <th class="text-center py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Days</th>
+                                <th class="text-right py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for inv in over_90 %}
+                            <tr class="border-t border-slate-100 dark:border-slate-800">
+                                <td class="py-2 px-4 font-mono text-xs">{{ inv.invoice_number }}</td>
+                                <td class="py-2 px-4">{{ inv.supplier_name }}</td>
+                                <td class="py-2 px-4 text-slate-500">{{ inv.due_date }}</td>
+                                <td class="py-2 px-4 text-center text-rose-600 dark:text-rose-400 font-medium">{{ inv.days_overdue }}</td>
+                                <td class="py-2 px-4 text-right font-mono">{{ inv.amount }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- 61-90 Days -->
+            {% if days_61_90 %}
+            <div class="border border-amber-200 dark:border-amber-800 rounded-xl overflow-hidden">
+                <button @click="openBucket = openBucket === 'days_61_90' ? '' : 'days_61_90'"
+                        class="w-full flex items-center justify-between p-4 bg-amber-50 dark:bg-amber-900/20 text-left">
+                    <span class="font-semibold text-amber-700 dark:text-amber-400">61-90 Days ({{ days_61_90 | length }} invoices)</span>
+                    <div class="flex items-center gap-3">
+                        <span class="font-mono font-bold text-amber-600 dark:text-amber-400">{{ total_61_90 }}</span>
+                        <svg class="h-5 w-5 text-amber-500 transition-transform" :class="openBucket === 'days_61_90' ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                        </svg>
+                    </div>
+                </button>
+                <div x-show="openBucket === 'days_61_90'" x-collapse>
+                    <table class="w-full text-sm">
+                        <thead class="bg-slate-50 dark:bg-slate-800/50">
+                            <tr>
+                                <th class="text-left py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Invoice #</th>
+                                <th class="text-left py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Supplier</th>
+                                <th class="text-left py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Due Date</th>
+                                <th class="text-center py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Days</th>
+                                <th class="text-right py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for inv in days_61_90 %}
+                            <tr class="border-t border-slate-100 dark:border-slate-800">
+                                <td class="py-2 px-4 font-mono text-xs">{{ inv.invoice_number }}</td>
+                                <td class="py-2 px-4">{{ inv.supplier_name }}</td>
+                                <td class="py-2 px-4 text-slate-500">{{ inv.due_date }}</td>
+                                <td class="py-2 px-4 text-center text-amber-600 dark:text-amber-400 font-medium">{{ inv.days_overdue }}</td>
+                                <td class="py-2 px-4 text-right font-mono">{{ inv.amount }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- 31-60 Days -->
+            {% if days_31_60 %}
+            <div class="border border-yellow-200 dark:border-yellow-800 rounded-xl overflow-hidden">
+                <button @click="openBucket = openBucket === 'days_31_60' ? '' : 'days_31_60'"
+                        class="w-full flex items-center justify-between p-4 bg-yellow-50 dark:bg-yellow-900/20 text-left">
+                    <span class="font-semibold text-yellow-700 dark:text-yellow-400">31-60 Days ({{ days_31_60 | length }} invoices)</span>
+                    <div class="flex items-center gap-3">
+                        <span class="font-mono font-bold text-yellow-600 dark:text-yellow-400">{{ total_31_60 }}</span>
+                        <svg class="h-5 w-5 text-yellow-500 transition-transform" :class="openBucket === 'days_31_60' ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                        </svg>
+                    </div>
+                </button>
+                <div x-show="openBucket === 'days_31_60'" x-collapse>
+                    <table class="w-full text-sm">
+                        <thead class="bg-slate-50 dark:bg-slate-800/50">
+                            <tr>
+                                <th class="text-left py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Invoice #</th>
+                                <th class="text-left py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Supplier</th>
+                                <th class="text-left py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Due Date</th>
+                                <th class="text-center py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Days</th>
+                                <th class="text-right py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for inv in days_31_60 %}
+                            <tr class="border-t border-slate-100 dark:border-slate-800">
+                                <td class="py-2 px-4 font-mono text-xs">{{ inv.invoice_number }}</td>
+                                <td class="py-2 px-4">{{ inv.supplier_name }}</td>
+                                <td class="py-2 px-4 text-slate-500">{{ inv.due_date }}</td>
+                                <td class="py-2 px-4 text-center text-yellow-600 dark:text-yellow-400 font-medium">{{ inv.days_overdue }}</td>
+                                <td class="py-2 px-4 text-right font-mono">{{ inv.amount }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- 1-30 Days -->
+            {% if days_1_30 %}
+            <div class="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
+                <button @click="openBucket = openBucket === 'days_1_30' ? '' : 'days_1_30'"
+                        class="w-full flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 text-left">
+                    <span class="font-semibold text-slate-700 dark:text-slate-300">1-30 Days ({{ days_1_30 | length }} invoices)</span>
+                    <div class="flex items-center gap-3">
+                        <span class="font-mono font-bold text-slate-700 dark:text-slate-300">{{ total_1_30 }}</span>
+                        <svg class="h-5 w-5 text-slate-400 transition-transform" :class="openBucket === 'days_1_30' ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                        </svg>
+                    </div>
+                </button>
+                <div x-show="openBucket === 'days_1_30'" x-collapse>
+                    <table class="w-full text-sm">
+                        <thead class="bg-slate-50 dark:bg-slate-800/50">
+                            <tr>
+                                <th class="text-left py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Invoice #</th>
+                                <th class="text-left py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Supplier</th>
+                                <th class="text-left py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Due Date</th>
+                                <th class="text-center py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Days</th>
+                                <th class="text-right py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for inv in days_1_30 %}
+                            <tr class="border-t border-slate-100 dark:border-slate-800">
+                                <td class="py-2 px-4 font-mono text-xs">{{ inv.invoice_number }}</td>
+                                <td class="py-2 px-4">{{ inv.supplier_name }}</td>
+                                <td class="py-2 px-4 text-slate-500">{{ inv.due_date }}</td>
+                                <td class="py-2 px-4 text-center font-medium">{{ inv.days_overdue }}</td>
+                                <td class="py-2 px-4 text-right font-mono">{{ inv.amount }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Current -->
+            {% if current %}
+            <div class="border border-emerald-200 dark:border-emerald-800 rounded-xl overflow-hidden">
+                <button @click="openBucket = openBucket === 'current' ? '' : 'current'"
+                        class="w-full flex items-center justify-between p-4 bg-emerald-50 dark:bg-emerald-900/20 text-left">
+                    <span class="font-semibold text-emerald-700 dark:text-emerald-400">Current ({{ current | length }} invoices)</span>
+                    <div class="flex items-center gap-3">
+                        <span class="font-mono font-bold text-emerald-600 dark:text-emerald-400">{{ total_current }}</span>
+                        <svg class="h-5 w-5 text-emerald-500 transition-transform" :class="openBucket === 'current' ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                        </svg>
+                    </div>
+                </button>
+                <div x-show="openBucket === 'current'" x-collapse>
+                    <table class="w-full text-sm">
+                        <thead class="bg-slate-50 dark:bg-slate-800/50">
+                            <tr>
+                                <th class="text-left py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Invoice #</th>
+                                <th class="text-left py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Supplier</th>
+                                <th class="text-left py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Due Date</th>
+                                <th class="text-center py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Days</th>
+                                <th class="text-right py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for inv in current %}
+                            <tr class="border-t border-slate-100 dark:border-slate-800">
+                                <td class="py-2 px-4 font-mono text-xs">{{ inv.invoice_number }}</td>
+                                <td class="py-2 px-4">{{ inv.supplier_name }}</td>
+                                <td class="py-2 px-4 text-slate-500">{{ inv.due_date }}</td>
+                                <td class="py-2 px-4 text-center text-emerald-600 dark:text-emerald-400 font-medium">-</td>
+                                <td class="py-2 px-4 text-right font-mono">{{ inv.amount }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Grand Total -->
+        <div class="mt-6 pt-4 border-t-2 border-slate-300 dark:border-slate-600">
+            <div class="flex justify-between items-center py-4 px-4 rounded-lg bg-slate-100 dark:bg-slate-800">
+                <span class="text-lg font-bold text-slate-900 dark:text-white">Total Accounts Payable</span>
+                <span class="text-xl font-mono font-bold text-slate-900 dark:text-white">{{ grand_total }}</span>
+            </div>
+        </div>
+
+        <!-- Empty State -->
+        {% if not current and not days_1_30 and not days_31_60 and not days_61_90 and not over_90 %}
+        <div class="empty-state">
+            <div class="empty-state-icon">
+                <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+            </div>
+            <h3 class="empty-state-title">No Outstanding Payables</h3>
+            <p class="empty-state-description">All supplier invoices have been paid.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

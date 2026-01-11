@@ -1,6 +1,6 @@
 """
 Accounts Receivable Schema - IFRS 15 & IFRS 9.
-Customers, contracts, invoices, payments, ECL.
+Customers, contracts, invoices, payments, ECL, quotes, sales orders.
 """
 from app.models.ifrs.ar.customer import Customer, CustomerType, RiskCategory
 from app.models.ifrs.ar.payment_terms import PaymentTerms
@@ -13,6 +13,11 @@ from app.models.ifrs.ar.customer_payment import CustomerPayment, PaymentMethod, 
 from app.models.ifrs.ar.payment_allocation import PaymentAllocation
 from app.models.ifrs.ar.expected_credit_loss import ExpectedCreditLoss, ECLMethodology, ECLStage
 from app.models.ifrs.ar.ar_aging_snapshot import ARAgingSnapshot
+from app.models.ifrs.ar.quote import Quote, QuoteLine, QuoteStatus
+from app.models.ifrs.ar.sales_order import (
+    SalesOrder, SalesOrderLine, SOStatus, FulfillmentStatus,
+    Shipment, ShipmentLine,
+)
 
 __all__ = [
     "Customer",
@@ -37,4 +42,15 @@ __all__ = [
     "ECLMethodology",
     "ECLStage",
     "ARAgingSnapshot",
+    # Quotes
+    "Quote",
+    "QuoteLine",
+    "QuoteStatus",
+    # Sales Orders
+    "SalesOrder",
+    "SalesOrderLine",
+    "SOStatus",
+    "FulfillmentStatus",
+    "Shipment",
+    "ShipmentLine",
 ]

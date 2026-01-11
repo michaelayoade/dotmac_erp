@@ -160,6 +160,40 @@ class ChartOfAccountsService(ListResponseMixin):
         return account
 
     @staticmethod
+    def deactivate_account(
+        db: Session,
+        organization_id: UUID,
+        account_id: UUID,
+    ) -> Account:
+        """
+        Deactivate an account.
+
+        Args:
+            db: Database session
+            organization_id: Organization scope
+            account_id: Account to deactivate
+
+        Returns:
+            Updated Account
+
+        Raises:
+            HTTPException(404): If account not found
+        """
+        org_id = coerce_uuid(organization_id)
+        acc_id = coerce_uuid(account_id)
+
+        account = db.get(Account, acc_id)
+        if not account or account.organization_id != org_id:
+            raise HTTPException(status_code=404, detail="Account not found")
+
+        account.is_active = False
+
+        db.commit()
+        db.refresh(account)
+
+        return account
+
+    @staticmethod
     def get(
         db: Session,
         account_id: str,

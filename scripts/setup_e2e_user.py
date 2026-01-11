@@ -22,6 +22,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app.db import SessionLocal
 from app.models.person import Person
 from app.models.auth import UserCredential
+from app.models.rbac import Role, PersonRole
 from app.services.auth_flow import hash_password
 
 
@@ -29,6 +30,44 @@ from app.services.auth_flow import hash_password
 DEFAULT_USERNAME = "e2e_testuser"
 DEFAULT_PASSWORD = "e2e_testpassword123"
 DEFAULT_ORG_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
+
+
+def assign_admin_role(db, person_id):
+    """Assign admin role to a person."""
+    # Find or create admin role
+    admin_role = db.query(Role).filter(Role.name == "admin").first()
+    if not admin_role:
+        admin_role = Role(
+            id=uuid.uuid4(),
+            name="admin",
+            description="Administrator role with full access",
+            is_active=True,
+        )
+        db.add(admin_role)
+        db.flush()
+        print(f"Created admin role: {admin_role.id}")
+
+    # Check if person already has admin role
+    existing_assignment = (
+        db.query(PersonRole)
+        .filter(PersonRole.person_id == person_id)
+        .filter(PersonRole.role_id == admin_role.id)
+        .first()
+    )
+
+    if existing_assignment:
+        print(f"  Admin role already assigned")
+        return
+
+    # Assign admin role to person
+    person_role = PersonRole(
+        id=uuid.uuid4(),
+        person_id=person_id,
+        role_id=admin_role.id,
+    )
+    db.add(person_role)
+    db.commit()
+    print(f"  Assigned admin role to user")
 
 
 def setup_e2e_user():
@@ -49,9 +88,11 @@ def setup_e2e_user():
             # Update password if user exists
             existing_cred.password_hash = hash_password(password)
             existing_cred.is_active = True
-            existing_cred.password_reset_required = False
+            existing_cred.must_change_password = False
             db.commit()
             print(f"Updated existing E2E test user: {username}")
+            # Assign admin role
+            assign_admin_role(db, existing_cred.person_id)
             return existing_cred.person_id
 
         # Check if person with this email exists
@@ -88,7 +129,7 @@ def setup_e2e_user():
             username=username,
             password_hash=hash_password(password),
             is_active=True,
-            password_reset_required=False,
+            must_change_password=False,
         )
         db.add(credential)
         db.commit()
@@ -98,6 +139,9 @@ def setup_e2e_user():
         print(f"  Password: {password}")
         print(f"  Person ID: {person.id}")
         print(f"  Organization ID: {DEFAULT_ORG_ID}")
+
+        # Assign admin role
+        assign_admin_role(db, person.id)
 
         return person.id
 

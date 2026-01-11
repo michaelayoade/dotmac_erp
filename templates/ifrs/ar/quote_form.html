@@ -1,0 +1,749 @@
+{% extends "ifrs/base_ifrs.html" %}
+
+{% block page_title %}{{ "Edit Quote" if quote else "New Quote" }}{% endblock %}
+
+{% block page_styles %}
+<style>
+    :root {
+        --ink: #1a1f36;
+        --ink-light: #3d4663;
+        --ink-muted: #6b7194;
+        --teal: #0d9488;
+        --teal-light: #14b8a6;
+        --cream: #faf9f7;
+        --cream-dark: #f0eeea;
+        --ruby: #dc2626;
+        --amber: #d97706;
+        --emerald: #059669;
+    }
+
+    .form-card {
+        position: relative;
+        background: white;
+        border-radius: 1rem;
+        padding: 2rem;
+        border: 1px solid rgba(26, 31, 54, 0.08);
+        box-shadow: 0 1px 3px rgba(26, 31, 54, 0.04);
+        overflow: hidden;
+    }
+
+    .form-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+        background: linear-gradient(90deg, var(--teal), var(--emerald));
+        opacity: 0;
+        transition: opacity 0.3s ease;
+    }
+
+    .form-card:hover::before,
+    .form-card:focus-within::before { opacity: 1; }
+
+    .dark .form-card {
+        background: rgba(26, 31, 54, 0.6);
+        border-color: rgba(255, 255, 255, 0.08);
+    }
+
+    .section-title {
+        font-weight: 600;
+        font-size: 1.25rem;
+        color: var(--ink);
+        letter-spacing: -0.01em;
+    }
+
+    .dark .section-title { color: white; }
+
+    .section-subtitle {
+        font-size: 0.875rem;
+        color: var(--ink-muted);
+        margin-top: 0.25rem;
+    }
+
+    .dark .section-subtitle { color: rgba(255, 255, 255, 0.5); }
+
+    .table-input {
+        width: 100%;
+        padding: 0.5rem 0.75rem;
+        border: 1px solid rgba(26, 31, 54, 0.12);
+        border-radius: 0.375rem;
+        font-size: 0.875rem;
+        color: var(--ink);
+        background: white;
+        transition: all 0.15s ease;
+    }
+
+    .table-input:hover {
+        border-color: rgba(26, 31, 54, 0.2);
+    }
+
+    .table-input:focus {
+        outline: none;
+        border-color: var(--teal);
+        box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.12);
+    }
+
+    .dark .table-input {
+        background: rgba(255, 255, 255, 0.04);
+        border-color: rgba(255, 255, 255, 0.08);
+        color: white;
+    }
+
+    select.table-input {
+        appearance: none;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7194'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 0.75rem center;
+        background-size: 1rem;
+        padding-right: 2.5rem;
+    }
+
+    .lines-table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+    }
+
+    .lines-table th {
+        padding: 0.75rem 0.5rem;
+        text-align: left;
+        font-size: 0.6875rem;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--ink-muted);
+        border-bottom: 2px solid rgba(26, 31, 54, 0.08);
+    }
+
+    .lines-table th.text-right { text-align: right; }
+
+    .dark .lines-table th {
+        color: rgba(255, 255, 255, 0.5);
+        border-bottom-color: rgba(255, 255, 255, 0.08);
+    }
+
+    .lines-table td {
+        padding: 0.75rem 0.5rem;
+        vertical-align: middle;
+        border-bottom: 1px solid rgba(26, 31, 54, 0.05);
+    }
+
+    .dark .lines-table td {
+        border-bottom-color: rgba(255, 255, 255, 0.05);
+    }
+
+    .lines-table tbody tr:hover {
+        background-color: rgba(13, 148, 136, 0.03);
+    }
+
+    .amount-display {
+        padding: 0.5rem 0.75rem;
+        background: var(--cream-dark);
+        border-radius: 0.375rem;
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: var(--ink);
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .dark .amount-display {
+        background: rgba(255, 255, 255, 0.05);
+        color: white;
+    }
+
+    .totals-section {
+        background: linear-gradient(135deg, rgba(13, 148, 136, 0.08), rgba(5, 150, 105, 0.08));
+        border-radius: 0.75rem;
+        padding: 1.25rem;
+    }
+
+    .dark .totals-section {
+        background: linear-gradient(135deg, rgba(13, 148, 136, 0.12), rgba(5, 150, 105, 0.12));
+    }
+
+    .total-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.5rem 0;
+    }
+
+    .total-label {
+        font-size: 0.875rem;
+        color: var(--ink-muted);
+    }
+
+    .dark .total-label { color: rgba(255, 255, 255, 0.6); }
+
+    .total-value {
+        font-weight: 600;
+        color: var(--ink);
+        font-variant-numeric: tabular-nums;
+    }
+
+    .dark .total-value { color: white; }
+
+    .total-final {
+        border-top: 2px solid rgba(26, 31, 54, 0.1);
+        padding-top: 0.75rem;
+        margin-top: 0.5rem;
+    }
+
+    .dark .total-final {
+        border-top-color: rgba(255, 255, 255, 0.1);
+    }
+
+    .total-final .total-label {
+        font-weight: 600;
+        font-size: 1rem;
+        color: var(--ink);
+    }
+
+    .dark .total-final .total-label { color: white; }
+
+    .total-final .total-value {
+        font-size: 1.375rem;
+        font-weight: 700;
+        color: var(--teal);
+    }
+
+    .dark .total-final .total-value {
+        color: var(--teal-light);
+    }
+
+    .btn-ghost-danger {
+        padding: 0.375rem;
+        color: var(--ink-muted);
+        border-radius: 0.375rem;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        background: transparent;
+        border: none;
+    }
+
+    .btn-ghost-danger:hover {
+        background: rgba(220, 38, 38, 0.1);
+        color: var(--ruby);
+    }
+</style>
+{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 mt-1">
+    <a href="/dashboard" class="hover:text-slate-700 dark:hover:text-slate-300">Dashboard</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <a href="/quotes" class="hover:text-slate-700 dark:hover:text-slate-300">Quotes</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="text-slate-700 dark:text-slate-300">{{ "Edit" if quote else "New Quote" }}</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div x-data="quoteForm()" class="max-w-5xl mx-auto space-y-8">
+    <form @submit.prevent="submitForm" class="space-y-8">
+        <!-- Page Header -->
+        <div>
+            <h1 class="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
+                {{ "Edit Quote" if quote else "New Quote" }}
+            </h1>
+            <p class="mt-2 text-slate-500 dark:text-slate-400">
+                Create a sales quote for your customer with pricing and terms.
+            </p>
+        </div>
+
+        <!-- Error Display -->
+        {% if error %}
+        <div class="bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 rounded-lg p-4">
+            <p class="text-rose-700 dark:text-rose-300">{{ error }}</p>
+        </div>
+        {% endif %}
+
+        <!-- Header Information -->
+        <div class="form-card">
+            <h2 class="section-title">Quote Details</h2>
+            <p class="section-subtitle">Customer and quote information</p>
+
+            <div class="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                <!-- Customer -->
+                <div class="lg:col-span-2">
+                    <label for="customer_id" class="form-label">
+                        Customer <span class="text-rose-500">*</span>
+                    </label>
+                    <select id="customer_id"
+                            name="customer_id"
+                            x-model="form.customer_id"
+                            @change="onCustomerChange"
+                            required
+                            class="form-input form-select">
+                        <option value="">Select customer</option>
+                        {% for c in customers %}
+                        <option value="{{ c.customer_id }}"
+                                data-email="{{ c.email or '' }}"
+                                {% if selected_customer_id == c.customer_id %}selected{% endif %}>
+                            {{ c.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- Currency -->
+                <div>
+                    <label for="currency_code" class="form-label">
+                        Currency <span class="text-rose-500">*</span>
+                    </label>
+                    <select id="currency_code"
+                            name="currency_code"
+                            x-model="form.currency_code"
+                            required
+                            class="form-input form-select">
+                        <option value="USD">USD - US Dollar</option>
+                        <option value="EUR">EUR - Euro</option>
+                        <option value="GBP">GBP - British Pound</option>
+                        <option value="NGN">NGN - Nigerian Naira</option>
+                    </select>
+                </div>
+
+                <!-- Quote Date -->
+                <div>
+                    <label for="quote_date" class="form-label">
+                        Quote Date <span class="text-rose-500">*</span>
+                    </label>
+                    <input type="date"
+                           id="quote_date"
+                           name="quote_date"
+                           x-model="form.quote_date"
+                           required
+                           class="form-input">
+                </div>
+
+                <!-- Valid Until -->
+                <div>
+                    <label for="valid_until" class="form-label">
+                        Valid Until <span class="text-rose-500">*</span>
+                    </label>
+                    <input type="date"
+                           id="valid_until"
+                           name="valid_until"
+                           x-model="form.valid_until"
+                           required
+                           class="form-input">
+                </div>
+
+                <!-- Payment Terms -->
+                <div>
+                    <label for="payment_terms_id" class="form-label">
+                        Payment Terms
+                    </label>
+                    <select id="payment_terms_id"
+                            name="payment_terms_id"
+                            x-model="form.payment_terms_id"
+                            class="form-input form-select">
+                        <option value="">Select terms</option>
+                        {% for t in payment_terms %}
+                        <option value="{{ t.terms_id }}">{{ t.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- Contact Name -->
+                <div>
+                    <label for="contact_name" class="form-label">
+                        Contact Name
+                    </label>
+                    <input type="text"
+                           id="contact_name"
+                           name="contact_name"
+                           x-model="form.contact_name"
+                           maxlength="100"
+                           placeholder="Contact person"
+                           class="form-input">
+                </div>
+
+                <!-- Contact Email -->
+                <div>
+                    <label for="contact_email" class="form-label">
+                        Contact Email
+                    </label>
+                    <input type="email"
+                           id="contact_email"
+                           name="contact_email"
+                           x-model="form.contact_email"
+                           maxlength="255"
+                           placeholder="contact@example.com"
+                           class="form-input">
+                </div>
+            </div>
+        </div>
+
+        <!-- Quote Lines -->
+        <div class="form-card">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h2 class="section-title">Quote Lines</h2>
+                    <p class="section-subtitle">Add products or services to this quote</p>
+                </div>
+                <button type="button" @click="addLine" class="btn btn-secondary">
+                    <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                    </svg>
+                    Add Line
+                </button>
+            </div>
+
+            <div class="mt-8 overflow-x-auto -mx-2 px-2">
+                <table class="lines-table min-w-[900px]">
+                    <thead>
+                        <tr>
+                            <th style="width: 10%">Item Code</th>
+                            <th style="width: 20%">Revenue Account</th>
+                            <th style="width: 18%">Description</th>
+                            <th class="text-right" style="width: 8%">Qty</th>
+                            <th class="text-right" style="width: 10%">Unit Price</th>
+                            <th class="text-right" style="width: 8%">Discount</th>
+                            <th style="width: 12%">Tax Code</th>
+                            <th class="text-right" style="width: 10%">Amount</th>
+                            <th style="width: 4%"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="(line, index) in form.lines" :key="index">
+                            <tr>
+                                <td>
+                                    <input type="text"
+                                           x-model="line.item_code"
+                                           placeholder="SKU"
+                                           maxlength="50"
+                                           class="table-input">
+                                </td>
+                                <td>
+                                    <select x-model="line.revenue_account_id"
+                                            required
+                                            class="table-input">
+                                        <option value="">Select account</option>
+                                        {% for account in revenue_accounts %}
+                                        <option value="{{ account.account_id }}">{{ account.code }} - {{ account.name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </td>
+                                <td>
+                                    <input type="text"
+                                           x-model="line.description"
+                                           required
+                                           placeholder="Description"
+                                           class="table-input">
+                                </td>
+                                <td>
+                                    <input type="number"
+                                           x-model.number="line.quantity"
+                                           @input="calculateLineAmount(index)"
+                                           required
+                                           min="0.01"
+                                           step="0.01"
+                                           class="table-input text-right">
+                                </td>
+                                <td>
+                                    <input type="number"
+                                           x-model.number="line.unit_price"
+                                           @input="calculateLineAmount(index)"
+                                           required
+                                           min="0"
+                                           step="0.01"
+                                           class="table-input text-right">
+                                </td>
+                                <td>
+                                    <input type="number"
+                                           x-model.number="line.discount_amount"
+                                           @input="calculateLineAmount(index)"
+                                           min="0"
+                                           step="0.01"
+                                           class="table-input text-right">
+                                </td>
+                                <td>
+                                    <select x-model="line.tax_code_id"
+                                            @change="calculateLineAmount(index)"
+                                            class="table-input">
+                                        <option value="">No Tax</option>
+                                        {% for tax in tax_codes %}
+                                        <option value="{{ tax.tax_code_id }}" data-rate="{{ tax.rate }}">{{ tax.code }} ({{ tax.rate }}%)</option>
+                                        {% endfor %}
+                                    </select>
+                                </td>
+                                <td>
+                                    <div class="amount-display" x-text="formatCurrency(line.line_total)"></div>
+                                </td>
+                                <td class="text-right">
+                                    <button type="button"
+                                            @click="removeLine(index)"
+                                            x-show="form.lines.length > 1"
+                                            class="btn-ghost-danger">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                        </svg>
+                                    </button>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Totals -->
+            <div class="mt-8 flex justify-end">
+                <div class="w-80 totals-section">
+                    <div class="total-row">
+                        <span class="total-label">Subtotal</span>
+                        <span class="total-value" x-text="formatCurrency(subtotal)"></span>
+                    </div>
+                    <div class="total-row">
+                        <span class="total-label">Discount</span>
+                        <span class="total-value" x-text="'-' + formatCurrency(discountTotal)"></span>
+                    </div>
+                    <div class="total-row">
+                        <span class="total-label">Tax</span>
+                        <span class="total-value" x-text="formatCurrency(taxTotal)"></span>
+                    </div>
+                    <div class="total-row total-final">
+                        <span class="total-label">Total</span>
+                        <span class="total-value" x-text="formatCurrency(grandTotal)"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Notes & Terms -->
+        <div class="form-card">
+            <h2 class="section-title">Notes & Terms</h2>
+            <p class="section-subtitle">Additional information for the quote</p>
+
+            <div class="mt-8 grid gap-6">
+                <!-- Customer Notes -->
+                <div>
+                    <label for="customer_notes" class="form-label">
+                        Customer Notes
+                    </label>
+                    <textarea id="customer_notes"
+                              name="customer_notes"
+                              x-model="form.customer_notes"
+                              rows="3"
+                              placeholder="Notes visible to the customer"
+                              class="form-input resize-none"></textarea>
+                </div>
+
+                <!-- Internal Notes -->
+                <div>
+                    <label for="internal_notes" class="form-label">
+                        Internal Notes
+                    </label>
+                    <textarea id="internal_notes"
+                              name="internal_notes"
+                              x-model="form.internal_notes"
+                              rows="2"
+                              placeholder="Notes for internal use only"
+                              class="form-input resize-none"></textarea>
+                </div>
+
+                <!-- Terms and Conditions -->
+                <div>
+                    <label for="terms_and_conditions" class="form-label">
+                        Terms & Conditions
+                    </label>
+                    <textarea id="terms_and_conditions"
+                              name="terms_and_conditions"
+                              x-model="form.terms_and_conditions"
+                              rows="4"
+                              placeholder="Terms and conditions for the quote"
+                              class="form-input resize-none"></textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- Form Actions -->
+        <div class="flex items-center justify-between py-4">
+            <div class="text-sm text-slate-500 dark:text-slate-400">
+                <span class="text-rose-500">*</span> Required fields
+            </div>
+            <div class="flex items-center gap-4">
+                <a href="/quotes" class="btn btn-secondary">Cancel</a>
+                <button type="submit" class="btn btn-primary">
+                    <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                    </svg>
+                    {{ "Update Quote" if quote else "Create Quote" }}
+                </button>
+            </div>
+        </div>
+
+        <!-- Hidden field for lines JSON -->
+        <input type="hidden" name="lines_json" :value="JSON.stringify(form.lines)">
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function quoteForm() {
+    return {
+        form: {
+            customer_id: '{{ selected_customer_id or "" }}',
+            quote_date: '{{ today }}',
+            valid_until: '{{ default_valid_until }}',
+            currency_code: 'USD',
+            contact_name: '',
+            contact_email: '',
+            payment_terms_id: '',
+            customer_notes: '',
+            internal_notes: '',
+            terms_and_conditions: '',
+            lines: [
+                { item_code: '', revenue_account_id: '', description: '', quantity: 1, unit_price: 0, discount_amount: 0, tax_code_id: '', tax_amount: 0, line_total: 0 }
+            ]
+        },
+        taxRates: {
+            {% for tax in tax_codes %}
+            '{{ tax.tax_code_id }}': {{ tax.rate }},
+            {% endfor %}
+        },
+
+        init() {
+            {% if quote %}
+            this.form.customer_id = '{{ quote.customer_id }}';
+            this.form.quote_date = '{{ quote.quote_date }}';
+            this.form.valid_until = '{{ quote.valid_until }}';
+            this.form.currency_code = '{{ quote.currency_code }}';
+            this.form.contact_name = '{{ quote.contact_name or "" }}';
+            this.form.contact_email = '{{ quote.contact_email or "" }}';
+            this.form.payment_terms_id = '{{ quote.payment_terms_id or "" }}';
+            this.form.customer_notes = '{{ quote.customer_notes or "" }}';
+            this.form.internal_notes = '{{ quote.internal_notes or "" }}';
+            this.form.terms_and_conditions = '{{ quote.terms_and_conditions or "" }}';
+            // Load lines if editing
+            {% endif %}
+        },
+
+        get subtotal() {
+            return this.form.lines.reduce((sum, line) => {
+                return sum + ((line.quantity || 0) * (line.unit_price || 0));
+            }, 0);
+        },
+
+        get discountTotal() {
+            return this.form.lines.reduce((sum, line) => {
+                return sum + (line.discount_amount || 0);
+            }, 0);
+        },
+
+        get taxTotal() {
+            return this.form.lines.reduce((sum, line) => {
+                return sum + (line.tax_amount || 0);
+            }, 0);
+        },
+
+        get grandTotal() {
+            return this.subtotal - this.discountTotal + this.taxTotal;
+        },
+
+        formatCurrency(amount) {
+            const currency = this.form.currency_code || 'USD';
+            return new Intl.NumberFormat('en-US', {
+                style: 'currency',
+                currency: currency
+            }).format(amount || 0);
+        },
+
+        onCustomerChange() {
+            const select = document.getElementById('customer_id');
+            const option = select.options[select.selectedIndex];
+            if (option && option.value) {
+                const email = option.dataset.email;
+                if (email) {
+                    this.form.contact_email = email;
+                }
+            }
+        },
+
+        addLine() {
+            this.form.lines.push({
+                item_code: '',
+                revenue_account_id: '',
+                description: '',
+                quantity: 1,
+                unit_price: 0,
+                discount_amount: 0,
+                tax_code_id: '',
+                tax_amount: 0,
+                line_total: 0
+            });
+        },
+
+        removeLine(index) {
+            if (this.form.lines.length > 1) {
+                this.form.lines.splice(index, 1);
+            }
+        },
+
+        calculateLineAmount(index) {
+            const line = this.form.lines[index];
+            const baseAmount = (line.quantity || 0) * (line.unit_price || 0);
+            const afterDiscount = baseAmount - (line.discount_amount || 0);
+
+            // Calculate tax
+            if (line.tax_code_id && this.taxRates[line.tax_code_id]) {
+                const rate = this.taxRates[line.tax_code_id];
+                line.tax_amount = afterDiscount * (rate / 100);
+            } else {
+                line.tax_amount = 0;
+            }
+
+            line.line_total = afterDiscount + line.tax_amount;
+        },
+
+        submitForm() {
+            // Update lines_json hidden field
+            document.querySelector('input[name="lines_json"]').value = JSON.stringify(this.form.lines);
+
+            // Submit via standard form
+            const form = document.querySelector('form');
+            form.action = '/quotes/new';
+            form.method = 'POST';
+
+            // Create FormData from Alpine data
+            const formData = new FormData();
+            formData.append('customer_id', this.form.customer_id);
+            formData.append('quote_date', this.form.quote_date);
+            formData.append('valid_until', this.form.valid_until);
+            formData.append('currency_code', this.form.currency_code);
+            formData.append('contact_name', this.form.contact_name);
+            formData.append('contact_email', this.form.contact_email);
+            formData.append('payment_terms_id', this.form.payment_terms_id);
+            formData.append('customer_notes', this.form.customer_notes);
+            formData.append('internal_notes', this.form.internal_notes);
+            formData.append('terms_and_conditions', this.form.terms_and_conditions);
+            formData.append('lines_json', JSON.stringify(this.form.lines));
+
+            // Create a hidden form and submit
+            const hiddenForm = document.createElement('form');
+            hiddenForm.method = 'POST';
+            hiddenForm.action = '/quotes/new';
+
+            for (const [key, value] of formData.entries()) {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = key;
+                input.value = value;
+                hiddenForm.appendChild(input);
+            }
+
+            document.body.appendChild(hiddenForm);
+            hiddenForm.submit();
+        }
+    }
+}
+</script>
+{% endblock %}

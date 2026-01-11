@@ -1,15 +1,54 @@
+from urllib.parse import quote
+
 from fastapi import HTTPException, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 
 
 def _error_payload(code: str, message: str, details):
     return {"code": code, "message": message, "details": details}
 
 
+def _is_html_request(request: Request) -> bool:
+    """Check if the request expects an HTML response."""
+    accept = request.headers.get("accept", "")
+    content_type = request.headers.get("content-type", "")
+
+    # Check if it's an API request (JSON content type or API path)
+    if "application/json" in content_type:
+        return False
+    if request.url.path.startswith("/api/"):
+        return False
+    if request.url.path.startswith("/auth/") and not request.url.path.startswith("/auth/me"):
+        # Auth API endpoints (login, logout, etc.) should return JSON
+        # But /auth/me is a web page
+        return False
+
+    # Check Accept header for HTML preference
+    if "text/html" in accept:
+        return True
+
+    # Default to HTML for web routes (non-API paths)
+    return not request.url.path.startswith("/api/")
+
+
 def register_error_handlers(app) -> None:
     @app.exception_handler(HTTPException)
     async def http_exception_handler(request: Request, exc: HTTPException):
+        # For 401 errors on web routes, redirect to login
+        if exc.status_code == 401 and _is_html_request(request):
+            # Build the next URL from the current request path
+            next_url = str(request.url.path)
+            if request.url.query:
+                next_url += f"?{request.url.query}"
+            login_url = f"/login?next={quote(next_url, safe='')}"
+            return RedirectResponse(url=login_url, status_code=302)
+
+        # For 403 errors on web routes, show a forbidden page or redirect
+        if exc.status_code == 403 and _is_html_request(request):
+            return RedirectResponse(url="/login?error=forbidden", status_code=302)
+
+        # For other errors or API requests, return JSON
         detail = exc.detail
         code = f"http_{exc.status_code}"
         message = "Request failed"

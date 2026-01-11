@@ -1,0 +1,179 @@
+{% extends "ifrs/base_ifrs.html" %}
+
+{% block page_title %}Goods Receipts{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400">
+    <a href="/ifrs" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white">Goods Receipts</span>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<a href="/ap/goods-receipts/new"
+   class="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-primary-600 to-primary-500 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-primary-500/25 btn-hover">
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+    </svg>
+    New Receipt
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Stats Summary -->
+    <div class="grid gap-4 sm:grid-cols-3">
+        <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800/50">
+            <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Received</p>
+            <p class="mt-1 text-2xl font-bold text-blue-600 dark:text-blue-400">{{ stats.received_count | default(0) }}</p>
+        </div>
+        <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800/50">
+            <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Inspecting</p>
+            <p class="mt-1 text-2xl font-bold text-yellow-600 dark:text-yellow-400">{{ stats.inspecting_count | default(0) }}</p>
+        </div>
+        <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800/50">
+            <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Accepted</p>
+            <p class="mt-1 text-2xl font-bold text-green-600 dark:text-green-400">{{ stats.accepted_count | default(0) }}</p>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-800/50">
+        <form method="get" class="flex flex-wrap items-center gap-4">
+            <div class="flex-1 min-w-[200px]">
+                <input type="text" name="search" value="{{ search | default('') }}"
+                       placeholder="Search receipt number or PO..."
+                       class="w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+            </div>
+            <select name="supplier_id"
+                    class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                <option value="">All Suppliers</option>
+                {% for s in suppliers_list %}
+                <option value="{{ s.supplier_id }}" {{ 'selected' if supplier_id == s.supplier_id|string else '' }}>{{ s.supplier_name }}</option>
+                {% endfor %}
+            </select>
+            <select name="status"
+                    class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                <option value="">All Status</option>
+                {% for s in gr_statuses %}
+                <option value="{{ s }}" {{ 'selected' if status == s else '' }}>{{ s | replace('_', ' ') | title }}</option>
+                {% endfor %}
+            </select>
+            <input type="date" name="start_date" value="{{ start_date | default('') }}"
+                   class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+            <input type="date" name="end_date" value="{{ end_date | default('') }}"
+                   class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+            <button type="submit"
+                    class="rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600">
+                Filter
+            </button>
+        </form>
+    </div>
+
+    <!-- Goods Receipts Table -->
+    <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50">
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead>
+                    <tr class="border-b border-slate-200 dark:border-slate-700">
+                        <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Receipt #</th>
+                        <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Supplier</th>
+                        <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">PO Number</th>
+                        <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Receipt Date</th>
+                        <th class="px-6 py-4 text-center text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Lines</th>
+                        <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Status</th>
+                        <th class="px-6 py-4 text-right text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                    {% for receipt in receipts %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer" onclick="window.location='/ap/goods-receipts/{{ receipt.receipt_id }}'">
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <a href="/ap/goods-receipts/{{ receipt.receipt_id }}" class="font-mono text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">
+                                {{ receipt.receipt_number }}
+                            </a>
+                        </td>
+                        <td class="px-6 py-4">
+                            <p class="text-sm font-medium text-slate-900 dark:text-white">{{ receipt.supplier_name }}</p>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <a href="/ap/purchase-orders/{{ receipt.po_id }}" class="font-mono text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400" onclick="event.stopPropagation()">
+                                {{ receipt.po_number }}
+                            </a>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-400">{{ receipt.receipt_date }}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-center text-sm text-slate-600 dark:text-slate-400">{{ receipt.line_count }}</td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            {% if receipt.status == 'RECEIVED' %}
+                            <span class="inline-flex rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">Received</span>
+                            {% elif receipt.status == 'INSPECTING' %}
+                            <span class="inline-flex rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">Inspecting</span>
+                            {% elif receipt.status == 'ACCEPTED' %}
+                            <span class="inline-flex rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">Accepted</span>
+                            {% elif receipt.status == 'REJECTED' %}
+                            <span class="inline-flex rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400">Rejected</span>
+                            {% elif receipt.status == 'PARTIAL' %}
+                            <span class="inline-flex rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700 dark:bg-orange-900/30 dark:text-orange-400">Partial</span>
+                            {% else %}
+                            <span class="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-400">{{ receipt.status | replace('_', ' ') | title }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-right">
+                            <div class="flex items-center justify-end gap-2">
+                                <a href="/ap/goods-receipts/{{ receipt.receipt_id }}"
+                                   class="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300"
+                                   onclick="event.stopPropagation()">
+                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                                    </svg>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="px-6 py-12 text-center">
+                            <svg class="mx-auto h-12 w-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+                            </svg>
+                            <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">No goods receipts found</p>
+                            <a href="/ap/goods-receipts/new" class="mt-4 inline-flex items-center text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">
+                                <svg class="mr-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                                </svg>
+                                Record your first goods receipt
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        {% if total_pages > 1 %}
+        <div class="flex items-center justify-between border-t border-slate-200 px-6 py-4 dark:border-slate-700">
+            <div class="text-sm text-slate-500 dark:text-slate-400">
+                Showing {{ offset + 1 }} to {{ [offset + limit, total_count] | min }} of {{ total_count }} results
+            </div>
+            <div class="flex gap-2">
+                {% if page > 1 %}
+                <a href="?page={{ page - 1 }}{% if search %}&search={{ search }}{% endif %}{% if supplier_id %}&supplier_id={{ supplier_id }}{% endif %}{% if status %}&status={{ status }}{% endif %}"
+                   class="rounded-lg border border-slate-300 px-3 py-1 text-sm hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-700">
+                    Previous
+                </a>
+                {% endif %}
+                {% if page < total_pages %}
+                <a href="?page={{ page + 1 }}{% if search %}&search={{ search }}{% endif %}{% if supplier_id %}&supplier_id={{ supplier_id }}{% endif %}{% if status %}&status={{ status }}{% endif %}"
+                   class="rounded-lg border border-slate-300 px-3 py-1 text-sm hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-700">
+                    Next
+                </a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -2,7 +2,7 @@
 Banking Services.
 
 Provides services for bank account management, statement import,
-and bank reconciliation.
+bank reconciliation, and transaction categorization.
 """
 
 from app.services.ifrs.banking.bank_account import (
@@ -22,6 +22,13 @@ from app.services.ifrs.banking.bank_reconciliation import (
     ReconciliationMatchInput,
     bank_reconciliation_service,
 )
+from app.services.ifrs.banking.categorization import (
+    TransactionCategorizationService,
+    CategorizationSuggestion,
+    CategorizationResult,
+    BatchCategorizationResult,
+    categorization_service,
+)
 
 __all__ = [
     # Bank Account
@@ -38,4 +45,10 @@ __all__ = [
     "ReconciliationInput",
     "ReconciliationMatchInput",
     "bank_reconciliation_service",
+    # Categorization
+    "TransactionCategorizationService",
+    "CategorizationSuggestion",
+    "CategorizationResult",
+    "BatchCategorizationResult",
+    "categorization_service",
 ]

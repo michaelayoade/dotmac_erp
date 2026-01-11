@@ -1,0 +1,131 @@
+{% extends "ifrs/base_ifrs.html" %}
+
+{% block page_title %}New AP Payment{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400">
+    <a href="/ifrs" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/ap/payments" class="hover:text-primary-600 dark:hover:text-primary-400">AP Payments</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white">New Payment</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-6">
+    <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800/50">
+        <h2 class="text-xl font-semibold text-slate-900 dark:text-white">Payment Details</h2>
+        <p class="mt-1 text-sm text-slate-500">Record supplier payments and allocations.</p>
+        <form class="mt-6 space-y-6">
+            <div class="grid gap-4 sm:grid-cols-2">
+                <div>
+                    <label class="form-label">Supplier</label>
+                    <select class="form-select form-input" name="supplier_id">
+                        <option value="">Select supplier</option>
+                        {% for supplier in suppliers_list %}
+                        <option value="{{ supplier.supplier_id }}" {% if invoice and invoice.supplier_id == supplier.supplier_id %}selected{% endif %}>
+                            {{ supplier.supplier_name }} ({{ supplier.supplier_code }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label">Payment Date</label>
+                    <input type="date" class="form-input" name="payment_date" value="{{ "" }}">
+                </div>
+                <div>
+                    <label class="form-label">Payment Method</label>
+                    <select class="form-select form-input" name="payment_method">
+                        <option value="">Select method</option>
+                        <option value="CHECK">Check</option>
+                        <option value="BANK_TRANSFER">Bank Transfer</option>
+                        <option value="WIRE">Wire</option>
+                        <option value="ACH">ACH</option>
+                        <option value="CARD">Card</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label">Amount</label>
+                    <input type="text" class="form-input" name="amount" placeholder="0.00" value="{{ invoice.balance if invoice else '' }}">
+                </div>
+                <div>
+                    <label class="form-label">Reference</label>
+                    <input type="text" class="form-input" name="reference" placeholder="Reference number">
+                </div>
+                <div>
+                    <label class="form-label">Currency</label>
+                    <input type="text" class="form-input" name="currency_code" placeholder="USD" value="{{ invoice.currency_code if invoice else '' }}">
+                </div>
+            </div>
+            <div class="flex items-center justify-between">
+                <p class="text-xs text-slate-500">Submission wiring is handled via API in a later step.</p>
+                <button type="button" disabled
+                        class="rounded-lg bg-slate-200 px-4 py-2 text-sm font-medium text-slate-500 dark:bg-slate-700 dark:text-slate-400">
+                    Save Payment
+                </button>
+            </div>
+        </form>
+    </div>
+
+    {% if invoice %}
+    <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800/50">
+        <h3 class="mb-4 text-lg font-medium text-slate-900 dark:text-white">Selected Invoice</h3>
+        <div class="grid gap-4 sm:grid-cols-4">
+            <div>
+                <p class="text-xs uppercase tracking-wide text-slate-500">Invoice</p>
+                <p class="text-sm font-medium text-slate-900 dark:text-white">{{ invoice.invoice_number }}</p>
+            </div>
+            <div>
+                <p class="text-xs uppercase tracking-wide text-slate-500">Due Date</p>
+                <p class="text-sm font-medium text-slate-900 dark:text-white">{{ invoice.due_date }}</p>
+            </div>
+            <div>
+                <p class="text-xs uppercase tracking-wide text-slate-500">Total</p>
+                <p class="text-sm font-medium text-slate-900 dark:text-white">{{ invoice.total_amount }}</p>
+            </div>
+            <div>
+                <p class="text-xs uppercase tracking-wide text-slate-500">Balance</p>
+                <p class="text-sm font-medium text-slate-900 dark:text-white">{{ invoice.balance }}</p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800/50">
+        <h3 class="mb-4 text-lg font-medium text-slate-900 dark:text-white">Open Invoices</h3>
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead>
+                    <tr class="border-b border-slate-200 text-left text-xs uppercase tracking-wider text-slate-500 dark:border-slate-700">
+                        <th class="px-4 py-3">Invoice</th>
+                        <th class="px-4 py-3">Supplier</th>
+                        <th class="px-4 py-3">Due Date</th>
+                        <th class="px-4 py-3 text-right">Total</th>
+                        <th class="px-4 py-3 text-right">Balance</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                    {% for inv in open_invoices %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                        <td class="px-4 py-3">
+                            <a href="/ap/payments/new?invoice_id={{ inv.invoice_id }}" class="text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">
+                                {{ inv.invoice_number }}
+                            </a>
+                        </td>
+                        <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">{{ inv.supplier_name }}</td>
+                        <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">{{ inv.due_date }}</td>
+                        <td class="px-4 py-3 text-right text-sm text-slate-600 dark:text-slate-400">{{ inv.total_amount }}</td>
+                        <td class="px-4 py-3 text-right text-sm font-medium text-slate-900 dark:text-white">{{ inv.balance }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5" class="px-4 py-8 text-center text-sm text-slate-500">No open invoices</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

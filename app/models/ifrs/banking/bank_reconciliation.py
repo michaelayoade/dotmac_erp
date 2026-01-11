@@ -65,7 +65,7 @@ class BankReconciliation(Base):
             name="uq_bank_reconciliation_date"
         ),
         Index("ix_bank_reconciliation_status", "bank_account_id", "status"),
-        {"schema": "ifrs"},
+        {"schema": "banking"},
     )
 
     # Primary key
@@ -85,7 +85,7 @@ class BankReconciliation(Base):
     # Bank account reference
     bank_account_id: Mapped[UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("ifrs.bank_accounts.bank_account_id", ondelete="CASCADE"),
+        ForeignKey("banking.bank_accounts.bank_account_id", ondelete="CASCADE"),
         nullable=False,
     )
 
@@ -172,7 +172,7 @@ class BankReconciliation(Base):
 
     # Status
     status: Mapped[ReconciliationStatus] = mapped_column(
-        Enum(ReconciliationStatus, name="reconciliation_status", schema="ifrs"),
+        Enum(ReconciliationStatus, name="reconciliation_status", schema="banking"),
         nullable=False,
         default=ReconciliationStatus.draft,
     )
@@ -250,7 +250,7 @@ class BankReconciliationLine(Base):
     __tablename__ = "bank_reconciliation_lines"
     __table_args__ = (
         Index("ix_recon_line_type", "reconciliation_id", "match_type"),
-        {"schema": "ifrs"},
+        {"schema": "banking"},
     )
 
     # Primary key
@@ -263,20 +263,20 @@ class BankReconciliationLine(Base):
     # Reconciliation reference
     reconciliation_id: Mapped[UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("ifrs.bank_reconciliations.reconciliation_id", ondelete="CASCADE"),
+        ForeignKey("banking.bank_reconciliations.reconciliation_id", ondelete="CASCADE"),
         nullable=False,
     )
 
     # Match type
     match_type: Mapped[ReconciliationMatchType] = mapped_column(
-        Enum(ReconciliationMatchType, name="reconciliation_match_type", schema="ifrs"),
+        Enum(ReconciliationMatchType, name="reconciliation_match_type", schema="banking"),
         nullable=False,
     )
 
     # Bank statement line reference
     statement_line_id: Mapped[UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("ifrs.bank_statement_lines.line_id", ondelete="SET NULL"),
+        ForeignKey("banking.bank_statement_lines.line_id", ondelete="SET NULL"),
         nullable=True,
     )
 

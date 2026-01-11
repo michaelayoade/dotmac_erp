@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import cast
 
 from fastapi import HTTPException
 
@@ -202,12 +203,279 @@ SETTINGS_SPECS: list[SettingSpec] = [
         default=30,
         min_value=1,
     ),
+    # Email Domain Settings
+    SettingSpec(
+        domain=SettingDomain.email,
+        key="smtp_host",
+        env_var="SMTP_HOST",
+        value_type=SettingValueType.string,
+        default="localhost",
+    ),
+    SettingSpec(
+        domain=SettingDomain.email,
+        key="smtp_port",
+        env_var="SMTP_PORT",
+        value_type=SettingValueType.integer,
+        default=587,
+        min_value=1,
+        max_value=65535,
+    ),
+    SettingSpec(
+        domain=SettingDomain.email,
+        key="smtp_username",
+        env_var="SMTP_USERNAME",
+        value_type=SettingValueType.string,
+        default=None,
+    ),
+    SettingSpec(
+        domain=SettingDomain.email,
+        key="smtp_password",
+        env_var="SMTP_PASSWORD",
+        value_type=SettingValueType.string,
+        default=None,
+        is_secret=True,
+    ),
+    SettingSpec(
+        domain=SettingDomain.email,
+        key="smtp_use_tls",
+        env_var="SMTP_USE_TLS",
+        value_type=SettingValueType.boolean,
+        default=True,
+    ),
+    SettingSpec(
+        domain=SettingDomain.email,
+        key="smtp_use_ssl",
+        env_var="SMTP_USE_SSL",
+        value_type=SettingValueType.boolean,
+        default=False,
+    ),
+    SettingSpec(
+        domain=SettingDomain.email,
+        key="smtp_from_email",
+        env_var="SMTP_FROM_EMAIL",
+        value_type=SettingValueType.string,
+        default="noreply@example.com",
+    ),
+    SettingSpec(
+        domain=SettingDomain.email,
+        key="smtp_from_name",
+        env_var="SMTP_FROM_NAME",
+        value_type=SettingValueType.string,
+        default="IFRS Ledger",
+    ),
+    SettingSpec(
+        domain=SettingDomain.email,
+        key="email_reply_to",
+        env_var="EMAIL_REPLY_TO",
+        value_type=SettingValueType.string,
+        default=None,
+    ),
+    # Automation Domain Settings
+    SettingSpec(
+        domain=SettingDomain.automation,
+        key="recurring_default_frequency",
+        env_var=None,
+        value_type=SettingValueType.string,
+        default="MONTHLY",
+        allowed={"DAILY", "WEEKLY", "MONTHLY", "QUARTERLY", "YEARLY"},
+    ),
+    SettingSpec(
+        domain=SettingDomain.automation,
+        key="recurring_max_occurrences",
+        env_var=None,
+        value_type=SettingValueType.integer,
+        default=999,
+        min_value=1,
+        max_value=9999,
+    ),
+    SettingSpec(
+        domain=SettingDomain.automation,
+        key="recurring_lookback_days",
+        env_var=None,
+        value_type=SettingValueType.integer,
+        default=7,
+        min_value=1,
+        max_value=90,
+    ),
+    SettingSpec(
+        domain=SettingDomain.automation,
+        key="workflow_max_actions_per_event",
+        env_var=None,
+        value_type=SettingValueType.integer,
+        default=10,
+        min_value=1,
+        max_value=100,
+    ),
+    SettingSpec(
+        domain=SettingDomain.automation,
+        key="workflow_async_timeout_seconds",
+        env_var=None,
+        value_type=SettingValueType.integer,
+        default=300,
+        min_value=30,
+        max_value=3600,
+    ),
+    SettingSpec(
+        domain=SettingDomain.automation,
+        key="custom_fields_max_per_entity",
+        env_var=None,
+        value_type=SettingValueType.integer,
+        default=20,
+        min_value=1,
+        max_value=100,
+    ),
+    # Webhook Security Settings
+    SettingSpec(
+        domain=SettingDomain.automation,
+        key="webhook_allowed_hosts",
+        env_var="WEBHOOK_ALLOWED_HOSTS",
+        value_type=SettingValueType.string,
+        default="",
+    ),
+    SettingSpec(
+        domain=SettingDomain.automation,
+        key="webhook_allowed_domains",
+        env_var="WEBHOOK_ALLOWED_DOMAINS",
+        value_type=SettingValueType.string,
+        default="",
+    ),
+    SettingSpec(
+        domain=SettingDomain.automation,
+        key="webhook_allow_insecure",
+        env_var="WEBHOOK_ALLOW_INSECURE",
+        value_type=SettingValueType.boolean,
+        default=False,
+    ),
+    SettingSpec(
+        domain=SettingDomain.automation,
+        key="webhook_allow_localhost",
+        env_var="WEBHOOK_ALLOW_LOCALHOST",
+        value_type=SettingValueType.boolean,
+        default=False,
+    ),
+    SettingSpec(
+        domain=SettingDomain.automation,
+        key="webhook_timeout_seconds",
+        env_var="WEBHOOK_TIMEOUT_SECONDS",
+        value_type=SettingValueType.integer,
+        default=10,
+        min_value=1,
+        max_value=300,
+    ),
+    # Secrets Provider Settings
+    SettingSpec(
+        domain=SettingDomain.automation,
+        key="openbao_allow_insecure",
+        env_var="OPENBAO_ALLOW_INSECURE",
+        value_type=SettingValueType.boolean,
+        default=False,
+    ),
+    # Features Domain Settings (Feature Flags)
+    SettingSpec(
+        domain=SettingDomain.features,
+        key="enable_multi_currency",
+        env_var=None,
+        value_type=SettingValueType.boolean,
+        default=True,
+    ),
+    SettingSpec(
+        domain=SettingDomain.features,
+        key="enable_budgeting",
+        env_var=None,
+        value_type=SettingValueType.boolean,
+        default=False,
+    ),
+    SettingSpec(
+        domain=SettingDomain.features,
+        key="enable_project_accounting",
+        env_var=None,
+        value_type=SettingValueType.boolean,
+        default=False,
+    ),
+    SettingSpec(
+        domain=SettingDomain.features,
+        key="enable_bank_reconciliation",
+        env_var=None,
+        value_type=SettingValueType.boolean,
+        default=True,
+    ),
+    SettingSpec(
+        domain=SettingDomain.features,
+        key="enable_recurring_transactions",
+        env_var=None,
+        value_type=SettingValueType.boolean,
+        default=True,
+    ),
+    SettingSpec(
+        domain=SettingDomain.features,
+        key="enable_inventory",
+        env_var=None,
+        value_type=SettingValueType.boolean,
+        default=True,
+    ),
+    SettingSpec(
+        domain=SettingDomain.features,
+        key="enable_fixed_assets",
+        env_var=None,
+        value_type=SettingValueType.boolean,
+        default=True,
+    ),
+    SettingSpec(
+        domain=SettingDomain.features,
+        key="enable_leases",
+        env_var=None,
+        value_type=SettingValueType.boolean,
+        default=False,
+    ),
+    # Reporting Domain Settings
+    SettingSpec(
+        domain=SettingDomain.reporting,
+        key="default_export_format",
+        env_var=None,
+        value_type=SettingValueType.string,
+        default="PDF",
+        allowed={"PDF", "EXCEL", "CSV"},
+    ),
+    SettingSpec(
+        domain=SettingDomain.reporting,
+        key="report_page_size",
+        env_var=None,
+        value_type=SettingValueType.string,
+        default="A4",
+        allowed={"A4", "LETTER", "LEGAL"},
+    ),
+    SettingSpec(
+        domain=SettingDomain.reporting,
+        key="report_orientation",
+        env_var=None,
+        value_type=SettingValueType.string,
+        default="PORTRAIT",
+        allowed={"PORTRAIT", "LANDSCAPE"},
+    ),
+    SettingSpec(
+        domain=SettingDomain.reporting,
+        key="include_logo_in_reports",
+        env_var=None,
+        value_type=SettingValueType.boolean,
+        default=True,
+    ),
+    SettingSpec(
+        domain=SettingDomain.reporting,
+        key="report_watermark_text",
+        env_var=None,
+        value_type=SettingValueType.string,
+        default=None,
+    ),
 ]
 
 DOMAIN_SETTINGS_SERVICE = {
     SettingDomain.auth: settings_service.auth_settings,
     SettingDomain.audit: settings_service.audit_settings,
     SettingDomain.scheduler: settings_service.scheduler_settings,
+    SettingDomain.automation: settings_service.automation_settings,
+    SettingDomain.email: settings_service.email_settings,
+    SettingDomain.features: settings_service.features_settings,
+    SettingDomain.reporting: settings_service.reporting_settings,
 }
 
 
@@ -242,14 +510,15 @@ def resolve_value(db, domain: SettingDomain, key: str) -> object | None:
     if spec.allowed and value is not None and value not in spec.allowed:
         value = spec.default
     if spec.value_type == SettingValueType.integer and value is not None:
+        parsed: int | None
         try:
-            parsed = int(value)
+            parsed = int(str(value))
         except (TypeError, ValueError):
             parsed = spec.default if isinstance(spec.default, int) else None
         if spec.min_value is not None and parsed is not None and parsed < spec.min_value:
-            parsed = spec.default
+            parsed = spec.default if isinstance(spec.default, int) else None
         if spec.max_value is not None and parsed is not None and parsed > spec.max_value:
-            parsed = spec.default
+            parsed = spec.default if isinstance(spec.default, int) else None
         value = parsed
     return value
 
@@ -258,9 +527,9 @@ def extract_db_value(setting) -> object | None:
     if not setting:
         return None
     if setting.value_text is not None:
-        return setting.value_text
+        return cast(object, setting.value_text)
     if setting.value_json is not None:
-        return setting.value_json
+        return cast(object, setting.value_json)
     return None
 
 
@@ -298,7 +567,7 @@ def normalize_for_db(spec: SettingSpec, value: object) -> tuple[str | None, obje
         bool_value = bool(value)
         return ("true" if bool_value else "false"), bool_value
     if spec.value_type == SettingValueType.integer:
-        return str(int(value)), None
+        return str(int(str(value))), None
     if spec.value_type == SettingValueType.string:
         return str(value), None
     return None, value

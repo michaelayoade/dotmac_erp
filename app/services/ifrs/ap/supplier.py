@@ -293,6 +293,7 @@ class SupplierService(ListResponseMixin):
     @staticmethod
     def get(
         db: Session,
+        organization_id: UUID,
         supplier_id: str,
     ) -> Supplier:
         """
@@ -308,8 +309,9 @@ class SupplierService(ListResponseMixin):
         Raises:
             HTTPException(404): If not found
         """
+        org_id = coerce_uuid(organization_id)
         supplier = db.get(Supplier, coerce_uuid(supplier_id))
-        if not supplier:
+        if not supplier or supplier.organization_id != org_id:
             raise HTTPException(status_code=404, detail="Supplier not found")
         return supplier
 
@@ -346,7 +348,7 @@ class SupplierService(ListResponseMixin):
     @staticmethod
     def list(
         db: Session,
-        organization_id: Optional[str] = None,
+        organization_id: str,
         supplier_type: Optional[SupplierType] = None,
         is_active: Optional[bool] = None,
         is_related_party: Optional[bool] = None,
@@ -370,12 +372,11 @@ class SupplierService(ListResponseMixin):
         Returns:
             List of Supplier objects
         """
-        query = db.query(Supplier)
+        if not organization_id:
+            raise HTTPException(status_code=400, detail="organization_id is required")
 
-        if organization_id:
-            query = query.filter(
-                Supplier.organization_id == coerce_uuid(organization_id)
-            )
+        org_id = coerce_uuid(organization_id)
+        query = db.query(Supplier).filter(Supplier.organization_id == org_id)
 
         if supplier_type:
             query = query.filter(Supplier.supplier_type == supplier_type)

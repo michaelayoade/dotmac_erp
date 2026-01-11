@@ -184,6 +184,31 @@ class BankReconciliationService:
 
         return list(db.execute(query).scalars().all())
 
+    def count(
+        self,
+        db: Session,
+        organization_id: UUID,
+        bank_account_id: Optional[UUID] = None,
+        status: Optional[ReconciliationStatus] = None,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+    ) -> int:
+        """Count reconciliations matching filters (for pagination)."""
+        query = select(func.count(BankReconciliation.reconciliation_id)).where(
+            BankReconciliation.organization_id == organization_id
+        )
+
+        if bank_account_id:
+            query = query.where(BankReconciliation.bank_account_id == bank_account_id)
+        if status:
+            query = query.where(BankReconciliation.status == status)
+        if start_date:
+            query = query.where(BankReconciliation.reconciliation_date >= start_date)
+        if end_date:
+            query = query.where(BankReconciliation.reconciliation_date <= end_date)
+
+        return db.execute(query).scalar() or 0
+
     def add_match(
         self,
         db: Session,
@@ -375,7 +400,7 @@ class BankReconciliationService:
             .where(
                 and_(
                     JournalEntryLine.account_id == bank_account.gl_account_id,
-                    JournalEntry.status == JournalStatus.posted,
+                    JournalEntry.status == JournalStatus.POSTED,
                     JournalEntry.entry_date >= reconciliation.period_start,
                     JournalEntry.entry_date <= reconciliation.period_end,
                 )
@@ -515,7 +540,7 @@ class BankReconciliationService:
         ).where(
             and_(
                 JournalEntryLine.account_id == gl_account_id,
-                JournalEntry.status == JournalStatus.posted,
+                JournalEntry.status == JournalStatus.POSTED,
                 JournalEntry.entry_date <= as_of_date,
             )
         )

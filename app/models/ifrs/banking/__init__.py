@@ -5,6 +5,7 @@ IFRS-compliant banking and cash management models including:
 - Bank accounts
 - Bank statements and transactions
 - Bank reconciliation
+- Payee management and transaction rules
 """
 
 from app.models.ifrs.banking.bank_account import (
@@ -24,6 +25,15 @@ from app.models.ifrs.banking.bank_reconciliation import (
     ReconciliationStatus,
     ReconciliationMatchType,
 )
+from app.models.ifrs.banking.payee import (
+    Payee,
+    PayeeType,
+)
+from app.models.ifrs.banking.transaction_rule import (
+    TransactionRule,
+    RuleType,
+    RuleAction,
+)
 
 __all__ = [
     # Bank Account
@@ -40,4 +50,11 @@ __all__ = [
     "BankReconciliationLine",
     "ReconciliationStatus",
     "ReconciliationMatchType",
+    # Payee
+    "Payee",
+    "PayeeType",
+    # Transaction Rules
+    "TransactionRule",
+    "RuleType",
+    "RuleAction",
 ]

@@ -291,6 +291,7 @@ class APAgingService(ListResponseMixin):
     def create_aging_snapshot(
         db: Session,
         organization_id: UUID,
+        fiscal_period_id: UUID,
         as_of_date: Optional[date] = None,
         created_by_user_id: Optional[UUID] = None,
     ) -> list[APAgingSnapshot]:
@@ -300,6 +301,7 @@ class APAgingService(ListResponseMixin):
         Args:
             db: Database session
             organization_id: Organization scope
+            fiscal_period_id: Fiscal period for the snapshot
             as_of_date: Date for snapshot
             created_by_user_id: User creating snapshot
 
@@ -307,6 +309,7 @@ class APAgingService(ListResponseMixin):
             List of created APAgingSnapshot records
         """
         org_id = coerce_uuid(organization_id)
+        period_id = coerce_uuid(fiscal_period_id)
         ref_date = as_of_date or date.today()
 
         # Get aging by supplier
@@ -315,21 +318,31 @@ class APAgingService(ListResponseMixin):
         )
 
         snapshots = []
+        bucket_mapping = [
+            ("Current", "current"),
+            ("31-60 Days", "days_31_60"),
+            ("61-90 Days", "days_61_90"),
+            ("Over 90 Days", "over_90"),
+        ]
+
         for aging in supplier_aging:
-            snapshot = APAgingSnapshot(
-                organization_id=org_id,
-                supplier_id=aging.supplier_id,
-                snapshot_date=ref_date,
-                currency_code=aging.currency_code,
-                current_amount=aging.current,
-                days_31_60_amount=aging.days_31_60,
-                days_61_90_amount=aging.days_61_90,
-                over_90_amount=aging.over_90,
-                total_outstanding=aging.total_outstanding,
-                invoice_count=aging.invoice_count,
-            )
-            db.add(snapshot)
-            snapshots.append(snapshot)
+            # Create one snapshot record per aging bucket per supplier
+            for bucket_name, attr_name in bucket_mapping:
+                amount = getattr(aging, attr_name)
+                if amount > 0:
+                    snapshot = APAgingSnapshot(
+                        organization_id=org_id,
+                        fiscal_period_id=period_id,
+                        snapshot_date=ref_date,
+                        supplier_id=aging.supplier_id,
+                        aging_bucket=bucket_name,
+                        amount_functional=amount,
+                        invoice_count=aging.invoice_count if bucket_name == "Current" else 0,
+                        currency_code=aging.currency_code,
+                        amount_original_currency=amount,
+                    )
+                    db.add(snapshot)
+                    snapshots.append(snapshot)
 
         db.commit()
         return snapshots

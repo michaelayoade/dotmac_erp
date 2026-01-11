@@ -82,6 +82,16 @@ class PostingResult:
     correlation_id: Optional[str] = None
 
 
+@dataclass
+class PostEntryResult:
+    """Result of post_entry operation (for API compatibility)."""
+
+    success: bool
+    entry_id: Optional[UUID] = None
+    entry_number: Optional[str] = None
+    message: str = ""
+
+
 class LedgerPostingService(ListResponseMixin):
     """
     Single writer service for posted_ledger_line.
@@ -507,6 +517,55 @@ class LedgerPostingService(ListResponseMixin):
 
         query = query.order_by(PostingBatch.submitted_at.desc())
         return query.limit(limit).offset(offset).all()
+
+    @staticmethod
+    def post_entry(
+        db: Session,
+        organization_id: UUID,
+        entry_id: UUID,
+        posted_by_user_id: UUID,
+    ) -> PostEntryResult:
+        """
+        Post a journal entry to the ledger (simplified API).
+
+        Args:
+            db: Database session
+            organization_id: Organization scope
+            entry_id: Journal entry to post
+            posted_by_user_id: User performing the posting
+
+        Returns:
+            PostEntryResult with outcome
+        """
+        from app.services.ifrs.gl.journal import journal_service
+
+        org_id = coerce_uuid(organization_id)
+        journal_id = coerce_uuid(entry_id)
+
+        # Get journal entry
+        journal = db.get(JournalEntry, journal_id)
+        if not journal or journal.organization_id != org_id:
+            raise HTTPException(status_code=404, detail="Journal entry not found")
+
+        # Post journal through journal service
+        try:
+            posted = journal_service.post_journal(
+                db=db,
+                organization_id=org_id,
+                journal_entry_id=journal_id,
+                posted_by_user_id=posted_by_user_id,
+            )
+            return PostEntryResult(
+                success=True,
+                entry_id=posted.journal_entry_id,
+                entry_number=posted.journal_number,
+                message="Posted successfully",
+            )
+        except HTTPException as e:
+            return PostEntryResult(
+                success=False,
+                message=e.detail,
+            )
 
 
 # Module-level singleton instance

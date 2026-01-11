@@ -1,0 +1,136 @@
+{% extends "ifrs/base_ifrs.html" %}
+
+{% block page_title %}Statement of Profit or Loss{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 mt-1">
+    <a href="/dashboard" class="hover:text-slate-700 dark:hover:text-slate-300">Dashboard</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <a href="/reports" class="hover:text-slate-700 dark:hover:text-slate-300">Reports</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="text-slate-700 dark:text-slate-300">Statement of Profit or Loss</span>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<button onclick="window.print()" class="btn btn-secondary h-9 px-3">
+    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
+    </svg>
+    Print
+</button>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-6">
+    <!-- Filter Card -->
+    <div class="card p-4">
+        <form method="get" class="flex flex-wrap items-end gap-4">
+            <div class="flex-1 min-w-[150px]">
+                <label class="form-label">Start Date</label>
+                <input type="date" name="start_date" value="{{ start_date }}" class="form-input">
+            </div>
+            <div class="flex-1 min-w-[150px]">
+                <label class="form-label">End Date</label>
+                <input type="date" name="end_date" value="{{ end_date }}" class="form-input">
+            </div>
+            <button type="submit" class="btn btn-primary">
+                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+                Refresh
+            </button>
+        </form>
+    </div>
+
+    <!-- Report -->
+    <div class="card p-6 print:shadow-none print:border-0">
+        <div class="text-center mb-8 print:mb-4">
+            <h1 class="text-2xl font-semibold text-slate-900 dark:text-white font-display">Statement of Profit or Loss</h1>
+            <p class="text-slate-500 dark:text-slate-400 mt-1">For the period {{ start_date }} to {{ end_date }}</p>
+            <p class="text-sm text-slate-400 dark:text-slate-500">{{ period_name }}</p>
+        </div>
+
+        <div class="space-y-8">
+            <!-- Revenue Section -->
+            <section>
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white border-b-2 border-slate-200 dark:border-slate-700 pb-2 mb-4">Revenue</h2>
+                {% if revenue_items %}
+                <table class="w-full text-sm">
+                    <tbody>
+                        {% for item in revenue_items %}
+                        <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/30">
+                            <td class="py-2 px-2 font-mono text-xs text-slate-500 w-24">{{ item.account_code }}</td>
+                            <td class="py-2 px-2 text-slate-700 dark:text-slate-300">{{ item.account_name }}</td>
+                            <td class="py-2 px-2 text-right font-mono text-slate-900 dark:text-white w-32">{{ item.amount }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot>
+                        <tr class="border-t border-slate-200 dark:border-slate-700">
+                            <td class="py-3 px-2"></td>
+                            <td class="py-3 px-2 font-semibold text-slate-900 dark:text-white">Total Revenue</td>
+                            <td class="py-3 px-2 text-right font-mono font-semibold text-emerald-600 dark:text-emerald-400">{{ total_revenue }}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+                {% else %}
+                <p class="text-sm text-slate-500 dark:text-slate-400 py-4">No revenue recorded for this period</p>
+                {% endif %}
+            </section>
+
+            <!-- Expenses Section -->
+            <section>
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white border-b-2 border-slate-200 dark:border-slate-700 pb-2 mb-4">Expenses</h2>
+                {% if expense_items %}
+                <table class="w-full text-sm">
+                    <tbody>
+                        {% for item in expense_items %}
+                        <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/30">
+                            <td class="py-2 px-2 font-mono text-xs text-slate-500 w-24">{{ item.account_code }}</td>
+                            <td class="py-2 px-2 text-slate-700 dark:text-slate-300">{{ item.account_name }}</td>
+                            <td class="py-2 px-2 text-right font-mono text-slate-900 dark:text-white w-32">{{ item.amount }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot>
+                        <tr class="border-t border-slate-200 dark:border-slate-700">
+                            <td class="py-3 px-2"></td>
+                            <td class="py-3 px-2 font-semibold text-slate-900 dark:text-white">Total Expenses</td>
+                            <td class="py-3 px-2 text-right font-mono font-semibold text-rose-600 dark:text-rose-400">{{ total_expenses }}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+                {% else %}
+                <p class="text-sm text-slate-500 dark:text-slate-400 py-4">No expenses recorded for this period</p>
+                {% endif %}
+            </section>
+
+            <!-- Net Income -->
+            <section class="pt-4 border-t-2 border-slate-300 dark:border-slate-600">
+                <div class="flex justify-between items-center py-4 px-2 rounded-lg {% if is_profit %}bg-emerald-50 dark:bg-emerald-900/20{% else %}bg-rose-50 dark:bg-rose-900/20{% endif %}">
+                    <span class="text-lg font-bold text-slate-900 dark:text-white">Net {{ 'Income' if is_profit else 'Loss' }}</span>
+                    <span class="text-xl font-mono font-bold {% if is_profit %}text-emerald-600 dark:text-emerald-400{% else %}text-rose-600 dark:text-rose-400{% endif %}">{{ net_income }}</span>
+                </div>
+            </section>
+        </div>
+
+        <!-- Empty State -->
+        {% if not revenue_items and not expense_items %}
+        <div class="empty-state">
+            <div class="empty-state-icon">
+                <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+                </svg>
+            </div>
+            <h3 class="empty-state-title">No Data Available</h3>
+            <p class="empty-state-description">No revenue or expenses found for the selected period.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

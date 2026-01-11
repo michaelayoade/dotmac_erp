@@ -86,7 +86,7 @@ def _statement_status_label(status: BankStatementStatus) -> str:
         return "in_progress"
     if status == BankStatementStatus.closed:
         return "reconciled"
-    return status.value
+    return str(status.value)
 
 
 def _parse_reconciliation_status(value: Optional[str]) -> Optional[ReconciliationStatus]:
@@ -670,6 +670,292 @@ class BankingWebService:
         }
 
         return {"report": report}
+
+    # =========================================================================
+    # Payee Context Methods
+    # =========================================================================
+
+    @staticmethod
+    def list_payees_context(
+        db: Session,
+        organization_id: str,
+        search: Optional[str] = None,
+        payee_type: Optional[str] = None,
+        page: int = 1,
+        per_page: int = 25,
+    ) -> dict:
+        """Context for payees list page."""
+        from app.models.ifrs.banking.payee import Payee, PayeeType
+
+        org_id = coerce_uuid(organization_id)
+
+        query = db.query(Payee).filter(
+            Payee.organization_id == org_id,
+            Payee.is_active == True,
+        )
+
+        if search:
+            search_pattern = f"%{search}%"
+            query = query.filter(
+                or_(
+                    Payee.payee_name.ilike(search_pattern),
+                    Payee.name_patterns.ilike(search_pattern),
+                )
+            )
+
+        if payee_type:
+            try:
+                pt = PayeeType(payee_type)
+                query = query.filter(Payee.payee_type == pt)
+            except ValueError:
+                pass
+
+        total = query.count()
+        payees = (
+            query.order_by(Payee.payee_name)
+            .offset((page - 1) * per_page)
+            .limit(per_page)
+            .all()
+        )
+
+        # Get GL accounts for display
+        account_map = {}
+        account_ids = [p.default_account_id for p in payees if p.default_account_id]
+        if account_ids:
+            accounts = db.query(Account).filter(Account.account_id.in_(account_ids)).all()
+            account_map = {a.account_id: f"{a.account_code} - {a.account_name}" for a in accounts}
+
+        payee_list = []
+        for p in payees:
+            payee_list.append({
+                "payee_id": str(p.payee_id),
+                "payee_name": p.payee_name,
+                "payee_type": p.payee_type.value if p.payee_type else "",
+                "name_patterns": p.name_patterns or "",
+                "default_account": account_map.get(p.default_account_id, ""),
+                "match_count": p.match_count,
+                "last_matched": _format_date(p.last_matched_at) if p.last_matched_at else "Never",
+            })
+
+        return {
+            "payees": payee_list,
+            "payee_types": [{"value": t.value, "label": t.value.replace("_", " ").title()} for t in PayeeType],
+            "search": search or "",
+            "selected_type": payee_type or "",
+            "pagination": {
+                "page": page,
+                "per_page": per_page,
+                "total": total,
+                "pages": (total + per_page - 1) // per_page,
+            },
+        }
+
+    @staticmethod
+    def payee_form_context(
+        db: Session,
+        organization_id: str,
+        payee_id: Optional[str] = None,
+    ) -> dict:
+        """Context for payee create/edit form."""
+        from app.models.ifrs.banking.payee import Payee, PayeeType
+
+        org_id = coerce_uuid(organization_id)
+
+        # Get GL accounts for dropdown
+        accounts = (
+            db.query(Account)
+            .filter(Account.organization_id == org_id, Account.is_active == True)
+            .order_by(Account.account_code)
+            .all()
+        )
+
+        account_options = [
+            {"value": str(a.account_id), "label": f"{a.account_code} - {a.account_name}"}
+            for a in accounts
+        ]
+
+        payee = None
+        if payee_id:
+            payee = db.get(Payee, coerce_uuid(payee_id))
+            if payee and payee.organization_id != org_id:
+                payee = None
+
+        payee_data = None
+        if payee:
+            payee_data = {
+                "payee_id": str(payee.payee_id),
+                "payee_name": payee.payee_name,
+                "payee_type": payee.payee_type.value if payee.payee_type else "",
+                "name_patterns": payee.name_patterns or "",
+                "default_account_id": str(payee.default_account_id) if payee.default_account_id else "",
+                "notes": payee.notes or "",
+                "is_active": payee.is_active,
+            }
+
+        return {
+            "payee": payee_data,
+            "is_edit": payee is not None,
+            "payee_types": [{"value": t.value, "label": t.value.replace("_", " ").title()} for t in PayeeType],
+            "accounts": account_options,
+        }
+
+    # =========================================================================
+    # Transaction Rule Context Methods
+    # =========================================================================
+
+    @staticmethod
+    def list_rules_context(
+        db: Session,
+        organization_id: str,
+        rule_type: Optional[str] = None,
+        page: int = 1,
+        per_page: int = 25,
+    ) -> dict:
+        """Context for transaction rules list page."""
+        from app.models.ifrs.banking.transaction_rule import TransactionRule, RuleType, RuleAction
+
+        org_id = coerce_uuid(organization_id)
+
+        query = db.query(TransactionRule).filter(
+            TransactionRule.organization_id == org_id,
+        )
+
+        if rule_type:
+            try:
+                rt = RuleType(rule_type)
+                query = query.filter(TransactionRule.rule_type == rt)
+            except ValueError:
+                pass
+
+        total = query.count()
+        rules = (
+            query.order_by(TransactionRule.priority.desc(), TransactionRule.rule_name)
+            .offset((page - 1) * per_page)
+            .limit(per_page)
+            .all()
+        )
+
+        # Get GL accounts for display
+        account_map = {}
+        account_ids = [r.target_account_id for r in rules if r.target_account_id]
+        if account_ids:
+            accounts = db.query(Account).filter(Account.account_id.in_(account_ids)).all()
+            account_map = {a.account_id: f"{a.account_code} - {a.account_name}" for a in accounts}
+
+        rule_list = []
+        for r in rules:
+            rule_list.append({
+                "rule_id": str(r.rule_id),
+                "rule_name": r.rule_name,
+                "description": r.description or "",
+                "rule_type": r.rule_type.value if r.rule_type else "",
+                "action": r.action.value if r.action else "",
+                "target_account": account_map.get(r.target_account_id, ""),
+                "priority": r.priority,
+                "auto_apply": r.auto_apply,
+                "is_active": r.is_active,
+                "match_count": r.match_count,
+                "success_rate": f"{r.success_rate:.0f}%" if r.success_count + r.reject_count > 0 else "N/A",
+            })
+
+        return {
+            "rules": rule_list,
+            "rule_types": [{"value": t.value, "label": t.value.replace("_", " ").title()} for t in RuleType],
+            "selected_type": rule_type or "",
+            "pagination": {
+                "page": page,
+                "per_page": per_page,
+                "total": total,
+                "pages": (total + per_page - 1) // per_page,
+            },
+        }
+
+    @staticmethod
+    def rule_form_context(
+        db: Session,
+        organization_id: str,
+        rule_id: Optional[str] = None,
+    ) -> dict:
+        """Context for transaction rule create/edit form."""
+        from app.models.ifrs.banking.transaction_rule import TransactionRule, RuleType, RuleAction
+        from app.models.ifrs.banking.payee import Payee
+
+        org_id = coerce_uuid(organization_id)
+
+        # Get GL accounts for dropdown
+        accounts = (
+            db.query(Account)
+            .filter(Account.organization_id == org_id, Account.is_active == True)
+            .order_by(Account.account_code)
+            .all()
+        )
+
+        account_options = [
+            {"value": str(a.account_id), "label": f"{a.account_code} - {a.account_name}"}
+            for a in accounts
+        ]
+
+        # Get bank accounts for dropdown
+        bank_accounts = (
+            db.query(BankAccount)
+            .filter(BankAccount.organization_id == org_id, BankAccount.status == BankAccountStatus.active)
+            .order_by(BankAccount.account_name)
+            .all()
+        )
+
+        bank_account_options = [
+            {"value": str(ba.bank_account_id), "label": f"{ba.bank_name} - {ba.account_name}"}
+            for ba in bank_accounts
+        ]
+
+        # Get payees for dropdown
+        payees = (
+            db.query(Payee)
+            .filter(Payee.organization_id == org_id, Payee.is_active == True)
+            .order_by(Payee.payee_name)
+            .all()
+        )
+
+        payee_options = [
+            {"value": str(p.payee_id), "label": p.payee_name}
+            for p in payees
+        ]
+
+        rule = None
+        if rule_id:
+            rule = db.get(TransactionRule, coerce_uuid(rule_id))
+            if rule and rule.organization_id != org_id:
+                rule = None
+
+        rule_data = None
+        if rule:
+            rule_data = {
+                "rule_id": str(rule.rule_id),
+                "rule_name": rule.rule_name,
+                "description": rule.description or "",
+                "rule_type": rule.rule_type.value if rule.rule_type else "",
+                "conditions": rule.conditions or {},
+                "action": rule.action.value if rule.action else "",
+                "target_account_id": str(rule.target_account_id) if rule.target_account_id else "",
+                "bank_account_id": str(rule.bank_account_id) if rule.bank_account_id else "",
+                "payee_id": str(rule.payee_id) if rule.payee_id else "",
+                "priority": rule.priority,
+                "auto_apply": rule.auto_apply,
+                "min_confidence": rule.min_confidence,
+                "applies_to_credits": rule.applies_to_credits,
+                "applies_to_debits": rule.applies_to_debits,
+                "is_active": rule.is_active,
+            }
+
+        return {
+            "rule": rule_data,
+            "is_edit": rule is not None,
+            "rule_types": [{"value": t.value, "label": t.value.replace("_", " ").title()} for t in RuleType],
+            "actions": [{"value": a.value, "label": a.value.replace("_", " ").title()} for a in RuleAction],
+            "accounts": account_options,
+            "bank_accounts": bank_account_options,
+            "payees": payee_options,
+        }
 
 
 banking_web_service = BankingWebService()

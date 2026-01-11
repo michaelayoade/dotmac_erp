@@ -63,7 +63,7 @@ class BankAccount(Base):
             "organization_id", "account_number", "bank_code",
             name="uq_bank_account_number"
         ),
-        {"schema": "ifrs"},
+        {"schema": "banking"},
     )
 
     # Primary key
@@ -90,7 +90,7 @@ class BankAccount(Base):
     account_number: Mapped[str] = mapped_column(String(50), nullable=False)
     account_name: Mapped[str] = mapped_column(String(200), nullable=False)
     account_type: Mapped[BankAccountType] = mapped_column(
-        Enum(BankAccountType, name="bank_account_type", schema="ifrs"),
+        Enum(BankAccountType, name="bank_account_type", schema="banking"),
         nullable=False,
         default=BankAccountType.checking,
     )
@@ -108,7 +108,7 @@ class BankAccount(Base):
 
     # Status
     status: Mapped[BankAccountStatus] = mapped_column(
-        Enum(BankAccountStatus, name="bank_account_status", schema="ifrs"),
+        Enum(BankAccountStatus, name="bank_account_status", schema="banking"),
         nullable=False,
         default=BankAccountStatus.active,
     )

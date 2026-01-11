@@ -73,10 +73,11 @@ def create_supplier(
 @router.get("/suppliers/{supplier_id}", response_model=SupplierRead)
 def get_supplier(
     supplier_id: UUID,
+    organization_id: UUID = Query(...),
     db: Session = Depends(get_db),
 ):
     """Get a supplier by ID."""
-    return supplier_service.get(db, str(supplier_id))
+    return supplier_service.get(db, organization_id, str(supplier_id))
 
 
 @router.get("/suppliers", response_model=ListResponse[SupplierRead])

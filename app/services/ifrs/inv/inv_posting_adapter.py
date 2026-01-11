@@ -78,7 +78,11 @@ class INVPostingAdapter:
         if not transaction or transaction.organization_id != org_id:
             return INVPostingResult(success=False, message="Transaction not found")
 
-        if transaction.transaction_type != TransactionType.RECEIPT:
+        if transaction.transaction_type not in [
+            TransactionType.RECEIPT,
+            TransactionType.RETURN,
+            TransactionType.ASSEMBLY,
+        ]:
             return INVPostingResult(
                 success=False,
                 message="Transaction is not a receipt",
@@ -267,7 +271,11 @@ class INVPostingAdapter:
         if not transaction or transaction.organization_id != org_id:
             return INVPostingResult(success=False, message="Transaction not found")
 
-        if transaction.transaction_type not in [TransactionType.ISSUE, TransactionType.SALE]:
+        if transaction.transaction_type not in [
+            TransactionType.ISSUE,
+            TransactionType.SALE,
+            TransactionType.DISASSEMBLY,
+        ]:
             return INVPostingResult(
                 success=False,
                 message="Transaction is not an issue or sale",
@@ -546,6 +554,72 @@ class INVPostingAdapter:
                 success=False,
                 journal_entry_id=journal.journal_entry_id,
                 message=f"Posting error: {str(e)}",
+            )
+
+
+    @staticmethod
+    def post_transaction(
+        db: Session,
+        organization_id: UUID,
+        transaction_id: UUID,
+        posting_date: date,
+        posted_by_user_id: UUID,
+        idempotency_key: Optional[str] = None,
+    ) -> INVPostingResult:
+        """
+        Post any inventory transaction to the general ledger.
+
+        Routes to the appropriate posting method based on transaction type.
+
+        Args:
+            db: Database session
+            organization_id: Organization scope
+            transaction_id: Transaction to post
+            posting_date: Date for the GL posting
+            posted_by_user_id: User posting
+            idempotency_key: Optional idempotency key
+
+        Returns:
+            INVPostingResult with outcome
+        """
+        org_id = coerce_uuid(organization_id)
+        txn_id = coerce_uuid(transaction_id)
+
+        transaction = db.get(InventoryTransaction, txn_id)
+        if not transaction or transaction.organization_id != org_id:
+            return INVPostingResult(success=False, message="Transaction not found")
+
+        if transaction.transaction_type in [
+            TransactionType.RECEIPT,
+            TransactionType.RETURN,
+            TransactionType.ASSEMBLY,
+        ]:
+            return INVPostingAdapter.post_receipt(
+                db, organization_id, transaction_id, posting_date,
+                posted_by_user_id, idempotency_key=idempotency_key
+            )
+        elif transaction.transaction_type in [
+            TransactionType.ISSUE,
+            TransactionType.SALE,
+            TransactionType.DISASSEMBLY,
+        ]:
+            return INVPostingAdapter.post_issue(
+                db, organization_id, transaction_id, posting_date,
+                posted_by_user_id, idempotency_key=idempotency_key
+            )
+        elif transaction.transaction_type in [
+            TransactionType.ADJUSTMENT,
+            TransactionType.COUNT_ADJUSTMENT,
+            TransactionType.SCRAP,
+        ]:
+            return INVPostingAdapter.post_adjustment(
+                db, organization_id, transaction_id, posting_date,
+                posted_by_user_id, idempotency_key=idempotency_key
+            )
+        else:
+            return INVPostingResult(
+                success=False,
+                message=f"Posting not supported for transaction type: {transaction.transaction_type}",
             )
 
 

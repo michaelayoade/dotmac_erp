@@ -25,6 +25,7 @@ class PaymentMethod(str, enum.Enum):
 
 class PaymentStatus(str, enum.Enum):
     PENDING = "PENDING"
+    APPROVED = "APPROVED"
     CLEARED = "CLEARED"
     BOUNCED = "BOUNCED"
     REVERSED = "REVERSED"

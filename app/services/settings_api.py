@@ -36,7 +36,7 @@ def _normalize_spec_setting(
         )
     if spec.value_type == SettingValueType.integer:
         try:
-            parsed = int(coerced)
+            parsed = int(str(coerced))
         except (TypeError, ValueError) as exc:
             raise HTTPException(status_code=400, detail="Value must be an integer") from exc
         if spec.min_value is not None and parsed < spec.min_value:

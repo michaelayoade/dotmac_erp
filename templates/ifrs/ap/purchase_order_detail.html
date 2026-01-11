@@ -1,0 +1,414 @@
+{% extends "ifrs/base_ifrs.html" %}
+
+{% block page_title %}{{ order.po_number if order else "PO Not Found" }}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <a href="/ap/purchase-orders" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Purchase Orders</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="font-medium text-slate-900 dark:text-white">{{ order.po_number if order else "Not Found" }}</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+{% if order %}
+<div class="space-y-8 pb-12">
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 stagger-in" style="animation-delay: 0ms;">
+        <div class="flex items-start gap-4">
+            <div class="flex h-14 w-14 items-center justify-center rounded-xl bg-indigo-100 dark:bg-indigo-900/30">
+                <svg class="h-7 w-7 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
+                </svg>
+            </div>
+            <div>
+                <div class="flex items-center gap-3">
+                    <h1 class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ order.po_number }}</h1>
+                    {% if order.status == 'DRAFT' %}
+                    <span class="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-400">Draft</span>
+                    {% elif order.status == 'PENDING_APPROVAL' %}
+                    <span class="inline-flex items-center rounded-full bg-yellow-100 px-2.5 py-0.5 text-xs font-medium text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">Pending Approval</span>
+                    {% elif order.status == 'APPROVED' %}
+                    <span class="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">Approved</span>
+                    {% elif order.status == 'PARTIALLY_RECEIVED' %}
+                    <span class="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">Partially Received</span>
+                    {% elif order.status == 'RECEIVED' %}
+                    <span class="inline-flex items-center rounded-full bg-primary-100 px-2.5 py-0.5 text-xs font-medium text-primary-700 dark:bg-primary-900/30 dark:text-primary-400">Received</span>
+                    {% elif order.status == 'CLOSED' %}
+                    <span class="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-400">Closed</span>
+                    {% elif order.status == 'CANCELLED' %}
+                    <span class="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400">Cancelled</span>
+                    {% endif %}
+                </div>
+                <p class="mt-1 text-lg text-slate-500 dark:text-slate-400">{{ order.supplier_name }}</p>
+            </div>
+        </div>
+        <div class="flex flex-wrap items-center gap-3">
+            {% if order.status == 'DRAFT' %}
+            <a href="/ap/purchase-orders/{{ order.po_id }}/edit" class="btn btn-ghost">
+                <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                </svg>
+                Edit
+            </a>
+            <form action="/ap/purchase-orders/{{ order.po_id }}/submit" method="POST" class="inline">
+                <button type="submit" class="btn btn-primary">
+                    <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                    </svg>
+                    Submit for Approval
+                </button>
+            </form>
+            {% elif order.status == 'PENDING_APPROVAL' %}
+            <form action="/ap/purchase-orders/{{ order.po_id }}/approve" method="POST" class="inline">
+                <button type="submit" class="btn btn-primary">
+                    <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                    </svg>
+                    Approve
+                </button>
+            </form>
+            <form action="/ap/purchase-orders/{{ order.po_id }}/cancel" method="POST" class="inline">
+                <button type="submit" class="btn btn-ghost text-red-600 hover:text-red-700">
+                    <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                    Cancel
+                </button>
+            </form>
+            {% elif order.status in ['APPROVED', 'PARTIALLY_RECEIVED'] %}
+            <a href="/ap/goods-receipts/new?po_id={{ order.po_id }}" class="btn btn-primary">
+                <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+                </svg>
+                Receive Goods
+            </a>
+            {% endif %}
+            <a href="/ap/purchase-orders" class="btn btn-ghost">
+                <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                </svg>
+                Back to List
+            </a>
+        </div>
+    </div>
+
+    {% if error %}
+    <div class="rounded-xl bg-red-50 border border-red-200 p-4 dark:bg-red-900/20 dark:border-red-800 stagger-in" style="animation-delay: 25ms;">
+        <div class="flex items-start gap-3">
+            <svg class="h-5 w-5 text-red-600 dark:text-red-400 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <p class="text-sm text-red-700 dark:text-red-300">{{ error }}</p>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Quick Stats -->
+    <div class="grid grid-cols-2 gap-4 sm:grid-cols-4 stagger-in" style="animation-delay: 50ms;">
+        <div class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800/50">
+            <p class="text-sm font-medium text-slate-500 dark:text-slate-400">PO Date</p>
+            <p class="mt-1 text-lg font-semibold text-slate-900 dark:text-white">{{ order.po_date }}</p>
+        </div>
+        <div class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800/50">
+            <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Expected Delivery</p>
+            <p class="mt-1 text-lg font-semibold text-slate-900 dark:text-white">{{ order.expected_delivery_date or '-' }}</p>
+        </div>
+        <div class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800/50">
+            <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Total Amount</p>
+            <p class="mt-1 text-lg font-semibold text-slate-900 dark:text-white">{{ order.total_amount }}</p>
+        </div>
+        <div class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800/50">
+            <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Amount Received</p>
+            <p class="mt-1 text-lg font-semibold text-green-600 dark:text-green-400">{{ order.amount_received }}</p>
+        </div>
+    </div>
+
+    <div class="grid gap-8 lg:grid-cols-3">
+        <!-- Order Details -->
+        <div class="lg:col-span-2 space-y-6">
+            <!-- Order Lines -->
+            <div class="card stagger-in" style="animation-delay: 100ms;">
+                <div class="card-header border-b border-slate-100 dark:border-slate-700">
+                    <div class="flex items-center gap-4">
+                        <div class="card-icon bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400">
+                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display">Order Lines</h2>
+                            <p class="text-sm text-slate-500 dark:text-slate-400">{{ lines | length }} line(s)</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead>
+                            <tr class="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+                                <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">#</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Description</th>
+                                <th class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Qty Ordered</th>
+                                <th class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Qty Received</th>
+                                <th class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Unit Price</th>
+                                <th class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                            {% for line in lines %}
+                            <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                                <td class="px-6 py-4 text-sm text-slate-500 dark:text-slate-400">{{ line.line_number }}</td>
+                                <td class="px-6 py-4">
+                                    <p class="text-sm font-medium text-slate-900 dark:text-white">{{ line.description }}</p>
+                                </td>
+                                <td class="px-6 py-4 text-right text-sm text-slate-900 dark:text-white">{{ line.quantity_ordered }}</td>
+                                <td class="px-6 py-4 text-right text-sm {{ 'text-green-600 dark:text-green-400' if line.quantity_received == line.quantity_ordered else 'text-slate-600 dark:text-slate-400' }}">{{ line.quantity_received }}</td>
+                                <td class="px-6 py-4 text-right text-sm text-slate-900 dark:text-white">{{ line.unit_price }}</td>
+                                <td class="px-6 py-4 text-right text-sm font-medium text-slate-900 dark:text-white">{{ line.line_amount }}</td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="6" class="px-6 py-8 text-center text-sm text-slate-500 dark:text-slate-400">
+                                    No lines on this purchase order
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        {% if lines %}
+                        <tfoot class="border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+                            <tr>
+                                <td colspan="5" class="px-6 py-3 text-right text-sm font-medium text-slate-500 dark:text-slate-400">Subtotal</td>
+                                <td class="px-6 py-3 text-right text-sm font-medium text-slate-900 dark:text-white">{{ order.subtotal }}</td>
+                            </tr>
+                            <tr>
+                                <td colspan="5" class="px-6 py-3 text-right text-sm font-medium text-slate-500 dark:text-slate-400">Tax</td>
+                                <td class="px-6 py-3 text-right text-sm font-medium text-slate-900 dark:text-white">{{ order.tax_amount }}</td>
+                            </tr>
+                            <tr class="border-t border-slate-200 dark:border-slate-700">
+                                <td colspan="5" class="px-6 py-3 text-right text-sm font-bold text-slate-900 dark:text-white">Total</td>
+                                <td class="px-6 py-3 text-right text-sm font-bold text-slate-900 dark:text-white">{{ order.total_amount }}</td>
+                            </tr>
+                        </tfoot>
+                        {% endif %}
+                    </table>
+                </div>
+            </div>
+
+            <!-- Terms & Conditions -->
+            {% if order.terms_and_conditions %}
+            <div class="card stagger-in" style="animation-delay: 150ms;">
+                <div class="card-header border-b border-slate-100 dark:border-slate-700">
+                    <div class="flex items-center gap-4">
+                        <div class="card-icon bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400">
+                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display">Terms & Conditions</h2>
+                        </div>
+                    </div>
+                </div>
+                <div class="p-6">
+                    <p class="text-sm text-slate-600 dark:text-slate-400 whitespace-pre-wrap">{{ order.terms_and_conditions }}</p>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Goods Receipts -->
+            <div class="card stagger-in" style="animation-delay: 175ms;">
+                <div class="card-header border-b border-slate-100 dark:border-slate-700">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-4">
+                            <div class="card-icon bg-teal-50 text-teal-600 dark:bg-teal-900/30 dark:text-teal-400">
+                                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display">Goods Receipts</h2>
+                                <p class="text-sm text-slate-500 dark:text-slate-400">{{ goods_receipts | length }} receipt(s)</p>
+                            </div>
+                        </div>
+                        {% if order.status in ['APPROVED', 'PARTIALLY_RECEIVED'] %}
+                        <a href="/ap/goods-receipts/new?po_id={{ order.po_id }}" class="text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">
+                            + Add Receipt
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="divide-y divide-slate-100 dark:divide-slate-700">
+                    {% for receipt in goods_receipts %}
+                    <a href="/ap/goods-receipts/{{ receipt.receipt_id }}" class="flex items-center justify-between p-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                        <div class="flex items-center gap-3">
+                            <div class="flex h-9 w-9 items-center justify-center rounded-lg
+                                {% if receipt.status == 'ACCEPTED' %}bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400
+                                {% elif receipt.status == 'INSPECTING' %}bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-400
+                                {% elif receipt.status == 'REJECTED' %}bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400
+                                {% else %}bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400{% endif %}">
+                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <p class="font-mono text-sm font-medium text-slate-900 dark:text-white">{{ receipt.receipt_number }}</p>
+                                <p class="text-xs text-slate-500 dark:text-slate-400">{{ receipt.receipt_date }} &middot; {{ receipt.line_count }} line(s)</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            {% if receipt.status == 'RECEIVED' %}
+                            <span class="inline-flex rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">Received</span>
+                            {% elif receipt.status == 'INSPECTING' %}
+                            <span class="inline-flex rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">Inspecting</span>
+                            {% elif receipt.status == 'ACCEPTED' %}
+                            <span class="inline-flex rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">Accepted</span>
+                            {% elif receipt.status == 'REJECTED' %}
+                            <span class="inline-flex rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400">Rejected</span>
+                            {% elif receipt.status == 'PARTIAL' %}
+                            <span class="inline-flex rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700 dark:bg-orange-900/30 dark:text-orange-400">Partial</span>
+                            {% endif %}
+                            <svg class="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                            </svg>
+                        </div>
+                    </a>
+                    {% else %}
+                    <div class="p-6 text-center">
+                        <svg class="mx-auto h-8 w-8 text-slate-300 dark:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+                        </svg>
+                        <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">No goods receipts yet</p>
+                        {% if order.status in ['APPROVED', 'PARTIALLY_RECEIVED'] %}
+                        <a href="/ap/goods-receipts/new?po_id={{ order.po_id }}" class="mt-2 inline-flex items-center text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">
+                            <svg class="mr-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                            </svg>
+                            Record goods receipt
+                        </a>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Attachments -->
+            <div class="stagger-in" style="animation-delay: 200ms;">
+                {% set upload_url = "/ap/purchase-orders/" ~ order.po_id ~ "/attachments" %}
+                {% set delete_base_url = "/ap/attachments" %}
+                {% include "ifrs/partials/_attachments.html" %}
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="space-y-6">
+            <!-- Supplier Info -->
+            <div class="card stagger-in" style="animation-delay: 200ms;">
+                <div class="card-header border-b border-slate-100 dark:border-slate-700">
+                    <div class="flex items-center gap-4">
+                        <div class="card-icon bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
+                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display">Supplier</h2>
+                        </div>
+                    </div>
+                </div>
+                <div class="p-6">
+                    {% if supplier %}
+                    <dl class="space-y-4">
+                        <div>
+                            <dt class="text-sm font-medium text-slate-500 dark:text-slate-400">Name</dt>
+                            <dd class="mt-1 text-sm text-slate-900 dark:text-white">
+                                <a href="/ap/suppliers/{{ supplier.supplier_id }}" class="text-primary-600 hover:text-primary-700 dark:text-primary-400">
+                                    {{ supplier.supplier_name }}
+                                </a>
+                            </dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm font-medium text-slate-500 dark:text-slate-400">Code</dt>
+                            <dd class="mt-1 font-mono text-sm text-slate-900 dark:text-white">{{ supplier.supplier_code }}</dd>
+                        </div>
+                        {% if supplier.email %}
+                        <div>
+                            <dt class="text-sm font-medium text-slate-500 dark:text-slate-400">Email</dt>
+                            <dd class="mt-1 text-sm text-slate-900 dark:text-white">{{ supplier.email }}</dd>
+                        </div>
+                        {% endif %}
+                        {% if supplier.phone %}
+                        <div>
+                            <dt class="text-sm font-medium text-slate-500 dark:text-slate-400">Phone</dt>
+                            <dd class="mt-1 text-sm text-slate-900 dark:text-white">{{ supplier.phone }}</dd>
+                        </div>
+                        {% endif %}
+                    </dl>
+                    {% else %}
+                    <p class="text-sm text-slate-500 dark:text-slate-400">Supplier information not available</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Order Info -->
+            <div class="card stagger-in" style="animation-delay: 250ms;">
+                <div class="card-header border-b border-slate-100 dark:border-slate-700">
+                    <div class="flex items-center gap-4">
+                        <div class="card-icon bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
+                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display">Order Info</h2>
+                        </div>
+                    </div>
+                </div>
+                <div class="p-6">
+                    <dl class="space-y-4">
+                        <div>
+                            <dt class="text-sm font-medium text-slate-500 dark:text-slate-400">Currency</dt>
+                            <dd class="mt-1 text-sm text-slate-900 dark:text-white">{{ order.currency_code }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm font-medium text-slate-500 dark:text-slate-400">Amount Invoiced</dt>
+                            <dd class="mt-1 text-sm text-slate-900 dark:text-white">{{ order.amount_invoiced }}</dd>
+                        </div>
+                        {% if order.approved_at %}
+                        <div>
+                            <dt class="text-sm font-medium text-slate-500 dark:text-slate-400">Approved At</dt>
+                            <dd class="mt-1 text-sm text-slate-900 dark:text-white">{{ order.approved_at.strftime('%Y-%m-%d %H:%M') }}</dd>
+                        </div>
+                        {% endif %}
+                        <div>
+                            <dt class="text-sm font-medium text-slate-500 dark:text-slate-400">Created At</dt>
+                            <dd class="mt-1 text-sm text-slate-900 dark:text-white">{{ order.created_at.strftime('%Y-%m-%d %H:%M') if order.created_at else '-' }}</dd>
+                        </div>
+                    </dl>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% else %}
+<!-- Order Not Found -->
+<div class="flex flex-col items-center justify-center py-16">
+    <div class="flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800">
+        <svg class="h-8 w-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+    </div>
+    <h2 class="mt-4 text-lg font-semibold text-slate-900 dark:text-white">Purchase Order Not Found</h2>
+    <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">The purchase order you're looking for doesn't exist or has been removed.</p>
+    <a href="/ap/purchase-orders" class="mt-6 btn btn-primary">
+        Back to Purchase Orders
+    </a>
+</div>
+{% endif %}
+{% endblock %}

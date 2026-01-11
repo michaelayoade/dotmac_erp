@@ -10,6 +10,8 @@ from app.models.ifrs.inv.inventory_transaction import InventoryTransaction, Tran
 from app.models.ifrs.inv.inventory_valuation import InventoryValuation
 from app.models.ifrs.inv.inventory_count import InventoryCount, CountStatus
 from app.models.ifrs.inv.inventory_count_line import InventoryCountLine
+from app.models.ifrs.inv.price_list import PriceList, PriceListItem, PriceListType
+from app.models.ifrs.inv.bom import BillOfMaterials, BOMComponent, BOMType
 
 __all__ = [
     "ItemCategory",
@@ -25,4 +27,10 @@ __all__ = [
     "InventoryCount",
     "CountStatus",
     "InventoryCountLine",
+    "PriceList",
+    "PriceListItem",
+    "PriceListType",
+    "BillOfMaterials",
+    "BOMComponent",
+    "BOMType",
 ]

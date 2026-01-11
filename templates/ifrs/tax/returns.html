@@ -1,0 +1,58 @@
+{% extends "ifrs/base_ifrs.html" %}
+
+{% block page_title %}Tax Returns{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400">
+    <a href="/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white">Tax Returns</span>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<a href="/tax/returns/new" data-testid="tax-returns-new"
+   class="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-primary-600 to-primary-500 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-primary-500/25 btn-hover">
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+    </svg>
+    New Return
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50">
+    <div class="overflow-x-auto">
+        <table class="w-full" data-testid="tax-returns-table">
+            <thead>
+                <tr class="border-b border-slate-200 dark:border-slate-700">
+                    <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Return</th>
+                    <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Type</th>
+                    <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Period</th>
+                    <th class="px-6 py-4 text-right text-xs font-medium uppercase tracking-wider text-slate-500">Final Amount</th>
+                    <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Status</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                {% for tax_return in returns %}
+                <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                    <td class="px-6 py-4">
+                        <a href="/tax/returns/{{ tax_return.return_id }}" class="text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">
+                            {{ tax_return.return_reference | default(tax_return.return_id) }}
+                        </a>
+                    </td>
+                    <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{{ tax_return.return_type }}</td>
+                    <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{{ tax_return.tax_period_id }}</td>
+                    <td class="px-6 py-4 text-right text-sm text-slate-600 dark:text-slate-400">{{ tax_return.final_amount }}</td>
+                    <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{{ tax_return.status }}</td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="5" class="px-6 py-12 text-center text-sm text-slate-500">No tax returns found</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

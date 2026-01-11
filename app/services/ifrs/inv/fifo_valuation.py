@@ -123,12 +123,15 @@ class FIFOValuationService(ListResponseMixin):
         lot_number = f"FIFO-{layer_date.strftime('%Y%m%d')}-{uuid_lib.uuid4().hex[:8]}"
 
         lot = InventoryLot(
+            organization_id=org_id,
             item_id=item_id,
+            warehouse_id=coerce_uuid(warehouse_id),
             lot_number=lot_number,
             received_date=layer_date,
             unit_cost=unit_cost,
             initial_quantity=quantity,
             quantity_on_hand=quantity,
+            quantity_allocated=Decimal("0"),
             quantity_available=quantity,
         )
 
@@ -136,6 +139,7 @@ class FIFOValuationService(ListResponseMixin):
 
         # Update item average cost
         total_on_hand = db.query(func.sum(InventoryLot.quantity_on_hand)).filter(
+            InventoryLot.organization_id == org_id,
             InventoryLot.item_id == item_id,
             InventoryLot.quantity_on_hand > 0,
         ).scalar() or Decimal("0")
@@ -143,6 +147,7 @@ class FIFOValuationService(ListResponseMixin):
         total_value = db.query(
             func.sum(InventoryLot.quantity_on_hand * InventoryLot.unit_cost)
         ).filter(
+            InventoryLot.organization_id == org_id,
             InventoryLot.item_id == item_id,
             InventoryLot.quantity_on_hand > 0,
         ).scalar() or Decimal("0")
@@ -188,6 +193,7 @@ class FIFOValuationService(ListResponseMixin):
 
         # Get layers ordered by received date (oldest first)
         layers = db.query(InventoryLot).filter(
+            InventoryLot.organization_id == org_id,
             InventoryLot.item_id == item_id,
             InventoryLot.quantity_on_hand > 0,
             InventoryLot.is_active == True,
@@ -254,7 +260,9 @@ class FIFOValuationService(ListResponseMixin):
         """
         item_id = coerce_uuid(item_id)
 
+        org_id = coerce_uuid(organization_id)
         layers_data = db.query(InventoryLot).filter(
+            InventoryLot.organization_id == org_id,
             InventoryLot.item_id == item_id,
             InventoryLot.quantity_on_hand > 0,
             InventoryLot.is_active == True,

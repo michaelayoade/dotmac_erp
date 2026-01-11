@@ -6,6 +6,8 @@ from email.mime.text import MIMEText
 
 from sqlalchemy.orm import Session
 
+from app.models.domain_settings import SettingDomain
+
 logger = logging.getLogger(__name__)
 
 
@@ -33,41 +35,78 @@ def _env_bool(name: str, default: bool) -> bool:
     return raw.lower() in {"1", "true", "yes", "on"}
 
 
-def _get_smtp_config() -> dict:
+def _get_db_setting(db: Session | None, key: str) -> object | None:
+    """Get a setting value from the database."""
+    if db is None:
+        return None
+    try:
+        from app.services.settings_spec import resolve_value
+        return resolve_value(db, SettingDomain.email, key)
+    except Exception:
+        return None
+
+
+def _get_smtp_config(db: Session | None = None) -> dict:
+    """Get SMTP config from database first, then fall back to environment variables."""
+    # Try DB settings first, then env vars, then defaults
+    host = _get_db_setting(db, "smtp_host") or _env_value("SMTP_HOST") or "localhost"
+    port = _get_db_setting(db, "smtp_port") or _env_int("SMTP_PORT", 587)
+    username = _get_db_setting(db, "smtp_username") or _env_value("SMTP_USERNAME")
+    password = _get_db_setting(db, "smtp_password") or _env_value("SMTP_PASSWORD")
+
+    # Boolean settings
+    use_tls_db = _get_db_setting(db, "smtp_use_tls")
+    use_tls = use_tls_db if use_tls_db is not None else _env_bool("SMTP_USE_TLS", True)
+
+    use_ssl_db = _get_db_setting(db, "smtp_use_ssl")
+    use_ssl = use_ssl_db if use_ssl_db is not None else _env_bool("SMTP_USE_SSL", False)
+
+    from_email = _get_db_setting(db, "smtp_from_email") or _env_value("SMTP_FROM_EMAIL") or "noreply@example.com"
+    from_name = _get_db_setting(db, "smtp_from_name") or _env_value("SMTP_FROM_NAME") or "IFRS Ledger"
+    reply_to = _get_db_setting(db, "email_reply_to") or _env_value("EMAIL_REPLY_TO")
+
     return {
-        "host": _env_value("SMTP_HOST") or "localhost",
-        "port": _env_int("SMTP_PORT", 587),
-        "username": _env_value("SMTP_USERNAME"),
-        "password": _env_value("SMTP_PASSWORD"),
-        "use_tls": _env_bool("SMTP_USE_TLS", True),
-        "use_ssl": _env_bool("SMTP_USE_SSL", False),
-        "from_email": _env_value("SMTP_FROM_EMAIL") or "noreply@example.com",
-        "from_name": _env_value("SMTP_FROM_NAME") or "Starter Template",
+        "host": host,
+        "port": int(port) if port else 587,
+        "username": username,
+        "password": password,
+        "use_tls": bool(use_tls),
+        "use_ssl": bool(use_ssl),
+        "from_email": from_email,
+        "from_name": from_name,
+        "reply_to": reply_to,
     }
 
 
 def send_email(
-    _db: Session | None,
+    db: Session | None,
     to_email: str,
     subject: str,
     body_html: str,
     body_text: str | None = None,
 ) -> bool:
-    config = _get_smtp_config()
+    """Send an email using SMTP settings from database or environment."""
+    config = _get_smtp_config(db)
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
     msg["From"] = f"{config['from_name']} <{config['from_email']}>"
     msg["To"] = to_email
 
+    # Add Reply-To header if configured
+    if config.get("reply_to"):
+        msg["Reply-To"] = config["reply_to"]
+
     if body_text:
         msg.attach(MIMEText(body_text, "plain"))
     msg.attach(MIMEText(body_html, "html"))
 
+    server: smtplib.SMTP | smtplib.SMTP_SSL | None = None
+    timeout_seconds = 10
     try:
         if config["use_ssl"]:
-            server = smtplib.SMTP_SSL(config["host"], config["port"])
+            server = smtplib.SMTP_SSL(config["host"], config["port"], timeout=timeout_seconds)
         else:
-            server = smtplib.SMTP(config["host"], config["port"])
+            server = smtplib.SMTP(config["host"], config["port"], timeout=timeout_seconds)
 
         if config["use_tls"] and not config["use_ssl"]:
             server.starttls()
@@ -76,13 +115,21 @@ def send_email(
             server.login(config["username"], config["password"])
 
         server.sendmail(config["from_email"], to_email, msg.as_string())
-        server.quit()
 
         logger.info("Email sent to %s", to_email)
         return True
     except Exception as exc:
         logger.error("Failed to send email to %s: %s", to_email, exc)
         return False
+    finally:
+        if server:
+            try:
+                server.quit()
+            except Exception:
+                try:
+                    server.close()
+                except Exception:
+                    pass
 
 
 def send_password_reset_email(

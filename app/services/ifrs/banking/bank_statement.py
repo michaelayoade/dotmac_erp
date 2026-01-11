@@ -45,18 +45,78 @@ class StatementLineInput:
 
 
 @dataclass
+class DuplicateLineInfo:
+    """Information about a duplicate line."""
+    line_number: int
+    transaction_date: date
+    amount: Decimal
+    description: Optional[str]
+    original_statement_id: UUID
+    original_line_id: UUID
+
+
+@dataclass
 class StatementImportResult:
     """Result of a statement import operation."""
 
     statement: BankStatement
     lines_imported: int
     lines_skipped: int
+    duplicates_found: int = 0
     errors: List[str] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
+    duplicate_lines: List[DuplicateLineInfo] = field(default_factory=list)
 
 
 class BankStatementService:
     """Service for managing bank statements."""
+
+    def _check_duplicate_line(
+        self,
+        db: Session,
+        bank_account_id: UUID,
+        line: StatementLineInput,
+    ) -> Optional[BankStatementLine]:
+        """
+        Check if a transaction line is a potential duplicate.
+
+        Matches on: same account, date, amount, and transaction type.
+        """
+        # Find existing lines with same date/amount/type
+        existing = (
+            db.query(BankStatementLine)
+            .join(BankStatement)
+            .filter(
+                BankStatement.bank_account_id == bank_account_id,
+                BankStatementLine.transaction_date == line.transaction_date,
+                BankStatementLine.amount == line.amount,
+                BankStatementLine.transaction_type == line.transaction_type,
+            )
+            .first()
+        )
+
+        if existing:
+            # Additional check: if bank_reference matches, it's definitely a duplicate
+            if line.bank_reference and existing.bank_reference:
+                if line.bank_reference == existing.bank_reference:
+                    return existing
+
+            # If transaction_id matches, it's definitely a duplicate
+            if line.transaction_id and existing.transaction_id:
+                if line.transaction_id == existing.transaction_id:
+                    return existing
+
+            # Check description similarity
+            if line.description and existing.description:
+                # Simple word overlap check
+                words1 = set(line.description.upper().split())
+                words2 = set(existing.description.upper().split())
+                if words1 and words2:
+                    overlap = len(words1 & words2) / len(words1 | words2)
+                    if overlap > 0.7:
+                        return existing
+
+        return None
 
     def import_statement(
         self,
@@ -73,6 +133,8 @@ class BankStatementService:
         import_source: Optional[str] = None,
         import_filename: Optional[str] = None,
         imported_by: Optional[UUID] = None,
+        check_duplicates: bool = True,
+        skip_duplicates: bool = True,
     ) -> StatementImportResult:
         """Import a bank statement with lines."""
         # Validate bank account
@@ -140,6 +202,28 @@ class BankStatementService:
 
         for line_input in lines:
             try:
+                # Check for duplicates
+                if check_duplicates:
+                    duplicate = self._check_duplicate_line(db, bank_account_id, line_input)
+                    if duplicate:
+                        result.duplicates_found += 1
+                        result.duplicate_lines.append(
+                            DuplicateLineInfo(
+                                line_number=line_input.line_number,
+                                transaction_date=line_input.transaction_date,
+                                amount=line_input.amount,
+                                description=line_input.description,
+                                original_statement_id=duplicate.statement_id,
+                                original_line_id=duplicate.line_id,
+                            )
+                        )
+                        if skip_duplicates:
+                            result.lines_skipped += 1
+                            result.warnings.append(
+                                f"Line {line_input.line_number}: Skipped as duplicate of existing transaction"
+                            )
+                            continue
+
                 line = BankStatementLine(
                     statement_id=statement.statement_id,
                     line_number=line_input.line_number,
@@ -226,6 +310,31 @@ class BankStatementService:
         query = query.offset(offset).limit(limit)
 
         return list(db.execute(query).scalars().all())
+
+    def count(
+        self,
+        db: Session,
+        organization_id: UUID,
+        bank_account_id: Optional[UUID] = None,
+        status: Optional[BankStatementStatus] = None,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+    ) -> int:
+        """Count statements matching filters (for pagination)."""
+        query = select(func.count(BankStatement.statement_id)).where(
+            BankStatement.organization_id == organization_id
+        )
+
+        if bank_account_id:
+            query = query.where(BankStatement.bank_account_id == bank_account_id)
+        if status:
+            query = query.where(BankStatement.status == status)
+        if start_date:
+            query = query.where(BankStatement.statement_date >= start_date)
+        if end_date:
+            query = query.where(BankStatement.statement_date <= end_date)
+
+        return db.execute(query).scalar() or 0
 
     def get_unmatched_lines(
         self,

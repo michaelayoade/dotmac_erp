@@ -244,3 +244,121 @@ def reconciliation_report(
     )
 
     return templates.TemplateResponse(request, "ifrs/banking/reconciliation_report.html", context)
+
+
+# =============================================================================
+# Payees
+# =============================================================================
+
+@router.get("/payees", response_class=HTMLResponse)
+def list_payees(
+    request: Request,
+    search: Optional[str] = None,
+    payee_type: Optional[str] = None,
+    page: int = Query(default=1, ge=1),
+    auth: WebAuthContext = Depends(require_web_auth),
+    db: Session = Depends(get_db),
+):
+    """Payees list page."""
+    context = base_context(request, auth, "Payees", "banking")
+    context.update(
+        banking_web_service.list_payees_context(
+            db,
+            str(auth.organization_id),
+            search=search,
+            payee_type=payee_type,
+            page=page,
+        )
+    )
+
+    return templates.TemplateResponse(request, "ifrs/banking/payees.html", context)
+
+
+@router.get("/payees/new", response_class=HTMLResponse)
+def new_payee_form(
+    request: Request,
+    auth: WebAuthContext = Depends(require_web_auth),
+    db: Session = Depends(get_db),
+):
+    """New payee form page."""
+    context = base_context(request, auth, "New Payee", "banking")
+    context.update(
+        banking_web_service.payee_form_context(db, str(auth.organization_id))
+    )
+    return templates.TemplateResponse(request, "ifrs/banking/payee_form.html", context)
+
+
+@router.get("/payees/{payee_id}", response_class=HTMLResponse)
+def view_payee(
+    request: Request,
+    payee_id: str,
+    auth: WebAuthContext = Depends(require_web_auth),
+    db: Session = Depends(get_db),
+):
+    """Payee detail/edit page."""
+    context = base_context(request, auth, "Edit Payee", "banking")
+    context.update(
+        banking_web_service.payee_form_context(
+            db, str(auth.organization_id), payee_id=payee_id
+        )
+    )
+
+    return templates.TemplateResponse(request, "ifrs/banking/payee_form.html", context)
+
+
+# =============================================================================
+# Transaction Rules
+# =============================================================================
+
+@router.get("/rules", response_class=HTMLResponse)
+def list_transaction_rules(
+    request: Request,
+    rule_type: Optional[str] = None,
+    page: int = Query(default=1, ge=1),
+    auth: WebAuthContext = Depends(require_web_auth),
+    db: Session = Depends(get_db),
+):
+    """Transaction rules list page."""
+    context = base_context(request, auth, "Transaction Rules", "banking")
+    context.update(
+        banking_web_service.list_rules_context(
+            db,
+            str(auth.organization_id),
+            rule_type=rule_type,
+            page=page,
+        )
+    )
+
+    return templates.TemplateResponse(request, "ifrs/banking/rules.html", context)
+
+
+@router.get("/rules/new", response_class=HTMLResponse)
+def new_rule_form(
+    request: Request,
+    auth: WebAuthContext = Depends(require_web_auth),
+    db: Session = Depends(get_db),
+):
+    """New transaction rule form page."""
+    context = base_context(request, auth, "New Transaction Rule", "banking")
+    context.update(
+        banking_web_service.rule_form_context(db, str(auth.organization_id))
+    )
+    return templates.TemplateResponse(request, "ifrs/banking/rule_form.html", context)
+
+
+@router.get("/rules/{rule_id}", response_class=HTMLResponse)
+def view_rule(
+    request: Request,
+    rule_id: str,
+    auth: WebAuthContext = Depends(require_web_auth),
+    db: Session = Depends(get_db),
+):
+    """Transaction rule detail/edit page."""
+    context = base_context(request, auth, "Edit Transaction Rule", "banking")
+    context.update(
+        banking_web_service.rule_form_context(
+            db, str(auth.organization_id), rule_id=rule_id
+        )
+    )
+
+    return templates.TemplateResponse(request, "ifrs/banking/rule_form.html", context)

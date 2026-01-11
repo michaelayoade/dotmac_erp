@@ -505,6 +505,26 @@
         <!-- Form Result Messages -->
         <div id="form-result"></div>
 
+        <!-- PO Reference Banner -->
+        {% if selected_po %}
+        <div class="rounded-xl bg-teal-50 border border-teal-200 p-4 dark:bg-teal-900/20 dark:border-teal-800 fade-up delay-1">
+            <div class="flex items-center gap-3">
+                <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-teal-100 dark:bg-teal-900/30">
+                    <svg class="h-5 w-5 text-teal-600 dark:text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                    </svg>
+                </div>
+                <div class="flex-1">
+                    <p class="text-sm font-medium text-teal-800 dark:text-teal-300">Creating invoice from Purchase Order</p>
+                    <p class="text-sm text-teal-600 dark:text-teal-400">
+                        <a href="/ap/purchase-orders/{{ selected_po.po_id }}" class="font-mono hover:underline">{{ selected_po.po_number }}</a>
+                        - {{ selected_po.supplier_name }}
+                    </p>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
         <!-- Header Information -->
         <div class="form-card fade-up delay-1">
             <h2 class="section-title">Invoice Details</h2>
@@ -517,6 +537,7 @@
                         Supplier <span class="required">*</span>
                     </label>
                     <select id="supplier_id"
+                            name="supplier_id"
                             x-model="form.supplier_id"
                             @change="onSupplierChange"
                             required
@@ -539,6 +560,7 @@
                     </label>
                     <input type="text"
                            id="invoice_number"
+                           name="invoice_number"
                            x-model="form.invoice_number"
                            required
                            maxlength="50"
@@ -553,6 +575,7 @@
                         Currency <span class="required">*</span>
                     </label>
                     <select id="currency_code"
+                            name="currency_code"
                             x-model="form.currency_code"
                             required
                             class="form-input">
@@ -570,6 +593,7 @@
                     </label>
                     <input type="date"
                            id="invoice_date"
+                           name="invoice_date"
                            x-model="form.invoice_date"
                            @change="calculateDueDate"
                            required
@@ -583,6 +607,7 @@
                     </label>
                     <input type="date"
                            id="due_date"
+                           name="due_date"
                            x-model="form.due_date"
                            required
                            class="form-input">
@@ -595,6 +620,7 @@
                     </label>
                     <input type="text"
                            id="description"
+                           name="description"
                            x-model="form.description"
                            maxlength="500"
                            placeholder="Invoice description"
@@ -783,22 +809,28 @@
 {% block scripts %}
 <script>
 function invoiceForm() {
+    // Pre-populated data from query params (supplier_id, po_id)
+    const selectedSupplier = {{ selected_supplier | tojson | safe if selected_supplier else 'null' }};
+    const selectedPO = {{ selected_po | tojson | safe if selected_po else 'null' }};
+    const poLines = {{ po_lines | tojson | safe if po_lines else '[]' }};
+
     return {
         form: {
-            supplier_id: '{{ invoice.supplier_id if invoice else "" }}',
+            supplier_id: '{{ invoice.supplier_id if invoice else "" }}' || (selectedSupplier?.supplier_id || ''),
             invoice_number: '{{ invoice.invoice_number if invoice else "" }}',
             invoice_date: '{{ invoice.invoice_date if invoice else "" }}',
             due_date: '{{ invoice.due_date if invoice else "" }}',
-            currency_code: '{{ invoice.currency_code if invoice else "USD" }}',
-            description: '{{ invoice.description if invoice else "" }}',
+            currency_code: '{{ invoice.currency_code if invoice else "" }}' || (selectedSupplier?.currency_code || selectedPO?.currency_code || 'USD'),
+            description: '{{ invoice.description if invoice else "" }}' || (selectedPO ? 'Invoice for PO ' + selectedPO.po_number : ''),
             cost_center_id: '{{ invoice.cost_center_id if invoice else "" }}',
             project_id: '{{ invoice.project_id if invoice else "" }}',
             notes: '{{ invoice.notes if invoice else "" }}',
+            po_id: selectedPO?.po_id || '',
             lines: [
                 { expense_account_id: '', description: '', quantity: 1, unit_price: 0, amount: 0, tax_code_id: '' }
             ]
         },
-        paymentTermsDays: 30,
+        paymentTermsDays: selectedSupplier?.payment_terms_days || 30,
 
         init() {
             if (!this.form.invoice_date) {
@@ -818,6 +850,18 @@ function invoiceForm() {
                 },
                 {% endfor %}
             ];
+            {% elif not invoice %}
+            // Pre-populate lines from PO if available
+            if (poLines && poLines.length > 0) {
+                this.form.lines = poLines.map(line => ({
+                    expense_account_id: line.expense_account_id || '',
+                    description: line.description,
+                    quantity: line.quantity,
+                    unit_price: line.unit_price,
+                    amount: line.amount,
+                    tax_code_id: ''
+                }));
+            }
             {% endif %}
         },
 

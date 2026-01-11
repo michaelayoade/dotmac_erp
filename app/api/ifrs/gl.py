@@ -55,18 +55,18 @@ def get_db():
 def create_account(
     payload: AccountCreate,
     organization_id: UUID = Query(...),
+    category_id: UUID = Query(..., description="Account category ID"),
     db: Session = Depends(get_db),
 ):
     """Create a new GL account."""
     input_data = AccountInput(
         account_code=payload.account_code,
         account_name=payload.account_name,
+        category_id=category_id,
         account_type=payload.account_type,
         normal_balance=payload.normal_balance,
         description=payload.description,
-        parent_account_id=payload.parent_account_id,
-        is_control_account=payload.is_control_account,
-        is_reconcilable=payload.is_reconcilable,
+        is_reconciliation_required=payload.is_reconcilable,
     )
     return chart_of_accounts_service.create_account(db, organization_id, input_data)
 
@@ -239,14 +239,17 @@ def create_journal_entry(
         for line in payload.lines
     ]
 
+    from app.models.ifrs.gl.journal_entry import JournalType
+
     input_data = JournalInput(
-        fiscal_period_id=payload.fiscal_period_id,
-        journal_date=payload.journal_date,
+        journal_type=JournalType.STANDARD,
+        entry_date=payload.journal_date,
+        posting_date=payload.journal_date,
         description=payload.description,
         source_module=payload.source_module,
         source_document_type=payload.source_document_type,
         source_document_id=payload.source_document_id,
-        reference_number=payload.reference_number,
+        reference=payload.reference_number,
         lines=lines,
     )
 

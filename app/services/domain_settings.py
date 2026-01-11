@@ -1,3 +1,5 @@
+from typing import Any, List
+
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
@@ -48,7 +50,7 @@ def _normalize_setting_values(
         return ("true" if bool_value else "false"), bool_value
     if value_type == SettingValueType.integer:
         try:
-            int_value = int(raw_value)
+            int_value = int(str(raw_value))
         except (TypeError, ValueError) as exc:
             raise HTTPException(status_code=400, detail="Value must be an integer") from exc
         return str(int_value), None
@@ -203,7 +205,7 @@ class DomainSettings(ListResponseMixin):
         key: str,
         value_type: SettingValueType,
         value_text: str | None = None,
-        value_json: dict | bool | int | None = None,
+        value_json: dict[str, Any] | List[Any] | bool | int | None = None,
         is_secret: bool = False,
     ):
         if not self.domain:
@@ -239,3 +241,7 @@ settings = DomainSettings()
 auth_settings = DomainSettings(SettingDomain.auth)
 audit_settings = DomainSettings(SettingDomain.audit)
 scheduler_settings = DomainSettings(SettingDomain.scheduler)
+automation_settings = DomainSettings(SettingDomain.automation)
+email_settings = DomainSettings(SettingDomain.email)
+features_settings = DomainSettings(SettingDomain.features)
+reporting_settings = DomainSettings(SettingDomain.reporting)

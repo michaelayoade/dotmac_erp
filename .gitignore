@@ -73,3 +73,6 @@ poetry.lock
 
 # Docker
 .docker/
+
+# Node.js
+node_modules/

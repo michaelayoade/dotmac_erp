@@ -20,6 +20,7 @@ from app.models.ifrs.banking.bank_account import (
     BankAccountType,
 )
 from app.models.ifrs.gl.account import Account
+from app.services.common import coerce_uuid
 
 
 @dataclass
@@ -56,16 +57,17 @@ class BankAccountService:
         created_by: Optional[UUID] = None,
     ) -> BankAccount:
         """Create a new bank account."""
+        org_id = coerce_uuid(organization_id)
         # Validate GL account exists and is a cash/bank account
         gl_account = db.get(Account, input.gl_account_id)
-        if not gl_account:
+        if not gl_account or gl_account.organization_id != org_id:
             raise HTTPException(status_code=404, detail=f"GL account {input.gl_account_id} not found")
 
         # Check for duplicate account number
         existing = db.execute(
             select(BankAccount).where(
                 and_(
-                    BankAccount.organization_id == organization_id,
+                    BankAccount.organization_id == org_id,
                     BankAccount.account_number == input.account_number,
                     BankAccount.bank_code == input.bank_code,
                 )
@@ -84,7 +86,7 @@ class BankAccountService:
                 BankAccount.__table__.update()
                 .where(
                     and_(
-                        BankAccount.organization_id == organization_id,
+                        BankAccount.organization_id == org_id,
                         BankAccount.currency_code == input.currency_code,
                         BankAccount.is_primary == True,
                     )
@@ -93,7 +95,7 @@ class BankAccountService:
             )
 
         bank_account = BankAccount(
-            organization_id=organization_id,
+            organization_id=org_id,
             bank_name=input.bank_name,
             bank_code=input.bank_code,
             branch_code=input.branch_code,
@@ -121,9 +123,18 @@ class BankAccountService:
 
         return bank_account
 
-    def get(self, db: Session, bank_account_id: UUID) -> Optional[BankAccount]:
+    def get(
+        self,
+        db: Session,
+        organization_id: UUID,
+        bank_account_id: UUID,
+    ) -> Optional[BankAccount]:
         """Get a bank account by ID."""
-        return db.get(BankAccount, bank_account_id)
+        org_id = coerce_uuid(organization_id)
+        account = db.get(BankAccount, bank_account_id)
+        if not account or account.organization_id != org_id:
+            return None
+        return account
 
     def get_by_account_number(
         self,
@@ -171,21 +182,47 @@ class BankAccountService:
 
         return list(db.execute(query).scalars().all())
 
+    def count(
+        self,
+        db: Session,
+        organization_id: UUID,
+        status: Optional[BankAccountStatus] = None,
+        currency_code: Optional[str] = None,
+        account_type: Optional[BankAccountType] = None,
+    ) -> int:
+        """Count bank accounts matching filters (for pagination)."""
+        from sqlalchemy import func as sqla_func
+
+        query = select(sqla_func.count(BankAccount.bank_account_id)).where(
+            BankAccount.organization_id == organization_id
+        )
+
+        if status:
+            query = query.where(BankAccount.status == status)
+        if currency_code:
+            query = query.where(BankAccount.currency_code == currency_code)
+        if account_type:
+            query = query.where(BankAccount.account_type == account_type)
+
+        return db.execute(query).scalar() or 0
+
     def update(
         self,
         db: Session,
+        organization_id: UUID,
         bank_account_id: UUID,
         input: BankAccountInput,
         updated_by: Optional[UUID] = None,
     ) -> BankAccount:
         """Update a bank account."""
+        org_id = coerce_uuid(organization_id)
         bank_account = db.get(BankAccount, bank_account_id)
-        if not bank_account:
+        if not bank_account or bank_account.organization_id != org_id:
             raise HTTPException(status_code=404, detail=f"Bank account {bank_account_id} not found")
 
         # Validate GL account
         gl_account = db.get(Account, input.gl_account_id)
-        if not gl_account:
+        if not gl_account or gl_account.organization_id != org_id:
             raise HTTPException(status_code=404, detail=f"GL account {input.gl_account_id} not found")
 
         # Update fields
@@ -213,7 +250,7 @@ class BankAccountService:
                 BankAccount.__table__.update()
                 .where(
                     and_(
-                        BankAccount.organization_id == bank_account.organization_id,
+                        BankAccount.organization_id == org_id,
                         BankAccount.currency_code == input.currency_code,
                         BankAccount.is_primary == True,
                         BankAccount.bank_account_id != bank_account_id,
@@ -231,13 +268,15 @@ class BankAccountService:
     def update_status(
         self,
         db: Session,
+        organization_id: UUID,
         bank_account_id: UUID,
         status: BankAccountStatus,
         updated_by: Optional[UUID] = None,
     ) -> BankAccount:
         """Update bank account status."""
+        org_id = coerce_uuid(organization_id)
         bank_account = db.get(BankAccount, bank_account_id)
-        if not bank_account:
+        if not bank_account or bank_account.organization_id != org_id:
             raise HTTPException(status_code=404, detail=f"Bank account {bank_account_id} not found")
 
         bank_account.status = status
@@ -249,13 +288,15 @@ class BankAccountService:
     def update_reconciled_balance(
         self,
         db: Session,
+        organization_id: UUID,
         bank_account_id: UUID,
         reconciled_date: datetime,
         reconciled_balance: Decimal,
     ) -> BankAccount:
         """Update last reconciled date and balance."""
+        org_id = coerce_uuid(organization_id)
         bank_account = db.get(BankAccount, bank_account_id)
-        if not bank_account:
+        if not bank_account or bank_account.organization_id != org_id:
             raise HTTPException(status_code=404, detail=f"Bank account {bank_account_id} not found")
 
         bank_account.last_reconciled_date = reconciled_date
@@ -289,15 +330,16 @@ class BankAccountService:
         Raises:
             ValueError: If account not found or has non-zero balance
         """
+        org_id = coerce_uuid(organization_id)
         bank_account = db.get(BankAccount, bank_account_id)
-        if not bank_account or bank_account.organization_id != organization_id:
+        if not bank_account or bank_account.organization_id != org_id:
             raise HTTPException(status_code=404, detail=f"Bank account {bank_account_id} not found")
 
         if bank_account.status == BankAccountStatus.closed:
             raise HTTPException(status_code=400, detail="Bank account is already closed")
 
         # Check GL balance before closing
-        gl_balance = self.get_gl_balance(db, bank_account_id)
+        gl_balance = self.get_gl_balance(db, org_id, bank_account_id)
         if gl_balance != Decimal("0"):
             raise HTTPException(
                 status_code=400,
@@ -313,12 +355,14 @@ class BankAccountService:
     def get_gl_balance(
         self,
         db: Session,
+        organization_id: UUID,
         bank_account_id: UUID,
         as_of_date: Optional[datetime] = None,
     ) -> Decimal:
         """Get current GL balance for the bank account."""
+        org_id = coerce_uuid(organization_id)
         bank_account = db.get(BankAccount, bank_account_id)
-        if not bank_account:
+        if not bank_account or bank_account.organization_id != org_id:
             raise HTTPException(status_code=404, detail=f"Bank account {bank_account_id} not found")
 
         # Query GL balance from journal entry lines

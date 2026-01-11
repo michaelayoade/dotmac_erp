@@ -22,6 +22,8 @@ class InventoryLot(Base):
     __table_args__ = (
         UniqueConstraint("item_id", "lot_number", name="uq_inventory_lot"),
         Index("idx_lot_item", "item_id"),
+        Index("idx_lot_org", "organization_id"),
+        Index("idx_lot_warehouse", "warehouse_id"),
         {"schema": "inv"},
     )
 
@@ -31,10 +33,20 @@ class InventoryLot(Base):
         default=uuid.uuid4,
         server_default=text("gen_random_uuid()"),
     )
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("core_org.organization.organization_id"),
+        nullable=False,
+    )
     item_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("inv.item.item_id"),
         nullable=False,
+    )
+    warehouse_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("inv.warehouse.warehouse_id"),
+        nullable=True,
     )
 
     lot_number: Mapped[str] = mapped_column(String(50), nullable=False)
@@ -57,6 +69,7 @@ class InventoryLot(Base):
     quantity_on_hand: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
     quantity_allocated: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False, default=0)
     quantity_available: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
+    allocation_reference: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
     # Status
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)

@@ -61,7 +61,7 @@ class BankStatement(Base):
             name="uq_bank_statement_number"
         ),
         Index("ix_bank_statement_period", "bank_account_id", "statement_date"),
-        {"schema": "ifrs"},
+        {"schema": "banking"},
     )
 
     # Primary key
@@ -81,7 +81,7 @@ class BankStatement(Base):
     # Bank account reference
     bank_account_id: Mapped[UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("ifrs.bank_accounts.bank_account_id", ondelete="CASCADE"),
+        ForeignKey("banking.bank_accounts.bank_account_id", ondelete="CASCADE"),
         nullable=False,
     )
 
@@ -116,7 +116,7 @@ class BankStatement(Base):
 
     # Status
     status: Mapped[BankStatementStatus] = mapped_column(
-        Enum(BankStatementStatus, name="bank_statement_status", schema="ifrs"),
+        Enum(BankStatementStatus, name="bank_statement_status", schema="banking"),
         nullable=False,
         default=BankStatementStatus.imported,
     )
@@ -193,7 +193,7 @@ class BankStatementLine(Base):
     __table_args__ = (
         Index("ix_statement_line_date", "statement_id", "transaction_date"),
         Index("ix_statement_line_matched", "statement_id", "is_matched"),
-        {"schema": "ifrs"},
+        {"schema": "banking"},
     )
 
     # Primary key
@@ -206,7 +206,7 @@ class BankStatementLine(Base):
     # Statement reference
     statement_id: Mapped[UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("ifrs.bank_statements.statement_id", ondelete="CASCADE"),
+        ForeignKey("banking.bank_statements.statement_id", ondelete="CASCADE"),
         nullable=False,
     )
 
@@ -218,7 +218,7 @@ class BankStatementLine(Base):
     transaction_date: Mapped[date] = mapped_column(Date, nullable=False)
     value_date: Mapped[date] = mapped_column(Date, nullable=True)  # Settlement date
     transaction_type: Mapped[StatementLineType] = mapped_column(
-        Enum(StatementLineType, name="statement_line_type", schema="ifrs"),
+        Enum(StatementLineType, name="statement_line_type", schema="banking"),
         nullable=False,
     )
 

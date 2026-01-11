@@ -16,6 +16,7 @@ Schemas:
 - gl: General Ledger (11 tables)
 - ar: Accounts Receivable (11 tables)
 - ap: Accounts Payable (11 tables)
+- banking: Banking & cash management (4 tables)
 - fa: Fixed Assets (9 tables)
 - lease: Leases (5 tables)
 - inv: Inventory (9 tables)
@@ -38,6 +39,7 @@ SCHEMAS = [
     "ap",
     "ar",
     "audit",
+    "banking",
     "cons",
     "core_config",
     "core_fx",

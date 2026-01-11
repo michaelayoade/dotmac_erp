@@ -22,6 +22,7 @@ from app.models.ifrs.ar.invoice_line import InvoiceLine
 from app.services.common import coerce_uuid
 from app.services.ifrs.gl.journal import JournalService, JournalInput, JournalLineInput
 from app.services.ifrs.gl.ledger_posting import LedgerPostingService, PostingRequest
+from app.services.ifrs.tax.tax_transaction import tax_transaction_service
 from app.models.ifrs.gl.journal_entry import JournalType
 
 
@@ -230,6 +231,17 @@ class ARPostingAdapter:
                     message=f"Ledger posting failed: {posting_result.message}",
                 )
 
+            # Create tax transactions for taxable invoice lines
+            ARPostingAdapter._create_tax_transactions(
+                db=db,
+                organization_id=org_id,
+                invoice=invoice,
+                lines=lines,
+                customer=customer,
+                exchange_rate=exchange_rate,
+                is_credit_note=invoice.invoice_type == InvoiceType.CREDIT_NOTE,
+            )
+
             return ARPostingResult(
                 success=True,
                 journal_entry_id=journal.journal_entry_id,
@@ -370,6 +382,81 @@ class ARPostingAdapter:
                 journal_entry_id=journal.journal_entry_id,
                 message=f"Posting error: {str(e)}",
             )
+
+    @staticmethod
+    def _create_tax_transactions(
+        db: Session,
+        organization_id: UUID,
+        invoice: Invoice,
+        lines: list[InvoiceLine],
+        customer: Customer,
+        exchange_rate: Decimal,
+        is_credit_note: bool = False,
+    ) -> list[UUID]:
+        """
+        Create tax transactions for invoice lines with tax codes.
+
+        Args:
+            db: Database session
+            organization_id: Organization scope
+            invoice: The invoice being posted
+            lines: Invoice lines
+            customer: Customer for counterparty info
+            exchange_rate: Exchange rate to functional currency
+            is_credit_note: Whether this is a credit note (negative amounts)
+
+        Returns:
+            List of created tax transaction IDs
+        """
+        from app.models.ifrs.gl.fiscal_period import FiscalPeriod
+
+        tax_transaction_ids = []
+
+        # Get fiscal period from invoice date
+        fiscal_period = (
+            db.query(FiscalPeriod)
+            .filter(
+                FiscalPeriod.organization_id == organization_id,
+                FiscalPeriod.start_date <= invoice.invoice_date,
+                FiscalPeriod.end_date >= invoice.invoice_date,
+            )
+            .first()
+        )
+
+        if not fiscal_period:
+            # No fiscal period found - skip tax transactions
+            return tax_transaction_ids
+
+        for line in lines:
+            if not line.tax_code_id or line.tax_amount == Decimal("0"):
+                continue
+
+            # For credit notes, we record negative tax (reduces output tax)
+            base_amount = line.line_amount if not is_credit_note else -line.line_amount
+
+            try:
+                tax_txn = tax_transaction_service.create_from_invoice_line(
+                    db=db,
+                    organization_id=organization_id,
+                    fiscal_period_id=fiscal_period.fiscal_period_id,
+                    tax_code_id=line.tax_code_id,
+                    invoice_id=invoice.invoice_id,
+                    invoice_line_id=line.line_id,
+                    invoice_number=invoice.invoice_number,
+                    transaction_date=invoice.invoice_date,
+                    is_purchase=False,  # AR = OUTPUT tax (sales)
+                    base_amount=base_amount,
+                    currency_code=invoice.currency_code,
+                    counterparty_name=customer.legal_name,
+                    counterparty_tax_id=customer.tax_id,
+                    exchange_rate=exchange_rate,
+                )
+                tax_transaction_ids.append(tax_txn.transaction_id)
+            except Exception:
+                # Log error but don't fail the posting
+                pass
+
+        return tax_transaction_ids
 
 
 # Module-level singleton instance

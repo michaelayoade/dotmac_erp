@@ -1,0 +1,336 @@
+{% extends "base.html" %}
+
+{% block title %}Login - {{ brand.name | default("IFRS Accounting") }}{% endblock %}
+
+{% block body %}
+<div class="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center px-4 py-12 bg-mesh">
+    {% set brand_name = brand.name | default("IFRS Accounting") %}
+    {% set brand_tagline = brand.tagline | default("Enterprise Finance", true) %}
+    {% set brand_logo_url = brand.logo_url | default("", true) %}
+    {% set brand_mark = brand.mark | default("IF") %}
+
+    <div class="w-full max-w-md">
+        <!-- Logo and Branding -->
+        <div class="text-center mb-8 stagger-in">
+            <a href="/" class="inline-flex flex-col items-center gap-3">
+                {% if brand_logo_url %}
+                    <img src="{{ brand_logo_url }}" alt="{{ brand_name }} logo" class="h-16 w-16 rounded-2xl object-cover shadow-lg shadow-primary-500/20" />
+                {% else %}
+                    <div class="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-primary-500 via-primary-600 to-accent-500 text-xl font-semibold uppercase text-white shadow-lg shadow-primary-500/30">
+                        {{ brand_mark }}
+                    </div>
+                {% endif %}
+                <div>
+                    <p class="text-xs font-semibold uppercase tracking-[0.24em] text-primary-600 dark:text-primary-400">
+                        {{ brand_tagline }}
+                    </p>
+                    <p class="mt-1 text-2xl font-semibold text-slate-900 dark:text-white font-display">
+                        {{ brand_name }}
+                    </p>
+                </div>
+            </a>
+        </div>
+
+        <!-- Login Card -->
+        <div class="stagger-in card p-8" x-data="loginForm()">
+            <div class="text-center mb-6">
+                <h1 class="text-2xl font-semibold text-slate-900 dark:text-white font-display">Welcome back</h1>
+                <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">Sign in to your account to continue</p>
+            </div>
+
+            <!-- Session Expired / Access Denied Alert -->
+            {% set url_error = request.query_params.get('error', '') %}
+            {% if url_error == 'forbidden' %}
+            <div class="mb-6 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-4">
+                <div class="flex items-start gap-3">
+                    <svg class="h-5 w-5 text-amber-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                    </svg>
+                    <p class="text-sm text-amber-700 dark:text-amber-300">You don't have permission to access that page. Please sign in with an authorized account.</p>
+                </div>
+            </div>
+            {% elif next != '/dashboard' and next != '/' %}
+            <div class="mb-6 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-4">
+                <div class="flex items-start gap-3">
+                    <svg class="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <p class="text-sm text-blue-700 dark:text-blue-300">Please sign in to continue to your requested page.</p>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Error Alert -->
+            <div x-show="error" x-cloak
+                 x-transition:enter="transition ease-out duration-200"
+                 x-transition:enter-start="opacity-0 -translate-y-2"
+                 x-transition:enter-end="opacity-100 translate-y-0"
+                 class="mb-6 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-4">
+                <div class="flex items-start gap-3">
+                    <svg class="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <p class="text-sm text-red-700 dark:text-red-300" x-text="error"></p>
+                </div>
+            </div>
+
+            <!-- MFA Required Alert -->
+            <div x-show="mfaRequired" x-cloak
+                 x-transition:enter="transition ease-out duration-200"
+                 x-transition:enter-start="opacity-0 -translate-y-2"
+                 x-transition:enter-end="opacity-100 translate-y-0"
+                 class="mb-6 rounded-xl bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800 p-4">
+                <div class="flex items-start gap-3">
+                    <svg class="h-5 w-5 text-primary-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                    </svg>
+                    <p class="text-sm text-primary-700 dark:text-primary-300">Two-factor authentication required. Enter your code below.</p>
+                </div>
+            </div>
+
+            <form @submit.prevent="handleSubmit" class="space-y-5">
+                <!-- Username/Email Field -->
+                <div x-show="!mfaRequired">
+                    <label for="username" class="form-label form-label-required">Username or Email</label>
+                    <input
+                        type="text"
+                        id="username"
+                        name="username"
+                        x-model="username"
+                        :disabled="loading"
+                        autocomplete="username"
+                        placeholder="Enter your username or email"
+                        class="form-input"
+                        required
+                    />
+                </div>
+
+                <!-- Password Field -->
+                <div x-show="!mfaRequired">
+                    <label for="password" class="form-label form-label-required">Password</label>
+                    <div class="relative">
+                        <input
+                            :type="showPassword ? 'text' : 'password'"
+                            id="password"
+                            name="password"
+                            x-model="password"
+                            :disabled="loading"
+                            autocomplete="current-password"
+                            placeholder="Enter your password"
+                            class="form-input pr-12"
+                            required
+                        />
+                        <button
+                            type="button"
+                            @click="showPassword = !showPassword"
+                            class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                            tabindex="-1"
+                        >
+                            <svg x-show="!showPassword" class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                            </svg>
+                            <svg x-show="showPassword" x-cloak class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- MFA Code Field -->
+                <div x-show="mfaRequired" x-cloak>
+                    <label for="mfa_code" class="form-label form-label-required">Authentication Code</label>
+                    <input
+                        type="text"
+                        id="mfa_code"
+                        name="mfa_code"
+                        x-model="mfaCode"
+                        x-ref="mfaInput"
+                        :disabled="loading"
+                        autocomplete="one-time-code"
+                        inputmode="numeric"
+                        pattern="[0-9]*"
+                        maxlength="6"
+                        placeholder="Enter 6-digit code"
+                        class="form-input text-center text-xl tracking-[0.5em] font-mono"
+                    />
+                    <p class="form-hint">Enter the code from your authenticator app</p>
+                </div>
+
+                <!-- Remember Me & Forgot Password -->
+                <div x-show="!mfaRequired" class="flex items-center justify-between">
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" x-model="rememberMe" class="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800" />
+                        <span class="text-sm text-slate-600 dark:text-slate-400">Remember me</span>
+                    </label>
+                    <a href="/forgot-password" class="text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300">
+                        Forgot password?
+                    </a>
+                </div>
+
+                <!-- Submit Button -->
+                <button
+                    type="submit"
+                    :disabled="loading"
+                    class="btn btn-primary w-full py-3"
+                >
+                    <span x-show="!loading" x-text="mfaRequired ? 'Verify' : 'Sign in'"></span>
+                    <span x-show="loading" class="flex items-center justify-center gap-2">
+                        <svg class="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span x-text="mfaRequired ? 'Verifying...' : 'Signing in...'"></span>
+                    </span>
+                </button>
+
+                <!-- Back to login (for MFA) -->
+                <button
+                    x-show="mfaRequired"
+                    type="button"
+                    @click="resetMfa()"
+                    class="btn btn-secondary w-full"
+                >
+                    Back to login
+                </button>
+            </form>
+
+            <!-- Divider -->
+            <div class="relative my-6" x-show="!mfaRequired">
+                <div class="absolute inset-0 flex items-center">
+                    <div class="w-full border-t border-slate-200 dark:border-slate-700"></div>
+                </div>
+                <div class="relative flex justify-center text-sm">
+                    <span class="bg-white dark:bg-slate-800 px-4 text-slate-500 dark:text-slate-400">or</span>
+                </div>
+            </div>
+
+            <!-- Register Link -->
+            <p class="text-center text-sm text-slate-600 dark:text-slate-400" x-show="!mfaRequired">
+                Don't have an account?
+                <a href="/register" class="font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300">
+                    Create one
+                </a>
+            </p>
+        </div>
+
+        <!-- Footer -->
+        <p class="mt-8 text-center text-xs text-slate-500 dark:text-slate-500 stagger-in">
+            &copy; {{ now().year }} {{ brand_name }}. All rights reserved.
+        </p>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function loginForm() {
+    return {
+        username: '',
+        password: '',
+        mfaCode: '',
+        mfaToken: null,
+        mfaRequired: false,
+        showPassword: false,
+        rememberMe: false,
+        loading: false,
+        error: null,
+
+        async handleSubmit() {
+            this.error = null;
+            this.loading = true;
+
+            try {
+                if (this.mfaRequired) {
+                    await this.verifyMfa();
+                } else {
+                    await this.login();
+                }
+            } catch (err) {
+                this.error = err.message || 'An unexpected error occurred';
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        async login() {
+            const response = await fetch('/auth/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    username: this.username,
+                    password: this.password,
+                }),
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                if (response.status === 428 && data.detail?.code === 'PASSWORD_RESET_REQUIRED') {
+                    window.location.href = '/reset-password-required';
+                    return;
+                }
+                throw new Error(data.detail || 'Invalid credentials');
+            }
+
+            if (data.mfa_required) {
+                this.mfaRequired = true;
+                this.mfaToken = data.mfa_token;
+                this.$nextTick(() => {
+                    this.$refs.mfaInput?.focus();
+                });
+                return;
+            }
+
+            // Store access token in cookie
+            if (data.access_token) {
+                document.cookie = `access_token=${data.access_token}; path=/; max-age=${this.rememberMe ? 86400 * 30 : 86400}; SameSite=Lax`;
+            }
+
+            // Redirect to intended destination or dashboard
+            const params = new URLSearchParams(window.location.search);
+            const next = params.get('next') || '/dashboard';
+            window.location.href = next;
+        },
+
+        async verifyMfa() {
+            const response = await fetch('/auth/mfa/verify', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    mfa_token: this.mfaToken,
+                    code: this.mfaCode,
+                }),
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.detail || 'Invalid authentication code');
+            }
+
+            // Store access token in cookie
+            if (data.access_token) {
+                document.cookie = `access_token=${data.access_token}; path=/; max-age=${this.rememberMe ? 86400 * 30 : 86400}; SameSite=Lax`;
+            }
+
+            // Redirect to intended destination or dashboard
+            const params = new URLSearchParams(window.location.search);
+            const next = params.get('next') || '/dashboard';
+            window.location.href = next;
+        },
+
+        resetMfa() {
+            this.mfaRequired = false;
+            this.mfaToken = null;
+            this.mfaCode = '';
+            this.password = '';
+        }
+    }
+}
+</script>
+{% endblock %}

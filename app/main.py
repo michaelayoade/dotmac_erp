@@ -16,6 +16,8 @@ from app.api.scheduler import router as scheduler_router
 from app.api.settings import router as settings_router
 from app.web_home import router as web_home_router
 from app.web.ifrs import router as ifrs_web_router
+from app.web.auth import router as auth_web_router
+from app.web.admin import router as admin_web_router
 from app.api.ifrs import (
     gl_router,
     ap_router,
@@ -43,6 +45,7 @@ from app.logging import configure_logging
 from app.observability import ObservabilityMiddleware
 from app.telemetry import setup_otel
 from app.errors import register_error_handlers
+from app.web.csrf import csrf_middleware
 
 
 @asynccontextmanager
@@ -67,6 +70,7 @@ configure_logging()
 setup_otel(app)
 app.add_middleware(ObservabilityMiddleware)
 register_error_handlers(app)
+app.middleware("http")(csrf_middleware)
 
 
 @app.middleware("http")
@@ -196,6 +200,8 @@ _include_api_router(audit_router)
 _include_api_router(settings_router, dependencies=[Depends(require_tenant_auth)])
 _include_api_router(scheduler_router, dependencies=[Depends(require_tenant_auth)])
 app.include_router(web_home_router)
+app.include_router(auth_web_router)
+app.include_router(admin_web_router)
 app.include_router(ifrs_web_router)
 
 # IFRS Accounting Routers (authenticated with tenant context)
@@ -223,4 +229,3 @@ def health_check():
 def metrics():
     data = generate_latest()
     return Response(content=data, media_type=CONTENT_TYPE_LATEST)
-

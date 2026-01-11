@@ -139,6 +139,29 @@ class FiscalPeriodService(ListResponseMixin):
         return period
 
     @staticmethod
+    def close_period(
+        db: Session,
+        organization_id: UUID,
+        fiscal_period_id: UUID,
+        closed_by_user_id: UUID,
+    ) -> FiscalPeriod:
+        """
+        Close a fiscal period (alias for soft_close_period).
+
+        Args:
+            db: Database session
+            organization_id: Organization scope
+            fiscal_period_id: Period to close
+            closed_by_user_id: User closing the period
+
+        Returns:
+            Updated FiscalPeriod
+        """
+        return FiscalPeriodService.soft_close_period(
+            db, organization_id, fiscal_period_id, closed_by_user_id
+        )
+
+    @staticmethod
     def soft_close_period(
         db: Session,
         organization_id: UUID,

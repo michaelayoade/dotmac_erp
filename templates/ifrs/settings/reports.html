@@ -1,0 +1,160 @@
+{% extends "ifrs/base_ifrs.html" %}
+
+{% block page_title %}Report Settings{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <a href="/settings" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Settings</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="font-medium text-slate-900 dark:text-white">Report Settings</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto space-y-6 stagger-in">
+    <!-- Header -->
+    <div>
+        <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Report Settings</h1>
+        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+            Configure default export formats, page layout, and report branding.
+        </p>
+    </div>
+
+    <!-- Success Message -->
+    {% if request.query_params.get('saved') %}
+    <div class="rounded-lg bg-green-50 border border-green-200 p-4 dark:bg-green-900/20 dark:border-green-800">
+        <div class="flex items-center gap-3">
+            <svg class="h-5 w-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+            </svg>
+            <p class="text-sm text-green-700 dark:text-green-300">Report settings updated successfully.</p>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Error Message -->
+    {% if error %}
+    <div class="rounded-lg bg-red-50 border border-red-200 p-4 dark:bg-red-900/20 dark:border-red-800">
+        <div class="flex items-center gap-3">
+            <svg class="h-5 w-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <p class="text-sm text-red-700 dark:text-red-300">{{ error }}</p>
+        </div>
+    </div>
+    {% endif %}
+
+    <form method="POST" action="/settings/reports" class="space-y-6">
+        <!-- Export Defaults -->
+        <div class="card p-6">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Export Defaults</h2>
+            <div>
+                <label for="default_export_format" class="form-label">Default Export Format</label>
+                <select id="default_export_format" name="default_export_format" class="form-input form-select max-w-xs">
+                    {% set current_format = settings.default_export_format.value or settings.default_export_format.default %}
+                    <option value="PDF" {{ 'selected' if current_format == 'PDF' else '' }}>PDF Document</option>
+                    <option value="EXCEL" {{ 'selected' if current_format == 'EXCEL' else '' }}>Excel Spreadsheet</option>
+                    <option value="CSV" {{ 'selected' if current_format == 'CSV' else '' }}>CSV File</option>
+                </select>
+                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Default format when exporting reports</p>
+            </div>
+        </div>
+
+        <!-- Page Setup -->
+        <div class="card p-6">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Page Setup</h2>
+            <div class="grid gap-6 sm:grid-cols-2">
+                <div>
+                    <label for="report_page_size" class="form-label">Page Size</label>
+                    <select id="report_page_size" name="report_page_size" class="form-input form-select">
+                        {% set current_size = settings.report_page_size.value or settings.report_page_size.default %}
+                        <option value="A4" {{ 'selected' if current_size == 'A4' else '' }}>A4 (210 x 297 mm)</option>
+                        <option value="LETTER" {{ 'selected' if current_size == 'LETTER' else '' }}>Letter (8.5 x 11 in)</option>
+                        <option value="LEGAL" {{ 'selected' if current_size == 'LEGAL' else '' }}>Legal (8.5 x 14 in)</option>
+                    </select>
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Default paper size for PDF reports</p>
+                </div>
+                <div>
+                    <label for="report_orientation" class="form-label">Orientation</label>
+                    <select id="report_orientation" name="report_orientation" class="form-input form-select">
+                        {% set current_orientation = settings.report_orientation.value or settings.report_orientation.default %}
+                        <option value="PORTRAIT" {{ 'selected' if current_orientation == 'PORTRAIT' else '' }}>Portrait</option>
+                        <option value="LANDSCAPE" {{ 'selected' if current_orientation == 'LANDSCAPE' else '' }}>Landscape</option>
+                    </select>
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Default page orientation</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Branding -->
+        <div class="card p-6">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Report Branding</h2>
+            <div class="space-y-6">
+                <label class="flex items-center gap-3 cursor-pointer">
+                    <input type="checkbox" name="include_logo_in_reports" value="true"
+                           {{ 'checked' if settings.include_logo_in_reports.value else '' }}
+                           class="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500 dark:border-slate-600 dark:bg-slate-800">
+                    <div>
+                        <span class="font-medium text-slate-900 dark:text-white">Include Company Logo</span>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Display your company logo in the report header</p>
+                    </div>
+                </label>
+
+                <div>
+                    <label for="report_watermark_text" class="form-label">Watermark Text</label>
+                    <input type="text" id="report_watermark_text" name="report_watermark_text"
+                           value="{{ settings.report_watermark_text.value or '' }}"
+                           placeholder="e.g., DRAFT, CONFIDENTIAL"
+                           class="form-input max-w-xs">
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Optional watermark text displayed on reports (leave blank for none)</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Preview -->
+        <div class="card p-6 bg-slate-50 dark:bg-slate-900">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Preview</h2>
+            <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-6 shadow-sm">
+                <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 pb-4 mb-4">
+                    <div class="flex items-center gap-3">
+                        <div class="h-10 w-10 bg-teal-100 dark:bg-teal-900/30 rounded-lg flex items-center justify-center">
+                            <svg class="h-5 w-5 text-teal-600 dark:text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <div class="font-semibold text-slate-900 dark:text-white">Your Company Name</div>
+                            <div class="text-xs text-slate-500 dark:text-slate-400">Financial Report</div>
+                        </div>
+                    </div>
+                    <div class="text-xs text-slate-400 dark:text-slate-500">Page 1 of 5</div>
+                </div>
+                <div class="space-y-2">
+                    <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-3/4"></div>
+                    <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-full"></div>
+                    <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-5/6"></div>
+                    <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-2/3"></div>
+                </div>
+            </div>
+            <p class="mt-3 text-xs text-slate-500 dark:text-slate-400 text-center">Example report layout preview</p>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex items-center justify-end gap-4 py-4">
+            <a href="/settings" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">
+                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                </svg>
+                Save Settings
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

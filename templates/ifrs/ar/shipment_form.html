@@ -1,0 +1,214 @@
+{% extends "ifrs/base_ifrs.html" %}
+
+{% block page_title %}Ship {{ order.so_number }}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 mt-1">
+    <a href="/dashboard" class="hover:text-slate-700 dark:hover:text-slate-300">Dashboard</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <a href="/sales-orders" class="hover:text-slate-700 dark:hover:text-slate-300">Sales Orders</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <a href="/sales-orders/{{ order.so_id }}" class="hover:text-slate-700 dark:hover:text-slate-300">{{ order.so_number }}</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="text-slate-700 dark:text-slate-300">Ship</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div x-data="shipmentForm()" class="max-w-4xl mx-auto space-y-6">
+    <form @submit.prevent="submitForm" class="space-y-6">
+        <!-- Header -->
+        <div>
+            <h1 class="text-3xl font-bold text-slate-900 dark:text-white">Create Shipment</h1>
+            <p class="mt-2 text-slate-500 dark:text-slate-400">
+                Ship items for {{ order.so_number }} - {{ order.customer_name }}
+            </p>
+        </div>
+
+        <!-- Shipping Details -->
+        <div class="card p-6">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Shipment Details</h2>
+
+            <div class="grid gap-6 sm:grid-cols-2">
+                <!-- Shipment Date -->
+                <div>
+                    <label for="shipment_date" class="form-label">
+                        Shipment Date <span class="text-rose-500">*</span>
+                    </label>
+                    <input type="date" id="shipment_date" name="shipment_date" x-model="form.shipment_date" required class="form-input">
+                </div>
+
+                <!-- Shipping Method -->
+                <div>
+                    <label for="shipping_method" class="form-label">Shipping Method</label>
+                    <select id="shipping_method" name="shipping_method" x-model="form.shipping_method" class="form-input form-select">
+                        <option value="">Select method</option>
+                        <option value="Standard" {% if order.shipping_method == 'Standard' %}selected{% endif %}>Standard Shipping</option>
+                        <option value="Express" {% if order.shipping_method == 'Express' %}selected{% endif %}>Express Shipping</option>
+                        <option value="Overnight" {% if order.shipping_method == 'Overnight' %}selected{% endif %}>Overnight</option>
+                        <option value="Pickup" {% if order.shipping_method == 'Pickup' %}selected{% endif %}>Customer Pickup</option>
+                    </select>
+                </div>
+
+                <!-- Carrier -->
+                <div>
+                    <label for="carrier" class="form-label">Carrier</label>
+                    <input type="text" id="carrier" name="carrier" x-model="form.carrier"
+                           maxlength="100" placeholder="e.g., FedEx, UPS, DHL" class="form-input">
+                </div>
+
+                <!-- Tracking Number -->
+                <div>
+                    <label for="tracking_number" class="form-label">Tracking Number</label>
+                    <input type="text" id="tracking_number" name="tracking_number" x-model="form.tracking_number"
+                           maxlength="100" placeholder="Tracking number" class="form-input">
+                </div>
+
+                <!-- Notes -->
+                <div class="sm:col-span-2">
+                    <label for="notes" class="form-label">Notes</label>
+                    <textarea id="notes" name="notes" x-model="form.notes" rows="2"
+                              placeholder="Shipment notes" class="form-input resize-none"></textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- Ship To -->
+        <div class="card p-6">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Ship To</h2>
+            <div class="text-slate-700 dark:text-slate-300">
+                <p class="font-medium">{{ order.ship_to_name }}</p>
+                {% if order.ship_to_address %}
+                <p class="text-slate-500 dark:text-slate-400">{{ order.ship_to_address }}</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Line Items -->
+        <div class="card p-6">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Items to Ship</h2>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mb-4">Enter the quantity to ship for each line item.</p>
+
+            {% if lines %}
+            <table class="w-full">
+                <thead>
+                    <tr class="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700">
+                        <th class="pb-3 pr-2">#</th>
+                        <th class="pb-3 px-2">Item</th>
+                        <th class="pb-3 px-2">Description</th>
+                        <th class="pb-3 px-2 text-right">Ordered</th>
+                        <th class="pb-3 px-2 text-right">Shipped</th>
+                        <th class="pb-3 px-2 text-right">Remaining</th>
+                        <th class="pb-3 pl-2 text-right">Ship Qty</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for line in lines %}
+                    <tr class="border-b border-slate-100 dark:border-slate-800">
+                        <td class="py-3 pr-2 text-slate-500">{{ line.line_number }}</td>
+                        <td class="py-3 px-2 font-mono text-slate-900 dark:text-white">{{ line.item_code }}</td>
+                        <td class="py-3 px-2 text-slate-900 dark:text-white">{{ line.description }}</td>
+                        <td class="py-3 px-2 text-right text-slate-900 dark:text-white">{{ line.quantity_ordered }}</td>
+                        <td class="py-3 px-2 text-right text-slate-500">{{ line.quantity_shipped }}</td>
+                        <td class="py-3 px-2 text-right text-emerald-600 dark:text-emerald-400 font-medium">{{ line.remaining }}</td>
+                        <td class="py-3 pl-2">
+                            <input type="number"
+                                   x-model.number="quantities['{{ line.line_id }}']"
+                                   min="0"
+                                   max="{{ line.remaining }}"
+                                   step="0.01"
+                                   class="form-input text-sm py-1.5 w-24 text-right"
+                                   placeholder="0">
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="text-center py-8 text-slate-500">
+                <p>No items available for shipping.</p>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Actions -->
+        <div class="flex items-center justify-end gap-4 py-4">
+            <a href="/sales-orders/{{ order.so_id }}" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary" :disabled="!hasItemsToShip">
+                <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
+                </svg>
+                Create Shipment
+            </button>
+        </div>
+
+        <input type="hidden" name="line_quantities_json" :value="JSON.stringify(lineQuantities)">
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function shipmentForm() {
+    return {
+        form: {
+            shipment_date: '{{ today }}',
+            carrier: '',
+            tracking_number: '',
+            shipping_method: '{{ order.shipping_method or "" }}',
+            notes: ''
+        },
+        quantities: {
+            {% for line in lines %}
+            '{{ line.line_id }}': 0,
+            {% endfor %}
+        },
+
+        get lineQuantities() {
+            return Object.entries(this.quantities)
+                .filter(([_, qty]) => qty > 0)
+                .map(([line_id, quantity]) => ({ line_id, quantity }));
+        },
+
+        get hasItemsToShip() {
+            return this.lineQuantities.length > 0;
+        },
+
+        submitForm() {
+            if (!this.hasItemsToShip) {
+                alert('Please enter quantities to ship');
+                return;
+            }
+
+            const hiddenForm = document.createElement('form');
+            hiddenForm.method = 'POST';
+            hiddenForm.action = '/sales-orders/{{ order.so_id }}/ship';
+
+            const fields = ['shipment_date', 'carrier', 'tracking_number', 'shipping_method', 'notes'];
+            fields.forEach(field => {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = field;
+                input.value = this.form[field] || '';
+                hiddenForm.appendChild(input);
+            });
+
+            const lqInput = document.createElement('input');
+            lqInput.type = 'hidden';
+            lqInput.name = 'line_quantities_json';
+            lqInput.value = JSON.stringify(this.lineQuantities);
+            hiddenForm.appendChild(lqInput);
+
+            document.body.appendChild(hiddenForm);
+            hiddenForm.submit();
+        }
+    }
+}
+</script>
+{% endblock %}

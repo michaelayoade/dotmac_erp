@@ -1,0 +1,159 @@
+{% extends "admin/base_admin.html" %}
+
+{% block page_title %}Scheduled Tasks{% endblock %}
+{% block page_subtitle %}Monitor background jobs and schedules{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <span class="text-sm text-slate-500 dark:text-slate-400">
+            {{ pagination.total }} task{{ 's' if pagination.total != 1 else '' }} total
+        </span>
+        <div class="flex flex-wrap items-center gap-3">
+            <div class="relative">
+                <svg class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                </svg>
+                <input
+                    type="text"
+                    name="search"
+                    value="{{ search | default('') }}"
+                    placeholder="Search tasks..."
+                    class="w-56 pl-10 pr-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all"
+                    hx-get="/admin/tasks"
+                    hx-trigger="keyup changed delay:300ms"
+                    hx-target="#tasks-table-container"
+                    hx-select="#tasks-table-container"
+                    hx-push-url="true"
+                    hx-include="[name='status']"
+                />
+            </div>
+            <select
+                name="status"
+                class="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all"
+                hx-get="/admin/tasks"
+                hx-trigger="change"
+                hx-target="#tasks-table-container"
+                hx-select="#tasks-table-container"
+                hx-push-url="true"
+                hx-include="[name='search']"
+            >
+                <option value="" {{ 'selected' if not status_filter else '' }}>All Status</option>
+                <option value="enabled" {{ 'selected' if status_filter == 'enabled' else '' }}>Enabled</option>
+                <option value="disabled" {{ 'selected' if status_filter == 'disabled' else '' }}>Disabled</option>
+            </select>
+            <a href="/admin/tasks/new"
+               class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-accent-500 text-white text-sm font-medium shadow-lg shadow-accent-500/25 hover:bg-accent-600 transition-colors">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                </svg>
+                New Task
+            </a>
+        </div>
+    </div>
+
+    <div id="tasks-table-container" class="admin-card overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead class="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
+                    <tr>
+                        <th class="px-6 py-4 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Task</th>
+                        <th class="px-6 py-4 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Handler</th>
+                        <th class="px-6 py-4 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Schedule</th>
+                        <th class="px-6 py-4 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Args</th>
+                        <th class="px-6 py-4 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Kwargs</th>
+                        <th class="px-6 py-4 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
+                        <th class="px-6 py-4 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Last Run</th>
+                        <th class="px-6 py-4 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Updated</th>
+                        <th class="px-6 py-4 text-right text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                    {% for task in tasks %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                        <td class="px-6 py-4">
+                            <p class="text-sm font-medium text-slate-900 dark:text-white">{{ task.name }}</p>
+                        </td>
+                        <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400 font-mono">{{ task.task_name }}</td>
+                        <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{{ task.schedule }}</td>
+                        <td class="px-6 py-4 text-xs text-slate-500 dark:text-slate-400 font-mono">{{ task.args | default('-') }}</td>
+                        <td class="px-6 py-4 text-xs text-slate-500 dark:text-slate-400 font-mono">{{ task.kwargs | default('-') }}</td>
+                        <td class="px-6 py-4">
+                            {% if task.enabled %}
+                            <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+                                <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+                                Enabled
+                            </span>
+                            {% else %}
+                            <span class="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-700 dark:text-slate-400">
+                                <span class="h-1.5 w-1.5 rounded-full bg-slate-400"></span>
+                                Disabled
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{{ task.last_run_at | default('-') }}</td>
+                        <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{{ task.updated_at | default('-') }}</td>
+                        <td class="px-6 py-4 text-right">
+                            <a href="/admin/tasks/{{ task.task_id }}/edit"
+                               class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-700 transition-colors">
+                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                                </svg>
+                                Edit
+                            </a>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="9" class="px-6 py-16">
+                            <div class="text-center">
+                                <p class="text-sm font-medium text-slate-900 dark:text-white">No scheduled tasks found</p>
+                                <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Create tasks to automate background processing.</p>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {% if pagination.total_pages > 1 %}
+        <div class="px-6 py-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+            <div class="flex items-center justify-between">
+                <p class="text-sm text-slate-600 dark:text-slate-400">
+                    Showing {{ pagination.start }} to {{ pagination.end }} of {{ pagination.total }} tasks
+                </p>
+                <div class="flex items-center gap-2">
+                    {% if pagination.has_prev %}
+                    <a href="/admin/tasks?page={{ pagination.page - 1 }}{% if search %}&search={{ search }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}"
+                       class="px-3 py-1.5 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-200 dark:text-slate-400 dark:hover:bg-slate-700 transition-colors">
+                        Previous
+                    </a>
+                    {% endif %}
+
+                    <div class="flex items-center gap-1">
+                        {% for p in pagination.pages %}
+                        {% if p == '...' %}
+                        <span class="px-3 py-1.5 text-sm text-slate-400">...</span>
+                        {% else %}
+                        <a href="/admin/tasks?page={{ p }}{% if search %}&search={{ search }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}"
+                           class="px-3 py-1.5 rounded-lg text-sm font-medium {% if p == pagination.page %}bg-accent-500 text-white{% else %}text-slate-600 hover:bg-slate-200 dark:text-slate-400 dark:hover:bg-slate-700{% endif %}">
+                            {{ p }}
+                        </a>
+                        {% endif %}
+                        {% endfor %}
+                    </div>
+
+                    {% if pagination.has_next %}
+                    <a href="/admin/tasks?page={{ pagination.page + 1 }}{% if search %}&search={{ search }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}"
+                       class="px-3 py-1.5 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-200 dark:text-slate-400 dark:hover:bg-slate-700 transition-colors">
+                        Next
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -10,7 +10,7 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 from uuid import UUID
 import uuid as uuid_lib
 
@@ -25,6 +25,9 @@ from app.models.ifrs.gl.fiscal_period import FiscalPeriod
 from app.models.ifrs.gl.account import Account
 from app.services.common import coerce_uuid
 from app.services.response import ListResponseMixin
+
+if TYPE_CHECKING:
+    from app.schemas.ifrs.gl import TrialBalanceRead
 
 logger = logging.getLogger(__name__)
 
@@ -616,6 +619,87 @@ class AccountBalanceService(ListResponseMixin):
 
         query = query.order_by(AccountBalance.last_updated_at.desc())
         return query.limit(limit).offset(offset).all()
+
+    @staticmethod
+    def get_trial_balance(
+        db: Session,
+        organization_id: str,
+        fiscal_period_id: str,
+        as_of_date: Optional[datetime] = None,
+    ) -> "TrialBalanceRead":
+        """
+        Get trial balance for a fiscal period.
+
+        Args:
+            db: Database session
+            organization_id: Organization scope
+            fiscal_period_id: Period ID
+            as_of_date: Optional as-of date
+
+        Returns:
+            TrialBalanceResult object
+        """
+        from app.schemas.ifrs.gl import TrialBalanceRead, TrialBalanceLineRead
+        from datetime import date as date_type
+
+        org_id = coerce_uuid(organization_id)
+        period_id = coerce_uuid(fiscal_period_id)
+
+        # Get fiscal period info
+        period = db.get(FiscalPeriod, period_id)
+        if not period:
+            raise HTTPException(status_code=404, detail="Fiscal period not found")
+
+        # Get balances
+        balances = AccountBalanceService.get_account_balances(
+            db=db,
+            organization_id=org_id,
+            fiscal_period_id=period_id,
+        )
+
+        # Get account details for all accounts
+        acct_ids = [b.account_id for b in balances]
+        accounts = db.query(Account).filter(Account.account_id.in_(acct_ids)).all()
+        acct_map = {a.account_id: a for a in accounts}
+
+        # Build trial balance lines
+        lines = []
+        total_debit = Decimal("0")
+        total_credit = Decimal("0")
+
+        for balance in balances:
+            acct = acct_map.get(balance.account_id)
+            if not acct:
+                continue
+
+            closing = balance.closing_balance
+            if closing >= 0:
+                debit_balance = closing
+                credit_balance = Decimal("0")
+                total_debit += closing
+            else:
+                debit_balance = Decimal("0")
+                credit_balance = abs(closing)
+                total_credit += abs(closing)
+
+            lines.append(TrialBalanceLineRead(
+                account_id=balance.account_id,
+                account_code=acct.account_code,
+                account_name=acct.account_name,
+                account_type=str(acct.account_type.value) if acct.account_type else "POSTING",
+                debit_balance=debit_balance,
+                credit_balance=credit_balance,
+            ))
+
+        return TrialBalanceRead(
+            fiscal_period_id=period_id,
+            period_name=period.period_name,
+            as_of_date=as_of_date or date_type.today(),
+            lines=lines,
+            total_debit=total_debit,
+            total_credit=total_credit,
+            is_balanced=abs(total_debit - total_credit) < Decimal("0.01"),
+        )
 
 
 # Module-level singleton instance

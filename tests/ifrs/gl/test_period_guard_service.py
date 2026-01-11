@@ -14,31 +14,9 @@ from app.services.ifrs.gl.period_guard import (
     PeriodGuardResult,
 )
 
+from app.models.ifrs.gl.fiscal_period import PeriodStatus
 
-class MockEnumValue:
-    """A mock enum value with .value attribute."""
-    def __init__(self, value: str):
-        self.value = value
-
-    def __eq__(self, other):
-        if isinstance(other, MockEnumValue):
-            return self.value == other.value
-        return self.value == other
-
-    def __hash__(self):
-        return hash(self.value)
-
-    def __repr__(self):
-        return f"MockEnumValue({self.value})"
-
-
-class MockPeriodStatus:
-    """Mock period status enum."""
-    FUTURE = MockEnumValue("FUTURE")
-    OPEN = MockEnumValue("OPEN")
-    SOFT_CLOSED = MockEnumValue("SOFT_CLOSED")
-    HARD_CLOSED = MockEnumValue("HARD_CLOSED")
-    REOPENED = MockEnumValue("REOPENED")
+MockPeriodStatus = PeriodStatus
 
 
 class MockColumn:

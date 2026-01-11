@@ -5,13 +5,14 @@ services:
     restart: unless-stopped
     ports:
       - "8001:8001"
-    environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://postgres:postgres@db:5432/dotmac_books}
-      REDIS_URL: ${REDIS_URL:-redis://:redis@redis:6379/0}
-      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://:redis@redis:6379/0}
-      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://:redis@redis:6379/1}
     env_file:
       - .env
+    environment:
+      # Override database URL for Docker networking (must come after env_file)
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/dotmac_books
+      REDIS_URL: redis://:redis@redis:6379/0
+      CELERY_BROKER_URL: redis://:redis@redis:6379/0
+      CELERY_RESULT_BACKEND: redis://:redis@redis:6379/1
     depends_on:
       - db
       - redis
@@ -25,13 +26,13 @@ services:
     build: .
     container_name: dotmac_books_worker
     restart: unless-stopped
-    environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://postgres:postgres@db:5432/dotmac_books}
-      REDIS_URL: ${REDIS_URL:-redis://:redis@redis:6379/0}
-      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://:redis@redis:6379/0}
-      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://:redis@redis:6379/1}
     env_file:
       - .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/dotmac_books
+      REDIS_URL: redis://:redis@redis:6379/0
+      CELERY_BROKER_URL: redis://:redis@redis:6379/0
+      CELERY_RESULT_BACKEND: redis://:redis@redis:6379/1
     depends_on:
       - db
       - redis
@@ -41,13 +42,13 @@ services:
     build: .
     container_name: dotmac_books_beat
     restart: unless-stopped
-    environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://postgres:postgres@db:5432/dotmac_books}
-      REDIS_URL: ${REDIS_URL:-redis://:redis@redis:6379/0}
-      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://:redis@redis:6379/0}
-      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://:redis@redis:6379/1}
     env_file:
       - .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/dotmac_books
+      REDIS_URL: redis://:redis@redis:6379/0
+      CELERY_BROKER_URL: redis://:redis@redis:6379/0
+      CELERY_RESULT_BACKEND: redis://:redis@redis:6379/1
     depends_on:
       - db
       - redis

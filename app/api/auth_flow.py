@@ -78,8 +78,9 @@ def get_db():
     },
 )
 def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)):
+    provider = payload.provider.value if payload.provider else None
     return auth_flow_service.auth_flow.login_response(
-        db, payload.username, payload.password, request, payload.provider
+        db, payload.username, payload.password, request, provider
     )
 
 
