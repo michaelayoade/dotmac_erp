@@ -1,0 +1,481 @@
+{% extends "ifrs/base_ifrs.html" %}
+
+{% block page_title %}Import {{ entity_name }}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400">
+    <a href="/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/import" class="hover:text-primary-600 dark:hover:text-primary-400">Data Import</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white">{{ entity_name }}</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-3xl space-y-6">
+    <!-- Header -->
+    <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800/50">
+        <h2 class="text-xl font-semibold text-slate-900 dark:text-white">Import {{ entity_name }}</h2>
+        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+            Upload a CSV file to import {{ entity_name | lower }} into your account.
+        </p>
+    </div>
+
+    <!-- Column Requirements -->
+    <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800/50">
+        <h3 class="text-lg font-medium text-slate-900 dark:text-white">CSV Column Requirements</h3>
+
+        <div class="mt-4 grid gap-4 sm:grid-cols-2">
+            <div>
+                <h4 class="text-sm font-medium text-red-600 dark:text-red-400">Required Columns</h4>
+                <ul class="mt-2 space-y-1">
+                    {% for col in columns.required %}
+                    <li class="flex items-center text-sm text-slate-600 dark:text-slate-300">
+                        <svg class="mr-2 h-4 w-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                        </svg>
+                        {{ col }}
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+            <div>
+                <h4 class="text-sm font-medium text-slate-600 dark:text-slate-400">Optional Columns</h4>
+                <ul class="mt-2 space-y-1">
+                    {% for col in columns.optional %}
+                    <li class="flex items-center text-sm text-slate-500 dark:text-slate-400">
+                        <svg class="mr-2 h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        {{ col }}
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Upload Form -->
+    <form id="import-form" class="space-y-6">
+        <input type="hidden" name="entity_type" value="{{ entity_type }}">
+
+        <!-- File Upload -->
+        <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800/50">
+            <h3 class="mb-4 text-lg font-medium text-slate-900 dark:text-white">Select File</h3>
+
+            <div class="flex items-center justify-center w-full">
+                <label for="file" class="flex flex-col items-center justify-center w-full h-40 border-2 border-slate-300 border-dashed rounded-lg cursor-pointer bg-slate-50 hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-800 dark:hover:bg-slate-700 transition-colors">
+                    <div class="flex flex-col items-center justify-center pt-5 pb-6" id="upload-label">
+                        <svg class="w-10 h-10 mb-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                        </svg>
+                        <p class="mb-2 text-sm text-slate-500"><span class="font-semibold">Click to upload</span> or drag and drop</p>
+                        <p class="text-xs text-slate-400">CSV files only (MAX. 10MB)</p>
+                    </div>
+                    <input id="file" name="file" type="file" class="hidden" accept=".csv" />
+                </label>
+            </div>
+
+            <div id="file-info" class="hidden mt-4 p-3 rounded-lg bg-slate-100 dark:bg-slate-700">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center">
+                        <svg class="h-5 w-5 text-green-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        <span id="file-name" class="text-sm font-medium text-slate-700 dark:text-slate-300"></span>
+                    </div>
+                    <button type="button" id="remove-file" class="text-slate-400 hover:text-red-500">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Options -->
+        <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800/50">
+            <h3 class="mb-4 text-lg font-medium text-slate-900 dark:text-white">Import Options</h3>
+
+            <div class="space-y-4">
+                <label class="flex items-center">
+                    <input type="checkbox" name="skip_duplicates" checked
+                           class="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800">
+                    <span class="ml-2 text-sm text-slate-700 dark:text-slate-300">Skip duplicate entries</span>
+                </label>
+
+                <label class="flex items-center">
+                    <input type="checkbox" name="dry_run"
+                           class="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800">
+                    <span class="ml-2 text-sm text-slate-700 dark:text-slate-300">Dry run (validate without saving)</span>
+                </label>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex items-center justify-between">
+            <a href="/import"
+               class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800">
+                Cancel
+            </a>
+            <div class="flex gap-3">
+                <button type="button" id="preview-btn"
+                        class="rounded-lg border border-primary-300 px-4 py-2 text-sm font-medium text-primary-600 hover:bg-primary-50 dark:border-primary-700 dark:text-primary-400 dark:hover:bg-primary-900/30">
+                    Preview
+                </button>
+                <button type="submit" id="import-btn"
+                        class="rounded-lg bg-gradient-to-r from-primary-600 to-primary-500 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-primary-500/25 btn-hover disabled:opacity-50 disabled:cursor-not-allowed">
+                    Import Data
+                </button>
+            </div>
+        </div>
+    </form>
+
+    <!-- Visual Preview Container (hidden initially) -->
+    <div id="preview-container" class="hidden space-y-4">
+        <!-- Preview Header with Format Detection -->
+        <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800/50">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-medium text-slate-900 dark:text-white">File Preview</h3>
+                <div class="flex items-center gap-3">
+                    <span id="detected-format" class="px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300"></span>
+                    <span id="preview-status" class="px-3 py-1 rounded-full text-xs font-medium"></span>
+                </div>
+            </div>
+
+            <!-- Stats Row -->
+            <div class="grid gap-4 sm:grid-cols-4 mb-6">
+                <div class="text-center p-3 rounded-lg bg-slate-50 dark:bg-slate-700">
+                    <div id="preview-total" class="text-xl font-bold text-slate-900 dark:text-white">0</div>
+                    <div class="text-xs text-slate-500 dark:text-slate-400">Total Rows</div>
+                </div>
+                <div class="text-center p-3 rounded-lg bg-green-50 dark:bg-green-900/30">
+                    <div id="preview-mapped" class="text-xl font-bold text-green-600 dark:text-green-400">0</div>
+                    <div class="text-xs text-green-600 dark:text-green-400">Mapped Columns</div>
+                </div>
+                <div class="text-center p-3 rounded-lg bg-amber-50 dark:bg-amber-900/30">
+                    <div id="preview-missing" class="text-xl font-bold text-amber-600 dark:text-amber-400">0</div>
+                    <div class="text-xs text-amber-600 dark:text-amber-400">Missing Required</div>
+                </div>
+                <div class="text-center p-3 rounded-lg bg-red-50 dark:bg-red-900/30">
+                    <div id="preview-errors" class="text-xl font-bold text-red-600 dark:text-red-400">0</div>
+                    <div class="text-xs text-red-600 dark:text-red-400">Validation Errors</div>
+                </div>
+            </div>
+
+            <!-- Column Mapping Section -->
+            <div class="mb-6">
+                <h4 class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">Column Mappings</h4>
+                <div id="column-mappings" class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3"></div>
+            </div>
+
+            <!-- Missing Required Columns Warning -->
+            <div id="missing-columns-warning" class="hidden mb-4 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800">
+                <div class="flex items-start">
+                    <svg class="h-5 w-5 text-amber-500 mr-2 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                    </svg>
+                    <div>
+                        <p class="text-sm font-medium text-amber-700 dark:text-amber-300">Missing Required Columns</p>
+                        <p id="missing-columns-list" class="text-sm text-amber-600 dark:text-amber-400 mt-1"></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sample Data Table -->
+        <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50 overflow-hidden">
+            <div class="p-4 border-b border-slate-200 dark:border-slate-700">
+                <h4 class="text-sm font-medium text-slate-700 dark:text-slate-300">Sample Data (first 10 rows)</h4>
+            </div>
+            <div class="overflow-x-auto">
+                <table id="preview-table" class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+                    <thead id="preview-table-header" class="bg-slate-50 dark:bg-slate-700"></thead>
+                    <tbody id="preview-table-body" class="divide-y divide-slate-200 dark:divide-slate-700"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Validation Errors List -->
+        <div id="preview-errors-list" class="hidden rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/30">
+            <h4 class="text-sm font-medium text-red-700 dark:text-red-300 mb-2">Validation Errors</h4>
+            <ul id="preview-error-items" class="space-y-1 text-sm text-red-600 dark:text-red-400 max-h-40 overflow-y-auto"></ul>
+        </div>
+    </div>
+
+    <!-- Results Container (hidden initially) -->
+    <div id="results-container" class="hidden">
+        <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800/50">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-medium text-slate-900 dark:text-white">Import Results</h3>
+                <span id="result-status" class="px-3 py-1 rounded-full text-sm font-medium"></span>
+            </div>
+
+            <div class="grid gap-4 sm:grid-cols-4">
+                <div class="text-center p-3 rounded-lg bg-slate-50 dark:bg-slate-800">
+                    <div id="result-total" class="text-2xl font-bold text-slate-900 dark:text-white">0</div>
+                    <div class="text-xs text-slate-500">Total Rows</div>
+                </div>
+                <div class="text-center p-3 rounded-lg bg-green-50 dark:bg-green-900/30">
+                    <div id="result-imported" class="text-2xl font-bold text-green-600 dark:text-green-400">0</div>
+                    <div class="text-xs text-green-600 dark:text-green-400">Imported</div>
+                </div>
+                <div class="text-center p-3 rounded-lg bg-amber-50 dark:bg-amber-900/30">
+                    <div id="result-skipped" class="text-2xl font-bold text-amber-600 dark:text-amber-400">0</div>
+                    <div class="text-xs text-amber-600 dark:text-amber-400">Skipped</div>
+                </div>
+                <div class="text-center p-3 rounded-lg bg-red-50 dark:bg-red-900/30">
+                    <div id="result-errors" class="text-2xl font-bold text-red-600 dark:text-red-400">0</div>
+                    <div class="text-xs text-red-600 dark:text-red-400">Errors</div>
+                </div>
+            </div>
+
+            <div id="error-list" class="hidden mt-4">
+                <h4 class="text-sm font-medium text-red-600 dark:text-red-400 mb-2">Errors:</h4>
+                <ul id="error-items" class="space-y-1 text-sm text-red-500 max-h-40 overflow-y-auto"></ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const fileInput = document.getElementById('file');
+const fileInfo = document.getElementById('file-info');
+const fileName = document.getElementById('file-name');
+const removeFileBtn = document.getElementById('remove-file');
+const uploadLabel = document.getElementById('upload-label');
+const importForm = document.getElementById('import-form');
+const resultsContainer = document.getElementById('results-container');
+const previewBtn = document.getElementById('preview-btn');
+
+fileInput.addEventListener('change', function(e) {
+    if (this.files.length > 0) {
+        const file = this.files[0];
+        fileName.textContent = `${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+        fileInfo.classList.remove('hidden');
+        uploadLabel.querySelector('p:first-of-type').innerHTML = '<span class="font-semibold">File selected</span>';
+    }
+});
+
+removeFileBtn.addEventListener('click', function() {
+    fileInput.value = '';
+    fileInfo.classList.add('hidden');
+    uploadLabel.querySelector('p:first-of-type').innerHTML = '<span class="font-semibold">Click to upload</span> or drag and drop';
+});
+
+importForm.addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    const file = fileInput.files[0];
+    if (!file) {
+        alert('Please select a file first');
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('skip_duplicates', document.querySelector('[name="skip_duplicates"]').checked);
+    formData.append('dry_run', document.querySelector('[name="dry_run"]').checked);
+
+    const importBtn = document.getElementById('import-btn');
+    importBtn.disabled = true;
+    importBtn.textContent = 'Importing...';
+
+    try {
+        const response = await fetch('/api/v1/import/{{ entity_type }}', {
+            method: 'POST',
+            body: formData
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+            showResults(result);
+        } else {
+            alert('Import failed: ' + (result.detail || 'Unknown error'));
+        }
+    } catch (error) {
+        alert('Import failed: ' + error.message);
+    } finally {
+        importBtn.disabled = false;
+        importBtn.textContent = 'Import Data';
+    }
+});
+
+previewBtn.addEventListener('click', async function() {
+    const file = fileInput.files[0];
+    if (!file) {
+        alert('Please select a file first');
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    previewBtn.disabled = true;
+    previewBtn.textContent = 'Loading...';
+
+    try {
+        const response = await fetch('/api/v1/import/preview/{{ entity_type }}', {
+            method: 'POST',
+            body: formData
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+            showVisualPreview(result);
+        } else {
+            alert('Preview failed: ' + (result.detail || 'Unknown error'));
+        }
+    } catch (error) {
+        alert('Preview failed: ' + error.message);
+    } finally {
+        previewBtn.disabled = false;
+        previewBtn.textContent = 'Preview';
+    }
+});
+
+function showVisualPreview(result) {
+    const container = document.getElementById('preview-container');
+    container.classList.remove('hidden');
+
+    // Format display names
+    const formatNames = {
+        'zoho': 'Zoho Books',
+        'quickbooks': 'QuickBooks',
+        'xero': 'Xero',
+        'sage': 'Sage',
+        'wave': 'Wave',
+        'freshbooks': 'FreshBooks',
+        'generic': 'Generic CSV'
+    };
+
+    // Update stats
+    document.getElementById('preview-total').textContent = result.total_rows;
+    document.getElementById('preview-mapped').textContent = result.column_mappings ? result.column_mappings.length : 0;
+    document.getElementById('preview-missing').textContent = result.missing_required ? result.missing_required.length : 0;
+    document.getElementById('preview-errors').textContent = result.validation_errors ? result.validation_errors.length : 0;
+
+    // Update format badge
+    const formatEl = document.getElementById('detected-format');
+    formatEl.textContent = formatNames[result.detected_format] || 'Unknown';
+
+    // Update status badge
+    const statusEl = document.getElementById('preview-status');
+    if (result.is_valid) {
+        statusEl.textContent = 'Ready to Import';
+        statusEl.className = 'px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300';
+    } else {
+        statusEl.textContent = 'Needs Attention';
+        statusEl.className = 'px-3 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300';
+    }
+
+    // Render column mappings
+    const mappingsEl = document.getElementById('column-mappings');
+    if (result.column_mappings && result.column_mappings.length > 0) {
+        mappingsEl.innerHTML = result.column_mappings.map(m => {
+            const confidenceClass = m.confidence >= 0.9 ? 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300' :
+                                   m.confidence >= 0.7 ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300' :
+                                   'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300';
+            const samples = m.samples && m.samples.length > 0 ? m.samples.slice(0, 2).join(', ') : '';
+            return `
+                <div class="flex items-center justify-between p-2 rounded-lg bg-slate-50 dark:bg-slate-700">
+                    <div class="flex items-center gap-2 min-w-0">
+                        <span class="text-sm font-medium text-slate-700 dark:text-slate-300 truncate" title="${m.source}">${m.source}</span>
+                        <svg class="h-4 w-4 text-slate-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
+                        </svg>
+                        <span class="text-sm text-slate-600 dark:text-slate-400 truncate" title="${m.target}">${m.target}</span>
+                    </div>
+                    <span class="px-2 py-0.5 rounded text-xs ${confidenceClass}">${Math.round(m.confidence * 100)}%</span>
+                </div>
+            `;
+        }).join('');
+    } else {
+        mappingsEl.innerHTML = '<p class="text-sm text-slate-500">No column mappings detected</p>';
+    }
+
+    // Show missing columns warning
+    const missingWarning = document.getElementById('missing-columns-warning');
+    if (result.missing_required && result.missing_required.length > 0) {
+        missingWarning.classList.remove('hidden');
+        document.getElementById('missing-columns-list').textContent = result.missing_required.join(', ');
+    } else {
+        missingWarning.classList.add('hidden');
+    }
+
+    // Render data table
+    const tableHeader = document.getElementById('preview-table-header');
+    const tableBody = document.getElementById('preview-table-body');
+
+    if (result.sample_data && result.sample_data.length > 0) {
+        const columns = result.detected_columns || Object.keys(result.sample_data[0]);
+
+        // Render header
+        tableHeader.innerHTML = `
+            <tr>
+                <th class="px-3 py-2 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">#</th>
+                ${columns.slice(0, 8).map(col => `
+                    <th class="px-3 py-2 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate max-w-[150px]" title="${col}">${col}</th>
+                `).join('')}
+                ${columns.length > 8 ? '<th class="px-3 py-2 text-left text-xs font-medium text-slate-400">...</th>' : ''}
+            </tr>
+        `;
+
+        // Render body
+        tableBody.innerHTML = result.sample_data.map((row, idx) => `
+            <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                <td class="px-3 py-2 text-sm text-slate-500 dark:text-slate-400">${idx + 1}</td>
+                ${columns.slice(0, 8).map(col => `
+                    <td class="px-3 py-2 text-sm text-slate-700 dark:text-slate-300 truncate max-w-[150px]" title="${row[col] || ''}">${row[col] || '-'}</td>
+                `).join('')}
+                ${columns.length > 8 ? '<td class="px-3 py-2 text-sm text-slate-400">...</td>' : ''}
+            </tr>
+        `).join('');
+    }
+
+    // Show validation errors
+    const errorsContainer = document.getElementById('preview-errors-list');
+    if (result.validation_errors && result.validation_errors.length > 0) {
+        errorsContainer.classList.remove('hidden');
+        document.getElementById('preview-error-items').innerHTML = result.validation_errors.slice(0, 20).map(err => `<li>• ${err}</li>`).join('');
+    } else {
+        errorsContainer.classList.add('hidden');
+    }
+
+    // Scroll to preview
+    container.scrollIntoView({ behavior: 'smooth' });
+}
+
+function showResults(result) {
+    resultsContainer.classList.remove('hidden');
+
+    document.getElementById('result-total').textContent = result.total_rows;
+    document.getElementById('result-imported').textContent = result.imported_count;
+    document.getElementById('result-skipped').textContent = result.skipped_count;
+    document.getElementById('result-errors').textContent = result.error_count;
+
+    const statusEl = document.getElementById('result-status');
+    if (result.status === 'completed') {
+        statusEl.textContent = 'Completed';
+        statusEl.className = 'px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300';
+    } else if (result.status === 'completed_with_errors') {
+        statusEl.textContent = 'Completed with Errors';
+        statusEl.className = 'px-3 py-1 rounded-full text-sm font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300';
+    } else {
+        statusEl.textContent = 'Failed';
+        statusEl.className = 'px-3 py-1 rounded-full text-sm font-medium bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300';
+    }
+
+    if (result.errors && result.errors.length > 0) {
+        document.getElementById('error-list').classList.remove('hidden');
+        const errorItems = document.getElementById('error-items');
+        errorItems.innerHTML = result.errors.map(err => `<li>- ${err}</li>`).join('');
+    }
+
+    resultsContainer.scrollIntoView({ behavior: 'smooth' });
+}
+</script>
+{% endblock %}

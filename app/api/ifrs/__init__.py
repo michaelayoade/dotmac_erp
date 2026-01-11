@@ -15,6 +15,7 @@ from app.api.ifrs.tax import router as tax_router
 from app.api.ifrs.cons import router as cons_router
 from app.api.ifrs.rpt import router as rpt_router
 from app.api.ifrs.banking import router as banking_router
+from app.api.ifrs.import_export import router as import_export_router
 
 __all__ = [
     "gl_router",
@@ -28,4 +29,5 @@ __all__ = [
     "cons_router",
     "rpt_router",
     "banking_router",
+    "import_export_router",
 ]
