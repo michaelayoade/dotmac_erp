@@ -9,12 +9,10 @@
     <meta name="htmx-config" content='{"defaultSwapStyle":"innerHTML","globalViewTransitions":true}' />
     {% set csrf_value = csrf_token if csrf_token is defined else request.state.csrf_token %}
     <meta name="csrf-token" content="{{ csrf_value | default('', true) }}" />
-    <title>{% block title %}{{ page_title | default("Admin") }} - {{ brand.name | default("Admin Portal") }}{% endblock %}</title>
+    <title>{% block title %}{{ page_title | default("Admin") }} - {{ brand.name }}{% endblock %}</title>
 
-    <!-- Premium Typography -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,400&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <!-- Self-hosted Typography -->
+    <link href="/static/css/fonts.css" rel="stylesheet">
 
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -45,10 +43,10 @@
         }
     </script>
 
-    <!-- HTMX & Alpine.js -->
-    <script src="https://unpkg.com/htmx.org@2.0.0"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/collapse@3.x.x/dist/cdn.min.js"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <!-- HTMX & Alpine.js (local) -->
+    <script src="/static/js/vendor/htmx.js"></script>
+    <script defer src="/static/js/vendor/alpine-collapse.js"></script>
+    <script defer src="/static/js/vendor/alpine.js"></script>
 
     <style>
         [x-cloak] { display: none !important; }
@@ -91,8 +89,8 @@
     {% block head %}{% endblock %}
 </head>
 <body class="min-h-screen bg-slate-100 dark:bg-slate-900 antialiased">
-    {% set brand_name = brand.name | default("Admin Portal") %}
-    {% set brand_mark = brand.mark | default("AD") %}
+    {% set brand_name = brand.name %}
+    {% set brand_mark = brand.mark %}
 
     <div class="flex min-h-screen">
         <!-- Sidebar -->

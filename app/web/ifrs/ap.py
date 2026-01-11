@@ -9,24 +9,24 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Query, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
-from app.web.deps import get_db, require_web_auth, WebAuthContext, base_context
-from app.models.ifrs.common.attachment import AttachmentCategory
-from app.services.ifrs.common.attachment import attachment_service, AttachmentInput
 from app.models.ifrs.ap.payment_batch import APBatchStatus
 from app.models.ifrs.ap.supplier import Supplier
 from app.models.ifrs.ap.supplier_invoice import SupplierInvoice
 from app.models.ifrs.ap.supplier_payment import APPaymentMethod
 from app.models.ifrs.banking.bank_account import BankAccountStatus
+from app.models.ifrs.common.attachment import AttachmentCategory
 from app.services.ifrs.ap.payment_batch import payment_batch_service
 from app.services.ifrs.ap.supplier import supplier_service
 from app.services.ifrs.ap.supplier_invoice import supplier_invoice_service
 from app.services.ifrs.ap.web import ap_web_service
 from app.services.ifrs.banking.bank_account import bank_account_service
-
-templates = Jinja2Templates(directory="templates")
+from app.services.ifrs.common.attachment import attachment_service, AttachmentInput
+from app.services.ifrs.platform.org_context import org_context_service
+from app.services.ifrs.platform.currency_context import get_currency_context
+from app.templates import templates
+from app.web.deps import get_db, require_web_auth, WebAuthContext, base_context
 
 router = APIRouter(prefix="/ap", tags=["ap-web"])
 
@@ -561,6 +561,7 @@ def new_payment_batch_form(
         "invoices": invoices_view,
         "payment_methods": [method.value for method in APPaymentMethod],
     })
+    context.update(get_currency_context(db, str(auth.organization_id)))
     return templates.TemplateResponse(request, "ifrs/ap/payment_batch_form.html", context)
 
 
@@ -688,11 +689,16 @@ async def create_purchase_order(
         expected_delivery_str = data.get("expected_delivery_date")
         expected_delivery = datetime.strptime(expected_delivery_str, "%Y-%m-%d").date() if expected_delivery_str else None
 
+        currency_code = data.get("currency_code") or org_context_service.get_functional_currency(
+            db,
+            auth.organization_id,
+        )
+
         input_data = PurchaseOrderInput(
             supplier_id=UUID(data["supplier_id"]),
             po_date=po_date,
             expected_delivery_date=expected_delivery,
-            currency_code=data.get("currency_code", "USD"),
+            currency_code=currency_code,
             terms_and_conditions=data.get("terms_and_conditions"),
             lines=lines,
         )

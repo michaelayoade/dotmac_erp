@@ -25,8 +25,32 @@ class Settings:
 
     # Branding
     brand_name: str = os.getenv("BRAND_NAME", "DotMac Books")
-    brand_tagline: str = os.getenv("BRAND_TAGLINE", "IFRS-Based Accounting Software")
+    brand_tagline: str = os.getenv("BRAND_TAGLINE", "IFRS accounting that closes faster")
     brand_logo_url: str | None = os.getenv("BRAND_LOGO_URL") or None
+    brand_mark: str | None = os.getenv("BRAND_MARK") or None  # Auto-derived if not set
+
+    # Default currency (used for admin org creation when no org context)
+    default_functional_currency_code: str = os.getenv(
+        "DEFAULT_FUNCTIONAL_CURRENCY_CODE",
+        "NGN",
+    )
+    default_presentation_currency_code: str = os.getenv(
+        "DEFAULT_PRESENTATION_CURRENCY_CODE",
+        "NGN",
+    )
+
+    # Landing page content (configurable without code changes)
+    landing_hero_badge: str = os.getenv("LANDING_HERO_BADGE", "IFRS-ready accounting")
+    landing_hero_title: str = os.getenv(
+        "LANDING_HERO_TITLE", "Close faster with audit-ready accounting"
+    )
+    landing_hero_subtitle: str = os.getenv(
+        "LANDING_HERO_SUBTITLE",
+        "Multi-entity support, clean audit trail, and accurate AR/AP aging for growing finance teams.",
+    )
+    landing_cta_primary: str = os.getenv("LANDING_CTA_PRIMARY", "Start trial")
+    landing_cta_secondary: str = os.getenv("LANDING_CTA_SECONDARY", "View sample reports")
+    landing_content_json: str | None = os.getenv("LANDING_CONTENT_JSON") or None
 
 
 settings = Settings()

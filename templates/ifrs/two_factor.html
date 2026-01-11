@@ -1,0 +1,515 @@
+{% extends "ifrs/base_ifrs.html" %}
+
+{% block page_title %}Two-Factor Authentication{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto space-y-8">
+    <!-- Header -->
+    <div class="stagger-in" style="animation-delay: 0ms;">
+        <a href="/profile" class="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-teal-600 dark:text-slate-400 dark:hover:text-teal-400 mb-4 transition-colors">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+            </svg>
+            Back to Profile
+        </a>
+        <h1 class="text-2xl font-display font-semibold text-slate-900 dark:text-white">Two-Factor Authentication</h1>
+        <p class="text-slate-500 dark:text-slate-400 mt-2">
+            Add an extra layer of security to your account using an authenticator app.
+        </p>
+    </div>
+
+    <!-- Alert Container -->
+    <div id="alert-container" class="hidden">
+        <div id="alert-message" class="p-4 rounded-lg text-sm"></div>
+    </div>
+
+    {% if has_totp %}
+    <!-- 2FA Enabled State -->
+    <div class="stagger-in" style="animation-delay: 50ms;">
+        <div class="card p-6">
+            <div class="flex items-start gap-4">
+                <div class="w-12 h-12 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                    </svg>
+                </div>
+                <div class="flex-1">
+                    <div class="flex items-center gap-2">
+                        <h3 class="font-semibold text-slate-900 dark:text-white">Two-factor authentication is enabled</h3>
+                        <span class="badge badge-success">Active</span>
+                    </div>
+                    <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                        Your account is protected with an authenticator app.
+                    </p>
+                    {% if primary_method and primary_method.last_used_at %}
+                    <p class="text-xs text-slate-400 dark:text-slate-500 mt-2">
+                        Last used: {{ primary_method.last_used_at.strftime('%b %d, %Y at %H:%M') }}
+                    </p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Existing Methods -->
+    <div class="stagger-in" style="animation-delay: 100ms;">
+        <div class="section-label">
+            <span class="section-label-text">Authenticator Apps</span>
+        </div>
+        <div class="space-y-3">
+            {% for method in mfa_methods %}
+            {% if method.method_type.value == 'totp' and method.enabled %}
+            <div class="card p-4" id="method-{{ method.id }}">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 dark:text-slate-400">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <p class="font-medium text-slate-900 dark:text-white">
+                                {{ method.label or 'Authenticator App' }}
+                            </p>
+                            <p class="text-xs text-slate-500 dark:text-slate-400">
+                                Added {{ method.created_at.strftime('%b %d, %Y') }}
+                                {% if method.is_primary %}
+                                <span class="text-teal-600 dark:text-teal-400">- Primary</span>
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+                    <button onclick="removeMethod('{{ method.id }}')"
+                            class="btn btn-sm text-rose-600 border-rose-200 hover:bg-rose-50 hover:border-rose-300 dark:border-rose-900/50 dark:hover:bg-rose-900/20"
+                            id="remove-btn-{{ method.id }}">
+                        Remove
+                    </button>
+                </div>
+            </div>
+            {% endif %}
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Disable 2FA -->
+    <div class="stagger-in" style="animation-delay: 150ms;">
+        <div class="card p-6 border-rose-200 dark:border-rose-900/50">
+            <h4 class="font-medium text-slate-900 dark:text-white">Disable Two-Factor Authentication</h4>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mt-1 mb-4">
+                This will remove all authenticator apps and disable 2FA for your account.
+            </p>
+            <button onclick="disableAll2FA()"
+                    class="btn btn-sm text-rose-600 border-rose-200 hover:bg-rose-50 hover:border-rose-300 dark:border-rose-900/50 dark:hover:bg-rose-900/20"
+                    id="disable-all-btn">
+                Disable 2FA
+            </button>
+        </div>
+    </div>
+
+    {% else %}
+    <!-- 2FA Setup Wizard -->
+    <div class="stagger-in" style="animation-delay: 50ms;">
+        <div class="card p-6">
+            <div class="flex items-start gap-4 mb-6">
+                <div class="w-12 h-12 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center text-amber-600 dark:text-amber-400">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                    </svg>
+                </div>
+                <div>
+                    <h3 class="font-semibold text-slate-900 dark:text-white">Two-factor authentication is not enabled</h3>
+                    <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                        Enable 2FA to add an extra layer of security to your account.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Setup Steps -->
+            <div id="setup-container">
+                <!-- Step 1: Introduction -->
+                <div id="step-intro" class="space-y-6">
+                    <div class="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-4">
+                        <h4 class="font-medium text-slate-900 dark:text-white mb-2">What you'll need:</h4>
+                        <ul class="space-y-2 text-sm text-slate-600 dark:text-slate-400">
+                            <li class="flex items-start gap-2">
+                                <svg class="w-4 h-4 text-teal-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                </svg>
+                                An authenticator app on your phone (Google Authenticator, Authy, 1Password, etc.)
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <svg class="w-4 h-4 text-teal-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                </svg>
+                                About 2 minutes to complete setup
+                            </li>
+                        </ul>
+                    </div>
+                    <button onclick="startSetup()" class="btn btn-teal w-full sm:w-auto">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                        </svg>
+                        Set Up Two-Factor Authentication
+                    </button>
+                </div>
+
+                <!-- Step 2: QR Code -->
+                <div id="step-qr" class="hidden space-y-6">
+                    <div class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 mb-4">
+                        <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-teal-100 text-teal-700 text-xs font-semibold dark:bg-teal-900/30 dark:text-teal-400">1</span>
+                        Scan this QR code with your authenticator app
+                    </div>
+
+                    <div class="flex flex-col items-center gap-6">
+                        <!-- QR Code Container -->
+                        <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
+                            <div id="qr-code" class="w-48 h-48 flex items-center justify-center">
+                                <svg class="w-8 h-8 text-slate-300 animate-spin" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                            </div>
+                        </div>
+
+                        <!-- Manual Entry -->
+                        <details class="w-full">
+                            <summary class="text-sm text-slate-500 dark:text-slate-400 cursor-pointer hover:text-teal-600 dark:hover:text-teal-400">
+                                Can't scan? Enter code manually
+                            </summary>
+                            <div class="mt-3 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
+                                <p class="text-xs text-slate-500 dark:text-slate-400 mb-2">Enter this secret key in your authenticator app:</p>
+                                <div class="flex items-center gap-2">
+                                    <code id="secret-key" class="flex-1 p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded font-mono text-sm text-slate-700 dark:text-slate-300 break-all">
+                                        Loading...
+                                    </code>
+                                    <button onclick="copySecret()" class="btn btn-secondary btn-sm" title="Copy to clipboard">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+                        </details>
+                    </div>
+
+                    <div class="flex justify-between pt-4 border-t border-slate-100 dark:border-slate-700">
+                        <button onclick="cancelSetup()" class="btn btn-secondary">Cancel</button>
+                        <button onclick="showVerifyStep()" class="btn btn-teal">
+                            Continue
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Step 3: Verify -->
+                <div id="step-verify" class="hidden space-y-6">
+                    <div class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 mb-4">
+                        <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-teal-100 text-teal-700 text-xs font-semibold dark:bg-teal-900/30 dark:text-teal-400">2</span>
+                        Enter the 6-digit code from your authenticator app
+                    </div>
+
+                    <div class="max-w-xs mx-auto">
+                        <label class="form-label text-center block mb-2">Verification Code</label>
+                        <input type="text"
+                               id="totp-code"
+                               class="form-input text-center text-2xl font-mono tracking-widest"
+                               placeholder="000000"
+                               maxlength="6"
+                               pattern="[0-9]*"
+                               inputmode="numeric"
+                               autocomplete="one-time-code">
+                        <p class="text-xs text-slate-500 dark:text-slate-400 text-center mt-2">
+                            The code changes every 30 seconds
+                        </p>
+                    </div>
+
+                    <div class="flex justify-between pt-4 border-t border-slate-100 dark:border-slate-700">
+                        <button onclick="showQRStep()" class="btn btn-secondary">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                            </svg>
+                            Back
+                        </button>
+                        <button onclick="verifyCode()" class="btn btn-teal" id="verify-btn">
+                            <span id="verify-text">Verify & Enable</span>
+                            <svg id="verify-spinner" class="hidden w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Security Info -->
+    <div class="stagger-in" style="animation-delay: 200ms;">
+        <div class="card p-6 bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700">
+            <h3 class="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-2">
+                <svg class="w-4 h-4 text-teal-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                How Two-Factor Authentication Works
+            </h3>
+            <ul class="space-y-2 text-sm text-slate-600 dark:text-slate-400">
+                <li class="flex items-start gap-2">
+                    <span class="text-teal-500 font-semibold">1.</span>
+                    When you sign in, you'll enter your password as usual
+                </li>
+                <li class="flex items-start gap-2">
+                    <span class="text-teal-500 font-semibold">2.</span>
+                    You'll then be asked for a 6-digit code from your authenticator app
+                </li>
+                <li class="flex items-start gap-2">
+                    <span class="text-teal-500 font-semibold">3.</span>
+                    Even if someone knows your password, they can't sign in without your phone
+                </li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<script src="/static/js/vendor/qrcode.js"></script>
+<script>
+const personId = '{{ person_id }}';
+let currentMethodId = null;
+let currentSecret = null;
+
+function showAlert(message, isError = false) {
+    const container = document.getElementById('alert-container');
+    const alertMsg = document.getElementById('alert-message');
+
+    container.classList.remove('hidden');
+    alertMsg.textContent = message;
+
+    if (isError) {
+        alertMsg.className = 'p-4 rounded-lg text-sm bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-900/20 dark:text-rose-400 dark:border-rose-900/50';
+    } else {
+        alertMsg.className = 'p-4 rounded-lg text-sm bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-900/50';
+    }
+
+    setTimeout(() => {
+        container.classList.add('hidden');
+    }, 5000);
+}
+
+async function startSetup() {
+    document.getElementById('step-intro').classList.add('hidden');
+    document.getElementById('step-qr').classList.remove('hidden');
+
+    try {
+        const response = await fetch('/api/v1/auth/mfa/setup', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                person_id: personId,
+                label: 'Authenticator App'
+            }),
+            credentials: 'include'
+        });
+
+        if (!response.ok) {
+            const data = await response.json();
+            throw new Error(data.detail || 'Failed to start setup');
+        }
+
+        const data = await response.json();
+        currentMethodId = data.method_id;
+        currentSecret = data.secret;
+
+        // Generate QR code using qrcodejs
+        const qrContainer = document.getElementById('qr-code');
+        qrContainer.innerHTML = '';
+        try {
+            new QRCode(qrContainer, {
+                text: data.otpauth_uri,
+                width: 192,
+                height: 192,
+                colorDark: '#0f172a',
+                colorLight: '#ffffff',
+                correctLevel: QRCode.CorrectLevel.M
+            });
+        } catch (error) {
+            qrContainer.innerHTML = '<p class="text-sm text-rose-500">Failed to generate QR code</p>';
+        }
+
+        // Show secret key
+        document.getElementById('secret-key').textContent = data.secret;
+
+    } catch (error) {
+        showAlert(error.message, true);
+        cancelSetup();
+    }
+}
+
+function cancelSetup() {
+    document.getElementById('step-qr').classList.add('hidden');
+    document.getElementById('step-verify').classList.add('hidden');
+    document.getElementById('step-intro').classList.remove('hidden');
+    currentMethodId = null;
+    currentSecret = null;
+}
+
+function showVerifyStep() {
+    document.getElementById('step-qr').classList.add('hidden');
+    document.getElementById('step-verify').classList.remove('hidden');
+    document.getElementById('totp-code').focus();
+}
+
+function showQRStep() {
+    document.getElementById('step-verify').classList.add('hidden');
+    document.getElementById('step-qr').classList.remove('hidden');
+}
+
+function copySecret() {
+    const secret = document.getElementById('secret-key').textContent;
+    navigator.clipboard.writeText(secret).then(() => {
+        showAlert('Secret key copied to clipboard');
+    }).catch(() => {
+        showAlert('Failed to copy', true);
+    });
+}
+
+async function verifyCode() {
+    const code = document.getElementById('totp-code').value.trim();
+    if (code.length !== 6 || !/^\d+$/.test(code)) {
+        showAlert('Please enter a valid 6-digit code', true);
+        return;
+    }
+
+    const btn = document.getElementById('verify-btn');
+    const btnText = document.getElementById('verify-text');
+    const spinner = document.getElementById('verify-spinner');
+
+    btn.disabled = true;
+    btnText.textContent = 'Verifying...';
+    spinner.classList.remove('hidden');
+
+    try {
+        const response = await fetch('/api/v1/auth/mfa/confirm', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                method_id: currentMethodId,
+                code: code
+            }),
+            credentials: 'include'
+        });
+
+        if (!response.ok) {
+            const data = await response.json();
+            throw new Error(data.detail || 'Invalid code');
+        }
+
+        showAlert('Two-factor authentication enabled successfully!');
+        setTimeout(() => {
+            window.location.reload();
+        }, 1500);
+
+    } catch (error) {
+        showAlert(error.message, true);
+        btn.disabled = false;
+        btnText.textContent = 'Verify & Enable';
+        spinner.classList.add('hidden');
+        document.getElementById('totp-code').value = '';
+        document.getElementById('totp-code').focus();
+    }
+}
+
+async function removeMethod(methodId) {
+    if (!confirm('Are you sure you want to remove this authenticator? You may lose access to your account if this is your only 2FA method.')) {
+        return;
+    }
+
+    const btn = document.getElementById('remove-btn-' + methodId);
+    btn.disabled = true;
+    btn.textContent = 'Removing...';
+
+    try {
+        const response = await fetch('/api/v1/mfa-methods/' + methodId, {
+            method: 'DELETE',
+            credentials: 'include'
+        });
+
+        if (!response.ok) {
+            const data = await response.json();
+            throw new Error(data.detail || 'Failed to remove');
+        }
+
+        showAlert('Authenticator removed');
+        setTimeout(() => {
+            window.location.reload();
+        }, 1000);
+
+    } catch (error) {
+        showAlert(error.message, true);
+        btn.disabled = false;
+        btn.textContent = 'Remove';
+    }
+}
+
+async function disableAll2FA() {
+    if (!confirm('Are you sure you want to disable two-factor authentication? This will make your account less secure.')) {
+        return;
+    }
+
+    const btn = document.getElementById('disable-all-btn');
+    btn.disabled = true;
+    btn.textContent = 'Disabling...';
+
+    try {
+        // Get all methods and delete them
+        const response = await fetch('/api/v1/mfa-methods?person_id=' + personId, {
+            credentials: 'include'
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to fetch methods');
+        }
+
+        const data = await response.json();
+        const methods = data.data || [];
+
+        for (const method of methods) {
+            await fetch('/api/v1/mfa-methods/' + method.id, {
+                method: 'DELETE',
+                credentials: 'include'
+            });
+        }
+
+        showAlert('Two-factor authentication disabled');
+        setTimeout(() => {
+            window.location.reload();
+        }, 1000);
+
+    } catch (error) {
+        showAlert(error.message, true);
+        btn.disabled = false;
+        btn.textContent = 'Disable 2FA';
+    }
+}
+
+// Auto-submit when 6 digits entered
+document.getElementById('totp-code')?.addEventListener('input', function(e) {
+    this.value = this.value.replace(/\D/g, '').slice(0, 6);
+    if (this.value.length === 6) {
+        verifyCode();
+    }
+});
+
+// Handle Enter key
+document.getElementById('totp-code')?.addEventListener('keypress', function(e) {
+    if (e.key === 'Enter' && this.value.length === 6) {
+        verifyCode();
+    }
+});
+</script>
+{% endblock %}

@@ -128,6 +128,14 @@ IFRS-based multi-tenant accounting software built with FastAPI, featuring compre
 
 ## Getting Started
 
+### Documentation
+
+- `docs/getting_started.md`
+- `docs/development.md`
+- `docs/architecture.md`
+- `docs/deployment.md`
+- `docs/troubleshooting.md`
+
 ### Prerequisites
 
 - Python 3.11 or 3.12
@@ -233,7 +241,14 @@ Services:
 | `TOTP_ISSUER` | TOTP issuer name | `dotmac_books` |
 | `TOTP_ENCRYPTION_KEY` | TOTP secret encryption key | Required |
 | `BRAND_NAME` | Application brand name | `DotMac Books` |
-| `BRAND_TAGLINE` | Application tagline | `IFRS-Based Accounting Software` |
+| `BRAND_TAGLINE` | Application tagline | `IFRS accounting that closes faster` |
+| `BRAND_MARK` | Two-letter brand mark override | - |
+| `LANDING_HERO_BADGE` | Landing page hero badge text | `IFRS-ready accounting` |
+| `LANDING_HERO_TITLE` | Landing page hero title | `Close faster with audit-ready accounting` |
+| `LANDING_HERO_SUBTITLE` | Landing page hero subtitle | `Multi-entity support, clean audit trail, and accurate AR/AP aging for growing finance teams.` |
+| `LANDING_CTA_PRIMARY` | Landing page primary CTA label | `Start trial` |
+| `LANDING_CTA_SECONDARY` | Landing page secondary CTA label | `View sample reports` |
+| `LANDING_CONTENT_JSON` | Optional JSON to override landing page content | - |
 | `OTEL_ENABLED` | Enable OpenTelemetry | `false` |
 | `OTEL_SERVICE_NAME` | Service name for tracing | `dotmac_books` |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP collector endpoint | - |

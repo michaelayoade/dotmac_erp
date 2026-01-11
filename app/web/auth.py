@@ -8,15 +8,10 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
+from app.templates import templates
 from app.web.deps import brand_context, get_db, optional_web_auth, WebAuthContext
-
-templates = Jinja2Templates(directory="templates")
-
-# Add global 'now' function for templates
-templates.env.globals["now"] = datetime.now
 
 
 router = APIRouter(tags=["web-auth"])

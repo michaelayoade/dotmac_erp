@@ -10,6 +10,7 @@ from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Index, Integer, Stri
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.config import settings
 from app.db import Base
 
 
@@ -60,7 +61,11 @@ class Supplier(Base):
 
     # Payment terms
     payment_terms_days: Mapped[int] = mapped_column(Integer, nullable=False, default=30)
-    currency_code: Mapped[str] = mapped_column(String(3), nullable=False, default="USD")
+    currency_code: Mapped[str] = mapped_column(
+        String(3),
+        nullable=False,
+        default=settings.default_functional_currency_code,
+    )
 
     # Defaults
     default_expense_account_id: Mapped[Optional[uuid.UUID]] = mapped_column(

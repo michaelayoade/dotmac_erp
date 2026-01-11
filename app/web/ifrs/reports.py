@@ -4,19 +4,16 @@ Reports Web Routes.
 HTML template routes for financial reports and analytics.
 """
 
-from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
-from app.web.deps import get_db, require_web_auth, WebAuthContext, base_context
 from app.services.ifrs.rpt.web import reports_web_service
+from app.templates import templates
+from app.web.deps import get_db, require_web_auth, WebAuthContext, base_context
 
-templates = Jinja2Templates(directory="templates")
-templates.env.globals["now"] = datetime.now
 
 router = APIRouter(prefix="/reports", tags=["reports-web"])
 

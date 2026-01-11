@@ -9,17 +9,16 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Query, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
-from app.web.deps import get_db, require_web_auth, WebAuthContext, base_context
 from app.models.ifrs.common.attachment import AttachmentCategory
-from app.services.ifrs.common.attachment import attachment_service, AttachmentInput
 from app.services.ifrs.ar.customer import customer_service
 from app.services.ifrs.ar.invoice import ar_invoice_service
 from app.services.ifrs.ar.web import ar_web_service
+from app.services.ifrs.common.attachment import attachment_service, AttachmentInput
+from app.templates import templates
+from app.web.deps import get_db, require_web_auth, WebAuthContext, base_context
 
-templates = Jinja2Templates(directory="templates")
 
 router = APIRouter(prefix="/ar", tags=["ar-web"])
 

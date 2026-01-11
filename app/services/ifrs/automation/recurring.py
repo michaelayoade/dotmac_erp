@@ -15,6 +15,7 @@ from fastapi import HTTPException
 from sqlalchemy import and_, select
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.models.ifrs.automation import (
     RecurringEntityType,
     RecurringFrequency,
@@ -413,7 +414,10 @@ class RecurringService:
                 invoice_type=InvoiceType.STANDARD,
                 invoice_date=invoice_date,
                 due_date=due_date,
-                currency_code=data.get("currency_code", "USD"),
+                currency_code=data.get(
+                    "currency_code",
+                    settings.default_functional_currency_code,
+                ),
                 subtotal=subtotal,
                 tax_amount=tax_amount,
                 total_amount=total_amount,
@@ -487,7 +491,10 @@ class RecurringService:
                 expense_account_id=UUID(data["expense_account_id"]),
                 payment_account_id=UUID(data["payment_account_id"]) if data.get("payment_account_id") else None,
                 amount=Decimal(data.get("amount", "0")),
-                currency_code=data.get("currency_code", "USD"),
+                currency_code=data.get(
+                    "currency_code",
+                    settings.default_functional_currency_code,
+                ),
                 tax_code_id=UUID(data["tax_code_id"]) if data.get("tax_code_id") else None,
                 project_id=UUID(data["project_id"]) if data.get("project_id") else None,
                 cost_center_id=UUID(data["cost_center_id"]) if data.get("cost_center_id") else None,

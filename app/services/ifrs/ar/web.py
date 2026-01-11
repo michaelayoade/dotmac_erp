@@ -25,6 +25,7 @@ from app.models.ifrs.core_org.cost_center import CostCenter
 from app.models.ifrs.core_org.project import Project
 from app.models.ifrs.gl.account import Account
 from app.models.ifrs.gl.account_category import AccountCategory, IFRSCategory
+from app.config import settings
 from app.services.common import coerce_uuid
 from app.services.ifrs.ar.ar_aging import ar_aging_service
 from app.services.ifrs.ar.customer import CustomerInput, customer_service
@@ -36,6 +37,7 @@ from app.services.ifrs.ar.customer_payment import (
 from app.models.ifrs.ar.customer_payment import PaymentMethod, PaymentStatus
 from app.services.ifrs.ar.invoice import ARInvoiceInput, ARInvoiceLineInput, ar_invoice_service
 from app.services.ifrs.common.attachment import attachment_service
+from app.services.ifrs.platform.currency_context import get_currency_context
 from app.services.ifrs.tax.tax_master import tax_code_service
 
 
@@ -62,12 +64,13 @@ def _format_date(value: Optional[date]) -> str:
     return value.strftime("%Y-%m-%d") if value else ""
 
 
-def _format_currency(amount: Optional[Decimal], currency: str = "USD") -> Optional[str]:
+def _format_currency(
+    amount: Optional[Decimal],
+    currency: str = settings.default_presentation_currency_code,
+) -> Optional[str]:
     if amount is None:
         return None
     value = Decimal(str(amount))
-    if currency == "USD":
-        return f"${value:,.2f}"
     return f"{currency} {value:,.2f}"
 
 
@@ -337,7 +340,10 @@ class ARWebService:
             legal_name=form_data.get("customer_name", ""),
             trading_name=form_data.get("customer_name"),
             tax_identification_number=form_data.get("tax_id"),
-            currency_code=form_data.get("currency_code", "USD"),
+            currency_code=form_data.get(
+                "currency_code",
+                settings.default_functional_currency_code,
+            ),
             credit_terms_days=int(form_data.get("payment_terms_days", 30)),
             credit_limit=Decimal(credit_limit) if credit_limit else None,
             risk_category=RiskCategory.MEDIUM,
@@ -403,7 +409,10 @@ class ARWebService:
             invoice_type=InvoiceType.STANDARD,
             invoice_date=invoice_date,
             due_date=due_date,
-            currency_code=data.get("currency_code", "USD"),
+            currency_code=data.get(
+                "currency_code",
+                settings.default_functional_currency_code,
+            ),
             notes=data.get("terms"),
             internal_notes=data.get("notes"),
             lines=lines,
@@ -507,11 +516,13 @@ class ARWebService:
         revenue_accounts = _get_accounts(db, org_id, IFRSCategory.REVENUE)
         receivable_accounts = _get_accounts(db, org_id, IFRSCategory.ASSETS, "AR")
 
-        return {
+        context = {
             "customer": customer_view,
             "revenue_accounts": revenue_accounts,
             "receivable_accounts": receivable_accounts,
         }
+        context.update(get_currency_context(db, organization_id))
+        return context
 
     @staticmethod
     def customer_detail_context(
@@ -820,7 +831,7 @@ class ARWebService:
             )
         ]
 
-        return {
+        context = {
             "customers_list": customers_list,
             "revenue_accounts": revenue_accounts,
             "tax_codes": tax_codes,
@@ -829,6 +840,8 @@ class ARWebService:
             "organization_id": organization_id,
             "user_id": "00000000-0000-0000-0000-000000000001",
         }
+        context.update(get_currency_context(db, organization_id))
+        return context
 
     @staticmethod
     def invoice_detail_context(
@@ -1289,7 +1302,10 @@ class ARWebService:
             customer_id=UUID(data["customer_id"]),
             payment_date=payment_date,
             payment_method=payment_method,
-            currency_code=data.get("currency_code", "USD"),
+            currency_code=data.get(
+                "currency_code",
+                settings.default_functional_currency_code,
+            ),
             amount=Decimal(str(data.get("amount", 0))),
             bank_account_id=UUID(data["bank_account_id"]) if data.get("bank_account_id") else None,
             reference=data.get("reference"),
@@ -1550,7 +1566,7 @@ class ARWebService:
             if invoice_id and str(invoice.invoice_id) == invoice_id:
                 selected_invoice = view
 
-        return {
+        context = {
             "customers_list": customers_list,
             "revenue_accounts": revenue_accounts,
             "tax_codes": tax_codes,
@@ -1561,6 +1577,8 @@ class ARWebService:
             "selected_invoice": selected_invoice,
             "organization_id": organization_id,
         }
+        context.update(get_currency_context(db, organization_id))
+        return context
 
     @staticmethod
     def credit_note_detail_context(
@@ -1678,7 +1696,10 @@ class ARWebService:
             invoice_type=InvoiceType.CREDIT_NOTE,
             invoice_date=credit_note_date,
             due_date=credit_note_date,  # Credit notes don't have due dates
-            currency_code=data.get("currency_code", "USD"),
+            currency_code=data.get(
+                "currency_code",
+                settings.default_functional_currency_code,
+            ),
             notes=data.get("reason"),
             internal_notes=data.get("notes"),
             lines=lines,

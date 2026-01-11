@@ -16,6 +16,7 @@ from fastapi import HTTPException
 from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.models.ifrs.ar.customer import Customer, CustomerType, RiskCategory
 from app.services.common import coerce_uuid
 from app.services.response import ListResponseMixin
@@ -35,7 +36,7 @@ class CustomerInput:
     credit_limit: Optional[Decimal] = None
     credit_terms_days: int = 30
     payment_terms_id: Optional[UUID] = None
-    currency_code: str = "USD"
+    currency_code: str = settings.default_functional_currency_code
     price_list_id: Optional[UUID] = None
     default_revenue_account_id: Optional[UUID] = None
     sales_rep_user_id: Optional[UUID] = None

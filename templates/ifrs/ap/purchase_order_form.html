@@ -79,10 +79,12 @@
                         Currency <span class="text-rose-500">*</span>
                     </label>
                     <select x-model="formData.currency_code" required class="form-select">
-                        <option value="USD">USD - US Dollar</option>
-                        <option value="EUR">EUR - Euro</option>
-                        <option value="GBP">GBP - British Pound</option>
-                        <option value="NGN">NGN - Nigerian Naira</option>
+                        {% set selected_currency = order.currency_code if order else default_currency_code %}
+                        {% for currency in currencies %}
+                        <option value="{{ currency.code }}" {% if currency.code == selected_currency %}selected{% endif %}>
+                            {{ currency.code }} - {{ currency.name }}
+                        </option>
+                        {% endfor %}
                     </select>
                 </div>
 
@@ -227,7 +229,7 @@ function purchaseOrderForm() {
         submitting: false,
         formData: {
             supplier_id: existingOrder?.supplier_id || '',
-            currency_code: existingOrder?.currency_code || 'USD',
+            currency_code: existingOrder?.currency_code || '{{ default_currency_code }}',
             po_date: existingOrder?.po_date || today,
             expected_delivery_date: existingOrder?.expected_delivery_date || '',
             terms_and_conditions: existingOrder?.terms_and_conditions || '',
@@ -278,7 +280,7 @@ function purchaseOrderForm() {
         formatCurrency(amount) {
             return new Intl.NumberFormat('en-US', {
                 style: 'currency',
-                currency: this.formData.currency_code || 'USD',
+                currency: this.formData.currency_code || '{{ default_currency_code }}',
                 minimumFractionDigits: 2
             }).format(amount || 0);
         },

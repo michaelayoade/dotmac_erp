@@ -303,10 +303,9 @@
                             x-model="form.currency_code"
                             required
                             class="form-input form-select">
-                        <option value="USD">USD - US Dollar</option>
-                        <option value="EUR">EUR - Euro</option>
-                        <option value="GBP">GBP - British Pound</option>
-                        <option value="NGN">NGN - Nigerian Naira</option>
+                        {% for currency in currencies %}
+                        <option value="{{ currency.code }}">{{ currency.code }} - {{ currency.name }}</option>
+                        {% endfor %}
                     </select>
                 </div>
 
@@ -594,7 +593,7 @@ function quoteForm() {
             customer_id: '{{ selected_customer_id or "" }}',
             quote_date: '{{ today }}',
             valid_until: '{{ default_valid_until }}',
-            currency_code: 'USD',
+            currency_code: '{{ default_currency_code }}',
             contact_name: '',
             contact_email: '',
             payment_terms_id: '',
@@ -650,7 +649,7 @@ function quoteForm() {
         },
 
         formatCurrency(amount) {
-            const currency = this.form.currency_code || 'USD';
+            const currency = this.form.currency_code || '{{ default_currency_code }}';
             return new Intl.NumberFormat('en-US', {
                 style: 'currency',
                 currency: currency

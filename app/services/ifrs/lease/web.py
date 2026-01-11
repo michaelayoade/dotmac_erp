@@ -21,6 +21,7 @@ from app.models.ifrs.lease.lease_contract import (
 )
 from app.models.ifrs.lease.lease_liability import LeaseLiability
 from app.models.ifrs.lease.lease_payment_schedule import LeasePaymentSchedule
+from app.config import settings
 from app.services.common import coerce_uuid
 from app.services.ifrs.lease import lease_contract_service, lease_variable_payment_service
 
@@ -29,12 +30,13 @@ def _format_date(value: Optional[date]) -> str:
     return value.strftime("%Y-%m-%d") if value else ""
 
 
-def _format_currency(amount: Optional[Decimal], currency: str = "USD") -> str:
+def _format_currency(
+    amount: Optional[Decimal],
+    currency: str = settings.default_presentation_currency_code,
+) -> str:
     if amount is None:
         return ""
     value = Decimal(str(amount))
-    if currency == "USD":
-        return f"${value:,.2f}"
     return f"{currency} {value:,.2f}"
 
 

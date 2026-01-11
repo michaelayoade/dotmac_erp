@@ -9,16 +9,13 @@ from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
 from app.services.admin.web import admin_web_service
+from app.templates import templates
 from app.web.deps import brand_context, WebAuthContext, optional_web_auth
 
-
-templates = Jinja2Templates(directory="templates")
-templates.env.globals["now"] = datetime.now
 
 router = APIRouter(prefix="/admin", tags=["admin-web"])
 
@@ -870,7 +867,10 @@ def admin_organizations_new(
     auth_or_redirect = require_admin_web_auth(request, auth)
     if isinstance(auth_or_redirect, RedirectResponse):
         return auth_or_redirect
-    context = admin_web_service.organization_form_context(db)
+    context = admin_web_service.organization_form_context(
+        db,
+        default_currency_org_id=str(auth.organization_id) if auth.organization_id else None,
+    )
 
     return templates.TemplateResponse(
         request,
@@ -933,7 +933,10 @@ def admin_organizations_create(
     )
 
     if error:
-        context = admin_web_service.organization_form_context(db)
+        context = admin_web_service.organization_form_context(
+            db,
+            default_currency_org_id=str(auth.organization_id) if auth.organization_id else None,
+        )
         return templates.TemplateResponse(
             request,
             "admin/organization_form.html",

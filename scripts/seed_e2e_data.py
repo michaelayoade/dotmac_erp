@@ -19,6 +19,7 @@ from dotenv import load_dotenv
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from app.config import settings
 from app.db import SessionLocal
 from app.models.auth import UserCredential
 from app.models.person import Person
@@ -134,8 +135,8 @@ def ensure_organization(db, org_id: UUID, summary: SeedSummary) -> Organization:
         organization_id=org_id,
         organization_code=org_code,
         legal_name="E2E Test Organization",
-        functional_currency_code="USD",
-        presentation_currency_code="USD",
+        functional_currency_code=settings.default_functional_currency_code,
+        presentation_currency_code=settings.default_presentation_currency_code,
         fiscal_year_end_month=12,
         fiscal_year_end_day=31,
         jurisdiction_country_code="NG",
@@ -437,7 +438,7 @@ def ensure_customer(
         trading_name="E2E Customer",
         credit_limit=Decimal("10000"),
         credit_terms_days=30,
-        currency_code="USD",
+        currency_code=settings.default_functional_currency_code,
         ar_control_account_id=ar_account_id,
         default_revenue_account_id=revenue_account_id,
         risk_category=RiskCategory.MEDIUM,
@@ -474,7 +475,7 @@ def ensure_supplier(
         legal_name="E2E Supplier",
         trading_name="E2E Supplier",
         payment_terms_days=30,
-        currency_code="USD",
+        currency_code=settings.default_functional_currency_code,
         default_expense_account_id=expense_account_id,
         ap_control_account_id=ap_account_id,
         is_active=True,
@@ -554,7 +555,7 @@ def ensure_inventory_item(
         purchase_uom="EA",
         sales_uom="EA",
         costing_method=CostingMethod.WEIGHTED_AVERAGE,
-        currency_code="USD",
+        currency_code=settings.default_functional_currency_code,
         list_price=Decimal("100.00"),
         track_inventory=True,
         inventory_account_id=inventory_account_id,
@@ -597,7 +598,7 @@ def ensure_bank_account(
         account_number="E2E-0001",
         account_name="E2E Operating Account",
         account_type=BankAccountType.checking,
-        currency_code="USD",
+        currency_code=settings.default_functional_currency_code,
         gl_account_id=gl_account_id,
         status=BankAccountStatus.active,
         is_primary=True,

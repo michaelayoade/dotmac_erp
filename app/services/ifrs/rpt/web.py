@@ -24,7 +24,9 @@ from app.models.ifrs.ar.invoice import Invoice as ARInvoice
 from app.models.ifrs.ar.customer import Customer
 from app.models.ifrs.rpt.report_definition import ReportDefinition, ReportType
 from app.models.ifrs.rpt.report_instance import ReportInstance, ReportStatus
+from app.config import settings
 from app.services.common import coerce_uuid
+from app.services.ifrs.platform.org_context import org_context_service
 
 
 def _parse_date(value: Optional[str]) -> Optional[date]:
@@ -40,12 +42,13 @@ def _format_date(value: Optional[date]) -> str:
     return value.strftime("%Y-%m-%d") if value else ""
 
 
-def _format_currency(amount: Optional[Decimal], currency: str = "USD") -> str:
+def _format_currency(
+    amount: Optional[Decimal],
+    currency: str = settings.default_presentation_currency_code,
+) -> str:
     if amount is None:
-        return "$0.00"
+        return f"{currency} 0.00"
     value = Decimal(str(amount))
-    if currency == "USD":
-        return f"${value:,.2f}"
     return f"{currency} {value:,.2f}"
 
 
@@ -1106,6 +1109,10 @@ class ReportsWebService:
     ) -> dict:
         """Get context for expense summary report."""
         org_id = coerce_uuid(organization_id)
+        presentation_currency_code = org_context_service.get_presentation_currency(
+            db,
+            org_id,
+        )
         today = date.today()
         from_date = _parse_date(start_date) or today.replace(day=1)
         to_date = _parse_date(end_date) or today
@@ -1151,6 +1158,7 @@ class ReportsWebService:
             "top_expenses": top_expenses,
             "total_expenses": _format_currency(total_expenses),
             "total_expenses_raw": float(total_expenses),
+            "presentation_currency_code": presentation_currency_code,
         }
 
 

@@ -11,6 +11,7 @@ from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Index, Integer, Nume
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.config import settings
 from app.db import Base
 
 
@@ -74,7 +75,11 @@ class Customer(Base):
     )
 
     # Defaults
-    currency_code: Mapped[str] = mapped_column(String(3), nullable=False, default="USD")
+    currency_code: Mapped[str] = mapped_column(
+        String(3),
+        nullable=False,
+        default=settings.default_functional_currency_code,
+    )
     price_list_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
     ar_control_account_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),

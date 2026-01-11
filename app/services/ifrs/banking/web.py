@@ -28,7 +28,9 @@ from app.models.ifrs.banking.bank_statement import (
 from app.models.ifrs.gl.account import Account
 from app.models.ifrs.gl.journal_entry import JournalEntry, JournalStatus
 from app.models.ifrs.gl.journal_entry_line import JournalEntryLine
+from app.config import settings
 from app.services.common import coerce_uuid
+from app.services.ifrs.platform.currency_context import get_currency_context
 
 
 def _parse_date(value: Optional[str]) -> Optional[date]:
@@ -48,12 +50,13 @@ def _format_date(value: Optional[date | datetime]) -> str:
     return value.strftime("%Y-%m-%d")
 
 
-def _format_currency(amount: Optional[Decimal], currency: str = "USD") -> str:
+def _format_currency(
+    amount: Optional[Decimal],
+    currency: str = settings.default_presentation_currency_code,
+) -> str:
     if amount is None:
         return ""
     value = Decimal(str(amount))
-    if currency == "USD":
-        return f"${value:,.2f}"
     return f"{currency} {value:,.2f}"
 
 
@@ -324,10 +327,12 @@ class BankingWebService:
             .all()
         )
 
-        return {
+        context = {
             "account": _account_view(account) if account else None,
             "gl_accounts": gl_accounts,
         }
+        context.update(get_currency_context(db, organization_id))
+        return context
 
     @staticmethod
     def account_detail_context(

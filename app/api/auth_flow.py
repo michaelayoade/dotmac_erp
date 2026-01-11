@@ -310,11 +310,13 @@ def list_sessions(
     db: Session = Depends(get_db),
 ):
     person_id = coerce_uuid(auth["person_id"])
+    now = datetime.now(timezone.utc)
     sessions = (
         db.query(AuthSession)
         .filter(AuthSession.person_id == person_id)
         .filter(AuthSession.status == SessionStatus.active)
         .filter(AuthSession.revoked_at.is_(None))
+        .filter(AuthSession.expires_at > now)
         .order_by(AuthSession.created_at.desc())
         .all()
     )
@@ -353,20 +355,20 @@ def revoke_session(
     auth: dict = Depends(require_user_auth),
     db: Session = Depends(get_db),
 ):
+    now = datetime.now(timezone.utc)
     session = (
         db.query(AuthSession)
         .filter(AuthSession.id == coerce_uuid(session_id))
         .filter(AuthSession.person_id == coerce_uuid(auth["person_id"]))
+        .filter(AuthSession.status == SessionStatus.active)
+        .filter(AuthSession.revoked_at.is_(None))
+        .filter(AuthSession.expires_at > now)
         .first()
     )
 
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    if session.status == SessionStatus.revoked:
-        raise HTTPException(status_code=400, detail="Session already revoked")
-
-    now = datetime.now(timezone.utc)
     session.status = SessionStatus.revoked
     session.revoked_at = now
     db.commit()
@@ -390,16 +392,17 @@ def revoke_all_other_sessions(
     if current_session_id:
         current_session_id = coerce_uuid(current_session_id)
 
+    now = datetime.now(timezone.utc)
     sessions = (
         db.query(AuthSession)
         .filter(AuthSession.person_id == coerce_uuid(auth["person_id"]))
         .filter(AuthSession.status == SessionStatus.active)
         .filter(AuthSession.revoked_at.is_(None))
+        .filter(AuthSession.expires_at > now)
         .filter(AuthSession.id != current_session_id)
         .all()
     )
 
-    now = datetime.now(timezone.utc)
     for session in sessions:
         session.status = SessionStatus.revoked
         session.revoked_at = now

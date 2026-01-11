@@ -11,6 +11,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.config import settings
 from app.models.ifrs.banking.bank_account import BankAccountStatus, BankAccountType
 from app.models.ifrs.banking.bank_statement import BankStatementStatus, StatementLineType
 from app.models.ifrs.banking.bank_reconciliation import (
@@ -31,7 +32,7 @@ class BankAccountBase(BaseModel):
     account_number: str = Field(max_length=50)
     account_name: str = Field(max_length=200)
     gl_account_id: UUID
-    currency_code: str = Field(default="USD", max_length=3)
+    currency_code: str = Field(default=settings.default_functional_currency_code, max_length=3)
     account_type: BankAccountType = BankAccountType.checking
     bank_code: Optional[str] = Field(default=None, max_length=20)
     branch_code: Optional[str] = Field(default=None, max_length=20)

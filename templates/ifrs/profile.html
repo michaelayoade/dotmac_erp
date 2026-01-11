@@ -1,0 +1,329 @@
+{% extends "ifrs/base_ifrs.html" %}
+
+{% block page_title %}Profile{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-8">
+    <!-- Profile Header -->
+    <div class="stagger-in" style="animation-delay: 0ms;">
+        <div class="card p-8">
+            <div class="flex flex-col sm:flex-row items-start sm:items-center gap-6">
+                <!-- Avatar -->
+                <div class="relative">
+                    {% if person.avatar_url %}
+                    <img src="{{ person.avatar_url }}" alt="{{ person.name }}"
+                         class="w-24 h-24 rounded-2xl object-cover border-2 border-slate-200 dark:border-slate-700">
+                    {% else %}
+                    <div class="w-24 h-24 rounded-2xl bg-gradient-to-br from-teal-400 to-emerald-500 flex items-center justify-center text-white text-3xl font-semibold shadow-lg shadow-teal-500/25">
+                        {{ user.initials }}
+                    </div>
+                    {% endif %}
+                    <button class="absolute -bottom-2 -right-2 p-2 bg-white dark:bg-slate-800 rounded-full shadow-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                            title="Change avatar">
+                        <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- Name & Email -->
+                <div class="flex-1">
+                    <h2 class="text-2xl font-display font-semibold text-slate-900 dark:text-white">
+                        {{ person.name }}
+                    </h2>
+                    <p class="text-slate-500 dark:text-slate-400 mt-1">{{ person.email }}</p>
+                    <div class="flex flex-wrap gap-2 mt-3">
+                        {% for role in roles %}
+                        <span class="badge badge-info">{{ role }}</span>
+                        {% endfor %}
+                        {% if person.email_verified %}
+                        <span class="badge badge-success">
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                            </svg>
+                            Verified
+                        </span>
+                        {% else %}
+                        <span class="badge badge-warning">Unverified</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Account Stats -->
+                <div class="text-right hidden sm:block">
+                    <p class="text-sm text-slate-500 dark:text-slate-400">Member since</p>
+                    <p class="font-medium text-slate-900 dark:text-white">
+                        {{ person.created_at.strftime('%b %d, %Y') }}
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Grid -->
+    <div class="grid gap-8 lg:grid-cols-3">
+        <!-- Left Column - Personal Info -->
+        <div class="lg:col-span-2 space-y-8">
+            <!-- Personal Information -->
+            <div class="stagger-in" style="animation-delay: 50ms;">
+                <div class="section-label">
+                    <span class="section-label-text">Personal Information</span>
+                </div>
+                <div class="card p-6">
+                    <form action="/api/v1/profile" method="POST" class="space-y-6">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+                        <div class="grid gap-6 sm:grid-cols-2">
+                            <div>
+                                <label class="form-label">First Name</label>
+                                <input type="text" name="first_name" value="{{ person.first_name }}"
+                                       class="form-input" required>
+                            </div>
+                            <div>
+                                <label class="form-label">Last Name</label>
+                                <input type="text" name="last_name" value="{{ person.last_name }}"
+                                       class="form-input" required>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="form-label">Display Name</label>
+                            <input type="text" name="display_name" value="{{ person.display_name or '' }}"
+                                   class="form-input" placeholder="How you want to be addressed">
+                            <p class="form-hint">Leave blank to use your full name</p>
+                        </div>
+
+                        <div>
+                            <label class="form-label">Email Address</label>
+                            <input type="email" name="email" value="{{ person.email }}"
+                                   class="form-input" required disabled>
+                            <p class="form-hint">Contact support to change your email address</p>
+                        </div>
+
+                        <div>
+                            <label class="form-label">Phone Number</label>
+                            <input type="tel" name="phone" value="{{ person.phone or '' }}"
+                                   class="form-input" placeholder="+1 (555) 123-4567">
+                        </div>
+
+                        <div>
+                            <label class="form-label">Bio</label>
+                            <textarea name="bio" rows="3" class="form-input"
+                                      placeholder="A brief description about yourself">{{ person.bio or '' }}</textarea>
+                        </div>
+
+                        <div class="flex justify-end pt-4 border-t border-slate-100 dark:border-slate-700">
+                            <button type="submit" class="btn btn-teal">
+                                Save Changes
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Preferences -->
+            <div class="stagger-in" style="animation-delay: 100ms;">
+                <div class="section-label">
+                    <span class="section-label-text">Preferences</span>
+                </div>
+                <div class="card p-6">
+                    <form action="/api/v1/profile/preferences" method="POST" class="space-y-6">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+                        <div class="grid gap-6 sm:grid-cols-2">
+                            <div>
+                                <label class="form-label">Timezone</label>
+                                <select name="timezone" class="form-input form-select">
+                                    <option value="">Select timezone</option>
+                                    <option value="Africa/Lagos" {% if person.timezone == 'Africa/Lagos' %}selected{% endif %}>Africa/Lagos (WAT)</option>
+                                    <option value="America/New_York" {% if person.timezone == 'America/New_York' %}selected{% endif %}>America/New_York (EST)</option>
+                                    <option value="America/Los_Angeles" {% if person.timezone == 'America/Los_Angeles' %}selected{% endif %}>America/Los_Angeles (PST)</option>
+                                    <option value="Europe/London" {% if person.timezone == 'Europe/London' %}selected{% endif %}>Europe/London (GMT)</option>
+                                    <option value="Europe/Paris" {% if person.timezone == 'Europe/Paris' %}selected{% endif %}>Europe/Paris (CET)</option>
+                                    <option value="Asia/Dubai" {% if person.timezone == 'Asia/Dubai' %}selected{% endif %}>Asia/Dubai (GST)</option>
+                                    <option value="Asia/Singapore" {% if person.timezone == 'Asia/Singapore' %}selected{% endif %}>Asia/Singapore (SGT)</option>
+                                    <option value="UTC" {% if person.timezone == 'UTC' %}selected{% endif %}>UTC</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="form-label">Locale</label>
+                                <select name="locale" class="form-input form-select">
+                                    <option value="">Select locale</option>
+                                    <option value="en-US" {% if person.locale == 'en-US' %}selected{% endif %}>English (US)</option>
+                                    <option value="en-GB" {% if person.locale == 'en-GB' %}selected{% endif %}>English (UK)</option>
+                                    <option value="en-NG" {% if person.locale == 'en-NG' %}selected{% endif %}>English (Nigeria)</option>
+                                    <option value="fr-FR" {% if person.locale == 'fr-FR' %}selected{% endif %}>French (France)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="form-label">Preferred Contact Method</label>
+                            <div class="flex flex-wrap gap-4 mt-2">
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="radio" name="preferred_contact_method" value="email"
+                                           {% if person.preferred_contact_method and person.preferred_contact_method.value == 'email' %}checked{% endif %}
+                                           class="w-4 h-4 text-teal-600 border-slate-300 focus:ring-teal-500">
+                                    <span class="text-sm text-slate-700 dark:text-slate-300">Email</span>
+                                </label>
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="radio" name="preferred_contact_method" value="phone"
+                                           {% if person.preferred_contact_method and person.preferred_contact_method.value == 'phone' %}checked{% endif %}
+                                           class="w-4 h-4 text-teal-600 border-slate-300 focus:ring-teal-500">
+                                    <span class="text-sm text-slate-700 dark:text-slate-300">Phone</span>
+                                </label>
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="radio" name="preferred_contact_method" value="sms"
+                                           {% if person.preferred_contact_method and person.preferred_contact_method.value == 'sms' %}checked{% endif %}
+                                           class="w-4 h-4 text-teal-600 border-slate-300 focus:ring-teal-500">
+                                    <span class="text-sm text-slate-700 dark:text-slate-300">SMS</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-slate-700">
+                            <label class="flex items-center gap-3 cursor-pointer">
+                                <input type="checkbox" name="marketing_opt_in" value="true"
+                                       {% if person.marketing_opt_in %}checked{% endif %}
+                                       class="w-4 h-4 text-teal-600 border-slate-300 rounded focus:ring-teal-500">
+                                <span class="text-sm text-slate-700 dark:text-slate-300">Receive product updates and tips</span>
+                            </label>
+                            <button type="submit" class="btn btn-teal">
+                                Save Preferences
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column - Security & Sessions -->
+        <div class="space-y-8">
+            <!-- Security -->
+            <div class="stagger-in" style="animation-delay: 150ms;">
+                <div class="section-label">
+                    <span class="section-label-text">Security</span>
+                </div>
+                <div class="card p-6 space-y-5">
+                    <!-- Password -->
+                    <div class="flex items-start justify-between">
+                        <div>
+                            <h4 class="font-medium text-slate-900 dark:text-white">Password</h4>
+                            <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                                {% if credential and credential.password_updated_at %}
+                                Last changed {{ credential.password_updated_at.strftime('%b %d, %Y') }}
+                                {% else %}
+                                Never changed
+                                {% endif %}
+                            </p>
+                        </div>
+                        <a href="/change-password" class="btn btn-secondary btn-sm">
+                            Change
+                        </a>
+                    </div>
+
+                    <div class="border-t border-slate-100 dark:border-slate-700"></div>
+
+                    <!-- Two-Factor -->
+                    <div class="flex items-start justify-between">
+                        <div>
+                            <h4 class="font-medium text-slate-900 dark:text-white">Two-Factor Auth</h4>
+                            <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                                {% if has_2fa %}
+                                <span class="text-emerald-600 dark:text-emerald-400">Enabled</span>
+                                {% else %}
+                                Not enabled
+                                {% endif %}
+                            </p>
+                        </div>
+                        <a href="/account/two-factor" class="btn btn-secondary btn-sm">
+                            {% if has_2fa %}Manage{% else %}Enable{% endif %}
+                        </a>
+                    </div>
+
+                    <div class="border-t border-slate-100 dark:border-slate-700"></div>
+
+                    <!-- Sessions -->
+                    <div class="flex items-start justify-between">
+                        <div>
+                            <h4 class="font-medium text-slate-900 dark:text-white">Active Sessions</h4>
+                            <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                                {{ active_sessions }} active session{{ 's' if active_sessions != 1 else '' }}
+                            </p>
+                        </div>
+                        <a href="/account/sessions" class="btn btn-secondary btn-sm">
+                            Manage
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Current Session -->
+            <div class="stagger-in" style="animation-delay: 200ms;">
+                <div class="section-label">
+                    <span class="section-label-text">Current Session</span>
+                </div>
+                <div class="card p-6 space-y-4">
+                    {% if current_session %}
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-lg bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center text-teal-600 dark:text-teal-400">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                            </svg>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <p class="text-sm font-medium text-slate-900 dark:text-white truncate">
+                                {{ current_session.user_agent[:50] if current_session.user_agent else 'Unknown device' }}...
+                            </p>
+                            <p class="text-xs text-slate-500 dark:text-slate-400">
+                                {{ current_session.ip_address or 'Unknown IP' }}
+                            </p>
+                        </div>
+                    </div>
+                    <div class="space-y-2 text-sm">
+                        <div class="metric-mini">
+                            <span class="metric-mini-label">Started</span>
+                            <span class="metric-mini-value text-sm">{{ current_session.created_at.strftime('%b %d, %H:%M') }}</span>
+                        </div>
+                        <div class="metric-mini">
+                            <span class="metric-mini-label">Last Activity</span>
+                            <span class="metric-mini-value text-sm">
+                                {% if current_session.last_seen_at %}
+                                {{ current_session.last_seen_at.strftime('%b %d, %H:%M') }}
+                                {% else %}
+                                Just now
+                                {% endif %}
+                            </span>
+                        </div>
+                        <div class="metric-mini">
+                            <span class="metric-mini-label">Expires</span>
+                            <span class="metric-mini-value text-sm">{{ current_session.expires_at.strftime('%b %d, %H:%M') }}</span>
+                        </div>
+                    </div>
+                    {% else %}
+                    <p class="text-sm text-slate-500 dark:text-slate-400">Session information unavailable</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Danger Zone -->
+            <div class="stagger-in" style="animation-delay: 250ms;">
+                <div class="section-label">
+                    <span class="section-label-text text-rose-600 dark:text-rose-400">Danger Zone</span>
+                </div>
+                <div class="card p-6 border-rose-200 dark:border-rose-900/50">
+                    <h4 class="font-medium text-slate-900 dark:text-white">Delete Account</h4>
+                    <p class="text-sm text-slate-500 dark:text-slate-400 mt-1 mb-4">
+                        Permanently delete your account and all associated data. This action cannot be undone.
+                    </p>
+                    <button class="btn btn-sm text-rose-600 border-rose-200 hover:bg-rose-50 hover:border-rose-300 dark:border-rose-900/50 dark:hover:bg-rose-900/20"
+                            onclick="confirm('Are you sure you want to delete your account? This cannot be undone.') && alert('Please contact support to delete your account.')">
+                        Delete Account
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -4,13 +4,12 @@ IFRS Dashboard Web Routes.
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
-from app.web.deps import get_db, require_web_auth, WebAuthContext, base_context
 from app.services.ifrs.dashboard_web import dashboard_web_service
+from app.templates import templates
+from app.web.deps import get_db, require_web_auth, WebAuthContext, base_context
 
-templates = Jinja2Templates(directory="templates")
 
 router = APIRouter()
 

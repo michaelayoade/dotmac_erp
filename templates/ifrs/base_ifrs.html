@@ -1,5 +1,9 @@
 {% extends "base.html" %}
 
+{% block head %}
+<meta name="currency" content="{{ presentation_currency_code | default('USD') }}">
+{% endblock %}
+
 {% block body %}
 <div class="flex min-h-screen" x-data="{ sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === 'true' }"
      x-init="$watch('sidebarCollapsed', val => localStorage.setItem('sidebarCollapsed', val))">

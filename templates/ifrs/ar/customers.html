@@ -21,6 +21,7 @@
 {% endblock %}
 
 {% block content %}
+{% from "components/macros.html" import status_badge, empty_state %}
 <div class="space-y-6">
     <!-- Filters -->
     <div class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-800/50">
@@ -55,6 +56,7 @@
                         <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Payment Terms</th>
                         <th class="px-6 py-4 text-right text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Credit Limit</th>
                         <th class="px-6 py-4 text-right text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Balance</th>
+                        <th class="px-6 py-4 text-center text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Trend</th>
                         <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Status</th>
                         <th class="px-6 py-4 text-right text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Actions</th>
                     </tr>
@@ -75,11 +77,18 @@
                         <td class="px-6 py-4 whitespace-nowrap text-right text-sm text-slate-600 dark:text-slate-400">{{ customer.credit_limit | default("$0.00") }}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium text-slate-900 dark:text-white">{{ customer.balance | default("$0.00") }}</td>
                         <td class="px-6 py-4 whitespace-nowrap">
-                            {% if customer.is_active %}
-                            <span class="inline-flex rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">Active</span>
+                            {% if customer.balance_trend %}
+                            <div class="flex justify-center">
+                                <canvas class="h-6 w-16" data-chart="sparkline" data-chart-config='{{ {"data": customer.balance_trend} | tojson }}'></canvas>
+                            </div>
                             {% else %}
-                            <span class="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-400">Inactive</span>
+                            <div class="flex justify-center">
+                                <span class="text-xs text-slate-400">—</span>
+                            </div>
                             {% endif %}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            {{ status_badge('active' if customer.is_active else 'inactive', 'sm') }}
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-right">
                             <div class="flex items-center justify-end gap-2">
@@ -94,17 +103,8 @@
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="8" class="px-6 py-12 text-center">
-                            <svg class="mx-auto h-12 w-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
-                            </svg>
-                            <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">No customers found</p>
-                            <a href="/ar/customers/new" class="mt-4 inline-flex items-center text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">
-                                <svg class="mr-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-                                </svg>
-                                Add your first customer
-                            </a>
+                        <td colspan="9" class="px-6 py-12">
+                            {{ empty_state('No customers found', 'Get started by adding your first customer', 'users', 'Add Customer', '/ar/customers/new') }}
                         </td>
                     </tr>
                     {% endfor %}

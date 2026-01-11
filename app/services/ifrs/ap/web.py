@@ -29,6 +29,7 @@ from app.models.ifrs.core_org.cost_center import CostCenter
 from app.models.ifrs.core_org.project import Project
 from app.models.ifrs.gl.account import Account
 from app.models.ifrs.gl.account_category import AccountCategory, IFRSCategory
+from app.config import settings
 from app.services.common import coerce_uuid
 from app.services.ifrs.ap.ap_aging import ap_aging_service
 from app.services.ifrs.ap.supplier import SupplierInput, supplier_service
@@ -44,6 +45,7 @@ from app.services.ifrs.ap.supplier_payment import (
 )
 from app.models.ifrs.ap.supplier_payment import APPaymentMethod, APPaymentStatus
 from app.services.ifrs.common.attachment import attachment_service
+from app.services.ifrs.platform.currency_context import get_currency_context
 
 
 def _parse_date(value: Optional[str]) -> Optional[date]:
@@ -59,12 +61,13 @@ def _format_date(value: Optional[date]) -> str:
     return value.strftime("%Y-%m-%d") if value else ""
 
 
-def _format_currency(amount: Optional[Decimal], currency: str = "USD") -> Optional[str]:
+def _format_currency(
+    amount: Optional[Decimal],
+    currency: str = settings.default_presentation_currency_code,
+) -> Optional[str]:
     if amount is None:
         return None
     value = Decimal(str(amount))
-    if currency == "USD":
-        return f"${value:,.2f}"
     return f"{currency} {value:,.2f}"
 
 
@@ -337,7 +340,10 @@ class APWebService:
             legal_name=form_data.get("supplier_name", ""),
             trading_name=form_data.get("supplier_name"),
             tax_identification_number=form_data.get("tax_id"),
-            currency_code=form_data.get("currency_code", "USD"),
+                currency_code=form_data.get(
+                    "currency_code",
+                    settings.default_functional_currency_code,
+                ),
             payment_terms_days=int(form_data.get("payment_terms_days", 30)),
             ap_control_account_id=(
                 UUID(form_data["default_payable_account_id"])
@@ -396,7 +402,10 @@ class APWebService:
             invoice_date=invoice_date,
             received_date=invoice_date,
             due_date=due_date,
-            currency_code=data.get("currency_code", "USD"),
+            currency_code=data.get(
+                "currency_code",
+                settings.default_functional_currency_code,
+            ),
             supplier_invoice_number=data.get("invoice_number"),
             lines=lines,
         )
@@ -498,11 +507,13 @@ class APWebService:
         expense_accounts = _get_accounts(db, org_id, IFRSCategory.EXPENSES)
         payable_accounts = _get_accounts(db, org_id, IFRSCategory.LIABILITIES, "AP")
 
-        return {
+        context = {
             "supplier": supplier_view,
             "expense_accounts": expense_accounts,
             "payable_accounts": payable_accounts,
         }
+        context.update(get_currency_context(db, organization_id))
+        return context
 
     @staticmethod
     def supplier_detail_context(
@@ -829,7 +840,7 @@ class APWebService:
                         "expense_account_id": str(line.expense_account_id) if line.expense_account_id else "",
                     })
 
-        return {
+        context = {
             "suppliers_list": suppliers_list,
             "expense_accounts": expense_accounts,
             "cost_centers": _get_cost_centers(db, org_id),
@@ -840,6 +851,8 @@ class APWebService:
             "selected_po": selected_po,
             "po_lines": po_lines,
         }
+        context.update(get_currency_context(db, organization_id))
+        return context
 
     @staticmethod
     def invoice_detail_context(
@@ -1051,12 +1064,14 @@ class APWebService:
             if invoice_id and invoice.invoice_id == coerce_uuid(invoice_id):
                 selected_invoice = view
 
-        return {
+        context = {
             "suppliers_list": suppliers_list,
             "invoice_id": invoice_id,
             "invoice": selected_invoice,
             "open_invoices": open_invoices,
         }
+        context.update(get_currency_context(db, organization_id))
+        return context
 
     @staticmethod
     def payment_detail_context(
@@ -1297,7 +1312,10 @@ class APWebService:
             supplier_id=UUID(data["supplier_id"]),
             payment_date=payment_date,
             payment_method=payment_method,
-            currency_code=data.get("currency_code", "USD"),
+            currency_code=data.get(
+                "currency_code",
+                settings.default_functional_currency_code,
+            ),
             amount=Decimal(str(data.get("amount", 0))),
             bank_account_id=UUID(data["bank_account_id"]) if data.get("bank_account_id") else None,
             reference=data.get("reference"),
@@ -1668,7 +1686,7 @@ class APWebService:
                         "expense_account_id": str(line.expense_account_id) if line.expense_account_id else "",
                     })
 
-        return {
+        context = {
             "order": order,
             "lines": lines,
             "suppliers_list": suppliers_list,
@@ -1677,6 +1695,8 @@ class APWebService:
             "cost_centers": _get_cost_centers(db, org_id),
             "projects": _get_projects(db, org_id),
         }
+        context.update(get_currency_context(db, organization_id))
+        return context
 
     # =========================================================================
     # Goods Receipts

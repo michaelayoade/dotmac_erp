@@ -17,6 +17,7 @@ from fastapi import HTTPException
 from sqlalchemy import and_, func
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.models.ifrs.ap.supplier import Supplier, SupplierType
 from app.models.ifrs.ap.supplier_invoice import SupplierInvoice, SupplierInvoiceStatus
 from app.services.common import coerce_uuid
@@ -35,7 +36,7 @@ class SupplierInput:
     tax_identification_number: Optional[str] = None
     registration_number: Optional[str] = None
     payment_terms_days: int = 30
-    currency_code: str = "USD"
+    currency_code: str = settings.default_functional_currency_code
     default_expense_account_id: Optional[UUID] = None
     supplier_group_id: Optional[UUID] = None
     is_related_party: bool = False

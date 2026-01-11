@@ -1,4 +1,5 @@
 {% extends "ifrs/base_ifrs.html" %}
+{% from "components/macros.html" import stats_card, empty_state, progress_bar, section_card %}
 
 {% block page_title %}Expense Summary{% endblock %}
 
@@ -26,7 +27,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="max-w-6xl mx-auto space-y-6">
+<div class="max-w-7xl mx-auto space-y-6">
     <!-- Filter Card -->
     <div class="card p-4">
         <form method="get" class="flex flex-wrap items-end gap-4">
@@ -47,95 +48,149 @@
         </form>
     </div>
 
-    <!-- Total Expenses Card -->
-    <div class="card p-6">
-        <div class="flex items-center justify-between">
-            <div>
-                <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Total Expenses</p>
-                <p class="text-3xl font-bold text-rose-600 dark:text-rose-400 font-mono mt-1">{{ total_expenses }}</p>
-                <p class="text-xs text-slate-400 dark:text-slate-500 mt-1">{{ start_date }} to {{ end_date }}</p>
+    <!-- Summary Row: Total + Donut Chart -->
+    <div class="grid gap-6 lg:grid-cols-3">
+        <!-- Total Expenses Card -->
+        <div class="card p-6 flex flex-col justify-center">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Total Expenses</p>
+                    <p class="text-3xl font-bold text-rose-600 dark:text-rose-400 font-mono mt-1">{{ total_expenses }}</p>
+                    <p class="text-xs text-slate-400 dark:text-slate-500 mt-1">{{ start_date }} to {{ end_date }}</p>
+                </div>
+                <div class="flex h-16 w-16 items-center justify-center rounded-xl bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400">
+                    <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2z"/>
+                    </svg>
+                </div>
             </div>
-            <div class="flex h-16 w-16 items-center justify-center rounded-xl bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400">
-                <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2z"/>
-                </svg>
+            <!-- Quick Stats -->
+            <div class="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Categories</p>
+                        <p class="text-lg font-semibold text-slate-900 dark:text-white">{{ expense_items|length }}</p>
+                    </div>
+                    <div>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Top Category</p>
+                        <p class="text-sm font-medium text-slate-700 dark:text-slate-300 truncate">{{ top_expenses[0].account_name if top_expenses else 'N/A' }}</p>
+                    </div>
+                </div>
             </div>
+        </div>
+
+        <!-- Expense Distribution Donut Chart -->
+        <div class="lg:col-span-2 card p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="font-semibold text-slate-900 dark:text-white">Expense Distribution</h3>
+                <span class="text-xs text-slate-500 dark:text-slate-400">by category</span>
+            </div>
+            {% if top_expenses %}
+            {% set chart_labels = top_expenses|map(attribute='account_name')|list %}
+            {% set chart_data = top_expenses|map(attribute='amount_raw')|list %}
+            {% if expense_items|length > top_expenses|length %}
+                {% set _ = chart_labels.append('Other') %}
+                {% set _ = chart_data.append(total_expenses_raw - top_expenses|sum(attribute='amount_raw')) %}
+            {% endif %}
+            <div class="h-64">
+                <canvas data-chart="donut" data-chart-config='{{ {
+                    "labels": chart_labels,
+                    "data": chart_data,
+                    "currency": presentation_currency_code,
+                    "centerText": {"label": "Total", "value": total_expenses, "color": "rgb(244, 63, 94)"}
+                }|tojson }}'></canvas>
+            </div>
+            {% else %}
+            {{ empty_state("No expense data", "Record expenses to see distribution") }}
+            {% endif %}
         </div>
     </div>
 
+    <!-- Expense Bars + Table Grid -->
     <div class="grid gap-6 lg:grid-cols-3">
-        <!-- Top Expenses -->
+        <!-- Top Expenses Bar Chart -->
         <div class="lg:col-span-1 card p-6">
             <h3 class="font-semibold text-slate-900 dark:text-white mb-4">Top Expense Categories</h3>
             {% if top_expenses %}
             <div class="space-y-4">
+                {% set bar_colors = ['rose', 'rose', 'rose', 'rose', 'rose'] %}
                 {% for expense in top_expenses %}
-                <div>
-                    <div class="flex items-center justify-between mb-1">
-                        <span class="text-sm text-slate-700 dark:text-slate-300 truncate">{{ expense.account_name }}</span>
-                        <span class="text-sm font-mono font-medium text-slate-900 dark:text-white">{{ expense.amount }}</span>
-                    </div>
-                    <div class="h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                        {% set percentage = (expense.amount_raw / total_expenses_raw * 100) if total_expenses_raw > 0 else 0 %}
-                        <div class="h-full bg-gradient-to-r from-rose-500 to-pink-500 rounded-full" style="width: {{ percentage }}%"></div>
-                    </div>
-                </div>
+                {% set percentage = (expense.amount_raw / total_expenses_raw * 100) if total_expenses_raw > 0 else 0 %}
+                {{ progress_bar(expense.account_name, expense.amount, percentage, color=bar_colors[loop.index0 % 5], height="h-3") }}
                 {% endfor %}
             </div>
             {% else %}
-            <div class="empty-state py-8">
-                <p class="text-sm text-slate-500 dark:text-slate-400">No expenses recorded</p>
-            </div>
+            {{ empty_state("No expenses", "No expense data recorded") }}
             {% endif %}
         </div>
 
         <!-- Expense Table -->
         <div class="lg:col-span-2 card p-6">
-            <h3 class="font-semibold text-slate-900 dark:text-white mb-4">All Expense Accounts</h3>
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="font-semibold text-slate-900 dark:text-white">All Expense Accounts</h3>
+                <span class="text-xs text-slate-500 dark:text-slate-400">{{ expense_items|length }} account{{ 's' if expense_items|length != 1 else '' }}</span>
+            </div>
             {% if expense_items %}
             <div class="overflow-x-auto">
                 <table class="w-full text-sm">
                     <thead>
-                        <tr class="border-b border-slate-200 dark:border-slate-700">
-                            <th class="text-left py-2 px-2 font-semibold text-slate-700 dark:text-slate-300">Code</th>
-                            <th class="text-left py-2 px-2 font-semibold text-slate-700 dark:text-slate-300">Account</th>
-                            <th class="text-left py-2 px-2 font-semibold text-slate-700 dark:text-slate-300">Category</th>
-                            <th class="text-right py-2 px-2 font-semibold text-slate-700 dark:text-slate-300">Amount</th>
-                            <th class="text-right py-2 px-2 font-semibold text-slate-700 dark:text-slate-300">%</th>
+                        <tr class="border-b-2 border-slate-200 dark:border-slate-700">
+                            <th class="text-left py-3 px-3 font-semibold text-slate-700 dark:text-slate-300 text-xs uppercase tracking-wider">Code</th>
+                            <th class="text-left py-3 px-3 font-semibold text-slate-700 dark:text-slate-300 text-xs uppercase tracking-wider">Account</th>
+                            <th class="text-left py-3 px-3 font-semibold text-slate-700 dark:text-slate-300 text-xs uppercase tracking-wider">Category</th>
+                            <th class="text-right py-3 px-3 font-semibold text-slate-700 dark:text-slate-300 text-xs uppercase tracking-wider">Amount</th>
+                            <th class="py-3 px-3 font-semibold text-slate-700 dark:text-slate-300 text-xs uppercase tracking-wider w-32">Distribution</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
                         {% for expense in expense_items %}
-                        <tr class="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/30">
-                            <td class="py-2 px-2 font-mono text-xs text-slate-500 dark:text-slate-400">{{ expense.account_code }}</td>
-                            <td class="py-2 px-2 text-slate-900 dark:text-white">{{ expense.account_name }}</td>
-                            <td class="py-2 px-2 text-slate-500 dark:text-slate-400">{{ expense.category }}</td>
-                            <td class="py-2 px-2 text-right font-mono text-slate-900 dark:text-white">{{ expense.amount }}</td>
-                            <td class="py-2 px-2 text-right font-mono text-slate-500 dark:text-slate-400">
-                                {% set percentage = (expense.amount_raw / total_expenses_raw * 100) if total_expenses_raw > 0 else 0 %}
-                                {{ "%.1f"|format(percentage) }}%
+                        {% set percentage = (expense.amount_raw / total_expenses_raw * 100) if total_expenses_raw > 0 else 0 %}
+                        <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+                            <td class="py-3 px-3 font-mono text-xs text-slate-500 dark:text-slate-400">{{ expense.account_code }}</td>
+                            <td class="py-3 px-3 text-slate-900 dark:text-white font-medium">{{ expense.account_name }}</td>
+                            <td class="py-3 px-3">
+                                <span class="inline-flex px-2 py-0.5 text-xs rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+                                    {{ expense.category }}
+                                </span>
+                            </td>
+                            <td class="py-3 px-3 text-right font-mono text-slate-900 dark:text-white">{{ expense.amount }}</td>
+                            <td class="py-3 px-3">
+                                <div class="flex items-center gap-2">
+                                    <div class="flex-1 h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                                        <div class="h-full bg-gradient-to-r from-rose-500 to-pink-500 rounded-full transition-all"
+                                             style="width: {{ percentage }}%"></div>
+                                    </div>
+                                    <span class="text-xs font-mono text-slate-500 dark:text-slate-400 w-10 text-right">{{ "%.1f"|format(percentage) }}%</span>
+                                </div>
                             </td>
                         </tr>
                         {% endfor %}
                     </tbody>
                     <tfoot>
-                        <tr class="border-t-2 border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800">
-                            <td colspan="3" class="py-3 px-2 font-bold text-slate-900 dark:text-white">Total</td>
-                            <td class="py-3 px-2 text-right font-mono font-bold text-rose-600 dark:text-rose-400">{{ total_expenses }}</td>
-                            <td class="py-3 px-2 text-right font-mono font-bold text-slate-500">100%</td>
+                        <tr class="bg-gradient-to-r from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-800/50 border-t-2 border-slate-200 dark:border-slate-700">
+                            <td colspan="3" class="py-4 px-3 font-bold text-slate-900 dark:text-white">Total Expenses</td>
+                            <td class="py-4 px-3 text-right font-mono font-bold text-rose-600 dark:text-rose-400 text-lg">{{ total_expenses }}</td>
+                            <td class="py-4 px-3">
+                                <div class="flex items-center gap-2">
+                                    <div class="flex-1 h-2 bg-rose-200 dark:bg-rose-900/50 rounded-full overflow-hidden">
+                                        <div class="h-full bg-gradient-to-r from-rose-500 to-rose-600 rounded-full" style="width: 100%"></div>
+                                    </div>
+                                    <span class="text-xs font-mono font-bold text-rose-600 dark:text-rose-400 w-10 text-right">100%</span>
+                                </div>
+                            </td>
                         </tr>
                     </tfoot>
                 </table>
             </div>
             {% else %}
-            <div class="empty-state py-8">
-                <div class="empty-state-icon">
-                    <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+            <div class="empty-state py-12">
+                <div class="empty-state-icon mb-4">
+                    <svg class="h-12 w-12 text-slate-300 dark:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                     </svg>
                 </div>
-                <h3 class="empty-state-title">No Expenses</h3>
-                <p class="empty-state-description">No expense data available for the selected period.</p>
+                <h3 class="empty-state-title text-slate-700 dark:text-slate-300">No Expenses</h3>
+                <p class="empty-state-description text-slate-500 dark:text-slate-400">No expense data available for the selected period.</p>
             </div>
             {% endif %}
         </div>

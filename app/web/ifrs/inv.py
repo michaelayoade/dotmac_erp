@@ -9,15 +9,15 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
-from app.web.deps import get_db, require_web_auth, WebAuthContext, base_context
-from app.services.ifrs.inv.web import inv_web_service
-from app.services.ifrs.inv.item import item_service, ItemInput
 from app.models.ifrs.inv.item import ItemType, CostingMethod
+from app.services.ifrs.inv.item import item_service, ItemInput
+from app.services.ifrs.inv.web import inv_web_service
+from app.services.ifrs.platform.org_context import org_context_service
+from app.templates import templates
+from app.web.deps import get_db, require_web_auth, WebAuthContext, base_context
 
-templates = Jinja2Templates(directory="templates")
 
 router = APIRouter(prefix="/inv", tags=["inv-web"])
 
@@ -71,7 +71,7 @@ def create_item(
     item_type: str = Form(default="INVENTORY"),
     base_uom: str = Form(default="EACH"),
     costing_method: str = Form(default="WEIGHTED_AVERAGE"),
-    currency_code: str = Form(default="USD"),
+    currency_code: Optional[str] = Form(default=None),
     standard_cost: Optional[str] = Form(default=None),
     list_price: Optional[str] = Form(default=None),
     reorder_point: Optional[str] = Form(default=None),
@@ -88,6 +88,12 @@ def create_item(
     from decimal import Decimal
 
     try:
+        if not currency_code:
+            currency_code = org_context_service.get_functional_currency(
+                db,
+                auth.organization_id,
+            )
+
         input_data = ItemInput(
             item_code=item_code,
             item_name=item_name,
@@ -159,7 +165,7 @@ def update_item(
     item_type: str = Form(default="INVENTORY"),
     base_uom: str = Form(default="EACH"),
     costing_method: str = Form(default="WEIGHTED_AVERAGE"),
-    currency_code: str = Form(default="USD"),
+    currency_code: Optional[str] = Form(default=None),
     standard_cost: Optional[str] = Form(default=None),
     list_price: Optional[str] = Form(default=None),
     reorder_point: Optional[str] = Form(default=None),
@@ -176,6 +182,12 @@ def update_item(
     from decimal import Decimal
 
     try:
+        if not currency_code:
+            currency_code = org_context_service.get_functional_currency(
+                db,
+                auth.organization_id,
+            )
+
         updates = {
             "item_code": item_code,
             "item_name": item_name,

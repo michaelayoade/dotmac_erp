@@ -63,10 +63,9 @@
                         Currency <span class="text-rose-500">*</span>
                     </label>
                     <select id="currency_code" name="currency_code" x-model="form.currency_code" required class="form-input form-select">
-                        <option value="USD">USD - US Dollar</option>
-                        <option value="EUR">EUR - Euro</option>
-                        <option value="GBP">GBP - British Pound</option>
-                        <option value="NGN">NGN - Nigerian Naira</option>
+                        {% for currency in currencies %}
+                        <option value="{{ currency.code }}">{{ currency.code }} - {{ currency.name }}</option>
+                        {% endfor %}
                     </select>
                 </div>
 
@@ -328,7 +327,7 @@ function soForm() {
         form: {
             customer_id: '{{ selected_customer_id or "" }}',
             order_date: '{{ today }}',
-            currency_code: 'USD',
+            currency_code: '{{ default_currency_code }}',
             customer_po_number: '',
             requested_date: '',
             promised_date: '',
@@ -366,7 +365,7 @@ function soForm() {
         },
 
         formatCurrency(amount) {
-            const currency = this.form.currency_code || 'USD';
+            const currency = this.form.currency_code || '{{ default_currency_code }}';
             return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency }).format(amount || 0);
         },
 

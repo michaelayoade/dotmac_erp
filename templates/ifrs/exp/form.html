@@ -102,10 +102,12 @@
             <div>
                 <label class="form-label">Currency</label>
                 <select name="currency_code" class="form-input form-select">
-                    <option value="USD" {% if expense and expense.currency_code == 'USD' %}selected{% endif %}>USD</option>
-                    <option value="EUR" {% if expense and expense.currency_code == 'EUR' %}selected{% endif %}>EUR</option>
-                    <option value="GBP" {% if expense and expense.currency_code == 'GBP' %}selected{% endif %}>GBP</option>
-                    <option value="NGN" {% if expense and expense.currency_code == 'NGN' %}selected{% endif %}>NGN</option>
+                    {% set selected_currency = expense.currency_code if expense else default_currency_code %}
+                    {% for currency in currencies %}
+                    <option value="{{ currency.code }}" {% if currency.code == selected_currency %}selected{% endif %}>
+                        {{ currency.code }} - {{ currency.name }}
+                    </option>
+                    {% endfor %}
                 </select>
             </div>
             <div>

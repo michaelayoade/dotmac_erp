@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from app.models.auth import AuthProvider, Session as AuthSession, SessionStatus, UserCredential
 from app.models.audit import AuditActorType, AuditEvent
 from app.models.domain_settings import DomainSetting, SettingDomain, SettingValueType
+from app.config import settings
 from app.models.ifrs.core_org.organization import Organization
 from app.models.person import Person, PersonStatus
 from app.models.rbac import Permission, PersonRole, Role, RolePermission
@@ -1290,6 +1291,7 @@ class AdminWebService:
     def organization_form_context(
         db: Session,
         organization_id: Optional[str] = None,
+        default_currency_org_id: Optional[str] = None,
     ) -> dict:
         """Get context for organization create/edit form."""
         from app.models.ifrs.core_org.organization import ConsolidationMethod
@@ -1318,6 +1320,19 @@ class AdminWebService:
         ]
 
         organization_data = None
+        default_functional_currency_code = None
+        default_presentation_currency_code = None
+
+        default_org_id = organization_id or default_currency_org_id
+        if default_org_id:
+            default_org = db.get(Organization, coerce_uuid(default_org_id))
+            if default_org:
+                default_functional_currency_code = default_org.functional_currency_code
+                default_presentation_currency_code = default_org.presentation_currency_code
+        if not default_functional_currency_code:
+            default_functional_currency_code = settings.default_functional_currency_code
+        if not default_presentation_currency_code:
+            default_presentation_currency_code = settings.default_presentation_currency_code
         if organization_id:
             org = db.get(Organization, coerce_uuid(organization_id))
             if org:
@@ -1375,6 +1390,8 @@ class AdminWebService:
             "organization_data": organization_data,
             "parent_organizations": parent_org_list,
             "consolidation_methods": consolidation_methods,
+            "default_functional_currency_code": default_functional_currency_code,
+            "default_presentation_currency_code": default_presentation_currency_code,
         }
 
     @staticmethod

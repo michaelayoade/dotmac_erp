@@ -18,6 +18,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.ifrs.inv.item import Item, CostingMethod
+from app.config import settings
 from app.models.ifrs.inv.inventory_valuation import InventoryValuation
 from app.models.ifrs.inv.inventory_lot import InventoryLot
 from app.services.common import coerce_uuid
@@ -406,7 +407,7 @@ class FIFOValuationService(ListResponseMixin):
         fiscal_period_id: UUID,
         valuation_date: date,
         nrv_calc: NRVCalculation,
-        currency_code: str = "USD",
+        currency_code: str = settings.default_functional_currency_code,
     ) -> InventoryValuation:
         """
         Create an inventory valuation record.

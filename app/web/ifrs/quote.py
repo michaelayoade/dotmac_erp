@@ -3,37 +3,39 @@ Quote Web Routes.
 
 HTML template routes for sales quote management.
 """
-from datetime import datetime, date, timedelta
+from datetime import date, timedelta
 from decimal import Decimal
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
-from app.web.deps import get_db, require_web_auth, WebAuthContext, base_context
-from app.services.ifrs.ar.quote import quote_service
-from app.models.ifrs.ar.quote import Quote, QuoteStatus
 from app.models.ifrs.ar.customer import Customer
 from app.models.ifrs.ar.payment_terms import PaymentTerms
+from app.models.ifrs.ar.quote import Quote, QuoteStatus
 from app.models.ifrs.gl.account import Account
 from app.models.ifrs.gl.account_category import AccountCategory, IFRSCategory
 from app.models.ifrs.tax.tax_code import TaxCode
 from app.services.common import coerce_uuid
+from app.config import settings
+from app.services.ifrs.ar.quote import quote_service
+from app.services.ifrs.platform.org_context import org_context_service
+from app.services.ifrs.platform.currency_context import get_currency_context
+from app.templates import templates
+from app.web.deps import get_db, require_web_auth, WebAuthContext, base_context
 
-templates = Jinja2Templates(directory="templates")
-templates.env.globals["now"] = datetime.now
 
 router = APIRouter(prefix="/quotes", tags=["quotes-web"])
 
 
-def _format_currency(amount, currency="USD"):
+def _format_currency(
+    amount,
+    currency: str = settings.default_presentation_currency_code,
+):
     if amount is None:
-        return "$0.00"
+        return f"{currency} 0.00"
     value = Decimal(str(amount))
-    if currency == "USD":
-        return f"${value:,.2f}"
     return f"{currency} {value:,.2f}"
 
 
@@ -96,7 +98,7 @@ def _get_form_context(db: Session, org_id) -> dict:
         for t in payment_terms
     ]
 
-    return {
+    context = {
         "customers": customer_options,
         "revenue_accounts": revenue_options,
         "tax_codes": tax_options,
@@ -104,6 +106,8 @@ def _get_form_context(db: Session, org_id) -> dict:
         "today": _format_date(date.today()),
         "default_valid_until": _format_date(date.today() + timedelta(days=30)),
     }
+    context.update(get_currency_context(db, str(org_id)))
+    return context
 
 
 # =============================================================================
@@ -208,7 +212,7 @@ def create_quote(
     customer_id: str = Form(...),
     quote_date: str = Form(...),
     valid_until: str = Form(...),
-    currency_code: str = Form("USD"),
+    currency_code: Optional[str] = Form(None),
     contact_name: Optional[str] = Form(None),
     contact_email: Optional[str] = Form(None),
     payment_terms_id: Optional[str] = Form(None),
@@ -225,6 +229,12 @@ def create_quote(
 
     try:
         lines = json.loads(lines_json) if lines_json else []
+
+        if not currency_code:
+            currency_code = org_context_service.get_functional_currency(
+                db,
+                auth.organization_id,
+            )
 
         quote = quote_service.create(
             db,

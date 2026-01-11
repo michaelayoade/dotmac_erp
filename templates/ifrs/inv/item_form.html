@@ -178,10 +178,12 @@
                         Currency <span class="text-rose-500">*</span>
                     </label>
                     <select name="currency_code" required class="form-select">
-                        <option value="USD" {{ 'selected' if not item or item.currency_code == 'USD' else '' }}>USD - US Dollar</option>
-                        <option value="EUR" {{ 'selected' if item and item.currency_code == 'EUR' else '' }}>EUR - Euro</option>
-                        <option value="GBP" {{ 'selected' if item and item.currency_code == 'GBP' else '' }}>GBP - British Pound</option>
-                        <option value="NGN" {{ 'selected' if item and item.currency_code == 'NGN' else '' }}>NGN - Nigerian Naira</option>
+                        {% set selected_currency = item.currency_code if item else default_currency_code %}
+                        {% for currency in currencies %}
+                        <option value="{{ currency.code }}" {{ 'selected' if currency.code == selected_currency else '' }}>
+                            {{ currency.code }} - {{ currency.name }}
+                        </option>
+                        {% endfor %}
                     </select>
                 </div>
 

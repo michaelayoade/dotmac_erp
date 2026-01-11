@@ -7,36 +7,38 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="htmx-config" content='{"defaultSwapStyle":"innerHTML","globalViewTransitions":true}' />
+    {% set brand_data = brand if brand is defined else {} %}
+    {% set brand_name = brand_data.name | default(title | default("", true), true) %}
+    {% set brand_tagline = brand_data.tagline | default("", true) %}
+    {% set brand_logo_url = brand_data.logo_url | default("", true) %}
+    {% set brand_mark = brand_data.mark | default("", true) %}
     {% set csrf_value = csrf_token if csrf_token is defined else request.state.csrf_token %}
     <meta name="csrf-token" content="{{ csrf_value | default('', true) }}" />
-    <title>{% block title %}{{ title | default("IFRS Accounting") }}{% endblock %}</title>
+    <title>{% block title %}{{ title | default(brand_name, true) }}{% endblock %}</title>
 
-    <!-- Premium Typography: Fraunces (display) + DM Sans (body) -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,400&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <!-- Self-hosted Typography: Fraunces (display) + DM Sans (body) + JetBrains Mono -->
+    <link href="/static/css/fonts.css" rel="stylesheet">
 
     <!-- Compiled Tailwind CSS -->
     <link href="/static/css/app.css" rel="stylesheet">
 
-    <!-- HTMX -->
-    <script src="https://unpkg.com/htmx.org@2.0.0"></script>
-    <script src="https://unpkg.com/htmx-ext-loading-states@2.0.0/loading-states.js"></script>
+    <!-- HTMX (local) -->
+    <script src="/static/js/vendor/htmx.js"></script>
+    <script src="/static/js/vendor/htmx-loading-states.js"></script>
 
-    <!-- Alpine.js with Collapse plugin -->
-    <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/collapse@3.x.x/dist/cdn.min.js"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <!-- Alpine.js with Collapse plugin (local) -->
+    <script defer src="/static/js/vendor/alpine-collapse.js"></script>
+    <script defer src="/static/js/vendor/alpine.js"></script>
+
+    <!-- Chart.js for dashboard visualizations (local) -->
+    <script src="/static/js/vendor/chart.js"></script>
+    <script src="/static/js/charts.js"></script>
 
     {% block head %}{% endblock %}
     {% block page_styles %}{% endblock %}
 </head>
 <body class="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-900 dark:text-slate-100 antialiased"
       hx-ext="loading-states">
-
-    {% set brand_name = brand.name | default("IFRS Accounting") %}
-    {% set brand_tagline = brand.tagline | default("Enterprise Finance", true) %}
-    {% set brand_logo_url = brand.logo_url | default("", true) %}
-    {% set brand_mark = brand.mark | default("IF") %}
 
     {% block body %}
     <div class="relative">

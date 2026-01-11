@@ -38,7 +38,7 @@ def is_server_running(host: str, port: int) -> bool:
 
 def get_base_url():
     """Get base URL from environment or pytest option."""
-    return os.environ.get("E2E_BASE_URL", "http://localhost:8000")
+    return os.environ.get("E2E_BASE_URL", "http://localhost:8002")
 
 
 def get_test_credentials():

@@ -12,6 +12,7 @@ from sqlalchemy import DateTime, Enum, ForeignKey, Index, Integer, Numeric, Stri
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.config import settings
 from app.db import Base
 
 
@@ -78,7 +79,7 @@ class AccountBalance(Base):
     currency_code: Mapped[str] = mapped_column(
         String(3),
         nullable=False,
-        default="USD",
+        default=settings.default_functional_currency_code,
     )
 
     # Dimensions (NULL = all)

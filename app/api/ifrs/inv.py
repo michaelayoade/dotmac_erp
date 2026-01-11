@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, Query, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.db import SessionLocal
 from app.schemas.ifrs.common import ListResponse, PostingResultSchema
 from app.services.ifrs.inv import (
@@ -164,7 +165,7 @@ def create_inventory_item(
     payload: InventoryItemCreate,
     organization_id: UUID = Query(...),
     category_id: UUID = Query(..., description="Item category ID"),
-    currency_code: str = Query(default="USD"),
+    currency_code: str = Query(default=settings.default_functional_currency_code),
     db: Session = Depends(get_db),
 ):
     """Create a new inventory item."""
@@ -242,7 +243,7 @@ def create_inventory_transaction(
     created_by_user_id: UUID = Query(...),
     fiscal_period_id: UUID = Query(..., description="Fiscal period ID"),
     uom: str = Query(default="EACH", description="Unit of measure"),
-    currency_code: str = Query(default="USD"),
+    currency_code: str = Query(default=settings.default_functional_currency_code),
     db: Session = Depends(get_db),
 ):
     """Create an inventory transaction."""

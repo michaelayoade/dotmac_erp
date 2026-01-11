@@ -11,6 +11,7 @@ from uuid import UUID
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.models.ifrs.ar.sales_order import (
     SalesOrder, SalesOrderLine, SOStatus, FulfillmentStatus,
     Shipment, ShipmentLine,
@@ -41,7 +42,7 @@ class SalesOrderService:
         customer_id: str,
         order_date: date,
         created_by: str,
-        currency_code: str = "USD",
+    currency_code: str = settings.default_functional_currency_code,
         exchange_rate: Decimal = Decimal("1"),
         customer_po_number: Optional[str] = None,
         reference: Optional[str] = None,

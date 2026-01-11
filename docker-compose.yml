@@ -4,15 +4,15 @@ services:
     container_name: dotmac_books_app
     restart: unless-stopped
     ports:
-      - "8001:8001"
+      - "8002:8002"
     env_file:
       - .env
     environment:
       # Override database URL for Docker networking (must come after env_file)
-      DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/dotmac_books
-      REDIS_URL: redis://:redis@redis:6379/0
-      CELERY_BROKER_URL: redis://:redis@redis:6379/0
-      CELERY_RESULT_BACKEND: redis://:redis@redis:6379/1
+      DATABASE_URL: postgresql+psycopg://postgres:${POSTGRES_PASSWORD}@db:5432/dotmac_books
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD}@redis:6379/1
     depends_on:
       - db
       - redis
@@ -20,7 +20,7 @@ services:
       - ./app:/app/app
       - ./templates:/app/templates
       - ./static:/app/static
-    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001", "--reload"]
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8002", "--reload"]
 
   worker:
     build: .
@@ -29,10 +29,10 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/dotmac_books
-      REDIS_URL: redis://:redis@redis:6379/0
-      CELERY_BROKER_URL: redis://:redis@redis:6379/0
-      CELERY_RESULT_BACKEND: redis://:redis@redis:6379/1
+      DATABASE_URL: postgresql+psycopg://postgres:${POSTGRES_PASSWORD}@db:5432/dotmac_books
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD}@redis:6379/1
     depends_on:
       - db
       - redis
@@ -45,10 +45,10 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/dotmac_books
-      REDIS_URL: redis://:redis@redis:6379/0
-      CELERY_BROKER_URL: redis://:redis@redis:6379/0
-      CELERY_RESULT_BACKEND: redis://:redis@redis:6379/1
+      DATABASE_URL: postgresql+psycopg://postgres:${POSTGRES_PASSWORD}@db:5432/dotmac_books
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD}@redis:6379/1
     depends_on:
       - db
       - redis
@@ -63,7 +63,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-dotmac_books}
     ports:
-      - "5434:5432"
+      - "5435:5432"
     volumes:
       - dotmac_books_db_data:/var/lib/postgresql/data
 
@@ -73,7 +73,7 @@ services:
     restart: unless-stopped
     command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:-redis}"]
     ports:
-      - "6379:6379"
+      - "6380:6379"
 
 volumes:
   dotmac_books_db_data:
