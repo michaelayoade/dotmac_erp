@@ -128,3 +128,159 @@ def upsert_scheduler_setting(
 )
 def get_scheduler_setting(key: str, db: Session = Depends(get_db)):
     return settings_service.get_scheduler_setting(db, key)
+
+
+@router.get(
+    "/email",
+    response_model=ListResponse[DomainSettingRead],
+    tags=["settings-email"],
+)
+def list_email_settings(
+    is_active: bool | None = None,
+    order_by: str = Query(default="created_at"),
+    order_dir: str = Query(default="desc", pattern="^(asc|desc)$"),
+    limit: int = Query(default=200, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+):
+    return settings_service.list_email_settings_response(
+        db, is_active, order_by, order_dir, limit, offset
+    )
+
+
+@router.put(
+    "/email/{key}",
+    response_model=DomainSettingRead,
+    status_code=status.HTTP_200_OK,
+    tags=["settings-email"],
+)
+def upsert_email_setting(
+    key: str, payload: DomainSettingUpdate, db: Session = Depends(get_db)
+):
+    return settings_service.upsert_email_setting(db, key, payload)
+
+
+@router.get(
+    "/email/{key}",
+    response_model=DomainSettingRead,
+    tags=["settings-email"],
+)
+def get_email_setting(key: str, db: Session = Depends(get_db)):
+    return settings_service.get_email_setting(db, key)
+
+
+@router.get(
+    "/features",
+    response_model=ListResponse[DomainSettingRead],
+    tags=["settings-features"],
+)
+def list_features_settings(
+    is_active: bool | None = None,
+    order_by: str = Query(default="created_at"),
+    order_dir: str = Query(default="desc", pattern="^(asc|desc)$"),
+    limit: int = Query(default=200, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+):
+    return settings_service.list_features_settings_response(
+        db, is_active, order_by, order_dir, limit, offset
+    )
+
+
+@router.put(
+    "/features/{key}",
+    response_model=DomainSettingRead,
+    status_code=status.HTTP_200_OK,
+    tags=["settings-features"],
+)
+def upsert_features_setting(
+    key: str, payload: DomainSettingUpdate, db: Session = Depends(get_db)
+):
+    return settings_service.upsert_features_setting(db, key, payload)
+
+
+@router.get(
+    "/features/{key}",
+    response_model=DomainSettingRead,
+    tags=["settings-features"],
+)
+def get_features_setting(key: str, db: Session = Depends(get_db)):
+    return settings_service.get_features_setting(db, key)
+
+
+@router.get(
+    "/automation",
+    response_model=ListResponse[DomainSettingRead],
+    tags=["settings-automation"],
+)
+def list_automation_settings(
+    is_active: bool | None = None,
+    order_by: str = Query(default="created_at"),
+    order_dir: str = Query(default="desc", pattern="^(asc|desc)$"),
+    limit: int = Query(default=200, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+):
+    return settings_service.list_automation_settings_response(
+        db, is_active, order_by, order_dir, limit, offset
+    )
+
+
+@router.put(
+    "/automation/{key}",
+    response_model=DomainSettingRead,
+    status_code=status.HTTP_200_OK,
+    tags=["settings-automation"],
+)
+def upsert_automation_setting(
+    key: str, payload: DomainSettingUpdate, db: Session = Depends(get_db)
+):
+    return settings_service.upsert_automation_setting(db, key, payload)
+
+
+@router.get(
+    "/automation/{key}",
+    response_model=DomainSettingRead,
+    tags=["settings-automation"],
+)
+def get_automation_setting(key: str, db: Session = Depends(get_db)):
+    return settings_service.get_automation_setting(db, key)
+
+
+@router.get(
+    "/reporting",
+    response_model=ListResponse[DomainSettingRead],
+    tags=["settings-reporting"],
+)
+def list_reporting_settings(
+    is_active: bool | None = None,
+    order_by: str = Query(default="created_at"),
+    order_dir: str = Query(default="desc", pattern="^(asc|desc)$"),
+    limit: int = Query(default=200, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+):
+    return settings_service.list_reporting_settings_response(
+        db, is_active, order_by, order_dir, limit, offset
+    )
+
+
+@router.put(
+    "/reporting/{key}",
+    response_model=DomainSettingRead,
+    status_code=status.HTTP_200_OK,
+    tags=["settings-reporting"],
+)
+def upsert_reporting_setting(
+    key: str, payload: DomainSettingUpdate, db: Session = Depends(get_db)
+):
+    return settings_service.upsert_reporting_setting(db, key, payload)
+
+
+@router.get(
+    "/reporting/{key}",
+    response_model=DomainSettingRead,
+    tags=["settings-reporting"],
+)
+def get_reporting_setting(key: str, db: Session = Depends(get_db)):
+    return settings_service.get_reporting_setting(db, key)
