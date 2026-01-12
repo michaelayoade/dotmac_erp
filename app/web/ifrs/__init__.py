@@ -23,6 +23,7 @@ from app.web.ifrs.sales_order import router as sales_order_router
 from app.web.ifrs.settings import router as settings_router
 from app.web.ifrs.automation import router as automation_router
 from app.web.ifrs.import_export import router as import_export_router
+from app.web.ifrs.opening_balance import router as opening_balance_router
 
 router = APIRouter(tags=["ifrs-web"])
 
@@ -43,3 +44,4 @@ router.include_router(sales_order_router)
 router.include_router(settings_router)
 router.include_router(automation_router)
 router.include_router(import_export_router)
+router.include_router(opening_balance_router)

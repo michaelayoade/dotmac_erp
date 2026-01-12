@@ -19,6 +19,54 @@ from app.services.common import coerce_uuid
 WEB_SESSION_COOKIE = "session_token"
 
 
+def get_current_user_id(
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(lambda: SessionLocal()),
+) -> UUID:
+    """
+    Dependency to get the current authenticated user's ID.
+
+    Returns the user's UUID from the JWT token.
+    Raises 401 if not authenticated.
+    """
+    token = _extract_bearer_token(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    payload = decode_access_token(db, token)
+    person_id = payload.get("sub")
+    if not person_id:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    return coerce_uuid(person_id)
+
+
+def get_current_org_id(
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(lambda: SessionLocal()),
+) -> UUID:
+    """
+    Dependency to get the current authenticated user's organization ID.
+
+    Returns the organization UUID from the user record.
+    Raises 401 if not authenticated, 400 if user has no organization.
+    """
+    token = _extract_bearer_token(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    payload = decode_access_token(db, token)
+    person_id = payload.get("sub")
+    if not person_id:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    person = db.get(Person, coerce_uuid(person_id))
+    if not person or not person.organization_id:
+        raise HTTPException(status_code=400, detail="User has no organization")
+
+    return person.organization_id
+
+
 def _make_aware(dt: datetime) -> datetime:
     """Ensure datetime is timezone-aware (UTC). SQLite doesn't preserve tz info."""
     if dt is None:

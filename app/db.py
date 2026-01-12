@@ -65,3 +65,19 @@ class AsyncSessionLocalProxy:
 
 
 AsyncSessionLocal = AsyncSessionLocalProxy()
+
+
+def get_db_session():
+    """
+    Dependency that provides a database session.
+
+    Usage:
+        @router.post("/items")
+        async def create_item(db: Session = Depends(get_db_session)):
+            ...
+    """
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()

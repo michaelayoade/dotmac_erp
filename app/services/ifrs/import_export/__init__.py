@@ -52,6 +52,13 @@ from .banking import BankAccountImporter
 from .invoices import InvoiceImporter
 from .expenses import ExpenseImporter
 from .payments import CustomerPaymentImporter, SupplierPaymentImporter
+from .opening_balance import (
+    OpeningBalanceImporter,
+    OpeningBalanceLine,
+    OpeningBalancePreview,
+    OpeningBalanceResult,
+    get_opening_balance_template,
+)
 
 __all__ = [
     # Base classes
@@ -93,4 +100,10 @@ __all__ = [
     "ExpenseImporter",
     "CustomerPaymentImporter",
     "SupplierPaymentImporter",
+    # Opening Balance importer
+    "OpeningBalanceImporter",
+    "OpeningBalanceLine",
+    "OpeningBalancePreview",
+    "OpeningBalanceResult",
+    "get_opening_balance_template",
 ]
