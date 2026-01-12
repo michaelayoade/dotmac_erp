@@ -76,3 +76,6 @@ poetry.lock
 
 # Node.js
 node_modules/
+
+# Data backups
+books_backup/
