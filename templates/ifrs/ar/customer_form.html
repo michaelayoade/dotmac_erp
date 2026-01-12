@@ -3,9 +3,6 @@
 {% block page_title %}{{ "Edit Customer" if customer else "New Customer" }}{% endblock %}
 
 {% block page_styles %}
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
     :root {
         --ink: #1a1f36;
@@ -481,10 +478,12 @@
                             required
                             class="form-input">
                         <option value="">Select currency</option>
-                        <option value="USD" {{ 'selected' if (customer and customer.currency_code == 'USD') or not customer else '' }}>USD - US Dollar</option>
-                        <option value="EUR" {{ 'selected' if customer and customer.currency_code == 'EUR' else '' }}>EUR - Euro</option>
-                        <option value="GBP" {{ 'selected' if customer and customer.currency_code == 'GBP' else '' }}>GBP - British Pound</option>
-                        <option value="NGN" {{ 'selected' if customer and customer.currency_code == 'NGN' else '' }}>NGN - Nigerian Naira</option>
+                        {% set selected_currency = customer.currency_code if customer else default_currency_code %}
+                        {% for currency in currencies %}
+                        <option value="{{ currency.code }}" {{ 'selected' if currency.code == selected_currency else '' }}>
+                            {{ currency.code }} - {{ currency.name }}
+                        </option>
+                        {% endfor %}
                     </select>
                 </div>
             </div>

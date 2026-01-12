@@ -97,7 +97,7 @@
                     <label for="functional_currency_code" class="form-label">Functional Currency <span class="text-red-500">*</span></label>
                     <input type="text" id="functional_currency_code" name="functional_currency_code" required
                            value="{{ organization.functional_currency_code or '' }}"
-                           maxlength="3" placeholder="USD"
+                           maxlength="3" placeholder="ISO 4217 code"
                            class="form-input uppercase">
                     <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Primary operating currency (ISO 4217)</p>
                 </div>
@@ -105,7 +105,7 @@
                     <label for="presentation_currency_code" class="form-label">Presentation Currency <span class="text-red-500">*</span></label>
                     <input type="text" id="presentation_currency_code" name="presentation_currency_code" required
                            value="{{ organization.presentation_currency_code or '' }}"
-                           maxlength="3" placeholder="USD"
+                           maxlength="3" placeholder="ISO 4217 code"
                            class="form-input uppercase">
                     <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Currency for financial statements</p>
                 </div>

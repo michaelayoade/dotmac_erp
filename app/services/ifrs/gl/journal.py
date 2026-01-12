@@ -17,6 +17,7 @@ from fastapi import HTTPException
 from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.models.ifrs.gl.journal_entry import JournalEntry, JournalStatus, JournalType
 from app.models.ifrs.gl.journal_entry_line import JournalEntryLine
 from app.models.ifrs.core_config.numbering_sequence import SequenceType
@@ -58,7 +59,7 @@ class JournalInput:
     description: str
     lines: list[JournalLineInput] = field(default_factory=list)
     reference: Optional[str] = None
-    currency_code: str = "USD"
+    currency_code: str = settings.default_functional_currency_code
     exchange_rate: Decimal = Decimal("1.0")
     exchange_rate_type_id: Optional[UUID] = None
     source_module: Optional[str] = None

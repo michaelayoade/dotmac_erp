@@ -25,6 +25,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.config import settings
 from app.db import Base
 
 if TYPE_CHECKING:
@@ -168,7 +169,11 @@ class BankReconciliation(Base):
     )
 
     # Currency
-    currency_code: Mapped[str] = mapped_column(String(3), nullable=False, default="USD")
+    currency_code: Mapped[str] = mapped_column(
+        String(3),
+        nullable=False,
+        default=settings.default_functional_currency_code,
+    )
 
     # Status
     status: Mapped[ReconciliationStatus] = mapped_column(

@@ -5,6 +5,7 @@ Provides authentication dependencies for HTML template routes with
 proper tenant context handling.
 """
 
+import json
 from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID
@@ -40,14 +41,177 @@ async def get_async_db():
             await db.close()
 
 
+def _brand_mark(name: str) -> str:
+    """Generate a 2-letter brand mark from the brand name.
+
+    For multi-word names, uses the first letter of first two words (e.g., "DotMac Books" → "DB").
+    For single-word names, uses first two letters (e.g., "Ledger" → "LE").
+    """
+    parts = [part for part in name.split() if part]
+    if not parts:
+        return "DB"
+    if len(parts) == 1:
+        return parts[0][:2].upper()
+    return (parts[0][0] + parts[1][0]).upper()
+
+
 def brand_context() -> dict:
     """Get standard brand context for templates."""
+    # Use configured brand_mark or derive from name
+    mark = settings.brand_mark or (
+        _brand_mark(settings.brand_name) if settings.brand_name else "DB"
+    )
     return {
         "name": settings.brand_name,
         "tagline": settings.brand_tagline,
         "logo_url": settings.brand_logo_url,
-        "mark": settings.brand_name[:2].upper() if settings.brand_name else "IF",
+        "mark": mark,
     }
+
+
+def _merge_dicts(base: dict, override: dict) -> dict:
+    for key, value in override.items():
+        if isinstance(value, dict) and isinstance(base.get(key), dict):
+            _merge_dicts(base[key], value)
+        else:
+            base[key] = value
+    return base
+
+
+def landing_content() -> dict:
+    """Get landing page content for templates."""
+    content = {
+        "hero": {
+            "badge": settings.landing_hero_badge,
+            "title": settings.landing_hero_title,
+            "subtitle": f"{settings.brand_tagline}. {settings.landing_hero_subtitle}",
+            "cta_primary": settings.landing_cta_primary,
+            "cta_secondary": settings.landing_cta_secondary,
+        },
+        "proof_pills": [
+            {"key": "multi_entity", "label": "Multi-entity"},
+            {"key": "audit_trail", "label": "Audit trail"},
+            {"key": "ifrs_templates", "label": "IFRS templates"},
+            {"key": "ar_ap_aging", "label": "AR/AP aging"},
+        ],
+        "modules": {
+            "title": "Complete accounting modules",
+            "subtitle": "Everything you need to manage your finances, from general ledger to detailed reporting.",
+            "featured": {
+                "title": "General Ledger",
+                "description": (
+                    "The foundation of your accounting system. Chart of accounts with flexible hierarchies, "
+                    "journal entries with approval workflows, and trial balance with multi-currency support."
+                ),
+                "chips": [
+                    "Chart of Accounts",
+                    "Journal Entries",
+                    "Trial Balance",
+                    "Multi-Currency",
+                ],
+                "cta_label": "Explore General Ledger",
+                "cta_href": "/gl/accounts",
+            },
+            "cards": [
+                {
+                    "key": "ar",
+                    "title": "Accounts Receivable",
+                    "description": "Customer invoices, payments, credit memos, and aging analysis.",
+                    "cta_label": "View AR",
+                    "cta_href": "/ar/customers",
+                },
+                {
+                    "key": "ap",
+                    "title": "Accounts Payable",
+                    "description": "Supplier bills, payment scheduling, and expense allocation.",
+                    "cta_label": "View AP",
+                    "cta_href": "/ap/suppliers",
+                },
+                {
+                    "key": "fa",
+                    "title": "Fixed Assets",
+                    "description": "Asset register and depreciation schedules per IAS 16.",
+                    "cta_label": "View assets",
+                    "cta_href": "/fa/assets",
+                },
+                {
+                    "key": "banking",
+                    "title": "Banking",
+                    "description": "Bank accounts, reconciliation, and cash flow management.",
+                    "cta_label": "View banking",
+                    "cta_href": "/banking/accounts",
+                },
+                {
+                    "key": "reports",
+                    "title": "Financial Reports",
+                    "description": "Trial balance, P&L, balance sheet, and IFRS notes.",
+                    "cta_label": "View reports",
+                    "cta_href": "/gl/trial-balance",
+                },
+            ],
+        },
+        "audit": {
+            "badge": "Audit-ready",
+            "title": "Every entry traceable.\nEvery report ready.",
+            "description": (
+                "Built for compliance from day one. Complete audit trail, approval workflows, document "
+                "attachments, and row-level security ensure your books are always ready for review."
+            ),
+            "bullets": [
+                "Complete change history with user attribution",
+                "Multi-level approval workflows",
+                "Document attachments for supporting evidence",
+                "Row-level security for data isolation",
+            ],
+        },
+        "reports": {
+            "title": "IFRS-compliant reporting",
+            "subtitle": "Generate standard financial statements with proper IFRS disclosures, ready for auditors.",
+            "cards": [
+                {"title": "Trial Balance", "subtitle": "Detailed and summary views"},
+                {"title": "P&L Statement", "subtitle": "By period and comparative"},
+                {"title": "Balance Sheet", "subtitle": "IFRS presentation"},
+                {"title": "Cash Flow", "subtitle": "Direct and indirect methods"},
+            ],
+        },
+        "security": {
+            "title": "Enterprise-grade security",
+            "subtitle": "Your financial data deserves the highest level of protection.",
+            "cards": [
+                {
+                    "key": "rls",
+                    "title": "Row-Level Security",
+                    "description": "PostgreSQL RLS ensures data isolation between tenants.",
+                },
+                {
+                    "key": "rbac",
+                    "title": "Role-Based Access",
+                    "description": "Fine-grained permissions control who can view, edit, and approve.",
+                },
+                {
+                    "key": "encryption",
+                    "title": "Encrypted at Rest",
+                    "description": "Sensitive data is encrypted with industry-standard algorithms.",
+                },
+            ],
+        },
+        "cta": {
+            "title": "Ready to close faster?",
+            "subtitle": "Join finance teams who have shortened their month-end close with {brand}.",
+            "cta_primary": settings.landing_cta_primary,
+            "cta_secondary": settings.landing_cta_secondary,
+        },
+    }
+
+    if settings.landing_content_json:
+        try:
+            override = json.loads(settings.landing_content_json)
+        except json.JSONDecodeError:
+            override = None
+        if isinstance(override, dict):
+            content = _merge_dicts(content, override)
+
+    return content
 
 
 def base_context(

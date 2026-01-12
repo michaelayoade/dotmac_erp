@@ -1,0 +1,236 @@
+{#
+  Reusable UI Components
+  Import with: {% from "components/macros.html" import component_name %}
+#}
+
+{# ============================================
+   STATUS BADGE
+   Usage: {{ status_badge("PAID") }}
+          {{ status_badge("OVERDUE", size="sm") }}
+   ============================================ #}
+{% macro status_badge(status, size="md") %}
+{% set status_upper = status|upper %}
+{% set configs = {
+  'DRAFT': {'bg': 'bg-amber-100 dark:bg-amber-900/30', 'text': 'text-amber-700 dark:text-amber-400', 'dot': 'bg-amber-500'},
+  'PENDING': {'bg': 'bg-amber-100 dark:bg-amber-900/30', 'text': 'text-amber-700 dark:text-amber-400', 'dot': 'bg-amber-500'},
+  'POSTED': {'bg': 'bg-blue-100 dark:bg-blue-900/30', 'text': 'text-blue-700 dark:text-blue-400', 'dot': 'bg-blue-500'},
+  'APPROVED': {'bg': 'bg-blue-100 dark:bg-blue-900/30', 'text': 'text-blue-700 dark:text-blue-400', 'dot': 'bg-blue-500'},
+  'PAID': {'bg': 'bg-emerald-100 dark:bg-emerald-900/30', 'text': 'text-emerald-700 dark:text-emerald-400', 'dot': 'bg-emerald-500'},
+  'COMPLETED': {'bg': 'bg-emerald-100 dark:bg-emerald-900/30', 'text': 'text-emerald-700 dark:text-emerald-400', 'dot': 'bg-emerald-500'},
+  'ACTIVE': {'bg': 'bg-emerald-100 dark:bg-emerald-900/30', 'text': 'text-emerald-700 dark:text-emerald-400', 'dot': 'bg-emerald-500'},
+  'PARTIAL': {'bg': 'bg-sky-100 dark:bg-sky-900/30', 'text': 'text-sky-700 dark:text-sky-400', 'dot': 'bg-sky-500'},
+  'OVERDUE': {'bg': 'bg-rose-100 dark:bg-rose-900/30', 'text': 'text-rose-700 dark:text-rose-400', 'dot': 'bg-rose-500'},
+  'PAST DUE': {'bg': 'bg-rose-100 dark:bg-rose-900/30', 'text': 'text-rose-700 dark:text-rose-400', 'dot': 'bg-rose-500'},
+  'CANCELLED': {'bg': 'bg-rose-100 dark:bg-rose-900/30', 'text': 'text-rose-700 dark:text-rose-400', 'dot': 'bg-rose-500'},
+  'VOIDED': {'bg': 'bg-slate-100 dark:bg-slate-800', 'text': 'text-slate-600 dark:text-slate-400', 'dot': 'bg-slate-400'},
+  'INACTIVE': {'bg': 'bg-slate-100 dark:bg-slate-800', 'text': 'text-slate-600 dark:text-slate-400', 'dot': 'bg-slate-400'},
+  'CLOSED': {'bg': 'bg-slate-100 dark:bg-slate-800', 'text': 'text-slate-600 dark:text-slate-400', 'dot': 'bg-slate-400'}
+} %}
+{% set cfg = configs.get(status_upper, {'bg': 'bg-slate-100 dark:bg-slate-800', 'text': 'text-slate-600 dark:text-slate-400', 'dot': 'bg-slate-400'}) %}
+{% set sizes = {'sm': 'px-1.5 py-0.5 text-xs', 'md': 'px-2 py-1 text-xs', 'lg': 'px-2.5 py-1 text-sm'} %}
+<span class="inline-flex items-center gap-1 rounded-full font-medium {{ cfg.bg }} {{ cfg.text }} {{ sizes[size] }}">
+  <span class="h-1.5 w-1.5 rounded-full {{ cfg.dot }}"></span>
+  {{ status|title }}
+</span>
+{% endmacro %}
+
+
+{# ============================================
+   STATS CARD
+   Usage: {{ stats_card("Total Revenue", "$125,000", icon="trending-up", color="emerald", href="/reports") }}
+   ============================================ #}
+{% macro stats_card(label, value, icon="chart", color="slate", href=none, subtitle=none, trend=none) %}
+{% set colors = {
+  'emerald': {'bg': 'bg-emerald-100 dark:bg-emerald-900/30', 'text': 'text-emerald-600 dark:text-emerald-400'},
+  'rose': {'bg': 'bg-rose-100 dark:bg-rose-900/30', 'text': 'text-rose-600 dark:text-rose-400'},
+  'blue': {'bg': 'bg-blue-100 dark:bg-blue-900/30', 'text': 'text-blue-600 dark:text-blue-400'},
+  'amber': {'bg': 'bg-amber-100 dark:bg-amber-900/30', 'text': 'text-amber-600 dark:text-amber-400'},
+  'teal': {'bg': 'bg-teal-100 dark:bg-teal-900/30', 'text': 'text-teal-600 dark:text-teal-400'},
+  'violet': {'bg': 'bg-violet-100 dark:bg-violet-900/30', 'text': 'text-violet-600 dark:text-violet-400'},
+  'slate': {'bg': 'bg-slate-100 dark:bg-slate-800', 'text': 'text-slate-600 dark:text-slate-400'}
+} %}
+{% set c = colors.get(color, colors.slate) %}
+{% set tag = 'a' if href else 'div' %}
+<{{ tag }} {% if href %}href="{{ href }}"{% endif %} class="card p-5 {{ 'card-hover group' if href else '' }}">
+  <div class="flex items-center justify-between mb-3">
+    <span class="text-sm font-medium text-slate-500 dark:text-slate-400">{{ label }}</span>
+    <div class="flex h-9 w-9 items-center justify-center rounded-lg {{ c.bg }} {{ c.text }}">
+      {{ icon_svg(icon) }}
+    </div>
+  </div>
+  <p class="text-2xl font-bold text-slate-900 dark:text-white font-mono">{{ value }}</p>
+  {% if subtitle %}
+  <p class="text-xs text-slate-400 dark:text-slate-500 mt-1 {{ 'group-hover:text-teal-500 transition-colors' if href else '' }}">{{ subtitle }}</p>
+  {% endif %}
+  {% if trend %}
+  <div class="flex items-center gap-1 mt-2 text-xs {{ 'text-emerald-600 dark:text-emerald-400' if trend > 0 else 'text-rose-600 dark:text-rose-400' }}">
+    <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      {% if trend > 0 %}
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/>
+      {% else %}
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/>
+      {% endif %}
+    </svg>
+    <span>{{ trend|abs }}%</span>
+  </div>
+  {% endif %}
+</{{ tag }}>
+{% endmacro %}
+
+
+{# ============================================
+   EMPTY STATE
+   Usage: {{ empty_state("No invoices", "Create your first invoice to get started", icon="document", cta_text="New Invoice", cta_href="/invoices/new") }}
+   ============================================ #}
+{% macro empty_state(title, description=none, icon="document", cta_text=none, cta_href=none) %}
+<div class="empty-state py-12 text-center">
+  <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 mb-4">
+    <svg class="h-8 w-8 text-slate-400 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      {{ icon_path(icon) }}
+    </svg>
+  </div>
+  <h3 class="text-lg font-semibold text-slate-700 dark:text-slate-300 mb-1">{{ title }}</h3>
+  {% if description %}
+  <p class="text-sm text-slate-500 dark:text-slate-400 max-w-sm mx-auto">{{ description }}</p>
+  {% endif %}
+  {% if cta_text and cta_href %}
+  <a href="{{ cta_href }}" class="btn btn-primary mt-4">{{ cta_text }}</a>
+  {% endif %}
+</div>
+{% endmacro %}
+
+
+{# ============================================
+   AGING BAR (stacked horizontal)
+   Usage: {{ aging_bar(current=60, days30=20, days60=15, days90=5) }}
+   ============================================ #}
+{% macro aging_bar(current=0, days30=0, days60=0, days90=0, height="h-3", show_legend=false) %}
+{% set total = current + days30 + days60 + days90 %}
+{% if total > 0 %}
+{% set pct_current = (current / total * 100)|round(1) %}
+{% set pct_30 = (days30 / total * 100)|round(1) %}
+{% set pct_60 = (days60 / total * 100)|round(1) %}
+{% set pct_90 = (days90 / total * 100)|round(1) %}
+<div class="space-y-1.5">
+  <div class="{{ height }} bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden flex">
+    {% if pct_current > 0 %}<div class="h-full bg-emerald-500" style="width: {{ pct_current }}%" title="Current: {{ pct_current }}%"></div>{% endif %}
+    {% if pct_30 > 0 %}<div class="h-full bg-amber-500" style="width: {{ pct_30 }}%" title="1-30 Days: {{ pct_30 }}%"></div>{% endif %}
+    {% if pct_60 > 0 %}<div class="h-full bg-orange-500" style="width: {{ pct_60 }}%" title="31-60 Days: {{ pct_60 }}%"></div>{% endif %}
+    {% if pct_90 > 0 %}<div class="h-full bg-rose-500" style="width: {{ pct_90 }}%" title="60+ Days: {{ pct_90 }}%"></div>{% endif %}
+  </div>
+  {% if show_legend %}
+  <div class="flex flex-wrap gap-3 text-xs">
+    <div class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-emerald-500"></span><span class="text-slate-500">Current</span></div>
+    <div class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-amber-500"></span><span class="text-slate-500">1-30</span></div>
+    <div class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-orange-500"></span><span class="text-slate-500">31-60</span></div>
+    <div class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-rose-500"></span><span class="text-slate-500">60+</span></div>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+{% endmacro %}
+
+
+{# ============================================
+   PROGRESS BAR
+   Usage: {{ progress_bar("Revenue", "$50,000", 75, color="emerald") }}
+   ============================================ #}
+{% macro progress_bar(label, value, percentage, color="teal", height="h-2") %}
+{% set colors = {
+  'emerald': 'from-emerald-500 to-teal-500',
+  'rose': 'from-rose-500 to-pink-500',
+  'blue': 'from-blue-500 to-indigo-500',
+  'amber': 'from-amber-500 to-yellow-500',
+  'teal': 'from-teal-500 to-cyan-500'
+} %}
+<div class="space-y-1">
+  <div class="flex items-center justify-between text-sm">
+    <span class="text-slate-600 dark:text-slate-400">{{ label }}</span>
+    <span class="font-mono font-medium text-slate-900 dark:text-white">{{ value }}</span>
+  </div>
+  <div class="{{ height }} bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+    <div class="h-full bg-gradient-to-r {{ colors.get(color, colors.teal) }} rounded-full transition-all" style="width: {{ percentage|min(100) }}%"></div>
+  </div>
+</div>
+{% endmacro %}
+
+
+{# ============================================
+   SECTION CARD (with header and content)
+   Usage: {% call section_card("Recent Activity", href="/activity") %}content here{% endcall %}
+   ============================================ #}
+{% macro section_card(title, subtitle=none, href=none, href_text="View All") %}
+<div class="card p-6">
+  <div class="flex items-center justify-between mb-4">
+    <div>
+      <h3 class="font-semibold text-slate-900 dark:text-white">{{ title }}</h3>
+      {% if subtitle %}<p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{{ subtitle }}</p>{% endif %}
+    </div>
+    {% if href %}
+    <a href="{{ href }}" class="text-sm text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300">{{ href_text }}</a>
+    {% endif %}
+  </div>
+  {{ caller() }}
+</div>
+{% endmacro %}
+
+
+{# ============================================
+   SPARKLINE (inline SVG)
+   Usage: {{ sparkline([10, 25, 15, 30, 22, 35, 28], color="emerald") }}
+   ============================================ #}
+{% macro sparkline(data, color="teal", width=80, height=24) %}
+{% set colors = {'emerald': '#10b981', 'rose': '#f43f5e', 'teal': '#14b8a6', 'blue': '#3b82f6', 'amber': '#f59e0b'} %}
+{% set stroke = colors.get(color, colors.teal) %}
+{% if data and data|length > 1 %}
+{% set max_val = data|max %}
+{% set min_val = data|min %}
+{% set range = max_val - min_val if max_val != min_val else 1 %}
+{% set points = [] %}
+{% for val in data %}
+{% set x = (loop.index0 / (data|length - 1)) * width %}
+{% set y = height - ((val - min_val) / range * (height - 4)) - 2 %}
+{% set _ = points.append(x|string ~ ',' ~ y|string) %}
+{% endfor %}
+<svg width="{{ width }}" height="{{ height }}" class="inline-block">
+  <polyline fill="none" stroke="{{ stroke }}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" points="{{ points|join(' ') }}"/>
+</svg>
+{% endif %}
+{% endmacro %}
+
+
+{# ============================================
+   ICON HELPERS
+   ============================================ #}
+{% macro icon_svg(name, size="h-5 w-5") %}
+<svg class="{{ size }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">{{ icon_path(name) }}</svg>
+{% endmacro %}
+
+{% macro icon_path(name) %}
+{% if name == "trending-up" %}<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+{% elif name == "trending-down" %}<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6"/>
+{% elif name == "document" %}<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+{% elif name == "chart" %}<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+{% elif name == "users" %}<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
+{% elif name == "currency" %}<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+{% elif name == "receipt" %}<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z"/>
+{% elif name == "credit-card" %}<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
+{% elif name == "folder" %}<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
+{% elif name == "clock" %}<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+{% elif name == "check-circle" %}<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+{% elif name == "warning" %}<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+{% elif name == "box" %}<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+{% else %}<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+{% endif %}
+{% endmacro %}
+
+
+{# ============================================
+   CHART CANVAS (data-attribute based)
+   Usage: {{ chart_canvas("donut", {"labels": labels, "data": values}, id="myChart") }}
+   ============================================ #}
+{% macro chart_canvas(type, config, id=none, height="h-64") %}
+<div class="{{ height }}">
+  <canvas {% if id %}id="{{ id }}"{% endif %} data-chart="{{ type }}" data-chart-config='{{ config|tojson }}'></canvas>
+</div>
+{% endmacro %}

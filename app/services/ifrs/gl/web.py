@@ -22,7 +22,9 @@ from app.models.ifrs.gl.fiscal_period import FiscalPeriod
 from app.models.ifrs.gl.fiscal_year import FiscalYear
 from app.models.ifrs.gl.journal_entry import JournalEntry, JournalStatus, JournalType
 from app.models.ifrs.gl.journal_entry_line import JournalEntryLine
+from app.config import settings
 from app.services.common import coerce_uuid
+from app.services.ifrs.platform.currency_context import get_currency_context
 
 
 def _parse_date(value: Optional[str]) -> Optional[date]:
@@ -38,12 +40,13 @@ def _format_date(value: Optional[date]) -> str:
     return value.strftime("%Y-%m-%d") if value else ""
 
 
-def _format_currency(amount: Optional[Decimal], currency: str = "USD") -> Optional[str]:
+def _format_currency(
+    amount: Optional[Decimal],
+    currency: str = settings.default_presentation_currency_code,
+) -> Optional[str]:
     if amount is None:
         return None
     value = Decimal(str(amount))
-    if currency == "USD":
-        return f"${value:,.2f}"
     return f"{currency} {value:,.2f}"
 
 
@@ -338,13 +341,15 @@ class GLWebService:
                 .all()
             )
 
-        return {
+        context = {
             "account": _account_form_view(account) if account else None,
             "account_categories": [_category_option_view(cat) for cat in categories],
             "account_types": [value.value for value in AccountType],
             "normal_balances": [value.value for value in NormalBalance],
             "subledger_types": ["AR", "AP", "INVENTORY", "ASSET", "BANK"],
         }
+        context.update(get_currency_context(db, organization_id))
+        return context
 
     @staticmethod
     def account_detail_context(
@@ -371,7 +376,7 @@ class GLWebService:
         description: str = "",
         search_terms: str = "",
         is_multi_currency: bool = False,
-        default_currency_code: str = "USD",
+        default_currency_code: str = settings.default_functional_currency_code,
         is_active: bool = True,
         is_posting_allowed: bool = True,
         is_budgetable: bool = False,
@@ -453,7 +458,7 @@ class GLWebService:
         description: str = "",
         search_terms: str = "",
         is_multi_currency: bool = False,
-        default_currency_code: str = "USD",
+        default_currency_code: str = settings.default_functional_currency_code,
         is_active: bool = True,
         is_posting_allowed: bool = True,
         is_budgetable: bool = False,
@@ -683,7 +688,7 @@ class GLWebService:
             .all()
         )
 
-        return {
+        context = {
             "entry": _journal_entry_view(entry) if entry else None,
             "lines": lines_view,
             "accounts": [
@@ -697,6 +702,8 @@ class GLWebService:
             "journal_types": [value.value for value in JournalType],
             "fiscal_periods": [_period_option_view(period) for period in periods],
         }
+        context.update(get_currency_context(db, organization_id))
+        return context
 
     @staticmethod
     def journal_detail_context(
@@ -866,9 +873,10 @@ class GLWebService:
                     }
                 )
 
+        zero_value = f"{settings.default_presentation_currency_code} 0.00"
         totals = TrialBalanceTotals(
-            total_debit=_format_currency(total_debit) or "$0.00",
-            total_credit=_format_currency(total_credit) or "$0.00",
+            total_debit=_format_currency(total_debit) or zero_value,
+            total_credit=_format_currency(total_credit) or zero_value,
         )
 
         return {
@@ -890,7 +898,7 @@ class GLWebService:
         posting_date: str,
         description: str,
         reference: str = "",
-        currency_code: str = "USD",
+        currency_code: str = settings.default_functional_currency_code,
         exchange_rate: str = "1.0",
         lines_json: str = "[]",
     ) -> tuple[Optional[JournalEntry], Optional[str]]:
@@ -1038,7 +1046,7 @@ class GLWebService:
         posting_date: str,
         description: str,
         reference: str = "",
-        currency_code: str = "USD",
+        currency_code: str = settings.default_functional_currency_code,
         exchange_rate: str = "1.0",
         lines_json: str = "[]",
     ) -> tuple[Optional[JournalEntry], Optional[str]]:

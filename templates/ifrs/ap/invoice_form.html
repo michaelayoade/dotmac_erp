@@ -3,9 +3,6 @@
 {% block page_title %}{{ "Edit AP Invoice" if invoice else "New AP Invoice" }}{% endblock %}
 
 {% block page_styles %}
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
     :root {
         --ink: #1a1f36;
@@ -579,10 +576,9 @@
                             x-model="form.currency_code"
                             required
                             class="form-input">
-                        <option value="USD">USD - US Dollar</option>
-                        <option value="EUR">EUR - Euro</option>
-                        <option value="GBP">GBP - British Pound</option>
-                        <option value="NGN">NGN - Nigerian Naira</option>
+                        {% for currency in currencies %}
+                        <option value="{{ currency.code }}">{{ currency.code }} - {{ currency.name }}</option>
+                        {% endfor %}
                     </select>
                 </div>
 
@@ -820,7 +816,7 @@ function invoiceForm() {
             invoice_number: '{{ invoice.invoice_number if invoice else "" }}',
             invoice_date: '{{ invoice.invoice_date if invoice else "" }}',
             due_date: '{{ invoice.due_date if invoice else "" }}',
-            currency_code: '{{ invoice.currency_code if invoice else "" }}' || (selectedSupplier?.currency_code || selectedPO?.currency_code || 'USD'),
+            currency_code: '{{ invoice.currency_code if invoice else "" }}' || (selectedSupplier?.currency_code || selectedPO?.currency_code || '{{ default_currency_code }}'),
             description: '{{ invoice.description if invoice else "" }}' || (selectedPO ? 'Invoice for PO ' + selectedPO.po_number : ''),
             cost_center_id: '{{ invoice.cost_center_id if invoice else "" }}',
             project_id: '{{ invoice.project_id if invoice else "" }}',
@@ -878,7 +874,7 @@ function invoiceForm() {
         },
 
         formatCurrency(amount) {
-            const currency = this.form.currency_code || 'USD';
+            const currency = this.form.currency_code || '{{ default_currency_code }}';
             return new Intl.NumberFormat('en-US', {
                 style: 'currency',
                 currency: currency

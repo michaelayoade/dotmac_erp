@@ -60,6 +60,12 @@ def upgrade() -> None:
         op.execute(f"ALTER TABLE {full_table} ENABLE ROW LEVEL SECURITY;")
         op.execute(f"ALTER TABLE {full_table} FORCE ROW LEVEL SECURITY;")
 
+        # Drop existing policies if they exist (idempotent)
+        op.execute(f"DROP POLICY IF EXISTS {policy_name}_select ON {full_table};")
+        op.execute(f"DROP POLICY IF EXISTS {policy_name}_insert ON {full_table};")
+        op.execute(f"DROP POLICY IF EXISTS {policy_name}_update ON {full_table};")
+        op.execute(f"DROP POLICY IF EXISTS {policy_name}_delete ON {full_table};")
+
         op.execute(f"""
             CREATE POLICY {policy_name}_select ON {full_table}
             FOR SELECT

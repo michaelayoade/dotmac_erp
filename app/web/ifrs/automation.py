@@ -10,20 +10,19 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
-from app.web.deps import get_db, require_web_auth, WebAuthContext, base_context
-from app.services.ifrs.automation.recurring import recurring_service
-from app.services.ifrs.automation.workflow import workflow_service
-from app.services.ifrs.automation.custom_fields import custom_fields_service
-from app.services.ifrs.automation.web import automation_web_service
 from app.models.ifrs.automation import (
     DocumentTemplate,
     RecurringStatus,
 )
+from app.services.ifrs.automation.custom_fields import custom_fields_service
+from app.services.ifrs.automation.recurring import recurring_service
+from app.services.ifrs.automation.web import automation_web_service
+from app.services.ifrs.automation.workflow import workflow_service
+from app.templates import templates
+from app.web.deps import get_db, require_web_auth, WebAuthContext, base_context
 
-templates = Jinja2Templates(directory="templates")
 
 router = APIRouter(prefix="/automation", tags=["automation-web"])
 

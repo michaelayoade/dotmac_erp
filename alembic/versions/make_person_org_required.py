@@ -13,6 +13,7 @@ from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
+from app.config import settings
 
 # revision identifiers, used by Alembic.
 revision = "make_person_org_required"
@@ -23,6 +24,8 @@ depends_on = None
 
 # Default organization UUID for migrating orphaned users
 DEFAULT_ORG_ID = "00000000-0000-0000-0000-000000000001"
+DEFAULT_FUNCTIONAL_CURRENCY_CODE = settings.default_functional_currency_code
+DEFAULT_PRESENTATION_CURRENCY_CODE = settings.default_presentation_currency_code
 
 
 def upgrade() -> None:
@@ -45,8 +48,8 @@ def upgrade() -> None:
             '{DEFAULT_ORG_ID}'::uuid,
             'DEFAULT',
             'Default Organization',
-            'USD',
-            'USD',
+            '{DEFAULT_FUNCTIONAL_CURRENCY_CODE}',
+            '{DEFAULT_PRESENTATION_CURRENCY_CODE}',
             12,
             31,
             true,

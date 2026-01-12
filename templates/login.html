@@ -1,13 +1,13 @@
 {% extends "base.html" %}
 
-{% block title %}Login - {{ brand.name | default("IFRS Accounting") }}{% endblock %}
+{% block title %}Login - {{ brand.name }}{% endblock %}
 
 {% block body %}
 <div class="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center px-4 py-12 bg-mesh">
-    {% set brand_name = brand.name | default("IFRS Accounting") %}
-    {% set brand_tagline = brand.tagline | default("Enterprise Finance", true) %}
-    {% set brand_logo_url = brand.logo_url | default("", true) %}
-    {% set brand_mark = brand.mark | default("IF") %}
+    {% set brand_name = brand.name %}
+    {% set brand_tagline = brand.tagline %}
+    {% set brand_logo_url = brand.logo_url %}
+    {% set brand_mark = brand.mark %}
 
     <div class="w-full max-w-md">
         <!-- Logo and Branding -->

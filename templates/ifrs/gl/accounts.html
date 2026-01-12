@@ -21,6 +21,7 @@
 {% endblock %}
 
 {% block content %}
+{% from "components/macros.html" import status_badge, empty_state %}
 <div class="space-y-6">
     <!-- Filters -->
     <div class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-800/50">
@@ -63,6 +64,7 @@
                         <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Category</th>
                         <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Normal Balance</th>
                         <th class="px-6 py-4 text-right text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Balance</th>
+                        <th class="px-6 py-4 text-center text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Trend</th>
                         <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Status</th>
                         <th class="px-6 py-4 text-right text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Actions</th>
                     </tr>
@@ -85,11 +87,18 @@
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-400">{{ account.normal_balance }}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium text-slate-900 dark:text-white">{{ account.balance | default("$0.00") }}</td>
                         <td class="px-6 py-4 whitespace-nowrap">
-                            {% if account.is_active %}
-                            <span class="inline-flex rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">Active</span>
+                            {% if account.balance_trend %}
+                            <div class="flex justify-center">
+                                <canvas class="h-6 w-16" data-chart="sparkline" data-chart-config='{{ {"data": account.balance_trend} | tojson }}'></canvas>
+                            </div>
                             {% else %}
-                            <span class="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-400">Inactive</span>
+                            <div class="flex justify-center">
+                                <span class="text-xs text-slate-400">—</span>
+                            </div>
                             {% endif %}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            {{ status_badge('active' if account.is_active else 'inactive', 'sm') }}
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-right">
                             <div class="flex items-center justify-end gap-2">
@@ -104,17 +113,8 @@
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="7" class="px-6 py-12 text-center">
-                            <svg class="mx-auto h-12 w-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                            </svg>
-                            <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">No accounts found</p>
-                            <a href="/gl/accounts/new" class="mt-4 inline-flex items-center text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">
-                                <svg class="mr-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-                                </svg>
-                                Create your first account
-                            </a>
+                        <td colspan="8" class="px-6 py-12">
+                            {{ empty_state('No accounts found', 'Get started by creating your first account', 'document', 'Create Account', '/gl/accounts/new') }}
                         </td>
                     </tr>
                     {% endfor %}

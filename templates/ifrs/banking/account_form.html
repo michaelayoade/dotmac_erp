@@ -86,10 +86,12 @@
                     <label for="currency_code" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Currency *</label>
                     <select id="currency_code" name="currency_code" required
                             class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
-                        <option value="USD" {{ 'selected' if (not account) or (account and account.currency_code == 'USD') else '' }}>USD - US Dollar</option>
-                        <option value="EUR" {{ 'selected' if account and account.currency_code == 'EUR' else '' }}>EUR - Euro</option>
-                        <option value="GBP" {{ 'selected' if account and account.currency_code == 'GBP' else '' }}>GBP - British Pound</option>
-                        <option value="NGN" {{ 'selected' if account and account.currency_code == 'NGN' else '' }}>NGN - Nigerian Naira</option>
+                        {% set selected_currency = account.currency_code if account else default_currency_code %}
+                        {% for currency in currencies %}
+                        <option value="{{ currency.code }}" {{ 'selected' if currency.code == selected_currency else '' }}>
+                            {{ currency.code }} - {{ currency.name }}
+                        </option>
+                        {% endfor %}
                     </select>
                 </div>
                 <div>

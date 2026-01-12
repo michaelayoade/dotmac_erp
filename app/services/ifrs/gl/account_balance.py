@@ -25,6 +25,7 @@ from app.models.ifrs.gl.fiscal_period import FiscalPeriod
 from app.models.ifrs.gl.account import Account
 from app.services.common import coerce_uuid
 from app.services.response import ListResponseMixin
+from app.services.ifrs.platform.org_context import org_context_service
 
 if TYPE_CHECKING:
     from app.schemas.ifrs.gl import TrialBalanceRead
@@ -65,7 +66,7 @@ class AccountBalanceService(ListResponseMixin):
         fiscal_period_id: UUID,
         debit_amount: Decimal,
         credit_amount: Decimal,
-        currency_code: str = "USD",
+        currency_code: Optional[str] = None,
         balance_type: BalanceType = BalanceType.ACTUAL,
         business_unit_id: Optional[UUID] = None,
         cost_center_id: Optional[UUID] = None,
@@ -97,6 +98,9 @@ class AccountBalanceService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         acct_id = coerce_uuid(account_id)
         period_id = coerce_uuid(fiscal_period_id)
+
+        if not currency_code:
+            currency_code = org_context_service.get_functional_currency(db, org_id)
 
         # Find existing balance
         balance = (
@@ -161,7 +165,7 @@ class AccountBalanceService(ListResponseMixin):
         account_id: UUID,
         fiscal_period_id: UUID,
         balance_type: BalanceType = BalanceType.ACTUAL,
-        currency_code: str = "USD",
+        currency_code: Optional[str] = None,
         business_unit_id: Optional[UUID] = None,
         cost_center_id: Optional[UUID] = None,
         project_id: Optional[UUID] = None,
@@ -186,6 +190,9 @@ class AccountBalanceService(ListResponseMixin):
             AccountBalance or None if not found
         """
         org_id = coerce_uuid(organization_id)
+
+        if not currency_code:
+            currency_code = org_context_service.get_functional_currency(db, org_id)
 
         return (
             db.query(AccountBalance)
@@ -269,7 +276,7 @@ class AccountBalanceService(ListResponseMixin):
                     account_code=acct_map.get(r.account_id, ""),
                     fiscal_period_id=period_id,
                     balance_type=balance_type.value,
-                    currency_code="USD",  # Aggregated to functional
+                    currency_code=org_context_service.get_functional_currency(db, org_id),
                     opening_balance=r.opening_balance or Decimal("0"),
                     period_debit=r.period_debit or Decimal("0"),
                     period_credit=r.period_credit or Decimal("0"),
@@ -389,7 +396,7 @@ class AccountBalanceService(ListResponseMixin):
                     account_id=r.account_id,
                     fiscal_period_id=period_id,
                     balance_type=balance_type,
-                    currency_code="USD",  # Functional currency
+                    currency_code=org_context_service.get_functional_currency(db, org_id),
                     business_unit_id=r.business_unit_id,
                     cost_center_id=r.cost_center_id,
                     project_id=r.project_id,

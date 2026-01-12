@@ -49,14 +49,31 @@ def web_client(db_session):
 
     # Mock IFRS services that require PostgreSQL
     mock_dashboard_service = MagicMock()
+    # Create a proper stats mock with all required attributes
+    mock_stats = MagicMock()
+    mock_stats.total_revenue = "$100,000.00"
+    mock_stats.total_expenses = "$75,000.00"
+    mock_stats.net_income = "$25,000.00"
+    mock_stats.open_invoices = 10
+    mock_stats.pending_amount = "$5,000.00"
+    mock_stats.revenue_trend = 12.5  # Numeric so comparison works
+    mock_stats.income_trend = 8.2
+    mock_stats.net_cash_flow = "$10,000.00"
+    mock_stats.cash_in = "$50,000.00"
+    mock_stats.cash_out = "$40,000.00"
+    mock_stats.cash_in_pct = 55
+    mock_stats.cash_out_pct = 45
+    mock_stats.aging_current = "$30,000.00"
+    mock_stats.aging_30 = "$10,000.00"
+    mock_stats.aging_60 = "$5,000.00"
+    mock_stats.aging_90 = "$2,000.00"
+    mock_stats.aging_current_pct = 65
+    mock_stats.aging_30_pct = 20
+    mock_stats.aging_60_pct = 10
+    mock_stats.aging_90_pct = 5
+
     mock_dashboard_service.dashboard_context.return_value = {
-        "stats": MagicMock(
-            total_revenue=100000,
-            total_expenses=75000,
-            net_income=25000,
-            open_invoices=10,
-            pending_amount=5000,
-        ),
+        "stats": mock_stats,
         "recent_journals": [],
         "fiscal_periods": [],
     }

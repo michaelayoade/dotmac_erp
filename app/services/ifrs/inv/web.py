@@ -18,19 +18,22 @@ from app.models.ifrs.inv.inventory_transaction import InventoryTransaction, Tran
 from app.models.ifrs.inv.item import Item
 from app.models.ifrs.inv.item_category import ItemCategory
 from app.models.ifrs.inv.warehouse import Warehouse
+from app.config import settings
 from app.services.common import coerce_uuid
+from app.services.ifrs.platform.currency_context import get_currency_context
 
 
 def _format_date(value: Optional[date]) -> str:
     return value.strftime("%Y-%m-%d") if value else ""
 
 
-def _format_currency(amount: Optional[Decimal], currency: str = "USD") -> str:
+def _format_currency(
+    amount: Optional[Decimal],
+    currency: str = settings.default_presentation_currency_code,
+) -> str:
     if amount is None:
         return ""
     value = Decimal(str(amount))
-    if currency == "USD":
-        return f"${value:,.2f}"
     return f"{currency} {value:,.2f}"
 
 
@@ -90,6 +93,7 @@ class InventoryWebService:
             "costing_methods": costing_methods,
             "item": None,
         }
+        context.update(get_currency_context(db, organization_id))
 
         # Load existing item for edit
         if item_id:

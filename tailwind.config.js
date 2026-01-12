@@ -9,7 +9,7 @@ module.exports = {
     extend: {
       fontFamily: {
         sans: ['DM Sans', 'system-ui', 'sans-serif'],
-        display: ['Fraunces', 'Georgia', 'serif'],
+        display: ['DM Sans', 'system-ui', 'sans-serif'],
         mono: ['JetBrains Mono', 'monospace'],
       },
       colors: {
@@ -41,12 +41,12 @@ module.exports = {
           900: '#78350f',
           950: '#451a03',
         },
-        // Ink colors for text
+        // Deep navy ink colors for text - signals trust and professionalism
         ink: {
-          DEFAULT: '#1a1f36',
-          light: '#3d4663',
-          muted: '#6b7280',
-          faint: '#9ca3af',
+          DEFAULT: '#0f172a',
+          light: '#334155',
+          muted: '#64748b',
+          faint: '#94a3b8',
         }
       },
       animation: {

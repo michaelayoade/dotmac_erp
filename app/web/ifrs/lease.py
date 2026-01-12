@@ -9,14 +9,14 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
-from app.web.deps import get_db, require_web_auth, WebAuthContext, base_context
 from app.services.ifrs.lease import lease_modification_service, lease_variable_payment_service
 from app.services.ifrs.lease.web import lease_web_service
+from app.services.ifrs.platform.currency_context import get_currency_context
+from app.templates import templates
+from app.web.deps import get_db, require_web_auth, WebAuthContext, base_context
 
-templates = Jinja2Templates(directory="templates")
 
 router = APIRouter(prefix="/lease", tags=["lease-web"])
 
@@ -55,6 +55,7 @@ def list_contracts(
 def new_contract_form(request: Request, auth: WebAuthContext = Depends(require_web_auth), db: Session = Depends(get_db)):
     """New lease contract form page."""
     context = base_context(request, auth, "New Lease Contract", "lease")
+    context.update(get_currency_context(db, str(auth.organization_id)))
     return templates.TemplateResponse(request, "ifrs/lease/contract_form.html", context)
 
 

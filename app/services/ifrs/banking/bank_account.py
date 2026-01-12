@@ -14,6 +14,7 @@ from fastapi import HTTPException
 from sqlalchemy import and_, select
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.models.ifrs.banking.bank_account import (
     BankAccount,
     BankAccountStatus,
@@ -31,7 +32,7 @@ class BankAccountInput:
     account_number: str
     account_name: str
     gl_account_id: UUID
-    currency_code: str = "USD"
+    currency_code: str = settings.default_functional_currency_code
     account_type: BankAccountType = BankAccountType.checking
     bank_code: Optional[str] = None
     branch_code: Optional[str] = None

@@ -3,37 +3,39 @@ Sales Order Web Routes.
 
 HTML template routes for sales order management.
 """
-from datetime import datetime, date
+from datetime import date
 from decimal import Decimal
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
-from app.web.deps import get_db, require_web_auth, WebAuthContext, base_context
-from app.services.ifrs.ar.sales_order import sales_order_service
-from app.models.ifrs.ar.sales_order import SalesOrder, SOStatus, FulfillmentStatus, Shipment
 from app.models.ifrs.ar.customer import Customer
 from app.models.ifrs.ar.payment_terms import PaymentTerms
+from app.models.ifrs.ar.sales_order import SalesOrder, SOStatus, FulfillmentStatus, Shipment
 from app.models.ifrs.gl.account import Account
 from app.models.ifrs.gl.account_category import AccountCategory, IFRSCategory
 from app.models.ifrs.tax.tax_code import TaxCode
 from app.services.common import coerce_uuid
+from app.config import settings
+from app.services.ifrs.ar.sales_order import sales_order_service
+from app.services.ifrs.platform.org_context import org_context_service
+from app.services.ifrs.platform.currency_context import get_currency_context
+from app.templates import templates
+from app.web.deps import get_db, require_web_auth, WebAuthContext, base_context
 
-templates = Jinja2Templates(directory="templates")
-templates.env.globals["now"] = datetime.now
 
 router = APIRouter(prefix="/sales-orders", tags=["sales-orders-web"])
 
 
-def _format_currency(amount, currency="USD"):
+def _format_currency(
+    amount,
+    currency: str = settings.default_presentation_currency_code,
+):
     if amount is None:
-        return "$0.00"
+        return f"{currency} 0.00"
     value = Decimal(str(amount))
-    if currency == "USD":
-        return f"${value:,.2f}"
     return f"{currency} {value:,.2f}"
 
 
@@ -96,13 +98,15 @@ def _get_form_context(db: Session, org_id) -> dict:
         for t in payment_terms
     ]
 
-    return {
+    context = {
         "customers": customer_options,
         "revenue_accounts": revenue_options,
         "tax_codes": tax_options,
         "payment_terms": terms_options,
         "today": _format_date(date.today()),
     }
+    context.update(get_currency_context(db, str(org_id)))
+    return context
 
 
 # =============================================================================
@@ -209,7 +213,7 @@ def create_sales_order(
     request: Request,
     customer_id: str = Form(...),
     order_date: str = Form(...),
-    currency_code: str = Form("USD"),
+    currency_code: Optional[str] = Form(None),
     customer_po_number: Optional[str] = Form(None),
     requested_date: Optional[str] = Form(None),
     promised_date: Optional[str] = Form(None),
@@ -233,6 +237,12 @@ def create_sales_order(
 
     try:
         lines = json.loads(lines_json) if lines_json else []
+
+        if not currency_code:
+            currency_code = org_context_service.get_functional_currency(
+                db,
+                auth.organization_id,
+            )
 
         so = sales_order_service.create(
             db,

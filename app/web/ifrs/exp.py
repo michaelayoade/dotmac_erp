@@ -3,22 +3,20 @@ Expense Web Routes.
 
 HTML template routes for expense management.
 """
-from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
-from app.web.deps import get_db, require_web_auth, WebAuthContext, base_context
-from app.services.ifrs.exp.web import expense_web_service
-from app.services.ifrs.exp.expense import expense_service
 from app.models.ifrs.exp.expense_entry import PaymentMethod
+from app.services.ifrs.exp.expense import expense_service
+from app.services.ifrs.platform.org_context import org_context_service
+from app.services.ifrs.exp.web import expense_web_service
+from app.templates import templates
+from app.web.deps import get_db, require_web_auth, WebAuthContext, base_context
 
-templates = Jinja2Templates(directory="templates")
-templates.env.globals["now"] = datetime.now
 
 router = APIRouter(prefix="/expenses", tags=["expenses-web"])
 
@@ -83,7 +81,7 @@ def create_expense(
     payment_account_id: Optional[str] = Form(None),
     tax_code_id: Optional[str] = Form(None),
     tax_amount: str = Form("0"),
-    currency_code: str = Form("USD"),
+    currency_code: Optional[str] = Form(None),
     payee: Optional[str] = Form(None),
     receipt_reference: Optional[str] = Form(None),
     notes: Optional[str] = Form(None),
@@ -95,6 +93,12 @@ def create_expense(
 ):
     """Create new expense."""
     try:
+        if not currency_code:
+            currency_code = org_context_service.get_functional_currency(
+                db,
+                auth.organization_id,
+            )
+
         expense = expense_service.create(
             db,
             organization_id=str(auth.organization_id),

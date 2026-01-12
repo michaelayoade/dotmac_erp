@@ -37,7 +37,7 @@ class OrgContextService:
             organization_id: Organization ID
 
         Returns:
-            ISO 4217 currency code (e.g., "USD", "EUR", "GBP")
+            ISO 4217 currency code
 
         Raises:
             ValueError: If organization not found
@@ -63,7 +63,7 @@ class OrgContextService:
             organization_id: Organization ID
 
         Returns:
-            ISO 4217 currency code (e.g., "USD", "EUR", "GBP")
+            ISO 4217 currency code
 
         Raises:
             ValueError: If organization not found

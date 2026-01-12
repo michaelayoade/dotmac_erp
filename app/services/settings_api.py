@@ -29,7 +29,8 @@ def _normalize_spec_setting(
         raise HTTPException(status_code=400, detail=error)
     if isinstance(coerced, str) and spec.allowed:
         coerced = coerced.strip().lower()
-    if spec.allowed and coerced not in spec.allowed:
+    allowed_lower = {v.lower() for v in spec.allowed} if spec.allowed else None
+    if allowed_lower and coerced not in allowed_lower:
         allowed = ", ".join(sorted(spec.allowed))
         raise HTTPException(
             status_code=400, detail=f"Value must be one of: {allowed}"
@@ -170,3 +171,87 @@ def upsert_scheduler_setting(db: Session, key: str, payload: DomainSettingUpdate
 
 def get_scheduler_setting(db: Session, key: str):
     return _get_domain_setting(db, SettingDomain.scheduler, key)
+
+
+def list_email_settings_response(
+    db: Session,
+    is_active: bool | None,
+    order_by: str,
+    order_dir: str,
+    limit: int,
+    offset: int,
+):
+    return _list_domain_settings_response(
+        db, SettingDomain.email, is_active, order_by, order_dir, limit, offset
+    )
+
+
+def upsert_email_setting(db: Session, key: str, payload: DomainSettingUpdate):
+    return _upsert_domain_setting(db, SettingDomain.email, key, payload)
+
+
+def get_email_setting(db: Session, key: str):
+    return _get_domain_setting(db, SettingDomain.email, key)
+
+
+def list_features_settings_response(
+    db: Session,
+    is_active: bool | None,
+    order_by: str,
+    order_dir: str,
+    limit: int,
+    offset: int,
+):
+    return _list_domain_settings_response(
+        db, SettingDomain.features, is_active, order_by, order_dir, limit, offset
+    )
+
+
+def upsert_features_setting(db: Session, key: str, payload: DomainSettingUpdate):
+    return _upsert_domain_setting(db, SettingDomain.features, key, payload)
+
+
+def get_features_setting(db: Session, key: str):
+    return _get_domain_setting(db, SettingDomain.features, key)
+
+
+def list_automation_settings_response(
+    db: Session,
+    is_active: bool | None,
+    order_by: str,
+    order_dir: str,
+    limit: int,
+    offset: int,
+):
+    return _list_domain_settings_response(
+        db, SettingDomain.automation, is_active, order_by, order_dir, limit, offset
+    )
+
+
+def upsert_automation_setting(db: Session, key: str, payload: DomainSettingUpdate):
+    return _upsert_domain_setting(db, SettingDomain.automation, key, payload)
+
+
+def get_automation_setting(db: Session, key: str):
+    return _get_domain_setting(db, SettingDomain.automation, key)
+
+
+def list_reporting_settings_response(
+    db: Session,
+    is_active: bool | None,
+    order_by: str,
+    order_dir: str,
+    limit: int,
+    offset: int,
+):
+    return _list_domain_settings_response(
+        db, SettingDomain.reporting, is_active, order_by, order_dir, limit, offset
+    )
+
+
+def upsert_reporting_setting(db: Session, key: str, payload: DomainSettingUpdate):
+    return _upsert_domain_setting(db, SettingDomain.reporting, key, payload)
+
+
+def get_reporting_setting(db: Session, key: str):
+    return _get_domain_setting(db, SettingDomain.reporting, key)

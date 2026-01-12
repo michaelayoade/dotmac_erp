@@ -9,10 +9,8 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
-from app.web.deps import get_db, require_web_auth, WebAuthContext, base_context
 from app.models.ifrs.tax.tax_period import TaxPeriodFrequency, TaxPeriodStatus
 from app.services.ifrs.tax import (
     tax_jurisdiction_service,
@@ -22,8 +20,9 @@ from app.services.ifrs.tax import (
     deferred_tax_service,
 )
 from app.services.ifrs.tax.web import tax_web_service
+from app.templates import templates
+from app.web.deps import get_db, require_web_auth, WebAuthContext, base_context
 
-templates = Jinja2Templates(directory="templates")
 
 router = APIRouter(prefix="/tax", tags=["tax-web"])
 

@@ -8,13 +8,13 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
-from app.web.deps import get_db, require_web_auth, WebAuthContext, base_context
 from app.services.ifrs.gl.web import gl_web_service
+from app.services.ifrs.platform.org_context import org_context_service
+from app.templates import templates
+from app.web.deps import get_db, require_web_auth, WebAuthContext, base_context
 
-templates = Jinja2Templates(directory="templates")
 
 router = APIRouter(prefix="/gl", tags=["gl-web"])
 
@@ -111,7 +111,7 @@ def create_account(
     description: str = Form(""),
     search_terms: str = Form(""),
     is_multi_currency: bool = Form(False),
-    default_currency_code: str = Form("USD"),
+    default_currency_code: Optional[str] = Form(None),
     is_active: bool = Form(True),
     is_posting_allowed: bool = Form(True),
     is_budgetable: bool = Form(False),
@@ -123,6 +123,12 @@ def create_account(
     db: Session = Depends(get_db),
 ):
     """Create a new GL account."""
+    if not default_currency_code:
+        default_currency_code = org_context_service.get_functional_currency(
+            db,
+            auth.organization_id,
+        )
+
     account, error = gl_web_service.create_account(
         db,
         str(auth.organization_id),
@@ -183,7 +189,7 @@ def update_account(
     description: str = Form(""),
     search_terms: str = Form(""),
     is_multi_currency: bool = Form(False),
-    default_currency_code: str = Form("USD"),
+    default_currency_code: Optional[str] = Form(None),
     is_active: bool = Form(True),
     is_posting_allowed: bool = Form(True),
     is_budgetable: bool = Form(False),
@@ -195,6 +201,12 @@ def update_account(
     db: Session = Depends(get_db),
 ):
     """Update an existing GL account."""
+    if not default_currency_code:
+        default_currency_code = org_context_service.get_functional_currency(
+            db,
+            auth.organization_id,
+        )
+
     account, error = gl_web_service.update_account(
         db,
         str(auth.organization_id),
@@ -345,13 +357,19 @@ def create_journal(
     posting_date: str = Form(...),
     description: str = Form(...),
     reference: str = Form(""),
-    currency_code: str = Form("USD"),
+    currency_code: Optional[str] = Form(None),
     exchange_rate: str = Form("1.0"),
     lines_json: str = Form("[]"),
     auth: WebAuthContext = Depends(require_web_auth),
     db: Session = Depends(get_db),
 ):
     """Create a new journal entry."""
+    if not currency_code:
+        currency_code = org_context_service.get_functional_currency(
+            db,
+            auth.organization_id,
+        )
+
     entry, error = gl_web_service.create_journal(
         db,
         str(auth.organization_id),
@@ -397,13 +415,19 @@ def update_journal(
     posting_date: str = Form(...),
     description: str = Form(...),
     reference: str = Form(""),
-    currency_code: str = Form("USD"),
+    currency_code: Optional[str] = Form(None),
     exchange_rate: str = Form("1.0"),
     lines_json: str = Form("[]"),
     auth: WebAuthContext = Depends(require_web_auth),
     db: Session = Depends(get_db),
 ):
     """Update an existing journal entry."""
+    if not currency_code:
+        currency_code = org_context_service.get_functional_currency(
+            db,
+            auth.organization_id,
+        )
+
     entry, error = gl_web_service.update_journal(
         db,
         str(auth.organization_id),

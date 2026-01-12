@@ -22,6 +22,7 @@
 {% endblock %}
 
 {% block content %}
+{% from "components/macros.html" import status_badge %}
 <div class="space-y-6 stagger-in">
     <!-- Stats Row -->
     <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -131,6 +132,7 @@
                         <th>Tax ID</th>
                         <th>Payment Terms</th>
                         <th class="text-right sortable">Balance</th>
+                        <th class="text-center">Trend</th>
                         <th>Status</th>
                         <th class="text-right">Actions</th>
                     </tr>
@@ -164,11 +166,18 @@
                         </td>
                         <td class="text-right font-mono font-semibold text-slate-900 dark:text-white">{{ supplier.balance | default("$0.00") }}</td>
                         <td>
-                            {% if supplier.is_active %}
-                            <span class="badge-success">Active</span>
+                            {% if supplier.balance_trend %}
+                            <div class="flex justify-center">
+                                <canvas class="h-6 w-16" data-chart="sparkline" data-chart-config='{{ {"data": supplier.balance_trend} | tojson }}'></canvas>
+                            </div>
                             {% else %}
-                            <span class="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-600 dark:bg-slate-700 dark:text-slate-300">Inactive</span>
+                            <div class="flex justify-center">
+                                <span class="text-xs text-slate-400">—</span>
+                            </div>
                             {% endif %}
+                        </td>
+                        <td>
+                            {{ status_badge('active' if supplier.is_active else 'inactive', 'sm') }}
                         </td>
                         <td class="text-right">
                             <div class="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -199,7 +208,7 @@
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="7" class="py-16">
+                        <td colspan="8" class="py-16">
                             <div class="empty-state">
                                 <div class="empty-state-icon">
                                     <svg class="h-10 w-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">

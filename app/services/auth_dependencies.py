@@ -132,7 +132,10 @@ def require_user_auth(
     request: Request = None,
     db: Session = Depends(_get_db),
 ):
+    # Try Authorization header first, then fall back to cookie
     token = _extract_bearer_token(authorization)
+    if not token and request is not None:
+        token = request.cookies.get("access_token")
     if not token:
         raise HTTPException(status_code=401, detail="Unauthorized")
     payload = decode_access_token(db, token)

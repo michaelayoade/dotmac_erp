@@ -13,6 +13,7 @@ from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Index, Numeric
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.config import settings
 from app.db import Base
 
 
@@ -97,7 +98,11 @@ class ExpenseEntry(Base):
         Numeric(19, 4),
         nullable=False,
     )
-    currency_code: Mapped[str] = mapped_column(String(3), nullable=False, default="USD")
+    currency_code: Mapped[str] = mapped_column(
+        String(3),
+        nullable=False,
+        default=settings.default_functional_currency_code,
+    )
 
     # Tax
     tax_code_id: Mapped[Optional[uuid.UUID]] = mapped_column(

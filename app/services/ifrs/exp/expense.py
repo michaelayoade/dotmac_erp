@@ -11,6 +11,7 @@ from uuid import UUID
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.models.ifrs.exp.expense_entry import ExpenseEntry, ExpenseStatus, PaymentMethod
 from app.models.ifrs.gl.journal_entry import JournalEntry, JournalStatus, JournalType
 from app.models.ifrs.gl.journal_entry_line import JournalEntryLine
@@ -59,7 +60,7 @@ class ExpenseService:
         payment_account_id: Optional[str] = None,
         tax_code_id: Optional[str] = None,
         tax_amount: Decimal = Decimal("0"),
-        currency_code: str = "USD",
+        currency_code: str = settings.default_functional_currency_code,
         payee: Optional[str] = None,
         receipt_reference: Optional[str] = None,
         notes: Optional[str] = None,

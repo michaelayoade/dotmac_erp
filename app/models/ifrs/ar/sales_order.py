@@ -16,6 +16,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.config import settings
 from app.db import Base
 
 
@@ -141,7 +142,11 @@ class SalesOrder(Base):
     )
 
     # Currency
-    currency_code: Mapped[str] = mapped_column(String(3), nullable=False, default="USD")
+    currency_code: Mapped[str] = mapped_column(
+        String(3),
+        nullable=False,
+        default=settings.default_functional_currency_code,
+    )
     exchange_rate: Mapped[Decimal] = mapped_column(
         Numeric(19, 10),
         nullable=False,

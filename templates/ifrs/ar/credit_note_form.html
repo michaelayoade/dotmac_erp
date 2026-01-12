@@ -327,10 +327,9 @@
                             x-model="form.currency_code"
                             required
                             class="form-input">
-                        <option value="USD">USD - US Dollar</option>
-                        <option value="EUR">EUR - Euro</option>
-                        <option value="GBP">GBP - British Pound</option>
-                        <option value="NGN">NGN - Nigerian Naira</option>
+                        {% for currency in currencies %}
+                        <option value="{{ currency.code }}">{{ currency.code }} - {{ currency.name }}</option>
+                        {% endfor %}
                     </select>
                 </div>
 
@@ -572,7 +571,7 @@ function creditNoteForm() {
         form: {
             customer_id: '{{ selected_invoice.customer_id if selected_invoice else "" }}',
             credit_note_date: '',
-            currency_code: '{{ selected_invoice.currency_code if selected_invoice else "USD" }}',
+            currency_code: '{{ selected_invoice.currency_code if selected_invoice else default_currency_code }}',
             reference_invoice_id: '{{ invoice_id or "" }}',
             reason: '',
             cost_center_id: '',
@@ -602,7 +601,7 @@ function creditNoteForm() {
         },
 
         formatCurrency(amount) {
-            const currency = this.form.currency_code || 'USD';
+            const currency = this.form.currency_code || '{{ default_currency_code }}';
             return new Intl.NumberFormat('en-US', {
                 style: 'currency',
                 currency: currency

@@ -18,6 +18,7 @@ from app.web_home import router as web_home_router
 from app.web.ifrs import router as ifrs_web_router
 from app.web.auth import router as auth_web_router
 from app.web.admin import router as admin_web_router
+from app.web.profile import router as profile_web_router
 from app.api.ifrs import (
     gl_router,
     ap_router,
@@ -61,7 +62,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Starter Template API", lifespan=lifespan)
+app = FastAPI(title="DotMac Books API", lifespan=lifespan)
 
 _AUDIT_SETTINGS_CACHE: dict | None = None
 _AUDIT_SETTINGS_CACHE_AT: float | None = None
@@ -203,6 +204,7 @@ _include_api_router(scheduler_router, dependencies=[Depends(require_tenant_auth)
 app.include_router(web_home_router)
 app.include_router(auth_web_router)
 app.include_router(admin_web_router)
+app.include_router(profile_web_router)
 app.include_router(ifrs_web_router)
 
 # IFRS Accounting Routers (authenticated with tenant context)

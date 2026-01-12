@@ -11,6 +11,7 @@ from uuid import UUID
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.models.ifrs.ar.quote import Quote, QuoteLine, QuoteStatus
 from app.models.ifrs.ar.invoice import Invoice, InvoiceType, InvoiceStatus
 from app.models.ifrs.ar.invoice_line import InvoiceLine
@@ -40,7 +41,7 @@ class QuoteService:
         quote_date: date,
         valid_until: date,
         created_by: str,
-        currency_code: str = "USD",
+        currency_code: str = settings.default_functional_currency_code,
         exchange_rate: Decimal = Decimal("1"),
         reference: Optional[str] = None,
         contact_name: Optional[str] = None,

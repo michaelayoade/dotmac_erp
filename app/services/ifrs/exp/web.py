@@ -19,15 +19,18 @@ from app.models.ifrs.tax.tax_code import TaxCode
 from app.models.ifrs.core_org.project import Project, ProjectStatus
 from app.models.ifrs.core_org.cost_center import CostCenter
 from app.models.ifrs.core_org.business_unit import BusinessUnit
+from app.config import settings
 from app.services.common import coerce_uuid
+from app.services.ifrs.platform.currency_context import get_currency_context
 
 
-def _format_currency(amount: Optional[Decimal], currency: str = "USD") -> str:
+def _format_currency(
+    amount: Optional[Decimal],
+    currency: str = settings.default_presentation_currency_code,
+) -> str:
     if amount is None:
         return "$0.00"
     value = Decimal(str(amount))
-    if currency == "USD":
-        return f"${value:,.2f}"
     return f"{currency} {value:,.2f}"
 
 
@@ -263,6 +266,7 @@ class ExpenseWebService:
             "today": _format_date(date.today()),
             "expense": None,
         }
+        context.update(get_currency_context(db, organization_id))
 
         # If editing, load expense data
         if expense_id:

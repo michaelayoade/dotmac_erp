@@ -9,16 +9,15 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
 from app.models.ifrs.core_config import SequenceType, ResetFrequency
 from app.services.ifrs.common import NumberingService
 from app.services.ifrs.settings_web import settings_web_service
+from app.templates import templates
 from app.web.deps import get_async_db, get_db, require_web_auth, WebAuthContext, base_context
 
-templates = Jinja2Templates(directory="templates")
 
 router = APIRouter(prefix="/settings", tags=["ifrs-settings"])
 

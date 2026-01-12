@@ -11,6 +11,7 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.models.ifrs.core_fx.currency import Currency
 from app.models.ifrs.core_org.organization import Organization
 from app.models.ifrs.gl.account import Account, AccountType, NormalBalance
@@ -21,7 +22,7 @@ from app.services.common import coerce_uuid
 
 
 NIGERIA_COUNTRY_CODE = "NGA"
-NIGERIA_CURRENCY_CODE = "NGN"
+NIGERIA_CURRENCY_CODE = settings.default_functional_currency_code
 NIGERIA_JURISDICTION_CODE = "NG-FED"
 
 
@@ -44,7 +45,7 @@ def _ensure_currency(db: Session, summary: NigeriaSeedSummary) -> None:
         Currency(
             currency_code=NIGERIA_CURRENCY_CODE,
             currency_name="Nigerian Naira",
-            symbol="NGN",
+            symbol=NIGERIA_CURRENCY_CODE,
             decimal_places=2,
             is_active=True,
             is_crypto=False,
@@ -256,7 +257,7 @@ def seed_nigeria_tax_data(db: Session, organization_id: UUID | str) -> NigeriaSe
     """
     Seed baseline Nigeria tax data for an organization.
 
-    Adds NGN currency, core tax accounts, a Nigeria federal jurisdiction,
+    Adds default currency, core tax accounts, a Nigeria federal jurisdiction,
     and default VAT and withholding tax codes.
     """
     org_id = coerce_uuid(organization_id)

@@ -745,7 +745,7 @@ class TestDataFactory:
             "code": f"SUP-{unique_id}",
             "name": f"Test Supplier {unique_id}",
             "email": f"supplier-{unique_id}@test.com",
-            "currency": "USD",
+            "currency": "DEFAULT_CURRENCY_CODE",
         }
 
     @staticmethod

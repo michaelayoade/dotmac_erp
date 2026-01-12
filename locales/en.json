@@ -1,0 +1,294 @@
+{
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "create": "Create",
+    "update": "Update",
+    "search": "Search",
+    "filter": "Filter",
+    "clear": "Clear",
+    "submit": "Submit",
+    "back": "Back",
+    "next": "Next",
+    "previous": "Previous",
+    "close": "Close",
+    "loading": "Loading...",
+    "no_results": "No results found",
+    "view_all": "View all",
+    "view_details": "View details",
+    "actions": "Actions",
+    "status": "Status",
+    "date": "Date",
+    "amount": "Amount",
+    "description": "Description",
+    "notes": "Notes",
+    "required": "Required",
+    "optional": "Optional"
+  },
+
+  "nav": {
+    "dashboard": "Dashboard",
+    "general_ledger": "General Ledger",
+    "accounts_receivable": "Accounts Receivable",
+    "accounts_payable": "Accounts Payable",
+    "banking": "Banking",
+    "fixed_assets": "Fixed Assets",
+    "reports": "Reports",
+    "settings": "Settings",
+    "logout": "Logout",
+    "profile": "Profile"
+  },
+
+  "landing": {
+    "hero": {
+      "badge": "IFRS-ready accounting",
+      "title": "Close faster with audit-ready accounting",
+      "subtitle": "Multi-entity support, clean audit trail, and accurate AR/AP aging for growing finance teams."
+    },
+    "cta": {
+      "primary": "Start trial",
+      "secondary": "View sample reports"
+    },
+    "proof": {
+      "multi_entity": "Multi-entity",
+      "audit_trail": "Audit trail",
+      "ifrs_templates": "IFRS templates",
+      "ar_ap_aging": "AR/AP aging"
+    },
+    "modules": {
+      "title": "Complete accounting modules",
+      "subtitle": "Everything you need to manage your finances, from general ledger to detailed reporting.",
+      "gl": {
+        "title": "General Ledger",
+        "description": "The foundation of your accounting system. Chart of accounts with flexible hierarchies, journal entries with approval workflows, and trial balance with multi-currency support.",
+        "link": "Explore General Ledger"
+      },
+      "ar": {
+        "title": "Accounts Receivable",
+        "description": "Customer invoices, payments, credit memos, and aging analysis.",
+        "link": "View AR"
+      },
+      "ap": {
+        "title": "Accounts Payable",
+        "description": "Supplier bills, payment scheduling, and expense allocation.",
+        "link": "View AP"
+      },
+      "fa": {
+        "title": "Fixed Assets",
+        "description": "Asset register, depreciation schedules per IAS 16.",
+        "link": "View assets"
+      },
+      "banking": {
+        "title": "Banking",
+        "description": "Bank accounts, reconciliation, cash flow management.",
+        "link": "View banking"
+      },
+      "reports": {
+        "title": "Financial Reports",
+        "description": "Trial balance, P&L, balance sheet, IFRS notes.",
+        "link": "View reports"
+      }
+    },
+    "audit": {
+      "badge": "Audit-ready",
+      "title": "Every entry traceable. Every report ready.",
+      "subtitle": "Built for compliance from day one. Complete audit trail, approval workflows, document attachments, and row-level security ensure your books are always ready for review.",
+      "features": {
+        "history": "Complete change history with user attribution",
+        "workflows": "Multi-level approval workflows",
+        "attachments": "Document attachments for supporting evidence",
+        "rls": "Row-level security for data isolation"
+      }
+    },
+    "reports_section": {
+      "title": "IFRS-compliant reporting",
+      "subtitle": "Generate standard financial statements with proper IFRS disclosures, ready for your auditors.",
+      "trial_balance": "Trial Balance",
+      "trial_balance_desc": "Detailed & summary views",
+      "pl_statement": "P&L Statement",
+      "pl_statement_desc": "By period & comparative",
+      "balance_sheet": "Balance Sheet",
+      "balance_sheet_desc": "IFRS presentation",
+      "cash_flow": "Cash Flow",
+      "cash_flow_desc": "Direct & indirect methods"
+    },
+    "security": {
+      "title": "Enterprise-grade security",
+      "subtitle": "Your financial data deserves the highest level of protection.",
+      "rls": {
+        "title": "Row-Level Security",
+        "description": "PostgreSQL RLS ensures complete data isolation between tenants."
+      },
+      "rbac": {
+        "title": "Role-Based Access",
+        "description": "Fine-grained permissions control who can view, edit, and approve."
+      },
+      "encryption": {
+        "title": "Encrypted at Rest",
+        "description": "All sensitive data encrypted with industry-standard algorithms."
+      }
+    },
+    "final_cta": {
+      "title": "Ready to close faster?",
+      "subtitle": "Join finance teams who have shortened their month-end close with {brand_name}."
+    },
+    "footer": {
+      "copyright": "All rights reserved."
+    }
+  },
+
+  "auth": {
+    "login": "Login",
+    "logout": "Logout",
+    "register": "Register",
+    "forgot_password": "Forgot password?",
+    "reset_password": "Reset password",
+    "email": "Email",
+    "password": "Password",
+    "confirm_password": "Confirm password",
+    "remember_me": "Remember me",
+    "sign_in": "Sign in",
+    "sign_up": "Sign up",
+    "admin_login": "Admin Login"
+  },
+
+  "dashboard": {
+    "title": "Dashboard",
+    "stats": {
+      "revenue": "Revenue",
+      "expenses": "Expenses",
+      "net_income": "Net Income",
+      "open_invoices": "Open Invoices",
+      "pending": "pending",
+      "vs_last_period": "vs last period"
+    },
+    "quick_actions": {
+      "title": "Quick Actions",
+      "new_journal": "New Journal Entry",
+      "new_journal_hint": "GL",
+      "create_invoice": "Create Invoice",
+      "create_invoice_hint": "AR",
+      "record_bill": "Record Bill",
+      "record_bill_hint": "AP",
+      "trial_balance": "Trial Balance",
+      "trial_balance_hint": "Reports"
+    },
+    "cash_flow": {
+      "title": "Cash Flow (30 days)",
+      "net": "Net Cash Flow",
+      "in": "Cash In",
+      "out": "Cash Out"
+    },
+    "aging": {
+      "title": "Receivables Aging",
+      "current": "Current",
+      "days_1_30": "1-30 Days",
+      "days_31_60": "31-60 Days",
+      "days_60_plus": "60+ Days",
+      "view_report": "View aging report"
+    },
+    "journals": {
+      "title": "Recent Journal Entries",
+      "entry_num": "Entry #",
+      "date": "Date",
+      "description": "Description",
+      "amount": "Amount",
+      "status": "Status",
+      "empty_title": "No journal entries yet",
+      "empty_desc": "Create your first journal entry to start recording transactions"
+    },
+    "periods": {
+      "title": "Fiscal Periods",
+      "active": "Active",
+      "manage": "Manage periods",
+      "empty_title": "No fiscal periods configured",
+      "empty_desc": "Set up your fiscal calendar to start recording transactions"
+    }
+  },
+
+  "gl": {
+    "accounts": "Accounts",
+    "chart_of_accounts": "Chart of Accounts",
+    "journal_entries": "Journal Entries",
+    "trial_balance": "Trial Balance",
+    "periods": "Fiscal Periods",
+    "new_journal": "New Journal Entry",
+    "new_account": "New Account",
+    "new_period": "Create Fiscal Period",
+    "debit": "Debit",
+    "credit": "Credit",
+    "balance": "Balance",
+    "account_code": "Account Code",
+    "account_name": "Account Name",
+    "account_type": "Account Type",
+    "entry_number": "Entry Number",
+    "entry_date": "Entry Date",
+    "posted": "Posted",
+    "draft": "Draft"
+  },
+
+  "ar": {
+    "customers": "Customers",
+    "invoices": "Invoices",
+    "receipts": "Receipts",
+    "credit_notes": "Credit Notes",
+    "aging": "AR Aging",
+    "new_customer": "New Customer",
+    "new_invoice": "New Invoice",
+    "new_receipt": "New Receipt",
+    "invoice_number": "Invoice #",
+    "customer_name": "Customer Name",
+    "due_date": "Due Date",
+    "total": "Total",
+    "balance_due": "Balance Due",
+    "paid": "Paid",
+    "overdue": "Overdue"
+  },
+
+  "ap": {
+    "suppliers": "Suppliers",
+    "invoices": "Bills",
+    "payments": "Payments",
+    "purchase_orders": "Purchase Orders",
+    "aging": "AP Aging",
+    "new_supplier": "New Supplier",
+    "new_invoice": "New Bill",
+    "new_payment": "New Payment",
+    "supplier_name": "Supplier Name",
+    "bill_number": "Bill #",
+    "due_date": "Due Date"
+  },
+
+  "banking": {
+    "accounts": "Bank Accounts",
+    "statements": "Statements",
+    "reconciliation": "Reconciliation",
+    "new_account": "New Bank Account",
+    "import_statement": "Import Statement",
+    "account_name": "Account Name",
+    "account_number": "Account Number",
+    "current_balance": "Current Balance"
+  },
+
+  "errors": {
+    "required_field": "This field is required",
+    "invalid_email": "Please enter a valid email address",
+    "invalid_number": "Please enter a valid number",
+    "min_length": "Must be at least {min} characters",
+    "max_length": "Must be no more than {max} characters",
+    "passwords_no_match": "Passwords do not match",
+    "generic": "An error occurred. Please try again.",
+    "not_found": "The requested resource was not found",
+    "unauthorized": "You are not authorized to perform this action",
+    "session_expired": "Your session has expired. Please log in again."
+  },
+
+  "tags": {
+    "chart_of_accounts": "Chart of Accounts",
+    "journal_entries": "Journal Entries",
+    "trial_balance": "Trial Balance",
+    "multi_currency": "Multi-Currency"
+  }
+}

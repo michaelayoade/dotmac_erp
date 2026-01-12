@@ -162,6 +162,13 @@ class MockSettings:
     brand_name = "Starter Template"
     brand_tagline = "FastAPI starter"
     brand_logo_url = None
+    brand_mark = None
+    landing_hero_badge = "IFRS-ready accounting"
+    landing_hero_title = "Close faster with audit-ready accounting"
+    landing_hero_subtitle = "Multi-entity support, clean audit trail, and accurate AR/AP aging."
+    landing_cta_primary = "Start trial"
+    landing_cta_secondary = "View sample reports"
+    landing_content_json = None
 
 
 mock_config_module.settings = MockSettings()
