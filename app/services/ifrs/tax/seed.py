@@ -22,7 +22,6 @@ from app.services.common import coerce_uuid
 
 
 NIGERIA_COUNTRY_CODE = "NGA"
-NIGERIA_CURRENCY_CODE = settings.default_functional_currency_code
 NIGERIA_JURISDICTION_CODE = "NG-FED"
 
 
@@ -36,16 +35,20 @@ class NigeriaSeedSummary:
     tax_codes_created: int = 0
 
 
-def _ensure_currency(db: Session, summary: NigeriaSeedSummary) -> None:
-    currency = db.get(Currency, NIGERIA_CURRENCY_CODE)
+def _ensure_currency(
+    db: Session,
+    currency_code: str,
+    summary: NigeriaSeedSummary,
+) -> None:
+    currency = db.get(Currency, currency_code)
     if currency:
         return
 
     db.add(
         Currency(
-            currency_code=NIGERIA_CURRENCY_CODE,
+            currency_code=currency_code,
             currency_name="Nigerian Naira",
-            symbol=NIGERIA_CURRENCY_CODE,
+            symbol=currency_code,
             decimal_places=2,
             is_active=True,
             is_crypto=False,
@@ -121,6 +124,10 @@ def _ensure_account(
         .first()
     )
     if account:
+        if not account.is_active:
+            account.is_active = True
+        if not account.is_posting_allowed:
+            account.is_posting_allowed = True
         return account
 
     account = Account(
@@ -149,6 +156,7 @@ def _ensure_jurisdiction(
     deferred_tax_asset_account_id: UUID,
     deferred_tax_liability_account_id: UUID,
     deferred_tax_expense_account_id: UUID,
+    currency_code: str,
     summary: NigeriaSeedSummary,
 ) -> TaxJurisdiction:
     jurisdiction = (
@@ -180,7 +188,7 @@ def _ensure_jurisdiction(
         fiscal_year_end_month=12,
         filing_due_months=6,
         extension_months=None,
-        currency_code=NIGERIA_CURRENCY_CODE,
+        currency_code=currency_code,
         tax_authority_name="Federal Inland Revenue Service",
         tax_id_number=None,
         current_tax_payable_account_id=current_tax_payable_account_id,
@@ -267,7 +275,8 @@ def seed_nigeria_tax_data(db: Session, organization_id: UUID | str) -> NigeriaSe
 
     summary = NigeriaSeedSummary(organization_id=org_id)
 
-    _ensure_currency(db, summary)
+    currency_code = org.functional_currency_code or settings.default_functional_currency_code
+    _ensure_currency(db, currency_code, summary)
 
     assets_category = _ensure_category(
         db, org_id, IFRSCategory.ASSETS, "AST", "Assets", summary
@@ -370,6 +379,7 @@ def seed_nigeria_tax_data(db: Session, organization_id: UUID | str) -> NigeriaSe
         deferred_tax_asset.account_id,
         deferred_tax_liability.account_id,
         deferred_tax_expense.account_id,
+        currency_code,
         summary,
     )
 
