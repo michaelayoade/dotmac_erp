@@ -12,10 +12,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
-from app.models.ifrs.automation import (
-    DocumentTemplate,
-    RecurringStatus,
-)
+from app.models.ifrs.automation import RecurringStatus
 from app.services.ifrs.automation.custom_fields import custom_fields_service
 from app.services.ifrs.automation.recurring import recurring_service
 from app.services.ifrs.automation.web import automation_web_service
@@ -915,8 +912,6 @@ async def create_template(
     db: Session = Depends(get_db),
 ):
     """Handle document template form submission."""
-    from app.models.ifrs.automation import TemplateType
-
     content_type = request.headers.get("content-type", "")
 
     if "application/json" in content_type:
@@ -926,22 +921,12 @@ async def create_template(
         data = dict(form_data)
 
     try:
-        template = DocumentTemplate(
+        template = automation_web_service.create_template(
+            db=db,
             organization_id=auth.organization_id,
-            template_type=TemplateType(data["template_type"]),
-            template_name=data["template_name"],
-            description=data.get("description"),
-            template_content=data.get("template_content", ""),
-            css_styles=data.get("css_styles"),
-            page_size=data.get("page_size", "A4"),
-            page_orientation=data.get("page_orientation", "portrait"),
-            email_subject=data.get("email_subject"),
-            email_from_name=data.get("email_from_name"),
-            is_default=data.get("is_default") == "on",
-            created_by=auth.user_id,
+            user_id=auth.user_id,
+            data=data,
         )
-
-        db.add(template)
         db.commit()
 
         if "application/json" in content_type:
@@ -984,22 +969,12 @@ async def update_template(
         data = dict(form_data)
 
     try:
-        template = db.get(DocumentTemplate, UUID(template_id))
-        if not template:
-            raise ValueError("Template not found")
-
-        template.template_name = data.get("template_name", template.template_name)
-        template.description = data.get("description")
-        template.template_content = data.get("template_content", template.template_content)
-        template.css_styles = data.get("css_styles")
-        template.page_size = data.get("page_size", template.page_size)
-        template.page_orientation = data.get("page_orientation", template.page_orientation)
-        template.email_subject = data.get("email_subject")
-        template.email_from_name = data.get("email_from_name")
-        template.is_default = data.get("is_default") == "on"
-        template.updated_by = auth.user_id
-        template.version += 1
-
+        template = automation_web_service.update_template(
+            db=db,
+            template_id=UUID(template_id),
+            user_id=auth.user_id,
+            data=data,
+        )
         db.commit()
 
         if "application/json" in content_type:
@@ -1034,10 +1009,8 @@ def delete_template(
 ):
     """Delete a document template."""
     try:
-        template = db.get(DocumentTemplate, UUID(template_id))
-        if template:
-            template.is_active = False
-            db.commit()
+        automation_web_service.delete_template(db, UUID(template_id))
+        db.commit()
         return RedirectResponse(
             url="/automation/templates?success=Template+deleted",
             status_code=303,

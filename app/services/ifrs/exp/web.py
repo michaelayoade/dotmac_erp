@@ -22,6 +22,8 @@ from app.models.ifrs.core_org.business_unit import BusinessUnit
 from app.config import settings
 from app.services.common import coerce_uuid
 from app.services.ifrs.platform.currency_context import get_currency_context
+from app.services.ifrs.platform.org_context import org_context_service
+from app.services.ifrs.exp.expense import expense_service
 
 
 def _format_currency(
@@ -351,6 +353,85 @@ class ExpenseWebService:
                 "can_void": expense.status not in [ExpenseStatus.POSTED, ExpenseStatus.VOID],
             },
         }
+
+    @staticmethod
+    def create_expense_from_form(
+        db: Session,
+        organization_id: UUID,
+        user_id: UUID,
+        expense_date: str,
+        expense_account_id: str,
+        amount: str,
+        description: str,
+        payment_method: str,
+        payment_account_id: Optional[str] = None,
+        tax_code_id: Optional[str] = None,
+        tax_amount: Optional[str] = None,
+        currency_code: Optional[str] = None,
+        payee: Optional[str] = None,
+        receipt_reference: Optional[str] = None,
+        notes: Optional[str] = None,
+        project_id: Optional[str] = None,
+        cost_center_id: Optional[str] = None,
+        business_unit_id: Optional[str] = None,
+    ) -> ExpenseEntry:
+        """Create an expense from form data.
+
+        Handles all type conversions and defaults in the service layer.
+
+        Args:
+            db: Database session
+            organization_id: Organization UUID
+            user_id: User creating the expense
+            expense_date: Date string in YYYY-MM-DD format
+            expense_account_id: Expense account UUID string
+            amount: Amount string
+            description: Expense description
+            payment_method: PaymentMethod enum value string
+            ... other optional parameters
+
+        Returns:
+            Created ExpenseEntry
+
+        Raises:
+            ValueError: If required fields are invalid
+        """
+        # Default currency to functional currency if not provided
+        if not currency_code:
+            currency_code = org_context_service.get_functional_currency(
+                db, organization_id
+            )
+
+        # Parse date
+        parsed_date = datetime.strptime(expense_date, "%Y-%m-%d").date()
+
+        # Parse amount
+        parsed_amount = Decimal(amount)
+        parsed_tax_amount = Decimal(tax_amount) if tax_amount else Decimal("0")
+
+        # Create expense via the expense service
+        expense = expense_service.create(
+            db,
+            organization_id=str(organization_id),
+            expense_date=parsed_date,
+            expense_account_id=expense_account_id,
+            amount=parsed_amount,
+            description=description,
+            payment_method=PaymentMethod(payment_method),
+            created_by=str(user_id),
+            payment_account_id=payment_account_id if payment_account_id else None,
+            tax_code_id=tax_code_id if tax_code_id else None,
+            tax_amount=parsed_tax_amount,
+            currency_code=currency_code,
+            payee=payee,
+            receipt_reference=receipt_reference,
+            notes=notes,
+            project_id=project_id if project_id else None,
+            cost_center_id=cost_center_id if cost_center_id else None,
+            business_unit_id=business_unit_id if business_unit_id else None,
+        )
+
+        return expense
 
 
 expense_web_service = ExpenseWebService()

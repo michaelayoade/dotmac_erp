@@ -23,6 +23,7 @@ DEFAULT_PREFIXES = {
     SequenceType.JOURNAL: "JE",
     SequenceType.PURCHASE_ORDER: "PO",
     SequenceType.SUPPLIER_INVOICE: "SINV",
+    SequenceType.ITEM: "ITEM",
     SequenceType.ASSET: "FA",
     SequenceType.LEASE: "LS",
     SequenceType.GOODS_RECEIPT: "GR",

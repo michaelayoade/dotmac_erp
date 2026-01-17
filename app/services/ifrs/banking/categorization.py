@@ -5,6 +5,7 @@ Provides auto-categorization of bank transactions using payee matching
 and configurable rules.
 """
 
+import logging
 import re
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -14,6 +15,8 @@ from uuid import UUID
 
 from sqlalchemy import and_, or_, func, select
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 from app.models.ifrs.banking.bank_statement import (
     BankStatement,
@@ -400,8 +403,12 @@ class TransactionCategorizationService:
         try:
             if re.search(pattern, line.description, re.IGNORECASE):
                 return (80, f"Regex matched: {pattern}")
-        except re.error:
-            pass
+        except re.error as exc:
+            logger.warning(
+                "Invalid regex pattern in categorization rule: %r - %s",
+                pattern,
+                exc,
+            )
 
         return None
 
@@ -446,8 +453,12 @@ class TransactionCategorizationService:
                 try:
                     if re.search(pattern, ref, re.IGNORECASE):
                         return (85, f"Reference matched: {pattern}")
-                except re.error:
-                    pass
+                except re.error as exc:
+                    logger.warning(
+                        "Invalid regex pattern in reference match: %r - %s",
+                        pattern,
+                        exc,
+                    )
 
         return None
 

@@ -50,12 +50,18 @@ class SupplierPaymentInput:
     payment_date: date
     payment_method: APPaymentMethod
     currency_code: str
-    amount: Decimal
+    amount: Decimal  # Net amount paid (after WHT deduction)
     bank_account_id: UUID
     allocations: list[PaymentAllocationInput] = field(default_factory=list)
     exchange_rate: Optional[Decimal] = None
     reference: Optional[str] = None
-    withholding_tax_amount: Decimal = Decimal("0")
+    description: Optional[str] = None
+    # Withholding Tax (WHT) - when we withhold tax from supplier payment
+    gross_amount: Optional[Decimal] = None  # Invoice amount before WHT; defaults to amount if no WHT
+    wht_code_id: Optional[UUID] = None  # WHT tax code applied
+    wht_amount: Decimal = field(default_factory=lambda: Decimal("0"))  # WHT withheld
+    # Legacy field - maps to wht_amount for backward compatibility
+    withholding_tax_amount: Optional[Decimal] = None
     correlation_id: Optional[str] = None
 
 
@@ -101,13 +107,46 @@ class SupplierPaymentService(ListResponseMixin):
         if not supplier.is_active:
             raise HTTPException(status_code=400, detail="Supplier is not active")
 
-        # Validate allocations total
-        if input.allocations:
-            allocation_total = sum(a.amount for a in input.allocations)
-            if allocation_total > input.amount:
+        # Resolve WHT amount (support legacy field)
+        wht_amount = input.wht_amount
+        if input.withholding_tax_amount is not None and wht_amount == Decimal("0"):
+            wht_amount = input.withholding_tax_amount
+
+        # Determine gross amount
+        # If gross_amount provided, validate: gross = net + wht
+        # If not provided, calculate: gross = amount + wht_amount
+        gross_amount = input.gross_amount
+        if gross_amount is None:
+            gross_amount = input.amount + wht_amount
+        else:
+            # Validate the amounts match (with small tolerance for rounding)
+            expected_net = gross_amount - wht_amount
+            if abs(expected_net - input.amount) > Decimal("0.01"):
                 raise HTTPException(
                     status_code=400,
-                    detail="Allocation total exceeds payment amount",
+                    detail=f"Amount mismatch: gross ({gross_amount}) - WHT ({wht_amount}) != net ({input.amount})",
+                )
+
+        # WHT code is required if WHT amount is non-zero
+        if wht_amount > Decimal("0") and not input.wht_code_id:
+            # Try to get default WHT code from supplier
+            if supplier.withholding_tax_applicable and supplier.withholding_tax_code_id:
+                wht_code_id = supplier.withholding_tax_code_id
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail="WHT tax code is required when withholding tax amount is specified",
+                )
+        else:
+            wht_code_id = input.wht_code_id
+
+        # Validate allocations total - should match GROSS amount (invoice amount before WHT)
+        if input.allocations:
+            allocation_total = sum(a.amount for a in input.allocations)
+            if allocation_total > gross_amount:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Allocation total exceeds gross payment amount",
                 )
 
             # Validate invoices exist and are payable
@@ -154,13 +193,16 @@ class SupplierPaymentService(ListResponseMixin):
             payment_date=input.payment_date,
             payment_method=input.payment_method,
             currency_code=input.currency_code,
-            amount=input.amount,
+            amount=input.amount,  # Net amount paid to bank
             exchange_rate=exchange_rate,
             functional_currency_amount=functional_amount,
             bank_account_id=input.bank_account_id,
             reference=input.reference,
             status=APPaymentStatus.DRAFT,
-            withholding_tax_amount=input.withholding_tax_amount,
+            # WHT fields
+            gross_amount=gross_amount,  # Invoice amount before WHT
+            withholding_tax_amount=wht_amount,
+            withholding_tax_code_id=wht_code_id,
             created_by_user_id=user_id,
             correlation_id=input.correlation_id or str(uuid_lib.uuid4()),
         )

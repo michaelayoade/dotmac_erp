@@ -287,6 +287,7 @@ class AccountImporter(BaseImporter[Account]):
             subledger_type=subledger_type,
             is_cash_equivalent=is_cash_equivalent,
             is_financial_instrument=False,
+            created_by_user_id=self.config.user_id,
         )
 
         # Cache for parent account lookup

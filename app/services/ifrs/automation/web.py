@@ -1026,6 +1026,107 @@ class AutomationWebService:
             "template": _document_template_detail_view(template),
         }
 
+    def create_template(
+        self,
+        db: Session,
+        organization_id: UUID,
+        user_id: UUID,
+        data: dict,
+    ) -> DocumentTemplate:
+        """Create a new document template.
+
+        Args:
+            db: Database session
+            organization_id: Organization UUID
+            user_id: User UUID creating the template
+            data: Form data dict
+
+        Returns:
+            Created DocumentTemplate
+
+        Raises:
+            ValueError: If required fields are missing or invalid
+        """
+        template = DocumentTemplate(
+            organization_id=organization_id,
+            template_type=TemplateType(data["template_type"]),
+            template_name=data["template_name"],
+            description=data.get("description"),
+            template_content=data.get("template_content", ""),
+            css_styles=data.get("css_styles"),
+            page_size=data.get("page_size", "A4"),
+            page_orientation=data.get("page_orientation", "portrait"),
+            email_subject=data.get("email_subject"),
+            email_from_name=data.get("email_from_name"),
+            is_default=data.get("is_default") == "on",
+            created_by=user_id,
+        )
+
+        db.add(template)
+        db.flush()  # Get the ID without committing
+        return template
+
+    def update_template(
+        self,
+        db: Session,
+        template_id: UUID,
+        user_id: UUID,
+        data: dict,
+    ) -> DocumentTemplate:
+        """Update an existing document template.
+
+        Args:
+            db: Database session
+            template_id: Template UUID to update
+            user_id: User UUID performing the update
+            data: Form data dict with updated values
+
+        Returns:
+            Updated DocumentTemplate
+
+        Raises:
+            ValueError: If template not found
+        """
+        template = db.get(DocumentTemplate, template_id)
+        if not template:
+            raise ValueError("Template not found")
+
+        template.template_name = data.get("template_name", template.template_name)
+        template.description = data.get("description")
+        template.template_content = data.get("template_content", template.template_content)
+        template.css_styles = data.get("css_styles")
+        template.page_size = data.get("page_size", template.page_size)
+        template.page_orientation = data.get("page_orientation", template.page_orientation)
+        template.email_subject = data.get("email_subject")
+        template.email_from_name = data.get("email_from_name")
+        template.is_default = data.get("is_default") == "on"
+        template.updated_by = user_id
+        template.version += 1
+
+        db.flush()
+        return template
+
+    def delete_template(
+        self,
+        db: Session,
+        template_id: UUID,
+    ) -> bool:
+        """Soft delete a document template.
+
+        Args:
+            db: Database session
+            template_id: Template UUID to delete
+
+        Returns:
+            True if deleted, False if not found
+        """
+        template = db.get(DocumentTemplate, template_id)
+        if template:
+            template.is_active = False
+            db.flush()
+            return True
+        return False
+
 
 # Singleton instance
 automation_web_service = AutomationWebService()

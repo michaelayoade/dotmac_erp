@@ -106,11 +106,21 @@ class SupplierPayment(Base):
         nullable=True,
     )
 
-    # Withholding
+    # Withholding Tax
     withholding_tax_amount: Mapped[Decimal] = mapped_column(
         Numeric(20, 6),
         nullable=False,
         default=0,
+    )
+    withholding_tax_code_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("tax.tax_code.tax_code_id"),
+        nullable=True,
+    )
+    # Gross amount = amount (net paid) + withholding_tax_amount
+    gross_amount: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(20, 6),
+        nullable=True,
     )
 
     # Remittance

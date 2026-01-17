@@ -6,24 +6,107 @@ Provides view-focused data for tax web routes.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 
+from fastapi import Request
+from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
+from app.models.ifrs.tax.tax_code import TaxCode, TaxType
 from app.models.ifrs.tax.tax_return import TaxReturn
 from app.models.ifrs.tax.tax_transaction import TaxTransaction, TaxTransactionType
+from app.models.ifrs.tax.tax_period import TaxPeriodFrequency, TaxPeriodStatus
+from app.models.ifrs.gl.account import Account
+from app.models.ifrs.gl.account_category import AccountCategory, IFRSCategory
 from app.config import settings
 from app.services.common import coerce_uuid
 from app.services.ifrs.platform.currency_context import get_currency_context
+from app.services.ifrs.tax import (
+    tax_jurisdiction_service,
+    tax_code_service,
+    tax_period_service,
+    deferred_tax_service,
+)
+from app.services.ifrs.tax.tax_master import TaxCodeInput
 from app.services.ifrs.tax.tax_return import TaxReturnBoxValue, tax_return_service
 from app.services.ifrs.tax.tax_transaction import tax_transaction_service
+from app.templates import templates
+from app.web.deps import base_context, WebAuthContext
 
 
 def _format_date(value: Optional[date]) -> str:
     return value.strftime("%Y-%m-%d") if value else ""
+
+
+def _get_accounts(
+    db: Session,
+    organization_id: UUID,
+    ifrs_category: IFRSCategory,
+) -> list[Account]:
+    """Get GL accounts by IFRS category for dropdowns."""
+    return (
+        db.query(Account)
+        .join(AccountCategory, Account.category_id == AccountCategory.category_id)
+        .filter(
+            Account.organization_id == organization_id,
+            Account.is_active.is_(True),
+            AccountCategory.ifrs_category == ifrs_category,
+        )
+        .order_by(Account.account_code)
+        .all()
+    )
+
+
+def _tax_code_form_view(tax_code: TaxCode) -> dict:
+    """Format tax code for form editing."""
+    return {
+        "tax_code_id": tax_code.tax_code_id,
+        "tax_code": tax_code.tax_code,
+        "tax_name": tax_code.tax_name,
+        "description": tax_code.description,
+        "tax_type": tax_code.tax_type,
+        "jurisdiction_id": tax_code.jurisdiction_id,
+        "tax_rate": tax_code.tax_rate,
+        "effective_from": tax_code.effective_from,
+        "effective_to": tax_code.effective_to,
+        "is_compound": tax_code.is_compound,
+        "is_inclusive": tax_code.is_inclusive,
+        "is_recoverable": tax_code.is_recoverable,
+        "recovery_rate": tax_code.recovery_rate,
+        "applies_to_purchases": tax_code.applies_to_purchases,
+        "applies_to_sales": tax_code.applies_to_sales,
+        "tax_return_box": tax_code.tax_return_box,
+        "reporting_code": tax_code.reporting_code,
+        "tax_collected_account_id": tax_code.tax_collected_account_id,
+        "tax_paid_account_id": tax_code.tax_paid_account_id,
+        "tax_expense_account_id": tax_code.tax_expense_account_id,
+        "is_active": tax_code.is_active,
+    }
+
+
+def _tax_code_list_view(tax_code: TaxCode) -> dict:
+    """Format tax code for list display."""
+    # Format rate display
+    if tax_code.tax_rate < 1:
+        rate_display = f"{tax_code.tax_rate * 100:.2f}%"
+    else:
+        rate_display = f"₦{tax_code.tax_rate:,.2f}"
+
+    return {
+        "tax_code_id": tax_code.tax_code_id,
+        "tax_code": tax_code.tax_code,
+        "tax_name": tax_code.tax_name,
+        "tax_type": tax_code.tax_type.value.replace("_", " ").title(),
+        "tax_rate": rate_display,
+        "applies_to_sales": tax_code.applies_to_sales,
+        "applies_to_purchases": tax_code.applies_to_purchases,
+        "is_active": tax_code.is_active,
+        "effective_from": _format_date(tax_code.effective_from),
+        "effective_to": _format_date(tax_code.effective_to),
+    }
 
 
 def _format_currency(
@@ -363,6 +446,828 @@ class TaxWebService:
             "has_previous": page > 1,
             "has_next": page < total_pages,
         }
+
+    def list_jurisdictions_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        country_code: Optional[str],
+        page: int,
+        db: Session,
+    ) -> HTMLResponse:
+        limit = 50
+        offset = (page - 1) * limit
+
+        jurisdictions = tax_jurisdiction_service.list(
+            db=db,
+            organization_id=str(auth.organization_id),
+            country_code=country_code,
+            limit=limit,
+            offset=offset,
+        )
+
+        context = base_context(request, auth, "Tax Jurisdictions", "tax")
+        context.update({
+            "jurisdictions": jurisdictions,
+            "country_code": country_code,
+            "page": page,
+        })
+
+        return templates.TemplateResponse(request, "ifrs/tax/jurisdictions.html", context)
+
+    def list_tax_codes_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        tax_type: Optional[str],
+        jurisdiction_id: Optional[str],
+        page: int,
+        db: Session,
+        is_active: Optional[bool] = None,
+    ) -> HTMLResponse:
+        limit = 50
+        offset = (page - 1) * limit
+
+        # Convert tax_type string to enum if provided
+        tax_type_enum = None
+        if tax_type:
+            try:
+                tax_type_enum = TaxType(tax_type)
+            except ValueError:
+                pass
+
+        codes = tax_code_service.list(
+            db=db,
+            organization_id=str(auth.organization_id),
+            tax_type=tax_type_enum,
+            jurisdiction_id=jurisdiction_id,
+            is_active=is_active,
+            limit=limit,
+            offset=offset,
+        )
+
+        # Format codes for display
+        formatted_codes = [_tax_code_list_view(code) for code in codes]
+
+        # Get filter options
+        jurisdictions = tax_jurisdiction_service.list(
+            db=db,
+            organization_id=str(auth.organization_id),
+            is_active=True,
+            limit=100,
+        )
+
+        context = base_context(request, auth, "Tax Codes", "tax")
+        context.update({
+            "codes": formatted_codes,
+            "tax_type": tax_type,
+            "jurisdiction_id": jurisdiction_id,
+            "is_active": "true" if is_active is True else ("false" if is_active is False else ""),
+            "page": page,
+            "tax_types": list(TaxType),
+            "jurisdictions": jurisdictions,
+        })
+
+        return templates.TemplateResponse(request, "ifrs/tax/codes.html", context)
+
+    def list_tax_periods_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        jurisdiction_id: Optional[str],
+        frequency: Optional[str],
+        status: Optional[str],
+        year: Optional[int],
+        page: int,
+        db: Session,
+    ) -> HTMLResponse:
+        limit = 50
+        offset = (page - 1) * limit
+
+        status_value = None
+        if status:
+            try:
+                status_value = TaxPeriodStatus(status)
+            except ValueError:
+                status_value = None
+
+        frequency_value = None
+        if frequency:
+            try:
+                frequency_value = TaxPeriodFrequency(frequency)
+            except ValueError:
+                frequency_value = None
+
+        periods = tax_period_service.list(
+            db=db,
+            organization_id=str(auth.organization_id),
+            jurisdiction_id=jurisdiction_id,
+            status=status_value,
+            frequency=frequency_value,
+            year=year,
+            limit=limit,
+            offset=offset,
+        )
+
+        context = base_context(request, auth, "Tax Periods", "tax")
+        context.update({
+            "periods": periods,
+            "jurisdiction_id": jurisdiction_id,
+            "frequency": frequency,
+            "status": status,
+            "year": year,
+            "page": page,
+        })
+
+        return templates.TemplateResponse(request, "ifrs/tax/periods.html", context)
+
+    def overdue_periods_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        as_of_date: Optional[str],
+        db: Session,
+    ) -> HTMLResponse:
+        check_date = date.fromisoformat(as_of_date) if as_of_date else None
+        overdue = tax_period_service.get_overdue_periods(db, auth.organization_id, check_date)
+
+        context = base_context(request, auth, "Overdue Tax Periods", "tax")
+        context["overdue_periods"] = overdue
+        context["as_of_date"] = as_of_date
+
+        return templates.TemplateResponse(request, "ifrs/tax/overdue_periods.html", context)
+
+    def list_tax_returns_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        period_id: Optional[str],
+        status: Optional[str],
+        page: int,
+        db: Session,
+    ) -> HTMLResponse:
+        limit = 50
+        offset = (page - 1) * limit
+
+        returns = tax_return_service.list(
+            db=db,
+            organization_id=str(auth.organization_id),
+            tax_period_id=period_id,
+            status=status,
+            limit=limit,
+            offset=offset,
+        )
+
+        context = base_context(request, auth, "Tax Returns", "tax")
+        context.update({
+            "returns": returns,
+            "period_id": period_id,
+            "status": status,
+            "page": page,
+        })
+
+        return templates.TemplateResponse(request, "ifrs/tax/returns.html", context)
+
+    def view_tax_return_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        return_id: str,
+        db: Session,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "Tax Return Details", "tax")
+        context.update(
+            self.return_detail_context(
+                db,
+                str(auth.organization_id),
+                return_id,
+            )
+        )
+
+        return templates.TemplateResponse(request, "ifrs/tax/return_detail.html", context)
+
+    def new_return_form_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> HTMLResponse:
+        periods = tax_period_service.list(
+            db=db,
+            organization_id=str(auth.organization_id),
+            status=TaxPeriodStatus.OPEN,
+            limit=100,
+        )
+
+        context = base_context(request, auth, "Prepare Tax Return", "tax")
+        context["periods"] = periods
+
+        return templates.TemplateResponse(request, "ifrs/tax/return_form.html", context)
+
+    def deferred_tax_summary_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        as_of_date: Optional[str],
+        db: Session,
+    ) -> HTMLResponse:
+        check_date = as_of_date or date.today().isoformat()
+
+        summary = deferred_tax_service.get_summary(
+            db=db,
+            organization_id=str(auth.organization_id),
+            as_of_date=date.fromisoformat(check_date),
+        )
+
+        context = base_context(request, auth, "Deferred Tax Summary", "tax")
+        context["summary"] = summary
+        context["as_of_date"] = check_date
+
+        return templates.TemplateResponse(request, "ifrs/tax/deferred.html", context)
+
+    def vat_register_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        start_date: Optional[str],
+        end_date: Optional[str],
+        transaction_type: Optional[str],
+        tax_code_id: Optional[str],
+        page: int,
+        db: Session,
+    ) -> HTMLResponse:
+        today = date.today()
+        if not start_date:
+            start = today.replace(day=1)
+        else:
+            start = date.fromisoformat(start_date)
+
+        if not end_date:
+            next_month = today.replace(day=28) + timedelta(days=4)
+            end = next_month.replace(day=1) - timedelta(days=1)
+        else:
+            end = date.fromisoformat(end_date)
+
+        context = base_context(request, auth, "VAT Register", "tax")
+        context.update(
+            self.vat_register_context(
+                db=db,
+                organization_id=str(auth.organization_id),
+                start_date=start,
+                end_date=end,
+                transaction_type=transaction_type,
+                tax_code_id=tax_code_id,
+                page=page,
+                limit=50,
+            )
+        )
+
+        return templates.TemplateResponse(request, "ifrs/tax/vat_register.html", context)
+
+    def tax_liability_summary_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        start_date: Optional[str],
+        end_date: Optional[str],
+        group_by: str,
+        db: Session,
+    ) -> HTMLResponse:
+        today = date.today()
+        if not start_date:
+            start = (today.replace(day=1) - timedelta(days=365)).replace(day=1)
+        else:
+            start = date.fromisoformat(start_date)
+
+        if not end_date:
+            end = today
+        else:
+            end = date.fromisoformat(end_date)
+
+        context = base_context(request, auth, "Tax Liability Summary", "tax")
+        context.update(
+            self.tax_liability_context(
+                db=db,
+                organization_id=str(auth.organization_id),
+                start_date=start,
+                end_date=end,
+                group_by=group_by,
+            )
+        )
+
+        return templates.TemplateResponse(request, "ifrs/tax/liability_summary.html", context)
+
+    def view_tax_transaction_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        transaction_id: str,
+        db: Session,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "Tax Transaction Details", "tax")
+        context.update(
+            self.transaction_detail_context(
+                db=db,
+                organization_id=str(auth.organization_id),
+                transaction_id=transaction_id,
+            )
+        )
+
+        return templates.TemplateResponse(request, "ifrs/tax/transaction_detail.html", context)
+
+    def return_transactions_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        return_id: str,
+        page: int,
+        db: Session,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "Return Transactions", "tax")
+        context.update(
+            self.return_transactions_context(
+                db=db,
+                organization_id=str(auth.organization_id),
+                return_id=return_id,
+                page=page,
+            )
+        )
+
+        return templates.TemplateResponse(request, "ifrs/tax/return_transactions.html", context)
+
+    def recalculate_return_response(
+        self,
+        return_id: str,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> RedirectResponse:
+        try:
+            tax_return_service.recalculate(
+                db=db,
+                organization_id=auth.organization_id,
+                return_id=return_id,
+            )
+        except Exception:
+            pass
+
+        return RedirectResponse(
+            url=f"/tax/returns/{return_id}",
+            status_code=303,
+        )
+
+    def review_return_response(
+        self,
+        return_id: str,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> RedirectResponse:
+        try:
+            tax_return_service.review_return(
+                db=db,
+                organization_id=auth.organization_id,
+                return_id=return_id,
+                reviewed_by_user_id=auth.person_id,
+            )
+        except Exception:
+            pass
+
+        return RedirectResponse(
+            url=f"/tax/returns/{return_id}",
+            status_code=303,
+        )
+
+    def file_return_response(
+        self,
+        return_id: str,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> RedirectResponse:
+        try:
+            tax_return_service.file_return(
+                db=db,
+                organization_id=auth.organization_id,
+                return_id=return_id,
+                filed_by_user_id=auth.person_id,
+            )
+        except Exception:
+            pass
+
+        return RedirectResponse(
+            url=f"/tax/returns/{return_id}",
+            status_code=303,
+        )
+
+    # ============================================================
+    # Tax Code CRUD Methods
+    # ============================================================
+
+    def _get_tax_code_form_context(
+        self,
+        db: Session,
+        auth: WebAuthContext,
+        tax_code: Optional[TaxCode] = None,
+        error: Optional[str] = None,
+    ) -> dict:
+        """Get common context for tax code form."""
+        org_id = coerce_uuid(auth.organization_id)
+
+        # Get jurisdictions for dropdown
+        jurisdictions = tax_jurisdiction_service.list(
+            db=db,
+            organization_id=str(org_id),
+            is_active=True,
+            limit=100,
+        )
+
+        # Get GL accounts by category
+        liability_accounts = _get_accounts(db, org_id, IFRSCategory.LIABILITIES)
+        asset_accounts = _get_accounts(db, org_id, IFRSCategory.ASSETS)
+        expense_accounts = _get_accounts(db, org_id, IFRSCategory.EXPENSES)
+
+        return {
+            "tax_code": _tax_code_form_view(tax_code) if tax_code else None,
+            "tax_types": list(TaxType),
+            "jurisdictions": jurisdictions,
+            "liability_accounts": liability_accounts,
+            "asset_accounts": asset_accounts,
+            "expense_accounts": expense_accounts,
+            "today": date.today().isoformat(),
+            "error": error,
+        }
+
+    def new_tax_code_form_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        error: Optional[str] = None,
+    ) -> HTMLResponse:
+        """Display new tax code form."""
+        context = base_context(request, auth, "New Tax Code", "tax")
+        context.update(self._get_tax_code_form_context(db, auth, error=error))
+
+        return templates.TemplateResponse(request, "ifrs/tax/code_form.html", context)
+
+    async def create_tax_code_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> HTMLResponse | RedirectResponse:
+        """Handle new tax code form submission."""
+        form = await request.form()
+        org_id = coerce_uuid(auth.organization_id)
+
+        try:
+            # Parse form data
+            tax_code_str = form.get("tax_code", "").strip()
+            tax_name = form.get("tax_name", "").strip()
+            tax_type_str = form.get("tax_type", "")
+            jurisdiction_id_str = form.get("jurisdiction_id", "")
+            description = form.get("description", "").strip() or None
+
+            # Parse rate based on rate type
+            rate_type = form.get("rate_type", "percentage")
+            if rate_type == "percentage":
+                rate_percentage = form.get("tax_rate_percentage", "0")
+                tax_rate = Decimal(rate_percentage) / Decimal("100")
+            else:
+                rate_fixed = form.get("tax_rate_fixed", "0")
+                tax_rate = Decimal(rate_fixed)
+
+            # Parse dates
+            effective_from_str = form.get("effective_from", "")
+            effective_from = date.fromisoformat(effective_from_str) if effective_from_str else date.today()
+
+            effective_to_str = form.get("effective_to", "")
+            effective_to = date.fromisoformat(effective_to_str) if effective_to_str else None
+
+            # Parse booleans
+            is_compound = form.get("is_compound") == "true"
+            is_inclusive = form.get("is_inclusive") == "true"
+            is_recoverable = form.get("is_recoverable") == "true"
+
+            recovery_rate_pct = form.get("recovery_rate", "100")
+            recovery_rate = Decimal(recovery_rate_pct) / Decimal("100") if is_recoverable else Decimal("0")
+
+            applies_to_sales = form.get("applies_to_sales") == "true"
+            applies_to_purchases = form.get("applies_to_purchases") == "true"
+
+            # Parse optional fields
+            tax_return_box = form.get("tax_return_box", "").strip() or None
+            reporting_code = form.get("reporting_code", "").strip() or None
+
+            # Parse GL account IDs
+            tax_collected_account_id = form.get("tax_collected_account_id") or None
+            tax_paid_account_id = form.get("tax_paid_account_id") or None
+            tax_expense_account_id = form.get("tax_expense_account_id") or None
+
+            # Validation
+            if not tax_code_str:
+                raise ValueError("Tax code is required")
+            if not tax_name:
+                raise ValueError("Tax name is required")
+            if not tax_type_str:
+                raise ValueError("Tax type is required")
+            if not jurisdiction_id_str:
+                raise ValueError("Jurisdiction is required")
+            if not applies_to_sales and not applies_to_purchases:
+                raise ValueError("Tax must apply to at least Sales or Purchases")
+
+            # Create input
+            tax_input = TaxCodeInput(
+                tax_code=tax_code_str,
+                tax_name=tax_name,
+                tax_type=TaxType(tax_type_str),
+                jurisdiction_id=coerce_uuid(jurisdiction_id_str),
+                tax_rate=tax_rate,
+                effective_from=effective_from,
+                description=description,
+                effective_to=effective_to,
+                is_compound=is_compound,
+                is_inclusive=is_inclusive,
+                is_recoverable=is_recoverable,
+                recovery_rate=recovery_rate,
+                applies_to_purchases=applies_to_purchases,
+                applies_to_sales=applies_to_sales,
+                tax_return_box=tax_return_box,
+                reporting_code=reporting_code,
+                tax_collected_account_id=coerce_uuid(tax_collected_account_id) if tax_collected_account_id else None,
+                tax_paid_account_id=coerce_uuid(tax_paid_account_id) if tax_paid_account_id else None,
+                tax_expense_account_id=coerce_uuid(tax_expense_account_id) if tax_expense_account_id else None,
+            )
+
+            # Create tax code
+            tax_code_service.create_tax_code(db, org_id, tax_input)
+
+            return RedirectResponse(url="/tax/codes", status_code=303)
+
+        except ValueError as e:
+            return self.new_tax_code_form_response(request, auth, db, error=str(e))
+        except Exception as e:
+            error_msg = getattr(e, "detail", str(e))
+            return self.new_tax_code_form_response(request, auth, db, error=error_msg)
+
+    def edit_tax_code_form_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        tax_code_id: str,
+        db: Session,
+        error: Optional[str] = None,
+    ) -> HTMLResponse:
+        """Display edit tax code form."""
+        org_id = coerce_uuid(auth.organization_id)
+
+        tax_code = tax_code_service.get(db, tax_code_id)
+        if not tax_code or tax_code.organization_id != org_id:
+            return RedirectResponse(url="/tax/codes", status_code=303)
+
+        context = base_context(request, auth, "Edit Tax Code", "tax")
+        context.update(self._get_tax_code_form_context(db, auth, tax_code, error))
+
+        return templates.TemplateResponse(request, "ifrs/tax/code_form.html", context)
+
+    async def update_tax_code_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        tax_code_id: str,
+        db: Session,
+    ) -> HTMLResponse | RedirectResponse:
+        """Handle edit tax code form submission."""
+        form = await request.form()
+        org_id = coerce_uuid(auth.organization_id)
+
+        try:
+            tax_code = tax_code_service.get(db, tax_code_id)
+            if not tax_code or tax_code.organization_id != org_id:
+                return RedirectResponse(url="/tax/codes", status_code=303)
+
+            # Parse form data
+            tax_code_str = form.get("tax_code", "").strip()
+            tax_name = form.get("tax_name", "").strip()
+            tax_type_str = form.get("tax_type", "")
+            jurisdiction_id_str = form.get("jurisdiction_id", "")
+            description = form.get("description", "").strip() or None
+
+            # Parse rate based on rate type
+            rate_type = form.get("rate_type", "percentage")
+            if rate_type == "percentage":
+                rate_percentage = form.get("tax_rate_percentage", "0")
+                new_tax_rate = Decimal(rate_percentage) / Decimal("100")
+            else:
+                rate_fixed = form.get("tax_rate_fixed", "0")
+                new_tax_rate = Decimal(rate_fixed)
+
+            # Parse dates
+            effective_from_str = form.get("effective_from", "")
+            effective_from = date.fromisoformat(effective_from_str) if effective_from_str else date.today()
+
+            effective_to_str = form.get("effective_to", "")
+            effective_to = date.fromisoformat(effective_to_str) if effective_to_str else None
+
+            # Parse booleans
+            is_compound = form.get("is_compound") == "true"
+            is_inclusive = form.get("is_inclusive") == "true"
+            is_recoverable = form.get("is_recoverable") == "true"
+            is_active = form.get("is_active") == "true"
+
+            recovery_rate_pct = form.get("recovery_rate", "100")
+            recovery_rate = Decimal(recovery_rate_pct) / Decimal("100") if is_recoverable else Decimal("0")
+
+            applies_to_sales = form.get("applies_to_sales") == "true"
+            applies_to_purchases = form.get("applies_to_purchases") == "true"
+
+            # Parse optional fields
+            tax_return_box = form.get("tax_return_box", "").strip() or None
+            reporting_code = form.get("reporting_code", "").strip() or None
+
+            # Parse GL account IDs
+            tax_collected_account_id = form.get("tax_collected_account_id") or None
+            tax_paid_account_id = form.get("tax_paid_account_id") or None
+            tax_expense_account_id = form.get("tax_expense_account_id") or None
+
+            # Validation
+            if not tax_code_str:
+                raise ValueError("Tax code is required")
+            if not tax_name:
+                raise ValueError("Tax name is required")
+            if not tax_type_str:
+                raise ValueError("Tax type is required")
+            if not jurisdiction_id_str:
+                raise ValueError("Jurisdiction is required")
+            if not applies_to_sales and not applies_to_purchases:
+                raise ValueError("Tax must apply to at least Sales or Purchases")
+
+            # Check for duplicate code (if changed)
+            if tax_code_str != tax_code.tax_code:
+                existing = tax_code_service.get_by_code(db, str(org_id), tax_code_str)
+                if existing:
+                    raise ValueError(f"Tax code '{tax_code_str}' already exists")
+
+            # Update all fields
+            tax_code.tax_code = tax_code_str
+            tax_code.tax_name = tax_name
+            tax_code.description = description
+            tax_code.tax_type = TaxType(tax_type_str)
+            tax_code.jurisdiction_id = coerce_uuid(jurisdiction_id_str)
+            tax_code.tax_rate = new_tax_rate
+            tax_code.effective_from = effective_from
+            tax_code.effective_to = effective_to
+            tax_code.is_compound = is_compound
+            tax_code.is_inclusive = is_inclusive
+            tax_code.is_recoverable = is_recoverable
+            tax_code.recovery_rate = recovery_rate
+            tax_code.applies_to_purchases = applies_to_purchases
+            tax_code.applies_to_sales = applies_to_sales
+            tax_code.tax_return_box = tax_return_box
+            tax_code.reporting_code = reporting_code
+            tax_code.tax_collected_account_id = coerce_uuid(tax_collected_account_id) if tax_collected_account_id else None
+            tax_code.tax_paid_account_id = coerce_uuid(tax_paid_account_id) if tax_paid_account_id else None
+            tax_code.tax_expense_account_id = coerce_uuid(tax_expense_account_id) if tax_expense_account_id else None
+            tax_code.is_active = is_active
+
+            db.commit()
+
+            return RedirectResponse(url="/tax/codes", status_code=303)
+
+        except ValueError as e:
+            return self.edit_tax_code_form_response(request, auth, tax_code_id, db, error=str(e))
+        except Exception as e:
+            error_msg = getattr(e, "detail", str(e))
+            return self.edit_tax_code_form_response(request, auth, tax_code_id, db, error=error_msg)
+
+    def toggle_tax_code_response(
+        self,
+        auth: WebAuthContext,
+        tax_code_id: str,
+        db: Session,
+    ) -> RedirectResponse:
+        """Toggle tax code active/inactive status."""
+        org_id = coerce_uuid(auth.organization_id)
+
+        tax_code = tax_code_service.get(db, tax_code_id)
+        if tax_code and tax_code.organization_id == org_id:
+            tax_code.is_active = not tax_code.is_active
+            db.commit()
+
+        return RedirectResponse(url="/tax/codes", status_code=303)
+
+    # ============================================================
+    # Tax Reports
+    # ============================================================
+
+    def tax_summary_by_type_page(
+        self,
+        request: Request,
+        start_date_str: Optional[str],
+        end_date_str: Optional[str],
+        auth: WebAuthContext,
+        db: Session,
+    ) -> HTMLResponse:
+        """Tax summary by type report page."""
+        from app.services.ifrs.tax.tax_reports import tax_report_service
+
+        org_id = coerce_uuid(auth.organization_id)
+
+        # Default to current month
+        today = date.today()
+        if start_date_str:
+            try:
+                start_date = date.fromisoformat(start_date_str)
+            except ValueError:
+                start_date = today.replace(day=1)
+        else:
+            start_date = today.replace(day=1)
+
+        if end_date_str:
+            try:
+                end_date = date.fromisoformat(end_date_str)
+            except ValueError:
+                end_date = today
+        else:
+            end_date = today
+
+        # Get tax summary by type
+        summaries = tax_report_service.get_tax_summary_by_type(
+            db, org_id, start_date, end_date
+        )
+
+        # Calculate totals
+        total_output = sum(s.total_output for s in summaries)
+        total_input = sum(s.total_input for s in summaries)
+        total_wht_withheld = sum(s.total_wht_collected for s in summaries)
+        net_position = total_output - total_input
+
+        context = base_context(auth, request)
+        context.update({
+            "start_date": start_date.isoformat(),
+            "end_date": end_date.isoformat(),
+            "summaries": summaries,
+            "total_output": total_output,
+            "total_input": total_input,
+            "total_wht_withheld": total_wht_withheld,
+            "net_position": net_position,
+        })
+        context.update(get_currency_context(db, str(org_id)))
+
+        return templates.TemplateResponse(
+            request,
+            "ifrs/reports/tax_by_type.html",
+            context,
+        )
+
+    def wht_report_page(
+        self,
+        request: Request,
+        start_date_str: Optional[str],
+        end_date_str: Optional[str],
+        include_details: bool,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> HTMLResponse:
+        """WHT report page."""
+        from app.services.ifrs.tax.tax_reports import tax_report_service
+
+        org_id = coerce_uuid(auth.organization_id)
+
+        # Default to current month
+        today = date.today()
+        if start_date_str:
+            try:
+                start_date = date.fromisoformat(start_date_str)
+            except ValueError:
+                start_date = today.replace(day=1)
+        else:
+            start_date = today.replace(day=1)
+
+        if end_date_str:
+            try:
+                end_date = date.fromisoformat(end_date_str)
+            except ValueError:
+                end_date = today
+        else:
+            end_date = today
+
+        # Get WHT report data
+        report = tax_report_service.get_wht_report(
+            db, org_id, start_date, end_date, include_transactions=include_details
+        )
+
+        context = base_context(auth, request)
+        context.update({
+            "start_date": start_date.isoformat(),
+            "end_date": end_date.isoformat(),
+            "report": report,
+        })
+        context.update(get_currency_context(db, str(org_id)))
+
+        return templates.TemplateResponse(
+            request,
+            "ifrs/reports/wht_report.html",
+            context,
+        )
 
 
 tax_web_service = TaxWebService()

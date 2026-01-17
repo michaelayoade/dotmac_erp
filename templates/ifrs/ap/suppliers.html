@@ -1,10 +1,11 @@
 {% extends "ifrs/base_ifrs.html" %}
+{% from "components/macros.html" import search_autosuggest, pagination, status_badge, empty_state, stats_card, bulk_select_header, bulk_select_cell, bulk_action_bar, bulk_icon_delete, bulk_icon_export, bulk_icon_activate, bulk_icon_deactivate %}
 
 {% block page_title %}Suppliers{% endblock %}
 
 {% block breadcrumbs %}
 <nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <a href="/ifrs" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
     </svg>
@@ -14,7 +15,7 @@
 
 {% block header_actions %}
 <a href="/ap/suppliers/new" class="btn btn-primary">
-    <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
     </svg>
     New Supplier
@@ -22,264 +23,190 @@
 {% endblock %}
 
 {% block content %}
-{% from "components/macros.html" import status_badge %}
-<div class="space-y-6 stagger-in">
-    <!-- Stats Row -->
+<div class="space-y-6">
+    {# Stats Row #}
     <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div class="card p-4">
-            <div class="flex items-center gap-3">
-                <div class="card-icon bg-teal-50 text-teal-600 dark:bg-teal-900/30 dark:text-teal-400">
-                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
-                    </svg>
-                </div>
-                <div>
-                    <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ total_suppliers | default(0) }}</p>
-                    <p class="text-xs text-slate-500 dark:text-slate-400">Total Suppliers</p>
-                </div>
-            </div>
-        </div>
-        <div class="card p-4">
-            <div class="flex items-center gap-3">
-                <div class="card-icon bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
-                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
-                </div>
-                <div>
-                    <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ active_count | default(0) }}</p>
-                    <p class="text-xs text-slate-500 dark:text-slate-400">Active</p>
-                </div>
-            </div>
-        </div>
-        <div class="card p-4">
-            <div class="flex items-center gap-3">
-                <div class="card-icon bg-rose-50 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400">
-                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
-                </div>
-                <div>
-                    <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ total_payables | default("$0") }}</p>
-                    <p class="text-xs text-slate-500 dark:text-slate-400">Total Payables</p>
-                </div>
-            </div>
-        </div>
-        <div class="card p-4">
-            <div class="flex items-center gap-3">
-                <div class="card-icon bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">
-                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
-                </div>
-                <div>
-                    <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ overdue_count | default(0) }}</p>
-                    <p class="text-xs text-slate-500 dark:text-slate-400">Overdue Invoices</p>
-                </div>
-            </div>
-        </div>
+        {{ stats_card("Total Suppliers", total_suppliers | default(0), icon="users", color="teal") }}
+        {{ stats_card("Active", active_count | default(0), icon="check-circle", color="emerald") }}
+        {{ stats_card("Total Payables", total_payables | default("₦0"), icon="currency", color="rose") }}
+        {{ stats_card("Overdue Invoices", overdue_count | default(0), icon="clock", color="amber") }}
     </div>
 
-    <!-- Filters -->
-    <div class="card p-4">
-        <form method="get" class="flex flex-wrap items-center gap-4">
-            <div class="relative flex-1 min-w-[240px]">
-                <svg class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-                </svg>
-                <input type="text" name="search" value="{{ search | default('') }}"
-                       placeholder="Search by name, code, or tax ID..."
-                       class="form-input pl-10 w-full">
-            </div>
-            <select name="status" class="form-select">
-                <option value="">All Status</option>
-                <option value="active" {{ 'selected' if status == 'active' else '' }}>Active</option>
-                <option value="inactive" {{ 'selected' if status == 'inactive' else '' }}>Inactive</option>
-            </select>
-            <select name="sort" class="form-select">
-                <option value="name">Sort by Name</option>
-                <option value="code">Sort by Code</option>
-                <option value="balance">Sort by Balance</option>
-                <option value="recent">Most Recent</option>
-            </select>
-            <button type="submit" class="btn btn-secondary">
-                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
-                </svg>
-                Filter
-            </button>
-            {% if search or status %}
-            <a href="/ap/suppliers" class="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300 transition-colors">
-                Clear filters
-            </a>
-            {% endif %}
-        </form>
-    </div>
+    {# Search with Auto-suggest and Filters #}
+    {{ search_autosuggest(
+        search=search,
+        entity_type="suppliers",
+        filters=[
+            {
+                "name": "status",
+                "label": "All Status",
+                "value": status,
+                "options": [
+                    {"value": "active", "label": "Active"},
+                    {"value": "inactive", "label": "Inactive"}
+                ]
+            }
+        ],
+        base_url="/ap/suppliers",
+        placeholder="Search suppliers by name, code, or tax ID..."
+    ) }}
 
-    <!-- Suppliers Table -->
-    <div class="card">
-        <div class="table-container">
-            <table class="table">
-                <thead>
-                    <tr>
-                        <th class="sortable">
-                            Supplier Code
-                            <svg class="inline h-3 w-3 ml-1 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
-                            </svg>
-                        </th>
-                        <th class="sortable">Supplier Name</th>
-                        <th>Tax ID</th>
-                        <th>Payment Terms</th>
-                        <th class="text-right sortable">Balance</th>
-                        <th class="text-center">Trend</th>
-                        <th>Status</th>
-                        <th class="text-right">Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for supplier in suppliers %}
-                    <tr class="group">
-                        <td>
-                            <span class="font-mono text-sm font-semibold text-slate-700 dark:text-slate-300">{{ supplier.supplier_code }}</span>
-                        </td>
-                        <td>
-                            <a href="/ap/suppliers/{{ supplier.supplier_id }}" class="group/link flex items-center gap-3">
-                                <div class="h-9 w-9 rounded-full bg-gradient-to-br from-rose-400 to-pink-500 flex items-center justify-center text-white text-xs font-semibold shadow-sm">
-                                    {{ supplier.supplier_name[:2] | upper }}
-                                </div>
-                                <div>
-                                    <span class="font-medium text-teal-600 group-hover/link:text-teal-700 dark:text-teal-400 dark:group-hover/link:text-teal-300 transition-colors">
-                                        {{ supplier.supplier_name }}
-                                    </span>
-                                    {% if supplier.contact_email %}
-                                    <p class="text-xs text-slate-500 dark:text-slate-400">{{ supplier.contact_email }}</p>
+    {# Suppliers Table with Bulk Selection #}
+    <div x-data="bulkActions({ entityName: 'suppliers' })">
+        <div class="card">
+            <div class="table-container">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            {{ bulk_select_header() }}
+                            <th>Supplier Code</th>
+                            <th>Supplier Name</th>
+                            <th>Tax ID</th>
+                            <th>Payment Terms</th>
+                            <th class="text-right">Balance</th>
+                            <th class="text-center">Status</th>
+                            <th>Created</th>
+                            <th class="text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for supplier in suppliers %}
+                        <tr class="group">
+                            {{ bulk_select_cell(supplier.supplier_id) }}
+                            <td>
+                                <span class="font-mono text-sm font-semibold text-slate-700 dark:text-slate-300">{{ supplier.supplier_code }}</span>
+                            </td>
+                            <td>
+                                <a href="/ap/suppliers/{{ supplier.supplier_id }}" class="group/link flex items-center gap-3">
+                                    <div class="h-9 w-9 rounded-full bg-gradient-to-br from-rose-400 to-pink-500 flex items-center justify-center text-white text-xs font-semibold shadow-sm">
+                                        {{ supplier.supplier_name[:2] | upper }}
+                                    </div>
+                                    <div>
+                                        <span class="font-medium text-teal-600 group-hover/link:text-teal-700 dark:text-teal-400 dark:group-hover/link:text-teal-300 transition-colors">
+                                            {{ supplier.supplier_name }}
+                                        </span>
+                                        {% if supplier.contact_email %}
+                                        <p class="text-xs text-slate-500 dark:text-slate-400">{{ supplier.contact_email }}</p>
+                                        {% endif %}
+                                    </div>
+                                </a>
+                            </td>
+                            <td class="text-slate-600 dark:text-slate-400">{{ supplier.tax_id | default("—") }}</td>
+                            <td>
+                                <span class="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-300">
+                                    Net {{ supplier.payment_terms_days | default(30) }}
+                                </span>
+                            </td>
+                            <td class="text-right font-mono font-semibold text-slate-900 dark:text-white">{{ supplier.balance | default("₦0.00") }}</td>
+                            <td class="text-center">
+                                {{ status_badge('active' if supplier.is_active else 'inactive', 'sm') }}
+                            </td>
+                            <td>
+                                <div class="text-sm text-slate-600 dark:text-slate-400">
+                                    {% if supplier.created_at %}
+                                    {{ supplier.created_at.strftime('%b %d, %Y') }}
+                                    {% else %}
+                                    —
                                     {% endif %}
                                 </div>
-                            </a>
-                        </td>
-                        <td class="text-slate-600 dark:text-slate-400">{{ supplier.tax_id | default("-") }}</td>
-                        <td>
-                            <span class="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-300">
-                                Net {{ supplier.payment_terms_days | default(30) }}
-                            </span>
-                        </td>
-                        <td class="text-right font-mono font-semibold text-slate-900 dark:text-white">{{ supplier.balance | default("$0.00") }}</td>
-                        <td>
-                            {% if supplier.balance_trend %}
-                            <div class="flex justify-center">
-                                <canvas class="h-6 w-16" data-chart="sparkline" data-chart-config='{{ {"data": supplier.balance_trend} | tojson }}'></canvas>
-                            </div>
-                            {% else %}
-                            <div class="flex justify-center">
-                                <span class="text-xs text-slate-400">—</span>
-                            </div>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {{ status_badge('active' if supplier.is_active else 'inactive', 'sm') }}
-                        </td>
-                        <td class="text-right">
-                            <div class="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <a href="/ap/suppliers/{{ supplier.supplier_id }}"
-                                   class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300 transition-colors"
-                                   title="View details">
-                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
-                                    </svg>
-                                </a>
-                                <a href="/ap/suppliers/{{ supplier.supplier_id }}/edit"
-                                   class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300 transition-colors"
-                                   title="Edit supplier">
-                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-                                    </svg>
-                                </a>
-                                <a href="/ap/invoices?supplier={{ supplier.supplier_id }}"
-                                   class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300 transition-colors"
-                                   title="View invoices">
-                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                                    </svg>
-                                </a>
-                            </div>
-                        </td>
-                    </tr>
-                    {% else %}
-                    <tr>
-                        <td colspan="8" class="py-16">
-                            <div class="empty-state">
-                                <div class="empty-state-icon">
-                                    <svg class="h-10 w-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
-                                    </svg>
+                                {% if supplier.created_by_name %}
+                                <div class="text-xs text-slate-400 dark:text-slate-500">
+                                    by {{ supplier.created_by_name }}
                                 </div>
-                                <p class="mt-4 text-base font-semibold text-slate-900 dark:text-white">No suppliers found</p>
-                                {% if search or status %}
-                                <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">Try adjusting your search or filter criteria</p>
-                                <a href="/ap/suppliers" class="mt-4 btn btn-secondary">
-                                    Clear all filters
-                                </a>
-                                {% else %}
-                                <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">Get started by adding your first supplier</p>
-                                <a href="/ap/suppliers/new" class="mt-4 btn btn-primary">
-                                    <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-                                    </svg>
-                                    Add Supplier
-                                </a>
                                 {% endif %}
-                            </div>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-
-        <!-- Pagination -->
-        {% if total_pages and total_pages > 1 %}
-        <div class="border-t border-slate-200 dark:border-slate-700 px-6 py-4">
-            <div class="flex items-center justify-between">
-                <p class="text-sm text-slate-600 dark:text-slate-400">
-                    Showing <span class="font-medium text-slate-900 dark:text-white">{{ (page - 1) * per_page + 1 }}</span>
-                    to <span class="font-medium text-slate-900 dark:text-white">{{ [page * per_page, total_count] | min }}</span>
-                    of <span class="font-medium text-slate-900 dark:text-white">{{ total_count }}</span> results
-                </p>
-                <nav class="flex items-center gap-1">
-                    {% if page > 1 %}
-                    <a href="?page={{ page - 1 }}{{ '&search=' + search if search else '' }}{{ '&status=' + status if status else '' }}"
-                       class="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-300 transition-colors">
-                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
-                        </svg>
-                    </a>
-                    {% endif %}
-
-                    {% for p in range(1, total_pages + 1) %}
-                        {% if p == page %}
-                        <span class="rounded-lg bg-teal-50 px-3 py-1.5 text-sm font-medium text-teal-700 dark:bg-teal-900/30 dark:text-teal-300">{{ p }}</span>
-                        {% elif p == 1 or p == total_pages or (p >= page - 1 and p <= page + 1) %}
-                        <a href="?page={{ p }}{{ '&search=' + search if search else '' }}{{ '&status=' + status if status else '' }}"
-                           class="rounded-lg px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 transition-colors">{{ p }}</a>
-                        {% elif p == page - 2 or p == page + 2 %}
-                        <span class="px-1 text-slate-400">...</span>
-                        {% endif %}
-                    {% endfor %}
-
-                    {% if page < total_pages %}
-                    <a href="?page={{ page + 1 }}{{ '&search=' + search if search else '' }}{{ '&status=' + status if status else '' }}"
-                       class="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-300 transition-colors">
-                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-                        </svg>
-                    </a>
-                    {% endif %}
-                </nav>
+                            </td>
+                            <td>
+                                <div class="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <a href="/ap/suppliers/{{ supplier.supplier_id }}"
+                                       class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300 transition-colors"
+                                       title="View details">
+                                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                                        </svg>
+                                    </a>
+                                    <a href="/ap/suppliers/{{ supplier.supplier_id }}/edit"
+                                       class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300 transition-colors"
+                                       title="Edit supplier">
+                                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                                        </svg>
+                                    </a>
+                                    <a href="/ap/invoices?supplier_id={{ supplier.supplier_id }}"
+                                       class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300 transition-colors"
+                                       title="View invoices">
+                                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                        </svg>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="9" class="py-12">
+                                {{ empty_state(
+                                    'No suppliers found',
+                                    'Get started by adding your first supplier' if not (search or status) else 'Try adjusting your search or filter criteria',
+                                    'users',
+                                    'Add Supplier' if not (search or status) else none,
+                                    '/ap/suppliers/new' if not (search or status) else none
+                                ) }}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
             </div>
+
+            {# Pagination #}
+            {{ pagination(
+                page=page,
+                total_pages=total_pages,
+                total_count=total_count,
+                limit=limit,
+                search=search,
+                filters={"status": status}
+            ) }}
         </div>
-        {% endif %}
+
+        {# Bulk Action Bar #}
+        {{ bulk_action_bar(
+            actions=[
+                {
+                    "name": "export",
+                    "label": "Export",
+                    "endpoint": "/ap/suppliers/bulk-export",
+                    "icon": bulk_icon_export(),
+                    "class": "btn-secondary"
+                },
+                {
+                    "name": "activate",
+                    "label": "Activate",
+                    "endpoint": "/ap/suppliers/bulk-activate",
+                    "icon": bulk_icon_activate(),
+                    "class": "btn-secondary",
+                    "confirm": "Activate selected suppliers?"
+                },
+                {
+                    "name": "deactivate",
+                    "label": "Deactivate",
+                    "endpoint": "/ap/suppliers/bulk-deactivate",
+                    "icon": bulk_icon_deactivate(),
+                    "class": "btn-secondary",
+                    "confirm": "Deactivate selected suppliers?"
+                },
+                {
+                    "name": "delete",
+                    "label": "Delete",
+                    "endpoint": "/ap/suppliers/bulk-delete",
+                    "icon": bulk_icon_delete(),
+                    "class": "btn-bulk-danger",
+                    "confirm": "Delete selected suppliers? This action cannot be undone."
+                }
+            ],
+            entity_name="suppliers"
+        ) }}
     </div>
 </div>
 {% endblock %}

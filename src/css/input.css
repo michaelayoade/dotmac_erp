@@ -54,14 +54,14 @@
    Typography
    ======================================== */
 h1, h2, h3, h4, .font-display {
-    font-family: 'Fraunces', Georgia, serif;
+    font-family: 'DM Sans', system-ui, sans-serif;
     font-optical-sizing: auto;
     font-variation-settings: "SOFT" 50, "WONK" 1;
 }
 
 /* Large display headings - more dramatic optical sizing */
 .text-display-xl {
-    font-family: 'Fraunces', Georgia, serif;
+    font-family: 'DM Sans', system-ui, sans-serif;
     font-optical-sizing: auto;
     font-variation-settings: "SOFT" 100, "WONK" 1;
     letter-spacing: -0.02em;
@@ -74,14 +74,14 @@ h1, h2, h3, h4, .font-display {
 }
 
 .financial-figure {
-    font-family: 'JetBrains Mono', monospace;
+    font-family: 'DM Sans', monospace;
     font-variant-numeric: tabular-nums;
     font-feature-settings: "tnum" 1;
     letter-spacing: -0.01em;
 }
 
 code, .font-mono {
-    font-family: 'JetBrains Mono', monospace;
+    font-family: 'DM Sans', monospace;
 }
 
 /* Refined uppercase labels - less extreme tracking */
@@ -492,12 +492,12 @@ code, .font-mono {
     }
 
     .table-cell-mono {
-        font-family: 'JetBrains Mono', monospace;
+        font-family: 'DM Sans', monospace;
         font-size: 13px;
     }
 
     .table-cell-amount {
-        font-family: 'JetBrains Mono', monospace;
+        font-family: 'DM Sans', monospace;
         font-size: 13px;
         text-align: right;
         font-weight: 500;
@@ -649,7 +649,7 @@ code, .font-mono {
     }
 
     .empty-state-title {
-        font-family: 'Fraunces', Georgia, serif;
+        font-family: 'DM Sans', system-ui, sans-serif;
         font-size: 20px;
         font-weight: 500;
         color: var(--ink);
@@ -825,7 +825,7 @@ code, .font-mono {
 .command-palette-key {
     padding: 4px 8px;
     font-size: 11px;
-    font-family: 'JetBrains Mono', monospace;
+    font-family: 'DM Sans', monospace;
     background: var(--parchment);
     border: 1px solid var(--card-border);
     border-radius: 5px;
@@ -1030,7 +1030,7 @@ button:focus-visible {
     }
 
     .stat-hero-value {
-        font-family: 'JetBrains Mono', monospace;
+        font-family: 'DM Sans', monospace;
         font-size: 2rem;
         font-weight: 600;
         font-variant-numeric: tabular-nums;
@@ -1091,7 +1091,7 @@ button:focus-visible {
         background: var(--parchment);
         border: 1px solid var(--card-border);
         border-radius: 6px;
-        font-family: 'JetBrains Mono', monospace;
+        font-family: 'DM Sans', monospace;
         font-size: 12px;
         font-weight: 600;
         color: var(--ink-muted);
@@ -1205,7 +1205,7 @@ button:focus-visible {
     }
 
     .journal-entry-num {
-        font-family: 'JetBrains Mono', monospace;
+        font-family: 'DM Sans', monospace;
         font-size: 13px;
         font-weight: 600;
         color: var(--teal);
@@ -1228,7 +1228,7 @@ button:focus-visible {
     }
 
     .journal-amount {
-        font-family: 'JetBrains Mono', monospace;
+        font-family: 'DM Sans', monospace;
         font-size: 14px;
         font-weight: 500;
         color: var(--ink);
@@ -1293,7 +1293,7 @@ button:focus-visible {
     }
 
     .metric-mini-value {
-        font-family: 'JetBrains Mono', monospace;
+        font-family: 'DM Sans', monospace;
         font-size: 14px;
         font-weight: 600;
         color: var(--ink);
@@ -1342,5 +1342,184 @@ button:focus-visible {
     }
     to {
         transform: rotate(360deg);
+    }
+}
+
+/* ========================================
+   Bulk Selection System
+   ======================================== */
+@layer components {
+    /* Checkbox cell styling */
+    .bulk-select-cell {
+        width: 48px;
+        padding-left: 16px !important;
+        padding-right: 8px !important;
+    }
+
+    /* Custom checkbox styling */
+    .bulk-checkbox {
+        width: 18px;
+        height: 18px;
+        border-radius: 4px;
+        border: 2px solid var(--ink-faint);
+        cursor: pointer;
+        accent-color: var(--teal);
+        transition: all 0.15s ease;
+        appearance: none;
+        -webkit-appearance: none;
+        background-color: var(--card-bg);
+        position: relative;
+    }
+
+    .bulk-checkbox:hover {
+        border-color: var(--teal);
+    }
+
+    .bulk-checkbox:checked {
+        background-color: var(--teal);
+        border-color: var(--teal);
+    }
+
+    .bulk-checkbox:checked::after {
+        content: '';
+        position: absolute;
+        left: 5px;
+        top: 2px;
+        width: 5px;
+        height: 9px;
+        border: solid white;
+        border-width: 0 2px 2px 0;
+        transform: rotate(45deg);
+    }
+
+    .bulk-checkbox:indeterminate {
+        background-color: var(--teal);
+        border-color: var(--teal);
+    }
+
+    .bulk-checkbox:indeterminate::after {
+        content: '';
+        position: absolute;
+        left: 3px;
+        top: 7px;
+        width: 10px;
+        height: 2px;
+        background: white;
+        border-radius: 1px;
+    }
+
+    .bulk-checkbox:focus {
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.2);
+    }
+
+    /* Selected row highlight */
+    tr.bulk-selected,
+    tr:has(.bulk-checkbox:checked) {
+        background-color: rgba(13, 148, 136, 0.08) !important;
+    }
+
+    .dark tr.bulk-selected,
+    .dark tr:has(.bulk-checkbox:checked) {
+        background-color: rgba(13, 148, 136, 0.15) !important;
+    }
+
+    /* Floating action bar */
+    .bulk-action-bar {
+        position: fixed;
+        bottom: 24px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 50;
+    }
+
+    .bulk-action-bar-content {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 12px 20px;
+        background: var(--card-bg);
+        border: 1px solid var(--card-border);
+        border-radius: 12px;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+    }
+
+    .dark .bulk-action-bar-content {
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+    }
+
+    .bulk-selection-count {
+        font-weight: 500;
+        font-size: 14px;
+        color: var(--ink);
+        white-space: nowrap;
+    }
+
+    .bulk-actions-group {
+        display: flex;
+        gap: 8px;
+    }
+
+    /* Action button variants for bulk actions */
+    .btn-bulk-danger {
+        color: white;
+        background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+        box-shadow: 0 2px 8px rgba(239, 68, 68, 0.25);
+    }
+
+    .btn-bulk-danger:hover:not(:disabled) {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(239, 68, 68, 0.35);
+    }
+
+    /* Loading state for bulk action bar */
+    .bulk-action-bar-loading {
+        opacity: 0.7;
+        pointer-events: none;
+    }
+
+    .bulk-action-bar-loading::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: rgba(255, 255, 255, 0.3);
+        border-radius: 12px;
+    }
+
+    /* Animation for action bar entrance */
+    @keyframes bulkBarSlideUp {
+        from {
+            opacity: 0;
+            transform: translateX(-50%) translateY(20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+    }
+
+    .bulk-action-bar[x-show] {
+        animation: bulkBarSlideUp 0.2s ease-out;
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 640px) {
+        .bulk-action-bar {
+            left: 16px;
+            right: 16px;
+            transform: none;
+        }
+
+        .bulk-action-bar-content {
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 12px;
+            padding: 12px 16px;
+        }
+
+        .bulk-selection-count {
+            width: 100%;
+            text-align: center;
+        }
     }
 }

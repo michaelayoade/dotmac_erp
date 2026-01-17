@@ -1,19 +1,21 @@
 {% extends "ifrs/base_ifrs.html" %}
+{% from "components/macros.html" import search_autosuggest, pagination, status_badge, empty_state, stats_card, action_buttons %}
 
 {% block page_title %}Bank Accounts{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400">
-    <a href="/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white">Bank Accounts</span>
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+    <a href="/ifrs" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="font-medium text-slate-900 dark:text-white">Bank Accounts</span>
 </nav>
 {% endblock %}
 
 {% block header_actions %}
-<a href="/banking/accounts/new" data-testid="bank-accounts-new"
-   class="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-primary-600 to-primary-500 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-primary-500/25 btn-hover">
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<a href="/banking/accounts/new" data-testid="bank-accounts-new" class="btn btn-primary">
+    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
     </svg>
     New Bank Account
@@ -22,106 +24,95 @@
 
 {% block content %}
 <div class="space-y-6">
-    <!-- Stats Summary -->
-    <div class="grid gap-4 sm:grid-cols-4">
-        <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800/50">
-            <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Total Accounts</p>
-            <p class="mt-1 text-2xl font-bold text-slate-900 dark:text-white">{{ total_count | default(0) }}</p>
-        </div>
-        <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800/50">
-            <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Active</p>
-            <p class="mt-1 text-2xl font-bold text-green-600 dark:text-green-400">{{ active_count | default(0) }}</p>
-        </div>
-        <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800/50">
-            <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Total Balance</p>
-            <p class="mt-1 text-2xl font-bold text-slate-900 dark:text-white">{{ total_balance | default("$0.00") }}</p>
-        </div>
-        <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800/50">
-            <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Pending Reconciliation</p>
-            <p class="mt-1 text-2xl font-bold text-yellow-600 dark:text-yellow-400">{{ pending_recon | default(0) }}</p>
-        </div>
+    {# Stats Row #}
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {{ stats_card("Total Accounts", total_count | default(0), icon="bank", color="slate") }}
+        {{ stats_card("Active", active_count | default(0), icon="check-circle", color="emerald") }}
+        {{ stats_card("Total Balance", total_balance | default("₦0.00"), icon="currency", color="teal") }}
+        {{ stats_card("Pending Reconciliation", pending_recon | default(0), icon="clock", color="amber") }}
     </div>
 
-    <!-- Filters -->
-    <div class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-800/50">
-        <form method="get" class="flex flex-wrap items-center gap-4">
-            <div class="flex-1 min-w-[200px]">
-                <input type="text" name="search" value="{{ search | default('') }}" data-testid="bank-accounts-search"
-                       placeholder="Search accounts..."
-                       class="w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
-            </div>
-            <select name="status" data-testid="bank-accounts-status"
-                    class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
-                <option value="">All Status</option>
-                {% for s in statuses %}
-                <option value="{{ s }}" {{ 'selected' if status == s else '' }}>{{ s | title }}</option>
-                {% endfor %}
-            </select>
-            <button type="submit"
-                    class="rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600">
-                Filter
-            </button>
-        </form>
-    </div>
+    {# Search with Auto-suggest and Filters #}
+    {{ search_autosuggest(
+        search=search,
+        entity_type="bank_accounts",
+        filters=[
+            {
+                "name": "status",
+                "label": "All Status",
+                "value": status,
+                "options": [
+                    {"value": "active", "label": "Active"},
+                    {"value": "inactive", "label": "Inactive"},
+                    {"value": "closed", "label": "Closed"}
+                ]
+            }
+        ],
+        base_url="/banking/accounts",
+        placeholder="Search bank accounts by name or number..."
+    ) }}
 
-    <!-- Bank Accounts Table -->
-    <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50">
-        <div class="overflow-x-auto">
-            <table class="w-full" data-testid="bank-accounts-table">
+    {# Bank Accounts Table #}
+    <div class="card">
+        <div class="table-container">
+            <table class="table" data-testid="bank-accounts-table">
                 <thead>
-                    <tr class="border-b border-slate-200 dark:border-slate-700">
-                        <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Bank</th>
-                        <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Account</th>
-                        <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Type</th>
-                        <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Currency</th>
-                        <th class="px-6 py-4 text-right text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Last Statement</th>
-                        <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Last Reconciled</th>
-                        <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Status</th>
-                        <th class="px-6 py-4 text-right text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Actions</th>
+                    <tr>
+                        <th>Bank</th>
+                        <th>Account</th>
+                        <th>Type</th>
+                        <th>Currency</th>
+                        <th class="text-right">Last Statement</th>
+                        <th>Last Reconciled</th>
+                        <th class="text-center">Status</th>
+                        <th class="text-right">Actions</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                <tbody>
                     {% for account in accounts %}
-                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                        <td class="px-6 py-4">
+                    <tr class="group">
+                        <td>
                             <p class="text-sm font-medium text-slate-900 dark:text-white">{{ account.bank_name }}</p>
                             <p class="text-xs text-slate-500 dark:text-slate-400">{{ account.branch_name }}</p>
                         </td>
-                        <td class="px-6 py-4">
-                            <a href="/banking/accounts/{{ account.bank_account_id }}" class="text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">
+                        <td>
+                            <a href="/banking/accounts/{{ account.bank_account_id }}" class="text-sm font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300 transition-colors">
                                 {{ account.account_name }}
                             </a>
                             <p class="font-mono text-xs text-slate-500 dark:text-slate-400">{{ account.account_number }}</p>
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-400">{{ account.account_type | title }}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-400">{{ account.currency_code }}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium text-slate-900 dark:text-white">
-                            {{ account.last_statement_balance | default("-") }}
+                        <td class="text-slate-600 dark:text-slate-400">{{ account.account_type | title }}</td>
+                        <td class="text-slate-600 dark:text-slate-400">{{ account.currency_code }}</td>
+                        <td class="text-right">
+                            <span class="font-mono font-medium text-slate-900 dark:text-white">{{ account.last_statement_balance | default("—") }}</span>
                             {% if account.last_statement_date %}
-                            <p class="text-xs text-slate-500">{{ account.last_statement_date }}</p>
+                            <p class="text-xs text-slate-500 dark:text-slate-400">{{ account.last_statement_date }}</p>
                             {% endif %}
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-400">{{ account.last_reconciled_date | default("Never") }}</td>
-                        <td class="px-6 py-4 whitespace-nowrap">
-                            {% if account.status == 'active' %}
-                            <span class="inline-flex rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">Active</span>
-                            {% elif account.status == 'inactive' %}
-                            <span class="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-400">Inactive</span>
-                            {% else %}
-                            <span class="inline-flex rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400">Closed</span>
-                            {% endif %}
+                        <td class="text-slate-600 dark:text-slate-400">{{ account.last_reconciled_date | default("Never") }}</td>
+                        <td class="text-center">
+                            {{ status_badge(account.status | default('active'), 'sm') }}
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-right">
-                            <div class="flex items-center justify-end gap-2">
+                        <td>
+                            <div class="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                 <a href="/banking/reconciliations/new?account_id={{ account.bank_account_id }}"
-                                   class="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300"
+                                   class="rounded-lg p-2 text-slate-400 hover:bg-emerald-50 hover:text-emerald-600 dark:hover:bg-emerald-900/30 dark:hover:text-emerald-400 transition-colors"
                                    title="Reconcile">
                                     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
                                     </svg>
                                 </a>
+                                <a href="/banking/accounts/{{ account.bank_account_id }}"
+                                   class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300 transition-colors"
+                                   title="View details">
+                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                                    </svg>
+                                </a>
                                 <a href="/banking/accounts/{{ account.bank_account_id }}/edit"
-                                   class="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300">
+                                   class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300 transition-colors"
+                                   title="Edit account">
                                     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
                                     </svg>
@@ -131,17 +122,14 @@
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="8" class="px-6 py-12 text-center">
-                            <svg class="mx-auto h-12 w-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
-                            </svg>
-                            <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">No bank accounts found</p>
-                            <a href="/banking/accounts/new" class="mt-4 inline-flex items-center text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">
-                                <svg class="mr-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-                                </svg>
-                                Add your first bank account
-                            </a>
+                        <td colspan="8" class="py-12">
+                            {{ empty_state(
+                                'No bank accounts found',
+                                'Get started by adding your first bank account' if not (search or status) else 'Try adjusting your search or filter criteria',
+                                'bank',
+                                'Add Bank Account' if not (search or status) else none,
+                                '/banking/accounts/new' if not (search or status) else none
+                            ) }}
                         </td>
                     </tr>
                     {% endfor %}
@@ -149,22 +137,15 @@
             </table>
         </div>
 
-        <!-- Pagination -->
-        {% if total_pages > 1 %}
-        <div class="flex items-center justify-between border-t border-slate-200 px-6 py-4 dark:border-slate-700">
-            <p class="text-sm text-slate-500 dark:text-slate-400">
-                Showing {{ offset + 1 }} to {{ offset + accounts | length }} of {{ total_count }} accounts
-            </p>
-            <div class="flex items-center gap-2">
-                {% if page > 1 %}
-                <a href="?page={{ page - 1 }}" class="rounded-lg border border-slate-300 px-3 py-1 text-sm hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-800">Previous</a>
-                {% endif %}
-                {% if page < total_pages %}
-                <a href="?page={{ page + 1 }}" class="rounded-lg border border-slate-300 px-3 py-1 text-sm hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-800">Next</a>
-                {% endif %}
-            </div>
-        </div>
-        {% endif %}
+        {# Pagination #}
+        {{ pagination(
+            page=page | default(1),
+            total_pages=total_pages | default(1),
+            total_count=total_count | default(0),
+            limit=limit | default(50),
+            search=search,
+            filters={"status": status}
+        ) }}
     </div>
 </div>
 {% endblock %}

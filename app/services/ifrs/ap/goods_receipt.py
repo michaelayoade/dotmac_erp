@@ -21,7 +21,13 @@ from app.models.ifrs.ap.goods_receipt_line import GoodsReceiptLine
 from app.models.ifrs.ap.purchase_order import PurchaseOrder, POStatus
 from app.models.ifrs.ap.purchase_order_line import PurchaseOrderLine
 from app.models.ifrs.core_config.numbering_sequence import SequenceType
+from app.models.ifrs.inv.item import Item
+from app.models.ifrs.inv.inventory_transaction import TransactionType
 from app.services.common import coerce_uuid
+from app.services.ifrs.inv.transaction import (
+    InventoryTransactionService,
+    TransactionInput,
+)
 from app.services.ifrs.platform.sequence import SequenceService
 from app.services.response import ListResponseMixin
 
@@ -305,6 +311,15 @@ class GoodsReceiptService(ListResponseMixin):
         if receipt.status == ReceiptStatus.REJECTED:
             GoodsReceiptService._reverse_po_quantities(db, receipt)
 
+        # Create inventory transactions for accepted lines (if any)
+        if receipt.status in [ReceiptStatus.ACCEPTED, ReceiptStatus.PARTIAL]:
+            GoodsReceiptService._create_inventory_transactions_for_receipt(
+                db=db,
+                organization_id=org_id,
+                receipt=receipt,
+                user_id=receipt.received_by_user_id,
+            )
+
         db.commit()
         db.refresh(receipt)
 
@@ -350,10 +365,127 @@ class GoodsReceiptService(ListResponseMixin):
             line.quantity_rejected = Decimal("0")
 
         receipt.status = ReceiptStatus.ACCEPTED
+
+        # Create inventory transactions for accepted lines
+        GoodsReceiptService._create_inventory_transactions_for_receipt(
+            db=db,
+            organization_id=org_id,
+            receipt=receipt,
+            user_id=receipt.received_by_user_id,
+        )
+
         db.commit()
         db.refresh(receipt)
 
         return receipt
+
+    @staticmethod
+    def _create_inventory_transactions_for_receipt(
+        db: Session,
+        organization_id: UUID,
+        receipt: GoodsReceipt,
+        user_id: UUID,
+    ) -> list[UUID]:
+        """
+        Create inventory transactions for accepted goods receipt lines.
+
+        For each line with an inventory item, creates a RECEIPT transaction
+        that increases inventory at the specified warehouse.
+
+        Args:
+            db: Database session
+            organization_id: Organization scope
+            receipt: The goods receipt being accepted
+            user_id: User performing the acceptance
+
+        Returns:
+            List of created inventory transaction IDs
+        """
+        from app.models.ifrs.gl.fiscal_period import FiscalPeriod
+
+        transaction_ids = []
+
+        # Get fiscal period for the receipt date
+        fiscal_period = (
+            db.query(FiscalPeriod)
+            .filter(
+                FiscalPeriod.organization_id == organization_id,
+                FiscalPeriod.start_date <= receipt.receipt_date,
+                FiscalPeriod.end_date >= receipt.receipt_date,
+            )
+            .first()
+        )
+
+        if not fiscal_period:
+            # No fiscal period - skip inventory transactions
+            return transaction_ids
+
+        for line in receipt.lines:
+            # Skip lines with no accepted quantity
+            if line.quantity_accepted <= Decimal("0"):
+                continue
+
+            # Get the PO line to check for item_id
+            po_line = db.query(PurchaseOrderLine).filter(
+                PurchaseOrderLine.line_id == line.po_line_id
+            ).first()
+
+            if not po_line or not po_line.item_id:
+                # Skip non-inventory lines
+                continue
+
+            # Get the item
+            item = db.get(Item, po_line.item_id)
+            if not item or not item.track_inventory:
+                # Skip non-tracked items
+                continue
+
+            # Determine warehouse
+            warehouse_id = receipt.warehouse_id
+            if not warehouse_id:
+                # No warehouse specified on receipt - skip
+                continue
+
+            # Create inventory receipt transaction
+            try:
+                # Convert date to datetime for transaction
+                from datetime import datetime as dt, timezone as tz
+                transaction_datetime = dt.combine(
+                    receipt.receipt_date,
+                    dt.min.time(),
+                    tzinfo=tz.utc,
+                )
+
+                txn_input = TransactionInput(
+                    transaction_type=TransactionType.RECEIPT,
+                    transaction_date=transaction_datetime,
+                    fiscal_period_id=fiscal_period.fiscal_period_id,
+                    item_id=po_line.item_id,
+                    warehouse_id=warehouse_id,
+                    quantity=line.quantity_accepted,
+                    unit_cost=po_line.unit_price,
+                    uom=item.base_uom,
+                    currency_code=item.currency_code,
+                    location_id=line.location_id,
+                    source_document_type="GOODS_RECEIPT",
+                    source_document_id=receipt.receipt_id,
+                    source_document_line_id=line.line_id,
+                    reference=receipt.receipt_number,
+                )
+
+                transaction = InventoryTransactionService.create_receipt(
+                    db=db,
+                    organization_id=organization_id,
+                    input=txn_input,
+                    created_by_user_id=user_id,
+                )
+                transaction_ids.append(transaction.transaction_id)
+
+            except HTTPException:
+                # Log error but continue with other lines
+                pass
+
+        return transaction_ids
 
     @staticmethod
     def _update_po_status(db: Session, po: PurchaseOrder) -> None:

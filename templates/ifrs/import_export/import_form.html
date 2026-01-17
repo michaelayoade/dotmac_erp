@@ -283,7 +283,8 @@ importForm.addEventListener('submit', async function(e) {
     importBtn.textContent = 'Importing...';
 
     try {
-        const response = await fetch('/api/v1/import/{{ entity_type }}', {
+        // Use web route (same-origin, auth handled by session cookie)
+        const response = await fetch('/import/{{ entity_type }}', {
             method: 'POST',
             body: formData
         });
@@ -317,7 +318,8 @@ previewBtn.addEventListener('click', async function() {
     previewBtn.textContent = 'Loading...';
 
     try {
-        const response = await fetch('/api/v1/import/preview/{{ entity_type }}', {
+        // Use web route (same-origin, auth handled by session cookie)
+        const response = await fetch('/import/{{ entity_type }}/preview', {
             method: 'POST',
             body: formData
         });

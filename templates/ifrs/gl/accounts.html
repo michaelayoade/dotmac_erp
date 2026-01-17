@@ -1,19 +1,19 @@
 {% extends "ifrs/base_ifrs.html" %}
+{% from "components/macros.html" import search_autosuggest, pagination, status_badge, empty_state, action_buttons, bulk_select_header, bulk_select_cell, bulk_action_bar, bulk_icon_delete, bulk_icon_export, bulk_icon_activate, bulk_icon_deactivate %}
 
 {% block page_title %}Chart of Accounts{% endblock %}
 
 {% block breadcrumbs %}
 <nav class="flex text-sm text-slate-500 dark:text-slate-400">
-    <a href="/ifrs" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a>
+    <a href="/ifrs" class="hover:text-teal-600 dark:hover:text-teal-400">Dashboard</a>
     <span class="mx-2">/</span>
     <span class="text-slate-900 dark:text-white">Chart of Accounts</span>
 </nav>
 {% endblock %}
 
 {% block header_actions %}
-<a href="/gl/accounts/new"
-   class="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-primary-600 to-primary-500 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-primary-500/25 btn-hover">
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<a href="/gl/accounts/new" class="btn btn-primary">
+    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
     </svg>
     New Account
@@ -21,123 +21,167 @@
 {% endblock %}
 
 {% block content %}
-{% from "components/macros.html" import status_badge, empty_state %}
 <div class="space-y-6">
-    <!-- Filters -->
-    <div class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-800/50">
-        <form method="get" class="flex flex-wrap items-center gap-4">
-            <div class="flex-1 min-w-[200px]">
-                <input type="text" name="search" value="{{ search | default('') }}"
-                       placeholder="Search accounts..."
-                       class="w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
-            </div>
-            <select name="category"
-                    class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
-                <option value="">All Categories</option>
-                <option value="ASSET" {{ 'selected' if category == 'ASSET' else '' }}>Assets</option>
-                <option value="LIABILITY" {{ 'selected' if category == 'LIABILITY' else '' }}>Liabilities</option>
-                <option value="EQUITY" {{ 'selected' if category == 'EQUITY' else '' }}>Equity</option>
-                <option value="REVENUE" {{ 'selected' if category == 'REVENUE' else '' }}>Revenue</option>
-                <option value="EXPENSE" {{ 'selected' if category == 'EXPENSE' else '' }}>Expenses</option>
-            </select>
-            <select name="status"
-                    class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
-                <option value="">All Status</option>
-                <option value="active" {{ 'selected' if status == 'active' else '' }}>Active</option>
-                <option value="inactive" {{ 'selected' if status == 'inactive' else '' }}>Inactive</option>
-            </select>
-            <button type="submit"
-                    class="rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600">
-                Filter
-            </button>
-        </form>
-    </div>
+    {# Search with Auto-suggest and Filters #}
+    {{ search_autosuggest(
+        search=search,
+        entity_type="accounts",
+        filters=[
+            {
+                "name": "category",
+                "label": "All Categories",
+                "value": category,
+                "options": [
+                    {"value": "ASSET", "label": "Assets"},
+                    {"value": "LIABILITY", "label": "Liabilities"},
+                    {"value": "EQUITY", "label": "Equity"},
+                    {"value": "REVENUE", "label": "Revenue"},
+                    {"value": "EXPENSE", "label": "Expenses"}
+                ]
+            },
+            {
+                "name": "status",
+                "label": "All Status",
+                "value": status,
+                "options": [
+                    {"value": "active", "label": "Active"},
+                    {"value": "inactive", "label": "Inactive"}
+                ]
+            }
+        ],
+        base_url="/gl/accounts",
+        placeholder="Search accounts by code or name..."
+    ) }}
 
-    <!-- Accounts Table -->
-    <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50">
-        <div class="overflow-x-auto">
-            <table class="w-full">
-                <thead>
-                    <tr class="border-b border-slate-200 dark:border-slate-700">
-                        <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Account Code</th>
-                        <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Account Name</th>
-                        <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Category</th>
-                        <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Normal Balance</th>
-                        <th class="px-6 py-4 text-right text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Balance</th>
-                        <th class="px-6 py-4 text-center text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Trend</th>
-                        <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Status</th>
-                        <th class="px-6 py-4 text-right text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Actions</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
-                    {% for account in accounts %}
-                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                        <td class="px-6 py-4 whitespace-nowrap">
-                            <span class="font-mono text-sm font-medium text-slate-900 dark:text-white">{{ account.account_code }}</span>
-                        </td>
-                        <td class="px-6 py-4">
-                            <a href="/gl/accounts/{{ account.account_id }}" class="text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300">
-                                {{ account.account_name }}
-                            </a>
-                            {% if account.description %}
-                            <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ account.description | truncate(50) }}</p>
-                            {% endif %}
-                        </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-400">{{ account.category }}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-400">{{ account.normal_balance }}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium text-slate-900 dark:text-white">{{ account.balance | default("$0.00") }}</td>
-                        <td class="px-6 py-4 whitespace-nowrap">
-                            {% if account.balance_trend %}
-                            <div class="flex justify-center">
-                                <canvas class="h-6 w-16" data-chart="sparkline" data-chart-config='{{ {"data": account.balance_trend} | tojson }}'></canvas>
-                            </div>
-                            {% else %}
-                            <div class="flex justify-center">
-                                <span class="text-xs text-slate-400">—</span>
-                            </div>
-                            {% endif %}
-                        </td>
-                        <td class="px-6 py-4 whitespace-nowrap">
-                            {{ status_badge('active' if account.is_active else 'inactive', 'sm') }}
-                        </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-right">
-                            <div class="flex items-center justify-end gap-2">
-                                <a href="/gl/accounts/{{ account.account_id }}/edit"
-                                   class="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300">
-                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-                                    </svg>
+    {# Accounts Table with Bulk Selection #}
+    <div x-data="bulkActions({ entityName: 'accounts' })">
+        <div class="card">
+            <div class="table-container">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            {{ bulk_select_header() }}
+                            <th>Account Code</th>
+                            <th>Account Name</th>
+                            <th>Category</th>
+                            <th>Normal Balance</th>
+                            <th class="text-right">Balance</th>
+                            <th class="text-center">Status</th>
+                            <th>Created</th>
+                            <th class="text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for account in accounts %}
+                        <tr class="group">
+                            {{ bulk_select_cell(account.account_id) }}
+                            <td>
+                                <span class="font-mono text-sm font-medium text-slate-900 dark:text-white">{{ account.account_code }}</span>
+                            </td>
+                            <td>
+                                <a href="/gl/accounts/{{ account.account_id }}" class="text-sm font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300">
+                                    {{ account.account_name }}
                                 </a>
-                            </div>
-                        </td>
-                    </tr>
-                    {% else %}
-                    <tr>
-                        <td colspan="8" class="px-6 py-12">
-                            {{ empty_state('No accounts found', 'Get started by creating your first account', 'document', 'Create Account', '/gl/accounts/new') }}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+                                {% if account.description %}
+                                <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{{ account.description | truncate(50) }}</p>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span class="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium
+                                    {% if account.category == 'ASSET' %}bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400
+                                    {% elif account.category == 'LIABILITY' %}bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400
+                                    {% elif account.category == 'EQUITY' %}bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400
+                                    {% elif account.category == 'REVENUE' %}bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400
+                                    {% elif account.category == 'EXPENSE' %}bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400
+                                    {% else %}bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-400{% endif %}">
+                                    {{ account.category }}
+                                </span>
+                            </td>
+                            <td class="text-slate-600 dark:text-slate-400">{{ account.normal_balance }}</td>
+                            <td class="text-right font-mono font-medium text-slate-900 dark:text-white">{{ account.balance | default("₦0.00") }}</td>
+                            <td class="text-center">
+                                {{ status_badge('active' if account.is_active else 'inactive', 'sm') }}
+                            </td>
+                            <td>
+                                <div class="text-sm text-slate-600 dark:text-slate-400">
+                                    {% if account.created_at %}
+                                    {{ account.created_at.strftime('%b %d, %Y') }}
+                                    {% else %}
+                                    —
+                                    {% endif %}
+                                </div>
+                                {% if account.created_by_name %}
+                                <div class="text-xs text-slate-400 dark:text-slate-500">
+                                    by {{ account.created_by_name }}
+                                </div>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {{ action_buttons(
+                                    view_href="/gl/accounts/" ~ account.account_id,
+                                    edit_href="/gl/accounts/" ~ account.account_id ~ "/edit"
+                                ) }}
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="9" class="py-12">
+                                {{ empty_state('No accounts found', 'Get started by creating your first account', 'document', 'Create Account', '/gl/accounts/new') }}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            {# Pagination #}
+            {{ pagination(
+                page=page | default(1),
+                total_pages=total_pages | default(1),
+                total_count=total_count | default(0),
+                limit=limit | default(50),
+                search=search,
+                filters={"category": category, "status": status}
+            ) }}
         </div>
 
-        <!-- Pagination -->
-        {% if total_pages > 1 %}
-        <div class="flex items-center justify-between border-t border-slate-200 px-6 py-4 dark:border-slate-700">
-            <p class="text-sm text-slate-500 dark:text-slate-400">
-                Showing {{ offset + 1 }} to {{ offset + accounts | length }} of {{ total_count }} accounts
-            </p>
-            <div class="flex items-center gap-2">
-                {% if page > 1 %}
-                <a href="?page={{ page - 1 }}" class="rounded-lg border border-slate-300 px-3 py-1 text-sm hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-800">Previous</a>
-                {% endif %}
-                {% if page < total_pages %}
-                <a href="?page={{ page + 1 }}" class="rounded-lg border border-slate-300 px-3 py-1 text-sm hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-800">Next</a>
-                {% endif %}
-            </div>
-        </div>
-        {% endif %}
+        {# Bulk Action Bar #}
+        {{ bulk_action_bar(
+            actions=[
+                {
+                    "name": "export",
+                    "label": "Export",
+                    "endpoint": "/gl/accounts/bulk-export",
+                    "icon": bulk_icon_export(),
+                    "class": "btn-secondary"
+                },
+                {
+                    "name": "activate",
+                    "label": "Activate",
+                    "endpoint": "/gl/accounts/bulk-activate",
+                    "icon": bulk_icon_activate(),
+                    "class": "btn-secondary",
+                    "confirm": "Activate selected accounts?"
+                },
+                {
+                    "name": "deactivate",
+                    "label": "Deactivate",
+                    "endpoint": "/gl/accounts/bulk-deactivate",
+                    "icon": bulk_icon_deactivate(),
+                    "class": "btn-secondary",
+                    "confirm": "Deactivate selected accounts?"
+                },
+                {
+                    "name": "delete",
+                    "label": "Delete",
+                    "endpoint": "/gl/accounts/bulk-delete",
+                    "icon": bulk_icon_delete(),
+                    "class": "btn-bulk-danger",
+                    "confirm": "Delete selected accounts? Only accounts without journal entries can be deleted."
+                }
+            ],
+            entity_name="accounts"
+        ) }}
     </div>
 </div>
 {% endblock %}

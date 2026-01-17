@@ -1,21 +1,22 @@
 {% extends "ifrs/base_ifrs.html" %}
+{% from "components/macros.html" import pagination, status_badge, empty_state, stats_card %}
 
 {% block page_title %}Quotes{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 mt-1">
-    <a href="/dashboard" class="hover:text-slate-700 dark:hover:text-slate-300">Dashboard</a>
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+    <a href="/ifrs" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
     </svg>
-    <span class="text-slate-700 dark:text-slate-300">Quotes</span>
+    <span class="font-medium text-slate-900 dark:text-white">Quotes</span>
 </nav>
 {% endblock %}
 
 {% block header_actions %}
 <a href="/quotes/new" class="btn btn-primary">
     <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
     </svg>
     New Quote
 </a>
@@ -23,83 +24,61 @@
 
 {% block content %}
 <div class="space-y-6">
-    <!-- Filters -->
+    {# Stats Summary #}
+    <div class="grid gap-4 sm:grid-cols-4 lg:grid-cols-8">
+        {{ stats_card("Draft", status_counts.get('DRAFT', 0), icon="edit", color="slate") }}
+        {{ stats_card("Sent", status_counts.get('SENT', 0), icon="upload", color="blue") }}
+        {{ stats_card("Viewed", status_counts.get('VIEWED', 0), icon="eye", color="violet") }}
+        {{ stats_card("Accepted", status_counts.get('ACCEPTED', 0), icon="check-circle", color="emerald") }}
+        {{ stats_card("Rejected", status_counts.get('REJECTED', 0), icon="x-circle", color="rose") }}
+        {{ stats_card("Expired", status_counts.get('EXPIRED', 0), icon="clock", color="amber") }}
+        {{ stats_card("Converted", status_counts.get('CONVERTED', 0), icon="check", color="teal") }}
+        {{ stats_card("Void", status_counts.get('VOID', 0), icon="ban", color="slate") }}
+    </div>
+
+    {# Filters #}
     <div class="card p-4">
-        <form method="get" class="flex flex-wrap items-end gap-4">
-            <div class="min-w-[150px]">
-                <label class="form-label">Status</label>
-                <select name="status" class="form-input form-select">
-                    <option value="">All Statuses</option>
-                    {% for s in statuses %}
-                    <option value="{{ s }}" {% if filter_status == s %}selected{% endif %}>{{ s }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="min-w-[200px]">
-                <label class="form-label">Customer</label>
-                <select name="customer_id" class="form-input form-select">
-                    <option value="">All Customers</option>
-                    {% for c in customers %}
-                    <option value="{{ c.id }}" {% if filter_customer_id == c.id %}selected{% endif %}>{{ c.name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="min-w-[150px]">
-                <label class="form-label">Start Date</label>
-                <input type="date" name="start_date" value="{{ filter_start_date or '' }}" class="form-input">
-            </div>
-            <div class="min-w-[150px]">
-                <label class="form-label">End Date</label>
-                <input type="date" name="end_date" value="{{ filter_end_date or '' }}" class="form-input">
-            </div>
-            <button type="submit" class="btn btn-secondary">
+        <form method="get" action="/quotes" class="flex flex-wrap items-center gap-4">
+            {# Status Filter #}
+            <select name="status" class="form-select">
+                <option value="">All Statuses</option>
+                {% for s in statuses %}
+                <option value="{{ s }}" {{ 'selected' if filter_status == s else '' }}>{{ s | replace('_', ' ') | title }}</option>
+                {% endfor %}
+            </select>
+
+            {# Customer Filter #}
+            <select name="customer_id" class="form-select">
+                <option value="">All Customers</option>
+                {% for c in customers %}
+                <option value="{{ c.id }}" {{ 'selected' if filter_customer_id == c.id else '' }}>{{ c.name }}</option>
+                {% endfor %}
+            </select>
+
+            {# Date Range #}
+            <input type="date" name="start_date" value="{{ filter_start_date | default('') }}"
+                   class="form-input" placeholder="Start Date">
+            <input type="date" name="end_date" value="{{ filter_end_date | default('') }}"
+                   class="form-input" placeholder="End Date">
+
+            {# Actions #}
+            <button type="submit" class="btn btn-primary">
                 <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
                 </svg>
                 Filter
             </button>
+
+            {% if filter_status or filter_customer_id or filter_start_date or filter_end_date %}
+            <a href="/quotes" class="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300 transition-colors">
+                Clear
+            </a>
+            {% endif %}
         </form>
     </div>
 
-    <!-- Status Summary -->
-    <div class="grid gap-4 sm:grid-cols-4 lg:grid-cols-8">
-        <div class="card p-4">
-            <p class="text-sm text-slate-500 dark:text-slate-400">Draft</p>
-            <p class="text-2xl font-bold text-slate-900 dark:text-white">{{ status_counts.get('DRAFT', 0) }}</p>
-        </div>
-        <div class="card p-4">
-            <p class="text-sm text-slate-500 dark:text-slate-400">Sent</p>
-            <p class="text-2xl font-bold text-blue-600 dark:text-blue-400">{{ status_counts.get('SENT', 0) }}</p>
-        </div>
-        <div class="card p-4">
-            <p class="text-sm text-slate-500 dark:text-slate-400">Viewed</p>
-            <p class="text-2xl font-bold text-purple-600 dark:text-purple-400">{{ status_counts.get('VIEWED', 0) }}</p>
-        </div>
-        <div class="card p-4">
-            <p class="text-sm text-slate-500 dark:text-slate-400">Accepted</p>
-            <p class="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{{ status_counts.get('ACCEPTED', 0) }}</p>
-        </div>
-        <div class="card p-4">
-            <p class="text-sm text-slate-500 dark:text-slate-400">Rejected</p>
-            <p class="text-2xl font-bold text-rose-600 dark:text-rose-400">{{ status_counts.get('REJECTED', 0) }}</p>
-        </div>
-        <div class="card p-4">
-            <p class="text-sm text-slate-500 dark:text-slate-400">Expired</p>
-            <p class="text-2xl font-bold text-amber-600 dark:text-amber-400">{{ status_counts.get('EXPIRED', 0) }}</p>
-        </div>
-        <div class="card p-4">
-            <p class="text-sm text-slate-500 dark:text-slate-400">Converted</p>
-            <p class="text-2xl font-bold text-teal-600 dark:text-teal-400">{{ status_counts.get('CONVERTED', 0) }}</p>
-        </div>
-        <div class="card p-4">
-            <p class="text-sm text-slate-500 dark:text-slate-400">Void</p>
-            <p class="text-2xl font-bold text-slate-400">{{ status_counts.get('VOID', 0) }}</p>
-        </div>
-    </div>
-
-    <!-- Quote List -->
-    <div class="card overflow-hidden">
-        {% if quotes %}
+    {# Quote List #}
+    <div class="card">
         <div class="table-container">
             <table class="table">
                 <thead>
@@ -109,76 +88,75 @@
                         <th>Customer</th>
                         <th>Valid Until</th>
                         <th class="text-right">Amount</th>
-                        <th>Status</th>
-                        <th></th>
+                        <th class="text-center">Status</th>
+                        <th class="text-right">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for q in quotes %}
-                    <tr>
+                    <tr class="group">
                         <td>
-                            <a href="/quotes/{{ q.quote_id }}" class="font-mono text-teal-600 hover:text-teal-700 dark:text-teal-400">
+                            <a href="/quotes/{{ q.quote_id }}" class="font-mono text-sm font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300 transition-colors">
                                 {{ q.quote_number }}
                             </a>
                         </td>
-                        <td class="text-slate-500">{{ q.quote_date }}</td>
+                        <td class="text-slate-600 dark:text-slate-400">{{ q.quote_date }}</td>
                         <td class="text-slate-900 dark:text-white">{{ q.customer_name }}</td>
-                        <td class="{% if q.is_expired %}text-rose-500{% else %}text-slate-500{% endif %}">
+                        <td class="{{ 'text-rose-600 dark:text-rose-400 font-medium' if q.is_expired else 'text-slate-600 dark:text-slate-400' }}">
                             {{ q.valid_until }}
                             {% if q.is_expired %}<span class="text-xs ml-1">(expired)</span>{% endif %}
                         </td>
-                        <td class="text-right font-mono text-slate-900 dark:text-white">{{ q.total_amount }}</td>
-                        <td>
-                            {% if q.status == 'DRAFT' %}
-                            <span class="badge badge-neutral">Draft</span>
-                            {% elif q.status == 'SENT' %}
-                            <span class="badge badge-info">Sent</span>
-                            {% elif q.status == 'VIEWED' %}
-                            <span class="badge badge-purple">Viewed</span>
-                            {% elif q.status == 'ACCEPTED' %}
-                            <span class="badge badge-success">Accepted</span>
-                            {% elif q.status == 'REJECTED' %}
-                            <span class="badge badge-danger">Rejected</span>
-                            {% elif q.status == 'EXPIRED' %}
-                            <span class="badge badge-warning">Expired</span>
-                            {% elif q.status == 'CONVERTED' %}
-                            <span class="badge badge-teal">Converted</span>
-                            {% elif q.status == 'VOID' %}
-                            <span class="badge badge-neutral">Void</span>
-                            {% endif %}
+                        <td class="text-right font-mono font-medium text-slate-900 dark:text-white">{{ q.total_amount }}</td>
+                        <td class="text-center">
+                            {{ status_badge(q.status | lower | default('draft'), 'sm') }}
                         </td>
                         <td>
-                            <div class="table-actions">
-                                <a href="/quotes/{{ q.quote_id }}" class="table-action-btn" title="View">
+                            <div class="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <a href="/quotes/{{ q.quote_id }}"
+                                   class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300 transition-colors"
+                                   title="View">
                                     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
                                     </svg>
                                 </a>
+                                {% if q.status == 'DRAFT' %}
+                                <a href="/quotes/{{ q.quote_id }}/edit"
+                                   class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300 transition-colors"
+                                   title="Edit">
+                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                                    </svg>
+                                </a>
+                                {% endif %}
                             </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="py-12">
+                            {{ empty_state(
+                                'No quotes found',
+                                'Get started by creating your first quote' if not (filter_status or filter_customer_id or filter_start_date or filter_end_date) else 'Try adjusting your filter criteria',
+                                'document',
+                                'New Quote' if not (filter_status or filter_customer_id or filter_start_date or filter_end_date) else none,
+                                '/quotes/new' if not (filter_status or filter_customer_id or filter_start_date or filter_end_date) else none
+                            ) }}
                         </td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
-        {% else %}
-        <div class="empty-state p-12">
-            <div class="empty-state-icon">
-                <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                </svg>
-            </div>
-            <h3 class="empty-state-title">No Quotes</h3>
-            <p class="empty-state-description">Get started by creating your first quote.</p>
-            <a href="/quotes/new" class="btn btn-primary mt-4">
-                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-                </svg>
-                New Quote
-            </a>
-        </div>
-        {% endif %}
+
+        {# Pagination #}
+        {{ pagination(
+            page=page | default(1),
+            total_pages=total_pages | default(1),
+            total_count=total_count | default(quotes | length if quotes else 0),
+            limit=limit | default(50),
+            filters={"status": filter_status, "customer_id": filter_customer_id, "start_date": filter_start_date, "end_date": filter_end_date}
+        ) }}
     </div>
 </div>
 {% endblock %}

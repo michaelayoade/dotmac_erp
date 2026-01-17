@@ -6,13 +6,18 @@ Provides view-focused data for banking web routes.
 
 from __future__ import annotations
 
+import logging
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 
+from fastapi import Request
+from fastapi.responses import HTMLResponse
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 from app.models.ifrs.banking.bank_account import BankAccount, BankAccountStatus
 from app.models.ifrs.banking.bank_reconciliation import (
@@ -31,14 +36,21 @@ from app.models.ifrs.gl.journal_entry_line import JournalEntryLine
 from app.config import settings
 from app.services.common import coerce_uuid
 from app.services.ifrs.platform.currency_context import get_currency_context
+from app.templates import templates
+from app.web.deps import base_context, WebAuthContext
 
 
 def _parse_date(value: Optional[str]) -> Optional[date]:
+    """Parse date string in YYYY-MM-DD format.
+
+    Logs warning on parse failure for debugging data quality issues.
+    """
     if not value:
         return None
     try:
         return datetime.strptime(value, "%Y-%m-%d").date()
     except ValueError:
+        logger.warning("Failed to parse date value: %r (expected YYYY-MM-DD format)", value)
         return None
 
 
@@ -61,15 +73,24 @@ def _format_currency(
 
 
 def _parse_account_status(value: Optional[str]) -> Optional[BankAccountStatus]:
+    """Parse bank account status enum value.
+
+    Logs warning on parse failure for debugging.
+    """
     if not value:
         return None
     try:
         return BankAccountStatus(value)
     except ValueError:
+        logger.warning("Invalid bank account status value: %r", value)
         return None
 
 
 def _parse_statement_status(value: Optional[str]) -> Optional[BankStatementStatus]:
+    """Parse bank statement status enum value.
+
+    Logs warning on parse failure for debugging.
+    """
     if not value:
         return None
     status_map = {
@@ -81,6 +102,7 @@ def _parse_statement_status(value: Optional[str]) -> Optional[BankStatementStatu
     try:
         return BankStatementStatus(value)
     except ValueError:
+        logger.warning("Invalid bank statement status value: %r", value)
         return None
 
 
@@ -93,11 +115,16 @@ def _statement_status_label(status: BankStatementStatus) -> str:
 
 
 def _parse_reconciliation_status(value: Optional[str]) -> Optional[ReconciliationStatus]:
+    """Parse reconciliation status enum value.
+
+    Logs warning on parse failure for debugging.
+    """
     if not value:
         return None
     try:
         return ReconciliationStatus(value)
     except ValueError:
+        logger.warning("Invalid reconciliation status value: %r", value)
         return None
 
 
@@ -961,6 +988,298 @@ class BankingWebService:
             "bank_accounts": bank_account_options,
             "payees": payee_options,
         }
+
+    def list_accounts_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        search: Optional[str],
+        status: Optional[str],
+        page: int,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "Bank Accounts", "banking")
+        context.update(
+            self.list_accounts_context(
+                db,
+                str(auth.organization_id),
+                search=search,
+                status=status,
+                page=page,
+            )
+        )
+        return templates.TemplateResponse(request, "ifrs/banking/accounts.html", context)
+
+    def account_new_form_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "New Bank Account", "banking")
+        context.update(self.account_form_context(db, str(auth.organization_id)))
+        return templates.TemplateResponse(request, "ifrs/banking/account_form.html", context)
+
+    def account_detail_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        account_id: str,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "Bank Account Details", "banking")
+        context.update(
+            self.account_detail_context(
+                db,
+                str(auth.organization_id),
+                account_id,
+            )
+        )
+        return templates.TemplateResponse(request, "ifrs/banking/account_detail.html", context)
+
+    def account_edit_form_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        account_id: str,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "Edit Bank Account", "banking")
+        context.update(
+            self.account_form_context(
+                db,
+                str(auth.organization_id),
+                account_id,
+            )
+        )
+        return templates.TemplateResponse(request, "ifrs/banking/account_form.html", context)
+
+    def list_statements_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        account_id: Optional[str],
+        status: Optional[str],
+        start_date: Optional[str],
+        end_date: Optional[str],
+        page: int,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "Bank Statements", "banking")
+        context.update(
+            self.list_statements_context(
+                db,
+                str(auth.organization_id),
+                account_id=account_id,
+                status=status,
+                start_date=start_date,
+                end_date=end_date,
+                page=page,
+            )
+        )
+        return templates.TemplateResponse(request, "ifrs/banking/statements.html", context)
+
+    def statement_import_form_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "Import Bank Statement", "banking")
+        context.update(self.statement_import_context(db, str(auth.organization_id)))
+        return templates.TemplateResponse(request, "ifrs/banking/statement_import.html", context)
+
+    def statement_detail_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        statement_id: str,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "Bank Statement", "banking")
+        context.update(
+            self.statement_detail_context(
+                db,
+                str(auth.organization_id),
+                statement_id,
+            )
+        )
+        return templates.TemplateResponse(request, "ifrs/banking/statement_detail.html", context)
+
+    def list_reconciliations_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        account_id: Optional[str],
+        status: Optional[str],
+        start_date: Optional[str],
+        end_date: Optional[str],
+        page: int,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "Bank Reconciliations", "banking")
+        context.update(
+            self.list_reconciliations_context(
+                db,
+                str(auth.organization_id),
+                account_id=account_id,
+                status=status,
+                start_date=start_date,
+                end_date=end_date,
+                page=page,
+            )
+        )
+        return templates.TemplateResponse(
+            request,
+            "ifrs/banking/reconciliations.html",
+            context,
+        )
+
+    def reconciliation_new_form_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "New Reconciliation", "banking")
+        context.update(self.reconciliation_form_context(db, str(auth.organization_id)))
+        return templates.TemplateResponse(
+            request,
+            "ifrs/banking/reconciliation_form.html",
+            context,
+        )
+
+    def reconciliation_detail_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        reconciliation_id: str,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "Bank Reconciliation", "banking")
+        context.update(
+            self.reconciliation_detail_context(
+                db,
+                str(auth.organization_id),
+                reconciliation_id,
+            )
+        )
+        return templates.TemplateResponse(request, "ifrs/banking/reconciliation.html", context)
+
+    def reconciliation_report_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        reconciliation_id: str,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "Reconciliation Report", "banking")
+        context.update(
+            self.reconciliation_report_context(
+                db,
+                str(auth.organization_id),
+                reconciliation_id,
+            )
+        )
+        return templates.TemplateResponse(
+            request,
+            "ifrs/banking/reconciliation_report.html",
+            context,
+        )
+
+    def list_payees_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        search: Optional[str],
+        payee_type: Optional[str],
+        page: int,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "Payees", "banking")
+        context.update(
+            self.list_payees_context(
+                db,
+                str(auth.organization_id),
+                search=search,
+                payee_type=payee_type,
+                page=page,
+            )
+        )
+        return templates.TemplateResponse(request, "ifrs/banking/payees.html", context)
+
+    def payee_new_form_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "New Payee", "banking")
+        context.update(self.payee_form_context(db, str(auth.organization_id)))
+        return templates.TemplateResponse(request, "ifrs/banking/payee_form.html", context)
+
+    def payee_detail_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        payee_id: str,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "Edit Payee", "banking")
+        context.update(
+            self.payee_form_context(
+                db,
+                str(auth.organization_id),
+                payee_id=payee_id,
+            )
+        )
+        return templates.TemplateResponse(request, "ifrs/banking/payee_form.html", context)
+
+    def list_rules_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        rule_type: Optional[str],
+        page: int,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "Transaction Rules", "banking")
+        context.update(
+            self.list_rules_context(
+                db,
+                str(auth.organization_id),
+                rule_type=rule_type,
+                page=page,
+            )
+        )
+        return templates.TemplateResponse(request, "ifrs/banking/rules.html", context)
+
+    def rule_new_form_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "New Transaction Rule", "banking")
+        context.update(self.rule_form_context(db, str(auth.organization_id)))
+        return templates.TemplateResponse(request, "ifrs/banking/rule_form.html", context)
+
+    def rule_detail_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        rule_id: str,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "Edit Transaction Rule", "banking")
+        context.update(
+            self.rule_form_context(
+                db,
+                str(auth.organization_id),
+                rule_id=rule_id,
+            )
+        )
+        return templates.TemplateResponse(request, "ifrs/banking/rule_form.html", context)
 
 
 banking_web_service = BankingWebService()

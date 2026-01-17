@@ -18,10 +18,12 @@ from app.db import SessionLocal
 from app.schemas.ifrs.common import ListResponse, PostingResultSchema
 from app.services.ifrs.inv import (
     item_service,
+    item_category_service,
     inventory_transaction_service,
     inv_posting_adapter,
     inventory_balance_service,
     ItemInput,
+    ItemCategoryInput,
     TransactionInput,
 )
 
@@ -107,10 +109,17 @@ class TransactionCreate(BaseModel):
 
     item_id: UUID
     warehouse_id: UUID
+    location_id: Optional[UUID] = None
+    lot_id: Optional[UUID] = None
+    to_warehouse_id: Optional[UUID] = None
+    to_location_id: Optional[UUID] = None
     transaction_type: str = Field(max_length=30)
     transaction_date: date
     quantity: Decimal
     unit_cost: Optional[Decimal] = None
+    uom: Optional[str] = None
+    currency_code: Optional[str] = None
+    reason_code: Optional[str] = None
     reference_type: Optional[str] = None
     reference_id: Optional[UUID] = None
     notes: Optional[str] = None
@@ -125,6 +134,10 @@ class TransactionRead(BaseModel):
     organization_id: UUID
     item_id: UUID
     warehouse_id: UUID
+    location_id: Optional[UUID] = None
+    lot_id: Optional[UUID] = None
+    to_warehouse_id: Optional[UUID] = None
+    to_location_id: Optional[UUID] = None
     transaction_type: str
     transaction_date: date
     quantity: Decimal
@@ -133,6 +146,7 @@ class TransactionRead(BaseModel):
     quantity_before: Decimal
     quantity_after: Decimal
     reference: Optional[str] = None
+    reason_code: Optional[str] = None
 
 
 class CostingResultRead(BaseModel):
@@ -154,6 +168,97 @@ class InventoryValuationRead(BaseModel):
     total_quantity: Decimal
     total_value: Decimal
     items: list[CostingResultRead]
+
+
+# =============================================================================
+# Item Categories
+# =============================================================================
+
+class ItemCategoryCreate(BaseModel):
+    """Create item category request."""
+    category_code: str = Field(max_length=30)
+    category_name: str = Field(max_length=100)
+    inventory_account_id: UUID
+    cogs_account_id: UUID
+    revenue_account_id: UUID
+    inventory_adjustment_account_id: UUID
+    description: Optional[str] = None
+    parent_category_id: Optional[UUID] = None
+    purchase_variance_account_id: Optional[UUID] = None
+
+
+class ItemCategoryRead(BaseModel):
+    """Item category response."""
+    model_config = ConfigDict(from_attributes=True)
+
+    category_id: UUID
+    organization_id: UUID
+    category_code: str
+    category_name: str
+    description: Optional[str]
+    parent_category_id: Optional[UUID]
+    inventory_account_id: UUID
+    cogs_account_id: UUID
+    revenue_account_id: UUID
+    inventory_adjustment_account_id: UUID
+    purchase_variance_account_id: Optional[UUID]
+    is_active: bool
+
+
+@router.post("/categories", response_model=ItemCategoryRead, status_code=status.HTTP_201_CREATED)
+def create_item_category(
+    payload: ItemCategoryCreate,
+    organization_id: UUID = Query(...),
+    db: Session = Depends(get_db),
+):
+    """Create a new item category."""
+    input_data = ItemCategoryInput(
+        category_code=payload.category_code,
+        category_name=payload.category_name,
+        inventory_account_id=payload.inventory_account_id,
+        cogs_account_id=payload.cogs_account_id,
+        revenue_account_id=payload.revenue_account_id,
+        inventory_adjustment_account_id=payload.inventory_adjustment_account_id,
+        description=payload.description,
+        parent_category_id=payload.parent_category_id,
+        purchase_variance_account_id=payload.purchase_variance_account_id,
+    )
+    return item_category_service.create_category(db, organization_id, input_data)
+
+
+@router.get("/categories/{category_id}", response_model=ItemCategoryRead)
+def get_item_category(
+    category_id: UUID,
+    db: Session = Depends(get_db),
+):
+    """Get an item category by ID."""
+    return item_category_service.get(db, str(category_id))
+
+
+@router.get("/categories", response_model=ListResponse[ItemCategoryRead])
+def list_item_categories(
+    organization_id: UUID = Query(...),
+    is_active: Optional[bool] = None,
+    search: Optional[str] = Query(default=None, description="Search by code or name"),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+):
+    """List item categories with filters."""
+    categories = item_category_service.list(
+        db=db,
+        organization_id=str(organization_id),
+        is_active=is_active,
+        search=search,
+        limit=limit,
+        offset=offset,
+    )
+    return ListResponse(
+        items=categories,
+        count=len(categories),
+        limit=limit,
+        offset=offset,
+    )
 
 
 # =============================================================================
@@ -262,10 +367,15 @@ def create_inventory_transaction(
         fiscal_period_id=fiscal_period_id,
         item_id=payload.item_id,
         warehouse_id=payload.warehouse_id,
+        location_id=payload.location_id,
+        lot_id=payload.lot_id,
+        to_warehouse_id=payload.to_warehouse_id,
+        to_location_id=payload.to_location_id,
         quantity=payload.quantity,
         unit_cost=payload.unit_cost or Decimal("0"),
-        uom=uom,
-        currency_code=currency_code,
+        uom=payload.uom or uom,
+        currency_code=payload.currency_code or currency_code,
+        reason_code=payload.reason_code,
         source_document_type=payload.reference_type,
         source_document_id=payload.reference_id,
         reference=payload.notes,
@@ -496,6 +606,7 @@ def deallocate_stock(
     item_id: UUID = Query(...),
     quantity: Decimal = Query(...),
     organization_id: UUID = Query(...),
+    warehouse_id: Optional[UUID] = None,
     lot_id: Optional[UUID] = None,
     db: Session = Depends(get_db),
 ):
@@ -505,6 +616,7 @@ def deallocate_stock(
         organization_id=organization_id,
         item_id=item_id,
         quantity=quantity,
+        warehouse_id=warehouse_id,
         lot_id=lot_id,
     )
     return {"success": success}

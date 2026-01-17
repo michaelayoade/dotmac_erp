@@ -85,13 +85,16 @@
                 </div>
 
                 <div>
-                    <label class="form-label">Warehouse</label>
-                    <select x-model="formData.warehouse_id" class="form-select">
-                        <option value="">Select warehouse (optional)</option>
+                    <label class="form-label">
+                        Warehouse <span class="text-rose-500">*</span>
+                    </label>
+                    <select x-model="formData.warehouse_id" class="form-select" required>
+                        <option value="">Select warehouse</option>
                         {% for w in warehouse_list %}
                         <option value="{{ w.warehouse_id }}">{{ w.warehouse_code }} - {{ w.warehouse_name }}</option>
                         {% endfor %}
                     </select>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Required for inventory tracking</p>
                 </div>
 
                 <div class="sm:col-span-2">
@@ -280,6 +283,12 @@ function goodsReceiptForm() {
             const linesToReceive = this.lines.filter(l => l.quantity_to_receive > 0);
             if (linesToReceive.length === 0) {
                 alert('Please enter quantities to receive');
+                return;
+            }
+
+            // Validate warehouse is selected for inventory tracking
+            if (!this.formData.warehouse_id) {
+                alert('Please select a warehouse. This is required for inventory tracking.');
                 return;
             }
 

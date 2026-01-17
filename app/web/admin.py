@@ -4,63 +4,15 @@ Admin web routes.
 Provides admin dashboard and management pages with admin role requirement.
 """
 
-from datetime import datetime
-from urllib.parse import urlencode
-
-from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import APIRouter, Depends, Form, Query, Request
+from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
-from app.db import SessionLocal
 from app.services.admin.web import admin_web_service
-from app.templates import templates
-from app.web.deps import brand_context, WebAuthContext, optional_web_auth
+from app.web.deps import get_db, optional_web_auth, WebAuthContext
 
 
 router = APIRouter(prefix="/admin", tags=["admin-web"])
-
-
-def get_db():
-    """Get database session."""
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
-def _request_path_with_query(request: Request) -> str:
-    if request.url.query:
-        return f"{request.url.path}?{request.url.query}"
-    return request.url.path
-
-
-def _admin_login_redirect(next_path: str) -> RedirectResponse:
-    return RedirectResponse(
-        url=f"/admin/login?{urlencode({'next': next_path})}",
-        status_code=302,
-    )
-
-
-def require_admin_web_auth(
-    request: Request,
-    auth: WebAuthContext = Depends(optional_web_auth),
-) -> WebAuthContext | RedirectResponse:
-    """
-    Require admin role for web routes.
-
-    Redirects to admin login if not authenticated or not admin.
-    """
-    if not auth.is_authenticated:
-        return _admin_login_redirect(_request_path_with_query(request))
-
-    if "admin" not in auth.roles:
-        raise HTTPException(
-            status_code=403,
-            detail="Admin access required",
-        )
-
-    return auth
 
 
 @router.get("", response_class=HTMLResponse)
@@ -71,23 +23,7 @@ def admin_dashboard(
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
     """Admin dashboard page."""
-    auth_or_redirect = require_admin_web_auth(request, auth)
-    if isinstance(auth_or_redirect, RedirectResponse):
-        return auth_or_redirect
-    context = admin_web_service.dashboard_context(db)
-
-    return templates.TemplateResponse(
-        request,
-        "admin/dashboard.html",
-        {
-            "title": "Admin Dashboard",
-            "page_title": "Dashboard",
-            "brand": brand_context(),
-            "user": auth.user,
-            "active_page": "dashboard",
-            **context,
-        },
-    )
+    return admin_web_service.dashboard_response(request, db, auth)
 
 
 @router.get("/users", response_class=HTMLResponse)
@@ -100,23 +36,7 @@ def admin_users(
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
     """Admin users list page."""
-    auth_or_redirect = require_admin_web_auth(request, auth)
-    if isinstance(auth_or_redirect, RedirectResponse):
-        return auth_or_redirect
-    context = admin_web_service.users_context(db, search, status, page)
-
-    return templates.TemplateResponse(
-        request,
-        "admin/users.html",
-        {
-            "title": "Users",
-            "page_title": "Users",
-            "brand": brand_context(),
-            "user": auth.user,
-            "active_page": "users",
-            **context,
-        },
-    )
+    return admin_web_service.users_response(request, db, auth, page, search, status)
 
 
 @router.get("/users/new", response_class=HTMLResponse)
@@ -126,25 +46,7 @@ def admin_users_new(
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
     """Show create user form."""
-    auth_or_redirect = require_admin_web_auth(request, auth)
-    if isinstance(auth_or_redirect, RedirectResponse):
-        return auth_or_redirect
-    context = admin_web_service.user_form_context(db)
-
-    return templates.TemplateResponse(
-        request,
-        "admin/user_form.html",
-        {
-            "title": "Add New User",
-            "page_title": "Add New User",
-            "brand": brand_context(),
-            "user": auth.user,
-            "active_page": "users",
-            "error": None,
-            "success": None,
-            **context,
-        },
-    )
+    return admin_web_service.users_new_response(request, db, auth)
 
 
 @router.post("/users/new", response_class=HTMLResponse)
@@ -166,58 +68,23 @@ def admin_users_create(
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
     """Handle create user form submission."""
-    auth_or_redirect = require_admin_web_auth(request, auth)
-    if isinstance(auth_or_redirect, RedirectResponse):
-        return auth_or_redirect
-    person, error = admin_web_service.create_user(
-        db=db,
-        first_name=first_name,
-        last_name=last_name,
-        email=email,
-        username=username,
-        organization_id=organization_id,
-        password=password,
-        password_confirm=password_confirm,
-        display_name=display_name,
-        phone=phone,
-        status=status,
-        must_change_password=must_change_password,
-        role_ids=roles,
+    return admin_web_service.users_create_response(
+        request,
+        db,
+        auth,
+        first_name,
+        last_name,
+        email,
+        username,
+        organization_id,
+        password,
+        password_confirm,
+        display_name,
+        phone,
+        status,
+        must_change_password,
+        roles,
     )
-
-    if error:
-        context = admin_web_service.user_form_context(db)
-        context["user_data"] = admin_web_service.user_data_from_payload(
-            {
-                "first_name": first_name,
-                "last_name": last_name,
-                "display_name": display_name,
-                "email": email,
-                "phone": phone,
-                "status": status,
-                "organization_id": organization_id,
-                "username": username,
-                "must_change_password": must_change_password,
-                "roles": roles,
-            }
-        )
-        return templates.TemplateResponse(
-            request,
-            "admin/user_form.html",
-            {
-                "title": "Add New User",
-                "page_title": "Add New User",
-                "brand": brand_context(),
-                "user": auth.user,
-                "active_page": "users",
-                "error": error,
-                "success": None,
-                **context,
-            },
-            status_code=400,
-        )
-
-    return RedirectResponse(url="/admin/users?created=1", status_code=302)
 
 
 @router.get("/users/{user_id}", response_class=HTMLResponse)
@@ -228,7 +95,7 @@ def admin_users_view(
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
     """View user details (same as edit)."""
-    return admin_users_edit(request, user_id, db, auth)
+    return admin_web_service.users_view_response(request, db, auth, user_id)
 
 
 @router.get("/users/{user_id}/edit", response_class=HTMLResponse)
@@ -239,25 +106,7 @@ def admin_users_edit(
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
     """Show edit user form."""
-    auth_or_redirect = require_admin_web_auth(request, auth)
-    if isinstance(auth_or_redirect, RedirectResponse):
-        return auth_or_redirect
-    context = admin_web_service.user_form_context(db, user_id)
-
-    return templates.TemplateResponse(
-        request,
-        "admin/user_form.html",
-        {
-            "title": f"Edit User - {context['user_data']['first_name']} {context['user_data']['last_name']}",
-            "page_title": "Edit User",
-            "brand": brand_context(),
-            "user": auth.user,
-            "active_page": "users",
-            "error": None,
-            "success": None,
-            **context,
-        },
-    )
+    return admin_web_service.users_edit_response(request, db, auth, user_id)
 
 
 @router.post("/users/{user_id}/edit", response_class=HTMLResponse)
@@ -281,75 +130,24 @@ def admin_users_update(
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
     """Handle edit user form submission."""
-    auth_or_redirect = require_admin_web_auth(request, auth)
-    if isinstance(auth_or_redirect, RedirectResponse):
-        return auth_or_redirect
-    person, error = admin_web_service.update_user(
-        db=db,
-        user_id=user_id,
-        first_name=first_name,
-        last_name=last_name,
-        email=email,
-        username=username,
-        organization_id=organization_id,
-        password=password,
-        password_confirm=password_confirm,
-        display_name=display_name,
-        phone=phone,
-        status=status,
-        must_change_password=must_change_password,
-        email_verified=email_verified,
-        role_ids=roles,
-    )
-
-    context = admin_web_service.user_form_context(db, user_id)
-
-    if error:
-        context["user_data"] = admin_web_service.user_data_from_payload(
-            {
-                "first_name": first_name,
-                "last_name": last_name,
-                "display_name": display_name,
-                "email": email,
-                "phone": phone,
-                "status": status,
-                "organization_id": organization_id,
-                "username": username,
-                "must_change_password": must_change_password,
-                "email_verified": email_verified,
-                "roles": roles,
-            },
-            user_id=user_id,
-        )
-        return templates.TemplateResponse(
-            request,
-            "admin/user_form.html",
-            {
-                "title": f"Edit User - {first_name} {last_name}",
-                "page_title": "Edit User",
-                "brand": brand_context(),
-                "user": auth.user,
-                "active_page": "users",
-                "error": error,
-                "success": None,
-                **context,
-            },
-            status_code=400,
-        )
-
-    return templates.TemplateResponse(
+    return admin_web_service.users_update_response(
         request,
-        "admin/user_form.html",
-        {
-            "title": f"Edit User - {first_name} {last_name}",
-            "page_title": "Edit User",
-            "brand": brand_context(),
-            "user": auth.user,
-            "active_page": "users",
-            "error": None,
-            "success": "User updated successfully",
-            **context,
-        },
+        db,
+        auth,
+        user_id,
+        first_name,
+        last_name,
+        email,
+        username,
+        organization_id,
+        password,
+        password_confirm,
+        display_name,
+        phone,
+        status,
+        must_change_password,
+        email_verified,
+        roles,
     )
 
 
@@ -361,15 +159,7 @@ def admin_users_delete(
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
     """Delete a user."""
-    auth_or_redirect = require_admin_web_auth(request, auth)
-    if isinstance(auth_or_redirect, RedirectResponse):
-        return auth_or_redirect
-    error = admin_web_service.delete_user(db, user_id)
-
-    if error:
-        raise HTTPException(status_code=400, detail=error)
-
-    return RedirectResponse(url="/admin/users?deleted=1", status_code=302)
+    return admin_web_service.users_delete_response(request, db, auth, user_id)
 
 
 @router.get("/roles", response_class=HTMLResponse)
@@ -382,28 +172,7 @@ def admin_roles(
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
     """Admin roles management page."""
-    auth_or_redirect = require_admin_web_auth(request, auth)
-    if isinstance(auth_or_redirect, RedirectResponse):
-        return auth_or_redirect
-    context = admin_web_service.roles_context(
-        db=db,
-        search=search,
-        status=status,
-        page=page,
-    )
-
-    return templates.TemplateResponse(
-        request,
-        "admin/roles.html",
-        {
-            "title": "Roles",
-            "page_title": "Roles & Permissions",
-            "brand": brand_context(),
-            "user": auth.user,
-            "active_page": "roles",
-            **context,
-        },
-    )
+    return admin_web_service.roles_response(request, db, auth, page, search, status)
 
 
 @router.get("/roles/new", response_class=HTMLResponse)
@@ -413,25 +182,7 @@ def admin_roles_new(
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
     """Show create role form."""
-    auth_or_redirect = require_admin_web_auth(request, auth)
-    if isinstance(auth_or_redirect, RedirectResponse):
-        return auth_or_redirect
-    context = admin_web_service.role_form_context(db)
-
-    return templates.TemplateResponse(
-        request,
-        "admin/role_form.html",
-        {
-            "title": "Create Role",
-            "page_title": "Create Role",
-            "brand": brand_context(),
-            "user": auth.user,
-            "active_page": "roles",
-            "error": None,
-            "success": None,
-            **context,
-        },
-    )
+    return admin_web_service.roles_new_response(request, db, auth)
 
 
 @router.post("/roles/new", response_class=HTMLResponse)
@@ -445,36 +196,15 @@ def admin_roles_create(
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
     """Handle create role form submission."""
-    auth_or_redirect = require_admin_web_auth(request, auth)
-    if isinstance(auth_or_redirect, RedirectResponse):
-        return auth_or_redirect
-    role, error = admin_web_service.create_role(
-        db=db,
-        name=name,
-        description=description,
-        is_active=is_active == "1",
-        permission_ids=permissions,
+    return admin_web_service.roles_create_response(
+        request,
+        db,
+        auth,
+        name,
+        description,
+        is_active,
+        permissions,
     )
-
-    if error:
-        context = admin_web_service.role_form_context(db)
-        return templates.TemplateResponse(
-            request,
-            "admin/role_form.html",
-            {
-                "title": "Create Role",
-                "page_title": "Create Role",
-                "brand": brand_context(),
-                "user": auth.user,
-                "active_page": "roles",
-                "error": error,
-                "success": None,
-                **context,
-            },
-            status_code=400,
-        )
-
-    return RedirectResponse(url="/admin/roles?created=1", status_code=302)
 
 
 @router.get("/roles/{role_id}", response_class=HTMLResponse)
@@ -485,7 +215,7 @@ def admin_roles_view(
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
     """View role details (same as edit)."""
-    return admin_roles_edit(request, role_id, db, auth)
+    return admin_web_service.roles_view_response(request, db, auth, role_id)
 
 
 @router.get("/roles/{role_id}/edit", response_class=HTMLResponse)
@@ -496,28 +226,7 @@ def admin_roles_edit(
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
     """Show edit role form."""
-    auth_or_redirect = require_admin_web_auth(request, auth)
-    if isinstance(auth_or_redirect, RedirectResponse):
-        return auth_or_redirect
-    context = admin_web_service.role_form_context(db, role_id)
-
-    if not context.get("role_data"):
-        raise HTTPException(status_code=404, detail="Role not found")
-
-    return templates.TemplateResponse(
-        request,
-        "admin/role_form.html",
-        {
-            "title": f"Edit Role - {context['role_data']['name']}",
-            "page_title": "Edit Role",
-            "brand": brand_context(),
-            "user": auth.user,
-            "active_page": "roles",
-            "error": None,
-            "success": None,
-            **context,
-        },
-    )
+    return admin_web_service.roles_edit_response(request, db, auth, role_id)
 
 
 @router.post("/roles/{role_id}/edit", response_class=HTMLResponse)
@@ -532,50 +241,15 @@ def admin_roles_update(
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
     """Handle edit role form submission."""
-    auth_or_redirect = require_admin_web_auth(request, auth)
-    if isinstance(auth_or_redirect, RedirectResponse):
-        return auth_or_redirect
-    role, error = admin_web_service.update_role(
-        db=db,
-        role_id=role_id,
-        name=name,
-        description=description,
-        is_active=is_active == "1",
-        permission_ids=permissions,
-    )
-
-    context = admin_web_service.role_form_context(db, role_id)
-
-    if error:
-        return templates.TemplateResponse(
-            request,
-            "admin/role_form.html",
-            {
-                "title": f"Edit Role - {name}",
-                "page_title": "Edit Role",
-                "brand": brand_context(),
-                "user": auth.user,
-                "active_page": "roles",
-                "error": error,
-                "success": None,
-                **context,
-            },
-            status_code=400,
-        )
-
-    return templates.TemplateResponse(
+    return admin_web_service.roles_update_response(
         request,
-        "admin/role_form.html",
-        {
-            "title": f"Edit Role - {name}",
-            "page_title": "Edit Role",
-            "brand": brand_context(),
-            "user": auth.user,
-            "active_page": "roles",
-            "error": None,
-            "success": "Role updated successfully",
-            **context,
-        },
+        db,
+        auth,
+        role_id,
+        name,
+        description,
+        is_active,
+        permissions,
     )
 
 
@@ -587,18 +261,7 @@ def admin_roles_delete(
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
     """Delete a role."""
-    auth_or_redirect = require_admin_web_auth(request, auth)
-    if isinstance(auth_or_redirect, RedirectResponse):
-        return auth_or_redirect
-    error = admin_web_service.delete_role(db, role_id)
-
-    if error:
-        raise HTTPException(status_code=400, detail=error)
-
-    return RedirectResponse(url="/admin/roles?deleted=1", status_code=302)
-
-
-# --- Permissions Routes ---
+    return admin_web_service.roles_delete_response(request, db, auth, role_id)
 
 
 @router.get("/permissions", response_class=HTMLResponse)
@@ -611,28 +274,7 @@ def admin_permissions(
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
     """Admin permissions management page."""
-    auth_or_redirect = require_admin_web_auth(request, auth)
-    if isinstance(auth_or_redirect, RedirectResponse):
-        return auth_or_redirect
-    context = admin_web_service.permissions_context(
-        db=db,
-        search=search,
-        status=status,
-        page=page,
-    )
-
-    return templates.TemplateResponse(
-        request,
-        "admin/permissions.html",
-        {
-            "title": "Permissions",
-            "page_title": "Permissions",
-            "brand": brand_context(),
-            "user": auth.user,
-            "active_page": "permissions",
-            **context,
-        },
-    )
+    return admin_web_service.permissions_response(request, db, auth, page, search, status)
 
 
 @router.get("/permissions/new", response_class=HTMLResponse)
@@ -642,25 +284,7 @@ def admin_permissions_new(
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
     """Show create permission form."""
-    auth_or_redirect = require_admin_web_auth(request, auth)
-    if isinstance(auth_or_redirect, RedirectResponse):
-        return auth_or_redirect
-    context = admin_web_service.permission_form_context(db)
-
-    return templates.TemplateResponse(
-        request,
-        "admin/permission_form.html",
-        {
-            "title": "Create Permission",
-            "page_title": "Create Permission",
-            "brand": brand_context(),
-            "user": auth.user,
-            "active_page": "permissions",
-            "error": None,
-            "success": None,
-            **context,
-        },
-    )
+    return admin_web_service.permissions_new_response(request, db, auth)
 
 
 @router.post("/permissions/new", response_class=HTMLResponse)
@@ -673,35 +297,14 @@ def admin_permissions_create(
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
     """Handle create permission form submission."""
-    auth_or_redirect = require_admin_web_auth(request, auth)
-    if isinstance(auth_or_redirect, RedirectResponse):
-        return auth_or_redirect
-    permission, error = admin_web_service.create_permission(
-        db=db,
-        key=key,
-        description=description,
-        is_active=is_active == "1",
+    return admin_web_service.permissions_create_response(
+        request,
+        db,
+        auth,
+        key,
+        description,
+        is_active,
     )
-
-    if error:
-        context = admin_web_service.permission_form_context(db)
-        return templates.TemplateResponse(
-            request,
-            "admin/permission_form.html",
-            {
-                "title": "Create Permission",
-                "page_title": "Create Permission",
-                "brand": brand_context(),
-                "user": auth.user,
-                "active_page": "permissions",
-                "error": error,
-                "success": None,
-                **context,
-            },
-            status_code=400,
-        )
-
-    return RedirectResponse(url="/admin/permissions?created=1", status_code=302)
 
 
 @router.get("/permissions/{permission_id}", response_class=HTMLResponse)
@@ -712,7 +315,7 @@ def admin_permissions_view(
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
     """View permission details (same as edit)."""
-    return admin_permissions_edit(request, permission_id, db, auth)
+    return admin_web_service.permissions_view_response(request, db, auth, permission_id)
 
 
 @router.get("/permissions/{permission_id}/edit", response_class=HTMLResponse)
@@ -723,28 +326,7 @@ def admin_permissions_edit(
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
     """Show edit permission form."""
-    auth_or_redirect = require_admin_web_auth(request, auth)
-    if isinstance(auth_or_redirect, RedirectResponse):
-        return auth_or_redirect
-    context = admin_web_service.permission_form_context(db, permission_id)
-
-    if not context.get("permission_data"):
-        raise HTTPException(status_code=404, detail="Permission not found")
-
-    return templates.TemplateResponse(
-        request,
-        "admin/permission_form.html",
-        {
-            "title": f"Edit Permission - {context['permission_data']['key']}",
-            "page_title": "Edit Permission",
-            "brand": brand_context(),
-            "user": auth.user,
-            "active_page": "permissions",
-            "error": None,
-            "success": None,
-            **context,
-        },
-    )
+    return admin_web_service.permissions_edit_response(request, db, auth, permission_id)
 
 
 @router.post("/permissions/{permission_id}/edit", response_class=HTMLResponse)
@@ -758,49 +340,14 @@ def admin_permissions_update(
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
     """Handle edit permission form submission."""
-    auth_or_redirect = require_admin_web_auth(request, auth)
-    if isinstance(auth_or_redirect, RedirectResponse):
-        return auth_or_redirect
-    permission, error = admin_web_service.update_permission(
-        db=db,
-        permission_id=permission_id,
-        key=key,
-        description=description,
-        is_active=is_active == "1",
-    )
-
-    context = admin_web_service.permission_form_context(db, permission_id)
-
-    if error:
-        return templates.TemplateResponse(
-            request,
-            "admin/permission_form.html",
-            {
-                "title": f"Edit Permission - {key}",
-                "page_title": "Edit Permission",
-                "brand": brand_context(),
-                "user": auth.user,
-                "active_page": "permissions",
-                "error": error,
-                "success": None,
-                **context,
-            },
-            status_code=400,
-        )
-
-    return templates.TemplateResponse(
+    return admin_web_service.permissions_update_response(
         request,
-        "admin/permission_form.html",
-        {
-            "title": f"Edit Permission - {key}",
-            "page_title": "Edit Permission",
-            "brand": brand_context(),
-            "user": auth.user,
-            "active_page": "permissions",
-            "error": None,
-            "success": "Permission updated successfully",
-            **context,
-        },
+        db,
+        auth,
+        permission_id,
+        key,
+        description,
+        is_active,
     )
 
 
@@ -812,15 +359,7 @@ def admin_permissions_delete(
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
     """Delete a permission."""
-    auth_or_redirect = require_admin_web_auth(request, auth)
-    if isinstance(auth_or_redirect, RedirectResponse):
-        return auth_or_redirect
-    error = admin_web_service.delete_permission(db, permission_id)
-
-    if error:
-        raise HTTPException(status_code=400, detail=error)
-
-    return RedirectResponse(url="/admin/permissions?deleted=1", status_code=302)
+    return admin_web_service.permissions_delete_response(request, db, auth, permission_id)
 
 
 @router.get("/organizations", response_class=HTMLResponse)
@@ -833,28 +372,7 @@ def admin_organizations(
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
     """Admin organizations management page."""
-    auth_or_redirect = require_admin_web_auth(request, auth)
-    if isinstance(auth_or_redirect, RedirectResponse):
-        return auth_or_redirect
-    context = admin_web_service.organizations_context(
-        db=db,
-        search=search,
-        status=status,
-        page=page,
-    )
-
-    return templates.TemplateResponse(
-        request,
-        "admin/organizations.html",
-        {
-            "title": "Organizations",
-            "page_title": "Organizations",
-            "brand": brand_context(),
-            "user": auth.user,
-            "active_page": "organizations",
-            **context,
-        },
-    )
+    return admin_web_service.organizations_response(request, db, auth, page, search, status)
 
 
 @router.get("/organizations/new", response_class=HTMLResponse)
@@ -864,28 +382,7 @@ def admin_organizations_new(
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
     """Show create organization form."""
-    auth_or_redirect = require_admin_web_auth(request, auth)
-    if isinstance(auth_or_redirect, RedirectResponse):
-        return auth_or_redirect
-    context = admin_web_service.organization_form_context(
-        db,
-        default_currency_org_id=str(auth.organization_id) if auth.organization_id else None,
-    )
-
-    return templates.TemplateResponse(
-        request,
-        "admin/organization_form.html",
-        {
-            "title": "Create Organization",
-            "page_title": "Create Organization",
-            "brand": brand_context(),
-            "user": auth.user,
-            "active_page": "organizations",
-            "error": None,
-            "success": None,
-            **context,
-        },
-    )
+    return admin_web_service.organizations_new_response(request, db, auth)
 
 
 @router.post("/organizations/new", response_class=HTMLResponse)
@@ -910,50 +407,26 @@ def admin_organizations_create(
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
     """Handle create organization form submission."""
-    auth_or_redirect = require_admin_web_auth(request, auth)
-    if isinstance(auth_or_redirect, RedirectResponse):
-        return auth_or_redirect
-    organization, error = admin_web_service.create_organization(
-        db=db,
-        organization_code=organization_code,
-        legal_name=legal_name,
-        functional_currency_code=functional_currency_code,
-        presentation_currency_code=presentation_currency_code,
-        fiscal_year_end_month=fiscal_year_end_month,
-        fiscal_year_end_day=fiscal_year_end_day,
-        trading_name=trading_name or None,
-        registration_number=registration_number or None,
-        tax_identification_number=tax_identification_number or None,
-        incorporation_date=incorporation_date or None,
-        jurisdiction_country_code=jurisdiction_country_code or None,
-        parent_organization_id=parent_organization_id or None,
-        consolidation_method=consolidation_method or None,
-        ownership_percentage=ownership_percentage or None,
-        is_active=is_active == "1",
+    return admin_web_service.organizations_create_response(
+        request,
+        db,
+        auth,
+        organization_code,
+        legal_name,
+        functional_currency_code,
+        presentation_currency_code,
+        fiscal_year_end_month,
+        fiscal_year_end_day,
+        trading_name,
+        registration_number,
+        tax_identification_number,
+        incorporation_date,
+        jurisdiction_country_code,
+        parent_organization_id,
+        consolidation_method,
+        ownership_percentage,
+        is_active,
     )
-
-    if error:
-        context = admin_web_service.organization_form_context(
-            db,
-            default_currency_org_id=str(auth.organization_id) if auth.organization_id else None,
-        )
-        return templates.TemplateResponse(
-            request,
-            "admin/organization_form.html",
-            {
-                "title": "Create Organization",
-                "page_title": "Create Organization",
-                "brand": brand_context(),
-                "user": auth.user,
-                "active_page": "organizations",
-                "error": error,
-                "success": None,
-                **context,
-            },
-            status_code=400,
-        )
-
-    return RedirectResponse(url="/admin/organizations?created=1", status_code=302)
 
 
 @router.get("/organizations/{org_id}", response_class=HTMLResponse)
@@ -964,7 +437,7 @@ def admin_organizations_view(
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
     """View organization details (same as edit)."""
-    return admin_organizations_edit(request, org_id, db, auth)
+    return admin_web_service.organizations_view_response(request, db, auth, org_id)
 
 
 @router.get("/organizations/{org_id}/edit", response_class=HTMLResponse)
@@ -975,28 +448,7 @@ def admin_organizations_edit(
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
     """Show edit organization form."""
-    auth_or_redirect = require_admin_web_auth(request, auth)
-    if isinstance(auth_or_redirect, RedirectResponse):
-        return auth_or_redirect
-    context = admin_web_service.organization_form_context(db, org_id)
-
-    if not context.get("organization_data"):
-        raise HTTPException(status_code=404, detail="Organization not found")
-
-    return templates.TemplateResponse(
-        request,
-        "admin/organization_form.html",
-        {
-            "title": f"Edit Organization - {context['organization_data']['legal_name']}",
-            "page_title": "Edit Organization",
-            "brand": brand_context(),
-            "user": auth.user,
-            "active_page": "organizations",
-            "error": None,
-            "success": None,
-            **context,
-        },
-    )
+    return admin_web_service.organizations_edit_response(request, db, auth, org_id)
 
 
 @router.post("/organizations/{org_id}/edit", response_class=HTMLResponse)
@@ -1022,61 +474,26 @@ def admin_organizations_update(
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
     """Handle edit organization form submission."""
-    auth_or_redirect = require_admin_web_auth(request, auth)
-    if isinstance(auth_or_redirect, RedirectResponse):
-        return auth_or_redirect
-    organization, error = admin_web_service.update_organization(
-        db=db,
-        organization_id=org_id,
-        organization_code=organization_code,
-        legal_name=legal_name,
-        functional_currency_code=functional_currency_code,
-        presentation_currency_code=presentation_currency_code,
-        fiscal_year_end_month=fiscal_year_end_month,
-        fiscal_year_end_day=fiscal_year_end_day,
-        trading_name=trading_name or None,
-        registration_number=registration_number or None,
-        tax_identification_number=tax_identification_number or None,
-        incorporation_date=incorporation_date or None,
-        jurisdiction_country_code=jurisdiction_country_code or None,
-        parent_organization_id=parent_organization_id or None,
-        consolidation_method=consolidation_method or None,
-        ownership_percentage=ownership_percentage or None,
-        is_active=is_active == "1",
-    )
-
-    context = admin_web_service.organization_form_context(db, org_id)
-
-    if error:
-        return templates.TemplateResponse(
-            request,
-            "admin/organization_form.html",
-            {
-                "title": f"Edit Organization - {legal_name}",
-                "page_title": "Edit Organization",
-                "brand": brand_context(),
-                "user": auth.user,
-                "active_page": "organizations",
-                "error": error,
-                "success": None,
-                **context,
-            },
-            status_code=400,
-        )
-
-    return templates.TemplateResponse(
+    return admin_web_service.organizations_update_response(
         request,
-        "admin/organization_form.html",
-        {
-            "title": f"Edit Organization - {legal_name}",
-            "page_title": "Edit Organization",
-            "brand": brand_context(),
-            "user": auth.user,
-            "active_page": "organizations",
-            "error": None,
-            "success": "Organization updated successfully",
-            **context,
-        },
+        db,
+        auth,
+        org_id,
+        organization_code,
+        legal_name,
+        functional_currency_code,
+        presentation_currency_code,
+        fiscal_year_end_month,
+        fiscal_year_end_day,
+        trading_name,
+        registration_number,
+        tax_identification_number,
+        incorporation_date,
+        jurisdiction_country_code,
+        parent_organization_id,
+        consolidation_method,
+        ownership_percentage,
+        is_active,
     )
 
 
@@ -1088,15 +505,7 @@ def admin_organizations_delete(
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
     """Delete an organization."""
-    auth_or_redirect = require_admin_web_auth(request, auth)
-    if isinstance(auth_or_redirect, RedirectResponse):
-        return auth_or_redirect
-    error = admin_web_service.delete_organization(db, org_id)
-
-    if error:
-        raise HTTPException(status_code=400, detail=error)
-
-    return RedirectResponse(url="/admin/organizations?deleted=1", status_code=302)
+    return admin_web_service.organizations_delete_response(request, db, auth, org_id)
 
 
 @router.get("/settings", response_class=HTMLResponse)
@@ -1110,29 +519,7 @@ def admin_settings(
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
     """Admin system settings page."""
-    auth_or_redirect = require_admin_web_auth(request, auth)
-    if isinstance(auth_or_redirect, RedirectResponse):
-        return auth_or_redirect
-    context = admin_web_service.settings_context(
-        db=db,
-        search=search,
-        domain=domain,
-        status=status,
-        page=page,
-    )
-
-    return templates.TemplateResponse(
-        request,
-        "admin/settings.html",
-        {
-            "title": "Settings",
-            "page_title": "System Settings",
-            "brand": brand_context(),
-            "user": auth.user,
-            "active_page": "settings",
-            **context,
-        },
-    )
+    return admin_web_service.settings_response(request, db, auth, page, search, status, domain)
 
 
 @router.get("/settings/new", response_class=HTMLResponse)
@@ -1142,25 +529,7 @@ def admin_settings_new(
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
     """Show create setting form."""
-    auth_or_redirect = require_admin_web_auth(request, auth)
-    if isinstance(auth_or_redirect, RedirectResponse):
-        return auth_or_redirect
-    context = admin_web_service.setting_form_context(db)
-
-    return templates.TemplateResponse(
-        request,
-        "admin/setting_form.html",
-        {
-            "title": "Create Setting",
-            "page_title": "Create Setting",
-            "brand": brand_context(),
-            "user": auth.user,
-            "active_page": "settings",
-            "error": None,
-            "success": None,
-            **context,
-        },
-    )
+    return admin_web_service.settings_new_response(request, db, auth)
 
 
 @router.post("/settings/new", response_class=HTMLResponse)
@@ -1176,38 +545,17 @@ def admin_settings_create(
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
     """Handle create setting form submission."""
-    auth_or_redirect = require_admin_web_auth(request, auth)
-    if isinstance(auth_or_redirect, RedirectResponse):
-        return auth_or_redirect
-    setting, error = admin_web_service.create_setting(
-        db=db,
-        domain=domain,
-        key=key,
-        value_type=value_type,
-        value=value,
-        is_secret=is_secret == "1",
-        is_active=is_active == "1",
+    return admin_web_service.settings_create_response(
+        request,
+        db,
+        auth,
+        domain,
+        key,
+        value_type,
+        value,
+        is_secret,
+        is_active,
     )
-
-    if error:
-        context = admin_web_service.setting_form_context(db)
-        return templates.TemplateResponse(
-            request,
-            "admin/setting_form.html",
-            {
-                "title": "Create Setting",
-                "page_title": "Create Setting",
-                "brand": brand_context(),
-                "user": auth.user,
-                "active_page": "settings",
-                "error": error,
-                "success": None,
-                **context,
-            },
-            status_code=400,
-        )
-
-    return RedirectResponse(url="/admin/settings?created=1", status_code=302)
 
 
 @router.get("/settings/{setting_id}", response_class=HTMLResponse)
@@ -1218,7 +566,7 @@ def admin_settings_view(
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
     """View setting details (same as edit)."""
-    return admin_settings_edit(request, setting_id, db, auth)
+    return admin_web_service.settings_view_response(request, db, auth, setting_id)
 
 
 @router.get("/settings/{setting_id}/edit", response_class=HTMLResponse)
@@ -1229,28 +577,7 @@ def admin_settings_edit(
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
     """Show edit setting form."""
-    auth_or_redirect = require_admin_web_auth(request, auth)
-    if isinstance(auth_or_redirect, RedirectResponse):
-        return auth_or_redirect
-    context = admin_web_service.setting_form_context(db, setting_id)
-
-    if not context.get("setting_data"):
-        raise HTTPException(status_code=404, detail="Setting not found")
-
-    return templates.TemplateResponse(
-        request,
-        "admin/setting_form.html",
-        {
-            "title": f"Edit Setting - {context['setting_data']['key']}",
-            "page_title": "Edit Setting",
-            "brand": brand_context(),
-            "user": auth.user,
-            "active_page": "settings",
-            "error": None,
-            "success": None,
-            **context,
-        },
-    )
+    return admin_web_service.settings_edit_response(request, db, auth, setting_id)
 
 
 @router.post("/settings/{setting_id}/edit", response_class=HTMLResponse)
@@ -1267,52 +594,17 @@ def admin_settings_update(
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
     """Handle edit setting form submission."""
-    auth_or_redirect = require_admin_web_auth(request, auth)
-    if isinstance(auth_or_redirect, RedirectResponse):
-        return auth_or_redirect
-    setting, error = admin_web_service.update_setting(
-        db=db,
-        setting_id=setting_id,
-        domain=domain,
-        key=key,
-        value_type=value_type,
-        value=value,
-        is_secret=is_secret == "1",
-        is_active=is_active == "1",
-    )
-
-    context = admin_web_service.setting_form_context(db, setting_id)
-
-    if error:
-        return templates.TemplateResponse(
-            request,
-            "admin/setting_form.html",
-            {
-                "title": f"Edit Setting - {key}",
-                "page_title": "Edit Setting",
-                "brand": brand_context(),
-                "user": auth.user,
-                "active_page": "settings",
-                "error": error,
-                "success": None,
-                **context,
-            },
-            status_code=400,
-        )
-
-    return templates.TemplateResponse(
+    return admin_web_service.settings_update_response(
         request,
-        "admin/setting_form.html",
-        {
-            "title": f"Edit Setting - {key}",
-            "page_title": "Edit Setting",
-            "brand": brand_context(),
-            "user": auth.user,
-            "active_page": "settings",
-            "error": None,
-            "success": "Setting updated successfully",
-            **context,
-        },
+        db,
+        auth,
+        setting_id,
+        domain,
+        key,
+        value_type,
+        value,
+        is_secret,
+        is_active,
     )
 
 
@@ -1324,15 +616,7 @@ def admin_settings_delete(
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
     """Delete a setting."""
-    auth_or_redirect = require_admin_web_auth(request, auth)
-    if isinstance(auth_or_redirect, RedirectResponse):
-        return auth_or_redirect
-    error = admin_web_service.delete_setting(db, setting_id)
-
-    if error:
-        raise HTTPException(status_code=400, detail=error)
-
-    return RedirectResponse(url="/admin/settings?deleted=1", status_code=302)
+    return admin_web_service.settings_delete_response(request, db, auth, setting_id)
 
 
 @router.get("/audit-logs", response_class=HTMLResponse)
@@ -1346,28 +630,14 @@ def admin_audit_logs(
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
     """Admin audit logs page."""
-    auth_or_redirect = require_admin_web_auth(request, auth)
-    if isinstance(auth_or_redirect, RedirectResponse):
-        return auth_or_redirect
-    context = admin_web_service.audit_logs_context(
-        db=db,
-        search=search,
-        actor_type=actor_type,
-        status=status,
-        page=page,
-    )
-
-    return templates.TemplateResponse(
+    return admin_web_service.audit_logs_response(
         request,
-        "admin/audit_logs.html",
-        {
-            "title": "Audit Logs",
-            "page_title": "Audit Logs",
-            "brand": brand_context(),
-            "user": auth.user,
-            "active_page": "audit",
-            **context,
-        },
+        db,
+        auth,
+        page,
+        search,
+        status,
+        actor_type,
     )
 
 
@@ -1381,28 +651,7 @@ def admin_tasks(
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
     """Admin scheduled tasks page."""
-    auth_or_redirect = require_admin_web_auth(request, auth)
-    if isinstance(auth_or_redirect, RedirectResponse):
-        return auth_or_redirect
-    context = admin_web_service.tasks_context(
-        db=db,
-        search=search,
-        status=status,
-        page=page,
-    )
-
-    return templates.TemplateResponse(
-        request,
-        "admin/tasks.html",
-        {
-            "title": "Scheduled Tasks",
-            "page_title": "Scheduled Tasks",
-            "brand": brand_context(),
-            "user": auth.user,
-            "active_page": "tasks",
-            **context,
-        },
-    )
+    return admin_web_service.tasks_response(request, db, auth, page, search, status)
 
 
 @router.get("/tasks/new", response_class=HTMLResponse)
@@ -1412,26 +661,7 @@ def admin_tasks_new(
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
     """Show create task form."""
-    auth_or_redirect = require_admin_web_auth(request, auth)
-    if isinstance(auth_or_redirect, RedirectResponse):
-        return auth_or_redirect
-
-    context = admin_web_service.task_form_context(db)
-
-    return templates.TemplateResponse(
-        request,
-        "admin/task_form.html",
-        {
-            "title": "Create Task",
-            "page_title": "Create Task",
-            "brand": brand_context(),
-            "user": auth.user,
-            "active_page": "tasks",
-            "error": None,
-            "success": None,
-            **context,
-        },
-    )
+    return admin_web_service.tasks_new_response(request, db, auth)
 
 
 @router.post("/tasks/new", response_class=HTMLResponse)
@@ -1448,40 +678,18 @@ def admin_tasks_create(
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
     """Handle create task form submission."""
-    auth_or_redirect = require_admin_web_auth(request, auth)
-    if isinstance(auth_or_redirect, RedirectResponse):
-        return auth_or_redirect
-
-    task, error = admin_web_service.create_task(
-        db=db,
-        name=name,
-        task_name=task_name,
-        schedule_type=schedule_type,
-        interval_seconds=interval_seconds,
-        args_json=args_json,
-        kwargs_json=kwargs_json,
-        enabled=enabled == "1",
+    return admin_web_service.tasks_create_response(
+        request,
+        db,
+        auth,
+        name,
+        task_name,
+        schedule_type,
+        interval_seconds,
+        args_json,
+        kwargs_json,
+        enabled,
     )
-
-    if error:
-        context = admin_web_service.task_form_context(db)
-        return templates.TemplateResponse(
-            request,
-            "admin/task_form.html",
-            {
-                "title": "Create Task",
-                "page_title": "Create Task",
-                "brand": brand_context(),
-                "user": auth.user,
-                "active_page": "tasks",
-                "error": error,
-                "success": None,
-                **context,
-            },
-            status_code=400,
-        )
-
-    return RedirectResponse(url="/admin/tasks?created=1", status_code=302)
 
 
 @router.get("/tasks/{task_id}", response_class=HTMLResponse)
@@ -1492,7 +700,7 @@ def admin_tasks_view(
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
     """View task details (same as edit)."""
-    return admin_tasks_edit(request, task_id, db, auth)
+    return admin_web_service.tasks_view_response(request, db, auth, task_id)
 
 
 @router.get("/tasks/{task_id}/edit", response_class=HTMLResponse)
@@ -1503,29 +711,7 @@ def admin_tasks_edit(
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
     """Show edit task form."""
-    auth_or_redirect = require_admin_web_auth(request, auth)
-    if isinstance(auth_or_redirect, RedirectResponse):
-        return auth_or_redirect
-
-    context = admin_web_service.task_form_context(db, task_id)
-
-    if not context.get("task_data"):
-        raise HTTPException(status_code=404, detail="Task not found")
-
-    return templates.TemplateResponse(
-        request,
-        "admin/task_form.html",
-        {
-            "title": f"Edit Task - {context['task_data']['name']}",
-            "page_title": "Edit Task",
-            "brand": brand_context(),
-            "user": auth.user,
-            "active_page": "tasks",
-            "error": None,
-            "success": None,
-            **context,
-        },
-    )
+    return admin_web_service.tasks_edit_response(request, db, auth, task_id)
 
 
 @router.post("/tasks/{task_id}/edit", response_class=HTMLResponse)
@@ -1543,54 +729,18 @@ def admin_tasks_update(
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
     """Handle edit task form submission."""
-    auth_or_redirect = require_admin_web_auth(request, auth)
-    if isinstance(auth_or_redirect, RedirectResponse):
-        return auth_or_redirect
-
-    task, error = admin_web_service.update_task(
-        db=db,
-        task_id=task_id,
-        name=name,
-        task_name=task_name,
-        schedule_type=schedule_type,
-        interval_seconds=interval_seconds,
-        args_json=args_json,
-        kwargs_json=kwargs_json,
-        enabled=enabled == "1",
-    )
-
-    context = admin_web_service.task_form_context(db, task_id)
-
-    if error:
-        return templates.TemplateResponse(
-            request,
-            "admin/task_form.html",
-            {
-                "title": f"Edit Task - {name}",
-                "page_title": "Edit Task",
-                "brand": brand_context(),
-                "user": auth.user,
-                "active_page": "tasks",
-                "error": error,
-                "success": None,
-                **context,
-            },
-            status_code=400,
-        )
-
-    return templates.TemplateResponse(
+    return admin_web_service.tasks_update_response(
         request,
-        "admin/task_form.html",
-        {
-            "title": f"Edit Task - {name}",
-            "page_title": "Edit Task",
-            "brand": brand_context(),
-            "user": auth.user,
-            "active_page": "tasks",
-            "error": None,
-            "success": "Task updated successfully",
-            **context,
-        },
+        db,
+        auth,
+        task_id,
+        name,
+        task_name,
+        schedule_type,
+        interval_seconds,
+        args_json,
+        kwargs_json,
+        enabled,
     )
 
 
@@ -1602,13 +752,4 @@ def admin_tasks_delete(
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
     """Delete a task."""
-    auth_or_redirect = require_admin_web_auth(request, auth)
-    if isinstance(auth_or_redirect, RedirectResponse):
-        return auth_or_redirect
-
-    error = admin_web_service.delete_task(db, task_id)
-
-    if error:
-        raise HTTPException(status_code=400, detail=error)
-
-    return RedirectResponse(url="/admin/tasks?deleted=1", status_code=302)
+    return admin_web_service.tasks_delete_response(request, db, auth, task_id)

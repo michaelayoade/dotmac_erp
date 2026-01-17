@@ -1,0 +1,21 @@
+:root {
+  --font-primary: 'DM Sans', system-ui, sans-serif;
+}
+
+html,
+body {
+  font-family: var(--font-primary);
+}
+
+.font-display,
+.font-body,
+.font-mono {
+  font-family: var(--font-primary) !important;
+}
+
+code,
+kbd,
+pre,
+samp {
+  font-family: var(--font-primary) !important;
+}

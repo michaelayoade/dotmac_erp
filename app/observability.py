@@ -2,6 +2,7 @@ import logging
 import os
 import time
 import uuid
+from contextvars import ContextVar
 
 from jose import JWTError, jwt
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -10,6 +11,23 @@ from starlette.requests import Request
 from app.metrics import REQUEST_COUNT, REQUEST_ERRORS, REQUEST_LATENCY
 
 logger = logging.getLogger(__name__)
+
+# Context variables for request tracking - accessible anywhere in the request lifecycle
+request_id_var: ContextVar[str] = ContextVar("request_id", default="")
+actor_id_var: ContextVar[str] = ContextVar("actor_id", default="")
+
+
+def get_request_id() -> str:
+    """Get the current request ID from context.
+
+    Use this in services/models to include correlation ID in logs.
+    """
+    return request_id_var.get()
+
+
+def get_actor_id() -> str:
+    """Get the current actor ID from context."""
+    return actor_id_var.get()
 
 
 def _extract_bearer_token(request: Request) -> str | None:
@@ -60,10 +78,16 @@ class ObservabilityMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         request_id = request.headers.get("x-request-id") or str(uuid.uuid4())
         request.state.request_id = request_id
+        # Set context variable for request ID - accessible anywhere in the request
+        request_id_var.set(request_id)
+
         token = _extract_bearer_token(request)
         actor_id = getattr(request.state, "actor_id", None) or _extract_actor_id_from_jwt(
             token
         )
+        if actor_id:
+            actor_id_var.set(actor_id)
+
         start = time.monotonic()
         status_code = 500
         try:

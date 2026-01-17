@@ -1,0 +1,295 @@
+{% extends "ifrs/base_ifrs.html" %}
+
+{% block page_title %}{{ "Edit Asset Category" if category else "New Asset Category" }}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <a href="/fa/categories" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Asset Categories</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="font-medium text-slate-900 dark:text-white">{{ "Edit" if category else "New" }}</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto pb-12">
+    <div class="mb-10 stagger-in" style="animation-delay: 0ms;">
+        <h1 class="text-3xl font-bold text-slate-900 dark:text-white font-display tracking-tight">
+            {{ "Edit Asset Category" if category else "New Asset Category" }}
+        </h1>
+        <p class="mt-2 text-lg text-slate-600 dark:text-slate-400">
+            {{ "Update classification defaults and GL mappings" if category else "Create a category with depreciation defaults" }}
+        </p>
+    </div>
+
+    <form method="post"
+          action="{{ '/fa/categories/' ~ category.category_id ~ '/edit' if category else '/fa/categories/new' }}"
+          class="space-y-8">
+
+        {% if error %}
+        <div class="mb-6 p-4 rounded-xl bg-rose-50 border border-rose-200 dark:bg-rose-900/20 dark:border-rose-800">
+            <div class="flex items-start gap-3">
+                <svg class="w-5 h-5 text-rose-600 dark:text-rose-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <div>
+                    <h3 class="font-semibold text-rose-800 dark:text-rose-300">Error</h3>
+                    <p class="mt-1 text-sm text-rose-700 dark:text-rose-400">{{ error }}</p>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="card stagger-in" style="animation-delay: 50ms;">
+            <div class="card-header border-b border-slate-100 dark:border-slate-700">
+                <div class="flex items-center gap-4">
+                    <div class="card-icon bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display">Category Details</h2>
+                        <p class="text-sm text-slate-500 dark:text-slate-400">Identification and hierarchy</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-6 grid gap-6 sm:grid-cols-2">
+                <div>
+                    <label class="form-label">
+                        Category Code <span class="text-rose-500">*</span>
+                    </label>
+                    <input type="text"
+                           name="category_code"
+                           value="{{ category.category_code if category else '' }}"
+                           required
+                           maxlength="30"
+                           placeholder="EQP"
+                           class="form-input">
+                </div>
+
+                <div>
+                    <label class="form-label">
+                        Category Name <span class="text-rose-500">*</span>
+                    </label>
+                    <input type="text"
+                           name="category_name"
+                           value="{{ category.category_name if category else '' }}"
+                           required
+                           maxlength="100"
+                           placeholder="Equipment"
+                           class="form-input">
+                </div>
+
+                <div>
+                    <label class="form-label">Parent Category</label>
+                    <select name="parent_category_id" class="form-select">
+                        <option value="">No parent</option>
+                        {% for parent in categories %}
+                        {% if not category or parent.category_id != category.category_id %}
+                        <option value="{{ parent.category_id }}" {{ 'selected' if category and category.parent_category_id == parent.category_id else '' }}>
+                            {{ parent.category_code }} - {{ parent.category_name }}
+                        </option>
+                        {% endif %}
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="sm:col-span-2">
+                    <label class="form-label">Description</label>
+                    <textarea name="description"
+                              rows="3"
+                              placeholder="Optional description"
+                              class="form-input resize-none">{{ category.description if category else '' }}</textarea>
+                </div>
+
+                {% if category %}
+                <div class="sm:col-span-2">
+                    <label class="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                        <input type="checkbox" name="is_active" class="form-checkbox" {{ 'checked' if category.is_active else '' }}>
+                        Active
+                    </label>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="card stagger-in" style="animation-delay: 100ms;">
+            <div class="card-header border-b border-slate-100 dark:border-slate-700">
+                <div class="flex items-center gap-4">
+                    <div class="card-icon bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display">Depreciation Defaults</h2>
+                        <p class="text-sm text-slate-500 dark:text-slate-400">Method, life, and threshold</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-6 grid gap-6 sm:grid-cols-2">
+                <div>
+                    <label class="form-label">Depreciation Method</label>
+                    <select name="depreciation_method" class="form-select">
+                        {% for method in depreciation_methods %}
+                        <option value="{{ method.value }}" {{ 'selected' if category and category.depreciation_method == method else ('selected' if not category and method.value == 'STRAIGHT_LINE' else '') }}>
+                            {{ method.value | replace('_', ' ') | title }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label class="form-label">
+                        Useful Life (Months) <span class="text-rose-500">*</span>
+                    </label>
+                    <input type="number"
+                           name="useful_life_months"
+                           value="{{ category.useful_life_months if category else '' }}"
+                           min="1"
+                           required
+                           class="form-input">
+                </div>
+
+                <div>
+                    <label class="form-label">Residual Value (%)</label>
+                    <input type="number"
+                           name="residual_value_percent"
+                           value="{{ category.residual_value_percent if category else '0' }}"
+                           step="0.01"
+                           min="0"
+                           class="form-input">
+                </div>
+
+                <div>
+                    <label class="form-label">Capitalization Threshold</label>
+                    <input type="number"
+                           name="capitalization_threshold"
+                           value="{{ category.capitalization_threshold if category else '0' }}"
+                           step="0.01"
+                           min="0"
+                           class="form-input">
+                </div>
+
+                <div class="sm:col-span-2">
+                    <label class="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                        <input type="checkbox" name="revaluation_model_allowed" class="form-checkbox" {{ 'checked' if category and category.revaluation_model_allowed else '' }}>
+                        Allow revaluation model
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <div class="card stagger-in" style="animation-delay: 150ms;">
+            <div class="card-header border-b border-slate-100 dark:border-slate-700">
+                <div class="flex items-center gap-4">
+                    <div class="card-icon bg-sky-50 text-sky-600 dark:bg-sky-900/30 dark:text-sky-400">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display">GL Accounts</h2>
+                        <p class="text-sm text-slate-500 dark:text-slate-400">Default postings for this category</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-6 grid gap-6 sm:grid-cols-2">
+                <div>
+                    <label class="form-label">
+                        Asset Account <span class="text-rose-500">*</span>
+                    </label>
+                    <select name="asset_account_id" required class="form-select">
+                        <option value="">Select account</option>
+                        {% for account in accounts %}
+                        <option value="{{ account.account_id }}" {{ 'selected' if category and category.asset_account_id == account.account_id else '' }}>
+                            {{ account.account_code }} - {{ account.account_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label class="form-label">
+                        Accumulated Depreciation <span class="text-rose-500">*</span>
+                    </label>
+                    <select name="accumulated_depreciation_account_id" required class="form-select">
+                        <option value="">Select account</option>
+                        {% for account in accounts %}
+                        <option value="{{ account.account_id }}" {{ 'selected' if category and category.accumulated_depreciation_account_id == account.account_id else '' }}>
+                            {{ account.account_code }} - {{ account.account_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label class="form-label">
+                        Depreciation Expense <span class="text-rose-500">*</span>
+                    </label>
+                    <select name="depreciation_expense_account_id" required class="form-select">
+                        <option value="">Select account</option>
+                        {% for account in accounts %}
+                        <option value="{{ account.account_id }}" {{ 'selected' if category and category.depreciation_expense_account_id == account.account_id else '' }}>
+                            {{ account.account_code }} - {{ account.account_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label class="form-label">
+                        Gain/Loss Disposal <span class="text-rose-500">*</span>
+                    </label>
+                    <select name="gain_loss_disposal_account_id" required class="form-select">
+                        <option value="">Select account</option>
+                        {% for account in accounts %}
+                        <option value="{{ account.account_id }}" {{ 'selected' if category and category.gain_loss_disposal_account_id == account.account_id else '' }}>
+                            {{ account.account_code }} - {{ account.account_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label class="form-label">Revaluation Surplus</label>
+                    <select name="revaluation_surplus_account_id" class="form-select">
+                        <option value="">Select account</option>
+                        {% for account in accounts %}
+                        <option value="{{ account.account_id }}" {{ 'selected' if category and category.revaluation_surplus_account_id == account.account_id else '' }}>
+                            {{ account.account_code }} - {{ account.account_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label class="form-label">Impairment Loss</label>
+                    <select name="impairment_loss_account_id" class="form-select">
+                        <option value="">Select account</option>
+                        {% for account in accounts %}
+                        <option value="{{ account.account_id }}" {{ 'selected' if category and category.impairment_loss_account_id == account.account_id else '' }}>
+                            {{ account.account_code }} - {{ account.account_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex items-center justify-end gap-3">
+            <a href="/fa/categories" class="btn-outline">Cancel</a>
+            <button type="submit" class="btn-primary">{{ "Save Changes" if category else "Create Category" }}</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

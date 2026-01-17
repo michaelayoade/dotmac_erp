@@ -1,0 +1,162 @@
+{% extends "ifrs/base_ifrs.html" %}
+
+{% block page_title %}Tax Summary by Type{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400">
+    <a href="/ifrs" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/reports" class="hover:text-primary-600 dark:hover:text-primary-400">Reports</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white">Tax Summary</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header & Filters -->
+    <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+            <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Tax Summary by Type</h1>
+            <p class="mt-1 text-sm text-slate-500">Overview of all tax types for the selected period</p>
+        </div>
+        <form method="GET" class="flex items-center gap-2">
+            <input type="date" name="start_date" value="{{ start_date }}" class="form-input text-sm">
+            <span class="text-slate-400">to</span>
+            <input type="date" name="end_date" value="{{ end_date }}" class="form-input text-sm">
+            <button type="submit" class="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700">
+                Update
+            </button>
+        </form>
+    </div>
+
+    <!-- Period Info -->
+    <div class="rounded-lg bg-blue-50 px-4 py-3 dark:bg-blue-900/20">
+        <p class="text-sm text-blue-700 dark:text-blue-300">
+            Report period: <span class="font-medium">{{ start_date }}</span> to <span class="font-medium">{{ end_date }}</span>
+        </p>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div class="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-800/50">
+            <p class="text-xs uppercase tracking-wide text-slate-500">Total Output Tax</p>
+            <p class="mt-2 text-2xl font-bold text-emerald-600 dark:text-emerald-400">{{ total_output|format_currency }}</p>
+            <p class="mt-1 text-xs text-slate-400">Collected from sales</p>
+        </div>
+        <div class="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-800/50">
+            <p class="text-xs uppercase tracking-wide text-slate-500">Total Input Tax</p>
+            <p class="mt-2 text-2xl font-bold text-blue-600 dark:text-blue-400">{{ total_input|format_currency }}</p>
+            <p class="mt-1 text-xs text-slate-400">Paid on purchases</p>
+        </div>
+        <div class="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-800/50">
+            <p class="text-xs uppercase tracking-wide text-slate-500">WHT Withheld</p>
+            <p class="mt-2 text-2xl font-bold text-amber-600 dark:text-amber-400">{{ total_wht_withheld|format_currency }}</p>
+            <p class="mt-1 text-xs text-slate-400">From supplier payments</p>
+        </div>
+        <div class="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-800/50">
+            <p class="text-xs uppercase tracking-wide text-slate-500">Net Tax Position</p>
+            <p class="mt-2 text-2xl font-bold {% if net_position >= 0 %}text-red-600 dark:text-red-400{% else %}text-emerald-600 dark:text-emerald-400{% endif %}">
+                {{ net_position|format_currency }}
+            </p>
+            <p class="mt-1 text-xs text-slate-400">{% if net_position >= 0 %}Payable{% else %}Receivable{% endif %}</p>
+        </div>
+    </div>
+
+    <!-- Tax Type Breakdown -->
+    <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50">
+        <div class="border-b border-slate-200 px-6 py-4 dark:border-slate-700">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Breakdown by Tax Type</h2>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead>
+                    <tr class="border-b border-slate-200 text-left text-xs uppercase tracking-wider text-slate-500 dark:border-slate-700">
+                        <th class="px-6 py-3">Tax Type</th>
+                        <th class="px-6 py-3 text-right">Output Tax</th>
+                        <th class="px-6 py-3 text-right">Input Tax</th>
+                        <th class="px-6 py-3 text-right">WHT Collected</th>
+                        <th class="px-6 py-3 text-right">WHT Deducted</th>
+                        <th class="px-6 py-3 text-right">Net Position</th>
+                        <th class="px-6 py-3 text-right">Transactions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                    {% for item in summaries %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                        <td class="px-6 py-4">
+                            <p class="font-medium text-slate-900 dark:text-white">{{ item.tax_type_display }}</p>
+                            <p class="text-xs text-slate-500">{{ item.tax_type }}</p>
+                        </td>
+                        <td class="px-6 py-4 text-right text-sm text-emerald-600 dark:text-emerald-400">
+                            {{ item.total_output|format_currency }}
+                        </td>
+                        <td class="px-6 py-4 text-right text-sm text-blue-600 dark:text-blue-400">
+                            {{ item.total_input|format_currency }}
+                        </td>
+                        <td class="px-6 py-4 text-right text-sm text-amber-600 dark:text-amber-400">
+                            {{ item.total_wht_collected|format_currency }}
+                        </td>
+                        <td class="px-6 py-4 text-right text-sm text-purple-600 dark:text-purple-400">
+                            {{ item.total_wht_deducted|format_currency }}
+                        </td>
+                        <td class="px-6 py-4 text-right text-sm font-medium {% if item.net_payable >= 0 %}text-red-600 dark:text-red-400{% else %}text-emerald-600 dark:text-emerald-400{% endif %}">
+                            {{ item.net_payable|format_currency }}
+                        </td>
+                        <td class="px-6 py-4 text-right text-sm text-slate-600 dark:text-slate-400">
+                            {{ item.transaction_count }}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="px-6 py-8 text-center text-sm text-slate-500">
+                            No tax transactions found for this period
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Quick Links -->
+    <div class="grid gap-4 sm:grid-cols-3">
+        <a href="/tax/reports/vat-return?start_date={{ start_date }}&end_date={{ end_date }}"
+           class="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 hover:border-primary-300 hover:shadow-md dark:border-slate-800 dark:bg-slate-800/50 dark:hover:border-primary-700">
+            <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
+                <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+            </div>
+            <div>
+                <p class="font-medium text-slate-900 dark:text-white">VAT Return</p>
+                <p class="text-xs text-slate-500">FIRS format report</p>
+            </div>
+        </a>
+        <a href="/tax/reports/wht?start_date={{ start_date }}&end_date={{ end_date }}"
+           class="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 hover:border-primary-300 hover:shadow-md dark:border-slate-800 dark:bg-slate-800/50 dark:hover:border-primary-700">
+            <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">
+                <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z" />
+                </svg>
+            </div>
+            <div>
+                <p class="font-medium text-slate-900 dark:text-white">WHT Report</p>
+                <p class="text-xs text-slate-500">Withholding tax analysis</p>
+            </div>
+        </a>
+        <a href="/tax/transactions?start_date={{ start_date }}&end_date={{ end_date }}"
+           class="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 hover:border-primary-300 hover:shadow-md dark:border-slate-800 dark:bg-slate-800/50 dark:hover:border-primary-700">
+            <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400">
+                <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                </svg>
+            </div>
+            <div>
+                <p class="font-medium text-slate-900 dark:text-white">Tax Register</p>
+                <p class="text-xs text-slate-500">All tax transactions</p>
+            </div>
+        </a>
+    </div>
+</div>
+{% endblock %}

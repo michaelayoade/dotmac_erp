@@ -12,6 +12,8 @@ from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 
+from fastapi import Request
+from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -23,8 +25,12 @@ from app.models.ifrs.gl.fiscal_year import FiscalYear
 from app.models.ifrs.gl.journal_entry import JournalEntry, JournalStatus, JournalType
 from app.models.ifrs.gl.journal_entry_line import JournalEntryLine
 from app.config import settings
+from app.services.audit_info import get_audit_service
 from app.services.common import coerce_uuid
 from app.services.ifrs.platform.currency_context import get_currency_context
+from app.services.ifrs.platform.org_context import org_context_service
+from app.templates import templates
+from app.web.deps import base_context, WebAuthContext
 
 
 def _parse_date(value: Optional[str]) -> Optional[date]:
@@ -198,6 +204,124 @@ def _fiscal_year_option_view(year: FiscalYear) -> dict:
     }
 
 
+def _calculate_account_balances(
+    db: Session,
+    organization_id: UUID,
+    account_ids: list[UUID],
+) -> dict[UUID, Decimal]:
+    """
+    Calculate current balances for accounts from posted journal entries.
+    Balance = sum(debit) - sum(credit) for debit-normal accounts,
+    or sum(credit) - sum(debit) for credit-normal accounts.
+    """
+    if not account_ids:
+        return {}
+
+    # Get raw debit/credit totals per account
+    totals = (
+        db.query(
+            JournalEntryLine.account_id,
+            func.coalesce(func.sum(JournalEntryLine.debit_amount_functional), 0).label("total_debit"),
+            func.coalesce(func.sum(JournalEntryLine.credit_amount_functional), 0).label("total_credit"),
+        )
+        .join(JournalEntry, JournalEntryLine.journal_entry_id == JournalEntry.journal_entry_id)
+        .filter(
+            JournalEntry.organization_id == organization_id,
+            JournalEntry.status == JournalStatus.POSTED,
+            JournalEntryLine.account_id.in_(account_ids),
+        )
+        .group_by(JournalEntryLine.account_id)
+        .all()
+    )
+
+    # Get account normal balances to determine sign
+    accounts = (
+        db.query(Account.account_id, Account.normal_balance)
+        .filter(Account.account_id.in_(account_ids))
+        .all()
+    )
+    normal_balance_map = {a.account_id: a.normal_balance for a in accounts}
+
+    balances = {}
+    for row in totals:
+        normal = normal_balance_map.get(row.account_id, NormalBalance.DEBIT)
+        if normal == NormalBalance.DEBIT:
+            balances[row.account_id] = row.total_debit - row.total_credit
+        else:
+            balances[row.account_id] = row.total_credit - row.total_debit
+
+    return balances
+
+
+def _calculate_account_balance_trends(
+    db: Session,
+    organization_id: UUID,
+    account_ids: list[UUID],
+    months: int = 6,
+) -> dict[UUID, list[float]]:
+    """
+    Calculate monthly balance trends for accounts over the last N months.
+    Returns a dict mapping account_id to a list of balance values.
+    """
+    if not account_ids:
+        return {}
+
+    from datetime import timedelta
+    from dateutil.relativedelta import relativedelta
+
+    # Get account normal balances
+    accounts = (
+        db.query(Account.account_id, Account.normal_balance)
+        .filter(Account.account_id.in_(account_ids))
+        .all()
+    )
+    normal_balance_map = {a.account_id: a.normal_balance for a in accounts}
+
+    trends: dict[UUID, list[float]] = {aid: [] for aid in account_ids}
+    today = date.today()
+
+    # Calculate balance at end of each month for the last N months
+    for i in range(months - 1, -1, -1):
+        # Get the last day of the month (i months ago)
+        if i == 0:
+            as_of_date = today
+        else:
+            month_start = (today.replace(day=1) - relativedelta(months=i))
+            next_month = month_start + relativedelta(months=1)
+            as_of_date = next_month - timedelta(days=1)
+
+        # Query balance as of that date
+        totals = (
+            db.query(
+                JournalEntryLine.account_id,
+                func.coalesce(func.sum(JournalEntryLine.debit_amount_functional), 0).label("total_debit"),
+                func.coalesce(func.sum(JournalEntryLine.credit_amount_functional), 0).label("total_credit"),
+            )
+            .join(JournalEntry, JournalEntryLine.journal_entry_id == JournalEntry.journal_entry_id)
+            .filter(
+                JournalEntry.organization_id == organization_id,
+                JournalEntry.status == JournalStatus.POSTED,
+                JournalEntry.posting_date <= as_of_date,
+                JournalEntryLine.account_id.in_(account_ids),
+            )
+            .group_by(JournalEntryLine.account_id)
+            .all()
+        )
+
+        balance_map = {}
+        for row in totals:
+            normal = normal_balance_map.get(row.account_id, NormalBalance.DEBIT)
+            if normal == NormalBalance.DEBIT:
+                balance_map[row.account_id] = float(row.total_debit - row.total_credit)
+            else:
+                balance_map[row.account_id] = float(row.total_credit - row.total_debit)
+
+        for aid in account_ids:
+            trends[aid].append(balance_map.get(aid, 0.0))
+
+    return trends
+
+
 @dataclass
 class TrialBalanceTotals:
     total_debit: str
@@ -254,9 +378,23 @@ class GLWebService:
             .all()
         )
 
+        # Use shared audit service for user names
+        audit_service = get_audit_service(db)
+        creator_names = audit_service.get_creator_names(accounts)
+
+        # Calculate actual balances and trends
+        account_ids = [a.account_id for a in accounts]
+        balances = _calculate_account_balances(db, org_id, account_ids)
+        balance_trends = _calculate_account_balance_trends(db, org_id, account_ids)
+
+        # Get functional currency for formatting
+        functional_currency = org_context_service.get_functional_currency(db, org_id)
+
         accounts_view = []
         for account in accounts:
             category_label = _ifrs_label(account.category.ifrs_category)
+            account_balance = balances.get(account.account_id, Decimal("0"))
+            trend = balance_trends.get(account.account_id)
             accounts_view.append(
                 {
                     "account_id": account.account_id,
@@ -265,8 +403,14 @@ class GLWebService:
                     "description": account.description,
                     "category": category_label,
                     "normal_balance": account.normal_balance.value,
-                    "balance": "$0.00",
+                    "balance": _format_currency(account_balance, functional_currency),
+                    "balance_trend": trend if trend and any(v != 0 for v in trend) else None,
                     "is_active": account.is_active,
+                    # Audit info
+                    "created_at": account.created_at,
+                    "created_by_user_id": account.created_by_user_id,
+                    "created_by_name": creator_names.get(account.created_by_user_id),
+                    "updated_at": account.updated_at,
                 }
             )
 
@@ -1205,6 +1349,475 @@ class GLWebService:
         except Exception as e:
             db.rollback()
             return f"Failed to delete journal entry: {str(e)}"
+
+    def list_accounts_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        search: Optional[str],
+        category: Optional[str],
+        status: Optional[str],
+        page: int,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "Chart of Accounts", "gl")
+        context.update(
+            self.list_accounts_context(
+                db,
+                str(auth.organization_id),
+                search=search,
+                category=category,
+                status=status,
+                page=page,
+            )
+        )
+        return templates.TemplateResponse(request, "ifrs/gl/accounts.html", context)
+
+    def account_new_form_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "New Account", "gl")
+        context.update(self.account_form_context(db, str(auth.organization_id)))
+        return templates.TemplateResponse(request, "ifrs/gl/account_form.html", context)
+
+    def account_detail_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        account_id: str,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "Account Details", "gl")
+        context.update(
+            self.account_detail_context(
+                db,
+                str(auth.organization_id),
+                account_id,
+            )
+        )
+        return templates.TemplateResponse(request, "ifrs/gl/account_detail.html", context)
+
+    def account_edit_form_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        account_id: str,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "Edit Account", "gl")
+        context.update(
+            self.account_form_context(
+                db,
+                str(auth.organization_id),
+                account_id=account_id,
+            )
+        )
+        return templates.TemplateResponse(request, "ifrs/gl/account_form.html", context)
+
+    def create_account_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        account_code: str,
+        account_name: str,
+        category_id: str,
+        account_type: str,
+        normal_balance: str,
+        description: str,
+        search_terms: str,
+        is_multi_currency: bool,
+        default_currency_code: Optional[str],
+        is_active: bool,
+        is_posting_allowed: bool,
+        is_budgetable: bool,
+        is_reconciliation_required: bool,
+        subledger_type: Optional[str],
+        is_cash_equivalent: bool,
+        is_financial_instrument: bool,
+    ) -> HTMLResponse | RedirectResponse:
+        currency_code = default_currency_code or org_context_service.get_functional_currency(
+            db,
+            auth.organization_id,
+        )
+
+        account, error = self.create_account(
+            db,
+            str(auth.organization_id),
+            account_code=account_code,
+            account_name=account_name,
+            category_id=category_id,
+            account_type=account_type,
+            normal_balance=normal_balance,
+            description=description,
+            search_terms=search_terms,
+            is_multi_currency=is_multi_currency,
+            default_currency_code=currency_code,
+            is_active=is_active,
+            is_posting_allowed=is_posting_allowed,
+            is_budgetable=is_budgetable,
+            is_reconciliation_required=is_reconciliation_required,
+            subledger_type=subledger_type,
+            is_cash_equivalent=is_cash_equivalent,
+            is_financial_instrument=is_financial_instrument,
+        )
+
+        if error or account is None:
+            context = base_context(request, auth, "New Account", "gl")
+            context.update(self.account_form_context(db, str(auth.organization_id)))
+            context["error"] = error or "Account creation failed"
+            context["form_data"] = {
+                "account_code": account_code,
+                "account_name": account_name,
+                "category_id": category_id,
+                "account_type": account_type,
+                "normal_balance": normal_balance,
+                "description": description,
+                "search_terms": search_terms,
+                "is_multi_currency": is_multi_currency,
+                "default_currency_code": currency_code,
+                "is_active": is_active,
+                "is_posting_allowed": is_posting_allowed,
+                "is_budgetable": is_budgetable,
+                "is_reconciliation_required": is_reconciliation_required,
+                "subledger_type": subledger_type,
+                "is_cash_equivalent": is_cash_equivalent,
+                "is_financial_instrument": is_financial_instrument,
+            }
+            return templates.TemplateResponse(request, "ifrs/gl/account_form.html", context)
+
+        return RedirectResponse(url=f"/gl/accounts/{account.account_id}", status_code=303)
+
+    def update_account_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        account_id: str,
+        account_code: str,
+        account_name: str,
+        category_id: str,
+        account_type: str,
+        normal_balance: str,
+        description: str,
+        search_terms: str,
+        is_multi_currency: bool,
+        default_currency_code: Optional[str],
+        is_active: bool,
+        is_posting_allowed: bool,
+        is_budgetable: bool,
+        is_reconciliation_required: bool,
+        subledger_type: Optional[str],
+        is_cash_equivalent: bool,
+        is_financial_instrument: bool,
+    ) -> HTMLResponse | RedirectResponse:
+        currency_code = default_currency_code or org_context_service.get_functional_currency(
+            db,
+            auth.organization_id,
+        )
+
+        _, error = self.update_account(
+            db,
+            str(auth.organization_id),
+            account_id=account_id,
+            account_code=account_code,
+            account_name=account_name,
+            category_id=category_id,
+            account_type=account_type,
+            normal_balance=normal_balance,
+            description=description,
+            search_terms=search_terms,
+            is_multi_currency=is_multi_currency,
+            default_currency_code=currency_code,
+            is_active=is_active,
+            is_posting_allowed=is_posting_allowed,
+            is_budgetable=is_budgetable,
+            is_reconciliation_required=is_reconciliation_required,
+            subledger_type=subledger_type,
+            is_cash_equivalent=is_cash_equivalent,
+            is_financial_instrument=is_financial_instrument,
+        )
+
+        if error:
+            context = base_context(request, auth, "Edit Account", "gl")
+            context.update(
+                self.account_form_context(
+                    db,
+                    str(auth.organization_id),
+                    account_id=account_id,
+                )
+            )
+            context["error"] = error
+            return templates.TemplateResponse(request, "ifrs/gl/account_form.html", context)
+
+        return RedirectResponse(url=f"/gl/accounts/{account_id}", status_code=303)
+
+    def delete_account_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        account_id: str,
+    ) -> HTMLResponse | RedirectResponse:
+        error = self.delete_account(db, str(auth.organization_id), account_id)
+
+        if error:
+            context = base_context(request, auth, "Account Details", "gl")
+            context.update(
+                self.account_detail_context(
+                    db,
+                    str(auth.organization_id),
+                    account_id,
+                )
+            )
+            context["error"] = error
+            return templates.TemplateResponse(request, "ifrs/gl/account_detail.html", context)
+
+        return RedirectResponse(url="/gl/accounts", status_code=303)
+
+    def list_journals_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        search: Optional[str],
+        status: Optional[str],
+        start_date: Optional[str],
+        end_date: Optional[str],
+        page: int,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "Journal Entries", "gl")
+        context.update(
+            self.list_journals_context(
+                db,
+                str(auth.organization_id),
+                search=search,
+                status=status,
+                start_date=start_date,
+                end_date=end_date,
+                page=page,
+            )
+        )
+        return templates.TemplateResponse(request, "ifrs/gl/journals.html", context)
+
+    def journal_new_form_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "New Journal Entry", "gl")
+        context.update(self.journal_form_context(db, str(auth.organization_id)))
+        return templates.TemplateResponse(request, "ifrs/gl/journal_form.html", context)
+
+    def journal_detail_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        entry_id: str,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "Journal Entry Details", "gl")
+        context.update(
+            self.journal_detail_context(
+                db,
+                str(auth.organization_id),
+                entry_id,
+            )
+        )
+        return templates.TemplateResponse(request, "ifrs/gl/journal_detail.html", context)
+
+    def journal_edit_form_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        entry_id: str,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "Edit Journal Entry", "gl")
+        context.update(
+            self.journal_form_context(
+                db,
+                str(auth.organization_id),
+                entry_id=entry_id,
+            )
+        )
+        return templates.TemplateResponse(request, "ifrs/gl/journal_form.html", context)
+
+    def create_journal_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        journal_type: str,
+        fiscal_period_id: str,
+        entry_date: str,
+        posting_date: str,
+        description: str,
+        reference: str,
+        currency_code: Optional[str],
+        exchange_rate: str,
+        lines_json: str,
+    ) -> HTMLResponse | RedirectResponse:
+        default_currency = currency_code or org_context_service.get_functional_currency(
+            db,
+            auth.organization_id,
+        )
+
+        entry, error = self.create_journal(
+            db,
+            str(auth.organization_id),
+            str(auth.user_id),
+            journal_type=journal_type,
+            fiscal_period_id=fiscal_period_id,
+            entry_date=entry_date,
+            posting_date=posting_date,
+            description=description,
+            reference=reference,
+            currency_code=default_currency,
+            exchange_rate=exchange_rate,
+            lines_json=lines_json,
+        )
+
+        if error or entry is None:
+            context = base_context(request, auth, "New Journal Entry", "gl")
+            context.update(self.journal_form_context(db, str(auth.organization_id)))
+            context["error"] = error or "Journal entry creation failed"
+            context["form_data"] = {
+                "journal_type": journal_type,
+                "fiscal_period_id": fiscal_period_id,
+                "entry_date": entry_date,
+                "posting_date": posting_date,
+                "description": description,
+                "reference": reference,
+                "currency_code": default_currency,
+                "exchange_rate": exchange_rate,
+                "lines_json": lines_json,
+            }
+            return templates.TemplateResponse(request, "ifrs/gl/journal_form.html", context)
+
+        return RedirectResponse(url=f"/gl/journals/{entry.journal_entry_id}", status_code=303)
+
+    def update_journal_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        entry_id: str,
+        journal_type: str,
+        fiscal_period_id: str,
+        entry_date: str,
+        posting_date: str,
+        description: str,
+        reference: str,
+        currency_code: Optional[str],
+        exchange_rate: str,
+        lines_json: str,
+    ) -> HTMLResponse | RedirectResponse:
+        default_currency = currency_code or org_context_service.get_functional_currency(
+            db,
+            auth.organization_id,
+        )
+
+        _, error = self.update_journal(
+            db,
+            str(auth.organization_id),
+            entry_id=entry_id,
+            journal_type=journal_type,
+            fiscal_period_id=fiscal_period_id,
+            entry_date=entry_date,
+            posting_date=posting_date,
+            description=description,
+            reference=reference,
+            currency_code=default_currency,
+            exchange_rate=exchange_rate,
+            lines_json=lines_json,
+        )
+
+        if error:
+            context = base_context(request, auth, "Edit Journal Entry", "gl")
+            context.update(
+                self.journal_form_context(
+                    db,
+                    str(auth.organization_id),
+                    entry_id=entry_id,
+                )
+            )
+            context["error"] = error
+            return templates.TemplateResponse(request, "ifrs/gl/journal_form.html", context)
+
+        return RedirectResponse(url=f"/gl/journals/{entry_id}", status_code=303)
+
+    def delete_journal_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        entry_id: str,
+    ) -> HTMLResponse | RedirectResponse:
+        error = self.delete_journal(db, str(auth.organization_id), entry_id)
+
+        if error:
+            context = base_context(request, auth, "Journal Entry Details", "gl")
+            context.update(
+                self.journal_detail_context(
+                    db,
+                    str(auth.organization_id),
+                    entry_id,
+                )
+            )
+            context["error"] = error
+            return templates.TemplateResponse(request, "ifrs/gl/journal_detail.html", context)
+
+        return RedirectResponse(url="/gl/journals", status_code=303)
+
+    def period_close_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "Period Close", "gl")
+        return templates.TemplateResponse(request, "ifrs/gl/period_close.html", context)
+
+    def list_periods_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "Fiscal Periods", "gl")
+        context.update(self.periods_context(db, str(auth.organization_id)))
+        return templates.TemplateResponse(request, "ifrs/gl/periods.html", context)
+
+    def new_period_form_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "New Fiscal Year", "gl")
+        context.update(self.period_form_context(db, str(auth.organization_id)))
+        return templates.TemplateResponse(request, "ifrs/gl/period_form.html", context)
+
+    def trial_balance_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        as_of_date: Optional[str],
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "Trial Balance", "gl")
+        context.update(
+            self.trial_balance_context(
+                db,
+                str(auth.organization_id),
+                as_of_date=as_of_date,
+            )
+        )
+        return templates.TemplateResponse(request, "ifrs/gl/trial_balance.html", context)
 
 
 gl_web_service = GLWebService()

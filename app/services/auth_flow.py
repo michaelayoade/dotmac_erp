@@ -106,6 +106,11 @@ def _jwt_algorithm(db: Session | None) -> str:
 
 
 def _access_ttl_minutes(db: Session | None) -> int:
+    """Get access token TTL in minutes.
+
+    Default is 60 minutes. With automatic token refresh on the frontend,
+    users stay logged in as long as their session (refresh token) is valid.
+    """
     env_value = _env_int("JWT_ACCESS_TTL_MINUTES")
     if env_value is not None:
         return env_value
@@ -114,8 +119,8 @@ def _access_ttl_minutes(db: Session | None) -> int:
         try:
             return int(value)
         except ValueError:
-            return 15
-    return 15
+            return 60
+    return 60
 
 
 def _refresh_ttl_days(db: Session | None) -> int:
@@ -144,20 +149,31 @@ def _refresh_cookie_name(db: Session | None) -> str:
 
 
 def _refresh_cookie_secure(db: Session | None) -> bool:
+    """Get refresh cookie secure flag.
+
+    Defaults to True for production security. Set REFRESH_COOKIE_SECURE=false
+    only for local development without HTTPS.
+    """
     env_value = _env_value("REFRESH_COOKIE_SECURE")
     if env_value is not None:
         return env_value.lower() in {"1", "true", "yes", "on"}
     value = _setting_value(db, "refresh_cookie_secure")
     if value is not None:
         return str(value).lower() in {"1", "true", "yes", "on"}
-    return False
+    # Default to secure=True for production safety
+    return True
 
 
 def _refresh_cookie_samesite(db: Session | None) -> str:
+    """Get refresh cookie SameSite attribute.
+
+    Defaults to 'strict' for production security to prevent CSRF attacks.
+    Use 'lax' only if cross-site navigation is required.
+    """
     return (
         _env_value("REFRESH_COOKIE_SAMESITE")
         or _setting_value(db, "refresh_cookie_samesite")
-        or "lax"
+        or "strict"
     )
 
 

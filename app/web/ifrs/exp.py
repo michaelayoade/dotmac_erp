@@ -3,16 +3,13 @@ Expense Web Routes.
 
 HTML template routes for expense management.
 """
-from decimal import Decimal
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
-from app.models.ifrs.exp.expense_entry import PaymentMethod
 from app.services.ifrs.exp.expense import expense_service
-from app.services.ifrs.platform.org_context import org_context_service
 from app.services.ifrs.exp.web import expense_web_service
 from app.templates import templates
 from app.web.deps import get_db, require_web_auth, WebAuthContext, base_context
@@ -93,31 +90,25 @@ def create_expense(
 ):
     """Create new expense."""
     try:
-        if not currency_code:
-            currency_code = org_context_service.get_functional_currency(
-                db,
-                auth.organization_id,
-            )
-
-        expense = expense_service.create(
-            db,
-            organization_id=str(auth.organization_id),
-            expense_date=datetime.strptime(expense_date, "%Y-%m-%d").date(),
+        expense = expense_web_service.create_expense_from_form(
+            db=db,
+            organization_id=auth.organization_id,
+            user_id=auth.user_id,
+            expense_date=expense_date,
             expense_account_id=expense_account_id,
-            amount=Decimal(amount),
+            amount=amount,
             description=description,
-            payment_method=PaymentMethod(payment_method),
-            created_by=str(auth.user_id),
-            payment_account_id=payment_account_id if payment_account_id else None,
-            tax_code_id=tax_code_id if tax_code_id else None,
-            tax_amount=Decimal(tax_amount) if tax_amount else Decimal("0"),
+            payment_method=payment_method,
+            payment_account_id=payment_account_id,
+            tax_code_id=tax_code_id,
+            tax_amount=tax_amount,
             currency_code=currency_code,
             payee=payee,
             receipt_reference=receipt_reference,
             notes=notes,
-            project_id=project_id if project_id else None,
-            cost_center_id=cost_center_id if cost_center_id else None,
-            business_unit_id=business_unit_id if business_unit_id else None,
+            project_id=project_id,
+            cost_center_id=cost_center_id,
+            business_unit_id=business_unit_id,
         )
         db.commit()
         return RedirectResponse(f"/expenses/{expense.expense_id}", status_code=303)

@@ -358,6 +358,7 @@ class WarehouseService(ListResponseMixin):
         is_active: Optional[bool] = None,
         is_receiving: Optional[bool] = None,
         is_shipping: Optional[bool] = None,
+        search: Optional[str] = None,
         limit: int = 50,
         offset: int = 0,
     ) -> list[Warehouse]:
@@ -377,6 +378,13 @@ class WarehouseService(ListResponseMixin):
 
         if is_shipping is not None:
             query = query.filter(Warehouse.is_shipping == is_shipping)
+
+        if search:
+            search_pattern = f"%{search}%"
+            query = query.filter(
+                (Warehouse.warehouse_code.ilike(search_pattern))
+                | (Warehouse.warehouse_name.ilike(search_pattern))
+            )
 
         query = query.order_by(Warehouse.warehouse_code)
         return query.limit(limit).offset(offset).all()
@@ -401,6 +409,76 @@ class WarehouseService(ListResponseMixin):
 
         query = query.order_by(WarehouseLocation.location_code)
         return query.limit(limit).offset(offset).all()
+
+    @staticmethod
+    def update_warehouse(
+        db: Session,
+        organization_id: UUID,
+        warehouse_id: UUID,
+        updates: dict[str, Any],
+    ) -> Warehouse:
+        """
+        Update a warehouse's attributes.
+
+        Args:
+            db: Database session
+            organization_id: Organization scope
+            warehouse_id: Warehouse to update
+            updates: Dictionary of field updates
+
+        Returns:
+            Updated Warehouse
+        """
+        org_id = coerce_uuid(organization_id)
+        wh_id = coerce_uuid(warehouse_id)
+
+        warehouse = db.get(Warehouse, wh_id)
+        if not warehouse or warehouse.organization_id != org_id:
+            raise HTTPException(status_code=404, detail="Warehouse not found")
+
+        # Fields that cannot be updated
+        immutable_fields = {"warehouse_code", "organization_id", "warehouse_id"}
+
+        for key, value in updates.items():
+            if key in immutable_fields:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Cannot update field '{key}'",
+                )
+            if hasattr(warehouse, key):
+                setattr(warehouse, key, value)
+
+        db.commit()
+        db.refresh(warehouse)
+
+        return warehouse
+
+    @staticmethod
+    def count(
+        db: Session,
+        organization_id: Optional[str] = None,
+        is_active: Optional[bool] = None,
+        search: Optional[str] = None,
+    ) -> int:
+        """Count warehouses with filters."""
+        query = db.query(Warehouse)
+
+        if organization_id:
+            query = query.filter(
+                Warehouse.organization_id == coerce_uuid(organization_id)
+            )
+
+        if is_active is not None:
+            query = query.filter(Warehouse.is_active == is_active)
+
+        if search:
+            search_pattern = f"%{search}%"
+            query = query.filter(
+                (Warehouse.warehouse_code.ilike(search_pattern))
+                | (Warehouse.warehouse_name.ilike(search_pattern))
+            )
+
+        return query.count()
 
     @staticmethod
     def deactivate_warehouse(

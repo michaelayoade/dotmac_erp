@@ -1,19 +1,21 @@
 {% extends "ifrs/base_ifrs.html" %}
+{% from "components/macros.html" import pagination, status_badge, empty_state, stats_card %}
 
 {% block page_title %}Tax Returns{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400">
-    <a href="/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white">Tax Returns</span>
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+    <a href="/ifrs" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="font-medium text-slate-900 dark:text-white">Tax Returns</span>
 </nav>
 {% endblock %}
 
 {% block header_actions %}
-<a href="/tax/returns/new" data-testid="tax-returns-new"
-   class="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-primary-600 to-primary-500 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-primary-500/25 btn-hover">
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<a href="/tax/returns/new" data-testid="tax-returns-new" class="btn btn-primary">
+    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
     </svg>
     New Return
@@ -21,38 +23,139 @@
 {% endblock %}
 
 {% block content %}
-<div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50">
-    <div class="overflow-x-auto">
-        <table class="w-full" data-testid="tax-returns-table">
-            <thead>
-                <tr class="border-b border-slate-200 dark:border-slate-700">
-                    <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Return</th>
-                    <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Type</th>
-                    <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Period</th>
-                    <th class="px-6 py-4 text-right text-xs font-medium uppercase tracking-wider text-slate-500">Final Amount</th>
-                    <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Status</th>
-                </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
-                {% for tax_return in returns %}
-                <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                    <td class="px-6 py-4">
-                        <a href="/tax/returns/{{ tax_return.return_id }}" class="text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">
-                            {{ tax_return.return_reference | default(tax_return.return_id) }}
-                        </a>
-                    </td>
-                    <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{{ tax_return.return_type }}</td>
-                    <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{{ tax_return.tax_period_id }}</td>
-                    <td class="px-6 py-4 text-right text-sm text-slate-600 dark:text-slate-400">{{ tax_return.final_amount }}</td>
-                    <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{{ tax_return.status }}</td>
-                </tr>
-                {% else %}
-                <tr>
-                    <td colspan="5" class="px-6 py-12 text-center text-sm text-slate-500">No tax returns found</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+<div class="space-y-6">
+    {# Stats Row #}
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {{ stats_card("Total Returns", total_count | default(returns | length if returns else 0), icon="document", color="slate") }}
+        {{ stats_card("Draft", draft_count | default(0), icon="edit", color="amber") }}
+        {{ stats_card("Submitted", submitted_count | default(0), icon="upload", color="blue") }}
+        {{ stats_card("Filed", filed_count | default(0), icon="check-circle", color="emerald") }}
+    </div>
+
+    {# Filters #}
+    <div class="card p-4">
+        <form method="get" action="/tax/returns" class="flex flex-wrap items-center gap-4">
+            {# Return Type Filter #}
+            <select name="return_type" class="form-select">
+                <option value="">All Types</option>
+                <option value="VAT" {{ 'selected' if return_type == 'VAT' else '' }}>VAT Return</option>
+                <option value="WHT" {{ 'selected' if return_type == 'WHT' else '' }}>WHT Return</option>
+                <option value="CIT" {{ 'selected' if return_type == 'CIT' else '' }}>CIT Return</option>
+            </select>
+
+            {# Status Filter #}
+            <select name="status" class="form-select">
+                <option value="">All Status</option>
+                <option value="DRAFT" {{ 'selected' if status == 'DRAFT' else '' }}>Draft</option>
+                <option value="SUBMITTED" {{ 'selected' if status == 'SUBMITTED' else '' }}>Submitted</option>
+                <option value="FILED" {{ 'selected' if status == 'FILED' else '' }}>Filed</option>
+                <option value="PAID" {{ 'selected' if status == 'PAID' else '' }}>Paid</option>
+            </select>
+
+            {# Period Filter #}
+            <input type="month" name="period" value="{{ period | default('') }}"
+                   class="form-input" placeholder="Tax Period">
+
+            {# Actions #}
+            <button type="submit" class="btn btn-primary">
+                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
+                </svg>
+                Filter
+            </button>
+
+            {% if return_type or status or period %}
+            <a href="/tax/returns" class="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300 transition-colors">
+                Clear
+            </a>
+            {% endif %}
+        </form>
+    </div>
+
+    {# Tax Returns Table #}
+    <div class="card">
+        <div class="table-container">
+            <table class="table" data-testid="tax-returns-table">
+                <thead>
+                    <tr>
+                        <th>Return Reference</th>
+                        <th>Type</th>
+                        <th>Period</th>
+                        <th class="text-right">Tax Amount</th>
+                        <th class="text-center">Status</th>
+                        <th>Due Date</th>
+                        <th class="text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for tax_return in returns %}
+                    <tr class="group">
+                        <td>
+                            <a href="/tax/returns/{{ tax_return.return_id }}" class="font-mono text-sm font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300 transition-colors">
+                                {{ tax_return.return_reference | default(tax_return.return_id[:8]) }}
+                            </a>
+                        </td>
+                        <td>
+                            <span class="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium
+                                {% if tax_return.return_type == 'VAT' %}bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400
+                                {% elif tax_return.return_type == 'WHT' %}bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400
+                                {% else %}bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-400{% endif %}">
+                                {{ tax_return.return_type }}
+                            </span>
+                        </td>
+                        <td class="text-sm text-slate-600 dark:text-slate-400">{{ tax_return.tax_period_id }}</td>
+                        <td class="text-right font-mono font-medium text-slate-900 dark:text-white">{{ tax_return.final_amount | default("₦0.00") }}</td>
+                        <td class="text-center">
+                            {{ status_badge(tax_return.status | lower | default('draft'), 'sm') }}
+                        </td>
+                        <td class="text-sm text-slate-600 dark:text-slate-400">{{ tax_return.due_date | default("—") }}</td>
+                        <td>
+                            <div class="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <a href="/tax/returns/{{ tax_return.return_id }}"
+                                   class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300 transition-colors"
+                                   title="View return">
+                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                                    </svg>
+                                </a>
+                                {% if tax_return.status in ['DRAFT', 'draft'] %}
+                                <a href="/tax/returns/{{ tax_return.return_id }}/edit"
+                                   class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300 transition-colors"
+                                   title="Edit return">
+                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                                    </svg>
+                                </a>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="py-12">
+                            {{ empty_state(
+                                'No tax returns found',
+                                'Get started by creating your first tax return' if not (return_type or status or period) else 'Try adjusting your filter criteria',
+                                'document',
+                                'New Return' if not (return_type or status or period) else none,
+                                '/tax/returns/new' if not (return_type or status or period) else none
+                            ) }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {# Pagination #}
+        {{ pagination(
+            page=page | default(1),
+            total_pages=total_pages | default(1),
+            total_count=total_count | default(returns | length if returns else 0),
+            limit=limit | default(50),
+            filters={"return_type": return_type, "status": status, "period": period}
+        ) }}
     </div>
 </div>
 {% endblock %}

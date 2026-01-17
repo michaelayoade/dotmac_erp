@@ -20,6 +20,7 @@ from app.models.auth import Session as AuthSession, SessionStatus
 from app.models.person import Person
 from app.rls import set_current_organization_sync
 from app.services.auth_flow import decode_access_token
+from app.services.auth_dependencies import is_session_inactive
 from app.services.common import coerce_uuid
 
 
@@ -170,7 +171,7 @@ def landing_content() -> dict:
             "cards": [
                 {"title": "Trial Balance", "subtitle": "Detailed and summary views"},
                 {"title": "P&L Statement", "subtitle": "By period and comparative"},
-                {"title": "Balance Sheet", "subtitle": "IFRS presentation"},
+                {"title": "Statement of Financial Position", "subtitle": "IFRS presentation"},
                 {"title": "Cash Flow", "subtitle": "Direct and indirect methods"},
             ],
         },
@@ -219,6 +220,7 @@ def base_context(
     auth: "WebAuthContext",
     page_title: str,
     active_module: str = "",
+    notifications: list | None = None,
 ) -> dict:
     """
     Get base template context with authentication.
@@ -228,6 +230,13 @@ def base_context(
         auth: WebAuthContext from authentication
         page_title: Page title for the template
         active_module: Active navigation module
+        notifications: List of notification dicts with keys:
+            - type: 'mention' | 'invoice' | 'payment' | 'alert' | 'info'
+            - title: Short title text
+            - message: Longer description
+            - url: Link to navigate when clicked
+            - time: Relative time string (e.g., "5 min ago")
+            - read: bool indicating if notification was read
 
     Returns:
         Dict with common template context values (without request - use new TemplateResponse signature)
@@ -239,6 +248,7 @@ def base_context(
         "active_module": active_module,
         "user": auth.user,
         "csrf_token": getattr(request.state, "csrf_token", ""),
+        "notifications": notifications or [],
     }
 
 
@@ -353,6 +363,10 @@ def require_web_auth(
     if not session:
         raise HTTPException(status_code=401, detail="Session expired or invalid")
 
+    # Check for activity timeout (session idle too long)
+    if is_session_inactive(session, now):
+        raise HTTPException(status_code=401, detail="Session expired due to inactivity")
+
     # Get person details
     person = db.get(Person, person_uuid)
     if not person:
@@ -431,6 +445,10 @@ def optional_web_auth(
     )
 
     if not session:
+        return WebAuthContext(is_authenticated=False)
+
+    # Check for activity timeout (session idle too long)
+    if is_session_inactive(session, now):
         return WebAuthContext(is_authenticated=False)
 
     # Get person details

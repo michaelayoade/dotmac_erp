@@ -1,0 +1,976 @@
+{% extends "ifrs/base_ifrs.html" %}
+
+{% block page_title %}{{ "Edit Tax Code" if tax_code else "New Tax Code" }}{% endblock %}
+
+{% block page_styles %}
+<style>
+    :root {
+        --ink: #1a1f36;
+        --ink-light: #3d4663;
+        --ink-muted: #6b7194;
+        --gold: #d4a853;
+        --gold-light: #e8c985;
+        --gold-dark: #b8923f;
+        --teal: #0d9488;
+        --teal-light: #14b8a6;
+        --cream: #faf9f7;
+        --cream-dark: #f0eeea;
+        --ruby: #dc2626;
+        --emerald: #059669;
+    }
+
+    .font-display { font-family: 'DM Sans', system-ui, sans-serif; }
+    .font-body { font-family: 'DM Sans', system-ui, sans-serif; }
+
+    body {
+        font-family: 'DM Sans', system-ui, sans-serif;
+        background: var(--cream);
+    }
+
+    .dark body { background: var(--ink); }
+
+    /* Grain texture overlay */
+    .grain-overlay {
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        opacity: 0.03;
+        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+        z-index: 1000;
+    }
+
+    /* Form card styling */
+    .form-card {
+        position: relative;
+        background: white;
+        border-radius: 1rem;
+        padding: 2rem;
+        border: 1px solid rgba(26, 31, 54, 0.08);
+        box-shadow: 0 1px 3px rgba(26, 31, 54, 0.04);
+        overflow: hidden;
+    }
+
+    .form-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+        background: linear-gradient(90deg, var(--emerald), var(--teal));
+        opacity: 0;
+        transition: opacity 0.3s ease;
+    }
+
+    .form-card:hover::before { opacity: 1; }
+    .form-card:focus-within::before { opacity: 1; }
+
+    .dark .form-card {
+        background: rgba(26, 31, 54, 0.6);
+        border-color: rgba(255, 255, 255, 0.08);
+    }
+
+    /* Section title */
+    .section-title {
+        font-family: 'DM Sans', system-ui, sans-serif;
+        font-weight: 600;
+        font-size: 1.25rem;
+        color: var(--ink);
+        letter-spacing: -0.01em;
+    }
+
+    .dark .section-title { color: white; }
+
+    .section-subtitle {
+        font-size: 0.875rem;
+        color: var(--ink-muted);
+        margin-top: 0.25rem;
+    }
+
+    .dark .section-subtitle { color: rgba(255, 255, 255, 0.5); }
+
+    /* Form labels */
+    .form-label {
+        display: block;
+        font-weight: 500;
+        font-size: 0.8125rem;
+        color: var(--ink-light);
+        margin-bottom: 0.5rem;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+    }
+
+    .dark .form-label { color: rgba(255, 255, 255, 0.7); }
+
+    .form-label .required {
+        color: var(--ruby);
+        margin-left: 0.25rem;
+    }
+
+    /* Input styling */
+    .form-input {
+        width: 100%;
+        padding: 0.75rem 1rem;
+        border: 1px solid rgba(26, 31, 54, 0.15);
+        border-radius: 0.5rem;
+        font-size: 0.9375rem;
+        color: var(--ink);
+        background: white;
+        transition: all 0.2s ease;
+    }
+
+    .form-input:hover {
+        border-color: rgba(26, 31, 54, 0.25);
+    }
+
+    .form-input:focus {
+        outline: none;
+        border-color: var(--emerald);
+        box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.15);
+    }
+
+    .form-input::placeholder {
+        color: var(--ink-muted);
+    }
+
+    .dark .form-input {
+        background: rgba(255, 255, 255, 0.05);
+        border-color: rgba(255, 255, 255, 0.1);
+        color: white;
+    }
+
+    .dark .form-input:hover {
+        border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .dark .form-input:focus {
+        border-color: var(--emerald);
+        box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.2);
+    }
+
+    .dark .form-input::placeholder {
+        color: rgba(255, 255, 255, 0.4);
+    }
+
+    /* Input with prefix/suffix */
+    .input-prefix {
+        position: absolute;
+        left: 1rem;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--ink-muted);
+        font-weight: 500;
+        font-size: 0.9375rem;
+    }
+
+    .input-suffix {
+        position: absolute;
+        right: 1rem;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--ink-muted);
+        font-weight: 500;
+        font-size: 0.9375rem;
+    }
+
+    .dark .input-prefix, .dark .input-suffix { color: rgba(255, 255, 255, 0.5); }
+
+    .form-input.has-prefix {
+        padding-left: 2.5rem;
+    }
+
+    .form-input.has-suffix {
+        padding-right: 2.5rem;
+    }
+
+    /* Select dropdown arrow */
+    select.form-input {
+        appearance: none;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7194'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 0.75rem center;
+        background-size: 1rem;
+        padding-right: 2.5rem;
+    }
+
+    /* Help text */
+    .form-help {
+        font-size: 0.75rem;
+        color: var(--ink-muted);
+        margin-top: 0.375rem;
+    }
+
+    .dark .form-help { color: rgba(255, 255, 255, 0.4); }
+
+    /* Toggle switch */
+    .toggle-wrapper {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .toggle-switch {
+        position: relative;
+        width: 3rem;
+        height: 1.5rem;
+        background: rgba(26, 31, 54, 0.15);
+        border-radius: 0.75rem;
+        cursor: pointer;
+        transition: background-color 0.2s ease;
+    }
+
+    .toggle-switch::after {
+        content: '';
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 1.25rem;
+        height: 1.25rem;
+        background: white;
+        border-radius: 50%;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+        transition: transform 0.2s ease;
+    }
+
+    .toggle-input:checked + .toggle-switch {
+        background: var(--emerald);
+    }
+
+    .toggle-input:checked + .toggle-switch::after {
+        transform: translateX(1.5rem);
+    }
+
+    .toggle-input:focus + .toggle-switch {
+        box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.2);
+    }
+
+    .toggle-switch.danger {
+        background: rgba(26, 31, 54, 0.15);
+    }
+
+    .toggle-input:checked + .toggle-switch.danger {
+        background: var(--ruby);
+    }
+
+    .dark .toggle-switch {
+        background: rgba(255, 255, 255, 0.15);
+    }
+
+    .toggle-label {
+        font-size: 0.9375rem;
+        font-weight: 500;
+        color: var(--ink);
+    }
+
+    .dark .toggle-label { color: white; }
+
+    /* Checkbox styling */
+    .checkbox-wrapper {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .checkbox-input {
+        width: 1.25rem;
+        height: 1.25rem;
+        border: 2px solid rgba(26, 31, 54, 0.2);
+        border-radius: 0.25rem;
+        cursor: pointer;
+        transition: all 0.15s ease;
+    }
+
+    .checkbox-input:checked {
+        background: var(--emerald);
+        border-color: var(--emerald);
+    }
+
+    .checkbox-label {
+        font-size: 0.9375rem;
+        color: var(--ink);
+    }
+
+    .dark .checkbox-label { color: white; }
+
+    /* Buttons */
+    .btn-primary {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.75rem 1.5rem;
+        background: linear-gradient(135deg, var(--emerald), var(--teal));
+        color: white;
+        font-weight: 600;
+        font-size: 0.875rem;
+        border-radius: 0.5rem;
+        border: none;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        box-shadow: 0 2px 8px rgba(5, 150, 105, 0.3);
+    }
+
+    .btn-primary:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 16px rgba(5, 150, 105, 0.4);
+    }
+
+    .btn-secondary {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.75rem 1.5rem;
+        background: white;
+        color: var(--ink-light);
+        font-weight: 500;
+        font-size: 0.875rem;
+        border-radius: 0.5rem;
+        border: 1px solid rgba(26, 31, 54, 0.15);
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .btn-secondary:hover {
+        border-color: var(--ink-muted);
+        color: var(--ink);
+    }
+
+    .dark .btn-secondary {
+        background: rgba(255, 255, 255, 0.05);
+        border-color: rgba(255, 255, 255, 0.1);
+        color: rgba(255, 255, 255, 0.7);
+    }
+
+    .dark .btn-secondary:hover {
+        border-color: rgba(255, 255, 255, 0.2);
+        color: white;
+    }
+
+    /* Animation classes */
+    .fade-up {
+        opacity: 0;
+        transform: translateY(20px);
+        animation: fadeUp 0.5s ease forwards;
+    }
+
+    @keyframes fadeUp {
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .delay-1 { animation-delay: 0.1s; }
+    .delay-2 { animation-delay: 0.2s; }
+    .delay-3 { animation-delay: 0.3s; }
+    .delay-4 { animation-delay: 0.4s; }
+    .delay-5 { animation-delay: 0.5s; }
+
+    /* Breadcrumb styling */
+    .breadcrumb {
+        font-size: 0.8125rem;
+        color: var(--ink-muted);
+    }
+
+    .breadcrumb a {
+        color: var(--ink-muted);
+        transition: color 0.15s ease;
+    }
+
+    .breadcrumb a:hover { color: var(--emerald); }
+    .breadcrumb .current { color: var(--ink); font-weight: 500; }
+
+    .dark .breadcrumb { color: rgba(255, 255, 255, 0.5); }
+    .dark .breadcrumb a { color: rgba(255, 255, 255, 0.5); }
+    .dark .breadcrumb a:hover { color: var(--teal-light); }
+    .dark .breadcrumb .current { color: white; }
+
+    /* Icon accent */
+    .icon-accent {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 2.5rem;
+        height: 2.5rem;
+        border-radius: 0.75rem;
+        background: linear-gradient(135deg, rgba(5, 150, 105, 0.1), rgba(13, 148, 136, 0.1));
+    }
+
+    .icon-accent svg {
+        width: 1.25rem;
+        height: 1.25rem;
+        color: var(--emerald);
+    }
+
+    .dark .icon-accent {
+        background: linear-gradient(135deg, rgba(5, 150, 105, 0.2), rgba(13, 148, 136, 0.2));
+    }
+
+    /* Rate type toggle */
+    .rate-type-toggle {
+        display: flex;
+        border: 1px solid rgba(26, 31, 54, 0.15);
+        border-radius: 0.5rem;
+        overflow: hidden;
+    }
+
+    .rate-type-toggle input[type="radio"] {
+        display: none;
+    }
+
+    .rate-type-toggle label {
+        flex: 1;
+        padding: 0.75rem 1rem;
+        text-align: center;
+        cursor: pointer;
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: var(--ink-muted);
+        background: white;
+        transition: all 0.2s ease;
+        border-right: 1px solid rgba(26, 31, 54, 0.15);
+    }
+
+    .rate-type-toggle label:last-child {
+        border-right: none;
+    }
+
+    .rate-type-toggle input[type="radio"]:checked + label {
+        background: var(--emerald);
+        color: white;
+    }
+
+    .dark .rate-type-toggle {
+        border-color: rgba(255, 255, 255, 0.1);
+    }
+
+    .dark .rate-type-toggle label {
+        background: rgba(255, 255, 255, 0.05);
+        color: rgba(255, 255, 255, 0.6);
+        border-color: rgba(255, 255, 255, 0.1);
+    }
+
+    .dark .rate-type-toggle input[type="radio"]:checked + label {
+        background: var(--emerald);
+        color: white;
+    }
+</style>
+{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="breadcrumb flex items-center gap-2">
+    <a href="/ifrs" class="hover:text-emerald-600">Dashboard</a>
+    <span>/</span>
+    <a href="/tax/codes" class="hover:text-emerald-600">Tax Codes</a>
+    <span>/</span>
+    <span class="current">{{ "Edit" if tax_code else "New Tax Code" }}</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="grain-overlay"></div>
+
+<div class="mx-auto max-w-3xl space-y-8">
+    <!-- Page Header -->
+    <div class="fade-up flex items-start gap-4">
+        <div class="icon-accent">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2zM10 8.5a.5.5 0 11-1 0 .5.5 0 011 0zm5 5a.5.5 0 11-1 0 .5.5 0 011 0z"/>
+            </svg>
+        </div>
+        <div>
+            <h1 class="font-display text-3xl font-bold text-[var(--ink)] dark:text-white tracking-tight">
+                {{ "Edit Tax Code" if tax_code else "New Tax Code" }}
+            </h1>
+            <p class="mt-1 text-[var(--ink-muted)] dark:text-white/50">
+                {{ "Update the tax code details below." if tax_code else "Create a new tax code for VAT, WHT, Stamp Duty, or other taxes." }}
+            </p>
+        </div>
+    </div>
+
+    <form method="post"
+          action="{{ '/tax/codes/' ~ tax_code.tax_code_id ~ '/edit' if tax_code else '/tax/codes/new' }}"
+          class="space-y-8">
+
+        <!-- Form Result Messages -->
+        <div id="form-result">
+            {% if error %}
+            <div class="mb-6 p-4 rounded-lg bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-800">
+                <div class="flex items-start gap-3">
+                    <svg class="w-5 h-5 text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <div>
+                        <h3 class="font-medium text-red-800 dark:text-red-300">Error</h3>
+                        <p class="mt-1 text-sm text-red-700 dark:text-red-400">{{ error }}</p>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Basic Information -->
+        <div class="form-card fade-up delay-1">
+            <h2 class="section-title">Basic Information</h2>
+            <p class="section-subtitle">Enter the tax code identification details</p>
+
+            <div class="mt-8 grid gap-6 sm:grid-cols-2">
+                <!-- Tax Code -->
+                <div>
+                    <label for="tax_code" class="form-label">
+                        Tax Code <span class="required">*</span>
+                    </label>
+                    <input type="text"
+                           id="tax_code"
+                           name="tax_code"
+                           value="{{ tax_code.tax_code if tax_code else '' }}"
+                           required
+                           maxlength="30"
+                           placeholder="e.g., VAT-7.5, WHT-10"
+                           class="form-input">
+                    <p class="form-help">Unique identifier for this tax code</p>
+                </div>
+
+                <!-- Tax Name -->
+                <div>
+                    <label for="tax_name" class="form-label">
+                        Tax Name <span class="required">*</span>
+                    </label>
+                    <input type="text"
+                           id="tax_name"
+                           name="tax_name"
+                           value="{{ tax_code.tax_name if tax_code else '' }}"
+                           required
+                           maxlength="100"
+                           placeholder="e.g., VAT Standard Rate 7.5%"
+                           class="form-input">
+                </div>
+
+                <!-- Tax Type -->
+                <div>
+                    <label for="tax_type" class="form-label">
+                        Tax Type <span class="required">*</span>
+                    </label>
+                    <select id="tax_type"
+                            name="tax_type"
+                            required
+                            class="form-input">
+                        <option value="">Select tax type</option>
+                        {% for type in tax_types %}
+                        <option value="{{ type.value }}" {{ 'selected' if tax_code and tax_code.tax_type.value == type.value else '' }}>
+                            {{ type.value | replace('_', ' ') | title }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <p class="form-help">VAT, Withholding, Stamp Duty, etc.</p>
+                </div>
+
+                <!-- Jurisdiction -->
+                <div>
+                    <label for="jurisdiction_id" class="form-label">
+                        Jurisdiction <span class="required">*</span>
+                    </label>
+                    <select id="jurisdiction_id"
+                            name="jurisdiction_id"
+                            required
+                            class="form-input">
+                        <option value="">Select jurisdiction</option>
+                        {% for jurisdiction in jurisdictions %}
+                        <option value="{{ jurisdiction.jurisdiction_id }}" {{ 'selected' if tax_code and tax_code.jurisdiction_id == jurisdiction.jurisdiction_id else '' }}>
+                            {{ jurisdiction.jurisdiction_name }} ({{ jurisdiction.country_code }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- Description -->
+                <div class="sm:col-span-2">
+                    <label for="description" class="form-label">
+                        Description
+                    </label>
+                    <textarea id="description"
+                              name="description"
+                              rows="2"
+                              placeholder="Optional description of when this tax code applies"
+                              class="form-input resize-none">{{ tax_code.description if tax_code else '' }}</textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- Rate Configuration -->
+        <div class="form-card fade-up delay-2">
+            <h2 class="section-title">Rate Configuration</h2>
+            <p class="section-subtitle">Define the tax rate and calculation method</p>
+
+            <div class="mt-8 grid gap-6 sm:grid-cols-2">
+                <!-- Rate Type Toggle -->
+                <div class="sm:col-span-2">
+                    <label class="form-label">Rate Type <span class="required">*</span></label>
+                    <div class="rate-type-toggle mt-2">
+                        <input type="radio" id="rate_type_percentage" name="rate_type" value="percentage"
+                               {{ 'checked' if not tax_code or (tax_code and tax_code.tax_rate < 1) else '' }}>
+                        <label for="rate_type_percentage">Percentage (%)</label>
+                        <input type="radio" id="rate_type_fixed" name="rate_type" value="fixed"
+                               {{ 'checked' if tax_code and tax_code.tax_rate >= 1 else '' }}>
+                        <label for="rate_type_fixed">Fixed Amount</label>
+                    </div>
+                    <p class="form-help">Choose percentage for rates like 7.5%, or fixed amount for flat fees like ₦50</p>
+                </div>
+
+                <!-- Tax Rate (Percentage) -->
+                <div id="percentage_rate_field">
+                    <label for="tax_rate_percentage" class="form-label">
+                        Tax Rate <span class="required">*</span>
+                    </label>
+                    <div class="relative">
+                        <input type="number"
+                               id="tax_rate_percentage"
+                               name="tax_rate_percentage"
+                               value="{{ (tax_code.tax_rate * 100)|round(4) if tax_code and tax_code.tax_rate < 1 else '' }}"
+                               min="0"
+                               max="100"
+                               step="0.0001"
+                               placeholder="7.5"
+                               class="form-input has-suffix">
+                        <span class="input-suffix">%</span>
+                    </div>
+                    <p class="form-help">Enter the percentage rate (e.g., 7.5 for 7.5%)</p>
+                </div>
+
+                <!-- Tax Rate (Fixed Amount) -->
+                <div id="fixed_rate_field" style="display: none;">
+                    <label for="tax_rate_fixed" class="form-label">
+                        Fixed Amount <span class="required">*</span>
+                    </label>
+                    <div class="relative">
+                        <span class="input-prefix">₦</span>
+                        <input type="number"
+                               id="tax_rate_fixed"
+                               name="tax_rate_fixed"
+                               value="{{ tax_code.tax_rate if tax_code and tax_code.tax_rate >= 1 else '' }}"
+                               min="0"
+                               step="0.01"
+                               placeholder="50.00"
+                               class="form-input has-prefix">
+                    </div>
+                    <p class="form-help">Enter the fixed amount per transaction</p>
+                </div>
+
+                <!-- Effective From -->
+                <div>
+                    <label for="effective_from" class="form-label">
+                        Effective From <span class="required">*</span>
+                    </label>
+                    <input type="date"
+                           id="effective_from"
+                           name="effective_from"
+                           value="{{ tax_code.effective_from.strftime('%Y-%m-%d') if tax_code else today }}"
+                           required
+                           class="form-input">
+                </div>
+
+                <!-- Effective To -->
+                <div>
+                    <label for="effective_to" class="form-label">
+                        Effective To
+                    </label>
+                    <input type="date"
+                           id="effective_to"
+                           name="effective_to"
+                           value="{{ tax_code.effective_to.strftime('%Y-%m-%d') if tax_code and tax_code.effective_to else '' }}"
+                           class="form-input">
+                    <p class="form-help">Leave blank for no end date</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Calculation Options -->
+        <div class="form-card fade-up delay-3">
+            <h2 class="section-title">Calculation Options</h2>
+            <p class="section-subtitle">Configure how the tax is calculated and applied</p>
+
+            <div class="mt-8 space-y-6">
+                <!-- Compound Tax -->
+                <div class="toggle-wrapper">
+                    <input type="checkbox"
+                           id="is_compound"
+                           name="is_compound"
+                           value="true"
+                           {{ 'checked' if tax_code and tax_code.is_compound else '' }}
+                           class="toggle-input sr-only">
+                    <label for="is_compound" class="toggle-switch"></label>
+                    <div>
+                        <label for="is_compound" class="toggle-label">Compound Tax</label>
+                        <p class="form-help mt-0.5">Tax is calculated on the amount including other taxes</p>
+                    </div>
+                </div>
+
+                <!-- Inclusive Tax -->
+                <div class="toggle-wrapper">
+                    <input type="checkbox"
+                           id="is_inclusive"
+                           name="is_inclusive"
+                           value="true"
+                           {{ 'checked' if tax_code and tax_code.is_inclusive else '' }}
+                           class="toggle-input sr-only">
+                    <label for="is_inclusive" class="toggle-switch"></label>
+                    <div>
+                        <label for="is_inclusive" class="toggle-label">Tax Inclusive</label>
+                        <p class="form-help mt-0.5">Tax is already included in the line item price</p>
+                    </div>
+                </div>
+
+                <!-- Recoverable -->
+                <div class="toggle-wrapper">
+                    <input type="checkbox"
+                           id="is_recoverable"
+                           name="is_recoverable"
+                           value="true"
+                           {{ 'checked' if not tax_code or (tax_code and tax_code.is_recoverable) else '' }}
+                           class="toggle-input sr-only">
+                    <label for="is_recoverable" class="toggle-switch"></label>
+                    <div>
+                        <label for="is_recoverable" class="toggle-label">Recoverable</label>
+                        <p class="form-help mt-0.5">Input tax can be recovered/claimed back</p>
+                    </div>
+                </div>
+
+                <!-- Recovery Rate (shown when recoverable) -->
+                <div id="recovery_rate_wrapper" class="pl-12">
+                    <label for="recovery_rate" class="form-label">Recovery Rate</label>
+                    <div class="relative" style="max-width: 200px;">
+                        <input type="number"
+                               id="recovery_rate"
+                               name="recovery_rate"
+                               value="{{ (tax_code.recovery_rate * 100)|round(2) if tax_code else 100 }}"
+                               min="0"
+                               max="100"
+                               step="0.01"
+                               class="form-input has-suffix">
+                        <span class="input-suffix">%</span>
+                    </div>
+                    <p class="form-help">Percentage of tax that can be recovered (usually 100%)</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Applicability -->
+        <div class="form-card fade-up delay-4">
+            <h2 class="section-title">Applicability</h2>
+            <p class="section-subtitle">Define where this tax code can be used</p>
+
+            <div class="mt-8 grid gap-6 sm:grid-cols-2">
+                <!-- Applies To -->
+                <div class="sm:col-span-2">
+                    <label class="form-label">Applies To <span class="required">*</span></label>
+                    <div class="mt-3 flex flex-wrap gap-6">
+                        <div class="checkbox-wrapper">
+                            <input type="checkbox"
+                                   id="applies_to_sales"
+                                   name="applies_to_sales"
+                                   value="true"
+                                   {{ 'checked' if not tax_code or (tax_code and tax_code.applies_to_sales) else '' }}
+                                   class="checkbox-input">
+                            <label for="applies_to_sales" class="checkbox-label">Sales (AR Invoices)</label>
+                        </div>
+                        <div class="checkbox-wrapper">
+                            <input type="checkbox"
+                                   id="applies_to_purchases"
+                                   name="applies_to_purchases"
+                                   value="true"
+                                   {{ 'checked' if not tax_code or (tax_code and tax_code.applies_to_purchases) else '' }}
+                                   class="checkbox-input">
+                            <label for="applies_to_purchases" class="checkbox-label">Purchases (AP Invoices)</label>
+                        </div>
+                    </div>
+                    <p class="form-help mt-2">Select at least one option</p>
+                </div>
+
+                <!-- Tax Return Box -->
+                <div>
+                    <label for="tax_return_box" class="form-label">
+                        Tax Return Box
+                    </label>
+                    <input type="text"
+                           id="tax_return_box"
+                           name="tax_return_box"
+                           value="{{ tax_code.tax_return_box if tax_code else '' }}"
+                           maxlength="30"
+                           placeholder="e.g., Box 1, Box 4"
+                           class="form-input">
+                    <p class="form-help">FIRS VAT return box reference</p>
+                </div>
+
+                <!-- Reporting Code -->
+                <div>
+                    <label for="reporting_code" class="form-label">
+                        Reporting Code
+                    </label>
+                    <input type="text"
+                           id="reporting_code"
+                           name="reporting_code"
+                           value="{{ tax_code.reporting_code if tax_code else '' }}"
+                           maxlength="30"
+                           placeholder="e.g., STD, ZRL"
+                           class="form-input">
+                    <p class="form-help">Code for tax reporting purposes</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- GL Accounts -->
+        <div class="form-card fade-up delay-5">
+            <h2 class="section-title">GL Accounts</h2>
+            <p class="section-subtitle">Link tax accounts for automatic posting</p>
+
+            <div class="mt-8 grid gap-6 sm:grid-cols-2">
+                <!-- Tax Collected Account (Output VAT) -->
+                <div>
+                    <label for="tax_collected_account_id" class="form-label">
+                        Tax Collected Account
+                    </label>
+                    <select id="tax_collected_account_id"
+                            name="tax_collected_account_id"
+                            class="form-input">
+                        <option value="">Select account</option>
+                        {% for account in liability_accounts %}
+                        <option value="{{ account.account_id }}" {{ 'selected' if tax_code and tax_code.tax_collected_account_id == account.account_id else '' }}>
+                            {{ account.account_code }} - {{ account.account_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <p class="form-help">For output tax on sales (VAT Payable)</p>
+                </div>
+
+                <!-- Tax Paid Account (Input VAT) -->
+                <div>
+                    <label for="tax_paid_account_id" class="form-label">
+                        Tax Paid Account
+                    </label>
+                    <select id="tax_paid_account_id"
+                            name="tax_paid_account_id"
+                            class="form-input">
+                        <option value="">Select account</option>
+                        {% for account in asset_accounts %}
+                        <option value="{{ account.account_id }}" {{ 'selected' if tax_code and tax_code.tax_paid_account_id == account.account_id else '' }}>
+                            {{ account.account_code }} - {{ account.account_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <p class="form-help">For input tax on purchases (VAT Recoverable)</p>
+                </div>
+
+                <!-- Tax Expense Account -->
+                <div class="sm:col-span-2">
+                    <label for="tax_expense_account_id" class="form-label">
+                        Tax Expense Account
+                    </label>
+                    <select id="tax_expense_account_id"
+                            name="tax_expense_account_id"
+                            class="form-input">
+                        <option value="">Select account</option>
+                        {% for account in expense_accounts %}
+                        <option value="{{ account.account_id }}" {{ 'selected' if tax_code and tax_code.tax_expense_account_id == account.account_id else '' }}>
+                            {{ account.account_code }} - {{ account.account_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <p class="form-help">For non-recoverable tax (expensed directly)</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Status (Edit only) -->
+        {% if tax_code %}
+        <div class="form-card fade-up delay-6">
+            <h2 class="section-title">Status</h2>
+            <p class="section-subtitle">Control the tax code's active status</p>
+
+            <div class="mt-6">
+                <div class="toggle-wrapper">
+                    <input type="checkbox"
+                           id="is_active"
+                           name="is_active"
+                           value="true"
+                           {{ 'checked' if tax_code.is_active else '' }}
+                           class="toggle-input sr-only">
+                    <label for="is_active" class="toggle-switch"></label>
+                    <label for="is_active" class="toggle-label">Active</label>
+                </div>
+                <p class="form-help mt-2">Inactive tax codes cannot be selected on new transactions</p>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Form Actions -->
+        <div class="fade-up {% if tax_code %}delay-7{% else %}delay-6{% endif %} flex items-center justify-end gap-4 py-4">
+            <a href="/tax/codes" class="btn-secondary">
+                Cancel
+            </a>
+            <button type="submit" class="btn-primary">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                </svg>
+                {{ "Update Tax Code" if tax_code else "Create Tax Code" }}
+            </button>
+        </div>
+    </form>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Rate type toggle functionality
+        const percentageRadio = document.getElementById('rate_type_percentage');
+        const fixedRadio = document.getElementById('rate_type_fixed');
+        const percentageField = document.getElementById('percentage_rate_field');
+        const fixedField = document.getElementById('fixed_rate_field');
+        const percentageInput = document.getElementById('tax_rate_percentage');
+        const fixedInput = document.getElementById('tax_rate_fixed');
+
+        function toggleRateFields() {
+            if (percentageRadio.checked) {
+                percentageField.style.display = 'block';
+                fixedField.style.display = 'none';
+                percentageInput.required = true;
+                fixedInput.required = false;
+            } else {
+                percentageField.style.display = 'none';
+                fixedField.style.display = 'block';
+                percentageInput.required = false;
+                fixedInput.required = true;
+            }
+        }
+
+        percentageRadio.addEventListener('change', toggleRateFields);
+        fixedRadio.addEventListener('change', toggleRateFields);
+
+        // Initialize on page load
+        toggleRateFields();
+
+        // Recovery rate visibility based on is_recoverable
+        const recoverableCheckbox = document.getElementById('is_recoverable');
+        const recoveryRateWrapper = document.getElementById('recovery_rate_wrapper');
+
+        function toggleRecoveryRate() {
+            recoveryRateWrapper.style.display = recoverableCheckbox.checked ? 'block' : 'none';
+        }
+
+        recoverableCheckbox.addEventListener('change', toggleRecoveryRate);
+        toggleRecoveryRate();
+
+        // Tax type change - show/hide relevant fields
+        const taxTypeSelect = document.getElementById('tax_type');
+
+        taxTypeSelect.addEventListener('change', function() {
+            const isWithholding = this.value === 'WITHHOLDING';
+            // For withholding tax, typically applies to purchases, not sales
+            if (isWithholding) {
+                document.getElementById('applies_to_sales').checked = false;
+                document.getElementById('applies_to_purchases').checked = true;
+            }
+        });
+    });
+</script>
+{% endblock %}

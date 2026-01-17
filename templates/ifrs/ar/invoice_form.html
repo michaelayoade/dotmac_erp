@@ -20,7 +20,7 @@
         --emerald: #059669;
     }
 
-    .font-display { font-family: 'Fraunces', Georgia, serif; }
+    .font-display { font-family: 'DM Sans', system-ui, sans-serif; }
     .font-body { font-family: 'DM Sans', system-ui, sans-serif; }
 
     body {
@@ -73,7 +73,7 @@
 
     /* Section title */
     .section-title {
-        font-family: 'Fraunces', Georgia, serif;
+        font-family: 'DM Sans', system-ui, sans-serif;
         font-weight: 600;
         font-size: 1.25rem;
         color: var(--ink);
@@ -339,7 +339,7 @@
     }
 
     .total-final .total-label {
-        font-family: 'Fraunces', Georgia, serif;
+        font-family: 'DM Sans', system-ui, sans-serif;
         font-weight: 600;
         font-size: 1rem;
         color: var(--ink);
@@ -348,7 +348,7 @@
     .dark .total-final .total-label { color: white; }
 
     .total-final .total-value {
-        font-family: 'Fraunces', Georgia, serif;
+        font-family: 'DM Sans', system-ui, sans-serif;
         font-size: 1.375rem;
         font-weight: 700;
         color: var(--emerald);
@@ -706,14 +706,38 @@
                                            class="table-input text-right">
                                 </td>
                                 <td>
-                                    <select x-model="line.tax_code_id"
-                                            @change="calculateLineAmount(index)"
-                                            class="table-input">
-                                        <option value="">No Tax</option>
-                                        {% for tax in tax_codes %}
-                                        <option value="{{ tax.tax_code_id }}" data-rate="{{ tax.rate }}">{{ tax.tax_code }} ({{ tax.rate }}%)</option>
-                                        {% endfor %}
-                                    </select>
+                                    <!-- Multi-tax selector -->
+                                    <div class="relative" x-data="{ taxOpen: false }">
+                                        <button type="button"
+                                                @click="taxOpen = !taxOpen"
+                                                class="table-input text-left flex items-center justify-between gap-2">
+                                            <span x-text="getTaxLabels(line.tax_code_ids)" class="truncate">No Tax</span>
+                                            <svg class="w-4 h-4 flex-shrink-0 transition-transform" :class="{ 'rotate-180': taxOpen }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                            </svg>
+                                        </button>
+                                        <div x-show="taxOpen"
+                                             @click.away="taxOpen = false"
+                                             x-cloak
+                                             class="absolute z-50 mt-1 w-64 bg-white dark:bg-[var(--ink)] border border-gray-200 dark:border-white/10 rounded-lg shadow-lg py-2 max-h-48 overflow-y-auto">
+                                            <label class="flex items-center px-3 py-1.5 hover:bg-gray-50 dark:hover:bg-white/5 cursor-pointer">
+                                                <input type="checkbox"
+                                                       :checked="!line.tax_code_ids || line.tax_code_ids.length === 0"
+                                                       @change="if($event.target.checked) { line.tax_code_ids = []; calculateLineTaxes(index); }"
+                                                       class="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500">
+                                                <span class="ml-2 text-sm text-[var(--ink)] dark:text-white">No Tax</span>
+                                            </label>
+                                            {% for tax in tax_codes %}
+                                            <label class="flex items-center px-3 py-1.5 hover:bg-gray-50 dark:hover:bg-white/5 cursor-pointer">
+                                                <input type="checkbox"
+                                                       :checked="line.tax_code_ids && line.tax_code_ids.includes('{{ tax.tax_code_id }}')"
+                                                       @change="toggleTaxCode(index, '{{ tax.tax_code_id }}', $event.target.checked)"
+                                                       class="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500">
+                                                <span class="ml-2 text-sm text-[var(--ink)] dark:text-white">{{ tax.tax_code }} ({{ tax.tax_rate }}{% if tax.tax_rate < 1 %}%{% endif %})</span>
+                                            </label>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
                                 </td>
                                 <td>
                                     <div class="amount-display" x-text="formatCurrency(line.amount + (line.tax_amount || 0))"></div>
@@ -736,12 +760,23 @@
 
             <!-- Totals -->
             <div class="mt-8 flex justify-end">
-                <div class="w-80 totals-section">
+                <div class="w-96 totals-section">
                     <div class="total-row">
                         <span class="total-label">Subtotal</span>
                         <span class="total-value" x-text="formatCurrency(subtotal)"></span>
                     </div>
-                    <div class="total-row">
+                    <!-- Tax breakdown by type -->
+                    <template x-for="tax in taxBreakdown" :key="tax.tax_code">
+                        <div class="total-row">
+                            <span class="total-label flex items-center gap-1">
+                                <span x-text="tax.tax_code"></span>
+                                <span class="text-xs text-[var(--ink-muted)]" x-text="'(' + tax.tax_name + ')'"></span>
+                            </span>
+                            <span class="total-value" x-text="formatCurrency(tax.amount)"></span>
+                        </div>
+                    </template>
+                    <!-- Total tax (if no breakdown available yet) -->
+                    <div class="total-row" x-show="taxBreakdown.length === 0 && taxAmount > 0">
                         <span class="total-label">Tax</span>
                         <span class="total-value" x-text="formatCurrency(taxAmount)"></span>
                     </div>
@@ -841,6 +876,13 @@
 
 {% block scripts %}
 <script>
+// Tax code lookup data
+const taxCodeData = {
+    {% for tax in tax_codes %}
+    '{{ tax.tax_code_id }}': { code: '{{ tax.tax_code }}', rate: {{ tax.tax_rate }}, name: '{{ tax.tax_name }}' },
+    {% endfor %}
+};
+
 function invoiceForm() {
     return {
         form: {
@@ -855,13 +897,15 @@ function invoiceForm() {
             terms: '{{ invoice.terms if invoice else "" }}',
             notes: '{{ invoice.notes if invoice else "" }}',
             lines: [
-                { revenue_account_id: '', description: '', quantity: 1, unit_price: 0, amount: 0, tax_code_id: '', tax_amount: 0 }
+                { revenue_account_id: '', description: '', quantity: 1, unit_price: 0, amount: 0, tax_code_ids: [], tax_amount: 0, tax_details: [] }
             ]
         },
         paymentTermsDays: 30,
         customerCreditLimit: 0,
         customerBalance: 0,
         creditWarning: '',
+        taxBreakdown: [], // Aggregated tax breakdown for totals display
+        organizationId: '{{ organization_id }}',
 
         init() {
             if (!this.form.invoice_date) {
@@ -877,11 +921,14 @@ function invoiceForm() {
                     quantity: {{ line.quantity }},
                     unit_price: {{ line.unit_price }},
                     amount: {{ line.quantity * line.unit_price }},
-                    tax_code_id: '{{ line.tax_code_id or "" }}',
-                    tax_amount: {{ line.tax_amount or 0 }}
+                    tax_code_ids: [{% for lt in line.line_taxes %}'{{ lt.tax_code_id }}'{% if not loop.last %}, {% endif %}{% endfor %}],
+                    tax_amount: {{ line.tax_amount or 0 }},
+                    tax_details: []
                 },
                 {% endfor %}
             ];
+            // Recalculate taxes for existing lines
+            this.form.lines.forEach((_, idx) => this.calculateLineTaxes(idx));
             {% endif %}
         },
 
@@ -953,36 +1000,145 @@ function invoiceForm() {
                 quantity: 1,
                 unit_price: 0,
                 amount: 0,
-                tax_code_id: '',
-                tax_amount: 0
+                tax_code_ids: [],
+                tax_amount: 0,
+                tax_details: []
             });
         },
 
         removeLine(index) {
             if (this.form.lines.length > 1) {
                 this.form.lines.splice(index, 1);
+                this.updateTaxBreakdown();
                 this.checkCredit();
             }
         },
 
-        calculateLineAmount(index) {
-            const line = this.form.lines[index];
-            const baseAmount = (line.quantity || 0) * (line.unit_price || 0);
+        // Get display labels for selected tax codes
+        getTaxLabels(taxCodeIds) {
+            if (!taxCodeIds || taxCodeIds.length === 0) {
+                return 'No Tax';
+            }
+            return taxCodeIds.map(id => taxCodeData[id]?.code || id).join(', ');
+        },
 
-            // Calculate tax if tax code selected
-            if (line.tax_code_id) {
-                const taxSelect = document.querySelectorAll('select[x-model="line.tax_code_id"]')[index];
-                if (taxSelect) {
-                    const option = taxSelect.options[taxSelect.selectedIndex];
-                    const rate = parseFloat(option?.dataset?.rate) || 0;
-                    line.tax_amount = baseAmount * (rate / 100);
+        // Toggle a tax code on/off for a line
+        toggleTaxCode(lineIndex, taxCodeId, isChecked) {
+            const line = this.form.lines[lineIndex];
+            if (!line.tax_code_ids) {
+                line.tax_code_ids = [];
+            }
+            if (isChecked) {
+                if (!line.tax_code_ids.includes(taxCodeId)) {
+                    line.tax_code_ids.push(taxCodeId);
                 }
             } else {
+                line.tax_code_ids = line.tax_code_ids.filter(id => id !== taxCodeId);
+            }
+            this.calculateLineTaxes(lineIndex);
+        },
+
+        // Calculate taxes for a line by calling the API
+        async calculateLineTaxes(index) {
+            const line = this.form.lines[index];
+            const baseAmount = (line.quantity || 0) * (line.unit_price || 0);
+            line.amount = baseAmount;
+
+            // If no tax codes selected, clear tax
+            if (!line.tax_code_ids || line.tax_code_ids.length === 0) {
                 line.tax_amount = 0;
+                line.tax_details = [];
+                this.updateTaxBreakdown();
+                this.checkCredit();
+                return;
             }
 
-            line.amount = baseAmount;
+            // Call API for tax calculation
+            try {
+                const response = await fetch(`/api/ifrs/tax/calculate/line?organization_id=${this.organizationId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        line_amount: baseAmount,
+                        tax_code_ids: line.tax_code_ids,
+                        transaction_date: this.form.invoice_date || new Date().toISOString().split('T')[0]
+                    })
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    line.tax_amount = result.total_tax;
+                    line.tax_details = result.taxes || [];
+                } else {
+                    // Fallback to local calculation if API fails
+                    let totalTax = 0;
+                    line.tax_details = [];
+                    for (const taxId of line.tax_code_ids) {
+                        const taxInfo = taxCodeData[taxId];
+                        if (taxInfo) {
+                            const rate = taxInfo.rate < 1 ? taxInfo.rate : taxInfo.rate / 100;
+                            const taxAmount = baseAmount * rate;
+                            totalTax += taxAmount;
+                            line.tax_details.push({
+                                tax_code_id: taxId,
+                                tax_code: taxInfo.code,
+                                tax_name: taxInfo.name,
+                                tax_amount: taxAmount
+                            });
+                        }
+                    }
+                    line.tax_amount = totalTax;
+                }
+            } catch (error) {
+                console.error('Tax calculation error:', error);
+                // Fallback to local calculation
+                let totalTax = 0;
+                line.tax_details = [];
+                for (const taxId of line.tax_code_ids) {
+                    const taxInfo = taxCodeData[taxId];
+                    if (taxInfo) {
+                        const rate = taxInfo.rate < 1 ? taxInfo.rate : taxInfo.rate / 100;
+                        const taxAmount = baseAmount * rate;
+                        totalTax += taxAmount;
+                        line.tax_details.push({
+                            tax_code_id: taxId,
+                            tax_code: taxInfo.code,
+                            tax_name: taxInfo.name,
+                            tax_amount: taxAmount
+                        });
+                    }
+                }
+                line.tax_amount = totalTax;
+            }
+
+            this.updateTaxBreakdown();
             this.checkCredit();
+        },
+
+        // Aggregate tax breakdown from all lines
+        updateTaxBreakdown() {
+            const breakdown = {};
+            for (const line of this.form.lines) {
+                if (line.tax_details) {
+                    for (const tax of line.tax_details) {
+                        const key = tax.tax_code_id || tax.tax_code;
+                        if (!breakdown[key]) {
+                            breakdown[key] = {
+                                tax_code: tax.tax_code,
+                                tax_name: tax.tax_name || tax.tax_code,
+                                amount: 0
+                            };
+                        }
+                        breakdown[key].amount += tax.tax_amount;
+                    }
+                }
+            }
+            this.taxBreakdown = Object.values(breakdown);
+        },
+
+        // Legacy method for quantity/price changes
+        calculateLineAmount(index) {
+            this.calculateLineTaxes(index);
         },
 
         async saveAsDraft() {

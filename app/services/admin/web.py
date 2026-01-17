@@ -9,9 +9,11 @@ from __future__ import annotations
 import json
 from datetime import datetime, timedelta, timezone
 from typing import Optional, TypedDict
+from urllib.parse import urlencode
 from uuid import UUID
 
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
+from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
@@ -25,6 +27,8 @@ from app.models.rbac import Permission, PersonRole, Role, RolePermission
 from app.models.scheduler import ScheduleType, ScheduledTask
 from app.services.auth_flow import hash_password
 from app.services.common import coerce_uuid
+from app.templates import templates
+from app.web.deps import brand_context, WebAuthContext
 
 
 DEFAULT_PAGE_SIZE = 20
@@ -2224,6 +2228,1310 @@ class AdminWebService:
         except Exception as e:
             db.rollback()
             return f"Failed to delete task: {str(e)}"
+
+    def _request_path_with_query(self, request: Request) -> str:
+        if request.url.query:
+            return f"{request.url.path}?{request.url.query}"
+        return request.url.path
+
+    def _admin_login_redirect(self, next_path: str) -> RedirectResponse:
+        return RedirectResponse(
+            url=f"/admin/login?{urlencode({'next': next_path})}",
+            status_code=302,
+        )
+
+    def _require_admin_web_auth(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+    ) -> WebAuthContext | RedirectResponse:
+        if not auth.is_authenticated:
+            return self._admin_login_redirect(self._request_path_with_query(request))
+
+        if "admin" not in auth.roles:
+            raise HTTPException(
+                status_code=403,
+                detail="Admin access required",
+            )
+
+        return auth
+
+    def _render_admin_template(
+        self,
+        request: Request,
+        template_name: str,
+        auth: WebAuthContext,
+        title: str,
+        page_title: str,
+        active_page: str,
+        context: Optional[dict] = None,
+        status_code: Optional[int] = None,
+    ) -> HTMLResponse:
+        payload = {
+            "title": title,
+            "page_title": page_title,
+            "brand": brand_context(),
+            "user": auth.user,
+            "active_page": active_page,
+            **(context or {}),
+        }
+        return templates.TemplateResponse(
+            request,
+            template_name,
+            payload,
+            status_code=status_code,
+        )
+
+    def dashboard_response(
+        self,
+        request: Request,
+        db: Session,
+        auth: WebAuthContext,
+    ) -> HTMLResponse | RedirectResponse:
+        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        if isinstance(auth_or_redirect, RedirectResponse):
+            return auth_or_redirect
+        context = self.dashboard_context(db)
+        return self._render_admin_template(
+            request,
+            "admin/dashboard.html",
+            auth_or_redirect,
+            "Admin Dashboard",
+            "Dashboard",
+            "dashboard",
+            context,
+        )
+
+    def users_response(
+        self,
+        request: Request,
+        db: Session,
+        auth: WebAuthContext,
+        page: int,
+        search: str,
+        status: str,
+    ) -> HTMLResponse | RedirectResponse:
+        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        if isinstance(auth_or_redirect, RedirectResponse):
+            return auth_or_redirect
+        context = self.users_context(db, search, status, page)
+        return self._render_admin_template(
+            request,
+            "admin/users.html",
+            auth_or_redirect,
+            "Users",
+            "Users",
+            "users",
+            context,
+        )
+
+    def users_new_response(
+        self,
+        request: Request,
+        db: Session,
+        auth: WebAuthContext,
+    ) -> HTMLResponse | RedirectResponse:
+        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        if isinstance(auth_or_redirect, RedirectResponse):
+            return auth_or_redirect
+        context = self.user_form_context(db)
+        context.update({"error": None, "success": None})
+        return self._render_admin_template(
+            request,
+            "admin/user_form.html",
+            auth_or_redirect,
+            "Add New User",
+            "Add New User",
+            "users",
+            context,
+        )
+
+    def users_create_response(
+        self,
+        request: Request,
+        db: Session,
+        auth: WebAuthContext,
+        first_name: str,
+        last_name: str,
+        email: str,
+        username: str,
+        organization_id: str,
+        password: str,
+        password_confirm: str,
+        display_name: str,
+        phone: str,
+        status: str,
+        must_change_password: str,
+        roles: list[str],
+    ) -> HTMLResponse | RedirectResponse:
+        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        if isinstance(auth_or_redirect, RedirectResponse):
+            return auth_or_redirect
+        _, error = self.create_user(
+            db=db,
+            first_name=first_name,
+            last_name=last_name,
+            email=email,
+            username=username,
+            organization_id=organization_id,
+            password=password,
+            password_confirm=password_confirm,
+            display_name=display_name,
+            phone=phone,
+            status=status,
+            must_change_password=must_change_password,
+            role_ids=roles,
+        )
+
+        if error:
+            context = self.user_form_context(db)
+            context["user_data"] = self.user_data_from_payload(
+                {
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "display_name": display_name,
+                    "email": email,
+                    "phone": phone,
+                    "status": status,
+                    "organization_id": organization_id,
+                    "username": username,
+                    "must_change_password": must_change_password,
+                    "roles": roles,
+                }
+            )
+            context.update({"error": error, "success": None})
+            return self._render_admin_template(
+                request,
+                "admin/user_form.html",
+                auth_or_redirect,
+                "Add New User",
+                "Add New User",
+                "users",
+                context,
+                status_code=400,
+            )
+
+        return RedirectResponse(url="/admin/users?created=1", status_code=302)
+
+    def users_view_response(
+        self,
+        request: Request,
+        db: Session,
+        auth: WebAuthContext,
+        user_id: str,
+    ) -> HTMLResponse | RedirectResponse:
+        return self.users_edit_response(request, db, auth, user_id)
+
+    def users_edit_response(
+        self,
+        request: Request,
+        db: Session,
+        auth: WebAuthContext,
+        user_id: str,
+    ) -> HTMLResponse | RedirectResponse:
+        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        if isinstance(auth_or_redirect, RedirectResponse):
+            return auth_or_redirect
+        context = self.user_form_context(db, user_id)
+        context.update({"error": None, "success": None})
+        title = f"Edit User - {context['user_data']['first_name']} {context['user_data']['last_name']}"
+        return self._render_admin_template(
+            request,
+            "admin/user_form.html",
+            auth_or_redirect,
+            title,
+            "Edit User",
+            "users",
+            context,
+        )
+
+    def users_update_response(
+        self,
+        request: Request,
+        db: Session,
+        auth: WebAuthContext,
+        user_id: str,
+        first_name: str,
+        last_name: str,
+        email: str,
+        username: str,
+        organization_id: str,
+        password: str,
+        password_confirm: str,
+        display_name: str,
+        phone: str,
+        status: str,
+        must_change_password: str,
+        email_verified: str,
+        roles: list[str],
+    ) -> HTMLResponse | RedirectResponse:
+        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        if isinstance(auth_or_redirect, RedirectResponse):
+            return auth_or_redirect
+        _, error = self.update_user(
+            db=db,
+            user_id=user_id,
+            first_name=first_name,
+            last_name=last_name,
+            email=email,
+            username=username,
+            organization_id=organization_id,
+            password=password,
+            password_confirm=password_confirm,
+            display_name=display_name,
+            phone=phone,
+            status=status,
+            must_change_password=must_change_password,
+            email_verified=email_verified,
+            role_ids=roles,
+        )
+
+        context = self.user_form_context(db, user_id)
+        if error:
+            context["user_data"] = self.user_data_from_payload(
+                {
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "display_name": display_name,
+                    "email": email,
+                    "phone": phone,
+                    "status": status,
+                    "organization_id": organization_id,
+                    "username": username,
+                    "must_change_password": must_change_password,
+                    "email_verified": email_verified,
+                    "roles": roles,
+                },
+                user_id=user_id,
+            )
+            context.update({"error": error, "success": None})
+            return self._render_admin_template(
+                request,
+                "admin/user_form.html",
+                auth_or_redirect,
+                f"Edit User - {first_name} {last_name}",
+                "Edit User",
+                "users",
+                context,
+                status_code=400,
+            )
+
+        context.update({"error": None, "success": "User updated successfully"})
+        return self._render_admin_template(
+            request,
+            "admin/user_form.html",
+            auth_or_redirect,
+            f"Edit User - {first_name} {last_name}",
+            "Edit User",
+            "users",
+            context,
+        )
+
+    def users_delete_response(
+        self,
+        request: Request,
+        db: Session,
+        auth: WebAuthContext,
+        user_id: str,
+    ) -> RedirectResponse:
+        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        if isinstance(auth_or_redirect, RedirectResponse):
+            return auth_or_redirect
+        error = self.delete_user(db, user_id)
+        if error:
+            raise HTTPException(status_code=400, detail=error)
+        return RedirectResponse(url="/admin/users?deleted=1", status_code=302)
+
+    def roles_response(
+        self,
+        request: Request,
+        db: Session,
+        auth: WebAuthContext,
+        page: int,
+        search: str,
+        status: str,
+    ) -> HTMLResponse | RedirectResponse:
+        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        if isinstance(auth_or_redirect, RedirectResponse):
+            return auth_or_redirect
+        context = self.roles_context(db=db, search=search, status=status, page=page)
+        return self._render_admin_template(
+            request,
+            "admin/roles.html",
+            auth_or_redirect,
+            "Roles",
+            "Roles & Permissions",
+            "roles",
+            context,
+        )
+
+    def roles_new_response(
+        self,
+        request: Request,
+        db: Session,
+        auth: WebAuthContext,
+    ) -> HTMLResponse | RedirectResponse:
+        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        if isinstance(auth_or_redirect, RedirectResponse):
+            return auth_or_redirect
+        context = self.role_form_context(db)
+        context.update({"error": None, "success": None})
+        return self._render_admin_template(
+            request,
+            "admin/role_form.html",
+            auth_or_redirect,
+            "Create Role",
+            "Create Role",
+            "roles",
+            context,
+        )
+
+    def roles_create_response(
+        self,
+        request: Request,
+        db: Session,
+        auth: WebAuthContext,
+        name: str,
+        description: str,
+        is_active: str,
+        permissions: list[str],
+    ) -> HTMLResponse | RedirectResponse:
+        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        if isinstance(auth_or_redirect, RedirectResponse):
+            return auth_or_redirect
+        _, error = self.create_role(
+            db=db,
+            name=name,
+            description=description,
+            is_active=is_active == "1",
+            permission_ids=permissions,
+        )
+
+        if error:
+            context = self.role_form_context(db)
+            context.update({"error": error, "success": None})
+            return self._render_admin_template(
+                request,
+                "admin/role_form.html",
+                auth_or_redirect,
+                "Create Role",
+                "Create Role",
+                "roles",
+                context,
+                status_code=400,
+            )
+
+        return RedirectResponse(url="/admin/roles?created=1", status_code=302)
+
+    def roles_view_response(
+        self,
+        request: Request,
+        db: Session,
+        auth: WebAuthContext,
+        role_id: str,
+    ) -> HTMLResponse | RedirectResponse:
+        return self.roles_edit_response(request, db, auth, role_id)
+
+    def roles_edit_response(
+        self,
+        request: Request,
+        db: Session,
+        auth: WebAuthContext,
+        role_id: str,
+    ) -> HTMLResponse | RedirectResponse:
+        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        if isinstance(auth_or_redirect, RedirectResponse):
+            return auth_or_redirect
+        context = self.role_form_context(db, role_id)
+        if not context.get("role_data"):
+            raise HTTPException(status_code=404, detail="Role not found")
+        context.update({"error": None, "success": None})
+        title = f"Edit Role - {context['role_data']['name']}"
+        return self._render_admin_template(
+            request,
+            "admin/role_form.html",
+            auth_or_redirect,
+            title,
+            "Edit Role",
+            "roles",
+            context,
+        )
+
+    def roles_update_response(
+        self,
+        request: Request,
+        db: Session,
+        auth: WebAuthContext,
+        role_id: str,
+        name: str,
+        description: str,
+        is_active: str,
+        permissions: list[str],
+    ) -> HTMLResponse | RedirectResponse:
+        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        if isinstance(auth_or_redirect, RedirectResponse):
+            return auth_or_redirect
+        _, error = self.update_role(
+            db=db,
+            role_id=role_id,
+            name=name,
+            description=description,
+            is_active=is_active == "1",
+            permission_ids=permissions,
+        )
+
+        context = self.role_form_context(db, role_id)
+        if error:
+            context.update({"error": error, "success": None})
+            return self._render_admin_template(
+                request,
+                "admin/role_form.html",
+                auth_or_redirect,
+                f"Edit Role - {name}",
+                "Edit Role",
+                "roles",
+                context,
+                status_code=400,
+            )
+
+        context.update({"error": None, "success": "Role updated successfully"})
+        return self._render_admin_template(
+            request,
+            "admin/role_form.html",
+            auth_or_redirect,
+            f"Edit Role - {name}",
+            "Edit Role",
+            "roles",
+            context,
+        )
+
+    def roles_delete_response(
+        self,
+        request: Request,
+        db: Session,
+        auth: WebAuthContext,
+        role_id: str,
+    ) -> RedirectResponse:
+        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        if isinstance(auth_or_redirect, RedirectResponse):
+            return auth_or_redirect
+        error = self.delete_role(db, role_id)
+        if error:
+            raise HTTPException(status_code=400, detail=error)
+        return RedirectResponse(url="/admin/roles?deleted=1", status_code=302)
+
+    def permissions_response(
+        self,
+        request: Request,
+        db: Session,
+        auth: WebAuthContext,
+        page: int,
+        search: str,
+        status: str,
+    ) -> HTMLResponse | RedirectResponse:
+        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        if isinstance(auth_or_redirect, RedirectResponse):
+            return auth_or_redirect
+        context = self.permissions_context(db=db, search=search, status=status, page=page)
+        return self._render_admin_template(
+            request,
+            "admin/permissions.html",
+            auth_or_redirect,
+            "Permissions",
+            "Permissions",
+            "permissions",
+            context,
+        )
+
+    def permissions_new_response(
+        self,
+        request: Request,
+        db: Session,
+        auth: WebAuthContext,
+    ) -> HTMLResponse | RedirectResponse:
+        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        if isinstance(auth_or_redirect, RedirectResponse):
+            return auth_or_redirect
+        context = self.permission_form_context(db)
+        context.update({"error": None, "success": None})
+        return self._render_admin_template(
+            request,
+            "admin/permission_form.html",
+            auth_or_redirect,
+            "Create Permission",
+            "Create Permission",
+            "permissions",
+            context,
+        )
+
+    def permissions_create_response(
+        self,
+        request: Request,
+        db: Session,
+        auth: WebAuthContext,
+        key: str,
+        description: str,
+        is_active: str,
+    ) -> HTMLResponse | RedirectResponse:
+        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        if isinstance(auth_or_redirect, RedirectResponse):
+            return auth_or_redirect
+        _, error = self.create_permission(
+            db=db,
+            key=key,
+            description=description,
+            is_active=is_active == "1",
+        )
+
+        if error:
+            context = self.permission_form_context(db)
+            context.update({"error": error, "success": None})
+            return self._render_admin_template(
+                request,
+                "admin/permission_form.html",
+                auth_or_redirect,
+                "Create Permission",
+                "Create Permission",
+                "permissions",
+                context,
+                status_code=400,
+            )
+
+        return RedirectResponse(url="/admin/permissions?created=1", status_code=302)
+
+    def permissions_view_response(
+        self,
+        request: Request,
+        db: Session,
+        auth: WebAuthContext,
+        permission_id: str,
+    ) -> HTMLResponse | RedirectResponse:
+        return self.permissions_edit_response(request, db, auth, permission_id)
+
+    def permissions_edit_response(
+        self,
+        request: Request,
+        db: Session,
+        auth: WebAuthContext,
+        permission_id: str,
+    ) -> HTMLResponse | RedirectResponse:
+        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        if isinstance(auth_or_redirect, RedirectResponse):
+            return auth_or_redirect
+        context = self.permission_form_context(db, permission_id)
+        if not context.get("permission_data"):
+            raise HTTPException(status_code=404, detail="Permission not found")
+        context.update({"error": None, "success": None})
+        title = f"Edit Permission - {context['permission_data']['key']}"
+        return self._render_admin_template(
+            request,
+            "admin/permission_form.html",
+            auth_or_redirect,
+            title,
+            "Edit Permission",
+            "permissions",
+            context,
+        )
+
+    def permissions_update_response(
+        self,
+        request: Request,
+        db: Session,
+        auth: WebAuthContext,
+        permission_id: str,
+        key: str,
+        description: str,
+        is_active: str,
+    ) -> HTMLResponse | RedirectResponse:
+        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        if isinstance(auth_or_redirect, RedirectResponse):
+            return auth_or_redirect
+        _, error = self.update_permission(
+            db=db,
+            permission_id=permission_id,
+            key=key,
+            description=description,
+            is_active=is_active == "1",
+        )
+
+        context = self.permission_form_context(db, permission_id)
+        if error:
+            context.update({"error": error, "success": None})
+            return self._render_admin_template(
+                request,
+                "admin/permission_form.html",
+                auth_or_redirect,
+                f"Edit Permission - {key}",
+                "Edit Permission",
+                "permissions",
+                context,
+                status_code=400,
+            )
+
+        context.update({"error": None, "success": "Permission updated successfully"})
+        return self._render_admin_template(
+            request,
+            "admin/permission_form.html",
+            auth_or_redirect,
+            f"Edit Permission - {key}",
+            "Edit Permission",
+            "permissions",
+            context,
+        )
+
+    def permissions_delete_response(
+        self,
+        request: Request,
+        db: Session,
+        auth: WebAuthContext,
+        permission_id: str,
+    ) -> RedirectResponse:
+        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        if isinstance(auth_or_redirect, RedirectResponse):
+            return auth_or_redirect
+        error = self.delete_permission(db, permission_id)
+        if error:
+            raise HTTPException(status_code=400, detail=error)
+        return RedirectResponse(url="/admin/permissions?deleted=1", status_code=302)
+
+    def organizations_response(
+        self,
+        request: Request,
+        db: Session,
+        auth: WebAuthContext,
+        page: int,
+        search: str,
+        status: str,
+    ) -> HTMLResponse | RedirectResponse:
+        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        if isinstance(auth_or_redirect, RedirectResponse):
+            return auth_or_redirect
+        context = self.organizations_context(db=db, search=search, status=status, page=page)
+        return self._render_admin_template(
+            request,
+            "admin/organizations.html",
+            auth_or_redirect,
+            "Organizations",
+            "Organizations",
+            "organizations",
+            context,
+        )
+
+    def organizations_new_response(
+        self,
+        request: Request,
+        db: Session,
+        auth: WebAuthContext,
+    ) -> HTMLResponse | RedirectResponse:
+        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        if isinstance(auth_or_redirect, RedirectResponse):
+            return auth_or_redirect
+        context = self.organization_form_context(
+            db,
+            default_currency_org_id=str(auth_or_redirect.organization_id)
+            if auth_or_redirect.organization_id
+            else None,
+        )
+        context.update({"error": None, "success": None})
+        return self._render_admin_template(
+            request,
+            "admin/organization_form.html",
+            auth_or_redirect,
+            "Create Organization",
+            "Create Organization",
+            "organizations",
+            context,
+        )
+
+    def organizations_create_response(
+        self,
+        request: Request,
+        db: Session,
+        auth: WebAuthContext,
+        organization_code: str,
+        legal_name: str,
+        functional_currency_code: str,
+        presentation_currency_code: str,
+        fiscal_year_end_month: int,
+        fiscal_year_end_day: int,
+        trading_name: str,
+        registration_number: str,
+        tax_identification_number: str,
+        incorporation_date: str,
+        jurisdiction_country_code: str,
+        parent_organization_id: str,
+        consolidation_method: str,
+        ownership_percentage: str,
+        is_active: str,
+    ) -> HTMLResponse | RedirectResponse:
+        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        if isinstance(auth_or_redirect, RedirectResponse):
+            return auth_or_redirect
+        _, error = self.create_organization(
+            db=db,
+            organization_code=organization_code,
+            legal_name=legal_name,
+            functional_currency_code=functional_currency_code,
+            presentation_currency_code=presentation_currency_code,
+            fiscal_year_end_month=fiscal_year_end_month,
+            fiscal_year_end_day=fiscal_year_end_day,
+            trading_name=trading_name or None,
+            registration_number=registration_number or None,
+            tax_identification_number=tax_identification_number or None,
+            incorporation_date=incorporation_date or None,
+            jurisdiction_country_code=jurisdiction_country_code or None,
+            parent_organization_id=parent_organization_id or None,
+            consolidation_method=consolidation_method or None,
+            ownership_percentage=ownership_percentage or None,
+            is_active=is_active == "1",
+        )
+
+        if error:
+            context = self.organization_form_context(
+                db,
+                default_currency_org_id=str(auth_or_redirect.organization_id)
+                if auth_or_redirect.organization_id
+                else None,
+            )
+            context.update({"error": error, "success": None})
+            return self._render_admin_template(
+                request,
+                "admin/organization_form.html",
+                auth_or_redirect,
+                "Create Organization",
+                "Create Organization",
+                "organizations",
+                context,
+                status_code=400,
+            )
+
+        return RedirectResponse(url="/admin/organizations?created=1", status_code=302)
+
+    def organizations_view_response(
+        self,
+        request: Request,
+        db: Session,
+        auth: WebAuthContext,
+        org_id: str,
+    ) -> HTMLResponse | RedirectResponse:
+        return self.organizations_edit_response(request, db, auth, org_id)
+
+    def organizations_edit_response(
+        self,
+        request: Request,
+        db: Session,
+        auth: WebAuthContext,
+        org_id: str,
+    ) -> HTMLResponse | RedirectResponse:
+        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        if isinstance(auth_or_redirect, RedirectResponse):
+            return auth_or_redirect
+        context = self.organization_form_context(db, org_id)
+        if not context.get("organization_data"):
+            raise HTTPException(status_code=404, detail="Organization not found")
+        context.update({"error": None, "success": None})
+        title = f"Edit Organization - {context['organization_data']['legal_name']}"
+        return self._render_admin_template(
+            request,
+            "admin/organization_form.html",
+            auth_or_redirect,
+            title,
+            "Edit Organization",
+            "organizations",
+            context,
+        )
+
+    def organizations_update_response(
+        self,
+        request: Request,
+        db: Session,
+        auth: WebAuthContext,
+        org_id: str,
+        organization_code: str,
+        legal_name: str,
+        functional_currency_code: str,
+        presentation_currency_code: str,
+        fiscal_year_end_month: int,
+        fiscal_year_end_day: int,
+        trading_name: str,
+        registration_number: str,
+        tax_identification_number: str,
+        incorporation_date: str,
+        jurisdiction_country_code: str,
+        parent_organization_id: str,
+        consolidation_method: str,
+        ownership_percentage: str,
+        is_active: str,
+    ) -> HTMLResponse | RedirectResponse:
+        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        if isinstance(auth_or_redirect, RedirectResponse):
+            return auth_or_redirect
+        _, error = self.update_organization(
+            db=db,
+            organization_id=org_id,
+            organization_code=organization_code,
+            legal_name=legal_name,
+            functional_currency_code=functional_currency_code,
+            presentation_currency_code=presentation_currency_code,
+            fiscal_year_end_month=fiscal_year_end_month,
+            fiscal_year_end_day=fiscal_year_end_day,
+            trading_name=trading_name or None,
+            registration_number=registration_number or None,
+            tax_identification_number=tax_identification_number or None,
+            incorporation_date=incorporation_date or None,
+            jurisdiction_country_code=jurisdiction_country_code or None,
+            parent_organization_id=parent_organization_id or None,
+            consolidation_method=consolidation_method or None,
+            ownership_percentage=ownership_percentage or None,
+            is_active=is_active == "1",
+        )
+
+        context = self.organization_form_context(db, org_id)
+        if error:
+            context.update({"error": error, "success": None})
+            return self._render_admin_template(
+                request,
+                "admin/organization_form.html",
+                auth_or_redirect,
+                f"Edit Organization - {legal_name}",
+                "Edit Organization",
+                "organizations",
+                context,
+                status_code=400,
+            )
+
+        context.update({"error": None, "success": "Organization updated successfully"})
+        return self._render_admin_template(
+            request,
+            "admin/organization_form.html",
+            auth_or_redirect,
+            f"Edit Organization - {legal_name}",
+            "Edit Organization",
+            "organizations",
+            context,
+        )
+
+    def organizations_delete_response(
+        self,
+        request: Request,
+        db: Session,
+        auth: WebAuthContext,
+        org_id: str,
+    ) -> RedirectResponse:
+        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        if isinstance(auth_or_redirect, RedirectResponse):
+            return auth_or_redirect
+        error = self.delete_organization(db, org_id)
+        if error:
+            raise HTTPException(status_code=400, detail=error)
+        return RedirectResponse(url="/admin/organizations?deleted=1", status_code=302)
+
+    def settings_response(
+        self,
+        request: Request,
+        db: Session,
+        auth: WebAuthContext,
+        page: int,
+        search: str,
+        status: str,
+        domain: str,
+    ) -> HTMLResponse | RedirectResponse:
+        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        if isinstance(auth_or_redirect, RedirectResponse):
+            return auth_or_redirect
+        context = self.settings_context(db=db, search=search, domain=domain, status=status, page=page)
+        return self._render_admin_template(
+            request,
+            "admin/settings.html",
+            auth_or_redirect,
+            "Settings",
+            "System Settings",
+            "settings",
+            context,
+        )
+
+    def settings_new_response(
+        self,
+        request: Request,
+        db: Session,
+        auth: WebAuthContext,
+    ) -> HTMLResponse | RedirectResponse:
+        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        if isinstance(auth_or_redirect, RedirectResponse):
+            return auth_or_redirect
+        context = self.setting_form_context(db)
+        context.update({"error": None, "success": None})
+        return self._render_admin_template(
+            request,
+            "admin/setting_form.html",
+            auth_or_redirect,
+            "Create Setting",
+            "Create Setting",
+            "settings",
+            context,
+        )
+
+    def settings_create_response(
+        self,
+        request: Request,
+        db: Session,
+        auth: WebAuthContext,
+        domain: str,
+        key: str,
+        value_type: str,
+        value: str,
+        is_secret: str,
+        is_active: str,
+    ) -> HTMLResponse | RedirectResponse:
+        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        if isinstance(auth_or_redirect, RedirectResponse):
+            return auth_or_redirect
+        _, error = self.create_setting(
+            db=db,
+            domain=domain,
+            key=key,
+            value_type=value_type,
+            value=value,
+            is_secret=is_secret == "1",
+            is_active=is_active == "1",
+        )
+
+        if error:
+            context = self.setting_form_context(db)
+            context.update({"error": error, "success": None})
+            return self._render_admin_template(
+                request,
+                "admin/setting_form.html",
+                auth_or_redirect,
+                "Create Setting",
+                "Create Setting",
+                "settings",
+                context,
+                status_code=400,
+            )
+
+        return RedirectResponse(url="/admin/settings?created=1", status_code=302)
+
+    def settings_view_response(
+        self,
+        request: Request,
+        db: Session,
+        auth: WebAuthContext,
+        setting_id: str,
+    ) -> HTMLResponse | RedirectResponse:
+        return self.settings_edit_response(request, db, auth, setting_id)
+
+    def settings_edit_response(
+        self,
+        request: Request,
+        db: Session,
+        auth: WebAuthContext,
+        setting_id: str,
+    ) -> HTMLResponse | RedirectResponse:
+        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        if isinstance(auth_or_redirect, RedirectResponse):
+            return auth_or_redirect
+        context = self.setting_form_context(db, setting_id)
+        if not context.get("setting_data"):
+            raise HTTPException(status_code=404, detail="Setting not found")
+        context.update({"error": None, "success": None})
+        title = f"Edit Setting - {context['setting_data']['key']}"
+        return self._render_admin_template(
+            request,
+            "admin/setting_form.html",
+            auth_or_redirect,
+            title,
+            "Edit Setting",
+            "settings",
+            context,
+        )
+
+    def settings_update_response(
+        self,
+        request: Request,
+        db: Session,
+        auth: WebAuthContext,
+        setting_id: str,
+        domain: str,
+        key: str,
+        value_type: str,
+        value: str,
+        is_secret: str,
+        is_active: str,
+    ) -> HTMLResponse | RedirectResponse:
+        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        if isinstance(auth_or_redirect, RedirectResponse):
+            return auth_or_redirect
+        _, error = self.update_setting(
+            db=db,
+            setting_id=setting_id,
+            domain=domain,
+            key=key,
+            value_type=value_type,
+            value=value,
+            is_secret=is_secret == "1",
+            is_active=is_active == "1",
+        )
+
+        context = self.setting_form_context(db, setting_id)
+        if error:
+            context.update({"error": error, "success": None})
+            return self._render_admin_template(
+                request,
+                "admin/setting_form.html",
+                auth_or_redirect,
+                f"Edit Setting - {key}",
+                "Edit Setting",
+                "settings",
+                context,
+                status_code=400,
+            )
+
+        context.update({"error": None, "success": "Setting updated successfully"})
+        return self._render_admin_template(
+            request,
+            "admin/setting_form.html",
+            auth_or_redirect,
+            f"Edit Setting - {key}",
+            "Edit Setting",
+            "settings",
+            context,
+        )
+
+    def settings_delete_response(
+        self,
+        request: Request,
+        db: Session,
+        auth: WebAuthContext,
+        setting_id: str,
+    ) -> RedirectResponse:
+        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        if isinstance(auth_or_redirect, RedirectResponse):
+            return auth_or_redirect
+        error = self.delete_setting(db, setting_id)
+        if error:
+            raise HTTPException(status_code=400, detail=error)
+        return RedirectResponse(url="/admin/settings?deleted=1", status_code=302)
+
+    def audit_logs_response(
+        self,
+        request: Request,
+        db: Session,
+        auth: WebAuthContext,
+        page: int,
+        search: str,
+        status: str,
+        actor_type: str,
+    ) -> HTMLResponse | RedirectResponse:
+        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        if isinstance(auth_or_redirect, RedirectResponse):
+            return auth_or_redirect
+        context = self.audit_logs_context(
+            db=db,
+            search=search,
+            actor_type=actor_type,
+            status=status,
+            page=page,
+        )
+        return self._render_admin_template(
+            request,
+            "admin/audit_logs.html",
+            auth_or_redirect,
+            "Audit Logs",
+            "Audit Logs",
+            "audit",
+            context,
+        )
+
+    def tasks_response(
+        self,
+        request: Request,
+        db: Session,
+        auth: WebAuthContext,
+        page: int,
+        search: str,
+        status: str,
+    ) -> HTMLResponse | RedirectResponse:
+        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        if isinstance(auth_or_redirect, RedirectResponse):
+            return auth_or_redirect
+        context = self.tasks_context(db=db, search=search, status=status, page=page)
+        return self._render_admin_template(
+            request,
+            "admin/tasks.html",
+            auth_or_redirect,
+            "Scheduled Tasks",
+            "Scheduled Tasks",
+            "tasks",
+            context,
+        )
+
+    def tasks_new_response(
+        self,
+        request: Request,
+        db: Session,
+        auth: WebAuthContext,
+    ) -> HTMLResponse | RedirectResponse:
+        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        if isinstance(auth_or_redirect, RedirectResponse):
+            return auth_or_redirect
+        context = self.task_form_context(db)
+        context.update({"error": None, "success": None})
+        return self._render_admin_template(
+            request,
+            "admin/task_form.html",
+            auth_or_redirect,
+            "Create Task",
+            "Create Task",
+            "tasks",
+            context,
+        )
+
+    def tasks_create_response(
+        self,
+        request: Request,
+        db: Session,
+        auth: WebAuthContext,
+        name: str,
+        task_name: str,
+        schedule_type: str,
+        interval_seconds: int,
+        args_json: str,
+        kwargs_json: str,
+        enabled: str,
+    ) -> HTMLResponse | RedirectResponse:
+        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        if isinstance(auth_or_redirect, RedirectResponse):
+            return auth_or_redirect
+        _, error = self.create_task(
+            db=db,
+            name=name,
+            task_name=task_name,
+            schedule_type=schedule_type,
+            interval_seconds=interval_seconds,
+            args_json=args_json,
+            kwargs_json=kwargs_json,
+            enabled=enabled == "1",
+        )
+
+        if error:
+            context = self.task_form_context(db)
+            context.update({"error": error, "success": None})
+            return self._render_admin_template(
+                request,
+                "admin/task_form.html",
+                auth_or_redirect,
+                "Create Task",
+                "Create Task",
+                "tasks",
+                context,
+                status_code=400,
+            )
+
+        return RedirectResponse(url="/admin/tasks?created=1", status_code=302)
+
+    def tasks_view_response(
+        self,
+        request: Request,
+        db: Session,
+        auth: WebAuthContext,
+        task_id: str,
+    ) -> HTMLResponse | RedirectResponse:
+        return self.tasks_edit_response(request, db, auth, task_id)
+
+    def tasks_edit_response(
+        self,
+        request: Request,
+        db: Session,
+        auth: WebAuthContext,
+        task_id: str,
+    ) -> HTMLResponse | RedirectResponse:
+        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        if isinstance(auth_or_redirect, RedirectResponse):
+            return auth_or_redirect
+        context = self.task_form_context(db, task_id)
+        if not context.get("task_data"):
+            raise HTTPException(status_code=404, detail="Task not found")
+        context.update({"error": None, "success": None})
+        title = f"Edit Task - {context['task_data']['name']}"
+        return self._render_admin_template(
+            request,
+            "admin/task_form.html",
+            auth_or_redirect,
+            title,
+            "Edit Task",
+            "tasks",
+            context,
+        )
+
+    def tasks_update_response(
+        self,
+        request: Request,
+        db: Session,
+        auth: WebAuthContext,
+        task_id: str,
+        name: str,
+        task_name: str,
+        schedule_type: str,
+        interval_seconds: int,
+        args_json: str,
+        kwargs_json: str,
+        enabled: str,
+    ) -> HTMLResponse | RedirectResponse:
+        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        if isinstance(auth_or_redirect, RedirectResponse):
+            return auth_or_redirect
+        _, error = self.update_task(
+            db=db,
+            task_id=task_id,
+            name=name,
+            task_name=task_name,
+            schedule_type=schedule_type,
+            interval_seconds=interval_seconds,
+            args_json=args_json,
+            kwargs_json=kwargs_json,
+            enabled=enabled == "1",
+        )
+
+        context = self.task_form_context(db, task_id)
+        if error:
+            context.update({"error": error, "success": None})
+            return self._render_admin_template(
+                request,
+                "admin/task_form.html",
+                auth_or_redirect,
+                f"Edit Task - {name}",
+                "Edit Task",
+                "tasks",
+                context,
+                status_code=400,
+            )
+
+        context.update({"error": None, "success": "Task updated successfully"})
+        return self._render_admin_template(
+            request,
+            "admin/task_form.html",
+            auth_or_redirect,
+            f"Edit Task - {name}",
+            "Edit Task",
+            "tasks",
+            context,
+        )
+
+    def tasks_delete_response(
+        self,
+        request: Request,
+        db: Session,
+        auth: WebAuthContext,
+        task_id: str,
+    ) -> RedirectResponse:
+        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        if isinstance(auth_or_redirect, RedirectResponse):
+            return auth_or_redirect
+        error = self.delete_task(db, task_id)
+        if error:
+            raise HTTPException(status_code=400, detail=error)
+        return RedirectResponse(url="/admin/tasks?deleted=1", status_code=302)
 
 
 admin_web_service = AdminWebService()

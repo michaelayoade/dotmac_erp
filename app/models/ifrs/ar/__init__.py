@@ -9,6 +9,7 @@ from app.models.ifrs.ar.performance_obligation import PerformanceObligation, Sat
 from app.models.ifrs.ar.revenue_recognition_event import RevenueRecognitionEvent
 from app.models.ifrs.ar.invoice import Invoice, InvoiceType, InvoiceStatus
 from app.models.ifrs.ar.invoice_line import InvoiceLine
+from app.models.ifrs.ar.invoice_line_tax import InvoiceLineTax
 from app.models.ifrs.ar.customer_payment import CustomerPayment, PaymentMethod, PaymentStatus
 from app.models.ifrs.ar.payment_allocation import PaymentAllocation
 from app.models.ifrs.ar.expected_credit_loss import ExpectedCreditLoss, ECLMethodology, ECLStage
@@ -34,6 +35,7 @@ __all__ = [
     "InvoiceType",
     "InvoiceStatus",
     "InvoiceLine",
+    "InvoiceLineTax",
     "CustomerPayment",
     "PaymentMethod",
     "PaymentStatus",

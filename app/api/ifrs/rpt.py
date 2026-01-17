@@ -14,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
+from app.models.ifrs.rpt.report_definition import ReportType
 from app.schemas.ifrs.common import ListResponse
 from app.services.ifrs.rpt import (
     report_definition_service,
@@ -22,8 +23,6 @@ from app.services.ifrs.rpt import (
     disclosure_checklist_service,
     report_scheduler_service,
     ReportDefinitionInput,
-    ReportColumn,
-    ReportFilter,
     StatementLineInput,
     ReportGenerationRequest,
     DisclosureItemInput,
@@ -52,10 +51,21 @@ class ReportDefinitionCreate(BaseModel):
 
     report_code: str = Field(max_length=30)
     report_name: str = Field(max_length=200)
-    report_type: str = Field(max_length=30)  # BALANCE_SHEET, INCOME, CASH_FLOW, EQUITY
+    report_type: str = Field(max_length=30)  # BALANCE_SHEET, INCOME_STATEMENT, etc
+    data_source_type: str = Field(max_length=50)
     description: Optional[str] = None
-    columns: list["ReportColumnCreate"]
-    filters: list["ReportFilterCreate"] = []
+    category: Optional[str] = None
+    subcategory: Optional[str] = None
+    default_format: str = "PDF"
+    supported_formats: Optional[list] = None
+    report_structure: Optional[dict] = None
+    column_definitions: Optional[dict] = None
+    row_definitions: Optional[dict] = None
+    filter_definitions: Optional[dict] = None
+    data_source_config: Optional[dict] = None
+    template_file_path: Optional[str] = None
+    required_permissions: Optional[list] = None
+    is_system_report: bool = False
 
 
 class ReportColumnCreate(BaseModel):
@@ -84,14 +94,21 @@ class ReportDefinitionRead(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
-    report_id: UUID
+    report_def_id: UUID
     organization_id: UUID
     report_code: str
     report_name: str
     report_type: str
     description: Optional[str]
+    category: Optional[str]
+    subcategory: Optional[str]
+    default_format: str
+    supported_formats: Optional[list]
+    data_source_type: str
+    is_system_report: bool
     is_active: bool
-    version: int
+    created_by_user_id: UUID
+    created_at: datetime
 
 
 class StatementLineCreate(BaseModel):
@@ -130,9 +147,10 @@ class StatementLineRead(BaseModel):
 class ReportInstanceCreate(BaseModel):
     """Create report instance request."""
 
-    report_id: UUID
-    fiscal_period_id: UUID
-    as_of_date: date
+    report_def_id: Optional[UUID] = None
+    report_code: Optional[str] = None
+    output_format: str = "PDF"
+    fiscal_period_id: Optional[UUID] = None
     parameters: Optional[dict] = None
 
 
@@ -143,24 +161,27 @@ class ReportInstanceRead(BaseModel):
 
     instance_id: UUID
     organization_id: UUID
-    report_id: UUID
-    fiscal_period_id: UUID
-    as_of_date: date
+    report_def_id: UUID
+    fiscal_period_id: Optional[UUID]
+    parameters_used: Optional[dict]
+    output_format: str
+    output_file_path: Optional[str]
+    output_size_bytes: Optional[int]
     status: str
+    queued_at: datetime
+    started_at: Optional[datetime]
+    completed_at: Optional[datetime]
     generated_at: Optional[datetime]
-    generated_by_user_id: Optional[UUID]
-    file_path: Optional[str]
+    generated_by_user_id: UUID
 
 
 class ReportDataRead(BaseModel):
     """Report data response."""
 
     instance_id: UUID
+    report_def_id: UUID
     report_name: str
-    as_of_date: date
-    headers: list[str]
-    rows: list[dict]
-    totals: Optional[dict]
+    payload: dict
 
 
 class DisclosureItemCreate(BaseModel):
@@ -279,34 +300,24 @@ def create_report_definition(
     db: Session = Depends(get_db),
 ):
     """Create a new report definition."""
-    columns = [
-        ReportColumn(
-            column_code=col.column_code,
-            column_name=col.column_name,
-            column_type=col.column_type,
-            sequence=col.sequence,
-            formula=col.formula,
-            data_source=col.data_source,
-        )
-        for col in payload.columns
-    ]
-    filters = [
-        ReportFilter(
-            filter_code=f.filter_code,
-            filter_name=f.filter_name,
-            filter_type=f.filter_type,
-            default_value=f.default_value,
-            is_required=f.is_required,
-        )
-        for f in payload.filters
-    ]
     input_data = ReportDefinitionInput(
         report_code=payload.report_code,
         report_name=payload.report_name,
-        report_type=payload.report_type,
+        report_type=ReportType(payload.report_type),
+        data_source_type=payload.data_source_type,
         description=payload.description,
-        columns=columns,
-        filters=filters,
+        category=payload.category,
+        subcategory=payload.subcategory,
+        default_format=payload.default_format,
+        supported_formats=payload.supported_formats,
+        report_structure=payload.report_structure,
+        column_definitions=payload.column_definitions,
+        row_definitions=payload.row_definitions,
+        filter_definitions=payload.filter_definitions,
+        data_source_config=payload.data_source_config,
+        template_file_path=payload.template_file_path,
+        required_permissions=payload.required_permissions,
+        is_system_report=payload.is_system_report,
     )
     return report_definition_service.create_definition(
         db=db,
@@ -338,7 +349,7 @@ def list_report_definitions(
     definitions = report_definition_service.list(
         db=db,
         organization_id=str(organization_id),
-        report_type=report_type,
+        report_type=ReportType(report_type) if report_type else None,
         is_active=is_active,
         limit=limit,
         offset=offset,
@@ -364,10 +375,10 @@ def clone_report_definition(
     return report_definition_service.clone_definition(
         db=db,
         organization_id=organization_id,
-        source_report_id=report_id,
+        source_def_id=report_id,
         new_report_code=new_report_code,
         new_report_name=new_report_name,
-        cloned_by_user_id=cloned_by_user_id,
+        created_by_user_id=cloned_by_user_id,
     )
 
 
@@ -459,9 +470,10 @@ def create_report_instance(
 ):
     """Create a report instance (schedule for generation)."""
     request = ReportGenerationRequest(
-        report_id=payload.report_id,
+        report_def_id=payload.report_def_id,
+        report_code=payload.report_code,
+        output_format=payload.output_format,
         fiscal_period_id=payload.fiscal_period_id,
-        as_of_date=payload.as_of_date,
         parameters=payload.parameters,
     )
     return report_instance_service.create_instance(
@@ -484,7 +496,7 @@ def get_report_instance(
 @router.get("/instances", response_model=ListResponse[ReportInstanceRead])
 def list_report_instances(
     organization_id: UUID = Query(...),
-    report_id: Optional[UUID] = None,
+    report_def_id: Optional[UUID] = None,
     fiscal_period_id: Optional[UUID] = None,
     status: Optional[str] = None,
     limit: int = Query(default=50, ge=1, le=200),
@@ -495,7 +507,7 @@ def list_report_instances(
     instances = report_instance_service.list(
         db=db,
         organization_id=str(organization_id),
-        report_id=str(report_id) if report_id else None,
+        report_def_id=str(report_def_id) if report_def_id else None,
         fiscal_period_id=str(fiscal_period_id) if fiscal_period_id else None,
         status=status,
         limit=limit,
@@ -532,10 +544,18 @@ def get_report_data(
     db: Session = Depends(get_db),
 ):
     """Get generated report data."""
-    return report_instance_service.get_report_data(
+    payload = report_instance_service.get_report_data(
         db=db,
         organization_id=str(organization_id),
         instance_id=str(instance_id),
+    )
+    instance = report_instance_service.get(db, str(instance_id))
+    definition = report_definition_service.get(db, str(instance.report_def_id))
+    return ReportDataRead(
+        instance_id=instance.instance_id,
+        report_def_id=definition.report_def_id,
+        report_name=definition.report_name,
+        payload=payload,
     )
 
 

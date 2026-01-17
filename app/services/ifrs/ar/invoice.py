@@ -29,8 +29,10 @@ from app.models.ifrs.core_org.reporting_segment import ReportingSegment
 from app.models.ifrs.gl.account import Account
 from app.models.ifrs.inv.item import Item
 from app.models.ifrs.tax.tax_code import TaxCode
+from app.models.ifrs.ar.invoice_line_tax import InvoiceLineTax
 from app.services.common import coerce_uuid
 from app.services.ifrs.platform.sequence import SequenceService
+from app.services.ifrs.tax.tax_calculation import TaxCalculationService
 from app.services.response import ListResponseMixin
 
 
@@ -43,8 +45,10 @@ class ARInvoiceLineInput:
     unit_price: Decimal
     revenue_account_id: Optional[UUID] = None
     item_id: Optional[UUID] = None
+    # Multiple tax codes per line (replaces single tax_code_id)
+    tax_code_ids: list[UUID] = field(default_factory=list)
+    # Keep legacy field for backwards compatibility during transition
     tax_code_id: Optional[UUID] = None
-    tax_amount: Decimal = Decimal("0")
     discount_amount: Decimal = Decimal("0")
     cost_center_id: Optional[UUID] = None
     project_id: Optional[UUID] = None
@@ -138,14 +142,9 @@ class ARInvoiceService(ListResponseMixin):
         if input.contract_id:
             _require_org_match(db, org_id, Contract, input.contract_id, "Contract")
 
-        # Calculate totals
-        subtotal = Decimal("0")
-        tax_total = Decimal("0")
-        discount_total = Decimal("0")
-
+        # Validate referenced entities for all lines
         for line in input.lines:
             _require_org_match(db, org_id, Account, line.revenue_account_id, "Revenue account")
-            _require_org_match(db, org_id, TaxCode, line.tax_code_id, "Tax code")
             _require_org_match(db, org_id, Item, line.item_id, "Item")
             _require_org_match(db, org_id, CostCenter, line.cost_center_id, "Cost center")
             _require_org_match(db, org_id, Project, line.project_id, "Project")
@@ -157,10 +156,42 @@ class ARInvoiceService(ListResponseMixin):
                 line.performance_obligation_id,
                 "Performance obligation",
             )
+            # Validate tax codes
+            for tc_id in line.tax_code_ids:
+                _require_org_match(db, org_id, TaxCode, tc_id, "Tax code")
+            # Legacy single tax code support
+            if line.tax_code_id and not line.tax_code_ids:
+                _require_org_match(db, org_id, TaxCode, line.tax_code_id, "Tax code")
 
+        # Calculate totals with auto tax calculation
+        subtotal = Decimal("0")
+        tax_total = Decimal("0")
+        discount_total = Decimal("0")
+
+        # Pre-calculate taxes for all lines
+        line_tax_results = []
+        for line in input.lines:
             line_amount = line.quantity * line.unit_price - line.discount_amount
             subtotal += line_amount
-            tax_total += line.tax_amount
+
+            # Build list of tax codes (support both new and legacy format)
+            effective_tax_codes = list(line.tax_code_ids) if line.tax_code_ids else []
+            if line.tax_code_id and line.tax_code_id not in effective_tax_codes:
+                effective_tax_codes.append(line.tax_code_id)
+
+            # Calculate taxes using centralized service
+            if effective_tax_codes:
+                tax_result = TaxCalculationService.calculate_line_taxes(
+                    db=db,
+                    organization_id=org_id,
+                    line_amount=line_amount,
+                    tax_code_ids=effective_tax_codes,
+                    transaction_date=input.invoice_date,
+                )
+                line_tax_results.append(tax_result)
+                tax_total += tax_result.total_tax
+            else:
+                line_tax_results.append(None)
 
         total_amount = subtotal + tax_total
 
@@ -211,11 +242,23 @@ class ARInvoiceService(ListResponseMixin):
         db.add(invoice)
         db.flush()
 
-        # Create lines
+        # Create lines and their tax records
         for idx, line_input in enumerate(input.lines, start=1):
             line_amount = line_input.quantity * line_input.unit_price - line_input.discount_amount
             if input.invoice_type == InvoiceType.CREDIT_NOTE:
                 line_amount = -abs(line_amount)
+
+            # Get the pre-calculated tax result for this line
+            tax_result = line_tax_results[idx - 1]
+            line_tax_total = tax_result.total_tax if tax_result else Decimal("0")
+            if input.invoice_type == InvoiceType.CREDIT_NOTE and tax_result:
+                line_tax_total = -abs(line_tax_total)
+
+            # Get primary tax code ID for legacy compatibility (first tax code)
+            effective_tax_codes = list(line_input.tax_code_ids) if line_input.tax_code_ids else []
+            if line_input.tax_code_id and line_input.tax_code_id not in effective_tax_codes:
+                effective_tax_codes.append(line_input.tax_code_id)
+            primary_tax_code_id = effective_tax_codes[0] if effective_tax_codes else None
 
             line = InvoiceLine(
                 invoice_id=invoice.invoice_id,
@@ -225,8 +268,8 @@ class ARInvoiceService(ListResponseMixin):
                 unit_price=line_input.unit_price,
                 line_amount=line_amount,
                 discount_amount=line_input.discount_amount,
-                tax_code_id=line_input.tax_code_id,
-                tax_amount=line_input.tax_amount,
+                tax_code_id=primary_tax_code_id,  # Primary tax for backwards compatibility
+                tax_amount=line_tax_total,  # Total of all taxes on this line
                 revenue_account_id=line_input.revenue_account_id
                 or customer.default_revenue_account_id,
                 item_id=line_input.item_id,
@@ -236,6 +279,27 @@ class ARInvoiceService(ListResponseMixin):
                 obligation_id=line_input.performance_obligation_id,
             )
             db.add(line)
+            db.flush()  # Get line_id for tax records
+
+            # Create InvoiceLineTax records for each tax
+            if tax_result and tax_result.taxes:
+                for tax_detail in tax_result.taxes:
+                    tax_amount = tax_detail.tax_amount
+                    base_amount = tax_detail.base_amount
+                    if input.invoice_type == InvoiceType.CREDIT_NOTE:
+                        tax_amount = -abs(tax_amount)
+                        base_amount = -abs(base_amount)
+
+                    line_tax = InvoiceLineTax(
+                        line_id=line.line_id,
+                        tax_code_id=tax_detail.tax_code_id,
+                        base_amount=base_amount,
+                        tax_rate=tax_detail.tax_rate,
+                        tax_amount=tax_amount,
+                        is_inclusive=tax_detail.is_inclusive,
+                        sequence=tax_detail.sequence,
+                    )
+                    db.add(line_tax)
 
         db.commit()
         db.refresh(invoice)

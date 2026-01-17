@@ -3,11 +3,11 @@ Customer Model - AR Schema.
 """
 import enum
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Optional
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Index, Integer, Numeric, String, Text, UniqueConstraint, func, text
+from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Index, Integer, Numeric, String, Text, UniqueConstraint, func, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -69,6 +69,7 @@ class Customer(Base):
     # Credit
     credit_limit: Mapped[Optional[Decimal]] = mapped_column(Numeric(20, 6), nullable=True)
     credit_terms_days: Mapped[int] = mapped_column(Integer, nullable=False, default=30)
+    credit_hold: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     payment_terms_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
@@ -112,6 +113,30 @@ class Customer(Base):
     related_party_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     related_party_relationship: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
+    # Withholding Tax (WHT) Configuration
+    # When true, this customer deducts WHT when paying invoices
+    is_wht_applicable: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        comment="Customer deducts WHT on payments to us",
+    )
+    default_wht_code_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+        comment="Default WHT rate for this customer",
+    )
+    wht_exemption_certificate: Mapped[Optional[str]] = mapped_column(
+        String(100),
+        nullable=True,
+        comment="WHT exemption certificate number",
+    )
+    wht_exemption_expiry: Mapped[Optional[date]] = mapped_column(
+        Date,
+        nullable=True,
+        comment="When WHT exemption expires",
+    )
+
     # Contact & Address (JSONB for flexibility)
     billing_address: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
     shipping_address: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
@@ -123,10 +148,22 @@ class Customer(Base):
     )
 
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+    # Audit fields
+    created_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+        comment="User who created/imported this customer",
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
+    )
+    updated_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+        comment="User who last updated this customer",
     )
     updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True),

@@ -70,6 +70,120 @@
             {% endif %}
         </div>
 
+        {% if balance_sheet_lines %}
+        <div class="grid gap-8 lg:grid-cols-2">
+            <section class="space-y-6">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white border-b-2 border-blue-200 dark:border-blue-800 pb-2">
+                    <span class="flex items-center gap-2">
+                        <span class="h-3 w-3 rounded-full bg-blue-500"></span>
+                        Assets
+                    </span>
+                </h2>
+                <div>
+                    <h3 class="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-2">Current Assets</h3>
+                    <table class="w-full text-sm">
+                        <tbody>
+                            {% for item in balance_sheet_lines.current_assets %}
+                            <tr>
+                                <td class="py-1 px-2 text-slate-700 dark:text-slate-300">{{ item.name }}</td>
+                                <td class="py-1 px-2 text-right font-mono text-slate-900 dark:text-white">{{ item.amount }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div>
+                    <h3 class="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-2">Non-Current Assets</h3>
+                    <table class="w-full text-sm">
+                        <tbody>
+                            {% for item in balance_sheet_lines.non_current_assets %}
+                            <tr>
+                                <td class="py-1 px-2 text-slate-700 dark:text-slate-300">{{ item.name }}</td>
+                                <td class="py-1 px-2 text-right font-mono text-slate-900 dark:text-white">{{ item.amount }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot>
+                            <tr class="border-t border-blue-200 dark:border-blue-800">
+                                <td class="py-2 px-2 font-semibold text-slate-700 dark:text-slate-300">Total Assets</td>
+                                <td class="py-2 px-2 text-right font-mono font-semibold text-blue-600 dark:text-blue-400">{{ total_assets }}</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </section>
+
+            <section class="space-y-6">
+                <div>
+                    <h2 class="text-lg font-semibold text-slate-900 dark:text-white border-b-2 border-rose-200 dark:border-rose-800 pb-2 mb-4">
+                        <span class="flex items-center gap-2">
+                            <span class="h-3 w-3 rounded-full bg-rose-500"></span>
+                            Liabilities
+                        </span>
+                    </h2>
+                    <h3 class="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-2">Current Liabilities</h3>
+                    <table class="w-full text-sm mb-4">
+                        <tbody>
+                            {% for item in balance_sheet_lines.current_liabilities %}
+                            <tr>
+                                <td class="py-1 px-2 text-slate-700 dark:text-slate-300">{{ item.name }}</td>
+                                <td class="py-1 px-2 text-right font-mono text-slate-900 dark:text-white">{{ item.amount }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    <h3 class="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-2">Non-Current Liabilities</h3>
+                    <table class="w-full text-sm">
+                        <tbody>
+                            {% for item in balance_sheet_lines.non_current_liabilities %}
+                            <tr>
+                                <td class="py-1 px-2 text-slate-700 dark:text-slate-300">{{ item.name }}</td>
+                                <td class="py-1 px-2 text-right font-mono text-slate-900 dark:text-white">{{ item.amount }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot>
+                            <tr class="border-t border-rose-200 dark:border-rose-800">
+                                <td class="py-2 px-2 font-semibold text-slate-700 dark:text-slate-300">Total Liabilities</td>
+                                <td class="py-2 px-2 text-right font-mono font-semibold text-rose-600 dark:text-rose-400">{{ total_liabilities }}</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+                <div>
+                    <h2 class="text-lg font-semibold text-slate-900 dark:text-white border-b-2 border-emerald-200 dark:border-emerald-800 pb-2 mb-4">
+                        <span class="flex items-center gap-2">
+                            <span class="h-3 w-3 rounded-full bg-emerald-500"></span>
+                            Equity
+                        </span>
+                    </h2>
+                    <table class="w-full text-sm">
+                        <tbody>
+                            {% for item in balance_sheet_lines.equity %}
+                            <tr>
+                                <td class="py-1 px-2 text-slate-700 dark:text-slate-300">{{ item.name }}</td>
+                                <td class="py-1 px-2 text-right font-mono text-slate-900 dark:text-white">{{ item.amount }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot>
+                            <tr class="border-t border-emerald-200 dark:border-emerald-800">
+                                <td class="py-2 px-2 font-semibold text-slate-700 dark:text-slate-300">Total Equity</td>
+                                <td class="py-2 px-2 text-right font-mono font-semibold text-emerald-600 dark:text-emerald-400">{{ total_equity }}</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+
+                <div class="pt-4 border-t-2 border-slate-300 dark:border-slate-600">
+                    <div class="flex justify-between items-center py-3 px-2 rounded-lg bg-slate-100 dark:bg-slate-800">
+                        <span class="font-bold text-slate-900 dark:text-white">Total Liabilities + Equity</span>
+                        <span class="font-mono font-bold text-slate-900 dark:text-white">{{ total_liabilities_equity }}</span>
+                    </div>
+                </div>
+            </section>
+        </div>
+        {% else %}
         <div class="grid gap-8 lg:grid-cols-2">
             <!-- Assets Column -->
             <section>
@@ -190,6 +304,7 @@
             <h3 class="empty-state-title">No Data Available</h3>
             <p class="empty-state-description">No balance sheet accounts found for the selected period.</p>
         </div>
+        {% endif %}
         {% endif %}
     </div>
 </div>

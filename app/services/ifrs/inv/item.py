@@ -142,6 +142,106 @@ class ItemCategoryService(ListResponseMixin):
         return category
 
     @staticmethod
+    def update_category(
+        db: Session,
+        organization_id: UUID,
+        category_id: UUID,
+        updates: dict[str, Any],
+    ) -> ItemCategory:
+        """
+        Update a category's attributes.
+
+        Args:
+            db: Database session
+            organization_id: Organization scope
+            category_id: Category to update
+            updates: Dictionary of field updates
+
+        Returns:
+            Updated ItemCategory
+        """
+        org_id = coerce_uuid(organization_id)
+        cat_id = coerce_uuid(category_id)
+
+        category = db.get(ItemCategory, cat_id)
+        if not category or category.organization_id != org_id:
+            raise HTTPException(status_code=404, detail="Item category not found")
+
+        # Fields that cannot be updated
+        immutable_fields = {"category_code", "organization_id", "category_id"}
+
+        for key, value in updates.items():
+            if key in immutable_fields:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Cannot update field '{key}'",
+                )
+            if hasattr(category, key):
+                setattr(category, key, value)
+
+        db.commit()
+        db.refresh(category)
+
+        return category
+
+    @staticmethod
+    def deactivate_category(
+        db: Session,
+        organization_id: UUID,
+        category_id: UUID,
+    ) -> ItemCategory:
+        """
+        Deactivate a category (soft delete).
+
+        The category cannot be deactivated if it has active items.
+
+        Args:
+            db: Database session
+            organization_id: Organization scope
+            category_id: Category to deactivate
+
+        Returns:
+            Updated ItemCategory
+
+        Raises:
+            HTTPException: If category not found or has active items
+        """
+        org_id = coerce_uuid(organization_id)
+        cat_id = coerce_uuid(category_id)
+
+        category = db.get(ItemCategory, cat_id)
+        if not category or category.organization_id != org_id:
+            raise HTTPException(status_code=404, detail="Item category not found")
+
+        if not category.is_active:
+            raise HTTPException(status_code=400, detail="Category is already inactive")
+
+        # Check if category has active items
+        from app.models.ifrs.inv.item import Item
+        active_items_count = (
+            db.query(Item)
+            .filter(
+                and_(
+                    Item.category_id == cat_id,
+                    Item.is_active.is_(True),
+                )
+            )
+            .count()
+        )
+
+        if active_items_count > 0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot deactivate category with {active_items_count} active items",
+            )
+
+        category.is_active = False
+        db.commit()
+        db.refresh(category)
+
+        return category
+
+    @staticmethod
     def get(
         db: Session,
         category_id: str,
@@ -157,6 +257,7 @@ class ItemCategoryService(ListResponseMixin):
         db: Session,
         organization_id: Optional[str] = None,
         is_active: Optional[bool] = None,
+        search: Optional[str] = None,
         limit: int = 50,
         offset: int = 0,
     ) -> list[ItemCategory]:
@@ -171,8 +272,42 @@ class ItemCategoryService(ListResponseMixin):
         if is_active is not None:
             query = query.filter(ItemCategory.is_active == is_active)
 
+        if search:
+            search_pattern = f"%{search}%"
+            query = query.filter(
+                (ItemCategory.category_code.ilike(search_pattern))
+                | (ItemCategory.category_name.ilike(search_pattern))
+            )
+
         query = query.order_by(ItemCategory.category_code)
         return query.limit(limit).offset(offset).all()
+
+    @staticmethod
+    def count(
+        db: Session,
+        organization_id: Optional[str] = None,
+        is_active: Optional[bool] = None,
+        search: Optional[str] = None,
+    ) -> int:
+        """Count item categories with filters."""
+        query = db.query(ItemCategory)
+
+        if organization_id:
+            query = query.filter(
+                ItemCategory.organization_id == coerce_uuid(organization_id)
+            )
+
+        if is_active is not None:
+            query = query.filter(ItemCategory.is_active == is_active)
+
+        if search:
+            search_pattern = f"%{search}%"
+            query = query.filter(
+                (ItemCategory.category_code.ilike(search_pattern))
+                | (ItemCategory.category_name.ilike(search_pattern))
+            )
+
+        return query.count()
 
 
 class ItemService(ListResponseMixin):

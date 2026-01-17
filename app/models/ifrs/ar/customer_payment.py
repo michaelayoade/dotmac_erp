@@ -70,11 +70,40 @@ class CustomerPayment(Base):
 
     # Amounts
     currency_code: Mapped[str] = mapped_column(String(3), nullable=False)
-    amount: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
+    # The gross amount before WHT deduction
+    gross_amount: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6),
+        nullable=False,
+        comment="Amount before WHT deduction",
+    )
+    # Net amount received (after WHT deduction) - this was originally 'amount'
+    amount: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6),
+        nullable=False,
+        comment="Net amount received (after WHT)",
+    )
     exchange_rate: Mapped[Optional[Decimal]] = mapped_column(Numeric(20, 10), nullable=True)
     functional_currency_amount: Mapped[Decimal] = mapped_column(
         Numeric(20, 6),
         nullable=False,
+    )
+
+    # Withholding Tax (WHT) - when customer deducts WHT before paying
+    wht_code_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+        comment="WHT rate applied by customer",
+    )
+    wht_amount: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6),
+        nullable=False,
+        default=0,
+        comment="WHT deducted by customer",
+    )
+    wht_certificate_number: Mapped[Optional[str]] = mapped_column(
+        String(100),
+        nullable=True,
+        comment="WHT certificate number received from customer",
     )
 
     # Bank

@@ -73,6 +73,23 @@ class InvoiceLine(Base):
     project_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
     segment_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
 
+    # Inventory integration
+    warehouse_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("inv.warehouse.warehouse_id"),
+        nullable=True,
+    )
+    lot_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("inv.inventory_lot.lot_id"),
+        nullable=True,
+    )
+    inventory_transaction_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("inv.inventory_transaction.transaction_id"),
+        nullable=True,
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -81,7 +98,13 @@ class InvoiceLine(Base):
 
     # Relationships
     invoice: Mapped["Invoice"] = relationship("Invoice", back_populates="lines")
+    line_taxes: Mapped[list["InvoiceLineTax"]] = relationship(
+        "InvoiceLineTax",
+        back_populates="invoice_line",
+        cascade="all, delete-orphan",
+    )
 
 
-# Forward reference
+# Forward references
 from app.models.ifrs.ar.invoice import Invoice  # noqa: E402
+from app.models.ifrs.ar.invoice_line_tax import InvoiceLineTax  # noqa: E402

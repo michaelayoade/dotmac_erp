@@ -181,6 +181,80 @@ class AssetCategoryService(ListResponseMixin):
         query = query.order_by(AssetCategory.category_code)
         return query.limit(limit).offset(offset).all()
 
+    @staticmethod
+    def update_category(
+        db: Session,
+        organization_id: UUID,
+        category_id: str,
+        input: AssetCategoryInput,
+        is_active: Optional[bool] = None,
+    ) -> AssetCategory:
+        """Update an asset category."""
+        org_id = coerce_uuid(organization_id)
+        cat_id = coerce_uuid(category_id)
+
+        category = db.get(AssetCategory, cat_id)
+        if not category or category.organization_id != org_id:
+            raise HTTPException(status_code=404, detail="Asset category not found")
+
+        if category.category_code != input.category_code:
+            existing = (
+                db.query(AssetCategory)
+                .filter(
+                    and_(
+                        AssetCategory.organization_id == org_id,
+                        AssetCategory.category_code == input.category_code,
+                    )
+                )
+                .first()
+            )
+            if existing:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Category code '{input.category_code}' already exists",
+                )
+
+        category.category_code = input.category_code
+        category.category_name = input.category_name
+        category.description = input.description
+        category.parent_category_id = input.parent_category_id
+        category.depreciation_method = input.depreciation_method
+        category.useful_life_months = input.useful_life_months
+        category.residual_value_percent = input.residual_value_percent
+        category.asset_account_id = input.asset_account_id
+        category.accumulated_depreciation_account_id = input.accumulated_depreciation_account_id
+        category.depreciation_expense_account_id = input.depreciation_expense_account_id
+        category.gain_loss_disposal_account_id = input.gain_loss_disposal_account_id
+        category.revaluation_surplus_account_id = input.revaluation_surplus_account_id
+        category.impairment_loss_account_id = input.impairment_loss_account_id
+        category.capitalization_threshold = input.capitalization_threshold
+        category.revaluation_model_allowed = input.revaluation_model_allowed
+        if is_active is not None:
+            category.is_active = is_active
+
+        db.commit()
+        db.refresh(category)
+        return category
+
+    @staticmethod
+    def toggle_category(
+        db: Session,
+        organization_id: UUID,
+        category_id: str,
+    ) -> AssetCategory:
+        """Toggle asset category active status."""
+        org_id = coerce_uuid(organization_id)
+        cat_id = coerce_uuid(category_id)
+
+        category = db.get(AssetCategory, cat_id)
+        if not category or category.organization_id != org_id:
+            raise HTTPException(status_code=404, detail="Asset category not found")
+
+        category.is_active = not category.is_active
+        db.commit()
+        db.refresh(category)
+        return category
+
 
 class AssetService(ListResponseMixin):
     """

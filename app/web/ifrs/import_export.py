@@ -4,12 +4,15 @@ Import/Export Web Routes.
 HTML template routes for data import functionality.
 """
 
-from fastapi import APIRouter, Depends, Request
-from fastapi.responses import HTMLResponse
+from typing import Optional
+
+from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app.web.deps import get_db, require_web_auth, WebAuthContext, base_context
+from app.services.ifrs.import_export.web import import_web_service
 
 templates = Jinja2Templates(directory="templates")
 
@@ -184,3 +187,59 @@ def import_form(
     context["columns"] = entity_columns.get(entity_type, {"required": [], "optional": []})
 
     return templates.TemplateResponse(request, "ifrs/import_export/import_form.html", context)
+
+
+@router.post("/{entity_type}/preview", response_class=JSONResponse)
+async def preview_import(
+    request: Request,
+    entity_type: str,
+    file: UploadFile = File(...),
+    auth: WebAuthContext = Depends(require_web_auth),
+    db: Session = Depends(get_db),
+):
+    """Preview import with validation and column mapping (web route)."""
+    try:
+        result = await import_web_service.preview_import(
+            db=db,
+            organization_id=auth.organization_id,
+            user_id=auth.person_id,
+            entity_type=entity_type,
+            file=file,
+        )
+        return JSONResponse(content=result)
+    except ValueError as e:
+        return JSONResponse(content={"detail": str(e)}, status_code=400)
+    except Exception as e:
+        return JSONResponse(content={"detail": f"Preview failed: {str(e)}"}, status_code=500)
+
+
+@router.post("/{entity_type}", response_class=JSONResponse)
+async def execute_import(
+    request: Request,
+    entity_type: str,
+    file: UploadFile = File(...),
+    skip_duplicates: Optional[str] = Form(default=None),
+    dry_run: Optional[str] = Form(default=None),
+    auth: WebAuthContext = Depends(require_web_auth),
+    db: Session = Depends(get_db),
+):
+    """Execute import operation (web route)."""
+    try:
+        # Handle both checkbox (sends nothing when unchecked) and explicit "true"/"false" strings
+        skip_dups = skip_duplicates is not None and skip_duplicates.lower() in ("true", "1", "on", "")
+        is_dry_run = dry_run is not None and dry_run.lower() in ("true", "1", "on", "")
+
+        result = await import_web_service.execute_import(
+            db=db,
+            organization_id=auth.organization_id,
+            user_id=auth.person_id,
+            entity_type=entity_type,
+            file=file,
+            skip_duplicates=skip_dups,
+            dry_run=is_dry_run,
+        )
+        return JSONResponse(content=result)
+    except ValueError as e:
+        return JSONResponse(content={"detail": str(e)}, status_code=400)
+    except Exception as e:
+        return JSONResponse(content={"detail": f"Import failed: {str(e)}"}, status_code=500)

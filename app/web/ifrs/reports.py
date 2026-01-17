@@ -11,16 +11,11 @@ from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
 from app.services.ifrs.rpt.web import reports_web_service
-from app.templates import templates
-from app.web.deps import get_db, require_web_auth, WebAuthContext, base_context
+from app.web.deps import get_db, require_web_auth, WebAuthContext
 
 
 router = APIRouter(prefix="/reports", tags=["reports-web"])
 
-
-# =============================================================================
-# Reports Dashboard
-# =============================================================================
 
 @router.get("", response_class=HTMLResponse)
 @router.get("/", response_class=HTMLResponse)
@@ -32,21 +27,8 @@ def reports_dashboard(
     db: Session = Depends(get_db),
 ):
     """Reports dashboard/hub page."""
-    context = base_context(request, auth, "Reports", "reports")
-    context.update(
-        reports_web_service.dashboard_context(
-            db,
-            str(auth.organization_id),
-            start_date=start_date,
-            end_date=end_date,
-        )
-    )
-    return templates.TemplateResponse(request, "ifrs/reports/dashboard.html", context)
+    return reports_web_service.dashboard_response(request, auth, start_date, end_date, db)
 
-
-# =============================================================================
-# Trial Balance
-# =============================================================================
 
 @router.get("/trial-balance", response_class=HTMLResponse)
 def trial_balance_report(
@@ -56,20 +38,8 @@ def trial_balance_report(
     db: Session = Depends(get_db),
 ):
     """Trial balance report page."""
-    context = base_context(request, auth, "Trial Balance", "reports")
-    context.update(
-        reports_web_service.trial_balance_context(
-            db,
-            str(auth.organization_id),
-            as_of_date=as_of_date,
-        )
-    )
-    return templates.TemplateResponse(request, "ifrs/reports/trial_balance.html", context)
+    return reports_web_service.trial_balance_response(request, auth, as_of_date, db)
 
-
-# =============================================================================
-# Income Statement
-# =============================================================================
 
 @router.get("/income-statement", response_class=HTMLResponse)
 def income_statement_report(
@@ -80,21 +50,8 @@ def income_statement_report(
     db: Session = Depends(get_db),
 ):
     """Income statement report page."""
-    context = base_context(request, auth, "Income Statement", "reports")
-    context.update(
-        reports_web_service.income_statement_context(
-            db,
-            str(auth.organization_id),
-            start_date=start_date,
-            end_date=end_date,
-        )
-    )
-    return templates.TemplateResponse(request, "ifrs/reports/income_statement.html", context)
+    return reports_web_service.income_statement_response(request, auth, start_date, end_date, db)
 
-
-# =============================================================================
-# Balance Sheet
-# =============================================================================
 
 @router.get("/balance-sheet", response_class=HTMLResponse)
 def balance_sheet_report(
@@ -104,20 +61,8 @@ def balance_sheet_report(
     db: Session = Depends(get_db),
 ):
     """Balance sheet report page."""
-    context = base_context(request, auth, "Balance Sheet", "reports")
-    context.update(
-        reports_web_service.balance_sheet_context(
-            db,
-            str(auth.organization_id),
-            as_of_date=as_of_date,
-        )
-    )
-    return templates.TemplateResponse(request, "ifrs/reports/balance_sheet.html", context)
+    return reports_web_service.balance_sheet_response(request, auth, as_of_date, db)
 
-
-# =============================================================================
-# AP Aging
-# =============================================================================
 
 @router.get("/ap-aging", response_class=HTMLResponse)
 def ap_aging_report(
@@ -127,20 +72,8 @@ def ap_aging_report(
     db: Session = Depends(get_db),
 ):
     """AP aging report page."""
-    context = base_context(request, auth, "AP Aging Report", "reports")
-    context.update(
-        reports_web_service.ap_aging_context(
-            db,
-            str(auth.organization_id),
-            as_of_date=as_of_date,
-        )
-    )
-    return templates.TemplateResponse(request, "ifrs/reports/ap_aging.html", context)
+    return reports_web_service.ap_aging_response(request, auth, as_of_date, db)
 
-
-# =============================================================================
-# AR Aging
-# =============================================================================
 
 @router.get("/ar-aging", response_class=HTMLResponse)
 def ar_aging_report(
@@ -150,20 +83,8 @@ def ar_aging_report(
     db: Session = Depends(get_db),
 ):
     """AR aging report page."""
-    context = base_context(request, auth, "AR Aging Report", "reports")
-    context.update(
-        reports_web_service.ar_aging_context(
-            db,
-            str(auth.organization_id),
-            as_of_date=as_of_date,
-        )
-    )
-    return templates.TemplateResponse(request, "ifrs/reports/ar_aging.html", context)
+    return reports_web_service.ar_aging_response(request, auth, as_of_date, db)
 
-
-# =============================================================================
-# General Ledger
-# =============================================================================
 
 @router.get("/general-ledger", response_class=HTMLResponse)
 def general_ledger_report(
@@ -175,22 +96,15 @@ def general_ledger_report(
     db: Session = Depends(get_db),
 ):
     """General ledger detail report page."""
-    context = base_context(request, auth, "General Ledger", "reports")
-    context.update(
-        reports_web_service.general_ledger_context(
-            db,
-            str(auth.organization_id),
-            account_id=account_id,
-            start_date=start_date,
-            end_date=end_date,
-        )
+    return reports_web_service.general_ledger_response(
+        request,
+        auth,
+        account_id,
+        start_date,
+        end_date,
+        db,
     )
-    return templates.TemplateResponse(request, "ifrs/reports/general_ledger.html", context)
 
-
-# =============================================================================
-# Tax Summary Report
-# =============================================================================
 
 @router.get("/tax-summary", response_class=HTMLResponse)
 def tax_summary_report(
@@ -201,21 +115,8 @@ def tax_summary_report(
     db: Session = Depends(get_db),
 ):
     """Tax summary report page."""
-    context = base_context(request, auth, "Tax Summary", "reports")
-    context.update(
-        reports_web_service.tax_summary_context(
-            db,
-            str(auth.organization_id),
-            start_date=start_date,
-            end_date=end_date,
-        )
-    )
-    return templates.TemplateResponse(request, "ifrs/reports/tax_summary.html", context)
+    return reports_web_service.tax_summary_response(request, auth, start_date, end_date, db)
 
-
-# =============================================================================
-# Expense Summary Report
-# =============================================================================
 
 @router.get("/expense-summary", response_class=HTMLResponse)
 def expense_summary_report(
@@ -226,13 +127,46 @@ def expense_summary_report(
     db: Session = Depends(get_db),
 ):
     """Expense summary report page."""
-    context = base_context(request, auth, "Expense Summary", "reports")
-    context.update(
-        reports_web_service.expense_summary_context(
-            db,
-            str(auth.organization_id),
-            start_date=start_date,
-            end_date=end_date,
-        )
+    return reports_web_service.expense_summary_response(request, auth, start_date, end_date, db)
+
+
+@router.get("/cash-flow", response_class=HTMLResponse)
+def cash_flow_report(
+    request: Request,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    auth: WebAuthContext = Depends(require_web_auth),
+    db: Session = Depends(get_db),
+):
+    """Cash flow statement report page."""
+    return reports_web_service.cash_flow_response(request, auth, start_date, end_date, db)
+
+
+@router.get("/changes-in-equity", response_class=HTMLResponse)
+def changes_in_equity_report(
+    request: Request,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    auth: WebAuthContext = Depends(require_web_auth),
+    db: Session = Depends(get_db),
+):
+    """Changes in equity report page."""
+    return reports_web_service.changes_in_equity_response(
+        request, auth, start_date, end_date, db
     )
-    return templates.TemplateResponse(request, "ifrs/reports/expense_summary.html", context)
+
+
+@router.get("/budget-vs-actual", response_class=HTMLResponse)
+def budget_vs_actual_report(
+    request: Request,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    budget_id: Optional[str] = None,
+    budget_code: Optional[str] = None,
+    auth: WebAuthContext = Depends(require_web_auth),
+    db: Session = Depends(get_db),
+):
+    """Budget vs actual report page."""
+    return reports_web_service.budget_vs_actual_response(
+        request, auth, start_date, end_date, budget_id, budget_code, db
+    )

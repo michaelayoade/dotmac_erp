@@ -4,6 +4,26 @@ import logging.config
 from datetime import datetime, timezone
 
 
+def _get_request_context() -> dict:
+    """Get request context from context variables if available.
+
+    This allows automatic inclusion of request_id and actor_id in logs
+    without explicitly passing them.
+    """
+    try:
+        from app.observability import get_request_id, get_actor_id
+        context = {}
+        request_id = get_request_id()
+        if request_id:
+            context["request_id"] = request_id
+        actor_id = get_actor_id()
+        if actor_id:
+            context["actor_id"] = actor_id
+        return context
+    except ImportError:
+        return {}
+
+
 class JsonLogFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         payload = {
@@ -12,6 +32,11 @@ class JsonLogFormatter(logging.Formatter):
             "logger": record.name,
             "message": record.getMessage(),
         }
+
+        # Auto-include request context from context variables
+        payload.update(_get_request_context())
+
+        # Override with explicitly passed values
         for key in (
             "request_id",
             "actor_id",

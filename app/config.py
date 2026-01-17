@@ -53,4 +53,5 @@ class Settings:
     landing_content_json: str | None = os.getenv("LANDING_CONTENT_JSON") or None
 
 
+
 settings = Settings()

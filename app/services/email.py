@@ -42,7 +42,8 @@ def _get_db_setting(db: Session | None, key: str) -> object | None:
     try:
         from app.services.settings_spec import resolve_value
         return resolve_value(db, SettingDomain.email, key)
-    except Exception:
+    except (ImportError, AttributeError, KeyError) as exc:
+        logger.debug("Could not resolve email setting %s: %s", key, exc)
         return None
 
 
@@ -125,11 +126,12 @@ def send_email(
         if server:
             try:
                 server.quit()
-            except Exception:
+            except (smtplib.SMTPException, OSError) as quit_exc:
+                logger.debug("SMTP quit failed, trying close: %s", quit_exc)
                 try:
                     server.close()
-                except Exception:
-                    pass
+                except (smtplib.SMTPException, OSError) as close_exc:
+                    logger.debug("SMTP close also failed: %s", close_exc)
 
 
 def send_password_reset_email(

@@ -631,6 +631,56 @@ def detect_csv_format(columns: List[str]) -> str:
     return "generic"
 
 
+def find_account_by_subledger_type(
+    db: Session, organization_id: UUID, subledger_type: str
+) -> Optional[UUID]:
+    """Find account by subledger type.
+
+    Args:
+        db: Database session
+        organization_id: Organization UUID
+        subledger_type: The subledger type to search for (e.g., 'ar', 'ap')
+
+    Returns:
+        Account UUID if found, None otherwise
+    """
+    from sqlalchemy import select
+    from app.models.ifrs.gl.account import Account
+
+    result = db.execute(
+        select(Account).where(
+            Account.organization_id == organization_id,
+            Account.subledger_type == subledger_type,
+        )
+    ).scalar_one_or_none()
+    return result.account_id if result else None
+
+
+def find_account_by_name_pattern(
+    db: Session, organization_id: UUID, pattern: str
+) -> Optional[UUID]:
+    """Find account by name pattern (case-insensitive).
+
+    Args:
+        db: Database session
+        organization_id: Organization UUID
+        pattern: The pattern to search for in account name
+
+    Returns:
+        Account UUID if found, None otherwise
+    """
+    from sqlalchemy import select
+    from app.models.ifrs.gl.account import Account
+
+    result = db.execute(
+        select(Account).where(
+            Account.organization_id == organization_id,
+            Account.account_name.ilike(f"%{pattern}%"),
+        )
+    ).first()
+    return result[0].account_id if result else None
+
+
 class BaseImporter(ABC, Generic[T]):
     """
     Base class for all entity importers.
@@ -706,6 +756,10 @@ class BaseImporter(ABC, Generic[T]):
             try:
                 transformed[mapping.target_field] = mapping.transform(source_value)
             except Exception as e:
+                if mapping.required:
+                    raise ValueError(
+                        f"Failed to transform required field '{mapping.source_field}': {e}"
+                    ) from e
                 self.result.add_warning(
                     row_num,
                     f"Failed to transform value '{source_value}': {str(e)}",
@@ -806,7 +860,7 @@ class BaseImporter(ABC, Generic[T]):
 
             try:
                 # Validate
-                if not self.validate_row(row, idx):
+                if not self.validate_with_rules(row, idx):
                     self.result.skipped_count += 1
                     continue
 

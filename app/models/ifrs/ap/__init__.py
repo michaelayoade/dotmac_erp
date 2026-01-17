@@ -9,6 +9,7 @@ from app.models.ifrs.ap.goods_receipt import GoodsReceipt, ReceiptStatus
 from app.models.ifrs.ap.goods_receipt_line import GoodsReceiptLine
 from app.models.ifrs.ap.supplier_invoice import SupplierInvoice, SupplierInvoiceType, SupplierInvoiceStatus
 from app.models.ifrs.ap.supplier_invoice_line import SupplierInvoiceLine
+from app.models.ifrs.ap.supplier_invoice_line_tax import SupplierInvoiceLineTax
 from app.models.ifrs.ap.supplier_payment import SupplierPayment, APPaymentMethod, APPaymentStatus
 from app.models.ifrs.ap.ap_payment_allocation import APPaymentAllocation
 from app.models.ifrs.ap.payment_batch import APPaymentBatch, APBatchStatus
@@ -27,6 +28,7 @@ __all__ = [
     "SupplierInvoiceType",
     "SupplierInvoiceStatus",
     "SupplierInvoiceLine",
+    "SupplierInvoiceLineTax",
     "SupplierPayment",
     "APPaymentMethod",
     "APPaymentStatus",

@@ -15,12 +15,10 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from pydantic import BaseModel, Field
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db import get_db_session
 from app.services.auth_dependencies import get_current_user_id, get_current_org_id
-from app.models.ifrs.gl.account import Account
 from app.services.ifrs.import_export import (
     AccountImporter,
     CustomerImporter,
@@ -40,6 +38,8 @@ from app.services.ifrs.import_export import (
     detect_csv_format,
     get_ar_control_account,
     get_ap_control_account,
+    find_account_by_subledger_type,
+    find_account_by_name_pattern,
 )
 
 
@@ -143,28 +143,6 @@ class ImportPreviewResponse(BaseModel):
             detected_format=result.detected_format,
             is_valid=result.is_valid,
         )
-
-
-def _find_account_by_type(db: Session, org_id: UUID, subledger_type: str) -> Optional[UUID]:
-    """Find account by subledger type."""
-    result = db.execute(
-        select(Account).where(
-            Account.organization_id == org_id,
-            Account.subledger_type == subledger_type,
-        )
-    ).scalar_one_or_none()
-    return result.account_id if result else None
-
-
-def _find_account_by_name_pattern(db: Session, org_id: UUID, pattern: str) -> Optional[UUID]:
-    """Find account by name pattern."""
-    result = db.execute(
-        select(Account).where(
-            Account.organization_id == org_id,
-            Account.account_name.ilike(f"%{pattern}%"),
-        )
-    ).first()
-    return result[0].account_id if result else None
 
 
 @router.get("/supported-types")
@@ -412,7 +390,7 @@ def _get_importer(entity_type: EntityType, db: Session, config: ImportConfig):
     elif entity_type == EntityType.CUSTOMERS:
         ar_control_id = get_ar_control_account(db, org_id)
         if not ar_control_id:
-            ar_control_id = _find_account_by_name_pattern(db, org_id, "receivable")
+            ar_control_id = find_account_by_name_pattern(db, org_id, "receivable")
         if not ar_control_id:
             raise ValueError("No AR control account found. Import accounts first.")
         return CustomerImporter(db, config, ar_control_id)
@@ -420,43 +398,43 @@ def _get_importer(entity_type: EntityType, db: Session, config: ImportConfig):
     elif entity_type == EntityType.SUPPLIERS:
         ap_control_id = get_ap_control_account(db, org_id)
         if not ap_control_id:
-            ap_control_id = _find_account_by_name_pattern(db, org_id, "payable")
+            ap_control_id = find_account_by_name_pattern(db, org_id, "payable")
         if not ap_control_id:
             raise ValueError("No AP control account found. Import accounts first.")
         return SupplierImporter(db, config, ap_control_id)
 
     elif entity_type == EntityType.ITEMS:
-        inv_account = _find_account_by_type(db, org_id, "INVENTORY")
+        inv_account = find_account_by_subledger_type(db, org_id, "INVENTORY")
         if not inv_account:
-            inv_account = _find_account_by_name_pattern(db, org_id, "inventory")
+            inv_account = find_account_by_name_pattern(db, org_id, "inventory")
         if not inv_account:
             raise ValueError("No inventory account found. Import accounts first.")
         return ItemImporter(db, config, inv_account, inv_account, inv_account, inv_account)
 
     elif entity_type == EntityType.ASSETS:
-        asset_account = _find_account_by_type(db, org_id, "ASSET")
+        asset_account = find_account_by_subledger_type(db, org_id, "ASSET")
         if not asset_account:
-            asset_account = _find_account_by_name_pattern(db, org_id, "fixed asset")
+            asset_account = find_account_by_name_pattern(db, org_id, "fixed asset")
         if not asset_account:
             raise ValueError("No fixed asset account found. Import accounts first.")
         return AssetImporter(db, config, asset_account, asset_account, asset_account, asset_account)
 
     elif entity_type == EntityType.BANK_ACCOUNTS:
-        gl_account = _find_account_by_type(db, org_id, "BANK")
+        gl_account = find_account_by_subledger_type(db, org_id, "BANK")
         return BankAccountImporter(db, config, gl_account)
 
     elif entity_type == EntityType.INVOICES:
         ar_control_id = get_ar_control_account(db, org_id)
         if not ar_control_id:
             raise ValueError("No AR control account found. Import accounts first.")
-        revenue_account = _find_account_by_name_pattern(db, org_id, "sales") or ar_control_id
+        revenue_account = find_account_by_name_pattern(db, org_id, "sales") or ar_control_id
         return InvoiceImporter(db, config, ar_control_id, revenue_account)
 
     elif entity_type == EntityType.EXPENSES:
-        expense_account = _find_account_by_name_pattern(db, org_id, "expense")
+        expense_account = find_account_by_name_pattern(db, org_id, "expense")
         if not expense_account:
             raise ValueError("No expense account found. Import accounts first.")
-        payment_account = _find_account_by_type(db, org_id, "BANK")
+        payment_account = find_account_by_subledger_type(db, org_id, "BANK")
         return ExpenseImporter(db, config, expense_account, payment_account)
 
     elif entity_type == EntityType.CUSTOMER_PAYMENTS:

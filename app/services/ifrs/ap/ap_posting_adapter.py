@@ -24,6 +24,8 @@ from app.models.ifrs.ap.supplier_invoice import (
     SupplierInvoiceType,
 )
 from app.models.ifrs.ap.supplier_invoice_line import SupplierInvoiceLine
+from app.models.ifrs.inv.item import Item
+from app.models.ifrs.inv.item_category import ItemCategory
 from app.services.common import coerce_uuid
 from app.services.ifrs.gl.journal import JournalService, JournalInput, JournalLineInput
 from app.services.ifrs.gl.ledger_posting import LedgerPostingService, PostingRequest
@@ -116,12 +118,12 @@ class APPostingAdapter:
         journal_lines: list[JournalLineInput] = []
         exchange_rate = invoice.exchange_rate or Decimal("1.0")
 
-        # Debit lines (expense/asset accounts)
+        # Debit lines (expense/asset/inventory accounts)
         for inv_line in lines:
-            # Determine account (expense or asset)
-            account_id = inv_line.expense_account_id or inv_line.asset_account_id
-            if not account_id:
-                account_id = supplier.default_expense_account_id
+            # Determine account using smart routing
+            account_id = APPostingAdapter._determine_debit_account(
+                db, org_id, inv_line, supplier
+            )
 
             if not account_id:
                 return APPostingResult(
@@ -262,6 +264,18 @@ class APPostingAdapter:
                 is_credit_note=invoice.invoice_type == SupplierInvoiceType.CREDIT_NOTE,
             )
 
+            # Create fixed assets for capitalizable lines (AP → FA integration)
+            # Only for standard invoices, not credit notes
+            if invoice.invoice_type != SupplierInvoiceType.CREDIT_NOTE:
+                APPostingAdapter._create_assets_for_capitalizable_lines(
+                    db=db,
+                    organization_id=org_id,
+                    invoice=invoice,
+                    lines=lines,
+                    supplier=supplier,
+                    user_id=user_id,
+                )
+
             return APPostingResult(
                 success=True,
                 journal_entry_id=journal.journal_entry_id,
@@ -329,29 +343,61 @@ class APPostingAdapter:
             return APPostingResult(success=False, message="Supplier not found")
 
         exchange_rate = payment.exchange_rate or Decimal("1.0")
-        functional_amount = payment.payment_amount * exchange_rate
+
+        # Determine amounts - handle WHT deduction
+        # gross_amount = invoice amount (what we owe)
+        # amount = net paid to bank (after WHT deduction)
+        # withholding_tax_amount = WHT withheld
+        wht_amount = payment.withholding_tax_amount or Decimal("0")
+        gross_amount = payment.gross_amount or (payment.amount + wht_amount)
+        net_amount = payment.amount
+
+        gross_functional = gross_amount * exchange_rate
+        net_functional = net_amount * exchange_rate
+        wht_functional = wht_amount * exchange_rate
 
         # Build journal lines
         journal_lines = [
-            # Debit AP Control (reduce liability)
+            # Debit AP Control (reduce liability) - GROSS amount
             JournalLineInput(
                 account_id=supplier.ap_control_account_id,
-                debit_amount=payment.payment_amount,
+                debit_amount=gross_amount,
                 credit_amount=Decimal("0"),
-                debit_amount_functional=functional_amount,
+                debit_amount_functional=gross_functional,
                 credit_amount_functional=Decimal("0"),
                 description=f"Payment to {supplier.legal_name}",
             ),
-            # Credit Bank/Cash
+            # Credit Bank/Cash - NET amount (what we actually pay)
             JournalLineInput(
                 account_id=payment.bank_account_id,
                 debit_amount=Decimal("0"),
-                credit_amount=payment.payment_amount,
+                credit_amount=net_amount,
                 debit_amount_functional=Decimal("0"),
-                credit_amount_functional=functional_amount,
+                credit_amount_functional=net_functional,
                 description=f"AP Payment: {payment.payment_number}",
             ),
         ]
+
+        # Add WHT Payable line if WHT is withheld
+        # WHT we withhold goes to tax_collected_account (liability to remit to tax authority)
+        if wht_amount > Decimal("0") and payment.withholding_tax_code_id:
+            from app.models.ifrs.tax.tax_code import TaxCode
+
+            wht_code = db.get(TaxCode, payment.withholding_tax_code_id)
+            # Use tax_collected_account_id for WHT payable (what we owe to tax authority)
+            wht_account_id = wht_code.tax_collected_account_id if wht_code else None
+
+            if wht_account_id:
+                journal_lines.append(
+                    JournalLineInput(
+                        account_id=wht_account_id,
+                        debit_amount=Decimal("0"),
+                        credit_amount=wht_amount,
+                        debit_amount_functional=Decimal("0"),
+                        credit_amount_functional=wht_functional,
+                        description=f"WHT withheld: {payment.payment_number}",
+                    )
+                )
 
         # Create journal entry
         journal_input = JournalInput(
@@ -406,6 +452,17 @@ class APPostingAdapter:
                     success=False,
                     journal_entry_id=journal.journal_entry_id,
                     message=f"Ledger posting failed: {posting_result.message}",
+                )
+
+            # Create WHT tax transaction for reporting
+            if wht_amount > Decimal("0") and payment.withholding_tax_code_id:
+                APPostingAdapter._create_wht_transaction(
+                    db=db,
+                    organization_id=org_id,
+                    payment=payment,
+                    supplier=supplier,
+                    wht_amount=wht_amount,
+                    exchange_rate=exchange_rate,
                 )
 
             return APPostingResult(
@@ -559,6 +616,196 @@ class APPostingAdapter:
                 pass
 
         return tax_transaction_ids
+
+    @staticmethod
+    def _create_wht_transaction(
+        db: Session,
+        organization_id: UUID,
+        payment,  # SupplierPayment
+        supplier: Supplier,
+        wht_amount: Decimal,
+        exchange_rate: Decimal,
+    ) -> Optional[UUID]:
+        """
+        Create a WHT tax transaction for a supplier payment.
+
+        This records the withholding tax withheld from the supplier payment
+        for tax reporting purposes.
+
+        Args:
+            db: Database session
+            organization_id: Organization scope
+            payment: SupplierPayment object
+            supplier: Supplier object
+            wht_amount: WHT amount withheld
+            exchange_rate: Exchange rate to functional currency
+
+        Returns:
+            Transaction ID if created, None otherwise
+        """
+        from app.models.ifrs.gl.fiscal_period import FiscalPeriod
+        from app.models.ifrs.tax.tax_transaction import TaxTransactionType
+        from app.services.ifrs.tax.tax_transaction import TaxTransactionInput
+
+        # Get fiscal period from payment date
+        fiscal_period = (
+            db.query(FiscalPeriod)
+            .filter(
+                FiscalPeriod.organization_id == organization_id,
+                FiscalPeriod.start_date <= payment.payment_date,
+                FiscalPeriod.end_date >= payment.payment_date,
+            )
+            .first()
+        )
+
+        if not fiscal_period:
+            return None
+
+        try:
+            # Calculate gross amount (base for WHT)
+            gross_amount = payment.gross_amount or (payment.amount + wht_amount)
+
+            tax_txn = tax_transaction_service.record_transaction(
+                db=db,
+                organization_id=organization_id,
+                input=TaxTransactionInput(
+                    tax_code_id=payment.withholding_tax_code_id,
+                    transaction_type=TaxTransactionType.WITHHOLDING,
+                    fiscal_period_id=fiscal_period.fiscal_period_id,
+                    transaction_date=payment.payment_date,
+                    base_amount=gross_amount,
+                    tax_amount=wht_amount,
+                    currency_code=payment.currency_code,
+                    exchange_rate=exchange_rate,
+                    functional_currency_base=gross_amount * exchange_rate,
+                    functional_currency_tax=wht_amount * exchange_rate,
+                    source_module="AP",
+                    source_document_type="SUPPLIER_PAYMENT",
+                    source_document_id=payment.payment_id,
+                    counterparty_name=supplier.legal_name,
+                    counterparty_tax_id=supplier.tax_id,
+                    reference=payment.payment_number,
+                ),
+            )
+            return tax_txn.transaction_id
+        except Exception:
+            # Log error but don't fail the posting
+            return None
+
+    @staticmethod
+    def _determine_debit_account(
+        db: Session,
+        organization_id: UUID,
+        line: SupplierInvoiceLine,
+        supplier: Supplier,
+    ) -> Optional[UUID]:
+        """
+        Determine the appropriate debit account for an invoice line.
+
+        Routing logic:
+        1. If line has item_id → use inventory account from Item or ItemCategory
+        2. If line has goods_receipt_line_id → use GRNI account (for matched items)
+        3. If line has asset_account_id (capitalization) → use asset account
+        4. Else → use expense_account_id or supplier default
+
+        Args:
+            db: Database session
+            organization_id: Organization scope
+            line: The invoice line
+            supplier: The supplier for default accounts
+
+        Returns:
+            Account UUID or None if not determinable
+        """
+        # Priority 1: Inventory item - route to inventory account
+        if line.item_id:
+            item = db.get(Item, line.item_id)
+            if item:
+                # Check item-level override first
+                if item.inventory_account_id:
+                    return item.inventory_account_id
+
+                # Fall back to category inventory account
+                if item.category_id:
+                    category = db.get(ItemCategory, item.category_id)
+                    if category and category.inventory_account_id:
+                        return category.inventory_account_id
+
+        # Priority 2: GR-matched line - use GRNI clearing account
+        # (In GRNI accounting, goods receipt debits Inventory/Cr GRNI
+        #  Invoice then debits GRNI/Cr AP to clear the accrual)
+        if line.goods_receipt_line_id:
+            # Get GRNI account from organization settings
+            from app.models.core_org.organization import Organization
+            org = db.get(Organization, organization_id)
+            if org and hasattr(org, 'grni_account_id') and org.grni_account_id:
+                return org.grni_account_id
+            # If no GRNI account configured, fall through to expense routing
+
+        # Priority 3: Capitalize flag - use asset account
+        if line.capitalize_flag and line.asset_account_id:
+            return line.asset_account_id
+
+        # Priority 4: Explicit expense account on line
+        if line.expense_account_id:
+            return line.expense_account_id
+
+        # Priority 5: Asset account on line (non-capitalize)
+        if line.asset_account_id:
+            return line.asset_account_id
+
+        # Priority 6: Supplier default
+        return supplier.default_expense_account_id
+
+    @staticmethod
+    def _create_assets_for_capitalizable_lines(
+        db: Session,
+        organization_id: UUID,
+        invoice: SupplierInvoice,
+        lines: list[SupplierInvoiceLine],
+        supplier: Supplier,
+        user_id: UUID,
+    ) -> None:
+        """
+        Create fixed assets for invoice lines marked for capitalization.
+
+        Uses the CapitalizationService to create DRAFT assets for lines
+        that have capitalize_flag=True and asset_category_id set.
+
+        Args:
+            db: Database session
+            organization_id: Organization scope
+            invoice: The posted invoice
+            lines: Invoice lines to check
+            supplier: Supplier for asset linkage
+            user_id: User creating the assets
+        """
+        from app.services.ifrs.fa.capitalization import CapitalizationService
+
+        # Check if any lines are capitalizable
+        capitalizable_lines = [
+            line for line in lines
+            if line.capitalize_flag and line.asset_category_id
+        ]
+
+        if not capitalizable_lines:
+            return
+
+        # Create assets through CapitalizationService
+        result = CapitalizationService.create_assets_from_invoice(
+            db=db,
+            organization_id=organization_id,
+            invoice=invoice,
+            lines=capitalizable_lines,
+            supplier=supplier,
+            user_id=user_id,
+        )
+
+        # Log errors but don't fail the posting
+        # (Assets are supplementary - invoice posting should still succeed)
+        if result.errors:
+            # In production, log these errors
+            pass
 
 
 # Module-level singleton instance

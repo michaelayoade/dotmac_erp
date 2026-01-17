@@ -50,6 +50,15 @@ from app.services.ifrs.tax.tax_return import (
     tax_return_service,
     TaxReturnInput,
 )
+from app.services.ifrs.tax.tax_calculation import (
+    TaxCalculationService,
+    LineTaxInput,
+    LineTaxResult,
+    LineCalculationResult,
+    InvoiceLineTaxInput,
+    InvoiceTaxResult,
+    tax_calculation_service,
+)
 
 __all__ = [
     # Tax Code
@@ -91,4 +100,12 @@ __all__ = [
     "TaxReturnService",
     "tax_return_service",
     "TaxReturnInput",
+    # Tax Calculation
+    "TaxCalculationService",
+    "LineTaxInput",
+    "LineTaxResult",
+    "LineCalculationResult",
+    "InvoiceLineTaxInput",
+    "InvoiceTaxResult",
+    "tax_calculation_service",
 ]

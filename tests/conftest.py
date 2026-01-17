@@ -163,6 +163,9 @@ class MockSettings:
     brand_tagline = "FastAPI starter"
     brand_logo_url = None
     brand_mark = None
+    # IFRS default currencies
+    default_functional_currency_code = "USD"
+    default_presentation_currency_code = "USD"
     landing_hero_badge = "IFRS-ready accounting"
     landing_hero_title = "Close faster with audit-ready accounting"
     landing_hero_subtitle = "Multi-entity support, clean audit trail, and accurate AR/AP aging."

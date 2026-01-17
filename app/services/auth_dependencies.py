@@ -1,4 +1,5 @@
-from datetime import datetime, timezone
+import os
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from uuid import UUID
 
@@ -18,15 +19,43 @@ from app.services.common import coerce_uuid
 # Cookie name for web session
 WEB_SESSION_COOKIE = "session_token"
 
+# Session activity timeout in days - sessions inactive longer than this are considered expired
+# Default: 7 days. Override with SESSION_ACTIVITY_TIMEOUT_DAYS env var.
+SESSION_ACTIVITY_TIMEOUT_DAYS = int(os.getenv("SESSION_ACTIVITY_TIMEOUT_DAYS", "7"))
+
+
+def is_session_inactive(session: AuthSession, now: datetime) -> bool:
+    """Check if a session has been inactive for too long.
+
+    A session is considered inactive if last_seen_at is older than
+    SESSION_ACTIVITY_TIMEOUT_DAYS. This provides an additional security
+    layer on top of absolute token expiration.
+    """
+    if SESSION_ACTIVITY_TIMEOUT_DAYS <= 0:
+        # Activity timeout disabled
+        return False
+
+    if session.last_seen_at is None:
+        # No activity recorded yet, use created_at
+        last_activity = _make_aware(session.created_at)
+    else:
+        last_activity = _make_aware(session.last_seen_at)
+
+    if last_activity is None:
+        return False
+
+    timeout = timedelta(days=SESSION_ACTIVITY_TIMEOUT_DAYS)
+    return now - last_activity > timeout
+
 
 def get_current_user_id(
     authorization: str | None = Header(default=None),
     db: Session = Depends(lambda: SessionLocal()),
 ) -> UUID:
     """
-    Dependency to get the current authenticated user's ID.
+    Dependency to get the current authenticated user's ID from JWT token.
 
-    Returns the user's UUID from the JWT token.
+    For API routes only. Web routes should use require_web_auth instead.
     Raises 401 if not authenticated.
     """
     token = _extract_bearer_token(authorization)
@@ -35,10 +64,28 @@ def get_current_user_id(
 
     payload = decode_access_token(db, token)
     person_id = payload.get("sub")
-    if not person_id:
+    session_id = payload.get("session_id")
+    if not person_id or not session_id:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
-    return coerce_uuid(person_id)
+    now = datetime.now(timezone.utc)
+    person_uuid = coerce_uuid(person_id)
+    session_uuid = coerce_uuid(session_id)
+    session = (
+        db.query(AuthSession)
+        .filter(AuthSession.id == session_uuid)
+        .filter(AuthSession.person_id == person_uuid)
+        .filter(AuthSession.status == SessionStatus.active)
+        .filter(AuthSession.revoked_at.is_(None))
+        .filter(AuthSession.expires_at > now)
+        .first()
+    )
+    if not session:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    if is_session_inactive(session, now):
+        raise HTTPException(status_code=401, detail="Session expired due to inactivity")
+
+    return person_uuid
 
 
 def get_current_org_id(
@@ -48,7 +95,7 @@ def get_current_org_id(
     """
     Dependency to get the current authenticated user's organization ID.
 
-    Returns the organization UUID from the user record.
+    For API routes only. Web routes should use require_web_auth instead.
     Raises 401 if not authenticated, 400 if user has no organization.
     """
     token = _extract_bearer_token(authorization)
@@ -57,10 +104,28 @@ def get_current_org_id(
 
     payload = decode_access_token(db, token)
     person_id = payload.get("sub")
-    if not person_id:
+    session_id = payload.get("session_id")
+    if not person_id or not session_id:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
-    person = db.get(Person, coerce_uuid(person_id))
+    now = datetime.now(timezone.utc)
+    person_uuid = coerce_uuid(person_id)
+    session_uuid = coerce_uuid(session_id)
+    session = (
+        db.query(AuthSession)
+        .filter(AuthSession.id == session_uuid)
+        .filter(AuthSession.person_id == person_uuid)
+        .filter(AuthSession.status == SessionStatus.active)
+        .filter(AuthSession.revoked_at.is_(None))
+        .filter(AuthSession.expires_at > now)
+        .first()
+    )
+    if not session:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    if is_session_inactive(session, now):
+        raise HTTPException(status_code=401, detail="Session expired due to inactivity")
+
+    person = db.get(Person, person_uuid)
     if not person or not person.organization_id:
         raise HTTPException(status_code=400, detail="User has no organization")
 
@@ -206,6 +271,9 @@ def require_user_auth(
     )
     if not session:
         raise HTTPException(status_code=401, detail="Unauthorized")
+    # Check for activity timeout (session idle too long)
+    if is_session_inactive(session, now):
+        raise HTTPException(status_code=401, detail="Session expired due to inactivity")
     roles_value = payload.get("roles")
     scopes_value = payload.get("scopes")
     roles = [str(role) for role in roles_value] if isinstance(roles_value, list) else []
@@ -287,6 +355,7 @@ def require_permission(permission_key: str):
 
 def require_tenant_auth(
     authorization: str | None = Header(default=None),
+    access_token: str | None = Cookie(default=None),
     request: Request = None,
     db: Session = Depends(_get_db),
 ):
@@ -305,7 +374,7 @@ def require_tenant_auth(
             # All queries in this request are automatically scoped to the user's org
             return db.query(Item).all()
     """
-    token = _extract_bearer_token(authorization)
+    token = _extract_bearer_token(authorization) or access_token
     if not token:
         raise HTTPException(status_code=401, detail="Unauthorized")
     payload = decode_access_token(db, token)
@@ -328,10 +397,15 @@ def require_tenant_auth(
     )
     if not session:
         raise HTTPException(status_code=401, detail="Unauthorized")
+    # Check for activity timeout (session idle too long)
+    if is_session_inactive(session, now):
+        raise HTTPException(status_code=401, detail="Session expired due to inactivity")
 
     # Look up the user's organization
     person = db.get(Person, person_uuid)
     organization_id = person.organization_id if person else None
+    if not organization_id:
+        raise HTTPException(status_code=403, detail="Organization access required")
 
     # Set RLS context if user has an organization
     if organization_id:
@@ -471,6 +545,9 @@ def require_admin_bypass(
     )
     if not session:
         raise HTTPException(status_code=401, detail="Unauthorized")
+    # Check for activity timeout (session idle too long)
+    if is_session_inactive(session, now):
+        raise HTTPException(status_code=401, detail="Session expired due to inactivity")
 
     # Check for admin role
     roles_value = payload.get("roles")
@@ -514,9 +591,45 @@ def require_admin_bypass(
     }
 
 
+def _resolve_web_session_from_access_token(
+    db: Session,
+    access_token: str,
+    now: datetime,
+) -> tuple[AuthSession, Person] | None:
+    try:
+        payload = decode_access_token(db, access_token)
+    except HTTPException:
+        return None
+    person_id = payload.get("sub")
+    session_id = payload.get("session_id")
+    if not person_id or not session_id:
+        return None
+
+    person_uuid = coerce_uuid(person_id)
+    session_uuid = coerce_uuid(session_id)
+    session = (
+        db.query(AuthSession)
+        .filter(AuthSession.id == session_uuid)
+        .filter(AuthSession.person_id == person_uuid)
+        .filter(AuthSession.status == SessionStatus.active)
+        .filter(AuthSession.revoked_at.is_(None))
+        .filter(AuthSession.expires_at > now)
+        .first()
+    )
+    if not session or is_session_inactive(session, now):
+        return None
+
+    person = db.get(Person, person_uuid)
+    if not person:
+        return None
+
+    return session, person
+
+
 def require_web_session(
     request: Request,
     session_token: Optional[str] = Cookie(default=None, alias=WEB_SESSION_COOKIE),
+    access_token: Optional[str] = Cookie(default=None),
     db: Session = Depends(_get_db),
 ):
     """
@@ -537,28 +650,36 @@ def require_web_session(
             # User is authenticated, org context is set
             return templates.TemplateResponse(request, "dashboard.html", {"user": auth})
     """
-    if not session_token:
+    if not session_token and not access_token:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
     now = datetime.now(timezone.utc)
+    session = None
+    person = None
 
-    # Look up session by token hash
-    session = (
-        db.query(AuthSession)
-        .filter(AuthSession.token_hash == hash_session_token(session_token))
-        .filter(AuthSession.status == SessionStatus.active)
-        .filter(AuthSession.revoked_at.is_(None))
-        .filter(AuthSession.expires_at > now)
-        .first()
-    )
+    if session_token:
+        # Look up session by token hash
+        session = (
+            db.query(AuthSession)
+            .filter(AuthSession.token_hash == hash_session_token(session_token))
+            .filter(AuthSession.status == SessionStatus.active)
+            .filter(AuthSession.revoked_at.is_(None))
+            .filter(AuthSession.expires_at > now)
+            .first()
+        )
 
-    if not session:
+        if not session or is_session_inactive(session, now):
+            session = None
+        else:
+            person = db.get(Person, session.person_id)
+
+    if not session and access_token:
+        resolved = _resolve_web_session_from_access_token(db, access_token, now)
+        if resolved:
+            session, person = resolved
+
+    if not session or not person:
         raise HTTPException(status_code=401, detail="Invalid or expired session")
-
-    # Get the person and their organization
-    person = db.get(Person, session.person_id)
-    if not person:
-        raise HTTPException(status_code=401, detail="User not found")
 
     organization_id = person.organization_id
 
@@ -593,6 +714,7 @@ def _get_initials(person: Person) -> str:
 def optional_web_session(
     request: Request,
     session_token: Optional[str] = Cookie(default=None, alias=WEB_SESSION_COOKIE),
+    access_token: Optional[str] = Cookie(default=None),
     db: Session = Depends(_get_db),
 ):
     """
@@ -611,25 +733,34 @@ def optional_web_session(
                 # Anonymous user
                 ...
     """
-    if not session_token:
+    if not session_token and not access_token:
         return None
 
     now = datetime.now(timezone.utc)
+    session = None
+    person = None
 
-    session = (
-        db.query(AuthSession)
-        .filter(AuthSession.token_hash == hash_session_token(session_token))
-        .filter(AuthSession.status == SessionStatus.active)
-        .filter(AuthSession.revoked_at.is_(None))
-        .filter(AuthSession.expires_at > now)
-        .first()
-    )
+    if session_token:
+        session = (
+            db.query(AuthSession)
+            .filter(AuthSession.token_hash == hash_session_token(session_token))
+            .filter(AuthSession.status == SessionStatus.active)
+            .filter(AuthSession.revoked_at.is_(None))
+            .filter(AuthSession.expires_at > now)
+            .first()
+        )
 
-    if not session:
-        return None
+        if not session or is_session_inactive(session, now):
+            session = None
+        else:
+            person = db.get(Person, session.person_id)
 
-    person = db.get(Person, session.person_id)
-    if not person:
+    if not session and access_token:
+        resolved = _resolve_web_session_from_access_token(db, access_token, now)
+        if resolved:
+            session, person = resolved
+
+    if not session or not person:
         return None
 
     organization_id = person.organization_id

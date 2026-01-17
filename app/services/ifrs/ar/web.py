@@ -13,6 +13,8 @@ from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 
+from fastapi import Request, UploadFile
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
@@ -26,6 +28,7 @@ from app.models.ifrs.core_org.project import Project
 from app.models.ifrs.gl.account import Account
 from app.models.ifrs.gl.account_category import AccountCategory, IFRSCategory
 from app.config import settings
+from app.services.audit_info import get_audit_service
 from app.services.common import coerce_uuid
 from app.services.ifrs.ar.ar_aging import ar_aging_service
 from app.services.ifrs.ar.customer import CustomerInput, customer_service
@@ -36,8 +39,11 @@ from app.services.ifrs.ar.customer_payment import (
 )
 from app.models.ifrs.ar.customer_payment import PaymentMethod, PaymentStatus
 from app.services.ifrs.ar.invoice import ARInvoiceInput, ARInvoiceLineInput, ar_invoice_service
-from app.services.ifrs.common.attachment import attachment_service
+from app.services.ifrs.common.attachment import attachment_service, AttachmentInput
 from app.services.ifrs.platform.currency_context import get_currency_context
+from app.models.ifrs.common.attachment import AttachmentCategory
+from app.templates import templates
+from app.web.deps import base_context, WebAuthContext
 from app.services.ifrs.tax.tax_master import tax_code_service
 
 
@@ -90,6 +96,66 @@ def _customer_display_name(customer: Customer) -> str:
     return customer.trading_name or customer.legal_name
 
 
+def _calculate_customer_balance_trends(
+    db: Session,
+    organization_id: UUID,
+    customer_ids: list[UUID],
+    months: int = 6,
+) -> dict[UUID, list[float]]:
+    """
+    Calculate monthly balance trends for customers over the last N months.
+    Returns a dict mapping customer_id to a list of balance values.
+    """
+    if not customer_ids:
+        return {}
+
+    from dateutil.relativedelta import relativedelta
+
+    trends: dict[UUID, list[float]] = {cid: [] for cid in customer_ids}
+    today = date.today()
+
+    # Calculate balance at end of each month for the last N months
+    for i in range(months - 1, -1, -1):
+        # Get the last day of the month (i months ago)
+        if i == 0:
+            as_of_date = today
+        else:
+            month_start = (today.replace(day=1) - relativedelta(months=i))
+            # Last day of that month
+            next_month = month_start + relativedelta(months=1)
+            as_of_date = next_month - timedelta(days=1)
+
+        # Query balance as of that date for all customers
+        balances = (
+            db.query(
+                Invoice.customer_id,
+                func.coalesce(
+                    func.sum(Invoice.total_amount - Invoice.amount_paid), 0
+                ).label("balance"),
+            )
+            .filter(
+                Invoice.organization_id == organization_id,
+                Invoice.customer_id.in_(customer_ids),
+                Invoice.invoice_date <= as_of_date,
+                Invoice.status.in_([
+                    InvoiceStatus.POSTED,
+                    InvoiceStatus.PARTIALLY_PAID,
+                    InvoiceStatus.PAID,
+                    InvoiceStatus.OVERDUE,
+                ]),
+            )
+            .group_by(Invoice.customer_id)
+            .all()
+        )
+
+        balance_map = {row.customer_id: float(row.balance) for row in balances}
+
+        for cid in customer_ids:
+            trends[cid].append(balance_map.get(cid, 0.0))
+
+    return trends
+
+
 def _customer_option_view(customer: Customer) -> dict:
     return {
         "customer_id": customer.customer_id,
@@ -110,7 +176,7 @@ def _customer_form_view(customer: Customer) -> dict:
         "currency_code": customer.currency_code,
         "payment_terms_days": customer.credit_terms_days,
         "credit_limit": customer.credit_limit,
-        "credit_hold": False,
+        "credit_hold": customer.credit_hold,
         "default_revenue_account_id": customer.default_revenue_account_id,
         "default_receivable_account_id": customer.ar_control_account_id,
         "email": contact.get("email"),
@@ -121,7 +187,12 @@ def _customer_form_view(customer: Customer) -> dict:
     }
 
 
-def _customer_list_view(customer: Customer, balance: Decimal) -> dict:
+def _customer_list_view(
+    customer: Customer,
+    balance: Decimal,
+    created_by_name: str | None = None,
+    balance_trend: list[float] | None = None,
+) -> dict:
     return {
         "customer_id": customer.customer_id,
         "customer_code": customer.customer_code,
@@ -133,7 +204,13 @@ def _customer_list_view(customer: Customer, balance: Decimal) -> dict:
             customer.currency_code,
         ),
         "balance": _format_currency(balance, customer.currency_code),
+        "balance_trend": balance_trend if balance_trend and any(v > 0 for v in balance_trend) else None,
         "is_active": customer.is_active,
+        # Audit info
+        "created_at": customer.created_at,
+        "created_by_user_id": customer.created_by_user_id,
+        "created_by_name": created_by_name,
+        "updated_at": customer.updated_at,
     }
 
 
@@ -215,9 +292,17 @@ def _receipt_detail_view(payment: CustomerPayment, customer: Optional[Customer])
         "payment_method": payment.payment_method.value,
         "reference_number": payment.reference,
         "description": payment.description,
+        # Net amount received (after WHT deduction)
         "amount": _format_currency(payment.amount, payment.currency_code),
+        # WHT breakdown
+        "gross_amount": _format_currency(payment.gross_amount, payment.currency_code),
+        "wht_amount": _format_currency(payment.wht_amount, payment.currency_code) if payment.wht_amount else None,
+        "wht_code_id": payment.wht_code_id,
+        "wht_certificate_number": payment.wht_certificate_number,
+        "has_wht": payment.wht_amount and payment.wht_amount > 0,
         "status": _receipt_status_label(payment.status),
         "currency_code": payment.currency_code,
+        "bank_account_id": payment.bank_account_id,
     }
 
 
@@ -346,6 +431,7 @@ class ARWebService:
             ),
             credit_terms_days=int(form_data.get("payment_terms_days", 30)),
             credit_limit=Decimal(credit_limit) if credit_limit else None,
+            credit_hold=form_data.get("credit_hold") is not None,
             risk_category=RiskCategory.MEDIUM,
             ar_control_account_id=(
                 UUID(form_data["default_receivable_account_id"])
@@ -373,6 +459,7 @@ class ARWebService:
             }
             if form_data.get("email") or form_data.get("phone")
             else None,
+            is_active=form_data.get("is_active") is not None,
         )
 
     @staticmethod
@@ -384,6 +471,12 @@ class ARWebService:
         lines = []
         for line in lines_data:
             if line.get("revenue_account_id") and line.get("description"):
+                # Handle both new tax_code_ids array and legacy tax_code_id field
+                tax_code_ids = []
+                if line.get("tax_code_ids"):
+                    tax_code_ids = [UUID(tc_id) for tc_id in line["tax_code_ids"] if tc_id]
+                legacy_tax_code_id = UUID(line["tax_code_id"]) if line.get("tax_code_id") else None
+
                 lines.append(
                     ARInvoiceLineInput(
                         description=line.get("description", ""),
@@ -392,8 +485,8 @@ class ARWebService:
                         revenue_account_id=UUID(line["revenue_account_id"])
                         if line.get("revenue_account_id")
                         else None,
-                        tax_code_id=UUID(line["tax_code_id"]) if line.get("tax_code_id") else None,
-                        tax_amount=Decimal(str(line.get("tax_amount", 0))),
+                        tax_code_ids=tax_code_ids,
+                        tax_code_id=legacy_tax_code_id,
                         cost_center_id=UUID(line["cost_center_id"])
                         if line.get("cost_center_id")
                         else None,
@@ -477,10 +570,20 @@ class ARWebService:
         )
         balance_map = {row.customer_id: row.balance for row in balances}
 
+        # Use shared audit service for user names
+        audit_service = get_audit_service(db)
+        creator_names = audit_service.get_creator_names(customers)
+
+        # Calculate balance trends for sparkline charts
+        customer_ids = [c.customer_id for c in customers]
+        balance_trends = _calculate_customer_balance_trends(db, org_id, customer_ids)
+
         customers_view = [
             _customer_list_view(
                 customer,
                 balance_map.get(customer.customer_id, Decimal("0")),
+                creator_names.get(customer.created_by_user_id),
+                balance_trends.get(customer.customer_id),
             )
             for customer in customers
         ]
@@ -818,9 +921,13 @@ class ARWebService:
 
         tax_codes = [
             {
-                "tax_code_id": tax.tax_code_id,
+                "tax_code_id": str(tax.tax_code_id),
                 "tax_code": tax.tax_code,
-                "rate": (tax.tax_rate * 100).quantize(Decimal("0.01")),
+                "tax_name": tax.tax_name,
+                "tax_rate": tax.tax_rate,  # Raw rate (e.g., 0.075 or 50.00 for fixed)
+                "rate": (tax.tax_rate * 100).quantize(Decimal("0.01")) if tax.tax_rate < 1 else tax.tax_rate,  # Display rate
+                "is_inclusive": tax.is_inclusive,
+                "is_compound": tax.is_compound,
             }
             for tax in tax_code_service.list(
                 db,
@@ -837,7 +944,7 @@ class ARWebService:
             "tax_codes": tax_codes,
             "cost_centers": _get_cost_centers(db, org_id),
             "projects": _get_projects(db, org_id),
-            "organization_id": organization_id,
+            "organization_id": str(organization_id),
             "user_id": "00000000-0000-0000-0000-000000000001",
         }
         context.update(get_currency_context(db, organization_id))
@@ -1001,17 +1108,84 @@ class ARWebService:
         db: Session,
         organization_id: str,
         invoice_id: Optional[str] = None,
+        receipt_id: Optional[str] = None,
     ) -> dict:
+        from app.models.ifrs.tax.tax_code import TaxCode, TaxType
+
         org_id = coerce_uuid(organization_id)
-        customers_list = [
-            _customer_option_view(customer)
-            for customer in customer_service.list(
-                db,
-                organization_id=org_id,
-                is_active=True,
-                limit=200,
-            )
+
+        # Get existing receipt if editing
+        receipt = None
+        receipt_view = None
+        existing_allocations = []
+        if receipt_id:
+            try:
+                receipt = customer_payment_service.get(db, receipt_id)
+                if receipt and receipt.organization_id == org_id:
+                    # Build receipt view for form pre-population
+                    receipt_view = {
+                        "payment_id": str(receipt.payment_id),
+                        "payment_number": receipt.payment_number,
+                        "customer_id": str(receipt.customer_id),
+                        "payment_date": receipt.payment_date.isoformat() if receipt.payment_date else None,
+                        "payment_method": receipt.payment_method.value if receipt.payment_method else None,
+                        "bank_account_id": str(receipt.bank_account_id) if receipt.bank_account_id else None,
+                        "currency_code": receipt.currency_code,
+                        "amount": float(receipt.amount),
+                        "gross_amount": float(receipt.gross_amount) if receipt.gross_amount else None,
+                        "wht_amount": float(receipt.wht_amount) if receipt.wht_amount else 0,
+                        "wht_code_id": str(receipt.wht_code_id) if receipt.wht_code_id else None,
+                        "wht_certificate_number": receipt.wht_certificate_number,
+                        "reference": receipt.reference,
+                        "description": receipt.description,
+                        "status": receipt.status.value if receipt.status else None,
+                        "has_wht": receipt.wht_amount and receipt.wht_amount > 0,
+                    }
+                    # Get existing allocations
+                    allocations = customer_payment_service.get_payment_allocations(
+                        db, org_id, receipt.payment_id
+                    )
+                    for alloc in allocations:
+                        inv = db.get(Invoice, alloc.invoice_id)
+                        existing_allocations.append({
+                            "invoice_id": str(alloc.invoice_id),
+                            "invoice_number": inv.invoice_number if inv else "Unknown",
+                            "amount": float(alloc.allocated_amount),
+                        })
+            except Exception:
+                pass
+
+        # Get customers with WHT info
+        customers_list = []
+        for customer in customer_service.list(
+            db,
+            organization_id=org_id,
+            is_active=True,
+            limit=200,
+        ):
+            customer_view = _customer_option_view(customer)
+            # Add WHT fields
+            customer_view["is_wht_applicable"] = getattr(customer, "is_wht_applicable", False)
+            customer_view["default_wht_code_id"] = str(customer.default_wht_code_id) if getattr(customer, "default_wht_code_id", None) else None
+            customers_list.append(customer_view)
+
+        # Get WHT tax codes for dropdown
+        wht_codes = [
+            {
+                "tax_code_id": str(tc.tax_code_id),
+                "tax_code": tc.tax_code,
+                "tax_name": tc.tax_name,
+                "tax_rate": tc.tax_rate,
+            }
+            for tc in db.query(TaxCode).filter(
+                TaxCode.organization_id == org_id,
+                TaxCode.is_active == True,
+                TaxCode.tax_type == TaxType.WITHHOLDING,
+            ).all()
         ]
+
+        # Get bank accounts
+        bank_accounts = _get_accounts(db, org_id, IFRSCategory.CASH)
 
         open_statuses = [
             InvoiceStatus.POSTED,
@@ -1049,18 +1223,25 @@ class ARWebService:
                     invoice.currency_code,
                 ),
                 "balance": _format_currency(balance, invoice.currency_code),
+                "balance_raw": float(balance),  # For JS calculations
                 "currency_code": invoice.currency_code,
             }
             open_invoices.append(view)
             if invoice_id and invoice.invoice_id == coerce_uuid(invoice_id):
                 selected_invoice = view
 
-        return {
+        context = {
             "customers_list": customers_list,
+            "wht_codes": wht_codes,
+            "bank_accounts": bank_accounts,
             "invoice_id": invoice_id,
             "invoice": selected_invoice,
             "open_invoices": open_invoices,
+            "receipt": receipt_view,
+            "existing_allocations": existing_allocations,
         }
+        context.update(get_currency_context(db, organization_id))
+        return context
 
     @staticmethod
     def receipt_detail_context(
@@ -1298,6 +1479,23 @@ class ARWebService:
                     )
                 )
 
+        # Parse WHT fields
+        wht_code_id = None
+        wht_amount = Decimal("0")
+        gross_amount = None
+        wht_certificate_number = None
+
+        # Check if WHT is applied (has_wht checkbox or wht_amount > 0)
+        has_wht = data.get("has_wht") in ("true", "1", True, "on")
+        if has_wht:
+            if data.get("wht_code_id"):
+                wht_code_id = UUID(data["wht_code_id"])
+            if data.get("wht_amount"):
+                wht_amount = Decimal(str(data["wht_amount"]))
+            if data.get("gross_amount"):
+                gross_amount = Decimal(str(data["gross_amount"]))
+            wht_certificate_number = data.get("wht_certificate_number") or None
+
         return CustomerPaymentInput(
             customer_id=UUID(data["customer_id"]),
             payment_date=payment_date,
@@ -1311,6 +1509,11 @@ class ARWebService:
             reference=data.get("reference"),
             description=data.get("description"),
             allocations=allocations,
+            # WHT fields
+            gross_amount=gross_amount,
+            wht_code_id=wht_code_id,
+            wht_amount=wht_amount,
+            wht_certificate_number=wht_certificate_number,
         )
 
     @staticmethod
@@ -1748,6 +1951,866 @@ class ARWebService:
         except Exception as e:
             db.rollback()
             return f"Failed to delete credit note: {str(e)}"
+
+    def list_customers_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        search: Optional[str],
+        status: Optional[str],
+        page: int,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "Customers", "ar")
+        context.update(
+            self.list_customers_context(
+                db,
+                str(auth.organization_id),
+                search=search,
+                status=status,
+                page=page,
+            )
+        )
+        return templates.TemplateResponse(request, "ifrs/ar/customers.html", context)
+
+    def customer_new_form_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "New Customer", "ar")
+        context.update(self.customer_form_context(db, str(auth.organization_id)))
+        return templates.TemplateResponse(request, "ifrs/ar/customer_form.html", context)
+
+    def customer_detail_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        customer_id: str,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "Customer Details", "ar")
+        context.update(
+            self.customer_detail_context(
+                db,
+                str(auth.organization_id),
+                customer_id,
+            )
+        )
+        return templates.TemplateResponse(request, "ifrs/ar/customer_detail.html", context)
+
+    def customer_edit_form_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        customer_id: str,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "Edit Customer", "ar")
+        context.update(self.customer_form_context(db, str(auth.organization_id), customer_id))
+        return templates.TemplateResponse(request, "ifrs/ar/customer_form.html", context)
+
+    async def create_customer_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> HTMLResponse | RedirectResponse:
+        form_data = await request.form()
+
+        try:
+            input_data = self.build_customer_input(dict(form_data))
+
+            customer_service.create_customer(
+                db=db,
+                organization_id=auth.organization_id,
+                input=input_data,
+            )
+
+            return RedirectResponse(
+                url="/ar/customers?success=Customer+created+successfully",
+                status_code=303,
+            )
+
+        except Exception as e:
+            context = base_context(request, auth, "New Customer", "ar")
+            context.update(self.customer_form_context(db, str(auth.organization_id)))
+            context["error"] = str(e)
+            context["form_data"] = dict(form_data)
+            return templates.TemplateResponse(request, "ifrs/ar/customer_form.html", context)
+
+    async def update_customer_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        customer_id: str,
+    ) -> HTMLResponse | RedirectResponse:
+        form_data = await request.form()
+
+        try:
+            input_data = self.build_customer_input(dict(form_data))
+
+            customer_service.update_customer(
+                db=db,
+                organization_id=auth.organization_id,
+                customer_id=UUID(customer_id),
+                input=input_data,
+            )
+
+            return RedirectResponse(
+                url="/ar/customers?success=Customer+updated+successfully",
+                status_code=303,
+            )
+
+        except Exception as e:
+            context = base_context(request, auth, "Edit Customer", "ar")
+            context.update(self.customer_form_context(db, str(auth.organization_id), customer_id))
+            context["error"] = str(e)
+            context["form_data"] = dict(form_data)
+            return templates.TemplateResponse(request, "ifrs/ar/customer_form.html", context)
+
+    def delete_customer_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        customer_id: str,
+    ) -> HTMLResponse | RedirectResponse:
+        error = self.delete_customer(db, str(auth.organization_id), customer_id)
+
+        if error:
+            context = base_context(request, auth, "Customer Details", "ar")
+            context.update(
+                self.customer_detail_context(
+                    db,
+                    str(auth.organization_id),
+                    customer_id,
+                )
+            )
+            context["error"] = error
+            return templates.TemplateResponse(request, "ifrs/ar/customer_detail.html", context)
+
+        return RedirectResponse(url="/ar/customers", status_code=303)
+
+    def list_invoices_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        search: Optional[str],
+        customer_id: Optional[str],
+        status: Optional[str],
+        start_date: Optional[str],
+        end_date: Optional[str],
+        page: int,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "AR Invoices", "ar")
+        context.update(
+            self.list_invoices_context(
+                db,
+                str(auth.organization_id),
+                search=search,
+                customer_id=customer_id,
+                status=status,
+                start_date=start_date,
+                end_date=end_date,
+                page=page,
+            )
+        )
+        return templates.TemplateResponse(request, "ifrs/ar/invoices.html", context)
+
+    def invoice_new_form_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "New AR Invoice", "ar")
+        context.update(self.invoice_form_context(db, str(auth.organization_id)))
+        return templates.TemplateResponse(request, "ifrs/ar/invoice_form.html", context)
+
+    async def create_invoice_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> HTMLResponse | JSONResponse | RedirectResponse | dict:
+        content_type = request.headers.get("content-type", "")
+
+        if "application/json" in content_type:
+            data = await request.json()
+        else:
+            form_data = await request.form()
+            data = dict(form_data)
+
+        try:
+            input_data = self.build_invoice_input(data)
+
+            invoice = ar_invoice_service.create_invoice(
+                db=db,
+                organization_id=auth.organization_id,
+                input=input_data,
+                created_by_user_id=auth.user_id,
+            )
+
+            if "application/json" in content_type:
+                return {"success": True, "invoice_id": str(invoice.invoice_id)}
+
+            return RedirectResponse(
+                url="/ar/invoices?success=Invoice+created+successfully",
+                status_code=303,
+            )
+
+        except Exception as e:
+            if "application/json" in content_type:
+                return JSONResponse(
+                    status_code=400,
+                    content={"detail": str(e)},
+                )
+
+            context = base_context(request, auth, "New AR Invoice", "ar")
+            context.update(self.invoice_form_context(db, str(auth.organization_id)))
+            context["error"] = str(e)
+            context["form_data"] = data
+            return templates.TemplateResponse(request, "ifrs/ar/invoice_form.html", context)
+
+    def invoice_detail_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        invoice_id: str,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "AR Invoice Details", "ar")
+        context.update(
+            self.invoice_detail_context(
+                db,
+                str(auth.organization_id),
+                invoice_id,
+            )
+        )
+        return templates.TemplateResponse(request, "ifrs/ar/invoice_detail.html", context)
+
+    def delete_invoice_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        invoice_id: str,
+    ) -> HTMLResponse | RedirectResponse:
+        error = self.delete_invoice(db, str(auth.organization_id), invoice_id)
+
+        if error:
+            context = base_context(request, auth, "AR Invoice Details", "ar")
+            context.update(
+                self.invoice_detail_context(
+                    db,
+                    str(auth.organization_id),
+                    invoice_id,
+                )
+            )
+            context["error"] = error
+            return templates.TemplateResponse(request, "ifrs/ar/invoice_detail.html", context)
+
+        return RedirectResponse(url="/ar/invoices", status_code=303)
+
+    def list_receipts_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        search: Optional[str],
+        customer_id: Optional[str],
+        status: Optional[str],
+        start_date: Optional[str],
+        end_date: Optional[str],
+        page: int,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "AR Receipts", "ar")
+        context.update(
+            self.list_receipts_context(
+                db,
+                str(auth.organization_id),
+                search=search,
+                customer_id=customer_id,
+                status=status,
+                start_date=start_date,
+                end_date=end_date,
+                page=page,
+            )
+        )
+        return templates.TemplateResponse(request, "ifrs/ar/receipts.html", context)
+
+    def receipt_new_form_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        invoice_id: Optional[str],
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "New AR Receipt", "ar")
+        context.update(
+            self.receipt_form_context(
+                db,
+                str(auth.organization_id),
+                invoice_id=invoice_id,
+            )
+        )
+        return templates.TemplateResponse(request, "ifrs/ar/receipt_form.html", context)
+
+    def receipt_detail_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        receipt_id: str,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "AR Receipt Details", "ar")
+        context.update(
+            self.receipt_detail_context(
+                db,
+                str(auth.organization_id),
+                receipt_id,
+            )
+        )
+        return templates.TemplateResponse(request, "ifrs/ar/receipt_detail.html", context)
+
+    async def create_receipt_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> HTMLResponse | JSONResponse | RedirectResponse | dict:
+        content_type = request.headers.get("content-type", "")
+
+        if "application/json" in content_type:
+            data = await request.json()
+        else:
+            form_data = await request.form()
+            data = dict(form_data)
+
+        try:
+            input_data = self.build_receipt_input(data)
+
+            receipt = customer_payment_service.create_payment(
+                db=db,
+                organization_id=auth.organization_id,
+                input=input_data,
+                created_by_user_id=auth.user_id,
+            )
+
+            if "application/json" in content_type:
+                return {"success": True, "receipt_id": str(receipt.payment_id)}
+
+            return RedirectResponse(
+                url="/ar/receipts?success=Receipt+created+successfully",
+                status_code=303,
+            )
+
+        except Exception as e:
+            if "application/json" in content_type:
+                return JSONResponse(
+                    status_code=400,
+                    content={"detail": str(e)},
+                )
+
+            context = base_context(request, auth, "New AR Receipt", "ar")
+            context.update(self.receipt_form_context(db, str(auth.organization_id)))
+            context["error"] = str(e)
+            context["form_data"] = data
+            return templates.TemplateResponse(request, "ifrs/ar/receipt_form.html", context)
+
+    def delete_receipt_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        receipt_id: str,
+    ) -> HTMLResponse | RedirectResponse:
+        error = self.delete_receipt(db, str(auth.organization_id), receipt_id)
+
+        if error:
+            context = base_context(request, auth, "AR Receipt Details", "ar")
+            context.update(
+                self.receipt_detail_context(
+                    db,
+                    str(auth.organization_id),
+                    receipt_id,
+                )
+            )
+            context["error"] = error
+            return templates.TemplateResponse(request, "ifrs/ar/receipt_detail.html", context)
+
+        return RedirectResponse(url="/ar/receipts", status_code=303)
+
+    def receipt_edit_form_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        receipt_id: str,
+    ) -> HTMLResponse:
+        """Edit receipt form page."""
+        context = base_context(request, auth, "Edit AR Receipt", "ar")
+        context.update(
+            self.receipt_form_context(
+                db,
+                str(auth.organization_id),
+                receipt_id=receipt_id,
+            )
+        )
+        return templates.TemplateResponse(request, "ifrs/ar/receipt_form.html", context)
+
+    async def update_receipt_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        receipt_id: str,
+    ) -> HTMLResponse | JSONResponse | RedirectResponse | dict:
+        """Handle receipt update form submission."""
+        content_type = request.headers.get("content-type", "")
+
+        if "application/json" in content_type:
+            data = await request.json()
+        else:
+            form_data = await request.form()
+            data = dict(form_data)
+
+        try:
+            input_data = self.build_receipt_input(data)
+
+            customer_payment_service.update_payment(
+                db=db,
+                organization_id=auth.organization_id,
+                payment_id=UUID(receipt_id),
+                input=input_data,
+                updated_by_user_id=auth.user_id,
+            )
+
+            if "application/json" in content_type:
+                return {"success": True, "receipt_id": receipt_id}
+
+            return RedirectResponse(
+                url=f"/ar/receipts/{receipt_id}?success=Receipt+updated+successfully",
+                status_code=303,
+            )
+
+        except Exception as e:
+            if "application/json" in content_type:
+                return JSONResponse(
+                    status_code=400,
+                    content={"detail": str(e)},
+                )
+
+            context = base_context(request, auth, "Edit AR Receipt", "ar")
+            context.update(
+                self.receipt_form_context(
+                    db,
+                    str(auth.organization_id),
+                    receipt_id=receipt_id,
+                )
+            )
+            context["error"] = str(e)
+            context["form_data"] = data
+            return templates.TemplateResponse(request, "ifrs/ar/receipt_form.html", context)
+
+    def list_credit_notes_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        search: Optional[str],
+        customer_id: Optional[str],
+        status: Optional[str],
+        start_date: Optional[str],
+        end_date: Optional[str],
+        page: int,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "AR Credit Notes", "ar")
+        context.update(
+            self.list_credit_notes_context(
+                db,
+                str(auth.organization_id),
+                search=search,
+                customer_id=customer_id,
+                status=status,
+                start_date=start_date,
+                end_date=end_date,
+                page=page,
+            )
+        )
+        return templates.TemplateResponse(request, "ifrs/ar/credit_notes.html", context)
+
+    def credit_note_new_form_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        invoice_id: Optional[str],
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "New Credit Note", "ar")
+        context.update(
+            self.credit_note_form_context(
+                db,
+                str(auth.organization_id),
+                invoice_id=invoice_id,
+            )
+        )
+        return templates.TemplateResponse(request, "ifrs/ar/credit_note_form.html", context)
+
+    async def create_credit_note_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> HTMLResponse | JSONResponse | RedirectResponse | dict:
+        content_type = request.headers.get("content-type", "")
+
+        if "application/json" in content_type:
+            data = await request.json()
+        else:
+            form_data = await request.form()
+            data = dict(form_data)
+
+        try:
+            input_data = self.build_credit_note_input(data)
+
+            credit_note = ar_invoice_service.create_invoice(
+                db=db,
+                organization_id=auth.organization_id,
+                input=input_data,
+                created_by_user_id=auth.user_id,
+            )
+
+            if "application/json" in content_type:
+                return {"success": True, "credit_note_id": str(credit_note.invoice_id)}
+
+            return RedirectResponse(
+                url="/ar/credit-notes?success=Credit+note+created+successfully",
+                status_code=303,
+            )
+
+        except Exception as e:
+            if "application/json" in content_type:
+                return JSONResponse(
+                    status_code=400,
+                    content={"detail": str(e)},
+                )
+
+            context = base_context(request, auth, "New Credit Note", "ar")
+            context.update(self.credit_note_form_context(db, str(auth.organization_id)))
+            context["error"] = str(e)
+            context["form_data"] = data
+            return templates.TemplateResponse(request, "ifrs/ar/credit_note_form.html", context)
+
+    def credit_note_detail_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        credit_note_id: str,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "Credit Note Details", "ar")
+        context.update(
+            self.credit_note_detail_context(
+                db,
+                str(auth.organization_id),
+                credit_note_id,
+            )
+        )
+        return templates.TemplateResponse(request, "ifrs/ar/credit_note_detail.html", context)
+
+    def delete_credit_note_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        credit_note_id: str,
+    ) -> HTMLResponse | RedirectResponse:
+        error = self.delete_credit_note(db, str(auth.organization_id), credit_note_id)
+
+        if error:
+            context = base_context(request, auth, "Credit Note Details", "ar")
+            context.update(
+                self.credit_note_detail_context(
+                    db,
+                    str(auth.organization_id),
+                    credit_note_id,
+                )
+            )
+            context["error"] = error
+            return templates.TemplateResponse(request, "ifrs/ar/credit_note_detail.html", context)
+
+        return RedirectResponse(url="/ar/credit-notes", status_code=303)
+
+    def aging_report_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        as_of_date: Optional[str],
+        customer_id: Optional[str],
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "AR Aging Report", "ar")
+        context.update(
+            self.aging_context(
+                db,
+                str(auth.organization_id),
+                as_of_date=as_of_date,
+                customer_id=customer_id,
+            )
+        )
+        return templates.TemplateResponse(request, "ifrs/ar/aging.html", context)
+
+    async def upload_invoice_attachment_response(
+        self,
+        invoice_id: str,
+        file: UploadFile,
+        description: Optional[str],
+        auth: WebAuthContext,
+        db: Session,
+    ) -> RedirectResponse:
+        try:
+            invoice = ar_invoice_service.get(db, auth.organization_id, invoice_id)
+            if not invoice or invoice.organization_id != auth.organization_id:
+                return RedirectResponse(
+                    url=f"/ar/invoices/{invoice_id}?error=Invoice+not+found",
+                    status_code=303,
+                )
+
+            input_data = AttachmentInput(
+                entity_type="CUSTOMER_INVOICE",
+                entity_id=invoice_id,
+                file_name=file.filename or "unnamed",
+                content_type=file.content_type or "application/octet-stream",
+                category=AttachmentCategory.INVOICE,
+                description=description,
+            )
+
+            attachment_service.save_file(
+                db=db,
+                organization_id=auth.organization_id,
+                input=input_data,
+                file_content=file.file,
+                uploaded_by=auth.person_id,
+            )
+
+            return RedirectResponse(
+                url=f"/ar/invoices/{invoice_id}?success=Attachment+uploaded",
+                status_code=303,
+            )
+
+        except ValueError as e:
+            return RedirectResponse(
+                url=f"/ar/invoices/{invoice_id}?error={str(e)}",
+                status_code=303,
+            )
+        except Exception:
+            return RedirectResponse(
+                url=f"/ar/invoices/{invoice_id}?error=Upload+failed",
+                status_code=303,
+            )
+
+    async def upload_receipt_attachment_response(
+        self,
+        receipt_id: str,
+        file: UploadFile,
+        description: Optional[str],
+        auth: WebAuthContext,
+        db: Session,
+    ) -> RedirectResponse:
+        try:
+            receipt = customer_payment_service.get(db, receipt_id)
+            if not receipt or receipt.organization_id != auth.organization_id:
+                return RedirectResponse(
+                    url=f"/ar/receipts/{receipt_id}?error=Receipt+not+found",
+                    status_code=303,
+                )
+
+            input_data = AttachmentInput(
+                entity_type="CUSTOMER_PAYMENT",
+                entity_id=receipt_id,
+                file_name=file.filename or "unnamed",
+                content_type=file.content_type or "application/octet-stream",
+                category=AttachmentCategory.RECEIPT,
+                description=description,
+            )
+
+            attachment_service.save_file(
+                db=db,
+                organization_id=auth.organization_id,
+                input=input_data,
+                file_content=file.file,
+                uploaded_by=auth.person_id,
+            )
+
+            return RedirectResponse(
+                url=f"/ar/receipts/{receipt_id}?success=Attachment+uploaded",
+                status_code=303,
+            )
+
+        except ValueError as e:
+            return RedirectResponse(
+                url=f"/ar/receipts/{receipt_id}?error={str(e)}",
+                status_code=303,
+            )
+        except Exception:
+            return RedirectResponse(
+                url=f"/ar/receipts/{receipt_id}?error=Upload+failed",
+                status_code=303,
+            )
+
+    async def upload_credit_note_attachment_response(
+        self,
+        credit_note_id: str,
+        file: UploadFile,
+        description: Optional[str],
+        auth: WebAuthContext,
+        db: Session,
+    ) -> RedirectResponse:
+        try:
+            credit_note = ar_invoice_service.get(db, auth.organization_id, credit_note_id)
+            if not credit_note or credit_note.organization_id != auth.organization_id:
+                return RedirectResponse(
+                    url=f"/ar/credit-notes/{credit_note_id}?error=Credit+note+not+found",
+                    status_code=303,
+                )
+
+            input_data = AttachmentInput(
+                entity_type="CREDIT_NOTE",
+                entity_id=credit_note_id,
+                file_name=file.filename or "unnamed",
+                content_type=file.content_type or "application/octet-stream",
+                category=AttachmentCategory.CREDIT_NOTE,
+                description=description,
+            )
+
+            attachment_service.save_file(
+                db=db,
+                organization_id=auth.organization_id,
+                input=input_data,
+                file_content=file.file,
+                uploaded_by=auth.person_id,
+            )
+
+            return RedirectResponse(
+                url=f"/ar/credit-notes/{credit_note_id}?success=Attachment+uploaded",
+                status_code=303,
+            )
+
+        except ValueError as e:
+            return RedirectResponse(
+                url=f"/ar/credit-notes/{credit_note_id}?error={str(e)}",
+                status_code=303,
+            )
+        except Exception:
+            return RedirectResponse(
+                url=f"/ar/credit-notes/{credit_note_id}?error=Upload+failed",
+                status_code=303,
+            )
+
+    async def upload_customer_attachment_response(
+        self,
+        customer_id: str,
+        file: UploadFile,
+        description: Optional[str],
+        auth: WebAuthContext,
+        db: Session,
+    ) -> RedirectResponse:
+        try:
+            customer = customer_service.get(db, auth.organization_id, customer_id)
+            if not customer or customer.organization_id != auth.organization_id:
+                return RedirectResponse(
+                    url=f"/ar/customers/{customer_id}?error=Customer+not+found",
+                    status_code=303,
+                )
+
+            input_data = AttachmentInput(
+                entity_type="CUSTOMER",
+                entity_id=customer_id,
+                file_name=file.filename or "unnamed",
+                content_type=file.content_type or "application/octet-stream",
+                category=AttachmentCategory.CUSTOMER,
+                description=description,
+            )
+
+            attachment_service.save_file(
+                db=db,
+                organization_id=auth.organization_id,
+                input=input_data,
+                file_content=file.file,
+                uploaded_by=auth.person_id,
+            )
+
+            return RedirectResponse(
+                url=f"/ar/customers/{customer_id}?success=Attachment+uploaded",
+                status_code=303,
+            )
+
+        except ValueError as e:
+            return RedirectResponse(
+                url=f"/ar/customers/{customer_id}?error={str(e)}",
+                status_code=303,
+            )
+        except Exception:
+            return RedirectResponse(
+                url=f"/ar/customers/{customer_id}?error=Upload+failed",
+                status_code=303,
+            )
+
+    def download_attachment_response(
+        self,
+        attachment_id: str,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> FileResponse | RedirectResponse:
+        attachment = attachment_service.get(db, auth.organization_id, attachment_id)
+
+        if not attachment or attachment.organization_id != auth.organization_id:
+            return RedirectResponse(url="/ar/invoices?error=Attachment+not+found", status_code=303)
+
+        file_path = attachment_service.get_file_path(attachment)
+
+        if not file_path.exists():
+            return RedirectResponse(url="/ar/invoices?error=File+not+found", status_code=303)
+
+        return FileResponse(
+            path=str(file_path),
+            filename=attachment.file_name,
+            media_type=attachment.content_type,
+        )
+
+    def delete_attachment_response(
+        self,
+        attachment_id: str,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> RedirectResponse:
+        attachment = attachment_service.get(db, auth.organization_id, attachment_id)
+
+        if not attachment or attachment.organization_id != auth.organization_id:
+            return RedirectResponse(url="/ar/invoices?error=Attachment+not+found", status_code=303)
+
+        entity_type = attachment.entity_type
+        entity_id = attachment.entity_id
+
+        attachment_service.delete(db, attachment_id, auth.organization_id)
+
+        redirect_map = {
+            "CUSTOMER_INVOICE": f"/ar/invoices/{entity_id}",
+            "CUSTOMER_PAYMENT": f"/ar/receipts/{entity_id}",
+            "CREDIT_NOTE": f"/ar/credit-notes/{entity_id}",
+            "CUSTOMER": f"/ar/customers/{entity_id}",
+        }
+
+        redirect_url = redirect_map.get(entity_type, "/ar/invoices")
+        return RedirectResponse(
+            url=f"{redirect_url}?success=Attachment+deleted",
+            status_code=303,
+        )
 
 
 ar_web_service = ARWebService()

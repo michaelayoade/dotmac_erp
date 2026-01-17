@@ -196,8 +196,8 @@ class OpeningBalanceImporter:
 
         try:
             return Decimal(s)
-        except InvalidOperation:
-            return Decimal("0")
+        except InvalidOperation as exc:
+            raise ValueError(f"Invalid decimal value: {value}") from exc
 
     def _match_account(self, account_name: str, coa_match: Optional[str] = None) -> Optional[Account]:
         """
@@ -219,11 +219,6 @@ class OpeningBalanceImporter:
         key = account_name.lower().strip()
         if key in self._account_cache:
             return self._account_cache[key]
-
-        # Try partial match
-        for cached_name, account in self._account_cache.items():
-            if key in cached_name or cached_name in key:
-                return account
 
         return None
 
@@ -303,8 +298,16 @@ class OpeningBalanceImporter:
         for idx, row in enumerate(rows, start=1):
             account_name = row.get(name_col, "").strip() if name_col else ""
             account_type = row.get(type_col, "").strip() if type_col else ""
-            debit = self._parse_decimal(row.get(debit_col)) if debit_col else Decimal("0")
-            credit = self._parse_decimal(row.get(credit_col)) if credit_col else Decimal("0")
+            try:
+                debit = self._parse_decimal(row.get(debit_col)) if debit_col else Decimal("0")
+            except ValueError as exc:
+                errors.append(f"Row {idx}: {exc}")
+                debit = Decimal("0")
+            try:
+                credit = self._parse_decimal(row.get(credit_col)) if credit_col else Decimal("0")
+            except ValueError as exc:
+                errors.append(f"Row {idx}: {exc}")
+                credit = Decimal("0")
             balance_str = row.get(balance_col, "DEBIT").upper() if balance_col else "DEBIT"
             notes = row.get(notes_col, "") if notes_col else ""
             coa_match = row.get(coa_col, "") if coa_col else ""
@@ -405,6 +408,17 @@ class OpeningBalanceImporter:
                     errors=preview.validation_errors,
                     warnings=[],
                 )
+        if auto_create_accounts and preview.unmatched_count > 0:
+            return OpeningBalanceResult(
+                success=False,
+                journal_entry_id=None,
+                journal_number=None,
+                total_debit=preview.total_debit,
+                total_credit=preview.total_credit,
+                lines_created=0,
+                errors=["Auto-create accounts is not implemented. Please create missing accounts first."],
+                warnings=[],
+            )
 
         if not preview.is_balanced:
             return OpeningBalanceResult(
@@ -490,8 +504,9 @@ class OpeningBalanceImporter:
             account_id = line.account_id
             if not account_id:
                 if auto_create_accounts:
-                    # TODO: Create account
-                    warnings.append(f"Line {idx}: Account '{line.account_name}' not found and auto-create not implemented")
+                    errors.append(
+                        f"Line {idx}: Account '{line.account_name}' not found. Auto-create is not implemented."
+                    )
                     continue
                 else:
                     errors.append(f"Line {idx}: Account '{line.account_name}' not found in Chart of Accounts")

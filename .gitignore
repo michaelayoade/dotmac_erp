@@ -79,3 +79,4 @@ node_modules/
 
 # Data backups
 books_backup/
+dotmac_books_backup.sql.gz

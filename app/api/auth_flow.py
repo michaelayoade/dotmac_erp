@@ -1,11 +1,7 @@
-from datetime import datetime, timezone
-
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
-from app.models.auth import Session as AuthSession, SessionStatus, UserCredential
-from app.models.person import Person
 from app.schemas.auth import MFAMethodRead
 from app.schemas.auth_flow import (
     AvatarUploadResponse,
@@ -33,17 +29,8 @@ from app.schemas.auth_flow import (
     TokenResponse,
 )
 from app.services import auth_flow as auth_flow_service
-from app.services import avatar as avatar_service
 from app.services.auth_dependencies import require_user_auth
-from app.services.auth_flow import (
-    hash_password,
-    request_password_reset,
-    reset_password,
-    revoke_sessions_for_person,
-    verify_password,
-)
-from app.services.email import send_password_reset_email
-from app.services.common import coerce_uuid
+from app.services.auth_flow_api import auth_flow_api_service
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -180,27 +167,7 @@ def get_me(
     auth: dict = Depends(require_user_auth),
     db: Session = Depends(get_db),
 ):
-    person = db.get(Person, coerce_uuid(auth["person_id"]))
-    if not person:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    return MeResponse(
-        id=person.id,
-        first_name=person.first_name,
-        last_name=person.last_name,
-        display_name=person.display_name,
-        avatar_url=person.avatar_url,
-        email=person.email,
-        email_verified=person.email_verified,
-        phone=person.phone,
-        date_of_birth=person.date_of_birth,
-        gender=person.gender.value if person.gender else "unknown",
-        preferred_contact_method=person.preferred_contact_method.value if person.preferred_contact_method else None,
-        locale=person.locale,
-        timezone=person.timezone,
-        roles=auth.get("roles", []),
-        scopes=auth.get("scopes", []),
-    )
+    return auth_flow_api_service.get_me(auth, db)
 
 
 @router.patch(
@@ -216,34 +183,7 @@ def update_me(
     auth: dict = Depends(require_user_auth),
     db: Session = Depends(get_db),
 ):
-    person = db.get(Person, coerce_uuid(auth["person_id"]))
-    if not person:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    update_data = payload.model_dump(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(person, field, value)
-
-    db.commit()
-    db.refresh(person)
-
-    return MeResponse(
-        id=person.id,
-        first_name=person.first_name,
-        last_name=person.last_name,
-        display_name=person.display_name,
-        avatar_url=person.avatar_url,
-        email=person.email,
-        email_verified=person.email_verified,
-        phone=person.phone,
-        date_of_birth=person.date_of_birth,
-        gender=person.gender.value if person.gender else "unknown",
-        preferred_contact_method=person.preferred_contact_method.value if person.preferred_contact_method else None,
-        locale=person.locale,
-        timezone=person.timezone,
-        roles=auth.get("roles", []),
-        scopes=auth.get("scopes", []),
-    )
+    return auth_flow_api_service.update_me(auth, payload, db)
 
 
 @router.post(
@@ -260,21 +200,7 @@ async def upload_avatar(
     auth: dict = Depends(require_user_auth),
     db: Session = Depends(get_db),
 ):
-    person = db.get(Person, coerce_uuid(auth["person_id"]))
-    if not person:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    # Delete old avatar if exists
-    avatar_service.delete_avatar(person.avatar_url)
-
-    # Save new avatar
-    avatar_url = await avatar_service.save_avatar(file, str(person.id))
-
-    # Update person record
-    person.avatar_url = avatar_url
-    db.commit()
-
-    return AvatarUploadResponse(avatar_url=avatar_url)
+    return await auth_flow_api_service.upload_avatar(file, auth, db)
 
 
 @router.delete(
@@ -288,13 +214,7 @@ def delete_avatar(
     auth: dict = Depends(require_user_auth),
     db: Session = Depends(get_db),
 ):
-    person = db.get(Person, coerce_uuid(auth["person_id"]))
-    if not person:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    avatar_service.delete_avatar(person.avatar_url)
-    person.avatar_url = None
-    db.commit()
+    auth_flow_api_service.delete_avatar(auth, db)
 
 
 @router.get(
@@ -309,36 +229,7 @@ def list_sessions(
     auth: dict = Depends(require_user_auth),
     db: Session = Depends(get_db),
 ):
-    person_id = coerce_uuid(auth["person_id"])
-    now = datetime.now(timezone.utc)
-    sessions = (
-        db.query(AuthSession)
-        .filter(AuthSession.person_id == person_id)
-        .filter(AuthSession.status == SessionStatus.active)
-        .filter(AuthSession.revoked_at.is_(None))
-        .filter(AuthSession.expires_at > now)
-        .order_by(AuthSession.created_at.desc())
-        .all()
-    )
-
-    current_session_id = auth.get("session_id")
-
-    return SessionListResponse(
-        sessions=[
-            SessionInfoResponse(
-                id=s.id,
-                status=s.status.value,
-                ip_address=s.ip_address,
-                user_agent=s.user_agent,
-                created_at=s.created_at,
-                last_seen_at=s.last_seen_at,
-                expires_at=s.expires_at,
-                is_current=(str(s.id) == current_session_id),
-            )
-            for s in sessions
-        ],
-        total=len(sessions),
-    )
+    return auth_flow_api_service.list_sessions(auth, db)
 
 
 @router.delete(
@@ -355,25 +246,7 @@ def revoke_session(
     auth: dict = Depends(require_user_auth),
     db: Session = Depends(get_db),
 ):
-    now = datetime.now(timezone.utc)
-    session = (
-        db.query(AuthSession)
-        .filter(AuthSession.id == coerce_uuid(session_id))
-        .filter(AuthSession.person_id == coerce_uuid(auth["person_id"]))
-        .filter(AuthSession.status == SessionStatus.active)
-        .filter(AuthSession.revoked_at.is_(None))
-        .filter(AuthSession.expires_at > now)
-        .first()
-    )
-
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-
-    session.status = SessionStatus.revoked
-    session.revoked_at = now
-    db.commit()
-
-    return SessionRevokeResponse(revoked_at=now)
+    return auth_flow_api_service.revoke_session(session_id, auth, db)
 
 
 @router.delete(
@@ -388,28 +261,7 @@ def revoke_all_other_sessions(
     auth: dict = Depends(require_user_auth),
     db: Session = Depends(get_db),
 ):
-    current_session_id = auth.get("session_id")
-    if current_session_id:
-        current_session_id = coerce_uuid(current_session_id)
-
-    now = datetime.now(timezone.utc)
-    sessions = (
-        db.query(AuthSession)
-        .filter(AuthSession.person_id == coerce_uuid(auth["person_id"]))
-        .filter(AuthSession.status == SessionStatus.active)
-        .filter(AuthSession.revoked_at.is_(None))
-        .filter(AuthSession.expires_at > now)
-        .filter(AuthSession.id != current_session_id)
-        .all()
-    )
-
-    for session in sessions:
-        session.status = SessionStatus.revoked
-        session.revoked_at = now
-
-    db.commit()
-
-    return SessionRevokeResponse(revoked_at=now, revoked_count=len(sessions))
+    return auth_flow_api_service.revoke_all_other_sessions(auth, db)
 
 
 @router.post(
@@ -427,30 +279,7 @@ def change_password(
     auth: dict = Depends(require_user_auth),
     db: Session = Depends(get_db),
 ):
-    credential = (
-        db.query(UserCredential)
-        .filter(UserCredential.person_id == coerce_uuid(auth["person_id"]))
-        .filter(UserCredential.is_active.is_(True))
-        .first()
-    )
-
-    if not credential:
-        raise HTTPException(status_code=404, detail="No credentials found")
-
-    if not verify_password(payload.current_password, credential.password_hash):
-        raise HTTPException(status_code=401, detail="Current password is incorrect")
-
-    if payload.current_password == payload.new_password:
-        raise HTTPException(status_code=400, detail="New password must be different")
-
-    now = datetime.now(timezone.utc)
-    credential.password_hash = hash_password(payload.new_password)
-    credential.password_updated_at = now
-    credential.must_change_password = False
-    revoke_sessions_for_person(db, auth["person_id"])
-    db.commit()
-
-    return PasswordChangeResponse(changed_at=now)
+    return auth_flow_api_service.change_password(payload, auth, db)
 
 
 @router.post(
@@ -466,17 +295,7 @@ def forgot_password(
     Request a password reset email.
     Always returns success to prevent email enumeration.
     """
-    result = request_password_reset(db, payload.email)
-
-    if result:
-        send_password_reset_email(
-            db=db,
-            to_email=result["email"],
-            reset_token=result["token"],
-            person_name=result["person_name"],
-        )
-
-    return ForgotPasswordResponse()
+    return auth_flow_api_service.forgot_password(payload, db)
 
 
 @router.post(
@@ -495,5 +314,5 @@ def reset_password_endpoint(
     """
     Reset password using the token from forgot-password email.
     """
-    reset_at = reset_password(db, payload.token, payload.new_password)
+    reset_at = auth_flow_api_service.reset_password(payload, db)
     return ResetPasswordResponse(reset_at=reset_at)

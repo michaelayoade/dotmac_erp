@@ -116,6 +116,7 @@ class InvoiceImporter(BaseImporter[Invoice]):
             FieldMapping("Description", "description_alt", required=False),
             # Line item (for single-line invoices)
             FieldMapping("Item Name", "line_item_name", required=False),
+            FieldMapping("Item Desc", "line_item_desc", required=False),
             FieldMapping("Product", "line_product_alt", required=False),
             FieldMapping("Quantity", "line_quantity", required=False,
                          transformer=self.parse_decimal, default=Decimal("1")),
@@ -131,16 +132,167 @@ class InvoiceImporter(BaseImporter[Invoice]):
                          transformer=self.parse_decimal),
             FieldMapping("Amount", "line_amount_alt", required=False,
                          transformer=self.parse_decimal),
+            FieldMapping("Item Total", "line_item_total", required=False,
+                         transformer=self.parse_decimal),
+            FieldMapping("Item Price", "line_item_price", required=False,
+                         transformer=self.parse_decimal),
             FieldMapping("Discount", "line_discount", required=False,
                          transformer=self.parse_decimal, default=Decimal("0")),
             FieldMapping("Discount Amount", "line_discount_amount_alt", required=False,
+                         transformer=self.parse_decimal),
+            FieldMapping("Item Tax Amount", "line_tax_amount", required=False,
+                         transformer=self.parse_decimal),
+            FieldMapping("Tax Amount", "line_tax_amount_alt", required=False,
+                         transformer=self.parse_decimal),
+            FieldMapping("Balance", "balance_alt", required=False,
                          transformer=self.parse_decimal),
         ]
 
     def get_unique_key(self, row: Dict[str, Any]) -> str:
         """Unique key is invoice number."""
         return (row.get("Invoice Number") or row.get("Invoice No") or
-                row.get("Number") or "").strip()
+                row.get("Number") or row.get("Invoice ID") or "").strip()
+
+    def _import_rows(self, rows: List[Dict[str, Any]]) -> None:
+        """Import rows grouped by invoice number to preserve multi-line invoices."""
+        from collections import defaultdict
+
+        groups: dict[str, list[Dict[str, Any]]] = defaultdict(list)
+        for row in rows:
+            key = self.get_unique_key(row)
+            if not key:
+                self.result.add_error(0, "Missing invoice number", "Invoice Number")
+                self.result.skipped_count += 1
+                continue
+            groups[key].append(row)
+
+        batch = []
+
+        for idx, (invoice_key, group_rows) in enumerate(groups.items(), start=1):
+            if self.config.stop_on_error and self.result.error_count > 0:
+                break
+
+            header = group_rows[0]
+            if not self.validate_with_rules(header, idx):
+                self.result.skipped_count += 1
+                continue
+
+            if self.config.skip_duplicates:
+                existing = self.check_duplicate(header)
+                if existing:
+                    self.result.duplicate_count += 1
+                    self.result.skipped_count += 1
+                    self.result.add_warning(
+                        idx,
+                        f"Duplicate invoice skipped (key: {invoice_key})"
+                    )
+                    continue
+
+            try:
+                header_data = self.transform_row(header, idx)
+                line_data = [self.transform_row(row, idx) for row in group_rows]
+                invoice = self._build_invoice_from_rows(header_data, line_data)
+                if not self.config.dry_run:
+                    batch.append(invoice)
+                    if len(batch) >= self.config.batch_size:
+                        self._commit_batch(batch)
+                        batch = []
+                self.result.imported_count += 1
+            except Exception as exc:
+                self.result.add_error(idx, str(exc), None)
+                self.result.skipped_count += 1
+
+        if batch and not self.config.dry_run:
+            self._commit_batch(batch)
+
+    def _build_invoice_from_rows(
+        self,
+        header: Dict[str, Any],
+        line_rows: List[Dict[str, Any]],
+    ) -> Invoice:
+        """Create a single invoice with multiple lines from grouped rows."""
+        invoice_number = (header.get("invoice_number") or header.get("invoice_no_alt") or
+                          header.get("number_alt") or "").strip()
+        if not invoice_number:
+            self._invoice_number_counter += 1
+            invoice_number = f"INV{self._invoice_number_counter:06d}"
+
+        invoice_date = header.get("invoice_date") or header.get("date_alt") or date.today()
+        due_date = header.get("due_date") or invoice_date
+
+        customer_name = (header.get("customer_name") or header.get("customer_alt") or
+                         header.get("client_alt") or "Unknown Customer").strip()
+        customer_id = self._get_customer_id(customer_name)
+
+        type_str = (header.get("invoice_type_str") or header.get("type_alt") or "STANDARD")
+        invoice_type = self._parse_invoice_type(type_str)
+
+        currency_code = (header.get("currency_code") or header.get("currency_alt") or "NGN")[:3]
+        exchange_rate = header.get("exchange_rate") or Decimal("1")
+
+        lines: list[InvoiceLine] = []
+        subtotal = Decimal("0")
+        tax_amount = Decimal("0")
+
+        for line_number, line_row in enumerate(line_rows, start=1):
+            line = self._create_invoice_line(
+                line_row,
+                line_number=line_number,
+            )
+            lines.append(line)
+            subtotal += line.line_amount or Decimal("0")
+            tax_amount += line.tax_amount or Decimal("0")
+
+        total_amount = subtotal + tax_amount
+
+        header_total = header.get("total_amount") or header.get("total_alt") or header.get("gross_alt")
+        header_subtotal = header.get("subtotal") or header.get("net_amount_alt")
+        header_tax = header.get("tax_amount") or header.get("vat_alt") or header.get("tax_alt")
+
+        if header_subtotal is not None and subtotal == 0:
+            subtotal = header_subtotal
+        if header_tax is not None and tax_amount == 0:
+            tax_amount = header_tax
+        if header_total is not None and total_amount == 0:
+            total_amount = header_total
+
+        balance = header.get("balance_alt")
+        amount_paid = header.get("amount_paid") or header.get("paid_alt") or Decimal("0")
+        if balance is not None and total_amount is not None:
+            amount_paid = total_amount - balance
+            if amount_paid < 0:
+                amount_paid = Decimal("0")
+
+        functional_currency_amount = total_amount * exchange_rate
+
+        status_str = header.get("status_str") or header.get("status_alt") or "DRAFT"
+        status = self._parse_status(status_str, total_amount, amount_paid)
+
+        invoice = Invoice(
+            invoice_id=uuid4(),
+            organization_id=self.config.organization_id,
+            customer_id=customer_id,
+            invoice_number=invoice_number[:30],
+            invoice_type=invoice_type,
+            invoice_date=invoice_date,
+            due_date=due_date,
+            currency_code=currency_code,
+            exchange_rate=exchange_rate,
+            subtotal=subtotal,
+            tax_amount=tax_amount,
+            total_amount=total_amount,
+            amount_paid=amount_paid,
+            functional_currency_amount=functional_currency_amount,
+            status=status,
+            ar_control_account_id=self.ar_control_account_id,
+            notes=header.get("notes") or header.get("description_alt"),
+            posting_status="NOT_POSTED",
+            ecl_provision_amount=Decimal("0"),
+            is_intercompany=False,
+            created_by_user_id=self.config.user_id,
+        )
+        invoice.lines = lines
+        return invoice
 
     def check_duplicate(self, row: Dict[str, Any]) -> Optional[Invoice]:
         """Check if invoice already exists."""
@@ -257,36 +409,64 @@ class InvoiceImporter(BaseImporter[Invoice]):
         )
 
         # Create invoice line
-        line = self._create_invoice_line(row, invoice, subtotal)
+        line = self._create_invoice_line(row, line_number=1, fallback_amount=subtotal)
         invoice.lines = [line]
 
         return invoice
 
-    def _create_invoice_line(self, row: Dict[str, Any], invoice: Invoice, subtotal: Decimal) -> InvoiceLine:
+    def _create_invoice_line(
+        self,
+        row: Dict[str, Any],
+        line_number: int,
+        fallback_amount: Decimal | None = None,
+    ) -> InvoiceLine:
         """Create invoice line from row data."""
-        description = (row.get("line_item_name") or row.get("line_product_alt") or
-                       row.get("description_alt") or row.get("notes") or "Invoice Item")
+        description = (
+            row.get("line_item_name")
+            or row.get("line_item_desc")
+            or row.get("line_product_alt")
+            or row.get("description_alt")
+            or row.get("notes")
+            or "Invoice Item"
+        )
 
         quantity = (row.get("line_quantity") or row.get("line_qty_alt") or Decimal("1"))
-        unit_price = (row.get("line_unit_price") or row.get("line_price_alt") or
-                      row.get("line_rate_alt") or subtotal)
+        if quantity == 0:
+            quantity = Decimal("1")
 
-        line_amount = (row.get("line_amount") or row.get("line_amount_alt") or
-                       (quantity * unit_price if quantity and unit_price else subtotal))
+        unit_price = (row.get("line_unit_price") or row.get("line_price_alt") or
+                      row.get("line_rate_alt") or row.get("line_item_price"))
+
+        line_amount = (
+            row.get("line_item_total")
+            or row.get("line_amount")
+            or row.get("line_amount_alt")
+        )
+
+        if line_amount is None:
+            if unit_price is None and fallback_amount is not None:
+                unit_price = fallback_amount
+            if unit_price is None:
+                unit_price = Decimal("0")
+            line_amount = quantity * unit_price if quantity else unit_price
+
+        if unit_price is None:
+            unit_price = line_amount / quantity if quantity else line_amount
 
         discount = (row.get("line_discount") or row.get("line_discount_amount_alt") or
                     Decimal("0"))
+        tax_amount = (row.get("line_tax_amount") or row.get("line_tax_amount_alt") or
+                      Decimal("0"))
 
         return InvoiceLine(
             line_id=uuid4(),
-            invoice_id=invoice.invoice_id,
-            line_number=1,
+            line_number=line_number,
             description=description[:500] if description else "Item",
             quantity=quantity,
             unit_price=unit_price,
             discount_amount=discount,
             line_amount=line_amount,
-            tax_amount=Decimal("0"),
+            tax_amount=tax_amount,
             revenue_account_id=self.default_revenue_account_id,
         )
 

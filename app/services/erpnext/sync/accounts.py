@@ -1,0 +1,193 @@
+"""
+Account Sync Service - ERPNext to DotMac Books.
+"""
+import uuid
+from datetime import datetime
+from typing import Any, Optional
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.models.ifrs.gl.account import Account
+from app.models.ifrs.gl.account_category import AccountCategory
+from app.services.erpnext.mappings.accounts import AccountMapping, ROOT_TYPE_MAP
+
+from .base import BaseSyncService
+
+
+class AccountSyncService(BaseSyncService[Account]):
+    """Sync Chart of Accounts from ERPNext."""
+
+    source_doctype = "Account"
+    target_table = "gl.account"
+
+    def __init__(
+        self,
+        db: Session,
+        organization_id: uuid.UUID,
+        user_id: uuid.UUID,
+    ):
+        super().__init__(db, organization_id, user_id)
+        self._mapping = AccountMapping()
+        self._account_cache: dict[str, Account] = {}
+        self._category_cache: dict[str, AccountCategory] = {}
+
+    def fetch_records(self, client: Any, since: Optional[datetime] = None):
+        """Fetch accounts from ERPNext."""
+        if since:
+            yield from client.get_modified_since(
+                doctype="Account",
+                since=since,
+                fields=self._get_fields(),
+            )
+        else:
+            yield from client.get_chart_of_accounts()
+
+    def _get_fields(self) -> list[str]:
+        """Get fields to fetch."""
+        return [
+            "name",
+            "account_name",
+            "account_number",
+            "root_type",
+            "account_type",
+            "is_group",
+            "parent_account",
+            "account_currency",
+            "disabled",
+            "modified",
+        ]
+
+    def transform_record(self, record: dict[str, Any]) -> dict[str, Any]:
+        """Transform ERPNext account to DotMac Books format."""
+        return self._mapping.transform_record(record)
+
+    def _get_or_create_category(self, root_type: str) -> uuid.UUID:
+        """Get or create account category for ERPNext root_type."""
+        # Map ERPNext root_type to our category
+        category_code = ROOT_TYPE_MAP.get(root_type, "ASSETS")
+
+        # Check cache
+        if category_code in self._category_cache:
+            return self._category_cache[category_code].category_id
+
+        # Try to find existing
+        result = self.db.execute(
+            select(AccountCategory).where(
+                AccountCategory.organization_id == self.organization_id,
+                AccountCategory.category_code == category_code,
+            )
+        ).scalar_one_or_none()
+
+        if result:
+            self._category_cache[category_code] = result
+            return result.category_id
+
+        # Create new category
+        category = AccountCategory(
+            organization_id=self.organization_id,
+            category_code=category_code,
+            category_name=root_type or "Assets",
+            ifrs_category=category_code,
+            is_active=True,
+        )
+        self.db.add(category)
+        self.db.flush()
+        self._category_cache[category_code] = category
+        return category.category_id
+
+    def create_entity(self, data: dict[str, Any]) -> Account:
+        """Create Account entity."""
+        # Remove internal fields
+        data.pop("_parent_source_name", None)
+        data.pop("_source_modified", None)
+
+        # Get or create category
+        category_id = self._get_or_create_category(data.get("account_category", "Asset"))
+
+        # Map is_header to is_posting_allowed (inverted)
+        is_header = data.get("is_header", False)
+
+        # Determine account_type - must be CONTROL, POSTING, or STATISTICAL
+        # Group accounts (is_header=True) are CONTROL, posting accounts are POSTING
+        if is_header:
+            account_type = "CONTROL"
+        elif data.get("subledger_type"):
+            account_type = "CONTROL"  # Subledger accounts are control accounts
+        else:
+            account_type = "POSTING"
+
+        account = Account(
+            organization_id=self.organization_id,
+            account_code=data["account_code"][:20],  # Truncate to 20 chars
+            account_name=data["account_name"][:200],
+            category_id=category_id,
+            account_type=account_type,
+            normal_balance=data.get("normal_balance", "DEBIT")[:6],
+            is_posting_allowed=not is_header,  # Header accounts don't allow posting
+            is_active=data.get("is_active", True),
+            default_currency_code=data.get("currency_code", "NGN")[:3],
+            subledger_type=data.get("subledger_type"),
+            created_by_user_id=self.user_id,
+        )
+        return account
+
+    def update_entity(self, entity: Account, data: dict[str, Any]) -> Account:
+        """Update existing Account."""
+        data.pop("_parent_source_name", None)
+        data.pop("_source_modified", None)
+
+        # Get or create category
+        category_id = self._get_or_create_category(data.get("account_category", "Asset"))
+        is_header = data.get("is_header", False)
+
+        # Determine account_type - must be CONTROL, POSTING, or STATISTICAL
+        if is_header:
+            account_type = "CONTROL"
+        elif data.get("subledger_type"):
+            account_type = "CONTROL"
+        else:
+            account_type = "POSTING"
+
+        entity.account_name = data["account_name"][:200]
+        entity.category_id = category_id
+        entity.account_type = account_type
+        entity.normal_balance = data.get("normal_balance", "DEBIT")[:6]
+        entity.is_posting_allowed = not is_header
+        entity.is_active = data.get("is_active", True)
+        entity.default_currency_code = data.get("currency_code", "NGN")[:3]
+        entity.subledger_type = data.get("subledger_type")
+
+        return entity
+
+    def get_entity_id(self, entity: Account) -> uuid.UUID:
+        """Get account ID."""
+        return entity.account_id
+
+    def find_existing_entity(self, source_name: str) -> Optional[Account]:
+        """Find existing account by code."""
+        # Check cache first
+        if source_name in self._account_cache:
+            return self._account_cache[source_name]
+
+        # Check sync entity
+        sync_entity = self.get_sync_entity(source_name)
+        if sync_entity and sync_entity.target_id:
+            account = self.db.get(Account, sync_entity.target_id)
+            if account:
+                self._account_cache[source_name] = account
+                return account
+
+        # Try to find by code (truncated to 20 chars for initial import)
+        code = source_name[:20] if source_name else ""
+        result = self.db.execute(
+            select(Account).where(
+                Account.organization_id == self.organization_id,
+                Account.account_code == code,
+            )
+        ).scalar_one_or_none()
+
+        if result:
+            self._account_cache[source_name] = result
+
+        return result

@@ -33,6 +33,7 @@ from app.api.ifrs import (
     banking_router,
     import_export_router,
     opening_balance_router,
+    search_router,
 )
 from app.db import SessionLocal
 from app.services import audit as audit_service
@@ -222,6 +223,7 @@ _include_api_router(rpt_router, dependencies=[Depends(require_tenant_auth)])
 _include_api_router(banking_router, dependencies=[Depends(require_tenant_auth)])
 _include_api_router(import_export_router, dependencies=[Depends(require_tenant_auth)])
 _include_api_router(opening_balance_router, dependencies=[Depends(require_tenant_auth)])
+_include_api_router(search_router, dependencies=[Depends(require_tenant_auth)])
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 

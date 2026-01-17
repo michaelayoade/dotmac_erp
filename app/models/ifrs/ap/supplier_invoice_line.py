@@ -81,6 +81,16 @@ class SupplierInvoiceLine(Base):
 
     # Capitalization
     capitalize_flag: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    asset_category_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("fa.asset_category.category_id"),
+        nullable=True,
+    )
+    created_asset_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("fa.asset.asset_id"),
+        nullable=True,
+    )
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -90,7 +100,13 @@ class SupplierInvoiceLine(Base):
 
     # Relationships
     invoice: Mapped["SupplierInvoice"] = relationship("SupplierInvoice", back_populates="lines")
+    line_taxes: Mapped[list["SupplierInvoiceLineTax"]] = relationship(
+        "SupplierInvoiceLineTax",
+        back_populates="invoice_line",
+        cascade="all, delete-orphan",
+    )
 
 
-# Forward reference
+# Forward references
 from app.models.ifrs.ap.supplier_invoice import SupplierInvoice  # noqa: E402
+from app.models.ifrs.ap.supplier_invoice_line_tax import SupplierInvoiceLineTax  # noqa: E402

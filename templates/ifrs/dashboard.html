@@ -5,6 +5,21 @@
 
 {% block content %}
 <div class="space-y-8">
+    <div class="flex flex-wrap items-center justify-between gap-4">
+        <div>
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display">Dashboard</h2>
+            <p class="text-sm text-slate-500 dark:text-slate-400">Viewing {{ selected_year_label }}</p>
+        </div>
+        <form method="get" class="flex items-center gap-3">
+            <label for="year-filter" class="text-sm text-slate-500 dark:text-slate-400">Year</label>
+            <select id="year-filter" name="year" class="form-select" onchange="this.form.submit()">
+                <option value="all" {% if selected_year is none %}selected{% endif %}>All years</option>
+                {% for year_option in available_years %}
+                <option value="{{ year_option }}" {% if year_option == selected_year %}selected{% endif %}>{{ year_option }}</option>
+                {% endfor %}
+            </select>
+        </form>
+    </div>
     <!-- Hero Financial Summary -->
     <div class="stagger-in" style="animation-delay: 0ms;" data-testid="dashboard-stats">
         <div class="grid grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-12">
@@ -50,15 +65,13 @@
                 {% endif %}
             </div>
 
-            <!-- Open Invoices -->
+            <!-- AR/AP Control -->
             <div class="stat-hero" data-testid="dashboard-stat-open-invoices">
-                <span class="stat-hero-label">Open Invoices</span>
-                <span class="stat-hero-value">{{ stats.open_invoices | default(0) }}</span>
-                {% if stats.pending_amount %}
+                <span class="stat-hero-label">AR/AP Control</span>
+                <span class="stat-hero-value">{{ stats.ar_control_balance | default("$0.00") }}</span>
                 <span class="stat-hero-trend text-amber-600 dark:text-amber-400">
-                    {{ stats.pending_amount }} pending
+                    AP {{ stats.ap_control_balance | default("$0.00") }}
                 </span>
-                {% endif %}
             </div>
         </div>
     </div>
@@ -73,7 +86,9 @@
             <div class="flex items-center justify-between mb-6">
                 <div>
                     <h3 class="text-base font-semibold text-slate-900 dark:text-white font-display">Revenue vs Expenses</h3>
-                    <p class="text-sm text-slate-500 dark:text-slate-400">12-month trend</p>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">
+                        {% if selected_year %}{{ selected_year }} monthly trend{% else %}12-month trend{% endif %}
+                    </p>
                 </div>
                 <div class="flex items-center gap-4 text-xs">
                     <span class="flex items-center gap-1.5">
@@ -106,7 +121,9 @@
             <div class="flex items-center justify-between mb-6">
                 <div>
                     <h3 class="text-base font-semibold text-slate-900 dark:text-white font-display">Cash Flow</h3>
-                    <p class="text-sm text-slate-500 dark:text-slate-400">6-month inflows & outflows</p>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">
+                        {% if selected_year %}{{ selected_year }} inflows & outflows{% else %}6-month inflows & outflows{% endif %}
+                    </p>
                 </div>
                 <div class="flex items-center gap-4 text-xs">
                     <span class="flex items-center gap-1.5">
@@ -178,7 +195,7 @@
         <div class="stagger-in card p-6" style="animation-delay: 250ms;">
             <div class="mb-6">
                 <h3 class="text-base font-semibold text-slate-900 dark:text-white font-display">Top Suppliers</h3>
-                <p class="text-sm text-slate-500 dark:text-slate-400">By spend</p>
+                <p class="text-sm text-slate-500 dark:text-slate-400">COGS / purchases spend</p>
             </div>
             {% if chart_data.top_suppliers %}
             <div class="h-56">
@@ -261,6 +278,60 @@
                 </div>
             </div>
 
+            <!-- COGS vs Opex -->
+            <div class="stagger-in" style="animation-delay: 375ms;">
+                <div class="section-label">
+                    <span class="section-label-text">Cost Split</span>
+                </div>
+                <div class="card p-5">
+                    <div class="flex items-center justify-between mb-4">
+                        <span class="text-sm font-medium text-slate-700 dark:text-slate-300">COGS vs Opex</span>
+                        <span class="text-xs text-slate-500 dark:text-slate-400">{{ selected_year_label }}</span>
+                    </div>
+                    <div class="space-y-2">
+                        <div class="flex justify-between text-sm">
+                            <span class="text-slate-500 dark:text-slate-400">COGS / Purchases</span>
+                            <span class="text-slate-900 dark:text-white font-medium">{{ stats.cogs_spend | default("$0.00") }}</span>
+                        </div>
+                        <div class="flex justify-between text-sm">
+                            <span class="text-slate-500 dark:text-slate-400">Operating Expenses</span>
+                            <span class="text-slate-900 dark:text-white font-medium">{{ stats.opex_spend | default("$0.00") }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Subledger Reconciliation -->
+            <div class="stagger-in" style="animation-delay: 390ms;">
+                <div class="section-label">
+                    <span class="section-label-text">Subledger Reconciliation</span>
+                </div>
+                <div class="card p-5">
+                    <div class="flex items-center justify-between mb-4">
+                        <span class="text-sm font-medium text-slate-700 dark:text-slate-300">GL vs Subledger</span>
+                        <span class="text-xs text-slate-500 dark:text-slate-400">{{ selected_year_label }}</span>
+                    </div>
+                    <div class="space-y-2">
+                        <div class="flex items-center justify-between text-sm">
+                            <span class="text-slate-500 dark:text-slate-400">AR Control</span>
+                            {% if subledger_reconciliation.ar_ok %}
+                            <span class="text-emerald-600 dark:text-emerald-400 font-medium">Matched</span>
+                            {% else %}
+                            <span class="text-rose-600 dark:text-rose-400 font-medium">Diff {{ subledger_reconciliation.ar_diff }}</span>
+                            {% endif %}
+                        </div>
+                        <div class="flex items-center justify-between text-sm">
+                            <span class="text-slate-500 dark:text-slate-400">AP Control</span>
+                            {% if subledger_reconciliation.ap_ok %}
+                            <span class="text-emerald-600 dark:text-emerald-400 font-medium">Matched</span>
+                            {% else %}
+                            <span class="text-rose-600 dark:text-rose-400 font-medium">Diff {{ subledger_reconciliation.ap_diff }}</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Aging Overview -->
             <div class="stagger-in" style="animation-delay: 400ms;">
                 <div class="section-label">
@@ -318,7 +389,7 @@
             <!-- Invoice Status Mini Charts -->
             <div class="stagger-in" style="animation-delay: 400ms;">
                 <div class="section-label">
-                    <span class="section-label-text">Invoice Status</span>
+                    <span class="section-label-text">Posting Status</span>
                 </div>
                 <div class="grid grid-cols-2 gap-4">
                     <!-- AR Invoice Status -->
@@ -349,7 +420,7 @@
                 <div class="card bg-ledger" data-testid="dashboard-recent-journals">
                     <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-700/60">
                         <span class="text-sm font-medium text-slate-500 dark:text-slate-400">
-                            Showing latest {{ recent_journals | length | default(0) }} entries
+                            Showing latest {{ recent_journals | length | default(0) }} entries ({{ selected_year_label }})
                         </span>
                         <a href="/gl/journals" data-testid="dashboard-link-journals" class="text-sm font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400 transition-colors">
                             View all &rarr;
@@ -456,7 +527,7 @@
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
                             </svg>
                         </div>
-                        <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Balance Sheet</span>
+                        <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Statement of Financial Position</span>
                     </a>
                     <a href="/banking/reconciliations" class="card card-hover p-4 text-center">
                         <div class="text-slate-400 dark:text-slate-500 mb-2">

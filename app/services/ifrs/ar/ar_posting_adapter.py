@@ -19,7 +19,9 @@ from sqlalchemy.orm import Session
 from app.models.ifrs.ar.customer import Customer
 from app.models.ifrs.ar.invoice import Invoice, InvoiceStatus, InvoiceType
 from app.models.ifrs.ar.invoice_line import InvoiceLine
+from app.models.ifrs.gl.fiscal_period import FiscalPeriod
 from app.services.common import coerce_uuid
+from app.services.ifrs.ar.ar_inventory_integration import ARInventoryIntegration
 from app.services.ifrs.gl.journal import JournalService, JournalInput, JournalLineInput
 from app.services.ifrs.gl.ledger_posting import LedgerPostingService, PostingRequest
 from app.services.ifrs.tax.tax_transaction import tax_transaction_service
@@ -102,6 +104,34 @@ class ARPostingAdapter:
         if not lines:
             return ARPostingResult(success=False, message="Invoice has no lines")
 
+        # Get fiscal period for inventory transactions
+        fiscal_period = (
+            db.query(FiscalPeriod)
+            .filter(
+                FiscalPeriod.organization_id == org_id,
+                FiscalPeriod.start_date <= invoice.invoice_date,
+                FiscalPeriod.end_date >= invoice.invoice_date,
+            )
+            .first()
+        )
+
+        # Check if there are inventory lines
+        inventory_lines = [line for line in lines if line.item_id]
+        is_credit_note = invoice.invoice_type == InvoiceType.CREDIT_NOTE
+
+        # Validate inventory availability for standard invoices (not credit notes)
+        if inventory_lines and not is_credit_note:
+            is_valid, validation_errors = ARInventoryIntegration.validate_inventory_availability(
+                db=db,
+                organization_id=org_id,
+                lines=inventory_lines,
+            )
+            if not is_valid:
+                return ARPostingResult(
+                    success=False,
+                    message=f"Insufficient inventory: {'; '.join(validation_errors)}",
+                )
+
         # Build journal entry lines
         journal_lines: list[JournalLineInput] = []
         exchange_rate = invoice.exchange_rate or Decimal("1.0")
@@ -179,6 +209,23 @@ class ARPostingAdapter:
                         segment_id=inv_line.segment_id,
                     )
                 )
+
+        # Process inventory lines and get COGS journal entries
+        inventory_result = None
+        if inventory_lines and fiscal_period:
+            inventory_result = ARInventoryIntegration.process_invoice_inventory(
+                db=db,
+                organization_id=org_id,
+                invoice=invoice,
+                lines=inventory_lines,
+                fiscal_period_id=fiscal_period.fiscal_period_id,
+                user_id=user_id,
+                is_credit_note=is_credit_note,
+            )
+
+            # Add COGS journal lines to the entry
+            if inventory_result.cogs_journal_lines:
+                journal_lines.extend(inventory_result.cogs_journal_lines)
 
         # Create journal entry
         journal_input = JournalInput(

@@ -31,6 +31,7 @@ SEQUENCE_TYPE_LABELS = {
     SequenceType.JOURNAL: "Journal Entry",
     SequenceType.PURCHASE_ORDER: "Purchase Order",
     SequenceType.SUPPLIER_INVOICE: "Supplier Invoice",
+    SequenceType.ITEM: "Inventory Item",
     SequenceType.ASSET: "Fixed Asset",
     SequenceType.LEASE: "Lease",
     SequenceType.GOODS_RECEIPT: "Goods Receipt",
@@ -59,10 +60,14 @@ async def numbering_sequences_list(
     # Get or initialize all sequences
     sequences = await numbering_service.get_all_sequences(auth.organization_id)
 
-    # If no sequences exist, initialize them
-    if not sequences:
-        sequences = await numbering_service.initialize_all_sequences(auth.organization_id)
+    # Ensure all sequence types exist (covers new types added after initial setup)
+    existing_types = {seq.sequence_type for seq in sequences}
+    if len(existing_types) < len(SequenceType):
+        for seq_type in SequenceType:
+            if seq_type not in existing_types:
+                await numbering_service.get_or_create_sequence(auth.organization_id, seq_type)
         await db.commit()
+        sequences = await numbering_service.get_all_sequences(auth.organization_id)
 
     # Build sequence data with labels and previews
     sequence_data = []

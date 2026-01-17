@@ -16,7 +16,7 @@ from uuid import UUID
 from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 
-from app.models.ifrs.inv.item import Item
+from app.models.ifrs.inv.item import Item, CostingMethod
 from app.models.ifrs.inv.inventory_transaction import InventoryTransaction, TransactionType
 from app.models.ifrs.inv.inventory_lot import InventoryLot
 from app.models.ifrs.inv.warehouse import Warehouse
@@ -477,10 +477,10 @@ class InventoryBalanceService:
             return False
 
         # For lot-tracked items, allocate from lot
-        if item.track_lots and not lot_id:
+        if (item.track_lots or item.costing_method == CostingMethod.FIFO) and not lot_id:
             return False
 
-        if item.track_lots and lot_id:
+        if (item.track_lots or item.costing_method == CostingMethod.FIFO) and lot_id:
             lot = db.get(InventoryLot, coerce_uuid(lot_id))
             if not lot or lot.item_id != itm_id:
                 return False
@@ -497,11 +497,15 @@ class InventoryBalanceService:
         # This could also be done with a separate allocation table
         else:
             # Find or create a "general" lot for this item to track allocations
+            lot_number = "__GENERAL__"
+            if warehouse_id:
+                lot_number = f"__GENERAL__:{warehouse_id}"
+
             general_lot = db.query(InventoryLot).filter(
                 and_(
                     InventoryLot.organization_id == org_id,
                     InventoryLot.item_id == itm_id,
-                    InventoryLot.lot_number == "__GENERAL__",
+                    InventoryLot.lot_number == lot_number,
                 )
             ).first()
 
@@ -510,7 +514,8 @@ class InventoryBalanceService:
                 general_lot = InventoryLot(
                     organization_id=org_id,
                     item_id=itm_id,
-                    lot_number="__GENERAL__",
+                    lot_number=lot_number,
+                    warehouse_id=coerce_uuid(warehouse_id) if warehouse_id else None,
                     received_date=date_type.today(),
                     unit_cost=item.average_cost or Decimal("0"),
                     initial_quantity=Decimal("0"),  # Not actual inventory, just allocation tracking
@@ -534,6 +539,7 @@ class InventoryBalanceService:
         item_id: UUID,
         quantity: Decimal,
         lot_id: Optional[UUID] = None,
+        warehouse_id: Optional[UUID] = None,
     ) -> bool:
         """
         Release an allocation.
@@ -562,11 +568,14 @@ class InventoryBalanceService:
             db.commit()
         else:
             # Deallocate from general lot
+            lot_number = "__GENERAL__"
+            if warehouse_id:
+                lot_number = f"__GENERAL__:{warehouse_id}"
             general_lot = db.query(InventoryLot).filter(
                 and_(
                     InventoryLot.organization_id == org_id,
                     InventoryLot.item_id == itm_id,
-                    InventoryLot.lot_number == "__GENERAL__",
+                    InventoryLot.lot_number == lot_number,
                 )
             ).first()
 

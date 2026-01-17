@@ -47,13 +47,18 @@ class CustomerPaymentInput:
     payment_date: date
     payment_method: PaymentMethod
     currency_code: str
-    amount: Decimal
+    amount: Decimal  # Net amount received (after WHT)
     bank_account_id: Optional[UUID] = None
     allocations: list[PaymentAllocationInput] = field(default_factory=list)
     exchange_rate: Optional[Decimal] = None
     reference: Optional[str] = None
     description: Optional[str] = None
     correlation_id: Optional[str] = None
+    # Withholding Tax (WHT) - when customer deducts WHT before paying
+    gross_amount: Optional[Decimal] = None  # If not provided, defaults to amount (no WHT)
+    wht_code_id: Optional[UUID] = None  # WHT tax code applied
+    wht_amount: Decimal = field(default_factory=lambda: Decimal("0"))  # WHT deducted
+    wht_certificate_number: Optional[str] = None  # Certificate received from customer
 
 
 class CustomerPaymentService(ListResponseMixin):
@@ -136,9 +141,35 @@ class CustomerPaymentService(ListResponseMixin):
             db, org_id, SequenceType.RECEIPT
         )
 
+        # Handle WHT amounts
+        # gross_amount = amount before WHT deduction
+        # amount = net amount received (after WHT)
+        # wht_amount = WHT deducted by customer
+        wht_amount = input.wht_amount or Decimal("0")
+        net_amount = input.amount  # The 'amount' input is the net received
+
+        # If gross_amount is provided, use it; otherwise calculate from net + WHT
+        if input.gross_amount is not None:
+            gross_amount = input.gross_amount
+            # Validate: gross = net + wht
+            expected_wht = gross_amount - net_amount
+            if wht_amount > Decimal("0") and abs(expected_wht - wht_amount) > Decimal("0.01"):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"WHT amount ({wht_amount}) doesn't match gross - net ({expected_wht})",
+                )
+            if wht_amount == Decimal("0") and gross_amount != net_amount:
+                wht_amount = expected_wht
+        else:
+            # No gross amount provided - calculate from net + WHT
+            gross_amount = net_amount + wht_amount
+
+        # If customer has WHT applicable and no WHT provided, warn (but don't block)
+        # The user may have a valid reason (exemption, etc.)
+
         # Calculate functional currency amount
         exchange_rate = input.exchange_rate or Decimal("1.0")
-        functional_amount = input.amount * exchange_rate
+        functional_amount = net_amount * exchange_rate
 
         # Create payment
         payment = CustomerPayment(
@@ -148,7 +179,11 @@ class CustomerPaymentService(ListResponseMixin):
             payment_date=input.payment_date,
             payment_method=input.payment_method,
             currency_code=input.currency_code,
-            amount=input.amount,
+            gross_amount=gross_amount,
+            amount=net_amount,
+            wht_code_id=input.wht_code_id,
+            wht_amount=wht_amount,
+            wht_certificate_number=input.wht_certificate_number,
             exchange_rate=exchange_rate,
             functional_currency_amount=functional_amount,
             bank_account_id=input.bank_account_id,
@@ -234,26 +269,66 @@ class CustomerPaymentService(ListResponseMixin):
             raise HTTPException(status_code=404, detail="Customer not found")
 
         exchange_rate = payment.exchange_rate or Decimal("1.0")
-        functional_amount = payment.amount * exchange_rate
+        net_amount = payment.amount  # Net amount received
+        gross_amount = payment.gross_amount  # Gross amount before WHT
+        wht_amount = payment.wht_amount or Decimal("0")
+
+        net_functional = net_amount * exchange_rate
+        gross_functional = gross_amount * exchange_rate
+        wht_functional = wht_amount * exchange_rate
 
         journal_lines = [
+            # Dr Bank (net amount received)
             JournalLineInput(
                 account_id=payment.bank_account_id,
-                debit_amount=payment.amount,
+                debit_amount=net_amount,
                 credit_amount=Decimal("0"),
-                debit_amount_functional=functional_amount,
+                debit_amount_functional=net_functional,
                 credit_amount_functional=Decimal("0"),
                 description=f"AR Payment: {payment.reference or payment.payment_number}",
             ),
+        ]
+
+        # If WHT was deducted, add WHT Receivable entry
+        if wht_amount > Decimal("0"):
+            # Get WHT Receivable account from tax code or organization settings
+            wht_receivable_account_id = None
+            if payment.wht_code_id:
+                from app.models.ifrs.tax.tax_code import TaxCode
+                wht_code = db.get(TaxCode, payment.wht_code_id)
+                if wht_code:
+                    # Use the tax_paid_account_id as WHT Receivable
+                    wht_receivable_account_id = wht_code.tax_paid_account_id
+
+            if not wht_receivable_account_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail="WHT Receivable account not configured. Please set up the WHT tax code with a Tax Paid Account.",
+                )
+
+            journal_lines.append(
+                # Dr WHT Receivable (WHT amount deducted by customer)
+                JournalLineInput(
+                    account_id=wht_receivable_account_id,
+                    debit_amount=wht_amount,
+                    credit_amount=Decimal("0"),
+                    debit_amount_functional=wht_functional,
+                    credit_amount_functional=Decimal("0"),
+                    description=f"WHT deducted by {customer.legal_name} (Cert: {payment.wht_certificate_number or 'N/A'})",
+                )
+            )
+
+        # Cr AR Control (gross amount - the full invoice amount being settled)
+        journal_lines.append(
             JournalLineInput(
                 account_id=customer.ar_control_account_id,
                 debit_amount=Decimal("0"),
-                credit_amount=payment.amount,
+                credit_amount=gross_amount,
                 debit_amount_functional=Decimal("0"),
-                credit_amount_functional=functional_amount,
+                credit_amount_functional=gross_functional,
                 description=f"Payment from {customer.legal_name}",
-            ),
-        ]
+            )
+        )
 
         journal_input = JournalInput(
             journal_type=JournalType.STANDARD,
@@ -307,6 +382,35 @@ class CustomerPaymentService(ListResponseMixin):
         payment.posted_at = datetime.now(timezone.utc)
         payment.journal_entry_id = journal.journal_entry_id
         payment.posting_batch_id = posting_result.posting_batch_id
+
+        # Create tax transaction for WHT if applicable
+        if wht_amount > Decimal("0") and payment.wht_code_id:
+            from app.services.ifrs.tax.tax_transaction import (
+                tax_transaction_service,
+                TaxTransactionInput,
+            )
+            from app.models.ifrs.tax.tax_transaction import TaxTransactionType
+
+            tax_transaction_service.record_transaction(
+                db=db,
+                organization_id=org_id,
+                input=TaxTransactionInput(
+                    tax_code_id=payment.wht_code_id,
+                    transaction_type=TaxTransactionType.WITHHOLDING,
+                    transaction_date=payment.payment_date,
+                    base_amount=gross_amount,  # WHT calculated on gross
+                    tax_amount=wht_amount,
+                    currency_code=payment.currency_code,
+                    exchange_rate=exchange_rate,
+                    source_module="AR",
+                    source_document_type="CUSTOMER_PAYMENT",
+                    source_document_id=pay_id,
+                    source_document_number=payment.payment_number,
+                    counterparty_name=customer.legal_name,
+                    counterparty_tax_id=customer.tax_identification_number,
+                    description=f"WHT on AR Receipt {payment.payment_number} (Cert: {payment.wht_certificate_number or 'N/A'})",
+                ),
+            )
 
         # Apply allocations to invoices
         allocations = (
@@ -413,6 +517,145 @@ class CustomerPaymentService(ListResponseMixin):
                         invoice.status = InvoiceStatus.PARTIALLY_PAID
 
         payment.status = PaymentStatus.BOUNCED
+
+        db.commit()
+        db.refresh(payment)
+
+        return payment
+
+    @staticmethod
+    def update_payment(
+        db: Session,
+        organization_id: UUID,
+        payment_id: UUID,
+        input: CustomerPaymentInput,
+        updated_by_user_id: UUID,
+    ) -> CustomerPayment:
+        """
+        Update an existing customer payment receipt.
+
+        Only PENDING payments can be updated.
+
+        Args:
+            db: Database session
+            organization_id: Organization scope
+            payment_id: Payment to update
+            input: Updated payment data
+            updated_by_user_id: User making the update
+
+        Returns:
+            Updated CustomerPayment
+        """
+        org_id = coerce_uuid(organization_id)
+        pay_id = coerce_uuid(payment_id)
+        user_id = coerce_uuid(updated_by_user_id)
+        customer_id = coerce_uuid(input.customer_id)
+
+        payment = db.get(CustomerPayment, pay_id)
+        if not payment or payment.organization_id != org_id:
+            raise HTTPException(status_code=404, detail="Payment not found")
+
+        if payment.status != PaymentStatus.PENDING:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot edit payment with status '{payment.status.value}'. Only PENDING payments can be edited.",
+            )
+
+        # Validate customer
+        customer = db.get(Customer, customer_id)
+        if not customer or customer.organization_id != org_id:
+            raise HTTPException(status_code=404, detail="Customer not found")
+
+        if not customer.is_active:
+            raise HTTPException(status_code=400, detail="Customer is not active")
+
+        # Validate allocations
+        if input.allocations:
+            allocation_total = sum(a.amount for a in input.allocations)
+            if allocation_total > input.amount:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Allocation total exceeds payment amount",
+                )
+
+            for alloc in input.allocations:
+                invoice = db.get(Invoice, coerce_uuid(alloc.invoice_id))
+                if not invoice or invoice.organization_id != org_id:
+                    raise HTTPException(
+                        status_code=404,
+                        detail=f"Invoice {alloc.invoice_id} not found",
+                    )
+                if invoice.customer_id != customer_id:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Invoice {invoice.invoice_number} belongs to different customer",
+                    )
+                payable_statuses = [
+                    InvoiceStatus.POSTED,
+                    InvoiceStatus.PARTIALLY_PAID,
+                    InvoiceStatus.OVERDUE,
+                ]
+                if invoice.status not in payable_statuses:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Invoice {invoice.invoice_number} is not payable",
+                    )
+                if alloc.amount > invoice.balance_due:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Allocation exceeds balance due on {invoice.invoice_number}",
+                    )
+
+        # Handle WHT amounts
+        wht_amount = input.wht_amount or Decimal("0")
+        net_amount = input.amount
+
+        if input.gross_amount is not None:
+            gross_amount = input.gross_amount
+            expected_wht = gross_amount - net_amount
+            if wht_amount > Decimal("0") and abs(expected_wht - wht_amount) > Decimal("0.01"):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"WHT amount ({wht_amount}) doesn't match gross - net ({expected_wht})",
+                )
+            if wht_amount == Decimal("0") and gross_amount != net_amount:
+                wht_amount = expected_wht
+        else:
+            gross_amount = net_amount + wht_amount
+
+        # Calculate functional currency amount
+        exchange_rate = input.exchange_rate or Decimal("1.0")
+        functional_amount = net_amount * exchange_rate
+
+        # Update payment fields
+        payment.customer_id = customer_id
+        payment.payment_date = input.payment_date
+        payment.payment_method = input.payment_method
+        payment.currency_code = input.currency_code
+        payment.gross_amount = gross_amount
+        payment.amount = net_amount
+        payment.wht_code_id = input.wht_code_id
+        payment.wht_amount = wht_amount
+        payment.wht_certificate_number = input.wht_certificate_number
+        payment.exchange_rate = exchange_rate
+        payment.functional_currency_amount = functional_amount
+        payment.bank_account_id = input.bank_account_id
+        payment.reference = input.reference
+        payment.description = input.description
+
+        # Delete existing allocations and recreate
+        db.query(PaymentAllocation).filter(
+            PaymentAllocation.payment_id == pay_id
+        ).delete()
+
+        # Create new allocations
+        for alloc in input.allocations:
+            allocation = PaymentAllocation(
+                payment_id=pay_id,
+                invoice_id=coerce_uuid(alloc.invoice_id),
+                allocated_amount=alloc.amount,
+            )
+            db.add(allocation)
 
         db.commit()
         db.refresh(payment)

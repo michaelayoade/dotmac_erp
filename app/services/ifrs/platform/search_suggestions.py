@@ -1,0 +1,346 @@
+"""
+Search suggestions service for auto-complete functionality.
+
+Provides unified search across entity types with consistent response format.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any, Callable, Dict, List, Optional
+from uuid import UUID
+
+from sqlalchemy import or_, func
+from sqlalchemy.orm import Session
+
+# Import models for searchable entities
+from app.models.ifrs.ar.customer import Customer
+from app.models.ifrs.ap.supplier import Supplier
+from app.models.ifrs.gl.account import Account
+from app.models.ifrs.inv.item import Item
+from app.models.ifrs.tax.tax_code import TaxCode
+from app.models.ifrs.banking.bank_account import BankAccount
+
+
+@dataclass
+class SearchSuggestion:
+    """A single search suggestion."""
+    id: str
+    label: str
+    subtitle: Optional[str] = None
+    category: Optional[str] = None
+    meta: Optional[Dict[str, Any]] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        result = {"id": self.id, "label": self.label}
+        if self.subtitle:
+            result["subtitle"] = self.subtitle
+        if self.category:
+            result["category"] = self.category
+        if self.meta:
+            result["meta"] = self.meta
+        return result
+
+
+@dataclass
+class SearchResult:
+    """Search result with suggestions and metadata."""
+    suggestions: List[SearchSuggestion]
+    query: str
+    entity_type: str
+    has_more: bool = False
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "suggestions": [s.to_dict() for s in self.suggestions],
+            "query": self.query,
+            "entity_type": self.entity_type,
+            "has_more": self.has_more,
+        }
+
+
+class SearchSuggestionsService:
+    """
+    Unified search suggestions across entity types.
+
+    Supports: customers, suppliers, accounts, items, tax_codes, bank_accounts
+    """
+
+    # Maximum suggestions to return
+    MAX_SUGGESTIONS = 10
+
+    @classmethod
+    def search(
+        cls,
+        db: Session,
+        org_id: UUID,
+        entity_type: str,
+        query: str,
+        limit: int = 10,
+        filters: Optional[Dict[str, Any]] = None,
+    ) -> SearchResult:
+        """
+        Search for suggestions across an entity type.
+
+        Args:
+            db: Database session
+            org_id: Organization ID for RLS
+            entity_type: Type of entity to search (customers, suppliers, etc.)
+            query: Search query string
+            limit: Maximum results to return
+            filters: Optional additional filters
+
+        Returns:
+            SearchResult with matching suggestions
+        """
+        limit = min(limit, cls.MAX_SUGGESTIONS)
+        filters = filters or {}
+
+        # Route to appropriate search method
+        searchers = {
+            "customers": cls._search_customers,
+            "suppliers": cls._search_suppliers,
+            "accounts": cls._search_accounts,
+            "items": cls._search_items,
+            "tax_codes": cls._search_tax_codes,
+            "bank_accounts": cls._search_bank_accounts,
+        }
+
+        searcher = searchers.get(entity_type)
+        if not searcher:
+            return SearchResult(
+                suggestions=[],
+                query=query,
+                entity_type=entity_type,
+                has_more=False,
+            )
+
+        suggestions, has_more = searcher(db, org_id, query, limit, filters)
+        return SearchResult(
+            suggestions=suggestions,
+            query=query,
+            entity_type=entity_type,
+            has_more=has_more,
+        )
+
+    @classmethod
+    def _search_customers(
+        cls, db: Session, org_id: UUID, query: str, limit: int, filters: Dict
+    ) -> tuple[List[SearchSuggestion], bool]:
+        """Search customers by name or code."""
+        q = query.lower()
+        base_query = (
+            db.query(Customer)
+            .filter(Customer.organization_id == org_id)
+            .filter(Customer.is_active == True)
+            .filter(
+                or_(
+                    func.lower(Customer.customer_name).contains(q),
+                    func.lower(Customer.customer_code).contains(q),
+                    func.lower(Customer.email).contains(q),
+                )
+            )
+            .order_by(Customer.customer_name)
+        )
+
+        # Check if there are more results
+        total = base_query.count()
+        customers = base_query.limit(limit).all()
+
+        suggestions = [
+            SearchSuggestion(
+                id=str(c.customer_id),
+                label=c.customer_name,
+                subtitle=c.customer_code,
+                category="customer",
+                meta={"email": c.email} if c.email else None,
+            )
+            for c in customers
+        ]
+        return suggestions, total > limit
+
+    @classmethod
+    def _search_suppliers(
+        cls, db: Session, org_id: UUID, query: str, limit: int, filters: Dict
+    ) -> tuple[List[SearchSuggestion], bool]:
+        """Search suppliers by name or code."""
+        q = query.lower()
+        base_query = (
+            db.query(Supplier)
+            .filter(Supplier.organization_id == org_id)
+            .filter(Supplier.is_active == True)
+            .filter(
+                or_(
+                    func.lower(Supplier.supplier_name).contains(q),
+                    func.lower(Supplier.supplier_code).contains(q),
+                    func.lower(Supplier.email).contains(q),
+                )
+            )
+            .order_by(Supplier.supplier_name)
+        )
+
+        total = base_query.count()
+        suppliers = base_query.limit(limit).all()
+
+        suggestions = [
+            SearchSuggestion(
+                id=str(s.supplier_id),
+                label=s.supplier_name,
+                subtitle=s.supplier_code,
+                category="supplier",
+                meta={"email": s.email} if s.email else None,
+            )
+            for s in suppliers
+        ]
+        return suggestions, total > limit
+
+    @classmethod
+    def _search_accounts(
+        cls, db: Session, org_id: UUID, query: str, limit: int, filters: Dict
+    ) -> tuple[List[SearchSuggestion], bool]:
+        """Search GL accounts by code or name."""
+        q = query.lower()
+        base_query = (
+            db.query(Account)
+            .filter(Account.organization_id == org_id)
+            .filter(Account.is_active == True)
+            .filter(
+                or_(
+                    func.lower(Account.account_code).contains(q),
+                    func.lower(Account.account_name).contains(q),
+                )
+            )
+            .order_by(Account.account_code)
+        )
+
+        # Optional filter by account type
+        if filters.get("account_type"):
+            base_query = base_query.filter(Account.account_type == filters["account_type"])
+
+        total = base_query.count()
+        accounts = base_query.limit(limit).all()
+
+        suggestions = [
+            SearchSuggestion(
+                id=str(a.account_id),
+                label=f"{a.account_code} - {a.account_name}",
+                subtitle=a.account_type.value if a.account_type else None,
+                category="account",
+            )
+            for a in accounts
+        ]
+        return suggestions, total > limit
+
+    @classmethod
+    def _search_items(
+        cls, db: Session, org_id: UUID, query: str, limit: int, filters: Dict
+    ) -> tuple[List[SearchSuggestion], bool]:
+        """Search inventory items by code or name."""
+        q = query.lower()
+        base_query = (
+            db.query(Item)
+            .filter(Item.organization_id == org_id)
+            .filter(Item.is_active == True)
+            .filter(
+                or_(
+                    func.lower(Item.item_code).contains(q),
+                    func.lower(Item.item_name).contains(q),
+                )
+            )
+            .order_by(Item.item_name)
+        )
+
+        # Optional filter by category
+        if filters.get("category_id"):
+            base_query = base_query.filter(Item.category_id == filters["category_id"])
+
+        total = base_query.count()
+        items = base_query.limit(limit).all()
+
+        suggestions = [
+            SearchSuggestion(
+                id=str(i.item_id),
+                label=i.item_name,
+                subtitle=i.item_code,
+                category="item",
+                meta={"type": i.item_type.value if i.item_type else None},
+            )
+            for i in items
+        ]
+        return suggestions, total > limit
+
+    @classmethod
+    def _search_tax_codes(
+        cls, db: Session, org_id: UUID, query: str, limit: int, filters: Dict
+    ) -> tuple[List[SearchSuggestion], bool]:
+        """Search tax codes by code or name."""
+        q = query.lower()
+        base_query = (
+            db.query(TaxCode)
+            .filter(TaxCode.organization_id == org_id)
+            .filter(TaxCode.is_active == True)
+            .filter(
+                or_(
+                    func.lower(TaxCode.tax_code).contains(q),
+                    func.lower(TaxCode.tax_name).contains(q),
+                )
+            )
+            .order_by(TaxCode.tax_code)
+        )
+
+        # Optional filter by tax type
+        if filters.get("tax_type"):
+            base_query = base_query.filter(TaxCode.tax_type == filters["tax_type"])
+
+        total = base_query.count()
+        codes = base_query.limit(limit).all()
+
+        suggestions = [
+            SearchSuggestion(
+                id=str(t.tax_code_id),
+                label=f"{t.tax_code} - {t.tax_name}",
+                subtitle=f"{t.tax_rate}%" if t.tax_rate else None,
+                category="tax_code",
+                meta={"type": t.tax_type.value if t.tax_type else None},
+            )
+            for t in codes
+        ]
+        return suggestions, total > limit
+
+    @classmethod
+    def _search_bank_accounts(
+        cls, db: Session, org_id: UUID, query: str, limit: int, filters: Dict
+    ) -> tuple[List[SearchSuggestion], bool]:
+        """Search bank accounts by name or number."""
+        q = query.lower()
+        base_query = (
+            db.query(BankAccount)
+            .filter(BankAccount.organization_id == org_id)
+            .filter(BankAccount.is_active == True)
+            .filter(
+                or_(
+                    func.lower(BankAccount.account_name).contains(q),
+                    func.lower(BankAccount.account_number).contains(q),
+                    func.lower(BankAccount.bank_name).contains(q),
+                )
+            )
+            .order_by(BankAccount.account_name)
+        )
+
+        total = base_query.count()
+        accounts = base_query.limit(limit).all()
+
+        suggestions = [
+            SearchSuggestion(
+                id=str(a.bank_account_id),
+                label=a.account_name,
+                subtitle=f"{a.bank_name} - {a.account_number[-4:]}" if a.account_number else a.bank_name,
+                category="bank_account",
+            )
+            for a in accounts
+        ]
+        return suggestions, total > limit
+
+
+# Singleton instance
+search_suggestions_service = SearchSuggestionsService()

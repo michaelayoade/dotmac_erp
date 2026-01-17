@@ -1,12 +1,20 @@
+import logging
 from urllib.parse import quote
 
 from fastapi import HTTPException, Request
+from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, RedirectResponse
 
+logger = logging.getLogger(__name__)
+
 
 def _error_payload(code: str, message: str, details):
-    return {"code": code, "message": message, "details": details}
+    return {
+        "code": code,
+        "message": message,
+        "details": jsonable_encoder(details),
+    }
 
 
 def _is_html_request(request: Request) -> bool:
@@ -77,6 +85,13 @@ def register_error_handlers(app) -> None:
 
     @app.exception_handler(Exception)
     async def unhandled_exception_handler(request: Request, exc: Exception):
+        # Log the full exception with stack trace for debugging
+        logger.exception(
+            "Unhandled exception on %s %s: %s",
+            request.method,
+            request.url.path,
+            str(exc),
+        )
         return JSONResponse(
             status_code=500,
             content=_error_payload(

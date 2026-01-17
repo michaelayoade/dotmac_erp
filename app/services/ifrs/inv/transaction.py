@@ -13,7 +13,7 @@ from typing import Optional
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import and_, func
+from sqlalchemy import and_, case, func
 from sqlalchemy.orm import Session
 
 from app.models.ifrs.inv.item import Item, CostingMethod
@@ -97,7 +97,7 @@ class InventoryTransactionService(ListResponseMixin):
         current_qty = (
             db.query(
                 func.sum(
-                    func.case(
+                    case(
                         (InventoryTransaction.transaction_type.in_([
                             TransactionType.RECEIPT,
                             TransactionType.RETURN,
@@ -153,7 +153,7 @@ class InventoryTransactionService(ListResponseMixin):
         balance = (
             db.query(
                 func.sum(
-                    func.case(
+                    case(
                         (InventoryTransaction.transaction_type.in_([
                             TransactionType.RECEIPT,
                             TransactionType.RETURN,
@@ -609,11 +609,33 @@ class InventoryTransactionService(ListResponseMixin):
             db, org_id, itm_id, wh_id
         )
 
+        lot = None
+        requires_lot = item.track_lots or item.costing_method == CostingMethod.FIFO
+        if requires_lot:
+            if not input.lot_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Lot ID is required for this item",
+                )
+            lot = db.get(InventoryLot, coerce_uuid(input.lot_id))
+            if not lot or lot.item_id != itm_id:
+                raise HTTPException(status_code=404, detail="Lot not found")
+            if lot.warehouse_id and lot.warehouse_id != wh_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Lot does not belong to the selected warehouse",
+                )
+
         # For negative adjustments, check we have enough
         if input.quantity < 0 and qty_before < abs(input.quantity):
             raise HTTPException(
                 status_code=400,
                 detail=f"Adjustment would result in negative inventory",
+            )
+        if lot and input.quantity < 0 and lot.quantity_on_hand < abs(input.quantity):
+            raise HTTPException(
+                status_code=400,
+                detail="Adjustment would result in negative lot quantity",
             )
 
         # Use average cost for valuation
@@ -646,6 +668,13 @@ class InventoryTransactionService(ListResponseMixin):
         )
 
         db.add(transaction)
+
+        if lot:
+            lot.quantity_on_hand = (lot.quantity_on_hand or Decimal("0")) + input.quantity
+            lot.quantity_available = lot.quantity_on_hand - (lot.quantity_allocated or Decimal("0"))
+            if lot.warehouse_id is None:
+                lot.warehouse_id = wh_id
+
         db.commit()
         db.refresh(transaction)
 
@@ -698,6 +727,33 @@ class InventoryTransactionService(ListResponseMixin):
         if not to_warehouse or to_warehouse.organization_id != org_id:
             raise HTTPException(status_code=404, detail="Destination warehouse not found")
 
+        lot = None
+        requires_lot = item.track_lots or item.costing_method == CostingMethod.FIFO
+        if requires_lot:
+            if not input.lot_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Lot ID is required for this item",
+                )
+            lot = db.get(InventoryLot, coerce_uuid(input.lot_id))
+            if not lot or lot.item_id != itm_id:
+                raise HTTPException(status_code=404, detail="Lot not found")
+            if lot.is_quarantined:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Cannot transfer quarantined lot",
+                )
+            if lot.warehouse_id and lot.warehouse_id != from_wh_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Lot does not belong to the source warehouse",
+                )
+            if input.quantity != lot.quantity_on_hand:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Partial lot transfers are not supported",
+                )
+
         # Get balance at source
         qty_before_source = InventoryTransactionService.get_current_balance(
             db, org_id, itm_id, from_wh_id
@@ -727,6 +783,7 @@ class InventoryTransactionService(ListResponseMixin):
             item_id=itm_id,
             warehouse_id=from_wh_id,
             location_id=input.location_id,
+            lot_id=input.lot_id,
             to_warehouse_id=to_wh_id,
             to_location_id=input.to_location_id,
             quantity=-input.quantity,  # Negative for outgoing
@@ -751,6 +808,7 @@ class InventoryTransactionService(ListResponseMixin):
             item_id=itm_id,
             warehouse_id=to_wh_id,
             location_id=input.to_location_id,
+            lot_id=input.lot_id,
             quantity=input.quantity,  # Positive for incoming
             uom=input.uom,
             unit_cost=unit_cost,
@@ -763,6 +821,10 @@ class InventoryTransactionService(ListResponseMixin):
             created_by_user_id=user_id,
         )
         db.add(receipt_txn)
+
+        if lot:
+            lot.warehouse_id = to_wh_id
+            lot.quantity_available = lot.quantity_on_hand - (lot.quantity_allocated or Decimal("0"))
 
         db.commit()
         db.refresh(issue_txn)
@@ -802,11 +864,19 @@ class InventoryTransactionService(ListResponseMixin):
         Returns:
             Created InventoryTransaction
         """
-        if input.transaction_type in [TransactionType.RECEIPT, TransactionType.RETURN]:
+        if input.transaction_type in [
+            TransactionType.RECEIPT,
+            TransactionType.RETURN,
+            TransactionType.ASSEMBLY,
+        ]:
             return InventoryTransactionService.create_receipt(
                 db, organization_id, input, created_by_user_id
             )
-        elif input.transaction_type in [TransactionType.ISSUE, TransactionType.SALE]:
+        elif input.transaction_type in [
+            TransactionType.ISSUE,
+            TransactionType.SALE,
+            TransactionType.DISASSEMBLY,
+        ]:
             return InventoryTransactionService.create_issue(
                 db, organization_id, input, created_by_user_id
             )

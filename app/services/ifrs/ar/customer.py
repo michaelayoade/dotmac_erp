@@ -35,6 +35,7 @@ class CustomerInput:
     registration_number: Optional[str] = None
     credit_limit: Optional[Decimal] = None
     credit_terms_days: int = 30
+    credit_hold: bool = False
     payment_terms_id: Optional[UUID] = None
     currency_code: str = settings.default_functional_currency_code
     price_list_id: Optional[UUID] = None
@@ -49,6 +50,7 @@ class CustomerInput:
     shipping_address: Optional[dict[str, Any]] = None
     primary_contact: Optional[dict[str, Any]] = None
     bank_details: Optional[dict[str, Any]] = None
+    is_active: bool = True
 
 
 class CustomerService(ListResponseMixin):
@@ -108,6 +110,7 @@ class CustomerService(ListResponseMixin):
             registration_number=input.registration_number,
             credit_limit=input.credit_limit,
             credit_terms_days=input.credit_terms_days,
+            credit_hold=input.credit_hold,
             payment_terms_id=input.payment_terms_id,
             currency_code=input.currency_code,
             price_list_id=input.price_list_id,
@@ -123,7 +126,7 @@ class CustomerService(ListResponseMixin):
             shipping_address=input.shipping_address,
             primary_contact=input.primary_contact,
             bank_details=input.bank_details,
-            is_active=True,
+            is_active=input.is_active,
         )
 
         db.add(customer)
@@ -186,6 +189,7 @@ class CustomerService(ListResponseMixin):
         customer.registration_number = input.registration_number
         customer.credit_limit = input.credit_limit
         customer.credit_terms_days = input.credit_terms_days
+        customer.credit_hold = input.credit_hold
         customer.payment_terms_id = input.payment_terms_id
         customer.currency_code = input.currency_code
         customer.price_list_id = input.price_list_id
@@ -201,6 +205,7 @@ class CustomerService(ListResponseMixin):
         customer.shipping_address = input.shipping_address
         customer.primary_contact = input.primary_contact
         customer.bank_details = input.bank_details
+        customer.is_active = input.is_active
 
         db.commit()
         db.refresh(customer)

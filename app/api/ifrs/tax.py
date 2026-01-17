@@ -22,6 +22,7 @@ from app.services.ifrs.tax import (
     deferred_tax_service,
     tax_reconciliation_service,
     tax_posting_adapter,
+    tax_calculation_service,
     TaxCodeInput,
     TaxJurisdictionInput,
     TaxTransactionInput,
@@ -115,6 +116,68 @@ class TaxCalculationRead(BaseModel):
     base_amount: Decimal
     tax_amount: Decimal
     is_recoverable: bool
+
+
+# =============================================================================
+# Multi-Tax Calculation Schemas (for invoice forms)
+# =============================================================================
+
+
+class LineTaxInputCreate(BaseModel):
+    """Input for calculating taxes on a single invoice line."""
+
+    line_id: Optional[UUID] = None  # For reference, can be None for new lines
+    line_amount: Decimal
+    tax_code_ids: list[UUID] = Field(default_factory=list)
+
+
+class LineTaxResultRead(BaseModel):
+    """Result of tax calculation for a single tax code on a line."""
+
+    tax_code_id: UUID
+    tax_code: str
+    tax_name: str
+    base_amount: Decimal
+    tax_rate: Decimal
+    tax_amount: Decimal
+    is_inclusive: bool
+    is_recoverable: bool
+    recoverable_amount: Decimal
+    non_recoverable_amount: Decimal
+    sequence: int
+
+
+class LineCalculationResultRead(BaseModel):
+    """Complete tax calculation result for a single line."""
+
+    net_amount: Decimal
+    taxes: list[LineTaxResultRead] = Field(default_factory=list)
+    total_tax: Decimal
+    gross_amount: Decimal
+
+
+class MultiLineTaxRequest(BaseModel):
+    """Request for multi-line tax calculation (entire invoice)."""
+
+    transaction_date: date
+    lines: list[LineTaxInputCreate]
+
+
+class MultiLineTaxResponse(BaseModel):
+    """Response for multi-line tax calculation."""
+
+    lines: list[LineCalculationResultRead]
+    total_tax: Decimal
+    total_net: Decimal
+    total_gross: Decimal
+
+
+class SingleLineTaxRequest(BaseModel):
+    """Request for single-line multi-tax calculation."""
+
+    line_amount: Decimal
+    tax_code_ids: list[UUID]
+    transaction_date: date
 
 
 class TaxTransactionCreate(BaseModel):
@@ -362,6 +425,125 @@ def calculate_tax(
         tax_code_id=tax_code_id,
         base_amount=base_amount,
         transaction_date=transaction_date,
+    )
+
+
+# =============================================================================
+# Multi-Tax Calculation (for Invoice Forms)
+# =============================================================================
+
+
+@router.post("/calculate/line", response_model=LineCalculationResultRead)
+def calculate_line_taxes(
+    payload: SingleLineTaxRequest,
+    organization_id: UUID = Query(...),
+    db: Session = Depends(get_db),
+):
+    """
+    Calculate multiple taxes for a single invoice line.
+
+    Use this endpoint for real-time tax calculation in invoice forms.
+    Handles:
+    - Multiple tax codes per line
+    - Compound taxes (tax on tax)
+    - Inclusive taxes (tax included in price)
+    - Effective date filtering
+    """
+    result = tax_calculation_service.calculate_line_taxes(
+        db=db,
+        organization_id=organization_id,
+        line_amount=payload.line_amount,
+        tax_code_ids=payload.tax_code_ids,
+        transaction_date=payload.transaction_date,
+    )
+
+    # Convert dataclass result to Pydantic response
+    return LineCalculationResultRead(
+        net_amount=result.net_amount,
+        total_tax=result.total_tax,
+        gross_amount=result.gross_amount,
+        taxes=[
+            LineTaxResultRead(
+                tax_code_id=t.tax_code_id,
+                tax_code=t.tax_code,
+                tax_name=t.tax_name,
+                base_amount=t.base_amount,
+                tax_rate=t.tax_rate,
+                tax_amount=t.tax_amount,
+                is_inclusive=t.is_inclusive,
+                is_recoverable=t.is_recoverable,
+                recoverable_amount=t.recoverable_amount,
+                non_recoverable_amount=t.non_recoverable_amount,
+                sequence=t.sequence,
+            )
+            for t in result.taxes
+        ],
+    )
+
+
+@router.post("/calculate/invoice", response_model=MultiLineTaxResponse)
+def calculate_invoice_taxes(
+    payload: MultiLineTaxRequest,
+    organization_id: UUID = Query(...),
+    db: Session = Depends(get_db),
+):
+    """
+    Calculate taxes for an entire invoice (multiple lines).
+
+    Use this endpoint for batch calculation when the invoice has multiple lines.
+    Returns per-line breakdown and invoice totals.
+    """
+    from app.services.ifrs.tax.tax_calculation import InvoiceLineTaxInput
+
+    # Convert request to service input
+    line_inputs = [
+        InvoiceLineTaxInput(
+            line_id=line.line_id,
+            line_amount=line.line_amount,
+            tax_code_ids=line.tax_code_ids,
+        )
+        for line in payload.lines
+    ]
+
+    result = tax_calculation_service.calculate_invoice_taxes(
+        db=db,
+        organization_id=organization_id,
+        lines=line_inputs,
+        transaction_date=payload.transaction_date,
+    )
+
+    # Convert dataclass result to Pydantic response
+    line_results = []
+    for line_result in result.lines:
+        line_results.append(
+            LineCalculationResultRead(
+                net_amount=line_result.net_amount,
+                total_tax=line_result.total_tax,
+                gross_amount=line_result.gross_amount,
+                taxes=[
+                    LineTaxResultRead(
+                        tax_code_id=t.tax_code_id,
+                        tax_code=t.tax_code,
+                        tax_name=t.tax_name,
+                        base_amount=t.base_amount,
+                        tax_rate=t.tax_rate,
+                        tax_amount=t.tax_amount,
+                        is_inclusive=t.is_inclusive,
+                        is_recoverable=t.is_recoverable,
+                        recoverable_amount=t.recoverable_amount,
+                        non_recoverable_amount=t.non_recoverable_amount,
+                        sequence=t.sequence,
+                    )
+                    for t in line_result.taxes
+                ],
+            )
+        )
+
+    return MultiLineTaxResponse(
+        lines=line_results,
+        total_tax=result.total_tax,
+        total_net=result.total_net,
+        total_gross=result.total_gross,
     )
 
 

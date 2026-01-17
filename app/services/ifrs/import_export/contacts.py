@@ -157,6 +157,7 @@ class CustomerImporter(BaseImporter[Customer]):
             shipping_address=shipping_address if shipping_address else None,
             primary_contact=primary_contact if primary_contact else None,
             is_active=row.get("is_active", True),
+            created_by_user_id=self.config.user_id,
         )
 
         return customer
@@ -314,6 +315,7 @@ class SupplierImporter(BaseImporter[Supplier]):
             remittance_address=remittance_address if remittance_address else None,
             primary_contact=primary_contact if primary_contact else None,
             is_active=row.get("is_active", True),
+            created_by_user_id=self.config.user_id,
         )
 
         return supplier

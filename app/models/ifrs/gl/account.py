@@ -106,11 +106,21 @@ class Account(Base):
     )
     is_financial_instrument: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
-    # Audit
+    # Audit fields
+    created_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+        comment="User who created/imported this account",
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
+    )
+    updated_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+        comment="User who last updated this account",
     )
     updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True),

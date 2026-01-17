@@ -55,6 +55,18 @@
             <p class="text-sm text-slate-400 dark:text-slate-500">{{ period_name }}</p>
         </div>
 
+        {% if income_statement_lines %}
+        <table class="w-full text-sm">
+            <tbody>
+                {% for line in income_statement_lines %}
+                <tr class="border-b border-slate-100 dark:border-slate-800">
+                    <td class="py-2 px-2 text-slate-700 dark:text-slate-300">{{ line.name }}</td>
+                    <td class="py-2 px-2 text-right font-mono text-slate-900 dark:text-white">{{ line.amount }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
         <div class="space-y-8">
             <!-- Revenue Section -->
             <section>
@@ -130,6 +142,7 @@
             <h3 class="empty-state-title">No Data Available</h3>
             <p class="empty-state-description">No revenue or expenses found for the selected period.</p>
         </div>
+        {% endif %}
         {% endif %}
     </div>
 </div>

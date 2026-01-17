@@ -19,7 +19,7 @@
         --emerald: #059669;
     }
 
-    .font-display { font-family: 'Fraunces', Georgia, serif; }
+    .font-display { font-family: 'DM Sans', system-ui, sans-serif; }
     .font-body { font-family: 'DM Sans', system-ui, sans-serif; }
 
     body {
@@ -72,7 +72,7 @@
 
     /* Section title */
     .section-title {
-        font-family: 'Fraunces', Georgia, serif;
+        font-family: 'DM Sans', system-ui, sans-serif;
         font-weight: 600;
         font-size: 1.25rem;
         color: var(--ink);
@@ -312,7 +312,7 @@
     }
 
     .total-final .total-label {
-        font-family: 'Fraunces', Georgia, serif;
+        font-family: 'DM Sans', system-ui, sans-serif;
         font-weight: 600;
         font-size: 1rem;
         color: var(--ink);
@@ -321,7 +321,7 @@
     .dark .total-final .total-label { color: white; }
 
     .total-final .total-value {
-        font-family: 'Fraunces', Georgia, serif;
+        font-family: 'DM Sans', system-ui, sans-serif;
         font-size: 1.375rem;
         font-weight: 700;
         color: var(--teal);
@@ -641,15 +641,16 @@
             </div>
 
             <div class="mt-8 overflow-x-auto -mx-2 px-2">
-                <table class="lines-table min-w-[800px]">
+                <table class="lines-table min-w-[900px]">
                     <thead>
                         <tr>
-                            <th style="width: 25%">Expense Account</th>
-                            <th style="width: 25%">Description</th>
-                            <th class="text-right" style="width: 10%">Qty</th>
-                            <th class="text-right" style="width: 15%">Unit Price</th>
-                            <th class="text-right" style="width: 15%">Amount</th>
-                            <th class="text-right" style="width: 10%"></th>
+                            <th style="width: 22%">Expense Account</th>
+                            <th style="width: 20%">Description</th>
+                            <th class="text-right" style="width: 8%">Qty</th>
+                            <th class="text-right" style="width: 12%">Unit Price</th>
+                            <th style="width: 15%">Tax Code</th>
+                            <th class="text-right" style="width: 12%">Amount</th>
+                            <th class="text-right" style="width: 5%"></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -691,7 +692,20 @@
                                            class="table-input text-right">
                                 </td>
                                 <td>
+                                    <select x-model="line.tax_code_id"
+                                            @change="calculateLineAmount(index)"
+                                            class="table-input">
+                                        <option value="">No Tax</option>
+                                        {% for tax in tax_codes %}
+                                        <option value="{{ tax.tax_code_id }}">{{ tax.tax_code }} ({{ tax.rate_display }}%)</option>
+                                        {% endfor %}
+                                    </select>
+                                </td>
+                                <td>
                                     <div class="amount-display" x-text="formatCurrency(line.amount)"></div>
+                                    <div x-show="line.tax_amount > 0" class="text-xs text-[var(--ink-muted)] mt-1">
+                                        Tax: <span x-text="formatCurrency(line.tax_amount)"></span>
+                                    </div>
                                 </td>
                                 <td class="text-right">
                                     <button type="button"
@@ -804,6 +818,19 @@
 
 {% block scripts %}
 <script>
+// Tax code data for calculations
+const taxCodeData = {
+    {% for tax in tax_codes %}
+    '{{ tax.tax_code_id }}': {
+        code: '{{ tax.tax_code }}',
+        name: '{{ tax.tax_name }}',
+        rate: {{ tax.tax_rate }},
+        isInclusive: {{ 'true' if tax.is_inclusive else 'false' }},
+        isRecoverable: {{ 'true' if tax.is_recoverable else 'false' }}
+    },
+    {% endfor %}
+};
+
 function invoiceForm() {
     // Pre-populated data from query params (supplier_id, po_id)
     const selectedSupplier = {{ selected_supplier | tojson | safe if selected_supplier else 'null' }};
@@ -823,7 +850,7 @@ function invoiceForm() {
             notes: '{{ invoice.notes if invoice else "" }}',
             po_id: selectedPO?.po_id || '',
             lines: [
-                { expense_account_id: '', description: '', quantity: 1, unit_price: 0, amount: 0, tax_code_id: '' }
+                { expense_account_id: '', description: '', quantity: 1, unit_price: 0, amount: 0, tax_code_id: '', tax_amount: 0 }
             ]
         },
         paymentTermsDays: selectedSupplier?.payment_terms_days || 30,
@@ -842,7 +869,8 @@ function invoiceForm() {
                     quantity: {{ line.quantity }},
                     unit_price: {{ line.unit_price }},
                     amount: {{ line.quantity * line.unit_price }},
-                    tax_code_id: '{{ line.tax_code_id or "" }}'
+                    tax_code_id: '{{ line.tax_code_id or "" }}',
+                    tax_amount: {{ line.tax_amount or 0 }}
                 },
                 {% endfor %}
             ];
@@ -855,7 +883,8 @@ function invoiceForm() {
                     quantity: line.quantity,
                     unit_price: line.unit_price,
                     amount: line.amount,
-                    tax_code_id: ''
+                    tax_code_id: '',
+                    tax_amount: 0
                 }));
             }
             {% endif %}
@@ -866,7 +895,7 @@ function invoiceForm() {
         },
 
         get taxAmount() {
-            return 0;
+            return this.form.lines.reduce((sum, line) => sum + (line.tax_amount || 0), 0);
         },
 
         get total() {
@@ -908,7 +937,8 @@ function invoiceForm() {
                 quantity: 1,
                 unit_price: 0,
                 amount: 0,
-                tax_code_id: ''
+                tax_code_id: '',
+                tax_amount: 0
             });
         },
 
@@ -920,7 +950,23 @@ function invoiceForm() {
 
         calculateLineAmount(index) {
             const line = this.form.lines[index];
-            line.amount = (line.quantity || 0) * (line.unit_price || 0);
+            const baseAmount = (line.quantity || 0) * (line.unit_price || 0);
+            line.amount = baseAmount;
+
+            // Calculate tax
+            if (line.tax_code_id && taxCodeData[line.tax_code_id]) {
+                const taxCode = taxCodeData[line.tax_code_id];
+                if (taxCode.isInclusive) {
+                    // Tax-inclusive: extract tax from amount
+                    // amount = base / (1 + rate), so tax = amount * rate / (1 + rate)
+                    line.tax_amount = parseFloat((baseAmount * taxCode.rate / (1 + taxCode.rate)).toFixed(2));
+                } else {
+                    // Tax-exclusive: add tax on top
+                    line.tax_amount = parseFloat((baseAmount * taxCode.rate).toFixed(2));
+                }
+            } else {
+                line.tax_amount = 0;
+            }
         },
 
         async saveAsDraft() {

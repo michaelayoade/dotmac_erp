@@ -24,9 +24,12 @@ from app.models.ifrs.ap.supplier_invoice import (
     SupplierInvoiceType,
 )
 from app.models.ifrs.ap.supplier_invoice_line import SupplierInvoiceLine
+from app.models.ifrs.ap.supplier_invoice_line_tax import SupplierInvoiceLineTax
 from app.models.ifrs.core_config.numbering_sequence import SequenceType
+from app.models.ifrs.inv.item import Item, CostingMethod
 from app.services.common import coerce_uuid
 from app.services.ifrs.platform.sequence import SequenceService
+from app.services.ifrs.tax.tax_calculation import TaxCalculationService
 from app.services.response import ListResponseMixin
 
 
@@ -42,8 +45,10 @@ class InvoiceLineInput:
     po_line_id: Optional[UUID] = None
     goods_receipt_line_id: Optional[UUID] = None
     item_id: Optional[UUID] = None
+    # Multiple tax codes per line (replaces single tax_code_id)
+    tax_code_ids: list[UUID] = field(default_factory=list)
+    # Keep legacy field for backwards compatibility
     tax_code_id: Optional[UUID] = None
-    tax_amount: Decimal = Decimal("0")
     cost_center_id: Optional[UUID] = None
     project_id: Optional[UUID] = None
     segment_id: Optional[UUID] = None
@@ -118,14 +123,34 @@ class SupplierInvoiceService(ListResponseMixin):
                 status_code=400, detail="Invoice must have at least one line"
             )
 
-        # Calculate totals
+        # Calculate totals with auto tax calculation
         subtotal = Decimal("0")
         tax_total = Decimal("0")
 
+        # Pre-calculate taxes for all lines
+        line_tax_results = []
         for line in input.lines:
             line_amount = line.quantity * line.unit_price
             subtotal += line_amount
-            tax_total += line.tax_amount
+
+            # Build list of tax codes (support both new and legacy format)
+            effective_tax_codes = list(line.tax_code_ids) if line.tax_code_ids else []
+            if line.tax_code_id and line.tax_code_id not in effective_tax_codes:
+                effective_tax_codes.append(line.tax_code_id)
+
+            # Calculate taxes using centralized service
+            if effective_tax_codes:
+                tax_result = TaxCalculationService.calculate_line_taxes(
+                    db=db,
+                    organization_id=org_id,
+                    line_amount=line_amount,
+                    tax_code_ids=effective_tax_codes,
+                    transaction_date=input.invoice_date,
+                )
+                line_tax_results.append(tax_result)
+                tax_total += tax_result.total_tax
+            else:
+                line_tax_results.append(None)
 
         total_amount = subtotal + tax_total
 
@@ -173,11 +198,23 @@ class SupplierInvoiceService(ListResponseMixin):
         db.add(invoice)
         db.flush()  # Get invoice ID
 
-        # Create lines
+        # Create lines and their tax records
         for idx, line_input in enumerate(input.lines, start=1):
             line_amount = line_input.quantity * line_input.unit_price
             if input.invoice_type == SupplierInvoiceType.CREDIT_NOTE:
                 line_amount = -abs(line_amount)
+
+            # Get the pre-calculated tax result for this line
+            tax_result = line_tax_results[idx - 1]
+            line_tax_total = tax_result.total_tax if tax_result else Decimal("0")
+            if input.invoice_type == SupplierInvoiceType.CREDIT_NOTE and tax_result:
+                line_tax_total = -abs(line_tax_total)
+
+            # Get primary tax code ID for legacy compatibility (first tax code)
+            effective_tax_codes = list(line_input.tax_code_ids) if line_input.tax_code_ids else []
+            if line_input.tax_code_id and line_input.tax_code_id not in effective_tax_codes:
+                effective_tax_codes.append(line_input.tax_code_id)
+            primary_tax_code_id = effective_tax_codes[0] if effective_tax_codes else None
 
             line = SupplierInvoiceLine(
                 invoice_id=invoice.invoice_id,
@@ -186,8 +223,8 @@ class SupplierInvoiceService(ListResponseMixin):
                 quantity=line_input.quantity,
                 unit_price=line_input.unit_price,
                 line_amount=line_amount,
-                tax_code_id=line_input.tax_code_id,
-                tax_amount=line_input.tax_amount,
+                tax_code_id=primary_tax_code_id,  # Primary tax for backwards compatibility
+                tax_amount=line_tax_total,  # Total of all taxes on this line
                 expense_account_id=line_input.expense_account_id
                 or supplier.default_expense_account_id,
                 asset_account_id=line_input.asset_account_id,
@@ -200,6 +237,31 @@ class SupplierInvoiceService(ListResponseMixin):
                 capitalize_flag=line_input.capitalize_flag,
             )
             db.add(line)
+            db.flush()  # Get line_id for tax records
+
+            # Create SupplierInvoiceLineTax records for each tax (with recoverability)
+            if tax_result and tax_result.taxes:
+                for tax_detail in tax_result.taxes:
+                    tax_amount = tax_detail.tax_amount
+                    base_amount = tax_detail.base_amount
+                    recoverable = tax_detail.recoverable_amount
+                    if input.invoice_type == SupplierInvoiceType.CREDIT_NOTE:
+                        tax_amount = -abs(tax_amount)
+                        base_amount = -abs(base_amount)
+                        recoverable = -abs(recoverable)
+
+                    line_tax = SupplierInvoiceLineTax(
+                        line_id=line.line_id,
+                        tax_code_id=tax_detail.tax_code_id,
+                        base_amount=base_amount,
+                        tax_rate=tax_detail.tax_rate,
+                        tax_amount=tax_amount,
+                        is_inclusive=tax_detail.is_inclusive,
+                        sequence=tax_detail.sequence,
+                        is_recoverable=tax_detail.is_recoverable,
+                        recoverable_amount=recoverable,
+                    )
+                    db.add(line_tax)
 
         db.commit()
         db.refresh(invoice)
@@ -479,6 +541,9 @@ class SupplierInvoiceService(ListResponseMixin):
         invoice.journal_entry_id = result.journal_entry_id
         invoice.posting_batch_id = result.posting_batch_id
         invoice.posting_status = "POSTED"
+
+        # Update item costs from invoice lines
+        SupplierInvoiceService._update_item_costs_from_invoice(db, org_id, invoice)
 
         db.commit()
         db.refresh(invoice)
@@ -789,6 +854,88 @@ class SupplierInvoiceService(ListResponseMixin):
 
         query = query.order_by(SupplierInvoice.invoice_date.desc())
         return query.limit(limit).offset(offset).all()
+
+    @staticmethod
+    def _update_item_costs_from_invoice(
+        db: Session,
+        organization_id: UUID,
+        invoice: SupplierInvoice,
+    ) -> None:
+        """
+        Update inventory item costs from supplier invoice lines.
+
+        For each line with an item_id:
+        - Updates Item.last_purchase_cost
+        - For WEIGHTED_AVERAGE costing: recalculates Item.average_cost
+
+        Args:
+            db: Database session
+            organization_id: Organization scope
+            invoice: The posted invoice
+        """
+        from decimal import ROUND_HALF_UP
+
+        # Skip credit notes (they don't establish new costs)
+        if invoice.invoice_type == SupplierInvoiceType.CREDIT_NOTE:
+            return
+
+        # Load invoice lines
+        lines = (
+            db.query(SupplierInvoiceLine)
+            .filter(SupplierInvoiceLine.invoice_id == invoice.invoice_id)
+            .all()
+        )
+
+        for line in lines:
+            if not line.item_id or line.quantity <= Decimal("0"):
+                continue
+
+            # Get the item
+            item = db.get(Item, line.item_id)
+            if not item or item.organization_id != organization_id:
+                continue
+
+            # Skip non-inventory items
+            if not item.track_inventory:
+                continue
+
+            # Calculate unit cost from invoice line (net of tax)
+            unit_cost = line.line_amount / line.quantity
+            unit_cost = unit_cost.quantize(Decimal("0.000001"), rounding=ROUND_HALF_UP)
+
+            # Always update last purchase cost
+            item.last_purchase_cost = unit_cost
+
+            # For weighted average items, recalculate average cost
+            if item.costing_method == CostingMethod.WEIGHTED_AVERAGE:
+                # Get current inventory quantity
+                from app.services.ifrs.inv.transaction import InventoryTransactionService
+
+                # Sum quantity across all warehouses
+                total_qty = Decimal("0")
+                from app.models.ifrs.inv.warehouse import Warehouse
+                warehouses = db.query(Warehouse).filter(
+                    Warehouse.organization_id == organization_id,
+                    Warehouse.is_active == True,
+                ).all()
+
+                for warehouse in warehouses:
+                    qty = InventoryTransactionService.get_current_balance(
+                        db, organization_id, item.item_id, warehouse.warehouse_id
+                    )
+                    total_qty += qty
+
+                # Calculate new weighted average
+                current_avg = item.average_cost or Decimal("0")
+                current_value = total_qty * current_avg
+                new_value = line.quantity * unit_cost
+                new_total_qty = total_qty + line.quantity
+
+                if new_total_qty > 0:
+                    new_avg = (current_value + new_value) / new_total_qty
+                    item.average_cost = new_avg.quantize(
+                        Decimal("0.000001"), rounding=ROUND_HALF_UP
+                    )
 
 
 # Module-level singleton instance

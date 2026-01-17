@@ -11,12 +11,15 @@ from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 
+from fastapi import Request
+from fastapi.responses import HTMLResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.ifrs.gl.account import Account
-from app.models.ifrs.gl.account_balance import AccountBalance, BalanceType
 from app.models.ifrs.gl.account_category import AccountCategory, IFRSCategory
+from app.models.ifrs.gl.journal_entry import JournalEntry, JournalStatus
+from app.models.ifrs.gl.journal_entry_line import JournalEntryLine
 from app.models.ifrs.gl.fiscal_period import FiscalPeriod
 from app.models.ifrs.ap.supplier_invoice import SupplierInvoice, SupplierInvoiceStatus
 from app.models.ifrs.ap.supplier import Supplier
@@ -27,6 +30,8 @@ from app.models.ifrs.rpt.report_instance import ReportInstance, ReportStatus
 from app.config import settings
 from app.services.common import coerce_uuid
 from app.services.ifrs.platform.org_context import org_context_service
+from app.templates import templates
+from app.web.deps import base_context, WebAuthContext
 
 
 def _parse_date(value: Optional[str]) -> Optional[date]:
@@ -66,8 +71,8 @@ def _ifrs_label(category: IFRSCategory) -> str:
 
 def _report_type_label(report_type: ReportType) -> str:
     labels = {
-        ReportType.BALANCE_SHEET: "Balance Sheet",
-        ReportType.INCOME_STATEMENT: "Income Statement",
+        ReportType.BALANCE_SHEET: "Statement of Financial Position",
+        ReportType.INCOME_STATEMENT: "Statement of Profit or Loss",
         ReportType.CASH_FLOW: "Cash Flow Statement",
         ReportType.CHANGES_IN_EQUITY: "Changes in Equity",
         ReportType.TRIAL_BALANCE: "Trial Balance",
@@ -86,6 +91,116 @@ class ReportsWebService:
     """View service for reports web routes."""
 
     @staticmethod
+    def _amount_from_category(
+        ifrs_category: IFRSCategory,
+        debit: Decimal,
+        credit: Decimal,
+    ) -> Decimal:
+        if ifrs_category in {IFRSCategory.ASSETS, IFRSCategory.EXPENSES}:
+            return debit - credit
+        return credit - debit
+
+    @staticmethod
+    def _category_balances(
+        db: Session,
+        organization_id: str,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+        as_of_date: Optional[date] = None,
+    ) -> dict:
+        org_id = coerce_uuid(organization_id)
+
+        query = (
+            db.query(
+                AccountCategory.category_code,
+                AccountCategory.ifrs_category,
+                func.coalesce(func.sum(JournalEntryLine.debit_amount_functional), 0).label("debit"),
+                func.coalesce(func.sum(JournalEntryLine.credit_amount_functional), 0).label("credit"),
+            )
+            .join(Account, Account.category_id == AccountCategory.category_id)
+            .join(JournalEntryLine, JournalEntryLine.account_id == Account.account_id)
+            .join(JournalEntry, JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id)
+            .filter(
+                JournalEntry.organization_id == org_id,
+                JournalEntry.status == JournalStatus.POSTED,
+            )
+        )
+
+        if as_of_date:
+            query = query.filter(JournalEntry.posting_date <= as_of_date)
+        else:
+            if start_date:
+                query = query.filter(JournalEntry.posting_date >= start_date)
+            if end_date:
+                query = query.filter(JournalEntry.posting_date <= end_date)
+
+        rows = query.group_by(
+            AccountCategory.category_code,
+            AccountCategory.ifrs_category,
+        ).all()
+
+        balances = {}
+        for code, ifrs_category, debit, credit in rows:
+            debit = Decimal(str(debit or 0))
+            credit = Decimal(str(credit or 0))
+            balances[code] = {
+                "ifrs_category": ifrs_category,
+                "amount": ReportsWebService._amount_from_category(ifrs_category, debit, credit),
+            }
+
+        return balances
+
+    @staticmethod
+    def _tax_totals_from_gl(
+        db: Session,
+        organization_id: str,
+        start_date: date,
+        end_date: date,
+    ) -> dict:
+        org_id = coerce_uuid(organization_id)
+
+        rows = (
+            db.query(
+                AccountCategory.category_code,
+                func.coalesce(func.sum(JournalEntryLine.debit_amount_functional), 0).label("debit"),
+                func.coalesce(func.sum(JournalEntryLine.credit_amount_functional), 0).label("credit"),
+            )
+            .join(Account, Account.category_id == AccountCategory.category_id)
+            .join(JournalEntryLine, JournalEntryLine.account_id == Account.account_id)
+            .join(JournalEntry, JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id)
+            .filter(
+                JournalEntry.organization_id == org_id,
+                JournalEntry.status == JournalStatus.POSTED,
+                JournalEntry.posting_date >= start_date,
+                JournalEntry.posting_date <= end_date,
+                AccountCategory.category_code.in_(["CAT016", "CAT017", "CAT019"]),
+            )
+            .group_by(AccountCategory.category_code)
+            .all()
+        )
+
+        totals = {"CAT016": Decimal("0"), "CAT017": Decimal("0"), "CAT019": Decimal("0")}
+        for code, debit, credit in rows:
+            debit = Decimal(str(debit or 0))
+            credit = Decimal(str(credit or 0))
+            if code == "CAT016":
+                totals[code] = credit - debit
+            else:
+                totals[code] = debit - credit
+
+        output_tax = totals["CAT016"]
+        input_tax = totals["CAT017"]
+        withholding = totals["CAT019"]
+        net_tax = output_tax - input_tax - withholding
+
+        return {
+            "output_tax": output_tax,
+            "input_tax": input_tax,
+            "withholding": withholding,
+            "net_tax": net_tax,
+        }
+
+    @staticmethod
     def dashboard_context(
         db: Session,
         organization_id: str,
@@ -93,9 +208,6 @@ class ReportsWebService:
         end_date: Optional[str] = None,
     ) -> dict:
         """Get context for reports dashboard with key summaries."""
-        from app.models.ifrs.gl.journal_entry import JournalEntry, JournalStatus
-        from app.models.ifrs.ar.invoice import InvoiceStatus as ARInvoiceStatus
-        from app.models.ifrs.tax.tax_transaction import TaxTransaction, TaxTransactionType
         from app.models.ifrs.tax.tax_period import TaxPeriod, TaxPeriodStatus
 
         org_id = coerce_uuid(organization_id)
@@ -110,8 +222,8 @@ class ReportsWebService:
             db.query(FiscalPeriod)
             .filter(
                 FiscalPeriod.organization_id == org_id,
-                FiscalPeriod.start_date <= today,
-                FiscalPeriod.end_date >= today,
+                FiscalPeriod.start_date <= to_date,
+                FiscalPeriod.end_date >= to_date,
             )
             .order_by(FiscalPeriod.start_date.desc())
             .first()
@@ -123,109 +235,95 @@ class ReportsWebService:
         total_revenue = Decimal("0")
         total_expenses = Decimal("0")
 
-        if period:
-            # Get balance sheet totals
-            bs_rows = (
-                db.query(AccountBalance, Account, AccountCategory)
-                .join(Account, AccountBalance.account_id == Account.account_id)
-                .join(AccountCategory, Account.category_id == AccountCategory.category_id)
-                .filter(
-                    AccountBalance.organization_id == org_id,
-                    AccountBalance.fiscal_period_id == period.fiscal_period_id,
-                    AccountBalance.balance_type == BalanceType.ACTUAL,
+        bs_rows = (
+            db.query(
+                AccountCategory.ifrs_category,
+                func.coalesce(func.sum(JournalEntryLine.debit_amount_functional), 0).label("debit"),
+                func.coalesce(func.sum(JournalEntryLine.credit_amount_functional), 0).label("credit"),
+            )
+            .join(JournalEntry, JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id)
+            .join(Account, Account.account_id == JournalEntryLine.account_id)
+            .join(AccountCategory, Account.category_id == AccountCategory.category_id)
+            .filter(
+                JournalEntry.organization_id == org_id,
+                JournalEntry.status == JournalStatus.POSTED,
+                JournalEntry.posting_date <= to_date,
+                AccountCategory.ifrs_category.in_([
+                    IFRSCategory.ASSETS,
+                    IFRSCategory.LIABILITIES,
+                    IFRSCategory.EQUITY,
+                ]),
+            )
+            .group_by(AccountCategory.ifrs_category)
+            .all()
+        )
+
+        for ifrs_category, debit, credit in bs_rows:
+            debit = Decimal(str(debit or 0))
+            credit = Decimal(str(credit or 0))
+
+            if ifrs_category == IFRSCategory.ASSETS:
+                total_assets += debit - credit
+            elif ifrs_category == IFRSCategory.LIABILITIES:
+                total_liabilities += credit - debit
+            elif ifrs_category == IFRSCategory.EQUITY:
+                total_equity += credit - debit
+
+        # ========== AP/AR Control Balances (GL Source of Truth) ==========
+        ar_control_query = (
+            db.query(
+                func.coalesce(
+                    func.sum(
+                        JournalEntryLine.debit_amount_functional
+                        - JournalEntryLine.credit_amount_functional
+                    ),
+                    0,
                 )
-                .all()
             )
-
-            for balance, account, category in bs_rows:
-                debit = balance.closing_debit or Decimal("0")
-                credit = balance.closing_credit or Decimal("0")
-
-                if category.ifrs_category == IFRSCategory.ASSETS:
-                    total_assets += debit - credit
-                elif category.ifrs_category == IFRSCategory.LIABILITIES:
-                    total_liabilities += credit - debit
-                elif category.ifrs_category == IFRSCategory.EQUITY:
-                    total_equity += credit - debit
-                elif category.ifrs_category == IFRSCategory.REVENUE:
-                    total_revenue += credit - debit
-                elif category.ifrs_category == IFRSCategory.EXPENSES:
-                    total_expenses += debit - credit
-
-        net_income = total_revenue - total_expenses
-
-        # ========== AP/AR Aging Summaries ==========
-        # AP totals
-        ap_invoices = (
-            db.query(SupplierInvoice)
+            .join(JournalEntry, JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id)
+            .join(Account, Account.account_id == JournalEntryLine.account_id)
             .filter(
-                SupplierInvoice.organization_id == org_id,
-                SupplierInvoice.status.in_([
-                    SupplierInvoiceStatus.POSTED,
-                    SupplierInvoiceStatus.PARTIALLY_PAID,
-                ]),
+                JournalEntry.organization_id == org_id,
+                JournalEntry.status == JournalStatus.POSTED,
+                Account.subledger_type == "AR",
+                Account.is_active.is_(True),
             )
-            .all()
         )
+        ar_control_query = ar_control_query.filter(JournalEntry.posting_date <= to_date)
+        ar_total = Decimal(str(ar_control_query.scalar() or 0))
 
-        ap_current = Decimal("0")
-        ap_overdue = Decimal("0")
-        ap_total = Decimal("0")
-
-        for inv in ap_invoices:
-            balance = inv.balance_due or Decimal("0")
-            ap_total += balance
-            if inv.due_date and (today - inv.due_date).days > 0:
-                ap_overdue += balance
-            else:
-                ap_current += balance
-
-        # AR totals
-        ar_invoices = (
-            db.query(ARInvoice)
+        ap_control_query = (
+            db.query(
+                func.coalesce(
+                    func.sum(
+                        JournalEntryLine.credit_amount_functional
+                        - JournalEntryLine.debit_amount_functional
+                    ),
+                    0,
+                )
+            )
+            .join(JournalEntry, JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id)
+            .join(Account, Account.account_id == JournalEntryLine.account_id)
             .filter(
-                ARInvoice.organization_id == org_id,
-                ARInvoice.status.in_([
-                    ARInvoiceStatus.POSTED,
-                    ARInvoiceStatus.PARTIALLY_PAID,
-                ]),
+                JournalEntry.organization_id == org_id,
+                JournalEntry.status == JournalStatus.POSTED,
+                Account.subledger_type == "AP",
+                Account.is_active.is_(True),
             )
-            .all()
         )
+        ap_control_query = ap_control_query.filter(JournalEntry.posting_date <= to_date)
+        ap_total = Decimal(str(ap_control_query.scalar() or 0))
 
-        ar_current = Decimal("0")
-        ar_overdue = Decimal("0")
-        ar_total = Decimal("0")
-
-        for inv in ar_invoices:
-            balance = inv.balance_due or Decimal("0")
-            ar_total += balance
-            if inv.due_date and (today - inv.due_date).days > 0:
-                ar_overdue += balance
-            else:
-                ar_current += balance
-
-        # ========== Tax Summary ==========
-        tax_transactions = (
-            db.query(TaxTransaction)
-            .filter(
-                TaxTransaction.organization_id == org_id,
-                TaxTransaction.transaction_date >= from_date,
-                TaxTransaction.transaction_date <= to_date,
-            )
-            .all()
+        # ========== Tax Summary (GL Source of Truth) ==========
+        tax_totals = ReportsWebService._tax_totals_from_gl(
+            db=db,
+            organization_id=organization_id,
+            start_date=from_date,
+            end_date=to_date,
         )
-
-        output_tax = Decimal("0")
-        input_tax = Decimal("0")
-        for txn in tax_transactions:
-            amount = txn.tax_amount or Decimal("0")
-            if txn.transaction_type == TaxTransactionType.OUTPUT:
-                output_tax += amount
-            elif txn.transaction_type == TaxTransactionType.INPUT:
-                input_tax += amount
-
-        net_tax = output_tax - input_tax
+        output_tax = tax_totals["output_tax"]
+        input_tax = tax_totals["input_tax"]
+        net_tax = tax_totals["net_tax"]
 
         # Get overdue tax periods
         overdue_tax_periods = (
@@ -237,6 +335,41 @@ class ReportsWebService:
             )
             .count()
         )
+
+        pl_rows = (
+            db.query(
+                AccountCategory.ifrs_category,
+                func.coalesce(func.sum(JournalEntryLine.debit_amount_functional), 0).label("debit"),
+                func.coalesce(func.sum(JournalEntryLine.credit_amount_functional), 0).label("credit"),
+            )
+            .join(JournalEntry, JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id)
+            .join(Account, Account.account_id == JournalEntryLine.account_id)
+            .join(AccountCategory, Account.category_id == AccountCategory.category_id)
+            .filter(
+                JournalEntry.organization_id == org_id,
+                JournalEntry.status == JournalStatus.POSTED,
+                JournalEntry.posting_date >= from_date,
+                JournalEntry.posting_date <= to_date,
+                AccountCategory.ifrs_category.in_([
+                    IFRSCategory.REVENUE,
+                    IFRSCategory.EXPENSES,
+                ]),
+            )
+            .group_by(AccountCategory.ifrs_category)
+            .all()
+        )
+
+        total_revenue = Decimal("0")
+        total_expenses = Decimal("0")
+        for ifrs_category, debit, credit in pl_rows:
+            debit = Decimal(str(debit or 0))
+            credit = Decimal(str(credit or 0))
+            if ifrs_category == IFRSCategory.REVENUE:
+                total_revenue = credit - debit
+            elif ifrs_category == IFRSCategory.EXPENSES:
+                total_expenses = debit - credit
+
+        net_income = total_revenue - total_expenses
 
         # Key metrics summary
         key_metrics = {
@@ -257,22 +390,18 @@ class ReportsWebService:
             "is_profit": net_income >= 0,
             "ap_total": _format_currency(ap_total),
             "ap_total_raw": float(ap_total),
-            "ap_current": _format_currency(ap_current),
-            "ap_overdue": _format_currency(ap_overdue),
-            "ap_overdue_raw": float(ap_overdue),
             "ar_total": _format_currency(ar_total),
             "ar_total_raw": float(ar_total),
-            "ar_current": _format_currency(ar_current),
-            "ar_overdue": _format_currency(ar_overdue),
-            "ar_overdue_raw": float(ar_overdue),
             "output_tax": _format_currency(output_tax),
+            "output_tax_raw": float(output_tax),
             "input_tax": _format_currency(input_tax),
+            "input_tax_raw": float(input_tax),
             "net_tax": _format_currency(net_tax),
             "net_tax_raw": float(net_tax),
             "is_tax_payable": net_tax > 0,
             "overdue_tax_periods": overdue_tax_periods,
             "period_name": period.period_name if period else "No Active Period",
-            "as_of_date": _format_date(today),
+            "as_of_date": _format_date(to_date),
         }
 
         # Get report definitions
@@ -328,7 +457,7 @@ class ReportsWebService:
         recent_view = []
         for instance, defn in recent_instances:
             recent_view.append({
-                "instance_id": str(instance.report_instance_id),
+                "instance_id": str(instance.instance_id),
                 "report_name": defn.report_name,
                 "report_type": defn.report_type.value,
                 "status": instance.status.value,
@@ -386,6 +515,24 @@ class ReportsWebService:
                 "url": "/reports/expense-summary",
                 "icon": "credit-card",
             },
+            {
+                "name": "Cash Flow Statement",
+                "description": "Cash inflows, outflows, and net movement",
+                "url": "/reports/cash-flow",
+                "icon": "activity",
+            },
+            {
+                "name": "Changes in Equity",
+                "description": "Equity roll-forward for the period",
+                "url": "/reports/changes-in-equity",
+                "icon": "trending-up",
+            },
+            {
+                "name": "Budget vs Actual",
+                "description": "Budget performance against actuals",
+                "url": "/reports/budget-vs-actual",
+                "icon": "bar-chart-2",
+            },
         ]
 
         return {
@@ -438,47 +585,58 @@ class ReportsWebService:
         revenue = []
         expenses = []
 
-        if period:
-            rows = (
-                db.query(AccountBalance, Account, AccountCategory)
-                .join(Account, AccountBalance.account_id == Account.account_id)
-                .join(AccountCategory, Account.category_id == AccountCategory.category_id)
-                .filter(
-                    AccountBalance.organization_id == org_id,
-                    AccountBalance.fiscal_period_id == period.fiscal_period_id,
-                    AccountBalance.balance_type == BalanceType.ACTUAL,
-                )
-                .order_by(Account.account_code)
-                .all()
+        rows = (
+            db.query(
+                Account.account_code,
+                Account.account_name,
+                AccountCategory.ifrs_category,
+                func.coalesce(func.sum(JournalEntryLine.debit_amount_functional), 0).label("debit"),
+                func.coalesce(func.sum(JournalEntryLine.credit_amount_functional), 0).label("credit"),
             )
+            .join(JournalEntry, JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id)
+            .join(Account, Account.account_id == JournalEntryLine.account_id)
+            .join(AccountCategory, Account.category_id == AccountCategory.category_id)
+            .filter(
+                JournalEntry.organization_id == org_id,
+                JournalEntry.status == JournalStatus.POSTED,
+                JournalEntry.posting_date <= ref_date,
+            )
+            .group_by(
+                Account.account_code,
+                Account.account_name,
+                AccountCategory.ifrs_category,
+            )
+            .order_by(Account.account_code)
+            .all()
+        )
 
-            for balance, account, category in rows:
-                debit = balance.closing_debit or Decimal("0")
-                credit = balance.closing_credit or Decimal("0")
-                total_debit += debit
-                total_credit += credit
+        for account_code, account_name, ifrs_category, debit, credit in rows:
+            debit = Decimal(str(debit or 0))
+            credit = Decimal(str(credit or 0))
+            total_debit += debit
+            total_credit += credit
 
-                entry = {
-                    "account_code": account.account_code,
-                    "account_name": account.account_name,
-                    "debit": _format_currency(debit, balance.currency_code) if debit else "",
-                    "credit": _format_currency(credit, balance.currency_code) if credit else "",
-                    "debit_raw": float(debit),
-                    "credit_raw": float(credit),
-                }
+            entry = {
+                "account_code": account_code,
+                "account_name": account_name,
+                "debit": _format_currency(debit) if debit else "",
+                "credit": _format_currency(credit) if credit else "",
+                "debit_raw": float(debit),
+                "credit_raw": float(credit),
+            }
 
-                if category.ifrs_category == IFRSCategory.ASSETS:
-                    assets.append(entry)
-                elif category.ifrs_category == IFRSCategory.LIABILITIES:
-                    liabilities.append(entry)
-                elif category.ifrs_category == IFRSCategory.EQUITY:
-                    equity.append(entry)
-                elif category.ifrs_category == IFRSCategory.REVENUE:
-                    revenue.append(entry)
-                elif category.ifrs_category == IFRSCategory.EXPENSES:
-                    expenses.append(entry)
-                else:
-                    balances.append(entry)
+            if ifrs_category == IFRSCategory.ASSETS:
+                assets.append(entry)
+            elif ifrs_category == IFRSCategory.LIABILITIES:
+                liabilities.append(entry)
+            elif ifrs_category == IFRSCategory.EQUITY:
+                equity.append(entry)
+            elif ifrs_category == IFRSCategory.REVENUE:
+                revenue.append(entry)
+            elif ifrs_category == IFRSCategory.EXPENSES:
+                expenses.append(entry)
+            else:
+                balances.append(entry)
 
         return {
             "as_of_date": as_of_date or _format_date(ref_date),
@@ -521,77 +679,44 @@ class ReportsWebService:
             .first()
         )
 
-        revenue_items = []
-        expense_items = []
-        total_revenue = Decimal("0")
-        total_expenses = Decimal("0")
+        balances = ReportsWebService._category_balances(
+            db=db,
+            organization_id=organization_id,
+            start_date=from_date,
+            end_date=to_date,
+        )
 
-        if period:
-            # Get revenue accounts
-            revenue_rows = (
-                db.query(AccountBalance, Account, AccountCategory)
-                .join(Account, AccountBalance.account_id == Account.account_id)
-                .join(AccountCategory, Account.category_id == AccountCategory.category_id)
-                .filter(
-                    AccountBalance.organization_id == org_id,
-                    AccountBalance.fiscal_period_id == period.fiscal_period_id,
-                    AccountBalance.balance_type == BalanceType.ACTUAL,
-                    AccountCategory.ifrs_category == IFRSCategory.REVENUE,
-                )
-                .order_by(Account.account_code)
-                .all()
-            )
+        def cat_amount(code: str) -> Decimal:
+            return balances.get(code, {}).get("amount", Decimal("0"))
 
-            for balance, account, category in revenue_rows:
-                # Revenue has credit balance
-                amount = (balance.closing_credit or Decimal("0")) - (balance.closing_debit or Decimal("0"))
-                total_revenue += amount
-                revenue_items.append({
-                    "account_code": account.account_code,
-                    "account_name": account.account_name,
-                    "amount": _format_currency(amount),
-                    "amount_raw": float(amount),
-                })
+        revenue = cat_amount("REV") + cat_amount("CAT001")
+        other_income = cat_amount("CAT015")
+        cogs = cat_amount("CAT011")
+        operating_expenses = cat_amount("CAT002") + cat_amount("CAT008")
+        profit_for_period = revenue + other_income - cogs - operating_expenses
+        oci = cat_amount("OCI")
+        total_comprehensive_income = profit_for_period + oci
 
-            # Get expense accounts
-            expense_rows = (
-                db.query(AccountBalance, Account, AccountCategory)
-                .join(Account, AccountBalance.account_id == Account.account_id)
-                .join(AccountCategory, Account.category_id == AccountCategory.category_id)
-                .filter(
-                    AccountBalance.organization_id == org_id,
-                    AccountBalance.fiscal_period_id == period.fiscal_period_id,
-                    AccountBalance.balance_type == BalanceType.ACTUAL,
-                    AccountCategory.ifrs_category == IFRSCategory.EXPENSES,
-                )
-                .order_by(Account.account_code)
-                .all()
-            )
-
-            for balance, account, category in expense_rows:
-                # Expenses have debit balance
-                amount = (balance.closing_debit or Decimal("0")) - (balance.closing_credit or Decimal("0"))
-                total_expenses += amount
-                expense_items.append({
-                    "account_code": account.account_code,
-                    "account_name": account.account_name,
-                    "amount": _format_currency(amount),
-                    "amount_raw": float(amount),
-                })
-
-        net_income = total_revenue - total_expenses
+        income_statement_lines = [
+            {"name": "Revenue", "amount": _format_currency(revenue), "amount_raw": float(revenue)},
+            {"name": "Other Income", "amount": _format_currency(other_income), "amount_raw": float(other_income)},
+            {"name": "Cost of Sales", "amount": _format_currency(cogs), "amount_raw": float(cogs)},
+            {"name": "Operating Expenses", "amount": _format_currency(operating_expenses), "amount_raw": float(operating_expenses)},
+            {"name": "Profit for the Period", "amount": _format_currency(profit_for_period), "amount_raw": float(profit_for_period)},
+            {"name": "Other Comprehensive Income", "amount": _format_currency(oci), "amount_raw": float(oci)},
+            {"name": "Total Comprehensive Income", "amount": _format_currency(total_comprehensive_income), "amount_raw": float(total_comprehensive_income)},
+        ]
 
         return {
             "start_date": start_date or _format_date(from_date),
             "end_date": end_date or _format_date(to_date),
             "period_name": period.period_name if period else "No Period",
-            "revenue_items": revenue_items,
-            "expense_items": expense_items,
-            "total_revenue": _format_currency(total_revenue),
-            "total_expenses": _format_currency(total_expenses),
-            "net_income": _format_currency(net_income),
-            "net_income_raw": float(net_income),
-            "is_profit": net_income >= 0,
+            "income_statement_lines": income_statement_lines,
+            "total_revenue": _format_currency(revenue + other_income),
+            "total_expenses": _format_currency(cogs + operating_expenses),
+            "net_income": _format_currency(profit_for_period),
+            "net_income_raw": float(profit_for_period),
+            "is_profit": profit_for_period >= 0,
         }
 
     @staticmethod
@@ -624,72 +749,75 @@ class ReportsWebService:
                 .first()
             )
 
-        asset_items = []
-        liability_items = []
-        equity_items = []
-        total_assets = Decimal("0")
-        total_liabilities = Decimal("0")
-        total_equity = Decimal("0")
+        balances = ReportsWebService._category_balances(
+            db=db,
+            organization_id=organization_id,
+            as_of_date=ref_date,
+        )
 
-        if period:
-            rows = (
-                db.query(AccountBalance, Account, AccountCategory)
-                .join(Account, AccountBalance.account_id == Account.account_id)
-                .join(AccountCategory, Account.category_id == AccountCategory.category_id)
-                .filter(
-                    AccountBalance.organization_id == org_id,
-                    AccountBalance.fiscal_period_id == period.fiscal_period_id,
-                    AccountBalance.balance_type == BalanceType.ACTUAL,
-                    AccountCategory.ifrs_category.in_([
-                        IFRSCategory.ASSETS,
-                        IFRSCategory.LIABILITIES,
-                        IFRSCategory.EQUITY,
-                    ]),
-                )
-                .order_by(Account.account_code)
-                .all()
-            )
+        def cat_amount(code: str) -> Decimal:
+            return balances.get(code, {}).get("amount", Decimal("0"))
 
-            for balance, account, category in rows:
-                debit = balance.closing_debit or Decimal("0")
-                credit = balance.closing_credit or Decimal("0")
+        current_assets = [
+            ("Cash and Cash Equivalents", cat_amount("CAT003") + cat_amount("CAT012")),
+            ("Accounts Receivable", cat_amount("CAT004")),
+            ("Inventory", cat_amount("CAT010")),
+            ("Input Tax", cat_amount("CAT017")),
+            ("Withholding Tax", cat_amount("CAT019")),
+            ("Other Current Assets", cat_amount("CAT005") + cat_amount("CAT018")),
+        ]
+        non_current_assets = [
+            ("Property, Plant and Equipment", cat_amount("CAT013")),
+        ]
+        current_liabilities = [
+            ("Accounts Payable", cat_amount("CAT006")),
+            ("Output Tax", cat_amount("CAT016")),
+            ("Other Current Liabilities", cat_amount("CAT007")),
+        ]
+        non_current_liabilities = [
+            ("Other Liabilities", cat_amount("CAT009")),
+            ("Long-term Liabilities", cat_amount("CAT014")),
+        ]
+        equity_lines = [
+            ("Equity", cat_amount("EQT")),
+        ]
 
-                if category.ifrs_category == IFRSCategory.ASSETS:
-                    amount = debit - credit
-                    total_assets += amount
-                    asset_items.append({
-                        "account_code": account.account_code,
-                        "account_name": account.account_name,
-                        "amount": _format_currency(amount),
-                        "amount_raw": float(amount),
-                    })
-                elif category.ifrs_category == IFRSCategory.LIABILITIES:
-                    amount = credit - debit
-                    total_liabilities += amount
-                    liability_items.append({
-                        "account_code": account.account_code,
-                        "account_name": account.account_name,
-                        "amount": _format_currency(amount),
-                        "amount_raw": float(amount),
-                    })
-                elif category.ifrs_category == IFRSCategory.EQUITY:
-                    amount = credit - debit
-                    total_equity += amount
-                    equity_items.append({
-                        "account_code": account.account_code,
-                        "account_name": account.account_name,
-                        "amount": _format_currency(amount),
-                        "amount_raw": float(amount),
-                    })
-
+        total_assets = sum((amount for _, amount in current_assets), Decimal("0")) + sum(
+            (amount for _, amount in non_current_assets), Decimal("0")
+        )
+        total_liabilities = sum((amount for _, amount in current_liabilities), Decimal("0")) + sum(
+            (amount for _, amount in non_current_liabilities), Decimal("0")
+        )
+        total_equity = sum((amount for _, amount in equity_lines), Decimal("0"))
         total_liabilities_equity = total_liabilities + total_equity
+
+        balance_sheet_lines = {
+            "current_assets": [
+                {"name": name, "amount": _format_currency(amount), "amount_raw": float(amount)}
+                for name, amount in current_assets
+            ],
+            "non_current_assets": [
+                {"name": name, "amount": _format_currency(amount), "amount_raw": float(amount)}
+                for name, amount in non_current_assets
+            ],
+            "current_liabilities": [
+                {"name": name, "amount": _format_currency(amount), "amount_raw": float(amount)}
+                for name, amount in current_liabilities
+            ],
+            "non_current_liabilities": [
+                {"name": name, "amount": _format_currency(amount), "amount_raw": float(amount)}
+                for name, amount in non_current_liabilities
+            ],
+            "equity": [
+                {"name": name, "amount": _format_currency(amount), "amount_raw": float(amount)}
+                for name, amount in equity_lines
+            ],
+        }
 
         return {
             "as_of_date": as_of_date or _format_date(ref_date),
             "period_name": period.period_name if period else "No Period",
-            "asset_items": asset_items,
-            "liability_items": liability_items,
-            "equity_items": equity_items,
+            "balance_sheet_lines": balance_sheet_lines,
             "total_assets": _format_currency(total_assets),
             "total_liabilities": _format_currency(total_liabilities),
             "total_equity": _format_currency(total_equity),
@@ -717,6 +845,7 @@ class ReportsWebService:
                     SupplierInvoiceStatus.POSTED,
                     SupplierInvoiceStatus.PARTIALLY_PAID,
                 ]),
+                SupplierInvoice.invoice_date <= ref_date,
             )
             .order_by(SupplierInvoice.due_date)
             .all()
@@ -746,7 +875,7 @@ class ReportsWebService:
 
             entry = {
                 "invoice_number": invoice.invoice_number,
-                "supplier_name": supplier.supplier_name,
+                "supplier_name": supplier.trading_name or supplier.legal_name,
                 "invoice_date": _format_date(invoice.invoice_date),
                 "due_date": _format_date(due_date),
                 "amount": _format_currency(balance, invoice.currency_code),
@@ -816,6 +945,7 @@ class ReportsWebService:
                     ARInvoiceStatus.POSTED,
                     ARInvoiceStatus.PARTIALLY_PAID,
                 ]),
+                ARInvoice.invoice_date <= ref_date,
             )
             .order_by(ARInvoice.due_date)
             .all()
@@ -902,8 +1032,7 @@ class ReportsWebService:
         end_date: Optional[str] = None,
     ) -> dict:
         """Get context for general ledger detail report."""
-        from app.models.ifrs.gl.journal_entry import JournalEntry, JournalStatus
-        from app.models.ifrs.gl.journal_entry_line import JournalEntryLine
+        from app.models.ifrs.gl.journal_entry import JournalEntry
 
         org_id = coerce_uuid(organization_id)
 
@@ -944,20 +1073,21 @@ class ReportsWebService:
                 # Get journal lines for this account
                 lines = (
                     db.query(JournalEntryLine, JournalEntry)
-                    .join(JournalEntry, JournalEntryLine.journal_entry_id == JournalEntry.journal_entry_id)
+                    .join(JournalEntry, JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id)
                     .filter(
                         JournalEntryLine.account_id == acct_id,
+                        JournalEntry.organization_id == org_id,
+                        JournalEntry.status == JournalStatus.POSTED,
                         JournalEntry.posting_date >= from_date,
                         JournalEntry.posting_date <= to_date,
-                        JournalEntry.status == JournalStatus.POSTED,
                     )
                     .order_by(JournalEntry.posting_date, JournalEntry.journal_entry_id)
                     .all()
                 )
 
                 for line, entry in lines:
-                    debit = line.debit_amount or Decimal("0")
-                    credit = line.credit_amount or Decimal("0")
+                    debit = line.debit_amount_functional or Decimal("0")
+                    credit = line.credit_amount_functional or Decimal("0")
 
                     # Calculate running balance based on normal balance
                     if selected_account.normal_balance.value == "DEBIT":
@@ -997,92 +1127,48 @@ class ReportsWebService:
         end_date: Optional[str] = None,
     ) -> dict:
         """Get context for tax summary report."""
-        from app.models.ifrs.tax.tax_transaction import TaxTransaction, TaxTransactionType
-        from app.models.ifrs.tax.tax_code import TaxCode, TaxType
-        from app.models.ifrs.tax.tax_period import TaxPeriod, TaxPeriodStatus
-
-        org_id = coerce_uuid(organization_id)
         today = date.today()
         from_date = _parse_date(start_date) or today.replace(day=1)
         to_date = _parse_date(end_date) or today
 
-        # Get tax transactions for the period
-        transactions = (
-            db.query(TaxTransaction, TaxCode)
-            .join(TaxCode, TaxTransaction.tax_code_id == TaxCode.tax_code_id)
-            .filter(
-                TaxTransaction.organization_id == org_id,
-                TaxTransaction.transaction_date >= from_date,
-                TaxTransaction.transaction_date <= to_date,
-            )
-            .order_by(TaxTransaction.transaction_date.desc())
-            .all()
+        tax_totals = ReportsWebService._tax_totals_from_gl(
+            db=db,
+            organization_id=organization_id,
+            start_date=from_date,
+            end_date=to_date,
         )
 
-        # Calculate totals by type
-        output_tax = Decimal("0")  # Tax collected (sales)
-        input_tax = Decimal("0")   # Tax paid (purchases)
-        withholding = Decimal("0")
+        output_tax = tax_totals["output_tax"]
+        input_tax = tax_totals["input_tax"]
+        withholding = tax_totals["withholding"]
+        net_tax = tax_totals["net_tax"]
         payments = Decimal("0")
 
-        by_tax_type: dict = {}
-
-        for txn, code in transactions:
-            amount = txn.tax_amount or Decimal("0")
-
-            if txn.transaction_type == TaxTransactionType.OUTPUT:
-                output_tax += amount
-            elif txn.transaction_type == TaxTransactionType.INPUT:
-                input_tax += amount
-            elif txn.transaction_type == TaxTransactionType.WITHHOLDING:
-                withholding += amount
-            elif txn.transaction_type == TaxTransactionType.PAYMENT:
-                payments += amount
-
-            # Group by tax type
-            tax_type = code.tax_type.value
-            if tax_type not in by_tax_type:
-                by_tax_type[tax_type] = {"output": Decimal("0"), "input": Decimal("0")}
-            if txn.transaction_type == TaxTransactionType.OUTPUT:
-                by_tax_type[tax_type]["output"] += amount
-            elif txn.transaction_type == TaxTransactionType.INPUT:
-                by_tax_type[tax_type]["input"] += amount
-
-        net_tax = output_tax - input_tax
-
-        # Tax type breakdown
-        tax_breakdown = []
-        for tax_type, amounts in by_tax_type.items():
-            net = amounts["output"] - amounts["input"]
-            tax_breakdown.append({
-                "tax_type": tax_type,
-                "output": _format_currency(amounts["output"]),
-                "input": _format_currency(amounts["input"]),
-                "net": _format_currency(net),
-                "net_raw": float(net),
-            })
-
-        # Get open tax periods
-        open_periods = (
-            db.query(TaxPeriod)
-            .filter(
-                TaxPeriod.organization_id == org_id,
-                TaxPeriod.status.in_([TaxPeriodStatus.OPEN]),
-            )
-            .order_by(TaxPeriod.due_date)
-            .limit(5)
-            .all()
-        )
+        tax_breakdown = [
+            {
+                "tax_type": "Output Tax",
+                "output": _format_currency(output_tax),
+                "input": _format_currency(Decimal("0")),
+                "net": _format_currency(output_tax),
+                "net_raw": float(output_tax),
+            },
+            {
+                "tax_type": "Input Tax",
+                "output": _format_currency(Decimal("0")),
+                "input": _format_currency(input_tax),
+                "net": _format_currency(-input_tax),
+                "net_raw": float(-input_tax),
+            },
+            {
+                "tax_type": "Withholding Tax",
+                "output": _format_currency(Decimal("0")),
+                "input": _format_currency(withholding),
+                "net": _format_currency(-withholding),
+                "net_raw": float(-withholding),
+            },
+        ]
 
         upcoming_deadlines = []
-        for period in open_periods:
-            days_until = (period.due_date - today).days if period.due_date else 0
-            upcoming_deadlines.append({
-                "period_name": period.period_name,
-                "due_date": _format_date(period.due_date),
-                "days_until": days_until,
-                "is_overdue": days_until < 0,
-            })
 
         return {
             "start_date": start_date or _format_date(from_date),
@@ -1117,30 +1203,46 @@ class ReportsWebService:
         from_date = _parse_date(start_date) or today.replace(day=1)
         to_date = _parse_date(end_date) or today
 
-        # Get expense accounts (EXPENSES category)
-        expense_balances = (
-            db.query(AccountBalance, Account, AccountCategory)
-            .join(Account, AccountBalance.account_id == Account.account_id)
+        expense_items = []
+        total_expenses = Decimal("0")
+
+        # Aggregate posted ledger lines within the date range for expense accounts.
+        expense_rows = (
+            db.query(
+                Account.account_code,
+                Account.account_name,
+                AccountCategory.category_name,
+                func.coalesce(func.sum(JournalEntryLine.debit_amount_functional), 0).label("debit"),
+                func.coalesce(func.sum(JournalEntryLine.credit_amount_functional), 0).label("credit"),
+            )
+            .join(JournalEntry, JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id)
+            .join(Account, JournalEntryLine.account_id == Account.account_id)
             .join(AccountCategory, Account.category_id == AccountCategory.category_id)
             .filter(
-                AccountBalance.organization_id == org_id,
-                AccountBalance.balance_type == BalanceType.ACTUAL,
+                JournalEntry.organization_id == org_id,
+                JournalEntry.status == JournalStatus.POSTED,
+                JournalEntry.posting_date >= from_date,
+                JournalEntry.posting_date <= to_date,
                 AccountCategory.ifrs_category == IFRSCategory.EXPENSES,
+            )
+            .group_by(
+                Account.account_code,
+                Account.account_name,
+                AccountCategory.category_name,
             )
             .order_by(Account.account_code)
             .all()
         )
 
-        expense_items = []
-        total_expenses = Decimal("0")
-
-        for balance, account, category in expense_balances:
-            amount = (balance.closing_debit or Decimal("0")) - (balance.closing_credit or Decimal("0"))
+        for account_code, account_name, category_name, debit, credit in expense_rows:
+            debit = Decimal(str(debit or 0))
+            credit = Decimal(str(credit or 0))
+            amount = debit - credit
             total_expenses += amount
             expense_items.append({
-                "account_code": account.account_code,
-                "account_name": account.account_name,
-                "category": category.category_name,
+                "account_code": account_code,
+                "account_name": account_name,
+                "category": category_name,
                 "amount": _format_currency(amount),
                 "amount_raw": float(amount),
             })
@@ -1160,6 +1262,580 @@ class ReportsWebService:
             "total_expenses_raw": float(total_expenses),
             "presentation_currency_code": presentation_currency_code,
         }
+
+    @staticmethod
+    def cash_flow_context(
+        db: Session,
+        organization_id: str,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+    ) -> dict:
+        """Get context for cash flow summary report."""
+        org_id = coerce_uuid(organization_id)
+        today = date.today()
+        from_date = _parse_date(start_date) or today.replace(day=1)
+        to_date = _parse_date(end_date) or today
+
+        cash_category_codes = {"CAT003", "CAT012"}
+        cash_categories = (
+            db.query(AccountCategory.category_id)
+            .filter(
+                AccountCategory.organization_id == org_id,
+                AccountCategory.category_code.in_(cash_category_codes),
+            )
+            .all()
+        )
+        cash_category_ids = [row.category_id for row in cash_categories]
+
+        cash_accounts = (
+            db.query(Account.account_id, Account.account_code, Account.account_name)
+            .filter(
+                Account.organization_id == org_id,
+                Account.category_id.in_(cash_category_ids),
+                Account.is_active.is_(True),
+            )
+            .order_by(Account.account_code)
+            .all()
+        )
+        account_ids = [row.account_id for row in cash_accounts]
+
+        movements = []
+        total_inflow = Decimal("0")
+        total_outflow = Decimal("0")
+
+        if account_ids:
+            rows = (
+                db.query(
+                    Account.account_id,
+                    func.coalesce(func.sum(JournalEntryLine.debit_amount_functional), 0).label("debit"),
+                    func.coalesce(func.sum(JournalEntryLine.credit_amount_functional), 0).label("credit"),
+                )
+                .join(JournalEntry, JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id)
+                .join(Account, Account.account_id == JournalEntryLine.account_id)
+                .filter(
+                    JournalEntry.organization_id == org_id,
+                    JournalEntry.status == JournalStatus.POSTED,
+                    JournalEntry.posting_date >= from_date,
+                    JournalEntry.posting_date <= to_date,
+                    JournalEntryLine.account_id.in_(account_ids),
+                )
+                .group_by(Account.account_id)
+                .all()
+            )
+
+            acct_map = {row.account_id: row for row in cash_accounts}
+            for account_id, debit, credit in rows:
+                debit = Decimal(str(debit or 0))
+                credit = Decimal(str(credit or 0))
+                inflow = debit
+                outflow = credit
+                total_inflow += inflow
+                total_outflow += outflow
+
+                account = acct_map.get(account_id)
+                movements.append({
+                    "account_code": account.account_code if account else "",
+                    "account_name": account.account_name if account else "",
+                    "inflow": _format_currency(inflow),
+                    "outflow": _format_currency(outflow),
+                    "net": _format_currency(inflow - outflow),
+                    "net_raw": float(inflow - outflow),
+                })
+
+        net_cash = total_inflow - total_outflow
+
+        return {
+            "start_date": start_date or _format_date(from_date),
+            "end_date": end_date or _format_date(to_date),
+            "cash_movements": movements,
+            "total_inflow": _format_currency(total_inflow),
+            "total_outflow": _format_currency(total_outflow),
+            "net_cash_flow": _format_currency(net_cash),
+            "net_cash_flow_raw": float(net_cash),
+        }
+
+    @staticmethod
+    def changes_in_equity_context(
+        db: Session,
+        organization_id: str,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+    ) -> dict:
+        """Get context for statement of changes in equity."""
+        org_id = coerce_uuid(organization_id)
+        today = date.today()
+        from_date = _parse_date(start_date) or today.replace(day=1)
+        to_date = _parse_date(end_date) or today
+
+        equity_rows = (
+            db.query(
+                Account.account_id,
+                Account.account_code,
+                Account.account_name,
+                func.coalesce(func.sum(JournalEntryLine.debit_amount_functional), 0).label("debit"),
+                func.coalesce(func.sum(JournalEntryLine.credit_amount_functional), 0).label("credit"),
+            )
+            .join(JournalEntry, JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id)
+            .join(Account, Account.account_id == JournalEntryLine.account_id)
+            .join(AccountCategory, Account.category_id == AccountCategory.category_id)
+            .filter(
+                JournalEntry.organization_id == org_id,
+                JournalEntry.status == JournalStatus.POSTED,
+                JournalEntry.posting_date >= from_date,
+                JournalEntry.posting_date <= to_date,
+                AccountCategory.ifrs_category == IFRSCategory.EQUITY,
+            )
+            .group_by(Account.account_id, Account.account_code, Account.account_name)
+            .order_by(Account.account_code)
+            .all()
+        )
+
+        opening_rows = (
+            db.query(
+                Account.account_id,
+                func.coalesce(func.sum(JournalEntryLine.debit_amount_functional), 0).label("debit"),
+                func.coalesce(func.sum(JournalEntryLine.credit_amount_functional), 0).label("credit"),
+            )
+            .join(JournalEntry, JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id)
+            .join(Account, Account.account_id == JournalEntryLine.account_id)
+            .join(AccountCategory, Account.category_id == AccountCategory.category_id)
+            .filter(
+                JournalEntry.organization_id == org_id,
+                JournalEntry.status == JournalStatus.POSTED,
+                JournalEntry.posting_date < from_date,
+                AccountCategory.ifrs_category == IFRSCategory.EQUITY,
+            )
+            .group_by(Account.account_id)
+            .all()
+        )
+        opening_map = {row.account_id: (row.debit, row.credit) for row in opening_rows}
+
+        line_items = []
+        total_opening = Decimal("0")
+        total_change = Decimal("0")
+        total_closing = Decimal("0")
+
+        for account_id, code, name, debit, credit in equity_rows:
+            debit = Decimal(str(debit or 0))
+            credit = Decimal(str(credit or 0))
+            opening_debit, opening_credit = opening_map.get(account_id, (0, 0))
+            opening = Decimal(str(opening_credit or 0)) - Decimal(str(opening_debit or 0))
+            change = credit - debit
+            closing = opening + change
+
+            total_opening += opening
+            total_change += change
+            total_closing += closing
+
+            line_items.append({
+                "account_code": code,
+                "account_name": name,
+                "opening_balance": _format_currency(opening),
+                "change": _format_currency(change),
+                "closing_balance": _format_currency(closing),
+                "closing_balance_raw": float(closing),
+            })
+
+        # Net income for the period
+        revenue_expense = (
+            db.query(
+                AccountCategory.ifrs_category,
+                func.coalesce(func.sum(JournalEntryLine.debit_amount_functional), 0).label("debit"),
+                func.coalesce(func.sum(JournalEntryLine.credit_amount_functional), 0).label("credit"),
+            )
+            .join(JournalEntry, JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id)
+            .join(Account, Account.account_id == JournalEntryLine.account_id)
+            .join(AccountCategory, Account.category_id == AccountCategory.category_id)
+            .filter(
+                JournalEntry.organization_id == org_id,
+                JournalEntry.status == JournalStatus.POSTED,
+                JournalEntry.posting_date >= from_date,
+                JournalEntry.posting_date <= to_date,
+                AccountCategory.ifrs_category.in_([
+                    IFRSCategory.REVENUE,
+                    IFRSCategory.EXPENSES,
+                ]),
+            )
+            .group_by(AccountCategory.ifrs_category)
+            .all()
+        )
+        total_revenue = Decimal("0")
+        total_expenses = Decimal("0")
+        for ifrs_category, debit, credit in revenue_expense:
+            debit = Decimal(str(debit or 0))
+            credit = Decimal(str(credit or 0))
+            if ifrs_category == IFRSCategory.REVENUE:
+                total_revenue += credit - debit
+            elif ifrs_category == IFRSCategory.EXPENSES:
+                total_expenses += debit - credit
+
+        net_income = total_revenue - total_expenses
+
+        return {
+            "start_date": start_date or _format_date(from_date),
+            "end_date": end_date or _format_date(to_date),
+            "equity_lines": line_items,
+            "opening_equity": _format_currency(total_opening),
+            "change_in_equity": _format_currency(total_change),
+            "closing_equity": _format_currency(total_closing),
+            "net_income": _format_currency(net_income),
+            "net_income_raw": float(net_income),
+        }
+
+    @staticmethod
+    def budget_vs_actual_context(
+        db: Session,
+        organization_id: str,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        budget_id: Optional[str] = None,
+        budget_code: Optional[str] = None,
+    ) -> dict:
+        """Get context for budget vs actual report."""
+        from app.models.ifrs.gl.budget import Budget, BudgetStatus
+        from app.models.ifrs.gl.budget_line import BudgetLine
+
+        org_id = coerce_uuid(organization_id)
+        today = date.today()
+        from_date = _parse_date(start_date) or today.replace(day=1)
+        to_date = _parse_date(end_date) or today
+
+        periods = (
+            db.query(FiscalPeriod)
+            .filter(
+                FiscalPeriod.organization_id == org_id,
+                FiscalPeriod.start_date <= to_date,
+                FiscalPeriod.end_date >= from_date,
+            )
+            .all()
+        )
+        period_ids = [p.fiscal_period_id for p in periods]
+
+        budget_query = (
+            db.query(BudgetLine, Budget, Account)
+            .join(Budget, BudgetLine.budget_id == Budget.budget_id)
+            .join(Account, BudgetLine.account_id == Account.account_id)
+            .filter(
+                Budget.organization_id == org_id,
+                Budget.status.in_([BudgetStatus.APPROVED, BudgetStatus.ACTIVE]),
+                BudgetLine.fiscal_period_id.in_(period_ids),
+            )
+        )
+
+        if budget_id:
+            budget_query = budget_query.filter(Budget.budget_id == coerce_uuid(budget_id))
+        if budget_code:
+            budget_query = budget_query.filter(Budget.budget_code == budget_code)
+
+        budget_lines = budget_query.all()
+
+        budget_totals = {}
+        for line, budget, account in budget_lines:
+            budget_totals.setdefault(account.account_id, {
+                "account_code": account.account_code,
+                "account_name": account.account_name,
+                "budget": Decimal("0"),
+                "normal_balance": account.normal_balance.value,
+            })
+            budget_totals[account.account_id]["budget"] += Decimal(str(line.budget_amount or 0))
+
+        account_ids = list(budget_totals.keys())
+        actual_rows = []
+        if account_ids:
+            actual_rows = (
+                db.query(
+                    JournalEntryLine.account_id,
+                    func.coalesce(func.sum(JournalEntryLine.debit_amount_functional), 0).label("debit"),
+                    func.coalesce(func.sum(JournalEntryLine.credit_amount_functional), 0).label("credit"),
+                )
+                .join(JournalEntry, JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id)
+                .filter(
+                    JournalEntry.organization_id == org_id,
+                    JournalEntry.status == JournalStatus.POSTED,
+                    JournalEntry.posting_date >= from_date,
+                    JournalEntry.posting_date <= to_date,
+                    JournalEntryLine.account_id.in_(account_ids),
+                )
+                .group_by(JournalEntryLine.account_id)
+                .all()
+            )
+
+        actual_map = {row.account_id: row for row in actual_rows}
+
+        rows = []
+        total_budget = Decimal("0")
+        total_actual = Decimal("0")
+
+        for account_id, data in budget_totals.items():
+            actual_row = actual_map.get(account_id)
+            debit = Decimal(str(actual_row.debit or 0)) if actual_row else Decimal("0")
+            credit = Decimal(str(actual_row.credit or 0)) if actual_row else Decimal("0")
+            if data["normal_balance"] == "DEBIT":
+                actual = debit - credit
+            else:
+                actual = credit - debit
+
+            budget = data["budget"]
+            variance = actual - budget
+            variance_pct = (variance / budget * Decimal("100")) if budget else Decimal("0")
+
+            total_budget += budget
+            total_actual += actual
+
+            rows.append({
+                "account_code": data["account_code"],
+                "account_name": data["account_name"],
+                "budget": _format_currency(budget),
+                "actual": _format_currency(actual),
+                "variance": _format_currency(variance),
+                "variance_percent": f"{variance_pct:.2f}%",
+                "variance_raw": float(variance),
+            })
+
+        rows.sort(key=lambda x: x["account_code"])
+        total_variance = total_actual - total_budget
+
+        return {
+            "start_date": start_date or _format_date(from_date),
+            "end_date": end_date or _format_date(to_date),
+            "budget_id": budget_id or "",
+            "budget_code": budget_code or "",
+            "budget_lines": rows,
+            "total_budget": _format_currency(total_budget),
+            "total_actual": _format_currency(total_actual),
+            "total_variance": _format_currency(total_variance),
+            "total_variance_raw": float(total_variance),
+        }
+
+    def dashboard_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        start_date: Optional[str],
+        end_date: Optional[str],
+        db: Session,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "Reports", "reports")
+        context.update(
+            self.dashboard_context(
+                db,
+                str(auth.organization_id),
+                start_date=start_date,
+                end_date=end_date,
+            )
+        )
+        return templates.TemplateResponse(request, "ifrs/reports/dashboard.html", context)
+
+    def trial_balance_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        as_of_date: Optional[str],
+        db: Session,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "Trial Balance", "reports")
+        context.update(
+            self.trial_balance_context(
+                db,
+                str(auth.organization_id),
+                as_of_date=as_of_date,
+            )
+        )
+        return templates.TemplateResponse(request, "ifrs/reports/trial_balance.html", context)
+
+    def income_statement_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        start_date: Optional[str],
+        end_date: Optional[str],
+        db: Session,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "Statement of Profit or Loss", "reports")
+        context.update(
+            self.income_statement_context(
+                db,
+                str(auth.organization_id),
+                start_date=start_date,
+                end_date=end_date,
+            )
+        )
+        return templates.TemplateResponse(request, "ifrs/reports/income_statement.html", context)
+
+    def balance_sheet_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        as_of_date: Optional[str],
+        db: Session,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "Statement of Financial Position", "reports")
+        context.update(
+            self.balance_sheet_context(
+                db,
+                str(auth.organization_id),
+                as_of_date=as_of_date,
+            )
+        )
+        return templates.TemplateResponse(request, "ifrs/reports/balance_sheet.html", context)
+
+    def ap_aging_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        as_of_date: Optional[str],
+        db: Session,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "AP Aging Report", "reports")
+        context.update(
+            self.ap_aging_context(
+                db,
+                str(auth.organization_id),
+                as_of_date=as_of_date,
+            )
+        )
+        return templates.TemplateResponse(request, "ifrs/reports/ap_aging.html", context)
+
+    def ar_aging_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        as_of_date: Optional[str],
+        db: Session,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "AR Aging Report", "reports")
+        context.update(
+            self.ar_aging_context(
+                db,
+                str(auth.organization_id),
+                as_of_date=as_of_date,
+            )
+        )
+        return templates.TemplateResponse(request, "ifrs/reports/ar_aging.html", context)
+
+    def general_ledger_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        account_id: Optional[str],
+        start_date: Optional[str],
+        end_date: Optional[str],
+        db: Session,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "General Ledger", "reports")
+        context.update(
+            self.general_ledger_context(
+                db,
+                str(auth.organization_id),
+                account_id=account_id,
+                start_date=start_date,
+                end_date=end_date,
+            )
+        )
+        return templates.TemplateResponse(request, "ifrs/reports/general_ledger.html", context)
+
+    def tax_summary_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        start_date: Optional[str],
+        end_date: Optional[str],
+        db: Session,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "Tax Summary", "reports")
+        context.update(
+            self.tax_summary_context(
+                db,
+                str(auth.organization_id),
+                start_date=start_date,
+                end_date=end_date,
+            )
+        )
+        return templates.TemplateResponse(request, "ifrs/reports/tax_summary.html", context)
+
+    def expense_summary_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        start_date: Optional[str],
+        end_date: Optional[str],
+        db: Session,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "Expense Summary", "reports")
+        context.update(
+            self.expense_summary_context(
+                db,
+                str(auth.organization_id),
+                start_date=start_date,
+                end_date=end_date,
+            )
+        )
+        return templates.TemplateResponse(request, "ifrs/reports/expense_summary.html", context)
+
+    def cash_flow_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        start_date: Optional[str],
+        end_date: Optional[str],
+        db: Session,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "Cash Flow Statement", "reports")
+        context.update(
+            self.cash_flow_context(
+                db,
+                str(auth.organization_id),
+                start_date=start_date,
+                end_date=end_date,
+            )
+        )
+        return templates.TemplateResponse(request, "ifrs/reports/cash_flow.html", context)
+
+    def changes_in_equity_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        start_date: Optional[str],
+        end_date: Optional[str],
+        db: Session,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "Changes in Equity", "reports")
+        context.update(
+            self.changes_in_equity_context(
+                db,
+                str(auth.organization_id),
+                start_date=start_date,
+                end_date=end_date,
+            )
+        )
+        return templates.TemplateResponse(
+            request, "ifrs/reports/changes_in_equity.html", context
+        )
+
+    def budget_vs_actual_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        start_date: Optional[str],
+        end_date: Optional[str],
+        budget_id: Optional[str],
+        budget_code: Optional[str],
+        db: Session,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "Budget vs Actual", "reports")
+        context.update(
+            self.budget_vs_actual_context(
+                db,
+                str(auth.organization_id),
+                start_date=start_date,
+                end_date=end_date,
+                budget_id=budget_id,
+                budget_code=budget_code,
+            )
+        )
+        return templates.TemplateResponse(
+            request, "ifrs/reports/budget_vs_actual.html", context
+        )
 
 
 reports_web_service = ReportsWebService()

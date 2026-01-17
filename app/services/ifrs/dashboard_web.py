@@ -18,32 +18,72 @@ from app.services.ifrs.platform.org_context import org_context_service
 def _format_currency(amount: Decimal, currency_code: str) -> str:
     return f"{currency_code} {amount:,.2f}"
 
+def _resolve_year_selection(
+    year_param: str | None,
+    available_years: list[int],
+) -> int | None:
+    if year_param is None:
+        return available_years[0] if available_years else None
+    if year_param.strip().lower() == "all":
+        return None
+    try:
+        year = int(year_param)
+    except ValueError:
+        return available_years[0] if available_years else None
+    return year if year in available_years else (available_years[0] if available_years else None)
+
 
 class DashboardWebService:
     """View service for IFRS dashboard web route."""
 
     @staticmethod
-    def dashboard_context(db: Session, organization_id) -> dict:
+    def dashboard_context(db: Session, organization_id, year: str | None = None) -> dict:
         currency_settings = org_context_service.get_currency_settings(db, organization_id)
         presentation_currency_code = currency_settings["presentation"]
-        stats = dashboard_service.get_stats(db, organization_id)
-        recent_journals = dashboard_service.get_recent_journals(db, organization_id, limit=10)
-        fiscal_periods = dashboard_service.get_fiscal_periods(db, organization_id, limit=8)
+        available_years = dashboard_service.get_available_years(db, organization_id)
+        selected_year = _resolve_year_selection(year, available_years)
+        stats = dashboard_service.get_stats(db, organization_id, year=selected_year)
+        recent_journals = dashboard_service.get_recent_journals(db, organization_id, limit=10, year=selected_year)
+        fiscal_periods = dashboard_service.get_fiscal_periods(db, organization_id, limit=8, year=selected_year)
 
         # Chart data
-        monthly_trend = dashboard_service.get_monthly_revenue_expenses(db, organization_id, months=12)
-        account_balances = dashboard_service.get_account_balances_by_ifrs_category(db, organization_id)
-        top_customers = dashboard_service.get_top_customers(db, organization_id, limit=5)
-        top_suppliers = dashboard_service.get_top_suppliers(db, organization_id, limit=5)
-        cash_flow = dashboard_service.get_monthly_cash_flow(db, organization_id, months=6)
-        invoice_status = dashboard_service.get_invoice_status_breakdown(db, organization_id)
+        monthly_trend = dashboard_service.get_monthly_revenue_expenses(
+            db, organization_id, months=12, year=selected_year
+        )
+        account_balances = dashboard_service.get_account_balances_by_ifrs_category(
+            db, organization_id, year=selected_year
+        )
+        top_customers = dashboard_service.get_top_customers(db, organization_id, limit=5, year=selected_year)
+        top_suppliers = dashboard_service.get_top_suppliers(db, organization_id, limit=5, year=selected_year)
+        cash_flow = dashboard_service.get_monthly_cash_flow(db, organization_id, months=6, year=selected_year)
+        invoice_status = dashboard_service.get_invoice_status_breakdown(
+            db, organization_id, year=selected_year
+        )
+        subledger_recon = dashboard_service.get_subledger_reconciliation(
+            db, organization_id, year=selected_year
+        )
 
         stats_view = {
             "total_revenue": _format_currency(stats.total_revenue, presentation_currency_code),
             "total_expenses": _format_currency(stats.total_expenses, presentation_currency_code),
             "net_income": _format_currency(stats.net_income, presentation_currency_code),
-            "open_invoices": stats.open_invoices,
-            "pending_amount": _format_currency(stats.pending_amount, presentation_currency_code),
+            "cogs_spend": _format_currency(stats.cogs_spend, presentation_currency_code),
+            "opex_spend": _format_currency(stats.opex_spend, presentation_currency_code),
+            "ar_control_balance": _format_currency(stats.ar_control_balance, presentation_currency_code),
+            "ap_control_balance": _format_currency(stats.ap_control_balance, presentation_currency_code),
+            "net_ar_ap": _format_currency(
+                stats.ar_control_balance - stats.ap_control_balance,
+                presentation_currency_code,
+            ),
+            "cash_inflow": _format_currency(stats.cash_inflow, presentation_currency_code),
+            "cash_outflow": _format_currency(stats.cash_outflow, presentation_currency_code),
+            "net_cash_flow": _format_currency(stats.net_cash_flow, presentation_currency_code),
+        }
+        subledger_recon_view = {
+            "ar_ok": subledger_recon["ar_ok"],
+            "ap_ok": subledger_recon["ap_ok"],
+            "ar_diff": _format_currency(subledger_recon["ar_diff"], presentation_currency_code),
+            "ap_diff": _format_currency(subledger_recon["ap_diff"], presentation_currency_code),
         }
 
         journals_view = [
@@ -85,6 +125,10 @@ class DashboardWebService:
             "chart_data": chart_data,
             "chart_data_json": json.dumps(chart_data),
             "presentation_currency_code": presentation_currency_code,
+            "available_years": available_years,
+            "selected_year": selected_year,
+            "selected_year_label": str(selected_year) if selected_year else "All years",
+            "subledger_reconciliation": subledger_recon_view,
         }
 
 

@@ -43,6 +43,9 @@ from .base import (
     VALID_ACCOUNT_TYPES,
     detect_csv_format,
     resolve_column_alias,
+    # Account lookup utilities
+    find_account_by_subledger_type,
+    find_account_by_name_pattern,
 )
 from .accounts import AccountImporter, AccountCategoryImporter
 from .contacts import CustomerImporter, SupplierImporter, get_ar_control_account, get_ap_control_account
@@ -79,6 +82,9 @@ __all__ = [
     "VALID_ACCOUNT_TYPES",
     "detect_csv_format",
     "resolve_column_alias",
+    # Account lookup utilities
+    "find_account_by_subledger_type",
+    "find_account_by_name_pattern",
     # Account importers
     "AccountImporter",
     "AccountCategoryImporter",
