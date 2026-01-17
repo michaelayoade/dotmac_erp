@@ -20,6 +20,12 @@ from app.config import settings
 from app.models.ifrs.ar.customer import Customer, CustomerType, RiskCategory
 from app.services.common import coerce_uuid
 from app.services.response import ListResponseMixin
+from app.services.ifrs.common import (
+    validate_unique_code,
+    get_org_scoped_entity,
+    toggle_entity_status,
+    apply_search_filter,
+)
 
 
 @dataclass
@@ -82,23 +88,15 @@ class CustomerService(ListResponseMixin):
         """
         org_id = coerce_uuid(organization_id)
 
-        # Check for duplicate customer code
-        existing = (
-            db.query(Customer)
-            .filter(
-                and_(
-                    Customer.organization_id == org_id,
-                    Customer.customer_code == input.customer_code,
-                )
-            )
-            .first()
+        # Validate unique customer code
+        validate_unique_code(
+            db=db,
+            model_class=Customer,
+            org_id=org_id,
+            code_value=input.customer_code,
+            code_field_name="customer_code",
+            entity_name="Customer",
         )
-
-        if existing:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Customer code '{input.customer_code}' already exists",
-            )
 
         customer = Customer(
             organization_id=org_id,
@@ -157,28 +155,25 @@ class CustomerService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         cust_id = coerce_uuid(customer_id)
 
-        customer = db.get(Customer, cust_id)
-        if not customer or customer.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Customer not found")
+        customer = get_org_scoped_entity(
+            db=db,
+            model_class=Customer,
+            entity_id=cust_id,
+            org_id=org_id,
+            entity_name="Customer",
+        )
 
-        # Check for duplicate customer code
+        # Validate unique customer code (if changed)
         if customer.customer_code != input.customer_code:
-            existing = (
-                db.query(Customer)
-                .filter(
-                    and_(
-                        Customer.organization_id == org_id,
-                        Customer.customer_code == input.customer_code,
-                        Customer.customer_id != cust_id,
-                    )
-                )
-                .first()
+            validate_unique_code(
+                db=db,
+                model_class=Customer,
+                org_id=org_id,
+                code_value=input.customer_code,
+                code_field_name="customer_code",
+                entity_name="Customer",
+                exclude_id=cust_id,
             )
-            if existing:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Customer code '{input.customer_code}' already exists",
-                )
 
         # Update fields
         customer.customer_code = input.customer_code
@@ -231,12 +226,13 @@ class CustomerService(ListResponseMixin):
         Returns:
             Updated Customer
         """
-        org_id = coerce_uuid(organization_id)
-        cust_id = coerce_uuid(customer_id)
-
-        customer = db.get(Customer, cust_id)
-        if not customer or customer.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Customer not found")
+        customer = get_org_scoped_entity(
+            db=db,
+            model_class=Customer,
+            entity_id=customer_id,
+            org_id=organization_id,
+            entity_name="Customer",
+        )
 
         customer.credit_limit = new_credit_limit
 
@@ -264,12 +260,13 @@ class CustomerService(ListResponseMixin):
         Returns:
             Updated Customer
         """
-        org_id = coerce_uuid(organization_id)
-        cust_id = coerce_uuid(customer_id)
-
-        customer = db.get(Customer, cust_id)
-        if not customer or customer.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Customer not found")
+        customer = get_org_scoped_entity(
+            db=db,
+            model_class=Customer,
+            entity_id=customer_id,
+            org_id=organization_id,
+            entity_name="Customer",
+        )
 
         customer.risk_category = new_risk_category
 
@@ -285,18 +282,14 @@ class CustomerService(ListResponseMixin):
         customer_id: UUID,
     ) -> Customer:
         """Deactivate a customer (soft delete)."""
-        org_id = coerce_uuid(organization_id)
-        cust_id = coerce_uuid(customer_id)
-
-        customer = db.get(Customer, cust_id)
-        if not customer or customer.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Customer not found")
-
-        customer.is_active = False
-        db.commit()
-        db.refresh(customer)
-
-        return customer
+        return toggle_entity_status(
+            db=db,
+            model_class=Customer,
+            entity_id=customer_id,
+            org_id=organization_id,
+            is_active=False,
+            entity_name="Customer",
+        )
 
     @staticmethod
     def activate_customer(
@@ -305,18 +298,14 @@ class CustomerService(ListResponseMixin):
         customer_id: UUID,
     ) -> Customer:
         """Reactivate a customer."""
-        org_id = coerce_uuid(organization_id)
-        cust_id = coerce_uuid(customer_id)
-
-        customer = db.get(Customer, cust_id)
-        if not customer or customer.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Customer not found")
-
-        customer.is_active = True
-        db.commit()
-        db.refresh(customer)
-
-        return customer
+        return toggle_entity_status(
+            db=db,
+            model_class=Customer,
+            entity_id=customer_id,
+            org_id=organization_id,
+            is_active=True,
+            entity_name="Customer",
+        )
 
     @staticmethod
     def check_credit_limit(
@@ -339,12 +328,15 @@ class CustomerService(ListResponseMixin):
         """
         from app.models.ifrs.ar.invoice import Invoice, InvoiceStatus
 
-        org_id = coerce_uuid(organization_id)
         cust_id = coerce_uuid(customer_id)
 
-        customer = db.get(Customer, cust_id)
-        if not customer or customer.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Customer not found")
+        customer = get_org_scoped_entity(
+            db=db,
+            model_class=Customer,
+            entity_id=customer_id,
+            org_id=organization_id,
+            entity_name="Customer",
+        )
 
         if customer.credit_limit is None:
             # No credit limit = unlimited
@@ -381,11 +373,13 @@ class CustomerService(ListResponseMixin):
         customer_id: str,
     ) -> Customer:
         """Get a customer by ID."""
-        org_id = coerce_uuid(organization_id)
-        customer = db.get(Customer, coerce_uuid(customer_id))
-        if not customer or customer.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Customer not found")
-        return customer
+        return get_org_scoped_entity(
+            db=db,
+            model_class=Customer,
+            entity_id=customer_id,
+            org_id=organization_id,
+            entity_name="Customer",
+        )
 
     @staticmethod
     def get_by_code(
@@ -438,14 +432,16 @@ class CustomerService(ListResponseMixin):
         if is_related_party is not None:
             query = query.filter(Customer.is_related_party == is_related_party)
 
-        if search:
-            search_pattern = f"%{search}%"
-            query = query.filter(
-                (Customer.customer_code.ilike(search_pattern))
-                | (Customer.legal_name.ilike(search_pattern))
-                | (Customer.trading_name.ilike(search_pattern))
-                | (Customer.tax_identification_number.ilike(search_pattern))
-            )
+        query = apply_search_filter(
+            query,
+            search,
+            [
+                Customer.customer_code,
+                Customer.legal_name,
+                Customer.trading_name,
+                Customer.tax_identification_number,
+            ],
+        )
 
         query = query.order_by(Customer.legal_name)
         return query.limit(limit).offset(offset).all()
@@ -459,12 +455,15 @@ class CustomerService(ListResponseMixin):
         """Get customer summary with balance information."""
         from app.models.ifrs.ar.invoice import Invoice, InvoiceStatus
 
-        org_id = coerce_uuid(organization_id)
         cust_id = coerce_uuid(customer_id)
 
-        customer = db.get(Customer, cust_id)
-        if not customer or customer.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Customer not found")
+        customer = get_org_scoped_entity(
+            db=db,
+            model_class=Customer,
+            entity_id=customer_id,
+            org_id=organization_id,
+            entity_name="Customer",
+        )
 
         # Get outstanding invoices
         outstanding_statuses = [

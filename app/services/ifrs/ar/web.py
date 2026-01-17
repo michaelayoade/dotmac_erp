@@ -45,51 +45,23 @@ from app.models.ifrs.common.attachment import AttachmentCategory
 from app.templates import templates
 from app.web.deps import base_context, WebAuthContext
 from app.services.ifrs.tax.tax_master import tax_code_service
+from app.services.ifrs.common import (
+    parse_date,
+    format_date,
+    format_currency,
+    format_file_size,
+    parse_enum_safe,
+)
 
-
-def _format_file_size(size: int) -> str:
-    """Format file size for display."""
-    if size < 1024:
-        return f"{size} B"
-    elif size < 1024 * 1024:
-        return f"{size / 1024:.1f} KB"
-    else:
-        return f"{size / (1024 * 1024):.1f} MB"
-
-
-def _parse_date(value: Optional[str]) -> Optional[date]:
-    if not value:
-        return None
-    try:
-        return datetime.strptime(value, "%Y-%m-%d").date()
-    except ValueError:
-        return None
-
-
-def _format_date(value: Optional[date]) -> str:
-    return value.strftime("%Y-%m-%d") if value else ""
-
-
-def _format_currency(
-    amount: Optional[Decimal],
-    currency: str = settings.default_presentation_currency_code,
-) -> Optional[str]:
-    if amount is None:
-        return None
-    value = Decimal(str(amount))
-    return f"{currency} {value:,.2f}"
+# Keep aliases for backward compatibility with existing code
+_parse_date = parse_date
+_format_date = format_date
+_format_currency = format_currency
+_format_file_size = format_file_size
 
 
 def _parse_customer_type(value: Optional[str]) -> CustomerType:
-    if not value:
-        return CustomerType.COMPANY
-    try:
-        return CustomerType(value)
-    except ValueError:
-        try:
-            return CustomerType(value.upper())
-        except ValueError:
-            return CustomerType.COMPANY
+    return parse_enum_safe(CustomerType, value, CustomerType.COMPANY)
 
 
 def _customer_display_name(customer: Customer) -> str:
@@ -1875,6 +1847,12 @@ class ARWebService:
         lines = []
         for line in lines_data:
             if line.get("revenue_account_id") and line.get("description"):
+                # Handle both new tax_code_ids array and legacy tax_code_id field
+                tax_code_ids = []
+                if line.get("tax_code_ids"):
+                    tax_code_ids = [UUID(tc_id) for tc_id in line["tax_code_ids"] if tc_id]
+                legacy_tax_code_id = UUID(line["tax_code_id"]) if line.get("tax_code_id") else None
+
                 lines.append(
                     ARInvoiceLineInput(
                         description=line.get("description", ""),
@@ -1883,8 +1861,8 @@ class ARWebService:
                         revenue_account_id=UUID(line["revenue_account_id"])
                         if line.get("revenue_account_id")
                         else None,
-                        tax_code_id=UUID(line["tax_code_id"]) if line.get("tax_code_id") else None,
-                        tax_amount=Decimal(str(line.get("tax_amount", 0))),
+                        tax_code_ids=tax_code_ids,
+                        tax_code_id=legacy_tax_code_id,
                         cost_center_id=UUID(line["cost_center_id"])
                         if line.get("cost_center_id")
                         else None,

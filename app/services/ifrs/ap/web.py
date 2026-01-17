@@ -63,51 +63,23 @@ from app.services.ifrs.ap.supplier_payment import (
 from app.models.ifrs.ap.supplier_payment import APPaymentMethod, APPaymentStatus
 from app.services.ifrs.common.attachment import attachment_service
 from app.services.ifrs.platform.currency_context import get_currency_context
+from app.services.ifrs.common import (
+    parse_date,
+    format_date,
+    format_currency,
+    format_file_size,
+    parse_enum_safe,
+)
 
-
-def _parse_date(value: Optional[str]) -> Optional[date]:
-    if not value:
-        return None
-    try:
-        return datetime.strptime(value, "%Y-%m-%d").date()
-    except ValueError:
-        return None
-
-
-def _format_date(value: Optional[date]) -> str:
-    return value.strftime("%Y-%m-%d") if value else ""
-
-
-def _format_currency(
-    amount: Optional[Decimal],
-    currency: str = settings.default_presentation_currency_code,
-) -> Optional[str]:
-    if amount is None:
-        return None
-    value = Decimal(str(amount))
-    return f"{currency} {value:,.2f}"
-
-
-def _format_file_size(size: int) -> str:
-    """Format file size for display."""
-    if size < 1024:
-        return f"{size} B"
-    elif size < 1024 * 1024:
-        return f"{size / 1024:.1f} KB"
-    else:
-        return f"{size / (1024 * 1024):.1f} MB"
+# Keep aliases for backward compatibility with existing code
+_parse_date = parse_date
+_format_date = format_date
+_format_currency = format_currency
+_format_file_size = format_file_size
 
 
 def _parse_supplier_type(value: Optional[str]) -> SupplierType:
-    if not value:
-        return SupplierType.VENDOR
-    try:
-        return SupplierType(value)
-    except ValueError:
-        try:
-            return SupplierType(value.upper())
-        except ValueError:
-            return SupplierType.VENDOR
+    return parse_enum_safe(SupplierType, value, SupplierType.VENDOR)
 
 
 def _supplier_display_name(supplier: Supplier) -> str:
@@ -471,6 +443,12 @@ class APWebService:
         lines = []
         for line in lines_data:
             if line.get("expense_account_id") and line.get("description"):
+                # Handle both new tax_code_ids array and legacy tax_code_id field
+                tax_code_ids = []
+                if line.get("tax_code_ids"):
+                    tax_code_ids = [UUID(tc_id) for tc_id in line["tax_code_ids"] if tc_id]
+                legacy_tax_code_id = UUID(line["tax_code_id"]) if line.get("tax_code_id") else None
+
                 lines.append(
                     InvoiceLineInput(
                         description=line.get("description", ""),
@@ -479,7 +457,8 @@ class APWebService:
                         expense_account_id=UUID(line["expense_account_id"])
                         if line.get("expense_account_id")
                         else None,
-                        tax_amount=Decimal(str(line.get("tax_amount", 0))),
+                        tax_code_ids=tax_code_ids,
+                        tax_code_id=legacy_tax_code_id,
                         cost_center_id=UUID(line["cost_center_id"])
                         if line.get("cost_center_id")
                         else None,
@@ -2869,11 +2848,14 @@ class APWebService:
                     lines.append(POLineInput(
                         item_id=UUID(line["item_id"]) if line.get("item_id") else None,
                         description=line.get("description", ""),
-                        quantity=Decimal(str(line.get("quantity", 1))),
+                        quantity_ordered=Decimal(str(line.get("quantity", line.get("quantity_ordered", 1)))),
                         unit_price=Decimal(str(line.get("unit_price", 0))),
                         expense_account_id=UUID(line["expense_account_id"])
                         if line.get("expense_account_id")
                         else None,
+                        tax_code_id=UUID(line["tax_code_id"]) if line.get("tax_code_id") else None,
+                        cost_center_id=UUID(line["cost_center_id"]) if line.get("cost_center_id") else None,
+                        project_id=UUID(line["project_id"]) if line.get("project_id") else None,
                     ))
 
             po_date_str = data.get("po_date")

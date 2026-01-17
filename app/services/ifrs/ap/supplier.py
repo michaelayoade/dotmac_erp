@@ -22,6 +22,12 @@ from app.models.ifrs.ap.supplier import Supplier, SupplierType
 from app.models.ifrs.ap.supplier_invoice import SupplierInvoice, SupplierInvoiceStatus
 from app.services.common import coerce_uuid
 from app.services.response import ListResponseMixin
+from app.services.ifrs.common import (
+    validate_unique_code,
+    get_org_scoped_entity,
+    toggle_entity_status,
+    apply_search_filter,
+)
 
 
 @dataclass
@@ -78,23 +84,15 @@ class SupplierService(ListResponseMixin):
         """
         org_id = coerce_uuid(organization_id)
 
-        # Check for duplicate supplier code
-        existing = (
-            db.query(Supplier)
-            .filter(
-                and_(
-                    Supplier.organization_id == org_id,
-                    Supplier.supplier_code == input.supplier_code,
-                )
-            )
-            .first()
+        # Validate unique supplier code
+        validate_unique_code(
+            db=db,
+            model_class=Supplier,
+            org_id=org_id,
+            code_value=input.supplier_code,
+            code_field_name="supplier_code",
+            entity_name="Supplier",
         )
-
-        if existing:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Supplier code '{input.supplier_code}' already exists",
-            )
 
         supplier = Supplier(
             organization_id=org_id,
@@ -152,28 +150,25 @@ class SupplierService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         sup_id = coerce_uuid(supplier_id)
 
-        supplier = db.get(Supplier, sup_id)
-        if not supplier or supplier.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Supplier not found")
+        supplier = get_org_scoped_entity(
+            db=db,
+            model_class=Supplier,
+            entity_id=sup_id,
+            org_id=org_id,
+            entity_name="Supplier",
+        )
 
-        # Check for duplicate supplier code (if changed)
+        # Validate unique supplier code (if changed)
         if supplier.supplier_code != input.supplier_code:
-            existing = (
-                db.query(Supplier)
-                .filter(
-                    and_(
-                        Supplier.organization_id == org_id,
-                        Supplier.supplier_code == input.supplier_code,
-                        Supplier.supplier_id != sup_id,
-                    )
-                )
-                .first()
+            validate_unique_code(
+                db=db,
+                model_class=Supplier,
+                org_id=org_id,
+                code_value=input.supplier_code,
+                code_field_name="supplier_code",
+                entity_name="Supplier",
+                exclude_id=sup_id,
             )
-            if existing:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Supplier code '{input.supplier_code}' already exists",
-                )
 
         # Update fields
         supplier.supplier_code = input.supplier_code
@@ -202,6 +197,31 @@ class SupplierService(ListResponseMixin):
         return supplier
 
     @staticmethod
+    def _check_no_outstanding_balance(db: Session, supplier: Supplier) -> None:
+        """Pre-check for deactivation: ensure no outstanding balance."""
+        outstanding_statuses = [
+            SupplierInvoiceStatus.POSTED,
+            SupplierInvoiceStatus.PARTIALLY_PAID,
+        ]
+
+        outstanding_balance = (
+            db.query(func.coalesce(func.sum(SupplierInvoice.balance_due), Decimal("0")))
+            .filter(
+                and_(
+                    SupplierInvoice.supplier_id == supplier.supplier_id,
+                    SupplierInvoice.status.in_(outstanding_statuses),
+                )
+            )
+            .scalar()
+        )
+
+        if outstanding_balance > Decimal("0"):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot deactivate supplier with outstanding balance of {outstanding_balance}",
+            )
+
+    @staticmethod
     def deactivate_supplier(
         db: Session,
         organization_id: UUID,
@@ -222,41 +242,15 @@ class SupplierService(ListResponseMixin):
             HTTPException(404): If supplier not found
             HTTPException(400): If supplier has outstanding balance
         """
-        org_id = coerce_uuid(organization_id)
-        sup_id = coerce_uuid(supplier_id)
-
-        supplier = db.get(Supplier, sup_id)
-        if not supplier or supplier.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Supplier not found")
-
-        # Check for outstanding invoices before deactivation
-        outstanding_statuses = [
-            SupplierInvoiceStatus.POSTED,
-            SupplierInvoiceStatus.PARTIALLY_PAID,
-        ]
-
-        outstanding_balance = (
-            db.query(func.coalesce(func.sum(SupplierInvoice.balance_due), Decimal("0")))
-            .filter(
-                and_(
-                    SupplierInvoice.supplier_id == sup_id,
-                    SupplierInvoice.status.in_(outstanding_statuses),
-                )
-            )
-            .scalar()
+        return toggle_entity_status(
+            db=db,
+            model_class=Supplier,
+            entity_id=supplier_id,
+            org_id=organization_id,
+            is_active=False,
+            entity_name="Supplier",
+            pre_check=SupplierService._check_no_outstanding_balance,
         )
-
-        if outstanding_balance > Decimal("0"):
-            raise HTTPException(
-                status_code=400,
-                detail=f"Cannot deactivate supplier with outstanding balance of {outstanding_balance}",
-            )
-
-        supplier.is_active = False
-        db.commit()
-        db.refresh(supplier)
-
-        return supplier
 
     @staticmethod
     def activate_supplier(
@@ -278,18 +272,14 @@ class SupplierService(ListResponseMixin):
         Raises:
             HTTPException(404): If supplier not found
         """
-        org_id = coerce_uuid(organization_id)
-        sup_id = coerce_uuid(supplier_id)
-
-        supplier = db.get(Supplier, sup_id)
-        if not supplier or supplier.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Supplier not found")
-
-        supplier.is_active = True
-        db.commit()
-        db.refresh(supplier)
-
-        return supplier
+        return toggle_entity_status(
+            db=db,
+            model_class=Supplier,
+            entity_id=supplier_id,
+            org_id=organization_id,
+            is_active=True,
+            entity_name="Supplier",
+        )
 
     @staticmethod
     def get(
@@ -310,11 +300,13 @@ class SupplierService(ListResponseMixin):
         Raises:
             HTTPException(404): If not found
         """
-        org_id = coerce_uuid(organization_id)
-        supplier = db.get(Supplier, coerce_uuid(supplier_id))
-        if not supplier or supplier.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Supplier not found")
-        return supplier
+        return get_org_scoped_entity(
+            db=db,
+            model_class=Supplier,
+            entity_id=supplier_id,
+            org_id=organization_id,
+            entity_name="Supplier",
+        )
 
     @staticmethod
     def get_by_code(
@@ -388,14 +380,16 @@ class SupplierService(ListResponseMixin):
         if is_related_party is not None:
             query = query.filter(Supplier.is_related_party == is_related_party)
 
-        if search:
-            search_pattern = f"%{search}%"
-            query = query.filter(
-                (Supplier.supplier_code.ilike(search_pattern))
-                | (Supplier.legal_name.ilike(search_pattern))
-                | (Supplier.trading_name.ilike(search_pattern))
-                | (Supplier.tax_identification_number.ilike(search_pattern))
-            )
+        query = apply_search_filter(
+            query,
+            search,
+            [
+                Supplier.supplier_code,
+                Supplier.legal_name,
+                Supplier.trading_name,
+                Supplier.tax_identification_number,
+            ],
+        )
 
         query = query.order_by(Supplier.legal_name)
         return query.limit(limit).offset(offset).all()
@@ -417,12 +411,15 @@ class SupplierService(ListResponseMixin):
         Returns:
             Dictionary with supplier summary data
         """
-        org_id = coerce_uuid(organization_id)
         sup_id = coerce_uuid(supplier_id)
 
-        supplier = db.get(Supplier, sup_id)
-        if not supplier or supplier.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Supplier not found")
+        supplier = get_org_scoped_entity(
+            db=db,
+            model_class=Supplier,
+            entity_id=supplier_id,
+            org_id=organization_id,
+            entity_name="Supplier",
+        )
 
         # Get outstanding invoices
         outstanding_statuses = [
