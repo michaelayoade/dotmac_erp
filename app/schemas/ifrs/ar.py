@@ -20,13 +20,15 @@ class CustomerBase(BaseModel):
     """Base customer schema."""
 
     customer_code: str = Field(max_length=30)
-    customer_name: str = Field(max_length=200)
-    tax_id: Optional[str] = Field(default=None, max_length=50)
-    payment_terms_days: int = 30
+    customer_type: str = Field(default="corporate", max_length=20)
+    legal_name: str = Field(max_length=255)
+    trading_name: Optional[str] = Field(default=None, max_length=255)
+    tax_identification_number: Optional[str] = Field(default=None, max_length=50)
+    credit_terms_days: int = 30
     credit_limit: Optional[Decimal] = None
-    currency_code: str = Field(max_length=3)
+    currency_code: str = Field(default="NGN", max_length=3)
     default_revenue_account_id: Optional[UUID] = None
-    default_receivable_account_id: Optional[UUID] = None
+    ar_control_account_id: Optional[UUID] = None
     is_active: bool = True
 
 
@@ -39,8 +41,9 @@ class CustomerCreate(CustomerBase):
 class CustomerUpdate(BaseModel):
     """Update customer request."""
 
-    customer_name: Optional[str] = Field(default=None, max_length=200)
-    payment_terms_days: Optional[int] = None
+    legal_name: Optional[str] = Field(default=None, max_length=255)
+    trading_name: Optional[str] = Field(default=None, max_length=255)
+    credit_terms_days: Optional[int] = None
     credit_limit: Optional[Decimal] = None
     is_active: Optional[bool] = None
 
@@ -113,11 +116,11 @@ class ARInvoiceRead(BaseModel):
     due_date: date
     currency_code: str
     subtotal: Decimal
-    tax_total: Decimal
+    tax_amount: Decimal
     total_amount: Decimal
-    amount_received: Decimal
-    amount_due: Decimal
+    amount_paid: Decimal
     status: str
+    posting_status: str
     created_at: datetime
 
 
@@ -149,13 +152,14 @@ class ARReceiptRead(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
-    receipt_id: UUID
+    payment_id: UUID
     organization_id: UUID
     customer_id: UUID
-    receipt_number: str
-    receipt_date: date
+    payment_number: str
+    payment_date: date
     payment_method: str
-    total_amount: Decimal
+    gross_amount: Decimal
+    amount: Decimal
     currency_code: str
     status: str
     created_at: datetime

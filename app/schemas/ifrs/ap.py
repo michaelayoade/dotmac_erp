@@ -20,12 +20,14 @@ class SupplierBase(BaseModel):
     """Base supplier schema."""
 
     supplier_code: str = Field(max_length=30)
-    supplier_name: str = Field(max_length=200)
-    tax_id: Optional[str] = Field(default=None, max_length=50)
+    supplier_type: str = Field(default="vendor", max_length=20)
+    legal_name: str = Field(max_length=255)
+    trading_name: Optional[str] = Field(default=None, max_length=255)
+    tax_identification_number: Optional[str] = Field(default=None, max_length=50)
     payment_terms_days: int = 30
-    currency_code: str = Field(max_length=3)
+    currency_code: str = Field(default="NGN", max_length=3)
     default_expense_account_id: Optional[UUID] = None
-    default_payable_account_id: Optional[UUID] = None
+    ap_control_account_id: Optional[UUID] = None
     is_active: bool = True
 
 
@@ -38,7 +40,8 @@ class SupplierCreate(SupplierBase):
 class SupplierUpdate(BaseModel):
     """Update supplier request."""
 
-    supplier_name: Optional[str] = Field(default=None, max_length=200)
+    legal_name: Optional[str] = Field(default=None, max_length=255)
+    trading_name: Optional[str] = Field(default=None, max_length=255)
     payment_terms_days: Optional[int] = None
     is_active: Optional[bool] = None
 
@@ -74,8 +77,10 @@ class APInvoiceCreate(BaseModel):
     """Create AP invoice request."""
 
     supplier_id: UUID
+    invoice_type: str = Field(default="standard", max_length=20)
     invoice_number: str = Field(max_length=50)
     invoice_date: date
+    received_date: Optional[date] = None
     due_date: date
     currency_code: str = Field(max_length=3)
     description: Optional[str] = None
@@ -106,17 +111,19 @@ class APInvoiceRead(BaseModel):
     invoice_id: UUID
     organization_id: UUID
     supplier_id: UUID
-    supplier_name: Optional[str] = None
     invoice_number: str
+    supplier_invoice_number: Optional[str] = None
+    invoice_type: str
     invoice_date: date
+    received_date: date
     due_date: date
     currency_code: str
     subtotal: Decimal
-    tax_total: Decimal
+    tax_amount: Decimal
     total_amount: Decimal
     amount_paid: Decimal
-    amount_due: Decimal
     status: str
+    posting_status: str
     created_at: datetime
 
 
@@ -154,7 +161,7 @@ class APPaymentRead(BaseModel):
     payment_number: str
     payment_date: date
     payment_method: str
-    total_amount: Decimal
+    amount: Decimal
     currency_code: str
     status: str
     created_at: datetime

@@ -25,6 +25,7 @@ from app.schemas.ifrs.ar import (
     CreditNoteRead,
 )
 from app.schemas.ifrs.common import ListResponse, PostingResultSchema
+from app.models.ifrs.ar.customer import CustomerType
 from app.services.ifrs.ar import (
     customer_service,
     ar_invoice_service,
@@ -60,15 +61,20 @@ def create_customer(
     db: Session = Depends(get_db),
 ):
     """Create a new customer."""
+    # Convert string customer_type to enum
+    customer_type = CustomerType(payload.customer_type.upper())
+
     input_data = CustomerInput(
         customer_code=payload.customer_code,
-        customer_name=payload.customer_name,
-        tax_id=payload.tax_id,
-        payment_terms_days=payload.payment_terms_days,
+        customer_type=customer_type,
+        legal_name=payload.legal_name,
+        trading_name=payload.trading_name,
+        tax_identification_number=payload.tax_identification_number,
+        credit_terms_days=payload.credit_terms_days,
         credit_limit=payload.credit_limit,
         currency_code=payload.currency_code,
         default_revenue_account_id=payload.default_revenue_account_id,
-        default_receivable_account_id=payload.default_receivable_account_id,
+        ar_control_account_id=payload.ar_control_account_id,
     )
     return customer_service.create_customer(db, organization_id, input_data)
 
@@ -114,16 +120,39 @@ def update_customer(
     organization_id: UUID = Query(...),
     db: Session = Depends(get_db),
 ):
-    """Update a customer."""
-    return customer_service.update_customer(
+    """Update a customer (partial update)."""
+    # Fetch existing customer
+    existing = customer_service.get(db, organization_id, str(customer_id))
+
+    # Build input with existing values, overriding with provided values
+    input_data = CustomerInput(
+        customer_code=existing.customer_code,
+        customer_type=existing.customer_type,
+        legal_name=payload.legal_name if payload.legal_name is not None else existing.legal_name,
+        trading_name=payload.trading_name if payload.trading_name is not None else existing.trading_name,
+        tax_identification_number=existing.tax_identification_number,
+        credit_terms_days=payload.credit_terms_days if payload.credit_terms_days is not None else existing.credit_terms_days,
+        credit_limit=payload.credit_limit if payload.credit_limit is not None else existing.credit_limit,
+        currency_code=existing.currency_code,
+        default_revenue_account_id=existing.default_revenue_account_id,
+        ar_control_account_id=existing.ar_control_account_id,
+    )
+
+    result = customer_service.update_customer(
         db=db,
         organization_id=organization_id,
         customer_id=customer_id,
-        customer_name=payload.customer_name,
-        payment_terms_days=payload.payment_terms_days,
-        credit_limit=payload.credit_limit,
-        is_active=payload.is_active,
+        input=input_data,
     )
+
+    # Handle is_active separately if provided
+    if payload.is_active is not None and payload.is_active != result.is_active:
+        if payload.is_active:
+            result = customer_service.activate_customer(db, organization_id, customer_id)
+        else:
+            result = customer_service.deactivate_customer(db, organization_id, customer_id)
+
+    return result
 
 
 # =============================================================================
@@ -183,8 +212,8 @@ def list_ar_invoices(
     organization_id: UUID = Query(...),
     customer_id: Optional[UUID] = None,
     status: Optional[str] = None,
-    start_date: Optional[date] = None,
-    end_date: Optional[date] = None,
+    from_date: Optional[date] = None,
+    to_date: Optional[date] = None,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
@@ -195,8 +224,8 @@ def list_ar_invoices(
         organization_id=str(organization_id),
         customer_id=str(customer_id) if customer_id else None,
         status=status,
-        start_date=start_date,
-        end_date=end_date,
+        from_date=from_date,
+        to_date=to_date,
         limit=limit,
         offset=offset,
     )
@@ -286,8 +315,8 @@ def list_ar_receipts(
     organization_id: UUID = Query(...),
     customer_id: Optional[UUID] = None,
     status: Optional[str] = None,
-    start_date: Optional[date] = None,
-    end_date: Optional[date] = None,
+    from_date: Optional[date] = None,
+    to_date: Optional[date] = None,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
@@ -298,8 +327,8 @@ def list_ar_receipts(
         organization_id=str(organization_id),
         customer_id=str(customer_id) if customer_id else None,
         status=status,
-        start_date=start_date,
-        end_date=end_date,
+        from_date=from_date,
+        to_date=to_date,
         limit=limit,
         offset=offset,
     )

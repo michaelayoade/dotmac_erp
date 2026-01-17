@@ -25,6 +25,7 @@ from app.schemas.ifrs.gl import (
     TrialBalanceRead,
 )
 from app.schemas.ifrs.common import ListResponse, PostingResultSchema
+from app.models.ifrs.gl.account import AccountType, NormalBalance
 from app.services.ifrs.gl import (
     chart_of_accounts_service,
     fiscal_period_service,
@@ -59,12 +60,16 @@ def create_account(
     db: Session = Depends(get_db),
 ):
     """Create a new GL account."""
+    # Convert string types to enums
+    account_type = AccountType(payload.account_type.upper())
+    normal_balance = NormalBalance(payload.normal_balance.upper())
+
     input_data = AccountInput(
         account_code=payload.account_code,
         account_name=payload.account_name,
         category_id=category_id,
-        account_type=payload.account_type,
-        normal_balance=payload.normal_balance,
+        account_type=account_type,
+        normal_balance=normal_balance,
         description=payload.description,
         is_reconciliation_required=payload.is_reconcilable,
     )
@@ -85,18 +90,23 @@ def list_accounts(
     organization_id: UUID = Query(...),
     account_type: Optional[str] = None,
     is_active: Optional[bool] = None,
-    parent_account_id: Optional[UUID] = None,
+    category_id: Optional[UUID] = None,
+    search: Optional[str] = None,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
 ):
     """List GL accounts with filters."""
+    # Convert account_type string to enum if provided
+    account_type_enum = AccountType(account_type.upper()) if account_type else None
+
     accounts = chart_of_accounts_service.list(
         db=db,
         organization_id=str(organization_id),
-        account_type=account_type,
+        account_type=account_type_enum,
         is_active=is_active,
-        parent_account_id=str(parent_account_id) if parent_account_id else None,
+        category_id=str(category_id) if category_id else None,
+        search=search,
         limit=limit,
         offset=offset,
     )

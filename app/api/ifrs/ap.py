@@ -23,6 +23,8 @@ from app.schemas.ifrs.ap import (
     APAgingReportRead,
 )
 from app.schemas.ifrs.common import ListResponse, PostingResultSchema
+from app.models.ifrs.ap.supplier import SupplierType
+from app.models.ifrs.ap.supplier_invoice import SupplierInvoiceType
 from app.services.ifrs.ap import (
     supplier_service,
     supplier_invoice_service,
@@ -58,14 +60,19 @@ def create_supplier(
     db: Session = Depends(get_db),
 ):
     """Create a new supplier."""
+    # Convert string supplier_type to enum
+    supplier_type = SupplierType(payload.supplier_type.upper())
+
     input_data = SupplierInput(
         supplier_code=payload.supplier_code,
-        supplier_name=payload.supplier_name,
-        tax_id=payload.tax_id,
+        supplier_type=supplier_type,
+        legal_name=payload.legal_name,
+        trading_name=payload.trading_name,
+        tax_identification_number=payload.tax_identification_number,
         payment_terms_days=payload.payment_terms_days,
         currency_code=payload.currency_code,
         default_expense_account_id=payload.default_expense_account_id,
-        default_payable_account_id=payload.default_payable_account_id,
+        ap_control_account_id=payload.ap_control_account_id,
     )
     return supplier_service.create_supplier(db, organization_id, input_data)
 
@@ -111,15 +118,38 @@ def update_supplier(
     organization_id: UUID = Query(...),
     db: Session = Depends(get_db),
 ):
-    """Update a supplier."""
-    return supplier_service.update_supplier(
+    """Update a supplier (partial update)."""
+    # Fetch existing supplier
+    existing = supplier_service.get(db, organization_id, str(supplier_id))
+
+    # Build input with existing values, overriding with provided values
+    input_data = SupplierInput(
+        supplier_code=existing.supplier_code,
+        supplier_type=existing.supplier_type,
+        legal_name=payload.legal_name if payload.legal_name is not None else existing.legal_name,
+        trading_name=payload.trading_name if payload.trading_name is not None else existing.trading_name,
+        tax_identification_number=existing.tax_identification_number,
+        payment_terms_days=payload.payment_terms_days if payload.payment_terms_days is not None else existing.payment_terms_days,
+        currency_code=existing.currency_code,
+        default_expense_account_id=existing.default_expense_account_id,
+        ap_control_account_id=existing.ap_control_account_id,
+    )
+
+    result = supplier_service.update_supplier(
         db=db,
         organization_id=organization_id,
         supplier_id=supplier_id,
-        supplier_name=payload.supplier_name,
-        payment_terms_days=payload.payment_terms_days,
-        is_active=payload.is_active,
+        input=input_data,
     )
+
+    # Handle is_active separately if provided
+    if payload.is_active is not None and payload.is_active != result.is_active:
+        if payload.is_active:
+            result = supplier_service.activate_supplier(db, organization_id, supplier_id)
+        else:
+            result = supplier_service.deactivate_supplier(db, organization_id, supplier_id)
+
+    return result
 
 
 # =============================================================================
@@ -147,13 +177,17 @@ def create_ap_invoice(
         for line in payload.lines
     ]
 
+    # Convert invoice_type string to enum
+    invoice_type = SupplierInvoiceType(payload.invoice_type.upper()) if payload.invoice_type else SupplierInvoiceType.STANDARD
+
     input_data = SupplierInvoiceInput(
         supplier_id=payload.supplier_id,
-        invoice_number=payload.invoice_number,
+        invoice_type=invoice_type,
+        supplier_invoice_number=payload.invoice_number,
         invoice_date=payload.invoice_date,
+        received_date=payload.received_date or payload.invoice_date,
         due_date=payload.due_date,
         currency_code=payload.currency_code,
-        description=payload.description,
         lines=lines,
     )
 
@@ -179,8 +213,8 @@ def list_ap_invoices(
     organization_id: UUID = Query(...),
     supplier_id: Optional[UUID] = None,
     status: Optional[str] = None,
-    start_date: Optional[date] = None,
-    end_date: Optional[date] = None,
+    from_date: Optional[date] = None,
+    to_date: Optional[date] = None,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
@@ -191,8 +225,8 @@ def list_ap_invoices(
         organization_id=str(organization_id),
         supplier_id=str(supplier_id) if supplier_id else None,
         status=status,
-        start_date=start_date,
-        end_date=end_date,
+        from_date=from_date,
+        to_date=to_date,
         limit=limit,
         offset=offset,
     )
@@ -201,6 +235,22 @@ def list_ap_invoices(
         count=len(invoices),
         limit=limit,
         offset=offset,
+    )
+
+
+@router.post("/invoices/{invoice_id}/submit", response_model=APInvoiceRead)
+def submit_ap_invoice(
+    invoice_id: UUID,
+    organization_id: UUID = Query(...),
+    submitted_by_user_id: UUID = Query(...),
+    db: Session = Depends(get_db),
+):
+    """Submit an AP invoice for approval."""
+    return supplier_invoice_service.submit_invoice(
+        db=db,
+        organization_id=organization_id,
+        invoice_id=invoice_id,
+        submitted_by_user_id=submitted_by_user_id,
     )
 
 
@@ -298,8 +348,8 @@ def list_ap_payments(
     organization_id: UUID = Query(...),
     supplier_id: Optional[UUID] = None,
     status: Optional[str] = None,
-    start_date: Optional[date] = None,
-    end_date: Optional[date] = None,
+    from_date: Optional[date] = None,
+    to_date: Optional[date] = None,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
@@ -310,8 +360,8 @@ def list_ap_payments(
         organization_id=str(organization_id),
         supplier_id=str(supplier_id) if supplier_id else None,
         status=status,
-        start_date=start_date,
-        end_date=end_date,
+        from_date=from_date,
+        to_date=to_date,
         limit=limit,
         offset=offset,
     )
@@ -422,7 +472,7 @@ def create_purchase_order(
         POLineInput(
             item_id=line.item_id,
             description=line.description,
-            quantity=line.quantity,
+            quantity_ordered=line.quantity,
             unit_price=line.unit_price,
             expense_account_id=line.expense_account_id,
         )
