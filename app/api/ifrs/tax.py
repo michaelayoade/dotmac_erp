@@ -581,23 +581,30 @@ def create_tax_transaction(
 def list_tax_transactions(
     organization_id: UUID = Query(...),
     tax_code_id: Optional[UUID] = None,
-    tax_type: Optional[str] = None,
+    fiscal_period_id: Optional[UUID] = None,
+    transaction_type: Optional[str] = None,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
-    is_input_tax: Optional[bool] = None,
+    is_included_in_return: Optional[bool] = None,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
 ):
     """List tax transactions with filters."""
+    from app.models.ifrs.tax.tax_transaction import TaxTransactionType
+
+    # Convert transaction_type string to enum if provided
+    transaction_type_enum = TaxTransactionType(transaction_type.upper()) if transaction_type else None
+
     transactions = tax_transaction_service.list(
         db=db,
         organization_id=str(organization_id),
         tax_code_id=str(tax_code_id) if tax_code_id else None,
-        tax_type=tax_type,
+        fiscal_period_id=str(fiscal_period_id) if fiscal_period_id else None,
+        transaction_type=transaction_type_enum,
         start_date=start_date,
         end_date=end_date,
-        is_input_tax=is_input_tax,
+        is_included_in_return=is_included_in_return,
         limit=limit,
         offset=offset,
     )
@@ -867,7 +874,7 @@ def get_tax_period(period_id: UUID, db: Session = Depends(get_db)):
 def list_tax_periods(
     organization_id: UUID = Query(...),
     jurisdiction_id: Optional[UUID] = None,
-    tax_type: Optional[str] = None,
+    frequency: Optional[str] = None,
     status: Optional[str] = None,
     year: Optional[int] = None,
     limit: int = Query(default=50, ge=1, le=200),
@@ -875,12 +882,18 @@ def list_tax_periods(
     db: Session = Depends(get_db),
 ):
     """List tax periods with filters."""
+    from app.models.ifrs.tax.tax_period import TaxPeriodStatus, TaxPeriodFrequency
+
+    # Convert string parameters to enums if provided
+    status_enum = TaxPeriodStatus(status.upper()) if status else None
+    frequency_enum = TaxPeriodFrequency(frequency.upper()) if frequency else None
+
     periods = tax_period_service.list(
         db=db,
         organization_id=str(organization_id),
         jurisdiction_id=str(jurisdiction_id) if jurisdiction_id else None,
-        tax_type=tax_type,
-        status=status,
+        frequency=frequency_enum,
+        status=status_enum,
         year=year,
         limit=limit,
         offset=offset,
@@ -988,18 +1001,28 @@ def get_tax_return(return_id: UUID, db: Session = Depends(get_db)):
 @router.get("/returns", response_model=ListResponse[TaxReturnRead])
 def list_tax_returns(
     organization_id: UUID = Query(...),
-    period_id: Optional[UUID] = None,
+    tax_period_id: Optional[UUID] = None,
+    jurisdiction_id: Optional[UUID] = None,
+    return_type: Optional[str] = None,
     status: Optional[str] = None,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
 ):
     """List tax returns with filters."""
+    from app.models.ifrs.tax.tax_return import TaxReturnStatus, TaxReturnType
+
+    # Convert string parameters to enums if provided
+    status_enum = TaxReturnStatus(status.upper()) if status else None
+    return_type_enum = TaxReturnType(return_type.upper()) if return_type else None
+
     returns = tax_return_service.list(
         db=db,
         organization_id=str(organization_id),
-        period_id=str(period_id) if period_id else None,
-        status=status,
+        tax_period_id=str(tax_period_id) if tax_period_id else None,
+        jurisdiction_id=str(jurisdiction_id) if jurisdiction_id else None,
+        return_type=return_type_enum,
+        status=status_enum,
         limit=limit,
         offset=offset,
     )

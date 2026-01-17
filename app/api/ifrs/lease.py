@@ -177,20 +177,28 @@ def get_lease_contract(
 @router.get("/contracts", response_model=ListResponse[LeaseContractRead])
 def list_lease_contracts(
     organization_id: UUID = Query(...),
-    lease_type: Optional[str] = None,
+    classification: Optional[str] = None,
     status: Optional[str] = None,
-    lessor_name: Optional[str] = None,
+    lessor_supplier_id: Optional[UUID] = None,
+    is_lessee: Optional[bool] = None,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
 ):
     """List lease contracts with filters."""
+    from app.models.ifrs.lease.lease_contract import LeaseClassification, LeaseStatus
+
+    # Convert string parameters to enums if provided
+    classification_enum = LeaseClassification(classification.upper()) if classification else None
+    status_enum = LeaseStatus(status.upper()) if status else None
+
     leases = lease_contract_service.list(
         db=db,
         organization_id=str(organization_id),
-        lease_type=lease_type,
-        status=status,
-        lessor_name=lessor_name,
+        classification=classification_enum,
+        status=status_enum,
+        lessor_supplier_id=str(lessor_supplier_id) if lessor_supplier_id else None,
+        is_lessee=is_lessee,
         limit=limit,
         offset=offset,
     )

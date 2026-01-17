@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
 from app.schemas.ifrs.common import ListResponse, PostingResultSchema
+from app.models.ifrs.fa.asset import AssetStatus
 from app.services.ifrs.fa import (
     asset_service,
     depreciation_service,
@@ -165,11 +166,14 @@ def list_assets(
     db: Session = Depends(get_db),
 ):
     """List fixed assets with filters."""
+    # Convert status string to enum if provided
+    status_enum = AssetStatus(status.upper()) if status else None
+
     assets = asset_service.list(
         db=db,
         organization_id=str(organization_id),
-        asset_category_id=str(asset_category_id) if asset_category_id else None,
-        status=status,
+        category_id=str(asset_category_id) if asset_category_id else None,
+        status=status_enum,
         location_id=str(location_id) if location_id else None,
         limit=limit,
         offset=offset,
