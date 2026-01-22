@@ -14,12 +14,18 @@ from app.api.persons import router as people_router
 from app.api.rbac import router as rbac_router
 from app.api.scheduler import router as scheduler_router
 from app.api.settings import router as settings_router
+from app.api.me import router as me_router
+from app.api.workflow_tasks import router as workflow_tasks_router
 from app.web_home import router as web_home_router
-from app.web.ifrs import router as ifrs_web_router
+from app.web.finance import router as finance_web_router
+from app.web.finance import expense_router as expense_web_router
+from app.web.finance import settings_router as settings_web_router
+from app.web.finance import automation_router as automation_web_router
 from app.web.auth import router as auth_web_router
 from app.web.admin import router as admin_web_router
 from app.web.profile import router as profile_web_router
-from app.api.ifrs import (
+from app.web.people import router as people_web_router
+from app.api.finance import (
     gl_router,
     ap_router,
     ar_router,
@@ -35,6 +41,8 @@ from app.api.ifrs import (
     opening_balance_router,
     search_router,
 )
+from app.api.people import router as people_hr_router
+from app.api.expense import router as expense_router
 from app.db import SessionLocal
 from app.services import audit as audit_service
 from app.api.deps import require_role, require_user_auth, require_tenant_auth
@@ -50,12 +58,21 @@ from app.observability import ObservabilityMiddleware
 from app.telemetry import setup_otel
 from app.errors import register_error_handlers
 from app.web.csrf import csrf_middleware
+from app.startup import log_startup_info, validate_startup
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Log startup info for debugging
+    log_startup_info()
+
     db = SessionLocal()
     try:
+        # Validate required configuration before accepting requests
+        # This will exit(1) if critical config is missing
+        validate_startup(db, exit_on_failure=True)
+
+        # Seed default settings
         seed_auth_settings(db)
         seed_audit_settings(db)
         seed_scheduler_settings(db)
@@ -64,7 +81,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="DotMac Books API", lifespan=lifespan)
+app = FastAPI(title="DotMac ERP API", lifespan=lifespan)
 
 _AUDIT_SETTINGS_CACHE: dict | None = None
 _AUDIT_SETTINGS_CACHE_AT: float | None = None
@@ -199,17 +216,31 @@ def _include_api_router(router, dependencies=None):
 _include_api_router(auth_router, dependencies=[Depends(require_role("admin"))])
 _include_api_router(auth_flow_router)
 _include_api_router(rbac_router, dependencies=[Depends(require_tenant_auth)])
-_include_api_router(people_router, dependencies=[Depends(require_tenant_auth)])
+_include_api_router(me_router)
+_include_api_router(workflow_tasks_router, dependencies=[Depends(require_tenant_auth)])
+app.include_router(
+    people_router,
+    prefix="/api/v1",
+    dependencies=[Depends(require_tenant_auth)],
+)
 _include_api_router(audit_router)
-_include_api_router(settings_router, dependencies=[Depends(require_tenant_auth)])
+app.include_router(
+    settings_router,
+    prefix="/api/v1",
+    dependencies=[Depends(require_tenant_auth)],
+)
 _include_api_router(scheduler_router, dependencies=[Depends(require_tenant_auth)])
 app.include_router(web_home_router)
 app.include_router(auth_web_router)
 app.include_router(admin_web_router)
 app.include_router(profile_web_router)
-app.include_router(ifrs_web_router)
+app.include_router(finance_web_router, prefix="/finance")
+app.include_router(expense_web_router, prefix="/expense")
+app.include_router(settings_web_router)  # Has its own /settings prefix
+app.include_router(automation_web_router)  # Has its own /automation prefix
+app.include_router(people_web_router)
 
-# IFRS Accounting Routers (authenticated with tenant context)
+# Finance Accounting Routers (authenticated with tenant context)
 _include_api_router(gl_router, dependencies=[Depends(require_tenant_auth)])
 _include_api_router(ap_router, dependencies=[Depends(require_tenant_auth)])
 _include_api_router(ar_router, dependencies=[Depends(require_tenant_auth)])
@@ -224,6 +255,12 @@ _include_api_router(banking_router, dependencies=[Depends(require_tenant_auth)])
 _include_api_router(import_export_router, dependencies=[Depends(require_tenant_auth)])
 _include_api_router(opening_balance_router, dependencies=[Depends(require_tenant_auth)])
 _include_api_router(search_router, dependencies=[Depends(require_tenant_auth)])
+
+# People/HR Routers
+_include_api_router(people_hr_router, dependencies=[Depends(require_tenant_auth)])
+
+# Expense Management (independent module)
+_include_api_router(expense_router, dependencies=[Depends(require_tenant_auth)])
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
