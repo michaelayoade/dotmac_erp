@@ -37,7 +37,7 @@
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
             </svg>
           </a>
-          <a href="/gl/trial-balance" class="btn btn-secondary btn-lg">
+          <a href="/finance/gl/trial-balance" class="btn btn-secondary btn-lg">
             {{ content.hero.cta_secondary }}
           </a>
         </div>
@@ -48,13 +48,13 @@
             <svg class="h-5 w-5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
               <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
             </svg>
-            <span>IFRS Compliant</span>
+            <span>Audit-Ready</span>
           </div>
           <div class="flex items-center gap-2">
             <svg class="h-5 w-5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
               <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
             </svg>
-            <span>Audit Ready</span>
+            <span>HR & Payroll</span>
           </div>
           <div class="flex items-center gap-2">
             <svg class="h-5 w-5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
@@ -168,26 +168,25 @@
     </div>
   </section>
 
-  <!-- Stats Section with Animated Counters -->
+  <!-- Benefits Section -->
   <section class="relative border-y border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-800/30 backdrop-blur-sm">
     <div class="mx-auto max-w-6xl px-6 py-16">
-      <div class="grid grid-cols-2 lg:grid-cols-4 gap-8 lg:gap-12">
-        <div class="text-center">
-          <div class="text-4xl lg:text-5xl font-bold text-slate-900 dark:text-white font-display" data-counter="10000">0</div>
-          <div class="mt-2 text-sm text-slate-500 dark:text-slate-400">Transactions Daily</div>
+      <div class="text-center mb-12">
+        <p class="label-caps text-primary-600 dark:text-primary-400 mb-3">Dotmac ERP</p>
+        <h2 class="text-3xl lg:text-4xl font-bold text-slate-900 dark:text-white font-display">{{ content.benefits.title }}</h2>
+        <p class="mt-4 text-slate-600 dark:text-slate-400 max-w-2xl mx-auto text-lg">
+          {{ content.benefits.subtitle }}
+        </p>
+      </div>
+      <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+        {% for item in content.benefits["items"] %}
+        <div class="stagger-in rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-6 shadow-sm">
+          <h3 class="text-lg font-semibold text-slate-900 dark:text-white">{{ item.title }}</h3>
+          <p class="mt-3 text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
+            {{ item.description }}
+          </p>
         </div>
-        <div class="text-center">
-          <div class="text-4xl lg:text-5xl font-bold text-slate-900 dark:text-white font-display" data-counter="99.9" data-suffix="%">0</div>
-          <div class="mt-2 text-sm text-slate-500 dark:text-slate-400">Uptime SLA</div>
-        </div>
-        <div class="text-center">
-          <div class="text-4xl lg:text-5xl font-bold text-slate-900 dark:text-white font-display" data-counter="50" data-suffix="+">0</div>
-          <div class="mt-2 text-sm text-slate-500 dark:text-slate-400">Report Templates</div>
-        </div>
-        <div class="text-center">
-          <div class="text-4xl lg:text-5xl font-bold text-primary-600 dark:text-primary-400 font-display" data-counter="100" data-suffix="%">0</div>
-          <div class="mt-2 text-sm text-slate-500 dark:text-slate-400">IFRS Compliant</div>
-        </div>
+        {% endfor %}
       </div>
     </div>
   </section>
@@ -195,77 +194,27 @@
   <!-- Core Modules Section -->
   <section class="mx-auto max-w-6xl px-6 py-24">
     <div class="text-center mb-16">
-      <p class="label-caps text-primary-600 dark:text-primary-400 mb-3">Complete Solution</p>
-      <h2 class="text-3xl lg:text-4xl font-bold text-slate-900 dark:text-white font-display">{{ content.modules.title }}</h2>
+      <p class="label-caps text-primary-600 dark:text-primary-400 mb-3">ERP Modules</p>
+      <h2 class="text-3xl lg:text-4xl font-bold text-slate-900 dark:text-white font-display">{{ content.core_modules.title }}</h2>
       <p class="mt-4 text-slate-600 dark:text-slate-400 max-w-2xl mx-auto text-lg">
-        {{ content.modules.subtitle }}
+        {{ content.core_modules.subtitle }}
       </p>
     </div>
 
     <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-      <!-- General Ledger - Featured Card -->
-      <div class="stagger-in lg:col-span-2 relative group">
-        <div class="absolute inset-0 bg-gradient-to-r from-primary-500 to-teal-500 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity blur-xl"></div>
-        <div class="relative rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-8 shadow-lg group-hover:border-primary-300 dark:group-hover:border-primary-700 transition-colors">
-          <div class="flex flex-col md:flex-row md:items-start gap-6">
-            <div class="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-primary-500 to-teal-500 flex-shrink-0 shadow-lg shadow-primary-500/25">
-              <svg class="h-8 w-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
-              </svg>
-            </div>
-            <div class="flex-1">
-              <h3 class="text-2xl font-semibold text-slate-900 dark:text-white font-display">{{ content.modules.featured.title }}</h3>
-              <p class="mt-3 text-slate-600 dark:text-slate-400 leading-relaxed">
-                {{ content.modules.featured.description }}
-              </p>
-              <div class="mt-6 flex flex-wrap gap-2">
-                {% for chip in content.modules.featured.chips %}
-                <span class="text-xs font-medium px-3 py-1.5 rounded-full bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 border border-primary-100 dark:border-primary-800">{{ chip }}</span>
-                {% endfor %}
-              </div>
-              <a href="{{ content.modules.featured.cta_href }}" class="mt-6 inline-flex items-center text-sm font-semibold text-primary-600 hover:text-primary-700 dark:text-primary-400 group/link">
-                {{ content.modules.featured.cta_label }}
-                <svg class="ml-2 h-4 w-4 transition-transform group-hover/link:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
-                </svg>
-              </a>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {% for card in content.modules.cards %}
+      {% for card in content.core_modules.cards %}
       <div class="stagger-in group">
-        <div class="h-full rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-800 card-hover">
-          <div class="flex h-12 w-12 items-center justify-center rounded-xl mb-4 transition-all group-hover:scale-110 group-hover:shadow-lg
-            {% if card.key == 'ar' %}bg-emerald-100 dark:bg-emerald-900/30 group-hover:shadow-emerald-500/20{% elif card.key == 'ap' %}bg-rose-100 dark:bg-rose-900/30 group-hover:shadow-rose-500/20{% elif card.key == 'fa' %}bg-purple-100 dark:bg-purple-900/30 group-hover:shadow-purple-500/20{% elif card.key == 'banking' %}bg-blue-100 dark:bg-blue-900/30 group-hover:shadow-blue-500/20{% else %}bg-amber-100 dark:bg-amber-900/30 group-hover:shadow-amber-500/20{% endif %}">
-            {% if card.key == "ar" %}
-            <svg class="h-6 w-6 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
+        <div class="h-full rounded-2xl border border-slate-200 bg-white p-8 dark:border-slate-700 dark:bg-slate-800 card-hover">
+          <div class="flex h-12 w-12 items-center justify-center rounded-xl mb-4 bg-primary-100 dark:bg-primary-900/30">
+            <svg class="h-6 w-6 text-primary-600 dark:text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7h18M3 12h18M3 17h18"/>
             </svg>
-            {% elif card.key == "ap" %}
-            <svg class="h-6 w-6 text-rose-600 dark:text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/>
-            </svg>
-            {% elif card.key == "fa" %}
-            <svg class="h-6 w-6 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
-            </svg>
-            {% elif card.key == "banking" %}
-            <svg class="h-6 w-6 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
-            </svg>
-            {% else %}
-            <svg class="h-6 w-6 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-            </svg>
-            {% endif %}
           </div>
-          <h3 class="text-lg font-semibold text-slate-900 dark:text-white font-display">{{ card.title }}</h3>
-          <p class="mt-2 text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
+          <h3 class="text-xl font-semibold text-slate-900 dark:text-white font-display">{{ card.title }}</h3>
+          <p class="mt-3 text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
             {{ card.description }}
           </p>
-          <a href="{{ card.cta_href }}" class="mt-4 inline-flex items-center text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400 group/link">
+          <a href="{{ card.cta_href }}" class="mt-5 inline-flex items-center text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400 group/link">
             {{ card.cta_label }}
             <svg class="ml-1.5 h-4 w-4 transition-transform group-hover/link:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
@@ -353,75 +302,6 @@
     </div>
   </section>
 
-  <!-- Reports Section -->
-  <section class="mx-auto max-w-6xl px-6 py-24">
-    <div class="text-center mb-16">
-      <p class="label-caps text-primary-600 dark:text-primary-400 mb-3">Financial Intelligence</p>
-      <h2 class="text-3xl lg:text-4xl font-bold text-slate-900 dark:text-white font-display">{{ content.reports.title }}</h2>
-      <p class="mt-4 text-slate-600 dark:text-slate-400 max-w-2xl mx-auto text-lg">
-        {{ content.reports.subtitle }}
-      </p>
-    </div>
-    <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-      {% for report in content.reports.cards %}
-      <div class="stagger-in group">
-        <div class="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-800 text-center card-hover relative overflow-hidden">
-          <div class="absolute inset-0 bg-gradient-to-br from-primary-500/5 to-teal-500/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-          <div class="relative">
-            <div class="text-3xl font-bold text-slate-900 dark:text-white font-display group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">{{ report.title }}</div>
-            <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">{{ report.subtitle }}</p>
-          </div>
-        </div>
-      </div>
-      {% endfor %}
-    </div>
-  </section>
-
-  <!-- Security Section -->
-  <section class="relative bg-slate-900 dark:bg-slate-950 py-24 overflow-hidden">
-    <!-- Animated gradient orbs -->
-    <div class="absolute inset-0 overflow-hidden">
-      <div class="absolute top-1/4 left-1/4 w-96 h-96 bg-primary-500/10 rounded-full blur-3xl animate-pulse"></div>
-      <div class="absolute bottom-1/4 right-1/4 w-96 h-96 bg-teal-500/10 rounded-full blur-3xl animate-pulse" style="animation-delay: 1s;"></div>
-    </div>
-
-    <div class="relative mx-auto max-w-6xl px-6">
-      <div class="text-center mb-16">
-        <p class="label-caps text-primary-400 mb-3">Enterprise Security</p>
-        <h2 class="text-3xl lg:text-4xl font-bold text-white font-display">{{ content.security.title }}</h2>
-        <p class="mt-4 text-slate-400 max-w-2xl mx-auto text-lg">
-          {{ content.security.subtitle }}
-        </p>
-      </div>
-      <div class="grid gap-8 md:grid-cols-3">
-        {% for card in content.security.cards %}
-        <div class="stagger-in group">
-          <div class="text-center p-8 rounded-2xl border border-slate-800 bg-slate-900/50 hover:bg-slate-800/50 hover:border-slate-700 transition-all">
-            <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-primary-500/20 to-teal-500/20 mb-6 group-hover:scale-110 transition-transform">
-              {% if card.key == "rls" %}
-              <svg class="h-8 w-8 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
-              </svg>
-              {% elif card.key == "rbac" %}
-              <svg class="h-8 w-8 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
-              </svg>
-              {% elif card.key == "encryption" %}
-              <svg class="h-8 w-8 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 14v3m4-3v3m4-3v3M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10z"/>
-              </svg>
-              {% endif %}
-            </div>
-            <h3 class="text-xl font-semibold text-white font-display">{{ card.title }}</h3>
-            <p class="mt-3 text-slate-400 leading-relaxed">
-              {{ card.description }}
-            </p>
-          </div>
-        </div>
-        {% endfor %}
-      </div>
-    </div>
-  </section>
 
   <!-- Final CTA Section -->
   <section class="mx-auto max-w-6xl px-6 py-24">
@@ -449,7 +329,7 @@
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
             </svg>
           </a>
-          <a href="/gl/trial-balance" class="btn btn-lg text-white border border-slate-600 hover:bg-slate-800 hover:border-slate-500 transition-all">
+          <a href="/finance/gl/trial-balance" class="btn btn-lg text-white border border-slate-600 hover:bg-slate-800 hover:border-slate-500 transition-all">
             {{ content.cta.cta_secondary }}
           </a>
         </div>
@@ -459,93 +339,27 @@
 
   <!-- Footer -->
   <footer class="border-t border-slate-200 dark:border-slate-800">
-    <div class="mx-auto max-w-6xl px-6 py-12">
-      <div class="grid gap-8 md:grid-cols-4">
-        <!-- Brand -->
-        <div class="md:col-span-2">
-          <div class="flex items-center gap-3 mb-4">
-            {% if brand.logo_url %}
-            <img src="{{ brand.logo_url }}" alt="{{ brand.name }}" class="h-10 w-10 rounded-xl" />
-            {% else %}
-            <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary-500 to-teal-500 text-sm font-bold text-white">
-              {{ brand.mark }}
-            </div>
-            {% endif %}
-            <span class="text-lg font-semibold text-slate-900 dark:text-white">{{ brand.name }}</span>
-          </div>
-          <p class="text-sm text-slate-500 dark:text-slate-400 max-w-sm">
-            Professional accounting software built for modern businesses. IFRS compliant, audit-ready, and designed for teams.
-          </p>
+    <div class="mx-auto max-w-6xl px-6 py-10 flex flex-col md:flex-row items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        {% if brand.logo_url %}
+        <img src="{{ brand.logo_url }}" alt="{{ brand.name }}" class="h-9 w-9 rounded-xl" />
+        {% else %}
+        <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary-500 to-teal-500 text-xs font-bold text-white">
+          {{ brand.mark }}
         </div>
-
-        <!-- Links -->
-        <div>
-          <h4 class="text-sm font-semibold text-slate-900 dark:text-white mb-4">Product</h4>
-          <ul class="space-y-2">
-            <li><a href="/gl" class="text-sm text-slate-500 dark:text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors">General Ledger</a></li>
-            <li><a href="/ar" class="text-sm text-slate-500 dark:text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors">Receivables</a></li>
-            <li><a href="/ap" class="text-sm text-slate-500 dark:text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors">Payables</a></li>
-            <li><a href="/reports" class="text-sm text-slate-500 dark:text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors">Reports</a></li>
-          </ul>
-        </div>
-
-        <div>
-          <h4 class="text-sm font-semibold text-slate-900 dark:text-white mb-4">Company</h4>
-          <ul class="space-y-2">
-            <li><a href="/login" class="text-sm text-slate-500 dark:text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors">Sign In</a></li>
-            <li><a href="#" class="text-sm text-slate-500 dark:text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors">Documentation</a></li>
-            <li><a href="#" class="text-sm text-slate-500 dark:text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors">Support</a></li>
-          </ul>
-        </div>
+        {% endif %}
+        <span class="text-sm font-semibold text-slate-900 dark:text-white">{{ brand.name }}</span>
       </div>
-
-      <div class="mt-12 pt-8 border-t border-slate-200 dark:border-slate-800 flex flex-col md:flex-row items-center justify-between gap-4">
-        <p class="text-sm text-slate-500 dark:text-slate-400">
-          &copy; {{ now().year }} {{ brand.name }}. All rights reserved.
-        </p>
-        <div class="flex items-center gap-6">
-          <a href="#" class="text-sm text-slate-500 dark:text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors">Privacy</a>
-          <a href="#" class="text-sm text-slate-500 dark:text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors">Terms</a>
-        </div>
+      <p class="text-xs text-slate-500 dark:text-slate-400">
+        &copy; {{ now().year }} {{ brand.name }}. All rights reserved.
+      </p>
+      <div class="flex items-center gap-4 text-xs">
+        <a href="/login" class="text-slate-500 dark:text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors">Sign in</a>
+        <a href="#" class="text-slate-500 dark:text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors">Privacy</a>
+        <a href="#" class="text-slate-500 dark:text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors">Terms</a>
       </div>
     </div>
   </footer>
 </main>
 
-<!-- Animated Counter Script -->
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-  const counters = document.querySelectorAll('[data-counter]');
-
-  const animateCounter = (el) => {
-    const target = parseFloat(el.dataset.counter);
-    const suffix = el.dataset.suffix || '';
-    const duration = 2000;
-    const steps = 60;
-    const stepTime = duration / steps;
-    const increment = target / steps;
-    let current = 0;
-
-    const timer = setInterval(() => {
-      current += increment;
-      if (current >= target) {
-        current = target;
-        clearInterval(timer);
-      }
-      el.textContent = (target % 1 === 0 ? Math.floor(current).toLocaleString() : current.toFixed(1)) + suffix;
-    }, stepTime);
-  };
-
-  const observer = new IntersectionObserver((entries) => {
-    entries.forEach(entry => {
-      if (entry.isIntersecting) {
-        animateCounter(entry.target);
-        observer.unobserve(entry.target);
-      }
-    });
-  }, { threshold: 0.5 });
-
-  counters.forEach(counter => observer.observe(counter));
-});
-</script>
 {% endblock %}

@@ -2,15 +2,15 @@
 
 ## Overview
 
-Single-direction sync system to migrate books, assets, and inventory data from ERPNext into DotMac Books.
+Single-direction sync system to migrate books, assets, and inventory data from ERPNext into Dotmac ERP.
 
-**Direction**: ERPNext → DotMac Books (one-way import only)
+**Direction**: ERPNext → Dotmac ERP (one-way import only)
 
 ## Architecture
 
 ```
 ┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
-│    ERPNext      │────▶│  Migration       │────▶│  DotMac Books   │
+│    ERPNext      │────▶│  Migration       │────▶│  Dotmac ERP   │
 │    (Source)     │     │  Service         │     │  (Target)       │
 └─────────────────┘     └──────────────────┘     └─────────────────┘
         │                       │                        │
@@ -21,7 +21,7 @@ Single-direction sync system to migrate books, assets, and inventory data from E
         │               └──────────────────┘             │
         │                       │                        │
         ▼                       ▼                        ▼
-   Frappe REST API      sync_entity table         IFRS Models
+   Frappe REST API      sync_entity table         Finance Models
    (read-only)          sync_history table        (fa, inv, gl)
 ```
 
@@ -58,7 +58,7 @@ CREATE TABLE sync.sync_entity (
     source_doctype VARCHAR(100) NOT NULL, -- 'Item', 'Asset', etc.
     source_name VARCHAR(255) NOT NULL,    -- ERPNext document name
     target_table VARCHAR(100) NOT NULL,   -- 'inv.item', 'fa.asset'
-    target_id UUID,                        -- DotMac Books entity ID
+    target_id UUID,                        -- Dotmac ERP entity ID
     sync_status VARCHAR(20) NOT NULL,     -- pending/synced/failed/skipped
     source_modified TIMESTAMP,            -- ERPNext modified timestamp
     synced_at TIMESTAMP,
@@ -89,13 +89,13 @@ CREATE TABLE sync.sync_history (
 
 ### 3. Field Mappings (`app/services/erpnext/mappings/`)
 
-Configuration files mapping ERPNext DocTypes to DotMac Books models.
+Configuration files mapping ERPNext DocTypes to Dotmac ERP models.
 
-## ERPNext DocType → DotMac Books Mapping
+## ERPNext DocType → Dotmac ERP Mapping
 
 ### Chart of Accounts
 
-| ERPNext Field | DotMac Books Field | Notes |
+| ERPNext Field | Dotmac ERP Field | Notes |
 |---------------|-------------------|-------|
 | `name` | `account_code` | ERPNext uses name as identifier |
 | `account_name` | `account_name` | |
@@ -108,7 +108,7 @@ Configuration files mapping ERPNext DocTypes to DotMac Books models.
 
 ### Items (Inventory)
 
-| ERPNext Field | DotMac Books Field | Notes |
+| ERPNext Field | Dotmac ERP Field | Notes |
 |---------------|-------------------|-------|
 | `item_code` | `item_code` | |
 | `item_name` | `item_name` | |
@@ -127,7 +127,7 @@ Configuration files mapping ERPNext DocTypes to DotMac Books models.
 
 ### Item Groups → Item Categories
 
-| ERPNext Field | DotMac Books Field | Notes |
+| ERPNext Field | Dotmac ERP Field | Notes |
 |---------------|-------------------|-------|
 | `name` | `category_code` | |
 | `item_group_name` | `category_name` | |
@@ -136,7 +136,7 @@ Configuration files mapping ERPNext DocTypes to DotMac Books models.
 
 ### Assets (Fixed Assets)
 
-| ERPNext Field | DotMac Books Field | Notes |
+| ERPNext Field | Dotmac ERP Field | Notes |
 |---------------|-------------------|-------|
 | `name` | `asset_number` | |
 | `asset_name` | `asset_name` | |
@@ -161,7 +161,7 @@ Configuration files mapping ERPNext DocTypes to DotMac Books models.
 
 ### Asset Categories
 
-| ERPNext Field | DotMac Books Field | Notes |
+| ERPNext Field | Dotmac ERP Field | Notes |
 |---------------|-------------------|-------|
 | `name` | `category_code` | |
 | `asset_category_name` | `category_name` | |
@@ -172,7 +172,7 @@ Configuration files mapping ERPNext DocTypes to DotMac Books models.
 
 ### Warehouses
 
-| ERPNext Field | DotMac Books Field | Notes |
+| ERPNext Field | Dotmac ERP Field | Notes |
 |---------------|-------------------|-------|
 | `name` | `warehouse_code` | |
 | `warehouse_name` | `warehouse_name` | |
@@ -184,7 +184,7 @@ Configuration files mapping ERPNext DocTypes to DotMac Books models.
 
 ### Stock Ledger Entry → Inventory Transactions
 
-| ERPNext Field | DotMac Books Field | Notes |
+| ERPNext Field | Dotmac ERP Field | Notes |
 |---------------|-------------------|-------|
 | `item_code` | `item_id` | Lookup |
 | `warehouse` | `warehouse_id` | Lookup |
@@ -198,7 +198,7 @@ Configuration files mapping ERPNext DocTypes to DotMac Books models.
 
 ### Customers
 
-| ERPNext Field | DotMac Books Field | Notes |
+| ERPNext Field | Dotmac ERP Field | Notes |
 |---------------|-------------------|-------|
 | `name` | - | Internal ID |
 | `customer_name` | `legal_name` | |
@@ -212,7 +212,7 @@ Configuration files mapping ERPNext DocTypes to DotMac Books models.
 
 ### Suppliers
 
-| ERPNext Field | DotMac Books Field | Notes |
+| ERPNext Field | Dotmac ERP Field | Notes |
 |---------------|-------------------|-------|
 | `name` | - | Internal ID |
 | `supplier_name` | `legal_name` | |
@@ -225,7 +225,7 @@ Configuration files mapping ERPNext DocTypes to DotMac Books models.
 
 ### Sales Invoices
 
-| ERPNext Field | DotMac Books Field | Notes |
+| ERPNext Field | Dotmac ERP Field | Notes |
 |---------------|-------------------|-------|
 | `name` | `invoice_number` | |
 | `customer` | `customer_id` | Lookup |
@@ -239,7 +239,7 @@ Configuration files mapping ERPNext DocTypes to DotMac Books models.
 
 ### Purchase Invoices
 
-| ERPNext Field | DotMac Books Field | Notes |
+| ERPNext Field | Dotmac ERP Field | Notes |
 |---------------|-------------------|-------|
 | `name` | `invoice_number` | |
 | `supplier` | `supplier_id` | Lookup |
@@ -278,7 +278,7 @@ Phase 3: Transactions (requires Phase 2)
 ### Full Sync
 - Fetches all records from ERPNext
 - Compares with existing sync_entity records
-- Creates/updates DotMac Books entities
+- Creates/updates Dotmac ERP entities
 - Used for initial migration
 
 ### Incremental Sync

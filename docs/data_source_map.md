@@ -1,5 +1,5 @@
-IFRS Data Source Map
-====================
+Data Source Map
+===============
 
 Legend
 ------

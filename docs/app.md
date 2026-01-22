@@ -1,10 +1,10 @@
-# DotMac Books App Guide
+# Dotmac ERP App Guide
 
-This document describes the runtime architecture, configuration, and core workflows for the DotMac Books accounting application. It is intended for developers and operators.
+This document describes the runtime architecture, configuration, and core workflows for the Dotmac ERP application. It is intended for developers and operators.
 
 ## Overview
 
-DotMac Books is an IFRS-based, multi-tenant accounting system built on FastAPI. It ships both a JSON API (`/api/v1/...`) and a server-rendered web UI (`/` and `/ifrs/...`) with shared business logic and models.
+Dotmac ERP is a unified, multi-tenant ERP system built on FastAPI covering finance, HR, and operations. It ships both a JSON API (`/api/v1/...`) and a server-rendered web UI (`/finance/...`, `/people/...`) with shared business logic and models.
 
 ## Architecture
 
@@ -16,9 +16,9 @@ DotMac Books is an IFRS-based, multi-tenant accounting system built on FastAPI. 
 
 ## Key Directories
 
-- `app/api/`: JSON API routers.
-- `app/web/`: Web UI routes.
-- `app/models/`: SQLAlchemy ORM models (including `app/models/ifrs/...`).
+- `app/api/`: JSON API routers (including `finance/` and `people/`).
+- `app/web/`: Web UI routes (including `finance/` and `people/`).
+- `app/models/`: SQLAlchemy ORM models (including `finance/` and `people/`).
 - `app/services/`: Business logic and orchestration.
 - `templates/`: Jinja2 templates.
 - `static/`: Compiled CSS and assets.
@@ -77,7 +77,7 @@ All API endpoints are available with and without `/api/v1` prefixes. For example
 - `/api/v1/auth/login` and `/auth/login`
 - `/api/v1/gl/accounts` and `/gl/accounts`
 
-Most IFRS routers require tenant auth. The API layer uses:
+Most routers require tenant auth. The API layer uses:
 
 - `require_tenant_auth` for tenant-scoped access
 - `require_role("admin")` for admin-only routes

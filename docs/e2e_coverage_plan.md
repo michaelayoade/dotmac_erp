@@ -31,7 +31,7 @@
 | Fixed Assets | 2 | 15+ | 10% | 85% |
 | Financial Instruments | 2 | 10+ | 10% | 85% |
 | Inventory | 2 | 15+ | 10% | 85% |
-| Lease (IFRS 16) | 6 | 8 | 50% | 90% |
+| Lease | 6 | 8 | 50% | 90% |
 | Tax | 10 | 15 | 50% | 90% |
 | Settings | 0 | 20+ | 0% | 85% |
 | Automation | 0 | 25+ | 0% | 85% |

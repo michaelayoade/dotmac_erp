@@ -2,7 +2,7 @@
 
 ## Overview
 
-DotMac Books is a multi-tenant IFRS accounting system with:
+Dotmac ERP is a unified multi-tenant ERP system with:
 
 - FastAPI for API and web UI
 - PostgreSQL with schema separation

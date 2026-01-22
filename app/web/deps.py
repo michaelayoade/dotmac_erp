@@ -22,6 +22,7 @@ from app.rls import set_current_organization_sync
 from app.services.auth_flow import decode_access_token
 from app.services.auth_dependencies import is_session_inactive
 from app.services.common import coerce_uuid
+from app.services.finance.branding import BrandingService, CSSGenerator
 
 
 def get_db():
@@ -45,7 +46,7 @@ async def get_async_db():
 def _brand_mark(name: str) -> str:
     """Generate a 2-letter brand mark from the brand name.
 
-    For multi-word names, uses the first letter of first two words (e.g., "DotMac Books" → "DB").
+    For multi-word names, uses the first letter of first two words (e.g., "DotMac ERP" → "DB").
     For single-word names, uses first two letters (e.g., "Ledger" → "LE").
     """
     parts = [part for part in name.split() if part]
@@ -57,7 +58,7 @@ def _brand_mark(name: str) -> str:
 
 
 def brand_context() -> dict:
-    """Get standard brand context for templates."""
+    """Get standard brand context for templates (system defaults)."""
     # Use configured brand_mark or derive from name
     mark = settings.brand_mark or (
         _brand_mark(settings.brand_name) if settings.brand_name else "DB"
@@ -67,6 +68,68 @@ def brand_context() -> dict:
         "tagline": settings.brand_tagline,
         "logo_url": settings.brand_logo_url,
         "mark": mark,
+    }
+
+
+def org_brand_context(db: Session, org_id: Optional[UUID]) -> dict:
+    """
+    Get organization-specific brand context for templates.
+
+    Falls back to system defaults if no org branding exists.
+
+    Returns dict with:
+        - name: Display name
+        - tagline: Brand tagline
+        - logo_url: Logo URL for light backgrounds
+        - logo_dark_url: Logo URL for dark backgrounds
+        - favicon_url: Favicon URL
+        - mark: 2-letter brand mark
+        - css: Generated CSS for brand colors/fonts
+        - fonts_url: Google Fonts URL if custom fonts
+        - has_custom_branding: Whether org has custom branding
+    """
+    base = brand_context()
+
+    if not org_id:
+        return {
+            **base,
+            "logo_dark_url": None,
+            "favicon_url": None,
+            "css": "",
+            "fonts_url": None,
+            "has_custom_branding": False,
+        }
+
+    service = BrandingService(db)
+    branding = service.get_by_org_id(org_id)
+
+    if not branding:
+        return {
+            **base,
+            "logo_dark_url": None,
+            "favicon_url": None,
+            "css": "",
+            "fonts_url": None,
+            "has_custom_branding": False,
+        }
+
+    # Generate CSS and fonts URL
+    css_gen = CSSGenerator(branding)
+    css = css_gen.generate()
+    fonts_url = css_gen.get_google_fonts_url()
+
+    return {
+        "name": branding.display_name or base["name"],
+        "tagline": branding.tagline or base["tagline"],
+        "logo_url": branding.logo_url or base["logo_url"],
+        "logo_dark_url": branding.logo_dark_url,
+        "favicon_url": branding.favicon_url,
+        "mark": branding.brand_mark or base["mark"],
+        "css": css,
+        "fonts_url": fonts_url,
+        "has_custom_branding": True,
+        "primary_color": branding.primary_color,
+        "accent_color": branding.accent_color,
     }
 
 
@@ -92,12 +155,61 @@ def landing_content() -> dict:
         "proof_pills": [
             {"key": "multi_entity", "label": "Multi-entity"},
             {"key": "audit_trail", "label": "Audit trail"},
-            {"key": "ifrs_templates", "label": "IFRS templates"},
-            {"key": "ar_ap_aging", "label": "AR/AP aging"},
+            {"key": "hr_payroll", "label": "HR & Payroll"},
+            {"key": "real_time", "label": "Real-time"},
         ],
+        "benefits": {
+            "title": "Why teams choose Dotmac ERP",
+            "subtitle": "Less busywork, faster closes, and a single source of truth.",
+            "items": [
+                {
+                    "title": "One system, fewer handoffs",
+                    "description": "Finance, HR, and operations stay in sync with shared data and approvals.",
+                },
+                {
+                    "title": "Audit-ready out of the box",
+                    "description": "Standard statements, audit trails, and controls built into every workflow.",
+                },
+                {
+                    "title": "Real-time visibility",
+                    "description": "Dashboards and reports update as transactions happen, not at month-end.",
+                },
+                {
+                    "title": "Built for growing teams",
+                    "description": "Multi-entity support, roles, and approvals that scale with your org.",
+                },
+            ],
+        },
+        "core_modules": {
+            "title": "Core ERP modules",
+            "subtitle": "Start with finance and HR, then expand across operations as you grow.",
+            "cards": [
+                {
+                    "key": "finance",
+                    "title": "Finance",
+                    "description": "GL, AR/AP, fixed assets, banking, and financial reporting.",
+                    "cta_label": "Explore finance",
+                    "cta_href": "/finance/dashboard",
+                },
+                {
+                    "key": "people",
+                    "title": "People",
+                    "description": "HR, payroll, leave, and employee expenses in one place.",
+                    "cta_label": "Explore people",
+                    "cta_href": "/people/hr/employees",
+                },
+                {
+                    "key": "operations",
+                    "title": "Operations",
+                    "description": "Inventory, procurement, and workflow automation connected to finance.",
+                    "cta_label": "Explore operations",
+                    "cta_href": "/finance/inv/items",
+                },
+            ],
+        },
         "modules": {
-            "title": "Complete accounting modules",
-            "subtitle": "Everything you need to manage your finances, from general ledger to detailed reporting.",
+            "title": "ERP modules, fully connected",
+            "subtitle": "Finance, people, and operations working from a single system of record.",
             "featured": {
                 "title": "General Ledger",
                 "description": (
@@ -111,7 +223,7 @@ def landing_content() -> dict:
                     "Multi-Currency",
                 ],
                 "cta_label": "Explore General Ledger",
-                "cta_href": "/gl/accounts",
+                "cta_href": "/finance/gl/accounts",
             },
             "cards": [
                 {
@@ -119,35 +231,91 @@ def landing_content() -> dict:
                     "title": "Accounts Receivable",
                     "description": "Customer invoices, payments, credit memos, and aging analysis.",
                     "cta_label": "View AR",
-                    "cta_href": "/ar/customers",
+                    "cta_href": "/finance/ar/customers",
                 },
                 {
                     "key": "ap",
                     "title": "Accounts Payable",
                     "description": "Supplier bills, payment scheduling, and expense allocation.",
                     "cta_label": "View AP",
-                    "cta_href": "/ap/suppliers",
+                    "cta_href": "/finance/ap/suppliers",
                 },
                 {
                     "key": "fa",
                     "title": "Fixed Assets",
-                    "description": "Asset register and depreciation schedules per IAS 16.",
+                    "description": "Asset register and depreciation schedules.",
                     "cta_label": "View assets",
-                    "cta_href": "/fa/assets",
+                    "cta_href": "/finance/fa/assets",
                 },
                 {
                     "key": "banking",
                     "title": "Banking",
                     "description": "Bank accounts, reconciliation, and cash flow management.",
                     "cta_label": "View banking",
-                    "cta_href": "/banking/accounts",
+                    "cta_href": "/finance/banking/accounts",
                 },
                 {
                     "key": "reports",
                     "title": "Financial Reports",
-                    "description": "Trial balance, P&L, balance sheet, and IFRS notes.",
+                    "description": "Trial balance, P&L, balance sheet, and disclosure notes.",
                     "cta_label": "View reports",
-                    "cta_href": "/gl/trial-balance",
+                    "cta_href": "/finance/reports",
+                },
+            ],
+        },
+        "people": {
+            "title": "People & Payroll",
+            "subtitle": "Hire, pay, and manage teams with compliant HR workflows.",
+            "featured": {
+                "title": "Human Resources",
+                "description": (
+                    "Centralized employee management with departments, designations, and organizational hierarchy. "
+                    "Track employee lifecycle from onboarding to offboarding."
+                ),
+                "chips": [
+                    "Employee Database",
+                    "Departments",
+                    "Designations",
+                    "Org Structure",
+                ],
+                "cta_label": "Explore HR",
+                "cta_href": "/people/hr/employees",
+            },
+            "cards": [
+                {
+                    "key": "payroll",
+                    "title": "Payroll",
+                    "description": "Salary structures, components, payslips, and statutory compliance.",
+                    "cta_label": "View Payroll",
+                    "cta_href": "/people/payroll/slips",
+                },
+                {
+                    "key": "leave",
+                    "title": "Leave Management",
+                    "description": "Leave types, applications, approvals, and balance tracking.",
+                    "cta_label": "View Leave",
+                    "cta_href": "/people/leave",
+                },
+                {
+                    "key": "attendance",
+                    "title": "Attendance",
+                    "description": "Shift management, check-in/out tracking, and attendance reports.",
+                    "cta_label": "View Attendance",
+                    "cta_href": "/people/attendance",
+                },
+                {
+                    "key": "recruit",
+                    "title": "Recruitment",
+                    "description": "Job postings, applicant tracking, and hiring workflows.",
+                    "cta_label": "View Recruitment",
+                    "cta_href": "/people/recruit",
+                },
+                {
+                    "key": "expenses",
+                    "title": "Expense Claims",
+                    "description": "Employee expenses, cash advances, and corporate cards.",
+                    "cta_label": "View Expenses",
+                    "cta_href": "/people/expenses",
                 },
             ],
         },
@@ -166,8 +334,8 @@ def landing_content() -> dict:
             ],
         },
         "reports": {
-            "title": "IFRS-compliant reporting",
-            "subtitle": "Generate standard financial statements with proper IFRS disclosures, ready for auditors.",
+            "title": "IFRS reporting, built in",
+            "subtitle": "Generate standard financial statements with proper IFRS disclosures, ready for audit.",
             "cards": [
                 {"title": "Trial Balance", "subtitle": "Detailed and summary views"},
                 {"title": "P&L Statement", "subtitle": "By period and comparative"},
@@ -197,8 +365,8 @@ def landing_content() -> dict:
             ],
         },
         "cta": {
-            "title": "Ready to close faster?",
-            "subtitle": "Join finance teams who have shortened their month-end close with {brand}.",
+            "title": "Ready to run on one ERP?",
+            "subtitle": "Unify finance, HR, and operations with {brand}.",
             "cta_primary": settings.landing_cta_primary,
             "cta_secondary": settings.landing_cta_secondary,
         },
@@ -221,6 +389,7 @@ def base_context(
     page_title: str,
     active_module: str = "",
     notifications: list | None = None,
+    db: Optional[Session] = None,
 ) -> dict:
     """
     Get base template context with authentication.
@@ -237,16 +406,24 @@ def base_context(
             - url: Link to navigate when clicked
             - time: Relative time string (e.g., "5 min ago")
             - read: bool indicating if notification was read
+        db: Optional database session for loading org branding
 
     Returns:
         Dict with common template context values (without request - use new TemplateResponse signature)
     """
+    # Get org-specific branding if db session available
+    org_branding = None
+    if db and auth.organization_id:
+        org_branding = org_brand_context(db, auth.organization_id)
+
     return {
         "title": page_title,
         "page_title": page_title,
-        "brand": brand_context(),
+        "brand": org_branding or brand_context(),
+        "org_branding": org_branding,
         "active_module": active_module,
         "user": auth.user,
+        "accessible_modules": auth.accessible_modules,
         "csrf_token": getattr(request.state, "csrf_token", ""),
         "notifications": notifications or [],
     }
@@ -263,6 +440,7 @@ class WebAuthContext:
         user_name: str = "Guest",
         user_initials: str = "GU",
         roles: Optional[list[str]] = None,
+        scopes: Optional[list[str]] = None,
     ):
         self.is_authenticated = is_authenticated
         self.person_id = person_id
@@ -270,6 +448,7 @@ class WebAuthContext:
         self.user_name = user_name
         self.user_initials = user_initials
         self.roles = roles or []
+        self.scopes = scopes or []
 
     @property
     def user(self) -> dict:
@@ -279,6 +458,84 @@ class WebAuthContext:
             "initials": self.user_initials,
             "is_authenticated": self.is_authenticated,
         }
+
+    @property
+    def user_id(self) -> Optional[UUID]:
+        """Alias for person_id for backward compatibility."""
+        return self.person_id
+
+    @property
+    def is_admin(self) -> bool:
+        """Check if user has admin role."""
+        return "admin" in self.roles
+
+    @property
+    def accessible_modules(self) -> list[str]:
+        """Get list of modules the user can access."""
+        modules = []
+        scopes_set = set(self.scopes)
+
+        if self.is_admin or "finance:access" in scopes_set:
+            modules.append("finance")
+        if self.is_admin or "hr:access" in scopes_set:
+            modules.append("people")
+        if self.is_admin or "operations:access" in scopes_set:
+            modules.append("operations")
+
+        return modules
+
+    def has_module_access(self, module: str) -> bool:
+        """Check if user can access a specific module."""
+        alias_map = {
+            "hr": "people",
+            "people": "people",
+            "finance": "finance",
+            "operations": "operations",
+        }
+        canonical = alias_map.get(module, module)
+        return canonical in self.accessible_modules
+
+    def has_permission(self, permission: str) -> bool:
+        """Check if user has a specific permission."""
+        return self.is_admin or permission in self.scopes
+
+    def has_any_permission(self, permissions: list[str]) -> bool:
+        """Check if user has any of the specified permissions."""
+        if self.is_admin:
+            return True
+        return bool(set(permissions) & set(self.scopes))
+
+    def has_all_permissions(self, permissions: list[str]) -> bool:
+        """Check if user has all specified permissions."""
+        if self.is_admin:
+            return True
+        return set(permissions).issubset(set(self.scopes))
+
+    @property
+    def default_module(self) -> Optional[str]:
+        """Get the user's default module (first accessible module)."""
+        modules = self.accessible_modules
+        return modules[0] if modules else None
+
+    @property
+    def default_redirect(self) -> str:
+        """Get the default redirect URL based on accessible modules."""
+        if not self.is_authenticated:
+            return "/login"
+        modules = self.accessible_modules
+        if len(modules) == 0:
+            return "/no-access"
+        if len(modules) == 1:
+            module = modules[0]
+            if module == "finance":
+                return "/finance/dashboard"
+            if module == "people":
+                return "/people/hr/employees"
+            if module == "operations":
+                return "/finance/inv/items"
+            return f"/{module}/dashboard"
+        # Multiple modules - go to module selector
+        return "/"
 
 
 def _extract_bearer_token(authorization: str | None) -> str | None:
@@ -387,6 +644,8 @@ def require_web_auth(
 
     roles_value = payload.get("roles")
     roles = [str(role) for role in roles_value] if isinstance(roles_value, list) else []
+    scopes_value = payload.get("scopes")
+    scopes = [str(scope) for scope in scopes_value] if isinstance(scopes_value, list) else []
 
     return WebAuthContext(
         is_authenticated=True,
@@ -395,6 +654,7 @@ def require_web_auth(
         user_name=user_name,
         user_initials=initials,
         roles=roles,
+        scopes=scopes,
     )
 
 
@@ -471,6 +731,8 @@ def optional_web_auth(
 
     roles_value = payload.get("roles")
     roles = [str(role) for role in roles_value] if isinstance(roles_value, list) else []
+    scopes_value = payload.get("scopes")
+    scopes = [str(scope) for scope in scopes_value] if isinstance(scopes_value, list) else []
 
     return WebAuthContext(
         is_authenticated=True,
@@ -479,4 +741,146 @@ def optional_web_auth(
         user_name=user_name,
         user_initials=initials,
         roles=roles,
+        scopes=scopes,
     )
+
+
+# =============================================================================
+# Module Access Dependencies
+# =============================================================================
+
+
+def require_finance_access(
+    auth: WebAuthContext = Depends(require_web_auth),
+) -> WebAuthContext:
+    """
+    Require access to the finance module.
+
+    Use this dependency for all finance/accounting web routes.
+
+    Usage:
+        @router.get("/finance/dashboard")
+        def finance_dashboard(
+            request: Request,
+            auth: WebAuthContext = Depends(require_finance_access),
+        ):
+            ...
+    """
+    if not auth.has_module_access("finance"):
+        raise HTTPException(
+            status_code=403,
+            detail="Finance module access required",
+        )
+    return auth
+
+
+def require_hr_access(
+    auth: WebAuthContext = Depends(require_web_auth),
+) -> WebAuthContext:
+    """
+    Require access to the HR module.
+
+    Use this dependency for all HR/people web routes.
+
+    Usage:
+        @router.get("/hr/dashboard")
+        def hr_dashboard(
+            request: Request,
+            auth: WebAuthContext = Depends(require_hr_access),
+        ):
+            ...
+    """
+    if not auth.has_module_access("people"):
+        raise HTTPException(
+            status_code=403,
+            detail="HR module access required",
+        )
+    return auth
+
+
+def require_operations_access(
+    auth: WebAuthContext = Depends(require_web_auth),
+) -> WebAuthContext:
+    """
+    Require access to the Operations module.
+    """
+    if not auth.has_module_access("operations"):
+        raise HTTPException(
+            status_code=403,
+            detail="Operations module access required",
+        )
+    return auth
+
+
+def require_module_access(module: str):
+    """
+    Factory for creating module access dependencies.
+
+    Usage:
+        @router.get("/custom/dashboard")
+        def custom_dashboard(
+            request: Request,
+            auth: WebAuthContext = Depends(require_module_access("custom")),
+        ):
+            ...
+    """
+    def _require_module_access(
+        auth: WebAuthContext = Depends(require_web_auth),
+    ) -> WebAuthContext:
+        if not auth.has_module_access(module):
+            raise HTTPException(
+                status_code=403,
+                detail=f"{module.title()} module access required",
+            )
+        return auth
+
+    return _require_module_access
+
+
+def require_web_permission(permission: str):
+    """
+    Factory for creating permission-based web route dependencies.
+
+    Usage:
+        @router.get("/gl/journals")
+        def list_journals(
+            request: Request,
+            auth: WebAuthContext = Depends(require_web_permission("gl:read")),
+        ):
+            ...
+    """
+    def _require_permission(
+        auth: WebAuthContext = Depends(require_web_auth),
+    ) -> WebAuthContext:
+        if not auth.has_permission(permission):
+            raise HTTPException(
+                status_code=403,
+                detail=f"Permission '{permission}' required",
+            )
+        return auth
+
+    return _require_permission
+
+
+def require_any_web_permission(permissions: list[str]):
+    """
+    Factory for requiring any of the specified permissions.
+
+    Usage:
+        @router.get("/reports/overview")
+        def reports_overview(
+            auth: WebAuthContext = Depends(require_any_web_permission(["reports:read", "gl:read"])),
+        ):
+            ...
+    """
+    def _require_any_permission(
+        auth: WebAuthContext = Depends(require_web_auth),
+    ) -> WebAuthContext:
+        if not auth.has_any_permission(permissions):
+            raise HTTPException(
+                status_code=403,
+                detail=f"One of these permissions required: {', '.join(permissions)}",
+            )
+        return auth
+
+    return _require_any_permission

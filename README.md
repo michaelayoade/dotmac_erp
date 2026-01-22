@@ -1,10 +1,10 @@
-# DotMac Books
+# Dotmac ERP
 
-IFRS-based multi-tenant accounting software built with FastAPI, featuring comprehensive financial modules, authentication, RBAC, audit logging, background jobs, and full observability.
+Unified ERP for finance, HR, and operations. Multi-tenant business software built with FastAPI, featuring comprehensive financial modules, human resources, authentication, RBAC, audit logging, background jobs, and full observability.
 
 ## Features
 
-### IFRS Accounting Modules
+### Financial Modules
 
 - **General Ledger (GL)**
   - Chart of Accounts management
@@ -49,9 +49,31 @@ IFRS-based multi-tenant accounting software built with FastAPI, featuring compre
   - Expense tracking and categorization
   - Cost allocation
 
-- **Leases (IFRS 16)**
+- **Leases**
   - Lease contract management
   - Right-of-use asset and liability calculation
+
+### People & HR Modules
+
+- **Employee Management**
+  - Employee records and onboarding
+  - Organization structure and departments
+
+- **Attendance & Leave**
+  - Attendance tracking and timesheets
+  - Leave requests and approvals
+
+- **Payroll**
+  - Salary processing and payslips
+  - Tax deductions and benefits
+
+- **Recruitment**
+  - Job postings and applicant tracking
+  - Interview scheduling
+
+- **Performance**
+  - Performance reviews and goals
+  - 360-degree feedback
 
 ### Platform Features
 
@@ -102,26 +124,32 @@ IFRS-based multi-tenant accounting software built with FastAPI, featuring compre
 ```
 ├── app/
 │   ├── api/              # API route handlers
+│   │   ├── finance/      # Finance module APIs (GL, AP, AR, etc.)
+│   │   └── people/       # HR module APIs
 │   ├── models/           # SQLAlchemy ORM models
-│   │   └── ifrs/         # IFRS module models (gl, ap, ar, inv, etc.)
+│   │   ├── finance/      # Finance module models
+│   │   └── people/       # HR module models
 │   ├── schemas/          # Pydantic validation schemas
 │   ├── services/         # Business logic layer
-│   │   └── ifrs/         # IFRS module services
+│   │   ├── finance/      # Finance module services
+│   │   └── people/       # HR module services
 │   ├── web/              # Web UI route handlers
-│   │   └── ifrs/         # IFRS module web handlers
+│   │   ├── finance/      # Finance module web handlers
+│   │   └── people/       # HR module web handlers
 │   ├── main.py           # FastAPI app initialization
 │   ├── config.py         # Application settings
 │   ├── db.py             # Database configuration
 │   ├── celery_app.py     # Celery configuration
 │   └── telemetry.py      # OpenTelemetry setup
 ├── templates/            # Jinja2 HTML templates
-│   └── ifrs/             # IFRS module templates
+│   ├── finance/          # Finance module templates
+│   └── people/           # HR module templates
 ├── static/               # Static assets
 ├── alembic/              # Database migrations
 ├── scripts/              # Utility scripts
 ├── tests/                # Test suite
 │   ├── e2e/              # End-to-end Playwright tests
-│   └── ifrs/             # IFRS module unit tests
+│   └── ifrs/             # Finance module unit tests
 ├── docker-compose.yml    # Container orchestration
 └── Dockerfile            # Container image
 ```
@@ -147,8 +175,8 @@ IFRS-based multi-tenant accounting software built with FastAPI, featuring compre
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/michaelayoade/dotmac_books.git
-   cd dotmac_books
+   git clone https://github.com/dotmac/dotmac-erp.git
+   cd dotmac-erp
    ```
 
 2. **Set up environment variables**
@@ -230,7 +258,7 @@ Services:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `DATABASE_URL` | PostgreSQL connection string | `postgresql+psycopg://postgres:postgres@localhost:5434/dotmac_books` |
+| `DATABASE_URL` | PostgreSQL connection string | `postgresql+psycopg://postgres:postgres@localhost:5434/dotmac_erp` |
 | `REDIS_URL` | Redis connection string | `redis://:redis@localhost:6379/0` |
 | `CELERY_BROKER_URL` | Celery broker URL | `redis://:redis@localhost:6379/0` |
 | `CELERY_RESULT_BACKEND` | Celery result backend | `redis://:redis@localhost:6379/1` |
@@ -238,19 +266,19 @@ Services:
 | `JWT_ALGORITHM` | JWT algorithm | `HS256` |
 | `JWT_ACCESS_TTL_MINUTES` | Access token TTL | `15` |
 | `JWT_REFRESH_TTL_DAYS` | Refresh token TTL | `30` |
-| `TOTP_ISSUER` | TOTP issuer name | `dotmac_books` |
+| `TOTP_ISSUER` | TOTP issuer name | `dotmac_erp` |
 | `TOTP_ENCRYPTION_KEY` | TOTP secret encryption key | Required |
-| `BRAND_NAME` | Application brand name | `DotMac Books` |
-| `BRAND_TAGLINE` | Application tagline | `IFRS accounting that closes faster` |
+| `BRAND_NAME` | Application brand name | `Dotmac ERP` |
+| `BRAND_TAGLINE` | Application tagline | `Unified ERP for finance, HR, and operations` |
 | `BRAND_MARK` | Two-letter brand mark override | - |
-| `LANDING_HERO_BADGE` | Landing page hero badge text | `IFRS-ready accounting` |
-| `LANDING_HERO_TITLE` | Landing page hero title | `Close faster with audit-ready accounting` |
-| `LANDING_HERO_SUBTITLE` | Landing page hero subtitle | `Multi-entity support, clean audit trail, and accurate AR/AP aging for growing finance teams.` |
-| `LANDING_CTA_PRIMARY` | Landing page primary CTA label | `Start trial` |
-| `LANDING_CTA_SECONDARY` | Landing page secondary CTA label | `View sample reports` |
+| `LANDING_HERO_BADGE` | Landing page hero badge text | `Dotmac ERP` |
+| `LANDING_HERO_TITLE` | Landing page hero title | `Run your entire business on one ERP` |
+| `LANDING_HERO_SUBTITLE` | Landing page hero subtitle | `Finance, HR, and operations with real-time reporting.` |
+| `LANDING_CTA_PRIMARY` | Landing page primary CTA label | `Get started` |
+| `LANDING_CTA_SECONDARY` | Landing page secondary CTA label | `Explore modules` |
 | `LANDING_CONTENT_JSON` | Optional JSON to override landing page content | - |
 | `OTEL_ENABLED` | Enable OpenTelemetry | `false` |
-| `OTEL_SERVICE_NAME` | Service name for tracing | `dotmac_books` |
+| `OTEL_SERVICE_NAME` | Service name for tracing | `dotmac_erp` |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP collector endpoint | - |
 
 ### OpenBao Integration
@@ -258,7 +286,7 @@ Services:
 Secrets can be resolved from OpenBao by using the `openbao://` prefix:
 
 ```bash
-JWT_SECRET=openbao://secret/data/dotmac_books#jwt_secret
+JWT_SECRET=openbao://secret/data/dotmac_erp#jwt_secret
 ```
 
 ## Default Credentials
@@ -285,7 +313,7 @@ The application uses PostgreSQL schemas for domain separation:
 | `fa` | Fixed Assets |
 | `tax` | Tax management |
 | `exp` | Expenses |
-| `lease` | Lease accounting (IFRS 16) |
+| `lease` | Lease accounting |
 | `fin_inst` | Financial instruments |
 | `cons` | Consolidation |
 | `core_org` | Organization management |

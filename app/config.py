@@ -10,7 +10,7 @@ load_dotenv()
 class Settings:
     database_url: str = os.getenv(
         "DATABASE_URL",
-        "postgresql+psycopg://postgres:postgres@localhost:5434/dotmac_books",
+        "postgresql+psycopg://postgres:postgres@localhost:5434/dotmac_erp",
     )
     db_pool_size: int = int(os.getenv("DB_POOL_SIZE", "5"))
     db_max_overflow: int = int(os.getenv("DB_MAX_OVERFLOW", "10"))
@@ -24,8 +24,11 @@ class Settings:
     avatar_url_prefix: str = os.getenv("AVATAR_URL_PREFIX", "/static/avatars")
 
     # Branding
-    brand_name: str = os.getenv("BRAND_NAME", "DotMac Books")
-    brand_tagline: str = os.getenv("BRAND_TAGLINE", "IFRS accounting that closes faster")
+    brand_name: str = os.getenv("BRAND_NAME", "Dotmac ERP")
+    brand_tagline: str = os.getenv(
+        "BRAND_TAGLINE",
+        "Unified ERP for finance, HR, and operations",
+    )
     brand_logo_url: str | None = os.getenv("BRAND_LOGO_URL") or None
     brand_mark: str | None = os.getenv("BRAND_MARK") or None  # Auto-derived if not set
 
@@ -40,16 +43,16 @@ class Settings:
     )
 
     # Landing page content (configurable without code changes)
-    landing_hero_badge: str = os.getenv("LANDING_HERO_BADGE", "IFRS-ready accounting")
+    landing_hero_badge: str = os.getenv("LANDING_HERO_BADGE", "Dotmac ERP")
     landing_hero_title: str = os.getenv(
-        "LANDING_HERO_TITLE", "Close faster with audit-ready accounting"
+        "LANDING_HERO_TITLE", "Run your entire business on one ERP"
     )
     landing_hero_subtitle: str = os.getenv(
         "LANDING_HERO_SUBTITLE",
-        "Multi-entity support, clean audit trail, and accurate AR/AP aging for growing finance teams.",
+        "Finance, HR, and operations with real-time reporting.",
     )
-    landing_cta_primary: str = os.getenv("LANDING_CTA_PRIMARY", "Start trial")
-    landing_cta_secondary: str = os.getenv("LANDING_CTA_SECONDARY", "View sample reports")
+    landing_cta_primary: str = os.getenv("LANDING_CTA_PRIMARY", "Get started")
+    landing_cta_secondary: str = os.getenv("LANDING_CTA_SECONDARY", "Explore modules")
     landing_content_json: str | None = os.getenv("LANDING_CONTENT_JSON") or None
 
 

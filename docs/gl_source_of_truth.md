@@ -1,10 +1,9 @@
-IFRS Source of Truth for Book Entry
-===================================
+GL Source of Truth for Book Entry
+=================================
 
 Purpose
 -------
-Define a GL-first source-of-truth model for book entry and reporting, aligned to
-IAS 1 (presentation), IAS 8 (consistency), and the Conceptual Framework.
+Define a GL-first source-of-truth model for book entry and reporting.
 
 Principles
 ----------
@@ -80,4 +79,4 @@ Implementation Notes
 --------------------
 - If account_balance is empty, rebuild from posted journal lines.
 - Do not use subledger totals for financial reporting.
-- Keep account category (IFRS classification) consistent over time.
+- Keep account category (classification) consistent over time.
