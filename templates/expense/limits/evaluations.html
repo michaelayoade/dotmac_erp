@@ -1,0 +1,172 @@
+{% extends "expense/base_expense.html" %}
+{% from "components/macros.html" import pagination, empty_state %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+            <h1 class="text-2xl font-semibold text-slate-900 dark:text-white font-display">Limit Evaluations</h1>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Audit trail of expense limit checks</p>
+        </div>
+        <a href="/expense/limits/rules" class="btn btn-secondary">
+            <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+            </svg>
+            Back to Rules
+        </a>
+    </div>
+
+    <!-- Filters -->
+    <div class="card p-4">
+        <form method="get" class="flex flex-wrap items-end gap-4">
+            <div class="min-w-[150px]">
+                <label class="form-label">Result</label>
+                <select name="result" class="form-input form-select">
+                    <option value="">All Results</option>
+                    {% for rt in result_types %}
+                    <option value="{{ rt }}" {{ 'selected' if filters.result == rt else '' }}>{{ rt | replace('_', ' ') | title }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="min-w-[150px]">
+                <label class="form-label">From Date</label>
+                <input type="date" name="from_date" value="{{ filters.from_date or '' }}" class="form-input">
+            </div>
+            <div class="min-w-[150px]">
+                <label class="form-label">To Date</label>
+                <input type="date" name="to_date" value="{{ filters.to_date or '' }}" class="form-input">
+            </div>
+            <button type="submit" class="btn btn-secondary">
+                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
+                </svg>
+                Filter
+            </button>
+            {% if filters.result or filters.from_date or filters.to_date %}
+            <a href="/expense/limits/evaluations" class="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300">Clear</a>
+            {% endif %}
+        </form>
+    </div>
+
+    <!-- Stats Summary -->
+    <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <div class="card p-4">
+            <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Total Evaluations</p>
+            <p class="mt-1 text-2xl font-semibold text-slate-900 dark:text-white">{{ total }}</p>
+        </div>
+        <div class="card p-4">
+            <div class="flex items-center gap-2">
+                <span class="h-2 w-2 rounded-full bg-green-500"></span>
+                <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Passed</p>
+            </div>
+            <p class="mt-1 text-2xl font-semibold text-green-600 dark:text-green-400">
+                {{ evaluations | selectattr('result.value', 'equalto', 'PASSED') | list | length }}
+            </p>
+        </div>
+        <div class="card p-4">
+            <div class="flex items-center gap-2">
+                <span class="h-2 w-2 rounded-full bg-red-500"></span>
+                <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Blocked</p>
+            </div>
+            <p class="mt-1 text-2xl font-semibold text-red-600 dark:text-red-400">
+                {{ evaluations | selectattr('result.value', 'equalto', 'BLOCKED') | list | length }}
+            </p>
+        </div>
+        <div class="card p-4">
+            <div class="flex items-center gap-2">
+                <span class="h-2 w-2 rounded-full bg-blue-500"></span>
+                <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Approval Required</p>
+            </div>
+            <p class="mt-1 text-2xl font-semibold text-blue-600 dark:text-blue-400">
+                {{ evaluations | selectattr('result.value', 'equalto', 'APPROVAL_REQUIRED') | list | length }}
+            </p>
+        </div>
+    </div>
+
+    <!-- Evaluations Table -->
+    <div class="card overflow-hidden">
+        {% if evaluations %}
+        <div class="table-container">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Date/Time</th>
+                        <th>Claim ID</th>
+                        <th class="text-right">Claim Amount</th>
+                        <th class="text-right">Period Spent</th>
+                        <th>Result</th>
+                        <th>Triggered Rule</th>
+                        <th>Message</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for eval in evaluations %}
+                    <tr>
+                        <td class="text-slate-600 dark:text-slate-400 whitespace-nowrap">
+                            {{ eval.evaluated_at.strftime('%Y-%m-%d %H:%M') }}
+                        </td>
+                        <td class="font-mono text-slate-900 dark:text-white">
+                            <a href="/expense/claims/{{ eval.claim_id }}" class="hover:text-amber-600">
+                                {{ eval.claim_id | string | truncate(8, True, '') }}...
+                            </a>
+                        </td>
+                        <td class="text-right font-mono text-slate-900 dark:text-white">
+                            {{ "{:,.2f}".format(eval.claim_amount) }}
+                        </td>
+                        <td class="text-right font-mono text-slate-600 dark:text-slate-400">
+                            {% if eval.period_spent_amount is not none %}
+                            {{ "{:,.2f}".format(eval.period_spent_amount) }}
+                            {% else %}
+                            &mdash;
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if eval.result.value == 'PASSED' %}
+                            <span class="badge badge-success">Passed</span>
+                            {% elif eval.result.value == 'BLOCKED' %}
+                            <span class="badge badge-danger">Blocked</span>
+                            {% elif eval.result.value == 'WARNING' %}
+                            <span class="badge badge-warning">Warning</span>
+                            {% elif eval.result.value == 'APPROVAL_REQUIRED' %}
+                            <span class="badge badge-info">Approval Required</span>
+                            {% else %}
+                            <span class="badge badge-neutral">{{ eval.result.value }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-slate-700 dark:text-slate-300">
+                            {% if eval.rule_id %}
+                            <span class="font-mono text-xs">{{ eval.rule.rule_code if eval.rule else eval.rule_id | string | truncate(8, True, '') }}</span>
+                            {% else %}
+                            <span class="text-slate-400">&mdash;</span>
+                            {% endif %}
+                        </td>
+                        <td class="max-w-xs truncate text-sm text-slate-500 dark:text-slate-400" title="{{ eval.message or '' }}">
+                            {{ eval.message or '&mdash;' | safe }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {{ pagination(page=page, total_pages=total_pages, total_count=total, limit=25, filters={"result": filters.result, "from_date": filters.from_date, "to_date": filters.to_date}, show_size_selector=false) }}
+        {% else %}
+        {{ empty_state(
+            "No evaluations found",
+            "Limit evaluations appear here when expense claims are submitted.",
+            icon="clipboard"
+        ) }}
+        {% endif %}
+    </div>
+
+    <!-- Info Box -->
+    <div class="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/50">
+        <p class="font-medium text-slate-700 dark:text-slate-300 mb-2">Understanding Evaluation Results:</p>
+        <ul class="text-sm text-slate-600 dark:text-slate-400 space-y-1">
+            <li><span class="badge badge-success mr-2">Passed</span> Claim is within all applicable limits</li>
+            <li><span class="badge badge-warning mr-2">Warning</span> Limit exceeded but claim was allowed with a warning</li>
+            <li><span class="badge badge-info mr-2">Approval Required</span> Claim requires approval from an authorized approver</li>
+            <li><span class="badge badge-danger mr-2">Blocked</span> Claim was blocked due to exceeding a hard limit</li>
+        </ul>
+    </div>
+</div>
+{% endblock %}

@@ -25,6 +25,7 @@ from app.web.auth import router as auth_web_router
 from app.web.admin import router as admin_web_router
 from app.web.profile import router as profile_web_router
 from app.web.people import router as people_web_router
+from app.web.operations import router as operations_web_router
 from app.api.finance import (
     gl_router,
     ap_router,
@@ -40,14 +41,19 @@ from app.api.finance import (
     import_export_router,
     opening_balance_router,
     search_router,
+    payments_router,
+    payments_webhook_router,
 )
 from app.api.people import router as people_hr_router
 from app.api.expense import router as expense_router
+from app.api.expense_limits import router as expense_limits_router
 from app.db import SessionLocal
 from app.services import audit as audit_service
 from app.api.deps import require_role, require_user_auth, require_tenant_auth
 from app.models.domain_settings import DomainSetting, SettingDomain
+from sqlalchemy import text
 from sqlalchemy.orm import Session
+from starlette.responses import JSONResponse
 from app.services.settings_seed import (
     seed_audit_settings,
     seed_auth_settings,
@@ -58,6 +64,7 @@ from app.observability import ObservabilityMiddleware
 from app.telemetry import setup_otel
 from app.errors import register_error_handlers
 from app.web.csrf import csrf_middleware
+from app.middleware.rate_limit import rate_limit_middleware
 from app.startup import log_startup_info, validate_startup
 
 
@@ -91,6 +98,8 @@ configure_logging()
 setup_otel(app)
 app.add_middleware(ObservabilityMiddleware)
 register_error_handlers(app)
+# Rate limiting must come before CSRF to reject early
+app.middleware("http")(rate_limit_middleware)
 app.middleware("http")(csrf_middleware)
 
 
@@ -239,6 +248,7 @@ app.include_router(expense_web_router, prefix="/expense")
 app.include_router(settings_web_router)  # Has its own /settings prefix
 app.include_router(automation_web_router)  # Has its own /automation prefix
 app.include_router(people_web_router)
+app.include_router(operations_web_router)
 
 # Finance Accounting Routers (authenticated with tenant context)
 _include_api_router(gl_router, dependencies=[Depends(require_tenant_auth)])
@@ -255,19 +265,98 @@ _include_api_router(banking_router, dependencies=[Depends(require_tenant_auth)])
 _include_api_router(import_export_router, dependencies=[Depends(require_tenant_auth)])
 _include_api_router(opening_balance_router, dependencies=[Depends(require_tenant_auth)])
 _include_api_router(search_router, dependencies=[Depends(require_tenant_auth)])
+_include_api_router(payments_router, dependencies=[Depends(require_tenant_auth)])
+# Payments webhook router - NO authentication (uses signature verification)
+_include_api_router(payments_webhook_router)
 
 # People/HR Routers
 _include_api_router(people_hr_router, dependencies=[Depends(require_tenant_auth)])
 
 # Expense Management (independent module)
 _include_api_router(expense_router, dependencies=[Depends(require_tenant_auth)])
+_include_api_router(expense_limits_router, dependencies=[Depends(require_tenant_auth)])
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
 @app.get("/health")
 def health_check():
+    """Basic health check endpoint (backwards compatibility)."""
     return {"status": "ok"}
+
+
+@app.get("/health/live")
+def liveness_probe():
+    """Liveness probe - checks if the process is running.
+
+    Kubernetes uses this to determine if the container should be restarted.
+    This should always return 200 if the Python process is running.
+    """
+    return {"status": "alive"}
+
+
+@app.get("/health/ready")
+def readiness_probe():
+    """Readiness probe - checks if the app is ready to serve traffic.
+
+    Kubernetes uses this to determine if the pod should receive traffic.
+    Checks critical dependencies (database, etc.).
+
+    Returns:
+        200: Ready to serve traffic
+        503: Not ready (dependency failure)
+    """
+    checks = {
+        "database": _check_database(),
+        "redis": _check_redis(),
+    }
+
+    all_healthy = all(check["healthy"] for check in checks.values())
+
+    if all_healthy:
+        return {"status": "ready", "checks": checks}
+    else:
+        return Response(
+            content=JSONResponse(
+                content={"status": "not_ready", "checks": checks}
+            ).body,
+            status_code=503,
+            media_type="application/json",
+        )
+
+
+def _check_database() -> dict:
+    """Check database connectivity."""
+    try:
+        db = SessionLocal()
+        try:
+            # Simple query to verify connection
+            db.execute(text("SELECT 1"))
+            return {"healthy": True, "message": "Connected"}
+        finally:
+            db.close()
+    except Exception as e:
+        return {"healthy": False, "message": str(e)[:100]}
+
+
+def _check_redis() -> dict:
+    """Check Redis connectivity (optional dependency)."""
+    import os
+
+    redis_url = os.getenv("REDIS_URL")
+    if not redis_url:
+        return {"healthy": True, "message": "Not configured (optional)"}
+
+    try:
+        import redis
+
+        client = redis.from_url(redis_url, socket_connect_timeout=2)
+        client.ping()
+        return {"healthy": True, "message": "Connected"}
+    except ImportError:
+        return {"healthy": True, "message": "Redis package not installed (optional)"}
+    except Exception as e:
+        return {"healthy": False, "message": str(e)[:100]}
 
 
 @app.get("/metrics")

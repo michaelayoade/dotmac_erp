@@ -1,0 +1,189 @@
+{% extends "expense/base_expense.html" %}
+{% from "components/macros.html" import pagination, empty_state %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+            <h1 class="text-2xl font-semibold text-slate-900 dark:text-white font-display">Expense Limit Rules</h1>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Configure spending limits by scope, period, and action</p>
+        </div>
+        <div class="flex items-center gap-3">
+            <a href="/expense/limits/approvers" class="btn btn-secondary">
+                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                </svg>
+                Approver Limits
+            </a>
+            <a href="/expense/limits/rules/new" class="btn btn-primary">
+                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                </svg>
+                New Rule
+            </a>
+        </div>
+    </div>
+
+    <!-- Quick Links -->
+    <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <a href="/expense/limits/rules" class="card p-4 hover:border-amber-300 dark:hover:border-amber-700 transition-colors group">
+            <div class="flex items-center gap-3">
+                <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-100 text-amber-600 dark:bg-amber-900/50 dark:text-amber-400">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="font-medium text-slate-900 dark:text-white group-hover:text-amber-600 dark:group-hover:text-amber-400">Limit Rules</p>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">{{ total }} rules configured</p>
+                </div>
+            </div>
+        </a>
+        <a href="/expense/limits/usage" class="card p-4 hover:border-amber-300 dark:hover:border-amber-700 transition-colors group">
+            <div class="flex items-center gap-3">
+                <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-900/50 dark:text-blue-400">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="font-medium text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400">Usage Dashboard</p>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">View spending by employee</p>
+                </div>
+            </div>
+        </a>
+        <a href="/expense/limits/evaluations" class="card p-4 hover:border-amber-300 dark:hover:border-amber-700 transition-colors group">
+            <div class="flex items-center gap-3">
+                <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-violet-100 text-violet-600 dark:bg-violet-900/50 dark:text-violet-400">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="font-medium text-slate-900 dark:text-white group-hover:text-violet-600 dark:group-hover:text-violet-400">Audit Trail</p>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">Limit evaluation history</p>
+                </div>
+            </div>
+        </a>
+    </div>
+
+    <!-- Filters -->
+    <div class="card p-4">
+        <form method="get" class="flex flex-wrap items-end gap-4">
+            <div class="min-w-[200px]">
+                <label class="form-label">Search</label>
+                <input type="text" name="search" value="{{ filters.search or '' }}" class="form-input" placeholder="Rule code or name">
+            </div>
+            <div class="min-w-[160px]">
+                <label class="form-label">Scope Type</label>
+                <select name="scope_type" class="form-input form-select">
+                    <option value="">All Scopes</option>
+                    {% for st in scope_types %}
+                    <option value="{{ st }}" {{ 'selected' if filters.scope_type == st else '' }}>{{ st | replace('_', ' ') | title }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="min-w-[130px]">
+                <label class="form-label">Status</label>
+                <select name="is_active" class="form-input form-select">
+                    <option value="">All</option>
+                    <option value="true" {{ 'selected' if filters.is_active == 'true' else '' }}>Active</option>
+                    <option value="false" {{ 'selected' if filters.is_active == 'false' else '' }}>Inactive</option>
+                </select>
+            </div>
+            <button type="submit" class="btn btn-secondary">
+                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
+                </svg>
+                Filter
+            </button>
+            {% if filters.search or filters.scope_type or filters.is_active %}
+            <a href="/expense/limits/rules" class="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300">Clear</a>
+            {% endif %}
+        </form>
+    </div>
+
+    <!-- Rules Table -->
+    <div class="card overflow-hidden">
+        {% if rules %}
+        <div class="table-container">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Rule Code</th>
+                        <th>Name</th>
+                        <th>Scope</th>
+                        <th>Period</th>
+                        <th class="text-right">Limit Amount</th>
+                        <th>Action</th>
+                        <th>Priority</th>
+                        <th>Status</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for rule in rules %}
+                    <tr>
+                        <td class="font-mono text-slate-900 dark:text-white">{{ rule.rule_code }}</td>
+                        <td class="text-slate-700 dark:text-slate-300">{{ rule.rule_name }}</td>
+                        <td>
+                            <span class="badge badge-neutral">{{ rule.scope_type.value | replace('_', ' ') | title }}</span>
+                        </td>
+                        <td class="text-slate-600 dark:text-slate-400">{{ rule.period_type.value | title }}</td>
+                        <td class="text-right font-mono text-slate-900 dark:text-white">
+                            {{ "{:,.2f}".format(rule.limit_amount) }}
+                        </td>
+                        <td>
+                            {% if rule.action_type.value == 'BLOCK' %}
+                            <span class="badge badge-danger">Block</span>
+                            {% elif rule.action_type.value == 'WARN' %}
+                            <span class="badge badge-warning">Warn</span>
+                            {% elif rule.action_type.value == 'REQUIRE_APPROVAL' %}
+                            <span class="badge badge-info">Require Approval</span>
+                            {% else %}
+                            <span class="badge badge-neutral">{{ rule.action_type.value | replace('_', ' ') | title }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center text-slate-600 dark:text-slate-400">{{ rule.priority }}</td>
+                        <td>
+                            {% if rule.is_active %}
+                            <span class="badge badge-success">Active</span>
+                            {% else %}
+                            <span class="badge badge-neutral">Inactive</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="table-actions">
+                                <a href="/expense/limits/rules/{{ rule.rule_id }}/edit" class="table-action-btn" title="Edit">
+                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 4H6a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2v-5M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                                    </svg>
+                                </a>
+                                <form method="post" action="/expense/limits/rules/{{ rule.rule_id }}/delete" class="inline" onsubmit="return confirm('Delete this rule?')">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                    <button type="submit" class="table-action-btn text-red-500 hover:text-red-700" title="Delete">
+                                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                        </svg>
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {{ pagination(page=page, total_pages=total_pages, total_count=total, limit=25, search=filters.search, filters={"scope_type": filters.scope_type, "is_active": filters.is_active}, show_size_selector=false) }}
+        {% else %}
+        {{ empty_state(
+            "No expense limit rules",
+            "Create your first rule to enforce spending limits on expense claims.",
+            icon="document",
+            cta_text="New Rule",
+            cta_href="/expense/limits/rules/new"
+        ) }}
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

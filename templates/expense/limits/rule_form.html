@@ -1,0 +1,247 @@
+{% extends "expense/base_expense.html" %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="flex items-center gap-4">
+        <a href="/expense/limits/rules" class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300">
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+            </svg>
+        </a>
+        <div>
+            <h1 class="text-2xl font-semibold text-slate-900 dark:text-white font-display">
+                {% if rule and rule.rule_id %}Edit Rule: {{ rule.rule_code }}{% else %}New Expense Limit Rule{% endif %}
+            </h1>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Define spending limits and enforcement actions</p>
+        </div>
+    </div>
+
+    {% if errors._form %}
+    <div class="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400">
+        {{ errors._form }}
+    </div>
+    {% endif %}
+
+    <form method="post" class="space-y-6">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+        <!-- Basic Information -->
+        <div class="card p-6">
+            <h3 class="mb-4 font-medium text-slate-900 dark:text-white">Basic Information</h3>
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                    <label class="form-label">Rule Code <span class="text-red-500">*</span></label>
+                    <input type="text" name="rule_code" value="{{ rule.rule_code if rule else '' }}"
+                           class="form-input{% if errors.rule_code %} border-red-300{% endif %}"
+                           placeholder="e.g., GRADE-A-MONTHLY"
+                           {% if rule and rule.rule_id %}readonly{% endif %}>
+                    {% if errors.rule_code %}
+                    <p class="mt-1 text-sm text-red-500">{{ errors.rule_code }}</p>
+                    {% endif %}
+                </div>
+                <div>
+                    <label class="form-label">Rule Name <span class="text-red-500">*</span></label>
+                    <input type="text" name="rule_name" value="{{ rule.rule_name if rule else '' }}"
+                           class="form-input{% if errors.rule_name %} border-red-300{% endif %}"
+                           placeholder="e.g., Grade A Monthly Limit">
+                    {% if errors.rule_name %}
+                    <p class="mt-1 text-sm text-red-500">{{ errors.rule_name }}</p>
+                    {% endif %}
+                </div>
+                <div class="sm:col-span-2">
+                    <label class="form-label">Description</label>
+                    <textarea name="description" rows="2" class="form-input" placeholder="Optional description of this rule">{{ rule.description if rule and rule.description else '' }}</textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- Scope Configuration -->
+        <div class="card p-6">
+            <h3 class="mb-4 font-medium text-slate-900 dark:text-white">Scope Configuration</h3>
+            <p class="mb-4 text-sm text-slate-500 dark:text-slate-400">Define which employees or groups this rule applies to</p>
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2" x-data="{ scopeType: '{{ rule.scope_type if rule else '' }}' }">
+                <div>
+                    <label class="form-label">Scope Type <span class="text-red-500">*</span></label>
+                    <select name="scope_type" x-model="scopeType"
+                            class="form-input form-select{% if errors.scope_type %} border-red-300{% endif %}"
+                            {% if rule and rule.rule_id %}disabled{% endif %}>
+                        <option value="">Select scope type...</option>
+                        {% for st in scope_types %}
+                        <option value="{{ st }}" {% if rule and rule.scope_type and rule.scope_type.value == st %}selected{% endif %}>
+                            {{ st | replace('_', ' ') | title }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    {% if rule and rule.rule_id %}
+                    <input type="hidden" name="scope_type" value="{{ rule.scope_type.value if rule.scope_type else '' }}">
+                    {% endif %}
+                    {% if errors.scope_type %}
+                    <p class="mt-1 text-sm text-red-500">{{ errors.scope_type }}</p>
+                    {% endif %}
+                </div>
+                <div>
+                    <label class="form-label">Scope Target</label>
+                    <select name="scope_id" class="form-input form-select" {% if rule and rule.rule_id %}disabled{% endif %}>
+                        <option value="">All (Organization-wide)</option>
+
+                        <!-- Employee options -->
+                        <template x-if="scopeType === 'EMPLOYEE'">
+                            <optgroup label="Employees">
+                                {% for emp in scope_options.employees %}
+                                <option value="{{ emp.employee_id }}" {% if rule and rule.scope_id and (rule.scope_id | string) == (emp.employee_id | string) %}selected{% endif %}>
+                                    {{ emp.first_name }} {{ emp.last_name }}
+                                </option>
+                                {% endfor %}
+                            </optgroup>
+                        </template>
+
+                        <!-- Grade options -->
+                        <template x-if="scopeType === 'GRADE'">
+                            <optgroup label="Grades">
+                                {% for grade in scope_options.grades %}
+                                <option value="{{ grade.grade_id }}" {% if rule and rule.scope_id and (rule.scope_id | string) == (grade.grade_id | string) %}selected{% endif %}>
+                                    {{ grade.name }} (Rank: {{ grade.rank }})
+                                </option>
+                                {% endfor %}
+                            </optgroup>
+                        </template>
+
+                        <!-- Department options -->
+                        <template x-if="scopeType === 'DEPARTMENT'">
+                            <optgroup label="Departments">
+                                {% for dept in scope_options.departments %}
+                                <option value="{{ dept.department_id }}" {% if rule and rule.scope_id and (rule.scope_id | string) == (dept.department_id | string) %}selected{% endif %}>
+                                    {{ dept.name }}
+                                </option>
+                                {% endfor %}
+                            </optgroup>
+                        </template>
+
+                        <!-- Designation options -->
+                        <template x-if="scopeType === 'DESIGNATION'">
+                            <optgroup label="Designations">
+                                {% for des in scope_options.designations %}
+                                <option value="{{ des.designation_id }}" {% if rule and rule.scope_id and (rule.scope_id | string) == (des.designation_id | string) %}selected{% endif %}>
+                                    {{ des.name }}
+                                </option>
+                                {% endfor %}
+                            </optgroup>
+                        </template>
+                    </select>
+                    <p class="mt-1 text-xs text-slate-500">Leave empty to apply to all within the scope type</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Limit Configuration -->
+        <div class="card p-6">
+            <h3 class="mb-4 font-medium text-slate-900 dark:text-white">Limit Configuration</h3>
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <div>
+                    <label class="form-label">Period Type <span class="text-red-500">*</span></label>
+                    <select name="period_type" class="form-input form-select{% if errors.period_type %} border-red-300{% endif %}"
+                            {% if rule and rule.rule_id %}disabled{% endif %}>
+                        <option value="">Select period...</option>
+                        {% for pt in period_types %}
+                        <option value="{{ pt }}" {% if rule and rule.period_type and rule.period_type.value == pt %}selected{% endif %}>
+                            {{ pt | title }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    {% if rule and rule.rule_id %}
+                    <input type="hidden" name="period_type" value="{{ rule.period_type.value if rule.period_type else '' }}">
+                    {% endif %}
+                    {% if errors.period_type %}
+                    <p class="mt-1 text-sm text-red-500">{{ errors.period_type }}</p>
+                    {% endif %}
+                </div>
+                <div>
+                    <label class="form-label">Limit Amount <span class="text-red-500">*</span></label>
+                    <input type="number" name="limit_amount" step="0.01" min="0"
+                           value="{{ rule.limit_amount if rule else '' }}"
+                           class="form-input{% if errors.limit_amount %} border-red-300{% endif %}"
+                           placeholder="0.00">
+                    {% if errors.limit_amount %}
+                    <p class="mt-1 text-sm text-red-500">{{ errors.limit_amount }}</p>
+                    {% endif %}
+                </div>
+                <div>
+                    <label class="form-label">Action Type <span class="text-red-500">*</span></label>
+                    <select name="action_type" class="form-input form-select{% if errors.action_type %} border-red-300{% endif %}">
+                        <option value="">Select action...</option>
+                        {% for at in action_types %}
+                        <option value="{{ at }}" {% if rule and rule.action_type and rule.action_type.value == at %}selected{% endif %}>
+                            {{ at | replace('_', ' ') | title }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    {% if errors.action_type %}
+                    <p class="mt-1 text-sm text-red-500">{{ errors.action_type }}</p>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="mt-4 rounded-lg bg-slate-50 p-3 text-sm text-slate-600 dark:bg-slate-800/50 dark:text-slate-400">
+                <p class="font-medium mb-1">Action Types Explained:</p>
+                <ul class="list-disc list-inside space-y-1">
+                    <li><strong>Block:</strong> Prevents submission when limit is exceeded</li>
+                    <li><strong>Warn:</strong> Allows submission with a warning message</li>
+                    <li><strong>Require Approval:</strong> Routes to an approver when limit is exceeded</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Validity & Priority -->
+        <div class="card p-6">
+            <h3 class="mb-4 font-medium text-slate-900 dark:text-white">Validity & Priority</h3>
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-4">
+                <div>
+                    <label class="form-label">Effective From <span class="text-red-500">*</span></label>
+                    <input type="date" name="effective_from"
+                           value="{{ rule.effective_from.isoformat() if rule and rule.effective_from else '' }}"
+                           class="form-input{% if errors.effective_from %} border-red-300{% endif %}"
+                           {% if rule and rule.rule_id %}readonly{% endif %}>
+                    {% if errors.effective_from %}
+                    <p class="mt-1 text-sm text-red-500">{{ errors.effective_from }}</p>
+                    {% endif %}
+                </div>
+                <div>
+                    <label class="form-label">Effective To</label>
+                    <input type="date" name="effective_to"
+                           value="{{ rule.effective_to.isoformat() if rule and rule.effective_to else '' }}"
+                           class="form-input{% if errors.effective_to %} border-red-300{% endif %}">
+                    {% if errors.effective_to %}
+                    <p class="mt-1 text-sm text-red-500">{{ errors.effective_to }}</p>
+                    {% endif %}
+                    <p class="mt-1 text-xs text-slate-500">Leave empty for no end date</p>
+                </div>
+                <div>
+                    <label class="form-label">Priority</label>
+                    <input type="number" name="priority" min="1" max="1000"
+                           value="{{ rule.priority if rule else '100' }}"
+                           class="form-input{% if errors.priority %} border-red-300{% endif %}">
+                    {% if errors.priority %}
+                    <p class="mt-1 text-sm text-red-500">{{ errors.priority }}</p>
+                    {% endif %}
+                    <p class="mt-1 text-xs text-slate-500">Lower = higher priority</p>
+                </div>
+                <div class="flex items-end">
+                    <label class="flex items-center gap-2">
+                        <input type="checkbox" name="is_active" value="1"
+                               {% if (rule and rule.is_active) or not rule %}checked{% endif %}
+                               class="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500">
+                        <span class="text-sm text-slate-700 dark:text-slate-300">Active</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <!-- Form Actions -->
+        <div class="flex justify-end gap-3">
+            <a href="/expense/limits/rules" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">
+                {% if rule and rule.rule_id %}Update Rule{% else %}Create Rule{% endif %}
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

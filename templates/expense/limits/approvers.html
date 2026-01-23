@@ -1,0 +1,146 @@
+{% extends "expense/base_expense.html" %}
+{% from "components/macros.html" import pagination, empty_state %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+            <h1 class="text-2xl font-semibold text-slate-900 dark:text-white font-display">Approver Limits</h1>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Define approval authority for expense claims</p>
+        </div>
+        <div class="flex items-center gap-3">
+            <a href="/expense/limits/rules" class="btn btn-secondary">
+                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                </svg>
+                Back to Rules
+            </a>
+            <a href="/expense/limits/approvers/new" class="btn btn-primary">
+                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                </svg>
+                New Approver Limit
+            </a>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="card p-4">
+        <form method="get" class="flex flex-wrap items-end gap-4">
+            <div class="min-w-[160px]">
+                <label class="form-label">Scope Type</label>
+                <select name="scope_type" class="form-input form-select">
+                    <option value="">All Scopes</option>
+                    {% for st in scope_types %}
+                    <option value="{{ st }}" {{ 'selected' if filters.scope_type == st else '' }}>{{ st | replace('_', ' ') | title }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="min-w-[130px]">
+                <label class="form-label">Status</label>
+                <select name="is_active" class="form-input form-select">
+                    <option value="">All</option>
+                    <option value="true" {{ 'selected' if filters.is_active == 'true' else '' }}>Active</option>
+                    <option value="false" {{ 'selected' if filters.is_active == 'false' else '' }}>Inactive</option>
+                </select>
+            </div>
+            <button type="submit" class="btn btn-secondary">
+                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
+                </svg>
+                Filter
+            </button>
+            {% if filters.scope_type or filters.is_active %}
+            <a href="/expense/limits/approvers" class="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300">Clear</a>
+            {% endif %}
+        </form>
+    </div>
+
+    <!-- Info Box -->
+    <div class="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
+        <div class="flex gap-3">
+            <svg class="h-5 w-5 text-blue-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <div class="text-sm text-blue-700 dark:text-blue-300">
+                <p class="font-medium">How Approver Limits Work</p>
+                <p class="mt-1">Approver limits define the maximum expense amount each role or grade can approve. When an expense exceeds a limit rule with "Require Approval" action, the system finds approvers with sufficient authority.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Approver Limits Table -->
+    <div class="card overflow-hidden">
+        {% if approver_limits %}
+        <div class="table-container">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Scope Type</th>
+                        <th>Scope Target</th>
+                        <th class="text-right">Max Approval Amount</th>
+                        <th>Can Approve Own</th>
+                        <th>Status</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for limit in approver_limits %}
+                    <tr>
+                        <td>
+                            <span class="badge badge-neutral">{{ limit.scope_type | replace('_', ' ') | title }}</span>
+                        </td>
+                        <td class="text-slate-700 dark:text-slate-300">
+                            {% if limit.scope_id %}
+                                {{ limit.scope_id }}
+                            {% else %}
+                                <span class="text-slate-400 italic">All</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-right font-mono text-slate-900 dark:text-white">
+                            {{ "{:,.2f}".format(limit.max_approval_amount) }}
+                        </td>
+                        <td>
+                            {% if limit.can_approve_own_expenses %}
+                            <span class="badge badge-success">Yes</span>
+                            {% else %}
+                            <span class="badge badge-neutral">No</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if limit.is_active %}
+                            <span class="badge badge-success">Active</span>
+                            {% else %}
+                            <span class="badge badge-neutral">Inactive</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="table-actions">
+                                <form method="post" action="/expense/limits/approvers/{{ limit.approver_limit_id }}/delete" class="inline" onsubmit="return confirm('Delete this approver limit?')">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                    <button type="submit" class="table-action-btn text-red-500 hover:text-red-700" title="Delete">
+                                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                        </svg>
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {{ pagination(page=page, total_pages=total_pages, total_count=total, limit=25, filters={"scope_type": filters.scope_type, "is_active": filters.is_active}, show_size_selector=false) }}
+        {% else %}
+        {{ empty_state(
+            "No approver limits",
+            "Create approver limits to define who can approve expenses of certain amounts.",
+            icon="shield",
+            cta_text="New Approver Limit",
+            cta_href="/expense/limits/approvers/new"
+        ) }}
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

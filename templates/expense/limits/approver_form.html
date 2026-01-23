@@ -1,0 +1,138 @@
+{% extends "expense/base_expense.html" %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="flex items-center gap-4">
+        <a href="/expense/limits/approvers" class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300">
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+            </svg>
+        </a>
+        <div>
+            <h1 class="text-2xl font-semibold text-slate-900 dark:text-white font-display">New Approver Limit</h1>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Define approval authority for a role, grade, or individual</p>
+        </div>
+    </div>
+
+    {% if errors._form %}
+    <div class="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400">
+        {{ errors._form }}
+    </div>
+    {% endif %}
+
+    <form method="post" class="space-y-6">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+        <!-- Scope Configuration -->
+        <div class="card p-6">
+            <h3 class="mb-4 font-medium text-slate-900 dark:text-white">Scope Configuration</h3>
+            <p class="mb-4 text-sm text-slate-500 dark:text-slate-400">Define which approvers this limit applies to</p>
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2" x-data="{ scopeType: '{{ approver_limit.scope_type if approver_limit else '' }}' }">
+                <div>
+                    <label class="form-label">Scope Type <span class="text-red-500">*</span></label>
+                    <select name="scope_type" x-model="scopeType"
+                            class="form-input form-select{% if errors.scope_type %} border-red-300{% endif %}">
+                        <option value="">Select scope type...</option>
+                        {% for st in scope_types %}
+                        <option value="{{ st }}" {% if approver_limit and approver_limit.scope_type == st %}selected{% endif %}>
+                            {{ st | replace('_', ' ') | title }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    {% if errors.scope_type %}
+                    <p class="mt-1 text-sm text-red-500">{{ errors.scope_type }}</p>
+                    {% endif %}
+                </div>
+                <div>
+                    <label class="form-label">Scope Target</label>
+                    <select name="scope_id" class="form-input form-select">
+                        <option value="">All (applies to scope type)</option>
+
+                        <!-- Employee options -->
+                        <template x-if="scopeType === 'EMPLOYEE'">
+                            <optgroup label="Employees">
+                                {% for emp in scope_options.employees %}
+                                <option value="{{ emp.employee_id }}" {% if approver_limit and approver_limit.scope_id and (approver_limit.scope_id | string) == (emp.employee_id | string) %}selected{% endif %}>
+                                    {{ emp.first_name }} {{ emp.last_name }}
+                                </option>
+                                {% endfor %}
+                            </optgroup>
+                        </template>
+
+                        <!-- Grade options -->
+                        <template x-if="scopeType === 'GRADE'">
+                            <optgroup label="Grades">
+                                {% for grade in scope_options.grades %}
+                                <option value="{{ grade.grade_id }}" {% if approver_limit and approver_limit.scope_id and (approver_limit.scope_id | string) == (grade.grade_id | string) %}selected{% endif %}>
+                                    {{ grade.name }} (Rank: {{ grade.rank }})
+                                </option>
+                                {% endfor %}
+                            </optgroup>
+                        </template>
+
+                        <!-- Designation options -->
+                        <template x-if="scopeType === 'DESIGNATION'">
+                            <optgroup label="Designations">
+                                {% for des in scope_options.designations %}
+                                <option value="{{ des.designation_id }}" {% if approver_limit and approver_limit.scope_id and (approver_limit.scope_id | string) == (des.designation_id | string) %}selected{% endif %}>
+                                    {{ des.name }}
+                                </option>
+                                {% endfor %}
+                            </optgroup>
+                        </template>
+                    </select>
+                    <p class="mt-1 text-xs text-slate-500">Leave empty to apply to all within the scope type</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Approval Settings -->
+        <div class="card p-6">
+            <h3 class="mb-4 font-medium text-slate-900 dark:text-white">Approval Settings</h3>
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                    <label class="form-label">Maximum Approval Amount <span class="text-red-500">*</span></label>
+                    <input type="number" name="max_approval_amount" step="0.01" min="0"
+                           value="{{ approver_limit.max_approval_amount if approver_limit else '' }}"
+                           class="form-input{% if errors.max_approval_amount %} border-red-300{% endif %}"
+                           placeholder="0.00">
+                    {% if errors.max_approval_amount %}
+                    <p class="mt-1 text-sm text-red-500">{{ errors.max_approval_amount }}</p>
+                    {% endif %}
+                    <p class="mt-1 text-xs text-slate-500">Maximum expense amount this approver can authorize</p>
+                </div>
+                <div class="flex flex-col justify-end gap-3">
+                    <label class="flex items-center gap-2">
+                        <input type="checkbox" name="can_approve_own_expenses" value="1"
+                               {% if approver_limit and approver_limit.can_approve_own_expenses %}checked{% endif %}
+                               class="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500">
+                        <span class="text-sm text-slate-700 dark:text-slate-300">Can approve own expenses</span>
+                    </label>
+                    <label class="flex items-center gap-2">
+                        <input type="checkbox" name="is_active" value="1"
+                               {% if (approver_limit and approver_limit.is_active) or not approver_limit %}checked{% endif %}
+                               class="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500">
+                        <span class="text-sm text-slate-700 dark:text-slate-300">Active</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <!-- Example Box -->
+        <div class="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/50">
+            <p class="font-medium text-slate-700 dark:text-slate-300 mb-2">Example Configurations:</p>
+            <ul class="text-sm text-slate-600 dark:text-slate-400 space-y-1">
+                <li><strong>Grade: Manager, Max: 50,000</strong> - All managers can approve up to 50,000</li>
+                <li><strong>Employee: John Doe, Max: 100,000</strong> - Specific person can approve up to 100,000</li>
+                <li><strong>Designation: CFO, Max: 500,000</strong> - CFO role can approve up to 500,000</li>
+            </ul>
+        </div>
+
+        <!-- Form Actions -->
+        <div class="flex justify-end gap-3">
+            <a href="/expense/limits/approvers" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">Create Approver Limit</button>
+        </div>
+    </form>
+</div>
+{% endblock %}
