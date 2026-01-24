@@ -423,12 +423,11 @@ class ResourceService:
 
     def _count_business_days(self, start_date: date, end_date: date) -> int:
         """Count business days (Mon-Fri) between two dates."""
+        from datetime import timedelta
         count = 0
         current = start_date
         while current <= end_date:
             if current.weekday() < 5:  # Monday = 0, Friday = 4
                 count += 1
-            current = current.replace(day=current.day + 1) if current.day < 28 else \
-                date(current.year, current.month + 1, 1) if current.month < 12 else \
-                date(current.year + 1, 1, 1)
+            current += timedelta(days=1)
         return count

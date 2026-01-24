@@ -1,0 +1,115 @@
+{% extends "operations/base_operations.html" %}
+
+{% block title %}{% if entry %}Edit{% else %}Log{% endif %} Time - {{ project.project_name }}{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto space-y-6">
+    <div class="flex items-center gap-2">
+        <a href="/operations/projects/{{ project.project_code }}/time" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+            </svg>
+        </a>
+        <h1 class="text-2xl font-display font-semibold text-slate-900 dark:text-white">{% if entry %}Edit{% else %}Log{% endif %} Time</h1>
+    </div>
+    <p class="text-sm text-slate-500 dark:text-slate-400">{{ project.project_name }}</p>
+
+    <form method="post" action="/operations/projects/{{ project.project_code }}/time{% if entry %}/{{ entry.entry_id }}{% endif %}"
+          class="rounded-lg border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-800 space-y-6">
+
+        <!-- Date and Hours -->
+        <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
+            <div>
+                <label for="entry_date" class="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                    Date <span class="text-rose-500">*</span>
+                </label>
+                <input type="date" name="entry_date" id="entry_date" required
+                       value="{{ entry.entry_date.isoformat() if entry else today.isoformat() if today else '' }}"
+                       class="mt-1 block w-full rounded-lg border-slate-300 focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
+            </div>
+            <div>
+                <label for="hours" class="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                    Hours <span class="text-rose-500">*</span>
+                </label>
+                <input type="number" name="hours" id="hours" required step="0.25" min="0.25" max="24"
+                       value="{{ entry.hours if entry else '' }}"
+                       placeholder="e.g. 2.5"
+                       class="mt-1 block w-full rounded-lg border-slate-300 focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
+            </div>
+        </div>
+
+        <!-- Employee -->
+        <div>
+            <label for="employee_id" class="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                Team Member <span class="text-rose-500">*</span>
+            </label>
+            <select name="employee_id" id="employee_id" required
+                    class="mt-1 block w-full rounded-lg border-slate-300 focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
+                <option value="">Select team member...</option>
+                {% for emp in employees %}
+                <option value="{{ emp.employee_id }}" {{ 'selected' if entry and entry.employee_id == emp.employee_id else '' }}>
+                    {{ emp.full_name }} ({{ emp.employee_code }})
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <!-- Task -->
+        <div>
+            <label for="task_id" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Task</label>
+            <select name="task_id" id="task_id"
+                    class="mt-1 block w-full rounded-lg border-slate-300 focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
+                <option value="">No specific task</option>
+                {% for task in tasks %}
+                <option value="{{ task.task_id }}"
+                        {{ 'selected' if entry and entry.task_id == task.task_id else 'selected' if preselected_task_id and preselected_task_id == task.task_id|string else '' }}>
+                    {{ task.task_name }}{% if task.task_code %} ({{ task.task_code }}){% endif %}
+                </option>
+                {% endfor %}
+            </select>
+            <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Optional: link this time entry to a specific task</p>
+        </div>
+
+        <!-- Description -->
+        <div>
+            <label for="description" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Description</label>
+            <textarea name="description" id="description" rows="3"
+                      placeholder="What did you work on?"
+                      class="mt-1 block w-full rounded-lg border-slate-300 focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">{{ entry.description if entry else '' }}</textarea>
+        </div>
+
+        <!-- Billable -->
+        <div class="flex items-center gap-3">
+            <input type="checkbox" name="is_billable" id="is_billable"
+                   {{ 'checked' if entry and entry.is_billable else 'checked' if not entry else '' }}
+                   class="rounded border-slate-300 text-amber-600 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700">
+            <label for="is_billable" class="text-sm font-medium text-slate-700 dark:text-slate-300">
+                Billable time
+            </label>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
+            <a href="/operations/projects/{{ project.project_code }}/time"
+               class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600 transition-colors">
+                Cancel
+            </a>
+            <button type="submit"
+                    class="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 transition-colors">
+                {% if entry %}Update{% else %}Log Time{% endif %}
+            </button>
+        </div>
+    </form>
+
+    {% if entry and entry.billing_status and entry.billing_status.value == 'BILLED' %}
+    <div class="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
+        <div class="flex items-center gap-2">
+            <svg class="h-5 w-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span class="text-sm text-blue-800 dark:text-blue-200">This entry has been billed and cannot be modified.</span>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
