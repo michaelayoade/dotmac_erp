@@ -177,6 +177,10 @@ def _format_ticket_for_detail(ticket: Ticket, linked_expenses: List[ExpenseClaim
     base = _format_ticket_for_list(ticket)
     status_style = STATUS_STYLES.get(ticket.status, STATUS_STYLES[TicketStatus.OPEN])
 
+    customer_contact = ticket.customer.primary_contact if ticket.customer else None
+    customer_billing_address = (ticket.customer.billing_address or {}).get("address", "") if ticket.customer else ""
+    customer_shipping_address = (ticket.customer.shipping_address or {}).get("address", "") if ticket.customer else ""
+
     # Add full details
     base.update({
         "description": ticket.description,
@@ -194,6 +198,10 @@ def _format_ticket_for_detail(ticket: Ticket, linked_expenses: List[ExpenseClaim
         "customer_id": str(ticket.customer_id) if ticket.customer_id else None,
         "customer_name": ticket.customer.trading_name or ticket.customer.legal_name if ticket.customer else None,
         "customer_code": ticket.customer.customer_code if ticket.customer else None,
+        "customer_email": (customer_contact or {}).get("email"),
+        "customer_phone": (customer_contact or {}).get("phone"),
+        "customer_billing_address": customer_billing_address,
+        "customer_shipping_address": customer_shipping_address,
         # Category info
         "category_id": str(ticket.category_id) if ticket.category_id else None,
         "category_name": ticket.category.category_name if ticket.category else None,
@@ -411,6 +419,9 @@ class SupportWebService:
         # Get linked expenses
         linked_expenses = ticket_service.get_linked_expenses(db, org_id, ticket.ticket_id)
 
+        # Get linked tasks (tasks that have this ticket_id)
+        linked_tasks = self._get_linked_tasks(db, org_id, ticket.ticket_id)
+
         # Get employees for assignment dropdown
         employees = self._get_employees_for_dropdown(db, org_id)
 
@@ -428,6 +439,7 @@ class SupportWebService:
             **base_context(request, auth, f"Ticket {ticket.ticket_number}", "support", db=db),
             "ticket": formatted,
             "employees": employees,
+            "linked_tasks": linked_tasks,
             "activity_timeline": activity_timeline,
             "sla": sla_data,
         }
@@ -512,6 +524,9 @@ class SupportWebService:
         category_id: Optional[str] = None,
         team_id: Optional[str] = None,
         opening_date: Optional[str] = None,
+        contact_email: Optional[str] = None,
+        contact_phone: Optional[str] = None,
+        contact_address: Optional[str] = None,
     ) -> RedirectResponse:
         """Create a new ticket and redirect to detail page."""
         org_id = coerce_uuid(auth.organization_id)
@@ -538,6 +553,9 @@ class SupportWebService:
                 category_id=coerce_uuid(category_id) if category_id else None,
                 team_id=coerce_uuid(team_id) if team_id else None,
                 opening_date=parsed_date,
+                contact_email=contact_email,
+                contact_phone=contact_phone,
+                contact_address=contact_address,
             )
 
             db.commit()
@@ -570,6 +588,9 @@ class SupportWebService:
         customer_id: Optional[str] = None,
         category_id: Optional[str] = None,
         team_id: Optional[str] = None,
+        contact_email: Optional[str] = None,
+        contact_phone: Optional[str] = None,
+        contact_address: Optional[str] = None,
     ) -> RedirectResponse:
         """Update a ticket and redirect to detail page."""
         org_id = coerce_uuid(auth.organization_id)
@@ -593,6 +614,9 @@ class SupportWebService:
                 customer_id=coerce_uuid(customer_id) if customer_id else None,
                 category_id=coerce_uuid(category_id) if category_id else None,
                 team_id=coerce_uuid(team_id) if team_id else None,
+                contact_email=contact_email,
+                contact_phone=contact_phone,
+                contact_address=contact_address,
             )
 
             if not ticket:
@@ -1203,6 +1227,27 @@ class SupportWebService:
             "resolution_status_class": resolution_status_class,
         }
 
+    def _get_linked_tasks(
+        self,
+        db: Session,
+        organization_id: UUID,
+        ticket_id: UUID,
+    ) -> List[Any]:
+        """Get tasks linked to this ticket."""
+        from app.models.pm.task import Task
+        from sqlalchemy.orm import joinedload
+
+        stmt = (
+            select(Task)
+            .options(joinedload(Task.project))
+            .where(
+                Task.organization_id == organization_id,
+                Task.ticket_id == ticket_id,
+            )
+            .order_by(Task.created_at.desc())
+        )
+        return list(db.scalars(stmt).all())
+
     def _get_employees_for_dropdown(
         self,
         db: Session,
@@ -1371,6 +1416,10 @@ class SupportWebService:
                     "customer_id": str(c.customer_id),
                     "customer_code": c.customer_code,
                     "customer_name": c.trading_name or c.legal_name,
+                    "customer_email": (c.primary_contact or {}).get("email"),
+                    "customer_phone": (c.primary_contact or {}).get("phone"),
+                    "billing_address": (c.billing_address or {}).get("address", ""),
+                    "shipping_address": (c.shipping_address or {}).get("address", ""),
                 }
                 for c in results
             ]
@@ -1469,6 +1518,174 @@ class SupportWebService:
     def update_team_response(self, *args, **kwargs):
         """Delegate to team web service."""
         return team_web_service.update_team_response(*args, **kwargs)
+
+    # ========================================================================
+    # Bulk Operations
+    # ========================================================================
+
+    def bulk_update_status_response(
+        self,
+        request: Request,
+        auth: "WebAuthContext",
+        db: Session,
+        *,
+        ticket_ids: List[str],
+        new_status: str,
+        notes: Optional[str] = None,
+    ) -> RedirectResponse:
+        """Bulk update status for multiple tickets."""
+        org_id = coerce_uuid(auth.organization_id)
+        user_id = coerce_uuid(auth.user_id)
+
+        # Validate status is provided
+        if not new_status or not new_status.strip():
+            return RedirectResponse(
+                url="/operations/support/tickets?error=no_status_selected",
+                status_code=303,
+            )
+
+        # Convert string IDs to UUIDs, skipping invalid ones
+        uuids = []
+        for tid in ticket_ids:
+            if tid:
+                try:
+                    uuids.append(coerce_uuid(tid))
+                except (ValueError, HTTPException):
+                    logger.warning(f"Invalid ticket ID skipped: {tid}")
+
+        if not uuids:
+            return RedirectResponse(
+                url="/operations/support/tickets?error=no_tickets_selected",
+                status_code=303,
+            )
+
+        try:
+            result = ticket_service.bulk_update_status(
+                db, org_id, uuids, user_id,
+                new_status=new_status.strip(),
+                notes=notes,
+            )
+            db.commit()
+
+            return RedirectResponse(
+                url=f"/operations/support/tickets?bulk_status=success&updated={result['success']}&errors={result['error']}",
+                status_code=303,
+            )
+        except Exception as e:
+            db.rollback()
+            logger.exception("Bulk status update failed")
+            return RedirectResponse(
+                url="/operations/support/tickets?error=bulk_failed",
+                status_code=303,
+            )
+
+    def bulk_assign_response(
+        self,
+        request: Request,
+        auth: "WebAuthContext",
+        db: Session,
+        *,
+        ticket_ids: List[str],
+        assigned_to_id: str,
+    ) -> RedirectResponse:
+        """Bulk assign multiple tickets to an employee."""
+        org_id = coerce_uuid(auth.organization_id)
+        user_id = coerce_uuid(auth.user_id)
+
+        # Validate assignee is provided
+        if not assigned_to_id or not assigned_to_id.strip():
+            return RedirectResponse(
+                url="/operations/support/tickets?error=no_assignee_selected",
+                status_code=303,
+            )
+
+        # Validate assignee UUID
+        try:
+            assignee_uuid = coerce_uuid(assigned_to_id)
+        except (ValueError, HTTPException):
+            return RedirectResponse(
+                url="/operations/support/tickets?error=invalid_assignee",
+                status_code=303,
+            )
+
+        # Convert string IDs to UUIDs, skipping invalid ones
+        uuids = []
+        for tid in ticket_ids:
+            if tid:
+                try:
+                    uuids.append(coerce_uuid(tid))
+                except (ValueError, HTTPException):
+                    logger.warning(f"Invalid ticket ID skipped: {tid}")
+
+        if not uuids:
+            return RedirectResponse(
+                url="/operations/support/tickets?error=no_tickets_selected",
+                status_code=303,
+            )
+
+        try:
+            result = ticket_service.bulk_assign(
+                db, org_id, uuids, user_id,
+                assigned_to_id=assignee_uuid,
+            )
+            db.commit()
+
+            return RedirectResponse(
+                url=f"/operations/support/tickets?bulk_assign=success&updated={result['success']}&errors={result['error']}",
+                status_code=303,
+            )
+        except Exception as e:
+            db.rollback()
+            logger.exception("Bulk assign failed")
+            return RedirectResponse(
+                url="/operations/support/tickets?error=bulk_failed",
+                status_code=303,
+            )
+
+    def bulk_archive_response(
+        self,
+        request: Request,
+        auth: "WebAuthContext",
+        db: Session,
+        *,
+        ticket_ids: List[str],
+    ) -> RedirectResponse:
+        """Bulk archive multiple tickets."""
+        org_id = coerce_uuid(auth.organization_id)
+        user_id = coerce_uuid(auth.user_id)
+
+        # Convert string IDs to UUIDs, skipping invalid ones
+        uuids = []
+        for tid in ticket_ids:
+            if tid:
+                try:
+                    uuids.append(coerce_uuid(tid))
+                except (ValueError, HTTPException):
+                    logger.warning(f"Invalid ticket ID skipped: {tid}")
+
+        if not uuids:
+            return RedirectResponse(
+                url="/operations/support/tickets?error=no_tickets_selected",
+                status_code=303,
+            )
+
+        try:
+            result = ticket_service.bulk_archive(
+                db, org_id, uuids, user_id,
+            )
+            db.commit()
+
+            return RedirectResponse(
+                url=f"/operations/support/tickets?bulk_archive=success&archived={result['success']}&errors={result['error']}",
+                status_code=303,
+            )
+        except Exception as e:
+            db.rollback()
+            logger.exception("Bulk archive failed")
+            return RedirectResponse(
+                url=f"/operations/support/tickets?error=bulk_failed",
+                status_code=303,
+            )
 
 
 # Singleton instance

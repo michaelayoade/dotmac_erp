@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
-from app.services.common import coerce_uuid, NotFoundError, ValidationError, PaginationParams
+from app.services.common import coerce_uuid, ConflictError, NotFoundError, ValidationError, PaginationParams
 from app.templates import templates
 from app.web.deps import (
     base_context,
@@ -87,6 +87,18 @@ def _get_projects(db: Session, org_id):
     stmt = select(Project).where(
         Project.organization_id == coerce_uuid(org_id)
     ).order_by(Project.project_name)
+    return list(db.scalars(stmt).all())
+
+
+def _get_tickets(db: Session, org_id):
+    """Get open/active tickets for task linking."""
+    from app.models.support.ticket import Ticket, TicketStatus
+    from sqlalchemy import select
+
+    stmt = select(Ticket).where(
+        Ticket.organization_id == coerce_uuid(org_id),
+        Ticket.status.in_([TicketStatus.OPEN, TicketStatus.REPLIED, TicketStatus.ON_HOLD]),
+    ).order_by(Ticket.created_at.desc()).limit(100)
     return list(db.scalars(stmt).all())
 
 
@@ -264,13 +276,27 @@ def new_project_form(
     db: Session = Depends(get_db),
 ):
     """New project form page."""
-    from app.models.finance.core_org.project import ProjectStatus
+    from app.models.finance.core_org.project import ProjectStatus, ProjectType, ProjectPriority
+    from app.models.finance.ar.customer import Customer
+    from sqlalchemy import select
+
+    org_id = coerce_uuid(auth.organization_id)
+
+    # Get customers for dropdown
+    customers = db.scalars(
+        select(Customer)
+        .where(Customer.organization_id == org_id, Customer.is_active == True)
+        .order_by(Customer.trading_name)
+    ).all()
 
     context = {
         "request": request,
         **base_context(request, auth, "New Project", "projects", db=db),
         "project": None,
         "statuses": [s.value for s in ProjectStatus],
+        "project_types": [t.value for t in ProjectType],
+        "priorities": [p.value for p in ProjectPriority],
+        "customers": customers,
     }
 
     return templates.TemplateResponse("operations/projects/form.html", context)
@@ -284,7 +310,8 @@ def edit_project_form(
     db: Session = Depends(get_db),
 ):
     """Edit project form page."""
-    from app.models.finance.core_org.project import Project, ProjectStatus
+    from app.models.finance.core_org.project import Project, ProjectStatus, ProjectType, ProjectPriority
+    from app.models.finance.ar.customer import Customer
     from sqlalchemy import select
 
     org_id = coerce_uuid(auth.organization_id)
@@ -297,11 +324,21 @@ def edit_project_form(
             status_code=404,
         )
 
+    # Get customers for dropdown
+    customers = db.scalars(
+        select(Customer)
+        .where(Customer.organization_id == org_id, Customer.is_active == True)
+        .order_by(Customer.trading_name)
+    ).all()
+
     context = {
         "request": request,
         **base_context(request, auth, "Edit Project", "projects", db=db),
         "project": project,
         "statuses": [s.value for s in ProjectStatus],
+        "project_types": [t.value for t in ProjectType],
+        "priorities": [p.value for p in ProjectPriority],
+        "customers": customers,
     }
 
     return templates.TemplateResponse("operations/projects/form.html", context)
@@ -335,11 +372,24 @@ def project_dashboard(
     except NotFoundError:
         dashboard_data = {}
 
+    customer_info = None
+    if project.customer:
+        contact = project.customer.primary_contact or {}
+        customer_info = {
+            "customer_name": project.customer.trading_name or project.customer.legal_name,
+            "customer_code": project.customer.customer_code,
+            "email": contact.get("email"),
+            "phone": contact.get("phone"),
+            "billing_address": (project.customer.billing_address or {}).get("address", ""),
+            "shipping_address": (project.customer.shipping_address or {}).get("address", ""),
+        }
+
     context = {
         "request": request,
         **base_context(request, auth, project.project_name, "projects", db=db),
         "project": project,
         "dashboard": dashboard_data,
+        "customer_info": customer_info,
     }
 
     return templates.TemplateResponse("operations/projects/detail.html", context)
@@ -354,6 +404,9 @@ def create_project(
     project_name: str = Form(...),
     description: str = Form(default=""),
     status: str = Form(default="PLANNING"),
+    project_type: str = Form(default="INTERNAL"),
+    project_priority: str = Form(default="MEDIUM"),
+    customer_id: str = Form(default=""),
     start_date: str = Form(default=""),
     end_date: str = Form(default=""),
     budget_amount: str = Form(default=""),
@@ -361,7 +414,7 @@ def create_project(
     db: Session = Depends(get_db),
 ):
     """Create a new project."""
-    from app.models.finance.core_org.project import Project, ProjectStatus
+    from app.models.finance.core_org.project import Project, ProjectStatus, ProjectType, ProjectPriority
     from app.models.finance.core_config import SequenceType
     from app.services.finance.common.numbering import SyncNumberingService
 
@@ -381,6 +434,9 @@ def create_project(
         project_name=project_name.strip(),
         description=description.strip() if description else None,
         status=ProjectStatus(status),
+        project_type=ProjectType(project_type) if project_type else ProjectType.INTERNAL,
+        project_priority=ProjectPriority(project_priority) if project_priority else ProjectPriority.MEDIUM,
+        customer_id=coerce_uuid(customer_id) if customer_id else None,
         start_date=_safe_date(start_date),
         end_date=_safe_date(end_date),
         budget_amount=_safe_decimal(budget_amount),
@@ -404,6 +460,9 @@ def update_project(
     project_name: str = Form(...),
     description: str = Form(default=""),
     status: str = Form(...),
+    project_type: str = Form(default="INTERNAL"),
+    project_priority: str = Form(default="MEDIUM"),
+    customer_id: str = Form(default=""),
     start_date: str = Form(default=""),
     end_date: str = Form(default=""),
     budget_amount: str = Form(default=""),
@@ -411,7 +470,7 @@ def update_project(
     db: Session = Depends(get_db),
 ):
     """Update an existing project."""
-    from app.models.finance.core_org.project import Project, ProjectStatus
+    from app.models.finance.core_org.project import Project, ProjectStatus, ProjectType, ProjectPriority
     from sqlalchemy import select
 
     org_id = coerce_uuid(auth.organization_id)
@@ -423,6 +482,9 @@ def update_project(
     project.project_name = project_name.strip()
     project.description = description.strip() if description else None
     project.status = ProjectStatus(status)
+    project.project_type = ProjectType(project_type) if project_type else ProjectType.INTERNAL
+    project.project_priority = ProjectPriority(project_priority) if project_priority else ProjectPriority.MEDIUM
+    project.customer_id = coerce_uuid(customer_id) if customer_id else None
     project.start_date = _safe_date(start_date)
     project.end_date = _safe_date(end_date)
     project.budget_amount = _safe_decimal(budget_amount)
@@ -643,6 +705,7 @@ def new_task_form(
     ).items
 
     employees = _get_employees(db, org_id)
+    tickets = _get_tickets(db, org_id)
 
     context = {
         "request": request,
@@ -652,6 +715,7 @@ def new_task_form(
         "parent_task_id": parent_task_id,
         "available_parent_tasks": available_tasks,
         "team_members": employees,
+        "tickets": tickets,
         "statuses": [s.value for s in TaskStatus],
         "priorities": [p.value for p in TaskPriority],
     }
@@ -671,6 +735,7 @@ def create_task(
     priority: str = Form(default="MEDIUM"),
     parent_task_id: str = Form(default=""),
     assigned_to_id: str = Form(default=""),
+    ticket_id: str = Form(default=""),
     start_date: str = Form(default=""),
     due_date: str = Form(default=""),
     estimated_hours: str = Form(default=""),
@@ -705,6 +770,7 @@ def create_task(
         "priority": TaskPriority(priority),
         "parent_task_id": coerce_uuid(parent_task_id) if parent_task_id else None,
         "assigned_to_id": coerce_uuid(assigned_to_id) if assigned_to_id else None,
+        "ticket_id": coerce_uuid(ticket_id) if ticket_id else None,
         "start_date": _safe_date(start_date),
         "due_date": _safe_date(due_date),
         "estimated_hours": _safe_decimal(estimated_hours),
@@ -767,6 +833,7 @@ def edit_task_form(
     ]
 
     employees = _get_employees(db, org_id)
+    tickets = _get_tickets(db, org_id)
 
     # Get current dependencies for this task
     dependencies = services["task"].get_dependencies(task_uuid)
@@ -778,6 +845,7 @@ def edit_task_form(
         "task": task,
         "available_parent_tasks": available_tasks,
         "team_members": employees,
+        "tickets": tickets,
         "dependencies": dependencies,
         "statuses": [s.value for s in TaskStatus],
         "priorities": [p.value for p in TaskPriority],
@@ -798,6 +866,7 @@ def update_task(
     priority: str = Form(...),
     parent_task_id: str = Form(default=""),
     assigned_to_id: str = Form(default=""),
+    ticket_id: str = Form(default=""),
     start_date: str = Form(default=""),
     due_date: str = Form(default=""),
     estimated_hours: str = Form(default=""),
@@ -827,6 +896,7 @@ def update_task(
             "priority": TaskPriority(priority),
             "parent_task_id": coerce_uuid(parent_task_id) if parent_task_id else None,
             "assigned_to_id": coerce_uuid(assigned_to_id) if assigned_to_id else None,
+            "ticket_id": coerce_uuid(ticket_id) if ticket_id else None,
             "start_date": _safe_date(start_date),
             "due_date": _safe_date(due_date),
             "estimated_hours": _safe_decimal(estimated_hours),
@@ -2154,3 +2224,397 @@ def project_expenses(
     }
 
     return templates.TemplateResponse("operations/projects/expenses.html", context)
+
+
+# ============================================================================
+# Resource Allocation (Team Management)
+# ============================================================================
+
+
+@router.get("/{project_id}/team", response_class=HTMLResponse)
+def project_team(
+    request: Request,
+    project_id: str,
+    auth: WebAuthContext = Depends(require_operations_access),
+    db: Session = Depends(get_db),
+):
+    """Project team/resource allocations page."""
+    org_id = coerce_uuid(auth.organization_id)
+    project = _resolve_project_ref(db, org_id, project_id)
+
+    if not project:
+        return templates.TemplateResponse(
+            "errors/404.html",
+            {"request": request, "message": "Project not found"},
+            status_code=404,
+        )
+
+    services = _get_services(db, org_id)
+    allocations = services["resource"].get_project_team(project.project_id)
+    utilization = services["resource"].get_project_utilization(project.project_id)
+    employees = _get_employees(db, org_id)
+
+    context = {
+        "request": request,
+        **base_context(request, auth, f"Team - {project.project_name}", "projects", db=db),
+        "project": project,
+        "allocations": allocations,
+        "utilization": utilization,
+        "employees": employees,
+    }
+
+    return templates.TemplateResponse("operations/projects/team.html", context)
+
+
+@router.post("/{project_id}/team", response_class=RedirectResponse)
+def add_team_member(
+    request: Request,
+    project_id: str,
+    employee_id: str = Form(...),
+    role_on_project: Optional[str] = Form(None),
+    allocation_percent: str = Form("100"),
+    start_date: str = Form(...),
+    end_date: Optional[str] = Form(None),
+    cost_rate_per_hour: Optional[str] = Form(None),
+    billing_rate_per_hour: Optional[str] = Form(None),
+    auth: WebAuthContext = Depends(require_operations_access),
+    db: Session = Depends(get_db),
+):
+    """Add a team member to the project."""
+    org_id = coerce_uuid(auth.organization_id)
+    project = _resolve_project_ref(db, org_id, project_id)
+
+    if not project:
+        return RedirectResponse(url="/operations/projects?error=Project+not+found", status_code=303)
+
+    services = _get_services(db, org_id)
+
+    try:
+        data = {
+            "project_id": project.project_id,
+            "employee_id": coerce_uuid(employee_id),
+            "role_on_project": role_on_project or None,
+            "allocation_percent": _safe_decimal(allocation_percent, Decimal("100")),
+            "start_date": _safe_date(start_date) or date.today(),
+            "end_date": _safe_date(end_date),
+            "cost_rate_per_hour": _safe_decimal(cost_rate_per_hour),
+            "billing_rate_per_hour": _safe_decimal(billing_rate_per_hour),
+        }
+        services["resource"].allocate_resource(data)
+        db.commit()
+    except (ValidationError, ConflictError) as e:
+        db.rollback()
+        return RedirectResponse(
+            url=f"/operations/projects/{project.project_code}/team?error={str(e)}",
+            status_code=303,
+        )
+    except Exception as e:
+        db.rollback()
+        return RedirectResponse(
+            url=f"/operations/projects/{project.project_code}/team?error={str(e)}",
+            status_code=303,
+        )
+
+    return RedirectResponse(
+        url=f"/operations/projects/{project.project_code}/team?success=Team+member+added",
+        status_code=303,
+    )
+
+
+@router.post("/{project_id}/team/{allocation_id}", response_class=RedirectResponse)
+def update_team_member(
+    request: Request,
+    project_id: str,
+    allocation_id: str,
+    role_on_project: Optional[str] = Form(None),
+    allocation_percent: Optional[str] = Form(None),
+    end_date: Optional[str] = Form(None),
+    cost_rate_per_hour: Optional[str] = Form(None),
+    billing_rate_per_hour: Optional[str] = Form(None),
+    auth: WebAuthContext = Depends(require_operations_access),
+    db: Session = Depends(get_db),
+):
+    """Update team member allocation."""
+    org_id = coerce_uuid(auth.organization_id)
+    project = _resolve_project_ref(db, org_id, project_id)
+
+    if not project:
+        return RedirectResponse(url="/operations/projects?error=Project+not+found", status_code=303)
+
+    services = _get_services(db, org_id)
+
+    try:
+        data = {}
+        if role_on_project is not None:
+            data["role_on_project"] = role_on_project or None
+        if allocation_percent:
+            data["allocation_percent"] = _safe_decimal(allocation_percent, Decimal("100"))
+        if end_date:
+            data["end_date"] = _safe_date(end_date)
+        if cost_rate_per_hour:
+            data["cost_rate_per_hour"] = _safe_decimal(cost_rate_per_hour)
+        if billing_rate_per_hour:
+            data["billing_rate_per_hour"] = _safe_decimal(billing_rate_per_hour)
+
+        services["resource"].update_allocation(coerce_uuid(allocation_id), data)
+        db.commit()
+    except NotFoundError as e:
+        db.rollback()
+        return RedirectResponse(
+            url=f"/operations/projects/{project.project_code}/team?error=Allocation+not+found",
+            status_code=303,
+        )
+    except Exception as e:
+        db.rollback()
+        return RedirectResponse(
+            url=f"/operations/projects/{project.project_code}/team?error={str(e)}",
+            status_code=303,
+        )
+
+    return RedirectResponse(
+        url=f"/operations/projects/{project.project_code}/team?success=Allocation+updated",
+        status_code=303,
+    )
+
+
+@router.post("/{project_id}/team/{allocation_id}/end", response_class=RedirectResponse)
+def end_team_member(
+    request: Request,
+    project_id: str,
+    allocation_id: str,
+    end_date: Optional[str] = Form(None),
+    auth: WebAuthContext = Depends(require_operations_access),
+    db: Session = Depends(get_db),
+):
+    """End team member allocation."""
+    org_id = coerce_uuid(auth.organization_id)
+    project = _resolve_project_ref(db, org_id, project_id)
+
+    if not project:
+        return RedirectResponse(url="/operations/projects?error=Project+not+found", status_code=303)
+
+    services = _get_services(db, org_id)
+
+    try:
+        services["resource"].end_allocation(
+            coerce_uuid(allocation_id),
+            end_date_value=_safe_date(end_date) if end_date else None,
+        )
+        db.commit()
+    except NotFoundError:
+        db.rollback()
+        return RedirectResponse(
+            url=f"/operations/projects/{project.project_code}/team?error=Allocation+not+found",
+            status_code=303,
+        )
+    except ConflictError as e:
+        db.rollback()
+        return RedirectResponse(
+            url=f"/operations/projects/{project.project_code}/team?error={str(e)}",
+            status_code=303,
+        )
+
+    return RedirectResponse(
+        url=f"/operations/projects/{project.project_code}/team?success=Allocation+ended",
+        status_code=303,
+    )
+
+
+@router.post("/{project_id}/team/{allocation_id}/delete", response_class=RedirectResponse)
+def delete_team_member(
+    request: Request,
+    project_id: str,
+    allocation_id: str,
+    auth: WebAuthContext = Depends(require_operations_access),
+    db: Session = Depends(get_db),
+):
+    """Delete team member allocation."""
+    org_id = coerce_uuid(auth.organization_id)
+    project = _resolve_project_ref(db, org_id, project_id)
+
+    if not project:
+        return RedirectResponse(url="/operations/projects?error=Project+not+found", status_code=303)
+
+    services = _get_services(db, org_id)
+
+    try:
+        services["resource"].delete_allocation(coerce_uuid(allocation_id))
+        db.commit()
+    except NotFoundError:
+        db.rollback()
+        return RedirectResponse(
+            url=f"/operations/projects/{project.project_code}/team?error=Allocation+not+found",
+            status_code=303,
+        )
+
+    return RedirectResponse(
+        url=f"/operations/projects/{project.project_code}/team?success=Allocation+deleted",
+        status_code=303,
+    )
+
+
+# ============================================================================
+# Attachments
+# ============================================================================
+
+
+@router.get("/{project_id}/attachments", response_class=HTMLResponse)
+def project_attachments(
+    request: Request,
+    project_id: str,
+    auth: WebAuthContext = Depends(require_operations_access),
+    db: Session = Depends(get_db),
+):
+    """List project attachments."""
+    from app.services.pm.attachment import project_attachment_service
+
+    org_id = coerce_uuid(auth.organization_id)
+    project = _resolve_project_ref(db, org_id, project_id)
+
+    if not project:
+        return templates.TemplateResponse(
+            "errors/404.html",
+            {"request": request, "message": "Project not found"},
+            status_code=404,
+        )
+
+    attachments = project_attachment_service.list_attachments(
+        db, org_id, "PROJECT", project.project_id
+    )
+
+    context = {
+        "request": request,
+        **base_context(request, auth, f"{project.project_name} - Attachments", "projects", db=db),
+        "project": project,
+        "attachments": attachments,
+    }
+
+    return templates.TemplateResponse("operations/projects/attachments.html", context)
+
+
+@router.post("/{project_id}/attachments", response_class=RedirectResponse)
+async def upload_project_attachment(
+    request: Request,
+    project_id: str,
+    auth: WebAuthContext = Depends(require_operations_access),
+    db: Session = Depends(get_db),
+):
+    """Upload attachment to project."""
+    from app.services.pm.attachment import project_attachment_service
+
+    org_id = coerce_uuid(auth.organization_id)
+    project = _resolve_project_ref(db, org_id, project_id)
+
+    if not project:
+        return RedirectResponse(url="/operations/projects?error=Project+not+found", status_code=303)
+
+    form = await request.form()
+    file = form.get("file")
+    description = form.get("description", "")
+
+    if not file or not hasattr(file, "file"):
+        return RedirectResponse(
+            url=f"/operations/projects/{project.project_code}/attachments?error=No+file+provided",
+            status_code=303,
+        )
+
+    attachment, error = project_attachment_service.save_file(
+        db=db,
+        organization_id=org_id,
+        entity_type="PROJECT",
+        entity_id=project.project_id,
+        filename=file.filename,
+        file_data=file.file,
+        content_type=file.content_type or "application/octet-stream",
+        uploaded_by_id=auth.person_id,
+        description=description if description else None,
+    )
+
+    if error:
+        db.rollback()
+        return RedirectResponse(
+            url=f"/operations/projects/{project.project_code}/attachments?error={error.replace(' ', '+')}",
+            status_code=303,
+        )
+
+    db.commit()
+
+    return RedirectResponse(
+        url=f"/operations/projects/{project.project_code}/attachments?success=File+uploaded",
+        status_code=303,
+    )
+
+
+@router.get("/{project_id}/attachments/{attachment_id}/download")
+def download_project_attachment(
+    request: Request,
+    project_id: str,
+    attachment_id: str,
+    auth: WebAuthContext = Depends(require_operations_access),
+    db: Session = Depends(get_db),
+):
+    """Download project attachment."""
+    from fastapi.responses import FileResponse
+    from app.services.pm.attachment import project_attachment_service
+
+    org_id = coerce_uuid(auth.organization_id)
+    project = _resolve_project_ref(db, org_id, project_id)
+
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    attachment = project_attachment_service.get_attachment(
+        db, org_id, coerce_uuid(attachment_id)
+    )
+
+    if not attachment:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+
+    file_path = project_attachment_service.get_file_path(
+        db, org_id, coerce_uuid(attachment_id)
+    )
+
+    if not file_path:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    return FileResponse(
+        path=file_path,
+        filename=attachment.file_name,
+        media_type=attachment.content_type,
+    )
+
+
+@router.post("/{project_id}/attachments/{attachment_id}/delete", response_class=RedirectResponse)
+def delete_project_attachment(
+    request: Request,
+    project_id: str,
+    attachment_id: str,
+    auth: WebAuthContext = Depends(require_operations_access),
+    db: Session = Depends(get_db),
+):
+    """Delete project attachment."""
+    from app.services.pm.attachment import project_attachment_service
+
+    org_id = coerce_uuid(auth.organization_id)
+    project = _resolve_project_ref(db, org_id, project_id)
+
+    if not project:
+        return RedirectResponse(url="/operations/projects?error=Project+not+found", status_code=303)
+
+    success, error = project_attachment_service.delete_attachment(
+        db, org_id, coerce_uuid(attachment_id)
+    )
+
+    if not success:
+        db.rollback()
+        return RedirectResponse(
+            url=f"/operations/projects/{project.project_code}/attachments?error={error.replace(' ', '+')}",
+            status_code=303,
+        )
+
+    db.commit()
+
+    return RedirectResponse(
+        url=f"/operations/projects/{project.project_code}/attachments?success=Attachment+deleted",
+        status_code=303,
+    )

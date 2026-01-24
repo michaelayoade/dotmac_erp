@@ -68,9 +68,20 @@ class Asset(Base):
         UUID(as_uuid=True),
         nullable=True,
     )
-    custodian_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    custodian_employee_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
+        ForeignKey("hr.employee.employee_id"),
         nullable=True,
+        comment="Employee responsible for this asset",
+    )
+
+    # Project assignment (for project-specific assets)
+    project_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("core_org.project.project_id"),
+        nullable=True,
+        index=True,
+        comment="Project this asset is assigned to",
     )
 
     # Acquisition details

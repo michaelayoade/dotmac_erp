@@ -39,6 +39,7 @@ if TYPE_CHECKING:
     from app.models.pm.task_dependency import TaskDependency
     from app.models.pm.milestone import Milestone
     from app.models.pm.time_entry import TimeEntry
+    from app.models.support.ticket import Ticket
 
 
 class TaskStatus(str, enum.Enum):
@@ -106,6 +107,15 @@ class Task(Base, AuditMixin, SoftDeleteMixin, ERPNextSyncMixin):
         ForeignKey("pm.task.task_id"),
         nullable=True,
         index=True,
+    )
+
+    # Support ticket linkage (optional)
+    ticket_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("support.ticket.ticket_id"),
+        nullable=True,
+        index=True,
+        comment="Link to support ticket that spawned this task",
     )
 
     # Basic fields
@@ -184,6 +194,11 @@ class Task(Base, AuditMixin, SoftDeleteMixin, ERPNextSyncMixin):
     assigned_to: Mapped[Optional["Employee"]] = relationship(
         "Employee",
         foreign_keys=[assigned_to_id],
+        lazy="joined",
+    )
+    ticket: Mapped[Optional["Ticket"]] = relationship(
+        "Ticket",
+        foreign_keys=[ticket_id],
         lazy="joined",
     )
 
