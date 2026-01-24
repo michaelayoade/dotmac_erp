@@ -11,9 +11,9 @@ from decimal import Decimal
 import pytest
 from sqlalchemy.orm import Session
 
-from app.models.ifrs.ar.invoice_line import InvoiceLine
-from app.models.ifrs.inv.item import CostingMethod
-from app.services.ifrs.ar.ar_inventory_integration import (
+from app.models.finance.ar.invoice_line import InvoiceLine
+from app.models.finance.inv.item import CostingMethod
+from app.services.finance.ar.ar_inventory_integration import (
     ARInventoryIntegration,
     CostingResult,
 )
@@ -279,7 +279,7 @@ class TestGetItemCost:
         warehouse,
     ):
         """Should consume from multiple lots in FIFO order."""
-        from app.models.ifrs.inv.inventory_lot import InventoryLot
+        from app.models.finance.inv.inventory_lot import InventoryLot
 
         inventory_item.costing_method = CostingMethod.FIFO
         db.flush()

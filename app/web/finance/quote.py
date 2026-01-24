@@ -1,0 +1,177 @@
+"""
+Quote Web Routes.
+
+HTML template routes for sales quote management.
+"""
+from typing import Optional
+
+from fastapi import APIRouter, Depends, Form, Request
+from fastapi.responses import HTMLResponse, RedirectResponse
+from sqlalchemy.orm import Session
+
+from app.services.finance.ar.web import quote_web_service
+from app.web.deps import get_db, require_finance_access, WebAuthContext
+
+
+router = APIRouter(prefix="/quotes", tags=["quotes-web"])
+
+
+# =============================================================================
+# Quote List
+# =============================================================================
+
+@router.get("", response_class=HTMLResponse)
+@router.get("/", response_class=HTMLResponse)
+def quote_list(
+    request: Request,
+    status: Optional[str] = None,
+    customer_id: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Quote list page."""
+    return quote_web_service.list_response(
+        request, auth, db, status, customer_id, start_date, end_date
+    )
+
+
+# =============================================================================
+# New Quote
+# =============================================================================
+
+@router.get("/new", response_class=HTMLResponse)
+def new_quote_form(
+    request: Request,
+    customer_id: Optional[str] = None,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """New quote form."""
+    return quote_web_service.new_form_response(request, auth, db, customer_id)
+
+
+@router.post("/new", response_class=HTMLResponse)
+def create_quote(
+    request: Request,
+    customer_id: str = Form(...),
+    quote_date: str = Form(...),
+    valid_until: str = Form(...),
+    currency_code: Optional[str] = Form(None),
+    contact_name: Optional[str] = Form(None),
+    contact_email: Optional[str] = Form(None),
+    payment_terms_id: Optional[str] = Form(None),
+    customer_notes: Optional[str] = Form(None),
+    internal_notes: Optional[str] = Form(None),
+    terms_and_conditions: Optional[str] = Form(None),
+    lines_json: str = Form("[]"),
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Create new quote."""
+    return quote_web_service.create_response(
+        request,
+        auth,
+        db,
+        customer_id=customer_id,
+        quote_date=quote_date,
+        valid_until=valid_until,
+        lines_json=lines_json,
+        currency_code=currency_code,
+        contact_name=contact_name,
+        contact_email=contact_email,
+        payment_terms_id=payment_terms_id,
+        customer_notes=customer_notes,
+        internal_notes=internal_notes,
+        terms_and_conditions=terms_and_conditions,
+    )
+
+
+# =============================================================================
+# Quote Detail
+# =============================================================================
+
+@router.get("/{quote_id}", response_class=HTMLResponse)
+def quote_detail(
+    request: Request,
+    quote_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Quote detail page."""
+    return quote_web_service.detail_response(request, auth, db, quote_id)
+
+
+# =============================================================================
+# Quote Actions
+# =============================================================================
+
+@router.post("/{quote_id}/send", response_class=HTMLResponse)
+def send_quote(
+    request: Request,
+    quote_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Send quote."""
+    return quote_web_service.send_response(request, auth, db, quote_id)
+
+
+@router.post("/{quote_id}/accept", response_class=HTMLResponse)
+def accept_quote(
+    request: Request,
+    quote_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Accept quote."""
+    return quote_web_service.accept_response(request, auth, db, quote_id)
+
+
+@router.post("/{quote_id}/reject", response_class=HTMLResponse)
+def reject_quote(
+    request: Request,
+    quote_id: str,
+    reason: Optional[str] = Form(None),
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Reject quote."""
+    return quote_web_service.reject_response(request, auth, db, quote_id, reason)
+
+
+@router.post("/{quote_id}/convert-to-invoice", response_class=HTMLResponse)
+def convert_to_invoice(
+    request: Request,
+    quote_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Convert quote to invoice."""
+    return quote_web_service.convert_to_invoice_response(request, auth, db, quote_id)
+
+
+@router.post("/{quote_id}/convert-to-so", response_class=HTMLResponse)
+def convert_to_sales_order(
+    request: Request,
+    quote_id: str,
+    customer_po_number: Optional[str] = Form(None),
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Convert quote to sales order."""
+    return quote_web_service.convert_to_sales_order_response(
+        request, auth, db, quote_id, customer_po_number
+    )
+
+
+@router.post("/{quote_id}/void", response_class=HTMLResponse)
+def void_quote(
+    request: Request,
+    quote_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Void quote."""
+    return quote_web_service.void_response(request, auth, db, quote_id)

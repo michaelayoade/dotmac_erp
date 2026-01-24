@@ -1,0 +1,209 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}Performance Ratings{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/perf/appraisals" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Performance</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">Ratings Distribution</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">Performance Ratings Distribution</h1>
+            <p class="text-sm text-slate-500 dark:text-slate-400">Analysis of employee performance ratings</p>
+        </div>
+        <a href="/people/perf/appraisals" class="btn btn-secondary">
+            <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+            </svg>
+            Back
+        </a>
+    </div>
+
+    <!-- Filters -->
+    <div class="card">
+        <form method="get" class="p-4">
+            <div class="flex flex-wrap gap-4 items-end">
+                <div class="w-64">
+                    <label for="cycle_id" class="form-label">Appraisal Cycle</label>
+                    <select name="cycle_id" id="cycle_id" class="form-select w-full">
+                        <option value="">All Cycles</option>
+                        {% for c in report.cycles %}
+                        <option value="{{ c.cycle_id }}" {% if cycle_id == c.cycle_id|string %}selected{% endif %}>{{ c.cycle_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-secondary h-10">Apply Filter</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="card p-5">
+            <div class="flex items-center gap-4">
+                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-violet-100 dark:bg-violet-900/30">
+                    <svg class="h-6 w-6 text-violet-600 dark:text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">Total Appraisals</p>
+                    <p class="text-2xl font-semibold text-slate-900 dark:text-white">{{ report.total_appraisals }}</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="card p-5">
+            <div class="flex items-center gap-4">
+                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-100 dark:bg-amber-900/30">
+                    <svg class="h-6 w-6 text-amber-600 dark:text-amber-400" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">Average Rating</p>
+                    <p class="text-2xl font-semibold text-amber-600 dark:text-amber-400">
+                        {% if report.average_rating %}{{ report.average_rating }}/5{% else %}-{% endif %}
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <div class="card p-5">
+            <div class="flex items-center gap-4">
+                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-green-100 dark:bg-green-900/30">
+                    <svg class="h-6 w-6 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">Meets/Exceeds</p>
+                    {% set meets_exceeds = (report.distribution | selectattr('rating', '>=', 3) | sum(attribute='count')) %}
+                    {% set meets_pct = (meets_exceeds / report.total_appraisals * 100) | round(1) if report.total_appraisals > 0 else 0 %}
+                    <p class="text-2xl font-semibold text-green-600 dark:text-green-400">{{ meets_pct }}%</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Rating Distribution Chart -->
+    <div class="card">
+        <div class="border-b border-slate-200 dark:border-slate-700 px-5 py-4">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Rating Distribution</h2>
+        </div>
+        <div class="p-5">
+            {% if report.distribution %}
+            <div class="space-y-4">
+                {% for r in report.distribution %}
+                <div class="flex items-center gap-4">
+                    <div class="w-40 flex items-center gap-2">
+                        <div class="flex items-center gap-1">
+                            {% for i in range(r.rating) %}
+                            <svg class="h-4 w-4 text-amber-500" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                            </svg>
+                            {% endfor %}
+                            {% for i in range(5 - r.rating) %}
+                            <svg class="h-4 w-4 text-slate-300 dark:text-slate-600" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                            </svg>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <div class="flex-1">
+                        <div class="h-8 w-full rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                            <div class="h-full rounded-full transition-all
+                                {% if r.rating == 5 %}bg-green-500
+                                {% elif r.rating == 4 %}bg-teal-500
+                                {% elif r.rating == 3 %}bg-blue-500
+                                {% elif r.rating == 2 %}bg-amber-500
+                                {% else %}bg-rose-500{% endif %}"
+                                 style="width: {{ r.percentage }}%"></div>
+                        </div>
+                    </div>
+                    <div class="w-32 text-right">
+                        <span class="text-sm font-medium text-slate-700 dark:text-slate-300">{{ r.count }}</span>
+                        <span class="text-xs text-slate-500 dark:text-slate-400">({{ r.percentage }}%)</span>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="text-slate-500 dark:text-slate-400 text-center">No rating data available.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Rating Labels Table -->
+    <div class="card">
+        <div class="border-b border-slate-200 dark:border-slate-700 px-5 py-4">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Rating Breakdown</h2>
+        </div>
+        {% if report.distribution %}
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+                <thead>
+                    <tr class="bg-slate-50 dark:bg-slate-800/50">
+                        <th class="px-5 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Rating</th>
+                        <th class="px-5 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Label</th>
+                        <th class="px-5 py-3 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Count</th>
+                        <th class="px-5 py-3 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Percentage</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                    {% for r in report.distribution %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                        <td class="px-5 py-3">
+                            <div class="flex items-center gap-1">
+                                {% for i in range(r.rating) %}
+                                <svg class="h-4 w-4 text-amber-500" fill="currentColor" viewBox="0 0 20 20">
+                                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                                </svg>
+                                {% endfor %}
+                            </div>
+                        </td>
+                        <td class="px-5 py-3 text-sm font-medium text-slate-900 dark:text-white">{{ r.label }}</td>
+                        <td class="px-5 py-3 text-right text-sm font-medium text-slate-700 dark:text-slate-300">{{ r.count }}</td>
+                        <td class="px-5 py-3 text-right">
+                            <div class="flex items-center justify-end gap-2">
+                                <div class="w-16 h-2 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                                    <div class="h-full rounded-full transition-all
+                                        {% if r.rating == 5 %}bg-green-500
+                                        {% elif r.rating == 4 %}bg-teal-500
+                                        {% elif r.rating == 3 %}bg-blue-500
+                                        {% elif r.rating == 2 %}bg-amber-500
+                                        {% else %}bg-rose-500{% endif %}"
+                                         style="width: {{ r.percentage }}%"></div>
+                                </div>
+                                <span class="text-sm font-medium text-slate-700 dark:text-slate-300">{{ r.percentage }}%</span>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="p-8 text-center">
+            <p class="text-slate-500 dark:text-slate-400">No completed appraisals found.</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Quick Links -->
+    <div class="flex gap-4">
+        <a href="/people/perf/reports/by-department" class="btn btn-secondary">By Department</a>
+        <a href="/people/perf/reports/kpi-achievement" class="btn btn-secondary">KPI Achievement</a>
+        <a href="/people/perf/reports/trends" class="btn btn-secondary">Trends</a>
+    </div>
+</div>
+{% endblock %}

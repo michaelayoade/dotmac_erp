@@ -1,0 +1,197 @@
+{% extends "finance/base_finance.html" %}
+
+{% block page_title %}Sales Orders{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 mt-1">
+    <a href="/dashboard" class="hover:text-slate-700 dark:hover:text-slate-300">Dashboard</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="text-slate-700 dark:text-slate-300">Sales Orders</span>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<a href="/finance/sales-orders/new" class="btn btn-primary">
+    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+    </svg>
+    New Sales Order
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Filters -->
+    <div class="card p-4">
+        <form method="get" class="flex flex-wrap items-end gap-4">
+            <div class="min-w-[150px]">
+                <label class="form-label">Status</label>
+                <select name="status" class="form-input form-select">
+                    <option value="">All Statuses</option>
+                    {% for s in statuses %}
+                    <option value="{{ s }}" {% if filter_status == s %}selected{% endif %}>{{ s }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="min-w-[200px]">
+                <label class="form-label">Customer</label>
+                <select name="customer_id" class="form-input form-select">
+                    <option value="">All Customers</option>
+                    {% for c in customers %}
+                    <option value="{{ c.id }}" {% if filter_customer_id == c.id %}selected{% endif %}>{{ c.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="min-w-[150px]">
+                <label class="form-label">Start Date</label>
+                <input type="date" name="start_date" value="{{ filter_start_date or '' }}" class="form-input">
+            </div>
+            <div class="min-w-[150px]">
+                <label class="form-label">End Date</label>
+                <input type="date" name="end_date" value="{{ filter_end_date or '' }}" class="form-input">
+            </div>
+            <button type="submit" class="btn btn-secondary">
+                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
+                </svg>
+                Filter
+            </button>
+        </form>
+    </div>
+
+    <!-- Status Summary -->
+    <div class="grid gap-4 sm:grid-cols-3 lg:grid-cols-9">
+        <div class="card p-4">
+            <p class="text-sm text-slate-500 dark:text-slate-400">Draft</p>
+            <p class="text-2xl font-bold text-slate-900 dark:text-white">{{ status_counts.get('DRAFT', 0) }}</p>
+        </div>
+        <div class="card p-4">
+            <p class="text-sm text-slate-500 dark:text-slate-400">Submitted</p>
+            <p class="text-2xl font-bold text-blue-600 dark:text-blue-400">{{ status_counts.get('SUBMITTED', 0) }}</p>
+        </div>
+        <div class="card p-4">
+            <p class="text-sm text-slate-500 dark:text-slate-400">Approved</p>
+            <p class="text-2xl font-bold text-cyan-600 dark:text-cyan-400">{{ status_counts.get('APPROVED', 0) }}</p>
+        </div>
+        <div class="card p-4">
+            <p class="text-sm text-slate-500 dark:text-slate-400">Confirmed</p>
+            <p class="text-2xl font-bold text-teal-600 dark:text-teal-400">{{ status_counts.get('CONFIRMED', 0) }}</p>
+        </div>
+        <div class="card p-4">
+            <p class="text-sm text-slate-500 dark:text-slate-400">In Progress</p>
+            <p class="text-2xl font-bold text-purple-600 dark:text-purple-400">{{ status_counts.get('IN_PROGRESS', 0) }}</p>
+        </div>
+        <div class="card p-4">
+            <p class="text-sm text-slate-500 dark:text-slate-400">Shipped</p>
+            <p class="text-2xl font-bold text-indigo-600 dark:text-indigo-400">{{ status_counts.get('SHIPPED', 0) }}</p>
+        </div>
+        <div class="card p-4">
+            <p class="text-sm text-slate-500 dark:text-slate-400">Completed</p>
+            <p class="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{{ status_counts.get('COMPLETED', 0) }}</p>
+        </div>
+        <div class="card p-4">
+            <p class="text-sm text-slate-500 dark:text-slate-400">On Hold</p>
+            <p class="text-2xl font-bold text-amber-600 dark:text-amber-400">{{ status_counts.get('ON_HOLD', 0) }}</p>
+        </div>
+        <div class="card p-4">
+            <p class="text-sm text-slate-500 dark:text-slate-400">Cancelled</p>
+            <p class="text-2xl font-bold text-rose-600 dark:text-rose-400">{{ status_counts.get('CANCELLED', 0) }}</p>
+        </div>
+    </div>
+
+    <!-- Orders List -->
+    <div class="card overflow-hidden">
+        {% if orders %}
+        <div class="table-container">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>SO Number</th>
+                        <th>Date</th>
+                        <th>Customer</th>
+                        <th>PO #</th>
+                        <th class="text-right">Amount</th>
+                        <th>Fulfillment</th>
+                        <th>Status</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for so in orders %}
+                    <tr>
+                        <td>
+                            <a href="/finance/sales-orders/{{ so.so_id }}" class="font-mono text-teal-600 hover:text-teal-700 dark:text-teal-400">
+                                {{ so.so_number }}
+                            </a>
+                        </td>
+                        <td class="text-slate-500">{{ so.order_date }}</td>
+                        <td class="text-slate-900 dark:text-white">{{ so.customer_name }}</td>
+                        <td class="text-slate-500">{{ so.customer_po }}</td>
+                        <td class="text-right font-mono text-slate-900 dark:text-white">{{ so.total_amount }}</td>
+                        <td>
+                            {% if so.is_fully_invoiced %}
+                            <span class="badge badge-success">Invoiced</span>
+                            {% elif so.is_fully_shipped %}
+                            <span class="badge badge-info">Shipped</span>
+                            {% else %}
+                            <span class="badge badge-neutral">Pending</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if so.status == 'DRAFT' %}
+                            <span class="badge badge-neutral">Draft</span>
+                            {% elif so.status == 'SUBMITTED' %}
+                            <span class="badge badge-info">Submitted</span>
+                            {% elif so.status == 'APPROVED' %}
+                            <span class="badge badge-info">Approved</span>
+                            {% elif so.status == 'CONFIRMED' %}
+                            <span class="badge badge-teal">Confirmed</span>
+                            {% elif so.status == 'IN_PROGRESS' %}
+                            <span class="badge badge-purple">In Progress</span>
+                            {% elif so.status == 'SHIPPED' %}
+                            <span class="badge badge-indigo">Shipped</span>
+                            {% elif so.status == 'COMPLETED' %}
+                            <span class="badge badge-success">Completed</span>
+                            {% elif so.status == 'ON_HOLD' %}
+                            <span class="badge badge-warning">On Hold</span>
+                            {% elif so.status == 'CANCELLED' %}
+                            <span class="badge badge-danger">Cancelled</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="table-actions">
+                                <a href="/finance/sales-orders/{{ so.so_id }}" class="table-action-btn" title="View">
+                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                                    </svg>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state p-12">
+            <div class="empty-state-icon">
+                <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                </svg>
+            </div>
+            <h3 class="empty-state-title">No Sales Orders</h3>
+            <p class="empty-state-description">Get started by creating your first sales order.</p>
+            <a href="/finance/sales-orders/new" class="btn btn-primary mt-4">
+                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                </svg>
+                New Sales Order
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

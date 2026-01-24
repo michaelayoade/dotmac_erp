@@ -8,11 +8,11 @@ from uuid import uuid4
 
 import pytest
 
-from app.services.ifrs.gl.fiscal_period import (
+from app.services.finance.gl.fiscal_period import (
     FiscalPeriodService,
     FiscalPeriodInput,
 )
-from app.models.ifrs.gl.fiscal_period import PeriodStatus
+from app.models.finance.gl.fiscal_period import PeriodStatus
 from tests.ifrs.gl.conftest import (
     MockFiscalPeriod,
     MockPeriodStatus,

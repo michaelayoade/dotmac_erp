@@ -68,7 +68,7 @@ class TestAuditLogService:
         with patch.dict('sys.modules', {
             'app.models.ifrs.audit.audit_log': MagicMock(),
         }):
-            from app.services.ifrs.platform.audit_log import AuditLogService
+            from app.services.finance.platform.audit_log import AuditLogService
             return AuditLogService
 
     @pytest.fixture

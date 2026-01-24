@@ -1,0 +1,90 @@
+{% extends "operations/base_operations.html" %}
+
+{% block title %}{% if project %}Edit{% else %}New{% endif %} Project{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto space-y-6">
+    <div class="flex items-center gap-2">
+        <a href="/operations/projects{% if project %}/{{ project.project_code }}{% endif %}" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+            </svg>
+        </a>
+        <h1 class="text-2xl font-display font-semibold text-slate-900 dark:text-white">{% if project %}Edit{% else %}New{% endif %} Project</h1>
+    </div>
+
+    <form method="post" class="rounded-lg border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-800 space-y-6">
+        <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
+            <div>
+                <label for="project_code" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Project Code</label>
+                <input type="text" name="project_code" id="project_code" required
+                       value="{{ project.project_code if project else '' }}"
+                       class="mt-1 block w-full rounded-lg border-slate-300 focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
+            </div>
+            <div>
+                <label for="status" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Status</label>
+                <select name="status" id="status"
+                        class="mt-1 block w-full rounded-lg border-slate-300 focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
+                    {% for s in statuses %}
+                    <option value="{{ s }}" {{ 'selected' if project and project.status.value == s else '' }}>{{ s }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div>
+            <label for="project_name" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Project Name</label>
+            <input type="text" name="project_name" id="project_name" required
+                   value="{{ project.project_name if project else '' }}"
+                   class="mt-1 block w-full rounded-lg border-slate-300 focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
+        </div>
+
+        <div>
+            <label for="description" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Description</label>
+            <textarea name="description" id="description" rows="4"
+                      class="mt-1 block w-full rounded-lg border-slate-300 focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">{{ project.description if project else '' }}</textarea>
+        </div>
+
+        <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
+            <div>
+                <label for="start_date" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Start Date</label>
+                <input type="date" name="start_date" id="start_date"
+                       value="{{ project.start_date.isoformat() if project and project.start_date else '' }}"
+                       class="mt-1 block w-full rounded-lg border-slate-300 focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
+            </div>
+            <div>
+                <label for="end_date" class="block text-sm font-medium text-slate-700 dark:text-slate-300">End Date</label>
+                <input type="date" name="end_date" id="end_date"
+                       value="{{ project.end_date.isoformat() if project and project.end_date else '' }}"
+                       class="mt-1 block w-full rounded-lg border-slate-300 focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
+            <div>
+                <label for="budget_amount" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Budget</label>
+                <input type="number" name="budget_amount" id="budget_amount" step="0.01"
+                       value="{{ project.budget_amount if project and project.budget_amount else '' }}"
+                       class="mt-1 block w-full rounded-lg border-slate-300 focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
+            </div>
+            <div>
+                <label for="percent_complete" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Progress (%)</label>
+                <input type="number" name="percent_complete" id="percent_complete" min="0" max="100"
+                       value="{{ project.percent_complete|int if project else 0 }}"
+                       class="mt-1 block w-full rounded-lg border-slate-300 focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
+            </div>
+        </div>
+
+        <div class="flex justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
+            <a href="/operations/projects{% if project %}/{{ project.project_code }}{% endif %}"
+               class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 transition-colors">
+                Cancel
+            </a>
+            <button type="submit"
+                    class="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 transition-colors">
+                {% if project %}Update{% else %}Create{% endif %} Project
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

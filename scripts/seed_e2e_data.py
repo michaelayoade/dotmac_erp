@@ -23,21 +23,21 @@ from app.config import settings
 from app.db import SessionLocal
 from app.models.auth import UserCredential
 from app.models.person import Person
-from app.models.ifrs.core_org.organization import Organization
-from app.models.ifrs.gl.account import Account, AccountType, NormalBalance
-from app.models.ifrs.gl.account_category import AccountCategory, IFRSCategory
-from app.models.ifrs.gl.fiscal_year import FiscalYear
-from app.models.ifrs.gl.fiscal_period import FiscalPeriod, PeriodStatus
-from app.models.ifrs.ar.customer import Customer, CustomerType, RiskCategory
-from app.models.ifrs.ar.payment_terms import PaymentTerms
-from app.models.ifrs.ap.supplier import Supplier, SupplierType
-from app.models.ifrs.banking.bank_account import BankAccount, BankAccountStatus, BankAccountType
-from app.models.ifrs.inv.item import Item, ItemType, CostingMethod
-from app.models.ifrs.inv.item_category import ItemCategory
-from app.models.ifrs.tax.tax_jurisdiction import TaxJurisdiction
-from app.models.ifrs.tax.tax_period import TaxPeriod, TaxPeriodFrequency, TaxPeriodStatus
-from app.services.ifrs.gl.fiscal_year import FiscalYearInput, fiscal_year_service
-from app.services.ifrs.tax.seed import NigeriaSeedSummary, seed_nigeria_tax_data
+from app.models.finance.core_org.organization import Organization
+from app.models.finance.gl.account import Account, AccountType, NormalBalance
+from app.models.finance.gl.account_category import AccountCategory, IFRSCategory
+from app.models.finance.gl.fiscal_year import FiscalYear
+from app.models.finance.gl.fiscal_period import FiscalPeriod, PeriodStatus
+from app.models.finance.ar.customer import Customer, CustomerType, RiskCategory
+from app.models.finance.ar.payment_terms import PaymentTerms
+from app.models.finance.ap.supplier import Supplier, SupplierType
+from app.models.finance.banking.bank_account import BankAccount, BankAccountStatus, BankAccountType
+from app.models.finance.inv.item import Item, ItemType, CostingMethod
+from app.models.finance.inv.item_category import ItemCategory
+from app.models.finance.tax.tax_jurisdiction import TaxJurisdiction
+from app.models.finance.tax.tax_period import TaxPeriod, TaxPeriodFrequency, TaxPeriodStatus
+from app.services.finance.gl.fiscal_year import FiscalYearInput, fiscal_year_service
+from app.services.finance.tax.seed import NigeriaSeedSummary, seed_nigeria_tax_data
 
 
 DEFAULT_ORG_ID = UUID("00000000-0000-0000-0000-000000000001")

@@ -1,0 +1,248 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}{% if holiday_list %}Edit Holiday List{% else %}New Holiday List{% endif %}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a>
+    <span class="mx-2">/</span>
+    <a href="/people/leave" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Leave</a>
+    <span class="mx-2">/</span>
+    <a href="/people/leave/holidays" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Holiday Lists</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">{% if holiday_list %}Edit{% else %}New{% endif %}</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-6" x-data="holidayListForm()">
+    {% if error %}
+    <div class="p-4 rounded-lg bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-800">
+        <div class="flex items-center gap-2 text-red-700 dark:text-red-400">
+            <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span>{{ error }}</span>
+        </div>
+    </div>
+    {% endif %}
+
+    <form method="post" class="space-y-6"
+        action="{% if holiday_list %}/people/leave/holidays/{{ holiday_list.holiday_list_id }}/edit{% else %}/people/leave/holidays/new{% endif %}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+        <!-- Basic Information -->
+        <div class="card">
+            <div class="card-header border-b border-slate-200 dark:border-slate-700 p-4">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Holiday List Details</h2>
+                <p class="text-sm text-slate-500 dark:text-slate-400">Create a list of holidays for the year.</p>
+            </div>
+            <div class="card-body p-4 space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="list_code" class="form-label">List Code <span class="text-rose-500">*</span></label>
+                        <input type="text" name="list_code" id="list_code"
+                            value="{{ form_data.list_code if form_data else (holiday_list.list_code if holiday_list else '') }}"
+                            class="form-input w-full {% if errors and errors.list_code %}border-red-500{% endif %}"
+                            placeholder="e.g., NG-2025, US-2025"
+                            {% if holiday_list %}readonly{% endif %}
+                            required>
+                        {% if errors and errors.list_code %}
+                        <p class="text-sm text-red-500 mt-1">{{ errors.list_code }}</p>
+                        {% endif %}
+                    </div>
+                    <div>
+                        <label for="list_name" class="form-label">List Name <span class="text-rose-500">*</span></label>
+                        <input type="text" name="list_name" id="list_name"
+                            value="{{ form_data.list_name if form_data else (holiday_list.list_name if holiday_list else '') }}"
+                            class="form-input w-full {% if errors and errors.list_name %}border-red-500{% endif %}"
+                            placeholder="e.g., Nigeria Holidays 2025"
+                            required>
+                        {% if errors and errors.list_name %}
+                        <p class="text-sm text-red-500 mt-1">{{ errors.list_name }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="from_date" class="form-label">From Date <span class="text-rose-500">*</span></label>
+                        <input type="date" name="from_date" id="from_date"
+                            value="{{ form_data.from_date if form_data else (holiday_list.from_date.isoformat() if holiday_list else '') }}"
+                            class="form-input w-full {% if errors and errors.from_date %}border-red-500{% endif %}"
+                            required>
+                        {% if errors and errors.from_date %}
+                        <p class="text-sm text-red-500 mt-1">{{ errors.from_date }}</p>
+                        {% endif %}
+                    </div>
+                    <div>
+                        <label for="to_date" class="form-label">To Date <span class="text-rose-500">*</span></label>
+                        <input type="date" name="to_date" id="to_date"
+                            value="{{ form_data.to_date if form_data else (holiday_list.to_date.isoformat() if holiday_list else '') }}"
+                            class="form-input w-full {% if errors and errors.to_date %}border-red-500{% endif %}"
+                            required>
+                        {% if errors and errors.to_date %}
+                        <p class="text-sm text-red-500 mt-1">{{ errors.to_date }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Quick year selector -->
+                <div class="flex flex-wrap gap-2">
+                    <button type="button" class="text-xs px-3 py-1.5 rounded-full bg-slate-100 text-slate-600 hover:bg-violet-100 hover:text-violet-700 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-violet-900/30 dark:hover:text-violet-300 transition-colors"
+                        @click="setYear(new Date().getFullYear())">
+                        <span x-text="new Date().getFullYear()"></span>
+                    </button>
+                    <button type="button" class="text-xs px-3 py-1.5 rounded-full bg-slate-100 text-slate-600 hover:bg-violet-100 hover:text-violet-700 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-violet-900/30 dark:hover:text-violet-300 transition-colors"
+                        @click="setYear(new Date().getFullYear() + 1)">
+                        <span x-text="new Date().getFullYear() + 1"></span>
+                    </button>
+                </div>
+
+                <div>
+                    <label for="description" class="form-label">Description</label>
+                    <textarea name="description" id="description" rows="2"
+                        class="form-input w-full"
+                        placeholder="Optional description">{{ form_data.description if form_data else (holiday_list.description if holiday_list else '') }}</textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- Holidays -->
+        <div class="card">
+            <div class="card-header border-b border-slate-200 dark:border-slate-700 p-4 flex items-center justify-between">
+                <div>
+                    <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Holidays</h2>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">Add holidays to this list.</p>
+                </div>
+                <button type="button" @click="addHoliday()"
+                    class="btn btn-secondary text-sm">
+                    <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                    </svg>
+                    Add Holiday
+                </button>
+            </div>
+            <div class="card-body p-4">
+                <template x-if="holidays.length === 0">
+                    <div class="text-center py-8 text-slate-500 dark:text-slate-400">
+                        <svg class="h-12 w-12 mx-auto mb-3 text-slate-300 dark:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                        </svg>
+                        <p>No holidays added yet. Click "Add Holiday" to get started.</p>
+                    </div>
+                </template>
+
+                <div class="space-y-3">
+                    <template x-for="(holiday, index) in holidays" :key="index">
+                        <div class="flex items-start gap-3 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
+                            <div class="flex-1 grid grid-cols-1 md:grid-cols-4 gap-3">
+                                <div>
+                                    <input type="date" :name="'holidays[' + index + '][holiday_date]'"
+                                        x-model="holiday.holiday_date"
+                                        class="form-input w-full text-sm"
+                                        required>
+                                </div>
+                                <div class="md:col-span-2">
+                                    <input type="text" :name="'holidays[' + index + '][holiday_name]'"
+                                        x-model="holiday.holiday_name"
+                                        class="form-input w-full text-sm"
+                                        placeholder="Holiday Name"
+                                        required>
+                                </div>
+                                <div class="flex items-center gap-3">
+                                    <label class="flex items-center gap-2 cursor-pointer text-sm">
+                                        <input type="checkbox" :name="'holidays[' + index + '][is_optional]'"
+                                            x-model="holiday.is_optional"
+                                            class="rounded border-slate-300 text-violet-600 focus:ring-violet-500">
+                                        <span class="text-slate-600 dark:text-slate-400">Optional</span>
+                                    </label>
+                                </div>
+                            </div>
+                            <button type="button" @click="removeHoliday(index)"
+                                class="p-2 text-slate-400 hover:text-red-500 transition-colors">
+                                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </template>
+                </div>
+
+                <!-- Holiday count -->
+                <div class="mt-4 text-sm text-slate-500 dark:text-slate-400">
+                    <span x-text="holidays.length"></span> holiday(s) added
+                </div>
+            </div>
+        </div>
+
+        <!-- Status -->
+        <div class="card">
+            <div class="card-body p-4">
+                <label class="flex items-center gap-3 cursor-pointer">
+                    <input type="checkbox" name="is_active" value="true"
+                        class="rounded border-slate-300 text-violet-600 focus:ring-violet-500"
+                        {% if not holiday_list or holiday_list.is_active %}checked{% endif %}>
+                    <div>
+                        <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Active</span>
+                        <p class="text-sm text-slate-500">Inactive holiday lists won't be used for leave calculations</p>
+                    </div>
+                </label>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex items-center justify-end gap-3">
+            <a href="/people/leave/holidays" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">
+                {% if holiday_list %}Update Holiday List{% else %}Create Holiday List{% endif %}
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function holidayListForm() {
+    return {
+        holidays: [
+            {% if holiday_list and holiday_list.holidays %}
+            {% for h in holiday_list.holidays %}
+            {
+                holiday_date: '{{ h.holiday_date.isoformat() }}',
+                holiday_name: '{{ h.holiday_name }}',
+                is_optional: {{ 'true' if h.is_optional else 'false' }}
+            }{% if not loop.last %},{% endif %}
+            {% endfor %}
+            {% endif %}
+        ],
+
+        addHoliday() {
+            this.holidays.push({
+                holiday_date: '',
+                holiday_name: '',
+                is_optional: false
+            });
+        },
+
+        removeHoliday(index) {
+            this.holidays.splice(index, 1);
+        },
+
+        setYear(year) {
+            document.getElementById('from_date').value = year + '-01-01';
+            document.getElementById('to_date').value = year + '-12-31';
+
+            // Suggest a code if empty
+            const codeField = document.getElementById('list_code');
+            if (!codeField.value) {
+                codeField.value = 'HOLIDAYS-' + year;
+            }
+        }
+    };
+}
+</script>
+{% endblock %}

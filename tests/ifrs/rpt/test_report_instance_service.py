@@ -20,7 +20,7 @@ class TestReportInstanceServiceQueue:
 
     def test_queue_report_success(self, mock_db, org_id, user_id, mock_report_definition):
         """Test successful report queue."""
-        from app.services.ifrs.rpt.report_instance import (
+        from app.services.finance.rpt.report_instance import (
             ReportInstanceService,
             ReportGenerationRequest,
         )
@@ -42,7 +42,7 @@ class TestReportInstanceServiceQueue:
 
     def test_queue_report_definition_not_found(self, mock_db, org_id, user_id):
         """Test queue with missing report definition."""
-        from app.services.ifrs.rpt.report_instance import (
+        from app.services.finance.rpt.report_instance import (
             ReportInstanceService,
             ReportGenerationRequest,
         )
@@ -64,7 +64,7 @@ class TestReportInstanceServiceQueue:
 
     def test_queue_report_inactive_definition(self, mock_db, org_id, user_id):
         """Test queue with inactive report definition."""
-        from app.services.ifrs.rpt.report_instance import (
+        from app.services.finance.rpt.report_instance import (
             ReportInstanceService,
             ReportGenerationRequest,
         )
@@ -90,7 +90,7 @@ class TestReportInstanceServiceQueue:
 
     def test_queue_report_unsupported_format(self, mock_db, org_id, user_id):
         """Test queue with unsupported output format."""
-        from app.services.ifrs.rpt.report_instance import (
+        from app.services.finance.rpt.report_instance import (
             ReportInstanceService,
             ReportGenerationRequest,
         )
@@ -120,8 +120,8 @@ class TestReportInstanceServiceGeneration:
 
     def test_start_generation_success(self, mock_db, mock_report_instance):
         """Test successful generation start."""
-        from app.services.ifrs.rpt.report_instance import ReportInstanceService
-        from app.models.ifrs.rpt.report_instance import ReportStatus
+        from app.services.finance.rpt.report_instance import ReportInstanceService
+        from app.models.finance.rpt.report_instance import ReportStatus
 
         mock_report_instance.status = ReportStatus.QUEUED
         mock_db.get.return_value = mock_report_instance
@@ -136,7 +136,7 @@ class TestReportInstanceServiceGeneration:
 
     def test_start_generation_not_found(self, mock_db):
         """Test start generation with missing instance."""
-        from app.services.ifrs.rpt.report_instance import ReportInstanceService
+        from app.services.finance.rpt.report_instance import ReportInstanceService
 
         mock_db.get.return_value = None
 
@@ -147,8 +147,8 @@ class TestReportInstanceServiceGeneration:
 
     def test_start_generation_wrong_status(self, mock_db, mock_report_instance):
         """Test start generation with wrong status."""
-        from app.services.ifrs.rpt.report_instance import ReportInstanceService
-        from app.models.ifrs.rpt.report_instance import ReportStatus
+        from app.services.finance.rpt.report_instance import ReportInstanceService
+        from app.models.finance.rpt.report_instance import ReportStatus
 
         mock_report_instance.status = ReportStatus.COMPLETED
         mock_db.get.return_value = mock_report_instance
@@ -162,8 +162,8 @@ class TestReportInstanceServiceGeneration:
 
     def test_complete_generation_success(self, mock_db, mock_report_instance):
         """Test successful generation completion."""
-        from app.services.ifrs.rpt.report_instance import ReportInstanceService
-        from app.models.ifrs.rpt.report_instance import ReportStatus
+        from app.services.finance.rpt.report_instance import ReportInstanceService
+        from app.models.finance.rpt.report_instance import ReportStatus
 
         mock_report_instance.status = ReportStatus.GENERATING
         mock_report_instance.started_at = datetime.now(timezone.utc) - timedelta(seconds=5)
@@ -184,7 +184,7 @@ class TestReportInstanceServiceGeneration:
 
     def test_complete_generation_not_found(self, mock_db):
         """Test complete with missing instance."""
-        from app.services.ifrs.rpt.report_instance import ReportInstanceService
+        from app.services.finance.rpt.report_instance import ReportInstanceService
 
         mock_db.get.return_value = None
 
@@ -200,8 +200,8 @@ class TestReportInstanceServiceGeneration:
 
     def test_complete_generation_wrong_status(self, mock_db, mock_report_instance):
         """Test complete with wrong status."""
-        from app.services.ifrs.rpt.report_instance import ReportInstanceService
-        from app.models.ifrs.rpt.report_instance import ReportStatus
+        from app.services.finance.rpt.report_instance import ReportInstanceService
+        from app.models.finance.rpt.report_instance import ReportStatus
 
         mock_report_instance.status = ReportStatus.QUEUED
         mock_db.get.return_value = mock_report_instance
@@ -218,8 +218,8 @@ class TestReportInstanceServiceGeneration:
 
     def test_fail_generation_success(self, mock_db, mock_report_instance):
         """Test successful generation failure recording."""
-        from app.services.ifrs.rpt.report_instance import ReportInstanceService
-        from app.models.ifrs.rpt.report_instance import ReportStatus
+        from app.services.finance.rpt.report_instance import ReportInstanceService
+        from app.models.finance.rpt.report_instance import ReportStatus
 
         mock_report_instance.status = ReportStatus.GENERATING
         mock_report_instance.started_at = datetime.now(timezone.utc)
@@ -237,7 +237,7 @@ class TestReportInstanceServiceGeneration:
 
     def test_fail_generation_not_found(self, mock_db):
         """Test fail with missing instance."""
-        from app.services.ifrs.rpt.report_instance import ReportInstanceService
+        from app.services.finance.rpt.report_instance import ReportInstanceService
 
         mock_db.get.return_value = None
 
@@ -254,8 +254,8 @@ class TestReportInstanceServiceCancel:
 
     def test_cancel_report_success(self, mock_db, org_id, mock_report_instance):
         """Test successful report cancellation."""
-        from app.services.ifrs.rpt.report_instance import ReportInstanceService
-        from app.models.ifrs.rpt.report_instance import ReportStatus
+        from app.services.finance.rpt.report_instance import ReportInstanceService
+        from app.models.finance.rpt.report_instance import ReportStatus
 
         mock_report_instance.status = ReportStatus.QUEUED
         mock_report_instance.organization_id = org_id
@@ -270,7 +270,7 @@ class TestReportInstanceServiceCancel:
 
     def test_cancel_report_not_found(self, mock_db, org_id):
         """Test cancel with missing instance."""
-        from app.services.ifrs.rpt.report_instance import ReportInstanceService
+        from app.services.finance.rpt.report_instance import ReportInstanceService
 
         mock_db.get.return_value = None
 
@@ -283,8 +283,8 @@ class TestReportInstanceServiceCancel:
 
     def test_cancel_report_wrong_status(self, mock_db, org_id, mock_report_instance):
         """Test cancel with wrong status (not QUEUED)."""
-        from app.services.ifrs.rpt.report_instance import ReportInstanceService
-        from app.models.ifrs.rpt.report_instance import ReportStatus
+        from app.services.finance.rpt.report_instance import ReportInstanceService
+        from app.models.finance.rpt.report_instance import ReportStatus
 
         mock_report_instance.status = ReportStatus.GENERATING
         mock_report_instance.organization_id = org_id
@@ -303,7 +303,7 @@ class TestReportInstanceServiceQueries:
 
     def test_get_queued_reports(self, mock_db, mock_report_instance):
         """Test getting queued reports."""
-        from app.services.ifrs.rpt.report_instance import ReportInstanceService
+        from app.services.finance.rpt.report_instance import ReportInstanceService
 
         mock_query = MagicMock()
         mock_query.filter.return_value = mock_query
@@ -318,7 +318,7 @@ class TestReportInstanceServiceQueries:
 
     def test_get_queued_reports_with_org_filter(self, mock_db, org_id, mock_report_instance):
         """Test getting queued reports with organization filter."""
-        from app.services.ifrs.rpt.report_instance import ReportInstanceService
+        from app.services.finance.rpt.report_instance import ReportInstanceService
 
         mock_query = MagicMock()
         mock_query.filter.return_value = mock_query
@@ -335,8 +335,8 @@ class TestReportInstanceServiceQueries:
 
     def test_get_generation_statistics(self, mock_db, org_id, mock_report_instance):
         """Test getting generation statistics."""
-        from app.services.ifrs.rpt.report_instance import ReportInstanceService
-        from app.models.ifrs.rpt.report_instance import ReportStatus
+        from app.services.finance.rpt.report_instance import ReportInstanceService
+        from app.models.finance.rpt.report_instance import ReportStatus
 
         completed_instance = MockReportInstance(
             organization_id=org_id,
@@ -363,7 +363,7 @@ class TestReportInstanceServiceQueries:
 
     def test_get_instance_by_id(self, mock_db, mock_report_instance):
         """Test getting instance by ID."""
-        from app.services.ifrs.rpt.report_instance import ReportInstanceService
+        from app.services.finance.rpt.report_instance import ReportInstanceService
 
         mock_db.get.return_value = mock_report_instance
 
@@ -375,7 +375,7 @@ class TestReportInstanceServiceQueries:
 
     def test_get_instance_not_found(self, mock_db):
         """Test getting non-existent instance."""
-        from app.services.ifrs.rpt.report_instance import ReportInstanceService
+        from app.services.finance.rpt.report_instance import ReportInstanceService
 
         mock_db.get.return_value = None
 
@@ -386,7 +386,7 @@ class TestReportInstanceServiceQueries:
 
     def test_list_instances(self, mock_db, org_id, mock_report_instance):
         """Test listing instances."""
-        from app.services.ifrs.rpt.report_instance import ReportInstanceService
+        from app.services.finance.rpt.report_instance import ReportInstanceService
 
         mock_query = MagicMock()
         mock_query.filter.return_value = mock_query
@@ -411,7 +411,7 @@ class TestReportInstanceServiceRegenerate:
         self, mock_db, org_id, user_id, mock_report_instance, mock_report_definition
     ):
         """Test successful report regeneration."""
-        from app.services.ifrs.rpt.report_instance import ReportInstanceService
+        from app.services.finance.rpt.report_instance import ReportInstanceService
 
         mock_report_instance.organization_id = org_id
         mock_report_instance.report_def_id = mock_report_definition.report_def_id
@@ -436,7 +436,7 @@ class TestReportInstanceServiceRegenerate:
 
     def test_regenerate_report_not_found(self, mock_db, org_id, user_id):
         """Test regenerate with missing original instance."""
-        from app.services.ifrs.rpt.report_instance import ReportInstanceService
+        from app.services.finance.rpt.report_instance import ReportInstanceService
 
         mock_db.get.return_value = None
 
@@ -453,7 +453,7 @@ class TestReportInstanceServiceCleanup:
 
     def test_cleanup_old_instances(self, mock_db, org_id, mock_report_instance):
         """Test cleanup of old instances."""
-        from app.services.ifrs.rpt.report_instance import ReportInstanceService
+        from app.services.finance.rpt.report_instance import ReportInstanceService
 
         mock_query = MagicMock()
         mock_query.filter.return_value = mock_query

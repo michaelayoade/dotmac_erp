@@ -1,0 +1,136 @@
+{% extends "finance/base_finance.html" %}
+
+{% block page_title %}General ledger{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 mt-1">
+    <a href="/dashboard" class="hover:text-slate-700 dark:hover:text-slate-300">Dashboard</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <a href="/finance/reports" class="hover:text-slate-700 dark:hover:text-slate-300">Reports</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="text-slate-700 dark:text-slate-300">General ledger</span>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<button onclick="window.print()" class="btn btn-secondary h-9 px-3">
+    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
+    </svg>
+    Print
+</button>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto space-y-6">
+    <!-- Filter Card -->
+    <div class="card p-4">
+        <form method="get" class="flex flex-wrap items-end gap-4">
+            <div class="flex-1 min-w-[200px]">
+                <label class="form-label">Account</label>
+                <select name="account_id" class="form-input form-select">
+                    <option value="">Select an account...</option>
+                    {% for acct in accounts %}
+                    <option value="{{ acct.account_id }}" {% if acct.account_id == account_id %}selected{% endif %}>
+                        {{ acct.account_code }} - {{ acct.account_name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="min-w-[150px]">
+                <label class="form-label">Start date</label>
+                <input type="date" name="start_date" value="{{ start_date }}" class="form-input">
+            </div>
+            <div class="min-w-[150px]">
+                <label class="form-label">End date</label>
+                <input type="date" name="end_date" value="{{ end_date }}" class="form-input">
+            </div>
+            <button type="submit" class="btn btn-primary">
+                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+                Generate
+            </button>
+        </form>
+    </div>
+
+    <!-- Report -->
+    {% if selected_account %}
+    <div class="card p-6 print:shadow-none print:border-0">
+        <div class="text-center mb-6 print:mb-4">
+            <h1 class="text-2xl font-semibold text-slate-900 dark:text-white font-display">General ledger detail</h1>
+            <p class="text-lg text-slate-700 dark:text-slate-300 mt-2">
+                <span class="font-mono">{{ selected_account.account_code }}</span> - {{ selected_account.account_name }}
+            </p>
+            <p class="text-slate-500 dark:text-slate-400 mt-1">{{ start_date }} to {{ end_date }}</p>
+        </div>
+
+        {% if transactions %}
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="border-b-2 border-slate-300 dark:border-slate-600">
+                        <th class="text-left py-3 px-2 font-semibold text-slate-700 dark:text-slate-300">Date</th>
+                        <th class="text-left py-3 px-2 font-semibold text-slate-700 dark:text-slate-300">Journal #</th>
+                        <th class="text-left py-3 px-2 font-semibold text-slate-700 dark:text-slate-300">Description</th>
+                        <th class="text-left py-3 px-2 font-semibold text-slate-700 dark:text-slate-300">Reference</th>
+                        <th class="text-right py-3 px-2 font-semibold text-slate-700 dark:text-slate-300">Debit</th>
+                        <th class="text-right py-3 px-2 font-semibold text-slate-700 dark:text-slate-300">Credit</th>
+                        <th class="text-right py-3 px-2 font-semibold text-slate-700 dark:text-slate-300">Balance</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for txn in transactions %}
+                    <tr class="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/30">
+                        <td class="py-2 px-2 text-slate-600 dark:text-slate-400">{{ txn.date }}</td>
+                        <td class="py-2 px-2 font-mono text-xs text-teal-600 dark:text-teal-400">
+                            <a href="/finance/gl/journals/{{ txn.journal_number }}" class="hover:underline">{{ txn.journal_number }}</a>
+                        </td>
+                        <td class="py-2 px-2 text-slate-900 dark:text-white">{{ txn.description }}</td>
+                        <td class="py-2 px-2 text-slate-500 dark:text-slate-400">{{ txn.reference }}</td>
+                        <td class="py-2 px-2 text-right font-mono {% if txn.debit %}text-slate-900 dark:text-white{% else %}text-slate-300 dark:text-slate-600{% endif %}">{{ txn.debit or '-' }}</td>
+                        <td class="py-2 px-2 text-right font-mono {% if txn.credit %}text-slate-900 dark:text-white{% else %}text-slate-300 dark:text-slate-600{% endif %}">{{ txn.credit or '-' }}</td>
+                        <td class="py-2 px-2 text-right font-mono font-medium text-slate-900 dark:text-white">{{ txn.balance }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr class="border-t-2 border-slate-300 dark:border-slate-600 bg-slate-100 dark:bg-slate-800">
+                        <td colspan="6" class="py-3 px-2 font-bold text-slate-900 dark:text-white">Ending Balance</td>
+                        <td class="py-3 px-2 text-right font-mono font-bold text-slate-900 dark:text-white">{{ ending_balance }}</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <div class="empty-state-icon">
+                <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                </svg>
+            </div>
+            <h3 class="empty-state-title">No transactions</h3>
+            <p class="empty-state-description">No posted journal entries found for this account in the selected period.</p>
+        </div>
+        {% endif %}
+    </div>
+    {% else %}
+    <!-- No Account Selected -->
+    <div class="card p-6">
+        <div class="empty-state">
+            <div class="empty-state-icon">
+                <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+                </svg>
+            </div>
+            <h3 class="empty-state-title">Select an Account</h3>
+            <p class="empty-state-description">Choose an account from the dropdown above to view its transaction history.</p>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

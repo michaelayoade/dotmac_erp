@@ -10,7 +10,7 @@ from uuid import uuid4
 import pytest
 from fastapi import HTTPException
 
-from app.services.ifrs.tax.tax_return import (
+from app.services.finance.tax.tax_return import (
     TaxReturnService,
     TaxReturnInput,
     TaxReturnBoxValue,
@@ -37,7 +37,7 @@ class MockTaxReturn:
     """Mock TaxReturn model."""
 
     def __init__(self, **kwargs):
-        from app.models.ifrs.tax.tax_return import TaxReturnStatus, TaxReturnType
+        from app.models.finance.tax.tax_return import TaxReturnStatus, TaxReturnType
 
         self.return_id = kwargs.get("return_id", uuid4())
         self.organization_id = kwargs.get("organization_id", uuid4())
@@ -73,7 +73,7 @@ class MockTaxPeriod:
     """Mock TaxPeriod model."""
 
     def __init__(self, **kwargs):
-        from app.models.ifrs.tax.tax_period import TaxPeriodStatus
+        from app.models.finance.tax.tax_period import TaxPeriodStatus
 
         self.period_id = kwargs.get("period_id", uuid4())
         self.organization_id = kwargs.get("organization_id", uuid4())
@@ -87,8 +87,8 @@ class TestTaxReturnServicePrepareReturn:
 
     def test_prepare_return_success(self, mock_db):
         """Test successful return preparation."""
-        from app.models.ifrs.tax.tax_return import TaxReturnType
-        from app.models.ifrs.tax.tax_period import TaxPeriodStatus
+        from app.models.finance.tax.tax_return import TaxReturnType
+        from app.models.finance.tax.tax_period import TaxPeriodStatus
 
         org_id = uuid4()
         period_id = uuid4()
@@ -123,7 +123,7 @@ class TestTaxReturnServicePrepareReturn:
 
     def test_prepare_return_period_not_found(self, mock_db):
         """Test preparation with missing period."""
-        from app.models.ifrs.tax.tax_return import TaxReturnType
+        from app.models.finance.tax.tax_return import TaxReturnType
 
         mock_query = MagicMock()
         mock_query.filter.return_value = mock_query
@@ -144,8 +144,8 @@ class TestTaxReturnServicePrepareReturn:
 
     def test_prepare_return_period_not_open(self, mock_db):
         """Test preparation with non-open period."""
-        from app.models.ifrs.tax.tax_return import TaxReturnType
-        from app.models.ifrs.tax.tax_period import TaxPeriodStatus
+        from app.models.finance.tax.tax_return import TaxReturnType
+        from app.models.finance.tax.tax_period import TaxPeriodStatus
 
         org_id = uuid4()
         mock_period = MockTaxPeriod(
@@ -170,8 +170,8 @@ class TestTaxReturnServicePrepareReturn:
 
     def test_prepare_return_existing_non_draft(self, mock_db):
         """Test preparation when non-draft return exists."""
-        from app.models.ifrs.tax.tax_return import TaxReturnType, TaxReturnStatus
-        from app.models.ifrs.tax.tax_period import TaxPeriodStatus
+        from app.models.finance.tax.tax_return import TaxReturnType, TaxReturnStatus
+        from app.models.finance.tax.tax_period import TaxPeriodStatus
 
         org_id = uuid4()
         mock_period = MockTaxPeriod(
@@ -202,7 +202,7 @@ class TestTaxReturnServiceReviewReturn:
 
     def test_review_return_success(self, mock_db):
         """Test successful return review."""
-        from app.models.ifrs.tax.tax_return import TaxReturnStatus
+        from app.models.finance.tax.tax_return import TaxReturnStatus
 
         org_id = uuid4()
         return_id = uuid4()
@@ -243,7 +243,7 @@ class TestTaxReturnServiceReviewReturn:
 
     def test_review_return_wrong_status(self, mock_db):
         """Test review of return in wrong status."""
-        from app.models.ifrs.tax.tax_return import TaxReturnStatus
+        from app.models.finance.tax.tax_return import TaxReturnStatus
 
         org_id = uuid4()
         mock_return = MockTaxReturn(
@@ -263,7 +263,7 @@ class TestTaxReturnServiceReviewReturn:
 
     def test_review_return_sod_violation(self, mock_db):
         """Test review by same user who prepared (SoD check)."""
-        from app.models.ifrs.tax.tax_return import TaxReturnStatus
+        from app.models.finance.tax.tax_return import TaxReturnStatus
 
         org_id = uuid4()
         user_id = uuid4()  # Same user for both
@@ -291,7 +291,7 @@ class TestTaxReturnServiceFileReturn:
 
     def test_file_return_success(self, mock_db):
         """Test successful return filing."""
-        from app.models.ifrs.tax.tax_return import TaxReturnStatus
+        from app.models.finance.tax.tax_return import TaxReturnStatus
 
         org_id = uuid4()
         return_id = uuid4()
@@ -318,7 +318,7 @@ class TestTaxReturnServiceFileReturn:
 
     def test_file_return_wrong_status(self, mock_db):
         """Test filing return in wrong status."""
-        from app.models.ifrs.tax.tax_return import TaxReturnStatus
+        from app.models.finance.tax.tax_return import TaxReturnStatus
 
         org_id = uuid4()
         mock_return = MockTaxReturn(
@@ -341,7 +341,7 @@ class TestTaxReturnServiceRecordPayment:
 
     def test_record_payment_success(self, mock_db):
         """Test successful payment recording."""
-        from app.models.ifrs.tax.tax_return import TaxReturnStatus
+        from app.models.finance.tax.tax_return import TaxReturnStatus
 
         org_id = uuid4()
         return_id = uuid4()
@@ -371,7 +371,7 @@ class TestTaxReturnServiceRecordPayment:
 
     def test_record_payment_not_filed(self, mock_db):
         """Test payment recording on unfiled return."""
-        from app.models.ifrs.tax.tax_return import TaxReturnStatus
+        from app.models.finance.tax.tax_return import TaxReturnStatus
 
         org_id = uuid4()
         mock_return = MockTaxReturn(
@@ -397,7 +397,7 @@ class TestTaxReturnServiceCreateAmendment:
 
     def test_create_amendment_success(self, mock_db):
         """Test successful amendment creation."""
-        from app.models.ifrs.tax.tax_return import TaxReturnStatus
+        from app.models.finance.tax.tax_return import TaxReturnStatus
 
         org_id = uuid4()
         original_id = uuid4()
@@ -429,7 +429,7 @@ class TestTaxReturnServiceCreateAmendment:
 
     def test_create_amendment_not_filed(self, mock_db):
         """Test amendment of unfiled return."""
-        from app.models.ifrs.tax.tax_return import TaxReturnStatus
+        from app.models.finance.tax.tax_return import TaxReturnStatus
 
         org_id = uuid4()
         mock_original = MockTaxReturn(
@@ -517,7 +517,7 @@ class TestTaxReturnServiceQueries:
 
     def test_list_returns_with_filters(self, mock_db):
         """Test listing returns with filters."""
-        from app.models.ifrs.tax.tax_return import TaxReturnType, TaxReturnStatus
+        from app.models.finance.tax.tax_return import TaxReturnType, TaxReturnStatus
 
         returns = [MockTaxReturn(), MockTaxReturn()]
 

@@ -1,0 +1,163 @@
+{% extends "finance/base_finance.html" %}
+{% from "components/macros.html" import pagination, status_badge, empty_state, stats_card %}
+
+{% block page_title %}Bank Statements{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="font-medium text-slate-900 dark:text-white">Bank Statements</span>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<a href="/finance/banking/statements/import" data-testid="bank-statements-import" class="btn btn-primary">
+    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+    </svg>
+    Import Statement
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    {# Stats Row #}
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {{ stats_card("Total Statements", total_count | default(0), icon="document", color="slate") }}
+        {{ stats_card("Total Lines", total_lines | default(0), icon="list", color="teal") }}
+        {{ stats_card("Matched", matched_lines | default(0), icon="check-circle", color="emerald") }}
+        {{ stats_card("Unmatched", unmatched_lines | default(0), icon="warning", color="amber") }}
+    </div>
+
+    {# Filters #}
+    <div class="card p-4">
+        <form method="get" action="/finance/banking/statements" class="flex flex-wrap items-center gap-4">
+            {# Account Filter #}
+            <select name="account_id" data-testid="bank-statements-account" class="form-select">
+                <option value="">All Accounts</option>
+                {% for acc in accounts %}
+                <option value="{{ acc.bank_account_id }}" {{ 'selected' if account_id == acc.bank_account_id|string else '' }}>
+                    {{ acc.bank_name }} - {{ acc.account_number }}
+                </option>
+                {% endfor %}
+            </select>
+
+            {# Status Filter #}
+            <select name="status" data-testid="bank-statements-status" class="form-select">
+                <option value="">All Status</option>
+                <option value="imported" {{ 'selected' if status == 'imported' else '' }}>Imported</option>
+                <option value="in_progress" {{ 'selected' if status == 'in_progress' else '' }}>In Progress</option>
+                <option value="reconciled" {{ 'selected' if status == 'reconciled' else '' }}>Reconciled</option>
+            </select>
+
+            {# Date Range #}
+            <input type="date" name="start_date" value="{{ start_date | default('') }}"
+                   data-testid="bank-statements-start-date"
+                   class="form-input" placeholder="Start Date">
+            <input type="date" name="end_date" value="{{ end_date | default('') }}"
+                   data-testid="bank-statements-end-date"
+                   class="form-input" placeholder="End Date">
+
+            {# Actions #}
+            <button type="submit" class="btn btn-primary">
+                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
+                </svg>
+                Filter
+            </button>
+
+            {% if account_id or status or start_date or end_date %}
+            <a href="/finance/banking/statements" class="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300 transition-colors">
+                Clear
+            </a>
+            {% endif %}
+        </form>
+    </div>
+
+    {# Statements Table #}
+    <div class="card">
+        <div class="table-container">
+            <table class="table" data-testid="bank-statements-table">
+                <thead>
+                    <tr>
+                        <th>Statement #</th>
+                        <th>Bank Account</th>
+                        <th>Period</th>
+                        <th class="text-right">Opening</th>
+                        <th class="text-right">Closing</th>
+                        <th class="text-center">Lines</th>
+                        <th class="text-center">Status</th>
+                        <th class="text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for stmt in statements %}
+                    <tr class="group">
+                        <td>
+                            <a href="/finance/banking/statements/{{ stmt.statement_id }}" class="font-mono text-sm font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300 transition-colors">
+                                {{ stmt.statement_number }}
+                            </a>
+                            <p class="text-xs text-slate-500 dark:text-slate-400">{{ stmt.statement_date }}</p>
+                        </td>
+                        <td>
+                            <p class="text-sm font-medium text-slate-900 dark:text-white">{{ stmt.bank_name | default("") }}</p>
+                            <p class="font-mono text-xs text-slate-500 dark:text-slate-400">{{ stmt.account_number | default("") }}</p>
+                        </td>
+                        <td class="text-slate-600 dark:text-slate-400">
+                            {{ stmt.period_start }} - {{ stmt.period_end }}
+                        </td>
+                        <td class="text-right font-mono font-medium text-slate-900 dark:text-white">{{ stmt.opening_balance }}</td>
+                        <td class="text-right font-mono font-medium text-slate-900 dark:text-white">{{ stmt.closing_balance }}</td>
+                        <td class="text-center">
+                            <span class="text-sm text-slate-600 dark:text-slate-400">{{ stmt.matched_lines }}/{{ stmt.total_lines }}</span>
+                            <div class="mt-1 h-1.5 w-16 mx-auto rounded-full bg-slate-200 dark:bg-slate-700">
+                                <div class="h-1.5 rounded-full bg-emerald-500" style="width: {{ (stmt.matched_lines / stmt.total_lines * 100) if stmt.total_lines else 0 }}%"></div>
+                            </div>
+                        </td>
+                        <td class="text-center">
+                            {{ status_badge(stmt.status | default('imported'), 'sm') }}
+                        </td>
+                        <td>
+                            <div class="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <a href="/finance/banking/statements/{{ stmt.statement_id }}"
+                                   class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300 transition-colors"
+                                   title="View statement">
+                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                                    </svg>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="8" class="py-12">
+                            {{ empty_state(
+                                'No bank statements found',
+                                'Import your first bank statement to get started' if not (account_id or status or start_date or end_date) else 'Try adjusting your filter criteria',
+                                'document',
+                                'Import Statement' if not (account_id or status or start_date or end_date) else none,
+                                '/banking/statements/import' if not (account_id or status or start_date or end_date) else none
+                            ) }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {# Pagination #}
+        {{ pagination(
+            page=page | default(1),
+            total_pages=total_pages | default(1),
+            total_count=total_count | default(0),
+            limit=limit | default(50),
+            filters={"account_id": account_id, "status": status, "start_date": start_date, "end_date": end_date}
+        ) }}
+    </div>
+</div>
+{% endblock %}

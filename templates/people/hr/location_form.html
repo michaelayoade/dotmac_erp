@@ -1,0 +1,179 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}{% if location %}Edit Branch{% else %}New Branch{% endif %}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr/locations" class="hover:text-teal-600 dark:hover:text-teal-400">Branches</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white">{% if location %}{{ location.location_code }}{% else %}New{% endif %}</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl">
+    {% if error %}
+    <div class="mb-6 p-4 rounded-lg bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-800">
+        <div class="flex items-center gap-2 text-red-700 dark:text-red-400">
+            <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span>{{ error }}</span>
+        </div>
+    </div>
+    {% endif %}
+
+    <form method="post" action="/people/hr/locations/{% if location %}{{ location.location_id }}/edit{% else %}new{% endif %}" class="space-y-6">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Branch Details</h3>
+            </div>
+            <div class="card-body space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="location_code" class="form-label required">Branch Code</label>
+                        <input type="text" name="location_code" id="location_code"
+                            value="{{ location.location_code if location else '' }}"
+                            required
+                            class="form-input w-full {% if errors.location_code %}border-red-500{% endif %}">
+                        {% if errors.location_code %}
+                        <p class="text-sm text-red-500 mt-1">{{ errors.location_code }}</p>
+                        {% endif %}
+                    </div>
+                    <div>
+                        <label for="location_name" class="form-label required">Branch Name</label>
+                        <input type="text" name="location_name" id="location_name"
+                            value="{{ location.location_name if location else '' }}"
+                            required
+                            class="form-input w-full {% if errors.location_name %}border-red-500{% endif %}">
+                        {% if errors.location_name %}
+                        <p class="text-sm text-red-500 mt-1">{{ errors.location_name }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div>
+                    <label for="location_type" class="form-label">Location Type</label>
+                    <select name="location_type" id="location_type" class="form-input w-full">
+                        <option value="">Select type</option>
+                        {% for t in location_types %}
+                        <option value="{{ t }}" {{ 'selected' if location and ((location.location_type == t) or (location.location_type and location.location_type.value == t)) }}>
+                            {{ t | replace('_', ' ') | title }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="address_line_1" class="form-label">Address Line 1</label>
+                        <input type="text" name="address_line_1" id="address_line_1"
+                            value="{{ location.address_line_1 if location else '' }}"
+                            class="form-input w-full">
+                    </div>
+                    <div>
+                        <label for="address_line_2" class="form-label">Address Line 2</label>
+                        <input type="text" name="address_line_2" id="address_line_2"
+                            value="{{ location.address_line_2 if location else '' }}"
+                            class="form-input w-full">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="city" class="form-label">City</label>
+                        <input type="text" name="city" id="city"
+                            value="{{ location.city if location else '' }}"
+                            class="form-input w-full">
+                    </div>
+                    <div>
+                        <label for="state_province" class="form-label">State/Province</label>
+                        <input type="text" name="state_province" id="state_province"
+                            value="{{ location.state_province if location else '' }}"
+                            class="form-input w-full">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="postal_code" class="form-label">Postal Code</label>
+                        <input type="text" name="postal_code" id="postal_code"
+                            value="{{ location.postal_code if location else '' }}"
+                            class="form-input w-full">
+                    </div>
+                    <div>
+                        <label for="country_code" class="form-label">Country Code</label>
+                        <input type="text" name="country_code" id="country_code"
+                            value="{{ location.country_code if location else '' }}"
+                            class="form-input w-full" placeholder="US">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Geofence Settings</h3>
+            </div>
+            <div class="card-body space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="latitude" class="form-label">Latitude</label>
+                        <input type="text" name="latitude" id="latitude"
+                            value="{{ location.latitude if location and location.latitude is not none else '' }}"
+                            class="form-input w-full {% if errors.latitude %}border-red-500{% endif %}">
+                        {% if errors.latitude %}
+                        <p class="text-sm text-red-500 mt-1">{{ errors.latitude }}</p>
+                        {% endif %}
+                    </div>
+                    <div>
+                        <label for="longitude" class="form-label">Longitude</label>
+                        <input type="text" name="longitude" id="longitude"
+                            value="{{ location.longitude if location and location.longitude is not none else '' }}"
+                            class="form-input w-full {% if errors.longitude %}border-red-500{% endif %}">
+                        {% if errors.longitude %}
+                        <p class="text-sm text-red-500 mt-1">{{ errors.longitude }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="geofence_radius_m" class="form-label">Radius (meters)</label>
+                        <input type="number" name="geofence_radius_m" id="geofence_radius_m"
+                            value="{{ location.geofence_radius_m if location else 500 }}"
+                            min="0"
+                            class="form-input w-full {% if errors.geofence_radius_m %}border-red-500{% endif %}">
+                        {% if errors.geofence_radius_m %}
+                        <p class="text-sm text-red-500 mt-1">{{ errors.geofence_radius_m }}</p>
+                        {% endif %}
+                    </div>
+                    <div class="flex items-center gap-3 pt-6">
+                        <input type="checkbox" name="geofence_enabled" id="geofence_enabled" value="true"
+                            {{ 'checked' if not location or location.geofence_enabled }}
+                            class="rounded border-slate-300 text-teal-600 focus:ring-teal-500">
+                        <label for="geofence_enabled" class="text-sm text-slate-700 dark:text-slate-300">Enable geofence</label>
+                    </div>
+                </div>
+                <div class="flex items-center">
+                    <input type="checkbox" name="is_active" id="is_active" value="true"
+                        {{ 'checked' if not location or location.is_active }}
+                        class="rounded border-slate-300 text-teal-600 focus:ring-teal-500">
+                    <label for="is_active" class="ml-2 text-sm text-slate-700 dark:text-slate-300">Active</label>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex justify-end gap-3">
+            <a href="/people/hr/locations" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">
+                {% if location %}Update{% else %}Create{% endif %} Branch
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

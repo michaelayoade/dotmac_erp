@@ -1,0 +1,340 @@
+{% extends "operations/base_operations.html" %}
+
+{% block page_title %}SLA Dashboard{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+    <a href="/operations/dashboard" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Operations</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <a href="/operations/support/tickets" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Support</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="font-medium text-slate-900 dark:text-white">SLA Dashboard</span>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<div class="flex items-center gap-2">
+    <a href="/operations/support/reports/breaches" class="btn btn-secondary">
+        <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+        </svg>
+        View All Breaches
+    </a>
+    <a href="/operations/support/reports/aging" class="btn btn-secondary">
+        <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        Aging Report
+    </a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    {# Date Range Filter #}
+    <div class="card p-4">
+        <form method="get" class="flex flex-wrap gap-4 items-end">
+            <div>
+                <label for="date_from" class="form-label">From Date</label>
+                <input type="date" name="date_from" id="date_from" value="{{ date_from }}" class="form-input">
+            </div>
+            <div>
+                <label for="date_to" class="form-label">To Date</label>
+                <input type="date" name="date_to" id="date_to" value="{{ date_to }}" class="form-input">
+            </div>
+            <button type="submit" class="btn btn-primary h-10">
+                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+                Update
+            </button>
+        </form>
+    </div>
+
+    {# SLA Compliance Cards #}
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {# Total Tickets #}
+        <div class="card p-5 relative overflow-hidden group hover:shadow-lg transition-shadow">
+            <div class="absolute top-0 right-0 w-24 h-24 -mr-8 -mt-8 rounded-full bg-gradient-to-br from-slate-500/10 to-slate-500/5 group-hover:scale-110 transition-transform"></div>
+            <div class="flex items-start justify-between relative">
+                <div>
+                    <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Total Tickets</p>
+                    <p class="text-3xl font-bold text-slate-700 dark:text-slate-200 mt-1">{{ metrics.total_tickets }}</p>
+                    <p class="text-xs text-slate-400 dark:text-slate-500 mt-1">{{ metrics.resolved_tickets }} resolved, {{ metrics.open_tickets }} open</p>
+                </div>
+                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                    </svg>
+                </div>
+            </div>
+        </div>
+
+        {# Response SLA #}
+        <div class="card p-5 relative overflow-hidden group hover:shadow-lg transition-shadow">
+            <div class="absolute top-0 right-0 w-24 h-24 -mr-8 -mt-8 rounded-full bg-gradient-to-br from-sky-500/10 to-sky-500/5 group-hover:scale-110 transition-transform"></div>
+            <div class="flex items-start justify-between relative">
+                <div>
+                    <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Response SLA</p>
+                    <p class="text-3xl font-bold {% if metrics.response_compliance_pct >= 90 %}text-emerald-600 dark:text-emerald-400{% elif metrics.response_compliance_pct >= 70 %}text-amber-600 dark:text-amber-400{% else %}text-rose-600 dark:text-rose-400{% endif %} mt-1">{{ metrics.response_compliance_pct }}%</p>
+                    <p class="text-xs text-slate-400 dark:text-slate-500 mt-1">{{ metrics.response_met }} met, {{ metrics.response_breached }} breached</p>
+                </div>
+                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-sky-50 text-sky-600 dark:bg-sky-900/30 dark:text-sky-400">
+                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/>
+                    </svg>
+                </div>
+            </div>
+            {# Progress bar #}
+            <div class="mt-3 h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                <div class="h-full {% if metrics.response_compliance_pct >= 90 %}bg-emerald-500{% elif metrics.response_compliance_pct >= 70 %}bg-amber-500{% else %}bg-rose-500{% endif %} rounded-full transition-all" style="width: {{ metrics.response_compliance_pct }}%"></div>
+            </div>
+        </div>
+
+        {# Resolution SLA #}
+        <div class="card p-5 relative overflow-hidden group hover:shadow-lg transition-shadow">
+            <div class="absolute top-0 right-0 w-24 h-24 -mr-8 -mt-8 rounded-full bg-gradient-to-br from-emerald-500/10 to-emerald-500/5 group-hover:scale-110 transition-transform"></div>
+            <div class="flex items-start justify-between relative">
+                <div>
+                    <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Resolution SLA</p>
+                    <p class="text-3xl font-bold {% if metrics.resolution_compliance_pct >= 90 %}text-emerald-600 dark:text-emerald-400{% elif metrics.resolution_compliance_pct >= 70 %}text-amber-600 dark:text-amber-400{% else %}text-rose-600 dark:text-rose-400{% endif %} mt-1">{{ metrics.resolution_compliance_pct }}%</p>
+                    <p class="text-xs text-slate-400 dark:text-slate-500 mt-1">{{ metrics.resolution_met }} met, {{ metrics.resolution_breached }} breached</p>
+                </div>
+                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
+                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+            </div>
+            {# Progress bar #}
+            <div class="mt-3 h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                <div class="h-full {% if metrics.resolution_compliance_pct >= 90 %}bg-emerald-500{% elif metrics.resolution_compliance_pct >= 70 %}bg-amber-500{% else %}bg-rose-500{% endif %} rounded-full transition-all" style="width: {{ metrics.resolution_compliance_pct }}%"></div>
+            </div>
+        </div>
+
+        {# Average Times #}
+        <div class="card p-5 relative overflow-hidden group hover:shadow-lg transition-shadow">
+            <div class="absolute top-0 right-0 w-24 h-24 -mr-8 -mt-8 rounded-full bg-gradient-to-br from-violet-500/10 to-violet-500/5 group-hover:scale-110 transition-transform"></div>
+            <div class="flex items-start justify-between relative">
+                <div>
+                    <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Avg Response</p>
+                    <p class="text-3xl font-bold text-violet-600 dark:text-violet-400 mt-1">
+                        {% if metrics.avg_response_hours %}{{ "%.1f"|format(metrics.avg_response_hours) }}h{% else %}-{% endif %}
+                    </p>
+                    <p class="text-xs text-slate-400 dark:text-slate-500 mt-1">
+                        Avg resolution: {% if metrics.avg_resolution_hours %}{{ "%.1f"|format(metrics.avg_resolution_hours) }}h{% else %}-{% endif %}
+                    </p>
+                </div>
+                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-violet-50 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400">
+                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {# Breached Tickets #}
+        <div class="card overflow-hidden">
+            <div class="px-5 py-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                <h3 class="font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+                    <svg class="h-5 w-5 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                    </svg>
+                    Breached Tickets
+                    {% if breached_count > 0 %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400">
+                        {{ breached_count }}
+                    </span>
+                    {% endif %}
+                </h3>
+                <a href="/operations/support/reports/breaches" class="text-sm text-amber-600 hover:text-amber-700 dark:text-amber-400">View all</a>
+            </div>
+            {% if breached_tickets %}
+            <div class="divide-y divide-slate-100 dark:divide-slate-800">
+                {% for ticket in breached_tickets %}
+                <a href="{{ ticket.ticket_url }}" class="block px-5 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                    <div class="flex items-start justify-between gap-3">
+                        <div class="min-w-0 flex-1">
+                            <div class="flex items-center gap-2 mb-1">
+                                <span class="font-mono text-xs text-slate-500 dark:text-slate-400">{{ ticket.ticket_number }}</span>
+                                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ring-1 ring-inset {{ ticket.priority_badge }}">
+                                    {{ ticket.priority_label }}
+                                </span>
+                            </div>
+                            <p class="text-sm font-medium text-slate-900 dark:text-white truncate">{{ ticket.subject }}</p>
+                            <div class="flex items-center gap-3 mt-1 text-xs text-slate-500 dark:text-slate-400">
+                                {% if ticket.response_breached %}
+                                <span class="text-rose-600 dark:text-rose-400">
+                                    Response: +{{ "%.1f"|format(ticket.response_breach_hours) }}h overdue
+                                </span>
+                                {% endif %}
+                                {% if ticket.resolution_breached %}
+                                <span class="text-rose-600 dark:text-rose-400">
+                                    Resolution: +{{ "%.1f"|format(ticket.resolution_breach_hours) }}h overdue
+                                </span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ring-1 ring-inset {{ ticket.status_badge }}">
+                            {{ ticket.status_label }}
+                        </span>
+                    </div>
+                </a>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="px-5 py-8 text-center">
+                <div class="mx-auto w-12 h-12 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mb-3">
+                    <svg class="h-6 w-6 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                    </svg>
+                </div>
+                <p class="text-sm text-slate-500 dark:text-slate-400">No breached tickets! Great work.</p>
+            </div>
+            {% endif %}
+        </div>
+
+        {# Ticket Aging #}
+        <div class="card overflow-hidden">
+            <div class="px-5 py-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                <h3 class="font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+                    <svg class="h-5 w-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    Ticket Aging (Open)
+                </h3>
+                <a href="/operations/support/reports/aging" class="text-sm text-amber-600 hover:text-amber-700 dark:text-amber-400">View all</a>
+            </div>
+            <div class="p-5 space-y-4">
+                {% for bucket in aging_buckets %}
+                <div>
+                    <div class="flex items-center justify-between mb-1">
+                        <span class="text-sm font-medium text-slate-700 dark:text-slate-300">{{ bucket.label }}</span>
+                        <span class="text-sm font-bold {% if loop.last and bucket.count > 0 %}text-rose-600 dark:text-rose-400{% elif loop.index == 3 and bucket.count > 0 %}text-amber-600 dark:text-amber-400{% else %}text-slate-600 dark:text-slate-400{% endif %}">
+                            {{ bucket.count }}
+                        </span>
+                    </div>
+                    <div class="h-3 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                        {% set total = aging_buckets|map(attribute='count')|sum %}
+                        {% set pct = (bucket.count / total * 100) if total > 0 else 0 %}
+                        <div class="h-full {% if loop.last %}bg-rose-500{% elif loop.index == 3 %}bg-amber-500{% elif loop.index == 2 %}bg-sky-500{% else %}bg-emerald-500{% endif %} rounded-full transition-all" style="width: {{ pct }}%"></div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    {# Team Performance Table #}
+    <div class="card overflow-hidden">
+        <div class="px-5 py-4 border-b border-slate-200 dark:border-slate-700">
+            <h3 class="font-semibold text-slate-900 dark:text-white">Team Performance</h3>
+        </div>
+        {% if team_performance %}
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead>
+                    <tr class="border-b border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50">
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Team</th>
+                        <th class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Tickets</th>
+                        <th class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Response SLA</th>
+                        <th class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Resolution SLA</th>
+                        <th class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Avg Response</th>
+                        <th class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Avg Resolution</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                    {% for team in team_performance %}
+                    <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                        <td class="px-4 py-3">
+                            <span class="font-medium text-slate-900 dark:text-white">{{ team.team_name }}</span>
+                        </td>
+                        <td class="px-4 py-3 text-center">
+                            <span class="text-sm text-slate-600 dark:text-slate-400">{{ team.total_tickets }}</span>
+                        </td>
+                        <td class="px-4 py-3 text-center">
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium {% if team.response_compliance_pct >= 90 %}bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400{% elif team.response_compliance_pct >= 70 %}bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400{% else %}bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400{% endif %}">
+                                {{ team.response_compliance_pct }}%
+                            </span>
+                        </td>
+                        <td class="px-4 py-3 text-center">
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium {% if team.resolution_compliance_pct >= 90 %}bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400{% elif team.resolution_compliance_pct >= 70 %}bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400{% else %}bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400{% endif %}">
+                                {{ team.resolution_compliance_pct }}%
+                            </span>
+                        </td>
+                        <td class="px-4 py-3 text-center">
+                            <span class="text-sm text-slate-600 dark:text-slate-400">
+                                {% if team.avg_response_hours %}{{ "%.1f"|format(team.avg_response_hours) }}h{% else %}-{% endif %}
+                            </span>
+                        </td>
+                        <td class="px-4 py-3 text-center">
+                            <span class="text-sm text-slate-600 dark:text-slate-400">
+                                {% if team.avg_resolution_hours %}{{ "%.1f"|format(team.avg_resolution_hours) }}h{% else %}-{% endif %}
+                            </span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="px-5 py-8 text-center">
+            <p class="text-sm text-slate-500 dark:text-slate-400">No team data available for this period.</p>
+        </div>
+        {% endif %}
+    </div>
+
+    {# Category Performance Table #}
+    <div class="card overflow-hidden">
+        <div class="px-5 py-4 border-b border-slate-200 dark:border-slate-700">
+            <h3 class="font-semibold text-slate-900 dark:text-white">Category Performance</h3>
+        </div>
+        {% if category_performance %}
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead>
+                    <tr class="border-b border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50">
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Category</th>
+                        <th class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Tickets</th>
+                        <th class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Response SLA</th>
+                        <th class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Resolution SLA</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                    {% for cat in category_performance %}
+                    <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                        <td class="px-4 py-3">
+                            <span class="font-medium text-slate-900 dark:text-white">{{ cat.category_name }}</span>
+                        </td>
+                        <td class="px-4 py-3 text-center">
+                            <span class="text-sm text-slate-600 dark:text-slate-400">{{ cat.total_tickets }}</span>
+                        </td>
+                        <td class="px-4 py-3 text-center">
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium {% if cat.response_compliance_pct >= 90 %}bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400{% elif cat.response_compliance_pct >= 70 %}bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400{% else %}bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400{% endif %}">
+                                {{ cat.response_compliance_pct }}%
+                            </span>
+                        </td>
+                        <td class="px-4 py-3 text-center">
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium {% if cat.resolution_compliance_pct >= 90 %}bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400{% elif cat.resolution_compliance_pct >= 70 %}bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400{% else %}bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400{% endif %}">
+                                {{ cat.resolution_compliance_pct }}%
+                            </span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="px-5 py-8 text-center">
+            <p class="text-sm text-slate-500 dark:text-slate-400">No category data available for this period.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

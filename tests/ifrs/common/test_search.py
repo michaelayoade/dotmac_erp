@@ -15,7 +15,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from app.services.ifrs.common.search import (
+from app.services.finance.common.search import (
     build_search_pattern,
     apply_date_range_filter,
     apply_amount_range_filter,

@@ -11,11 +11,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.services.ifrs.inv.inv_posting_adapter import (
+from app.services.finance.inv.inv_posting_adapter import (
     INVPostingAdapter,
     INVPostingResult,
 )
-from app.models.ifrs.inv.inventory_transaction import TransactionType
+from app.models.finance.inv.inventory_transaction import TransactionType
 
 
 class MockItem:

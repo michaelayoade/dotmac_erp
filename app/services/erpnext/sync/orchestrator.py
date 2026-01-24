@@ -15,11 +15,40 @@ from app.models.sync import SyncHistory, SyncJobStatus, SyncType
 from app.services.erpnext.client import ERPNextClient, ERPNextConfig
 
 from .base import SyncResult
+
+# Core sync services
 from .accounts import AccountSyncService
 from .items import ItemCategorySyncService, ItemSyncService
 from .assets import AssetCategorySyncService, AssetSyncService
 from .contacts import CustomerSyncService, SupplierSyncService
 from .warehouses import WarehouseSyncService
+
+# HR sync services
+from .hr import (
+    DepartmentSyncService,
+    DesignationSyncService,
+    EmploymentTypeSyncService,
+    EmployeeGradeSyncService,
+    EmployeeSyncService,
+)
+
+# Leave & Attendance sync services
+from .leave import (
+    LeaveTypeSyncService,
+    LeaveAllocationSyncService,
+    LeaveApplicationSyncService,
+)
+from .attendance import ShiftTypeSyncService, AttendanceSyncService
+
+# Expense sync services
+from .expense import ExpenseCategorySyncService, ExpenseClaimSyncService
+
+# Project & Support sync services
+from .projects import ProjectSyncService
+from .support import TicketSyncService
+from .tasks import TaskSyncService
+from .timesheets import TimesheetSyncService
+from .material_request import MaterialRequestSyncService
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +70,7 @@ class MigrationConfig:
     # Entity types to sync (empty = all)
     entity_types: Optional[list[str]] = None
 
-    # DotMac Books configuration
+    # DotMac ERP configuration
     ar_control_account_id: Optional[uuid.UUID] = None
     ap_control_account_id: Optional[uuid.UUID] = None
     default_inventory_account_id: Optional[uuid.UUID] = None
@@ -59,11 +88,50 @@ SYNC_PHASES = [
         "name": "Phase 2: Master Data",
         "entities": ["customers", "suppliers", "items", "assets"],
     },
-    # Phase 3 (transactions) can be added later
+    {
+        "name": "Phase 3: HR Foundation",
+        "entities": [
+            "departments",
+            "designations",
+            "employment_types",
+            "employee_grades",
+        ],
+    },
+    {
+        "name": "Phase 4: HR Master Data",
+        "entities": ["employees"],
+    },
+    {
+        "name": "Phase 5: Projects & Support",
+        "entities": ["projects", "tickets"],
+    },
+    {
+        "name": "Phase 5.5: Project Details",
+        "entities": ["tasks", "timesheets"],
+    },
+    {
+        "name": "Phase 5.7: Inventory Requests",
+        "entities": ["material_requests"],
+    },
+    {
+        "name": "Phase 6: Leave & Attendance",
+        "entities": [
+            "leave_types",
+            "shift_types",
+            "leave_allocations",
+            "leave_applications",
+            "attendance",
+        ],
+    },
+    {
+        "name": "Phase 7: Expenses",
+        "entities": ["expense_categories", "expense_claims"],
+    },
 ]
 
 # All supported entity types
 SUPPORTED_ENTITIES = {
+    # Core Finance
     "accounts": "Chart of Accounts",
     "item_categories": "Item Categories",
     "asset_categories": "Asset Categories",
@@ -72,12 +140,35 @@ SUPPORTED_ENTITIES = {
     "suppliers": "Suppliers",
     "items": "Items",
     "assets": "Assets",
+    # HR Foundation
+    "departments": "Departments",
+    "designations": "Designations",
+    "employment_types": "Employment Types",
+    "employee_grades": "Employee Grades",
+    # HR Master Data
+    "employees": "Employees",
+    # Projects & Support
+    "projects": "Projects",
+    "tickets": "Tickets/Issues",
+    "tasks": "Project Tasks",
+    "timesheets": "Timesheets",
+    # Inventory Requests
+    "material_requests": "Material Requests",
+    # Leave & Attendance
+    "leave_types": "Leave Types",
+    "shift_types": "Shift Types",
+    "leave_allocations": "Leave Allocations",
+    "leave_applications": "Leave Applications",
+    "attendance": "Attendance Records",
+    # Expenses
+    "expense_categories": "Expense Categories",
+    "expense_claims": "Expense Claims",
 }
 
 
 class ERPNextSyncOrchestrator:
     """
-    Orchestrates ERPNext to DotMac Books migration.
+    Orchestrates ERPNext to DotMac ERP migration.
 
     Handles:
     - Dependency ordering
@@ -117,6 +208,7 @@ class ERPNextSyncOrchestrator:
     def _get_service(self, entity_type: str) -> Any:
         """Get sync service for entity type."""
         services = {
+            # Core Finance
             "accounts": AccountSyncService,
             "item_categories": ItemCategorySyncService,
             "asset_categories": AssetCategorySyncService,
@@ -125,6 +217,29 @@ class ERPNextSyncOrchestrator:
             "suppliers": SupplierSyncService,
             "items": ItemSyncService,
             "assets": AssetSyncService,
+            # HR Foundation
+            "departments": DepartmentSyncService,
+            "designations": DesignationSyncService,
+            "employment_types": EmploymentTypeSyncService,
+            "employee_grades": EmployeeGradeSyncService,
+            # HR Master Data
+            "employees": EmployeeSyncService,
+            # Projects & Support
+            "projects": ProjectSyncService,
+            "tickets": TicketSyncService,
+            "tasks": TaskSyncService,
+            "timesheets": TimesheetSyncService,
+            # Inventory Requests
+            "material_requests": MaterialRequestSyncService,
+            # Leave & Attendance
+            "leave_types": LeaveTypeSyncService,
+            "shift_types": ShiftTypeSyncService,
+            "leave_allocations": LeaveAllocationSyncService,
+            "leave_applications": LeaveApplicationSyncService,
+            "attendance": AttendanceSyncService,
+            # Expenses
+            "expense_categories": ExpenseCategorySyncService,
+            "expense_claims": ExpenseClaimSyncService,
         }
 
         service_class = services.get(entity_type)
@@ -218,6 +333,7 @@ class ERPNextSyncOrchestrator:
     def _get_count(self, entity_type: str) -> int:
         """Get count of records for entity type."""
         doctype_map = {
+            # Core Finance
             "accounts": "Account",
             "item_categories": "Item Group",
             "asset_categories": "Asset Category",
@@ -226,6 +342,29 @@ class ERPNextSyncOrchestrator:
             "suppliers": "Supplier",
             "items": "Item",
             "assets": "Asset",
+            # HR Foundation
+            "departments": "Department",
+            "designations": "Designation",
+            "employment_types": "Employment Type",
+            "employee_grades": "Employee Grade",
+            # HR Master Data
+            "employees": "Employee",
+            # Projects & Support
+            "projects": "Project",
+            "tickets": "Issue",  # May be "HD Ticket" for v14+
+            "tasks": "Task",
+            "timesheets": "Timesheet",
+            # Inventory Requests
+            "material_requests": "Material Request",
+            # Leave & Attendance
+            "leave_types": "Leave Type",
+            "shift_types": "Shift Type",
+            "leave_allocations": "Leave Allocation",
+            "leave_applications": "Leave Application",
+            "attendance": "Attendance",
+            # Expenses
+            "expense_categories": "Expense Claim Type",
+            "expense_claims": "Expense Claim",
         }
 
         doctype = doctype_map.get(entity_type)
@@ -233,10 +372,19 @@ class ERPNextSyncOrchestrator:
             return 0
 
         filters = {}
-        if self.config.erpnext_company and entity_type in ["accounts", "assets", "warehouses"]:
+        # Company filters for company-scoped DocTypes
+        if self.config.erpnext_company and entity_type in [
+            "accounts", "assets", "warehouses", "departments",
+            "employees", "projects", "expense_claims", "timesheets",
+            "material_requests",
+        ]:
             filters["company"] = self.config.erpnext_company
+
+        # Active record filters
         if entity_type in ["customers", "suppliers", "items"]:
             filters["disabled"] = 0
+        if entity_type == "employees":
+            filters["status"] = "Active"
 
         return self.client.get_count(doctype, filters)
 

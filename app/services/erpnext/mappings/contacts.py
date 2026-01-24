@@ -1,5 +1,5 @@
 """
-Contact mapping (Customers/Suppliers) from ERPNext to DotMac Books.
+Contact mapping (Customers/Suppliers) from ERPNext to DotMac ERP.
 """
 from typing import Any
 
@@ -13,7 +13,7 @@ from .base import (
 )
 
 
-# ERPNext customer_type to DotMac Books
+# ERPNext customer_type to DotMac ERP
 CUSTOMER_TYPE_MAP = {
     "Company": "COMPANY",
     "Individual": "INDIVIDUAL",
@@ -30,7 +30,7 @@ def map_customer_type(value: Any) -> str:
 
 
 class CustomerMapping(DocTypeMapping):
-    """Map ERPNext Customer to DotMac Books ar.customer."""
+    """Map ERPNext Customer to DotMac ERP ar.customer."""
 
     def __init__(self):
         super().__init__(
@@ -103,7 +103,7 @@ class CustomerMapping(DocTypeMapping):
 
 
 class SupplierMapping(DocTypeMapping):
-    """Map ERPNext Supplier to DotMac Books ap.supplier."""
+    """Map ERPNext Supplier to DotMac ERP ap.supplier."""
 
     def __init__(self):
         super().__init__(

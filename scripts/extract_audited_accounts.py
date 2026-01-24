@@ -10,8 +10,8 @@ from decimal import Decimal
 from dataclasses import dataclass, asdict
 from typing import Optional
 
-OCR_DIR = Path("/root/projects/dotmac_books/books_backup/ocr_text")
-OUTPUT_DIR = Path("/root/projects/dotmac_books/books_backup")
+OCR_DIR = Path("/root/projects/dotmac_erp/books_backup/ocr_text")
+OUTPUT_DIR = Path("/root/projects/dotmac_erp/books_backup")
 
 
 @dataclass

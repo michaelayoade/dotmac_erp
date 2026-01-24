@@ -18,6 +18,7 @@ from app.config import settings
 from app.db import AsyncSessionLocal, SessionLocal
 from app.models.auth import Session as AuthSession, SessionStatus
 from app.models.person import Person
+from app.models.rbac import Role, PersonRole
 from app.rls import set_current_organization_sync
 from app.services.auth_flow import decode_access_token
 from app.services.auth_dependencies import is_session_inactive
@@ -334,13 +335,13 @@ def landing_content() -> dict:
             ],
         },
         "reports": {
-            "title": "IFRS reporting, built in",
-            "subtitle": "Generate standard financial statements with proper IFRS disclosures, ready for audit.",
+            "title": "Real-time reporting & insights",
+            "subtitle": "Dashboards and reports that update as transactions happen across all modules.",
             "cards": [
-                {"title": "Trial Balance", "subtitle": "Detailed and summary views"},
-                {"title": "P&L Statement", "subtitle": "By period and comparative"},
-                {"title": "Statement of Financial Position", "subtitle": "IFRS presentation"},
-                {"title": "Cash Flow", "subtitle": "Direct and indirect methods"},
+                {"title": "Financial Reports", "subtitle": "P&L, balance sheet, cash flow"},
+                {"title": "HR Analytics", "subtitle": "Headcount, attrition, payroll costs"},
+                {"title": "Operations Metrics", "subtitle": "Inventory, procurement, fulfillment"},
+                {"title": "Custom Dashboards", "subtitle": "Build reports for your KPIs"},
             ],
         },
         "security": {
@@ -416,6 +417,14 @@ def base_context(
     if db and auth.organization_id:
         org_branding = org_brand_context(db, auth.organization_id)
 
+    can_team_leave = auth.has_any_permission(
+        [
+            "leave:applications:approve:tier1",
+            "leave:applications:approve:tier2",
+            "leave:applications:approve:tier3",
+        ]
+    )
+
     return {
         "title": page_title,
         "page_title": page_title,
@@ -424,6 +433,7 @@ def base_context(
         "active_module": active_module,
         "user": auth.user,
         "accessible_modules": auth.accessible_modules,
+        "can_team_leave": can_team_leave,
         "csrf_token": getattr(request.state, "csrf_token", ""),
         "notifications": notifications or [],
     }
@@ -457,6 +467,7 @@ class WebAuthContext:
             "name": self.user_name,
             "initials": self.user_initials,
             "is_authenticated": self.is_authenticated,
+            "is_admin": self.is_admin,
         }
 
     @property
@@ -481,6 +492,10 @@ class WebAuthContext:
             modules.append("people")
         if self.is_admin or "operations:access" in scopes_set:
             modules.append("operations")
+        if self.is_admin or "expense:access" in scopes_set:
+            modules.append("expense")
+        if "self:access" in scopes_set:
+            modules.append("self_service")
 
         return modules
 
@@ -491,6 +506,11 @@ class WebAuthContext:
             "people": "people",
             "finance": "finance",
             "operations": "operations",
+            "expense": "expense",
+            "expenses": "expense",
+            "self": "self_service",
+            "self-service": "self_service",
+            "self_service": "self_service",
         }
         canonical = alias_map.get(module, module)
         return canonical in self.accessible_modules
@@ -532,7 +552,11 @@ class WebAuthContext:
             if module == "people":
                 return "/people/hr/employees"
             if module == "operations":
-                return "/finance/inv/items"
+                return "/operations/dashboard"
+            if module == "expense":
+                return "/expense"
+            if module == "self_service":
+                return "/people/self/attendance"
             return f"/{module}/dashboard"
         # Multiple modules - go to module selector
         return "/"
@@ -546,6 +570,28 @@ def _extract_bearer_token(authorization: str | None) -> str | None:
     if len(parts) == 2 and parts[0].lower() == "bearer":
         return parts[1].strip()
     return None
+
+
+def _normalize_roles_scopes(roles: list[str], scopes: list[str]) -> tuple[list[str], list[str]]:
+    normalized_roles = [str(role).strip().lower() for role in roles if str(role).strip()]
+    normalized_scopes = [str(scope).strip().lower() for scope in scopes if str(scope).strip()]
+    return normalized_roles, normalized_scopes
+
+
+def _ensure_admin_role(db: Session, person_id: UUID, roles: list[str]) -> list[str]:
+    if "admin" in roles:
+        return roles
+    admin_role = db.query(Role).filter(Role.name == "admin").first()
+    if not admin_role:
+        return roles
+    has_admin_role = (
+        db.query(PersonRole)
+        .filter(PersonRole.person_id == person_id, PersonRole.role_id == admin_role.id)
+        .first()
+    )
+    if has_admin_role:
+        roles = [*roles, "admin"]
+    return roles
 
 
 def require_web_auth(
@@ -646,6 +692,8 @@ def require_web_auth(
     roles = [str(role) for role in roles_value] if isinstance(roles_value, list) else []
     scopes_value = payload.get("scopes")
     scopes = [str(scope) for scope in scopes_value] if isinstance(scopes_value, list) else []
+    roles, scopes = _normalize_roles_scopes(roles, scopes)
+    roles = _ensure_admin_role(db, person_uuid, roles)
 
     return WebAuthContext(
         is_authenticated=True,
@@ -733,6 +781,8 @@ def optional_web_auth(
     roles = [str(role) for role in roles_value] if isinstance(roles_value, list) else []
     scopes_value = payload.get("scopes")
     scopes = [str(scope) for scope in scopes_value] if isinstance(scopes_value, list) else []
+    roles, scopes = _normalize_roles_scopes(roles, scopes)
+    roles = _ensure_admin_role(db, person_uuid, roles)
 
     return WebAuthContext(
         is_authenticated=True,
@@ -808,6 +858,66 @@ def require_operations_access(
         raise HTTPException(
             status_code=403,
             detail="Operations module access required",
+        )
+    return auth
+
+
+def require_expense_access(
+    auth: WebAuthContext = Depends(require_web_auth),
+) -> WebAuthContext:
+    """
+    Require access to the Expense module.
+
+    Use this dependency for all expense management web routes.
+    Also allows access for users with finance:access scope since
+    expense claims integrate with the GL.
+
+    Usage:
+        @router.get("/expense/claims")
+        def expense_claims(
+            request: Request,
+            auth: WebAuthContext = Depends(require_expense_access),
+        ):
+            ...
+    """
+    # Allow both expense:access and finance:access since they're related
+    if not auth.has_module_access("expense") and not auth.has_module_access("finance"):
+        raise HTTPException(
+            status_code=403,
+            detail="Expense module access required",
+        )
+    return auth
+
+
+def require_self_service_access(
+    auth: WebAuthContext = Depends(require_web_auth),
+) -> WebAuthContext:
+    """
+    Require access to employee self-service pages.
+
+    Allows users with self-service access or full HR module access.
+    """
+    if not auth.has_module_access("self_service") and not auth.has_module_access("people"):
+        raise HTTPException(
+            status_code=403,
+            detail="Self-service access required",
+        )
+    return auth
+
+
+def require_self_service_leave_approver(
+    auth: WebAuthContext = Depends(require_self_service_access),
+) -> WebAuthContext:
+    """Require self-service access plus leave approval permission."""
+    permissions = [
+        "leave:applications:approve:tier1",
+        "leave:applications:approve:tier2",
+        "leave:applications:approve:tier3",
+    ]
+    if not auth.has_any_permission(permissions):
+        raise HTTPException(
+            status_code=403,
+            detail="Leave approval permission required",
         )
     return auth
 

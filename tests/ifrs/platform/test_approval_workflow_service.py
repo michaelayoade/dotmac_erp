@@ -133,7 +133,7 @@ class TestApprovalWorkflowService:
             'app.models.ifrs.audit.approval_decision': MagicMock(),
             'app.models.rbac': MagicMock(),
         }):
-            from app.services.ifrs.platform.approval_workflow import ApprovalWorkflowService
+            from app.services.finance.platform.approval_workflow import ApprovalWorkflowService
             return ApprovalWorkflowService
 
     @pytest.mark.skip(reason="Complex FXService mocking requires integration testing - tested via integration tests")

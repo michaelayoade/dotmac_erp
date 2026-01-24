@@ -1,0 +1,134 @@
+{% extends "finance/base_finance.html" %}
+
+{% block page_title %}Document Templates{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/automation" class="hover:text-teal-600 dark:hover:text-teal-400">Automation</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white">Document Templates</span>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<a href="/automation/templates/new"
+   class="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-rose-600 to-rose-500 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-rose-500/25 hover:from-rose-700 hover:to-rose-600">
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+    </svg>
+    New Template
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Filters -->
+    <div class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-800/50">
+        <form method="get" class="flex flex-wrap items-center gap-4">
+            <select name="template_type"
+                    class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-rose-500 focus:outline-none focus:ring-1 focus:ring-rose-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                <option value="">All Types</option>
+                {% for tt in template_types %}
+                <option value="{{ tt.value }}" {{ 'selected' if filters.template_type == tt.value else '' }}>{{ tt.label }}</option>
+                {% endfor %}
+            </select>
+            <select name="is_active"
+                    class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-rose-500 focus:outline-none focus:ring-1 focus:ring-rose-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                <option value="">All Status</option>
+                <option value="true" {{ 'selected' if filters.is_active == true else '' }}>Active</option>
+                <option value="false" {{ 'selected' if filters.is_active == false else '' }}>Inactive</option>
+            </select>
+            <button type="submit"
+                    class="rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600">
+                Filter
+            </button>
+        </form>
+    </div>
+
+    <!-- Templates Grid -->
+    {% if templates %}
+    <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        {% for template in templates %}
+        <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50 overflow-hidden">
+            <!-- Preview Area -->
+            <div class="relative h-40 bg-gradient-to-br from-slate-100 to-slate-50 dark:from-slate-700 dark:to-slate-800">
+                <div class="absolute inset-0 flex items-center justify-center">
+                    <svg class="h-16 w-16 text-slate-300 dark:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                </div>
+                {% if template.is_default %}
+                <div class="absolute top-3 left-3">
+                    <span class="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2 py-0.5 text-xs font-medium text-rose-700 dark:bg-rose-900/30 dark:text-rose-400">
+                        <svg class="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" clip-rule="evenodd"/>
+                        </svg>
+                        Default
+                    </span>
+                </div>
+                {% endif %}
+                <div class="absolute top-3 right-3">
+                    <span class="inline-flex rounded-full px-2 py-0.5 text-xs font-medium
+                        {% if template.is_active %}bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400
+                        {% else %}bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-400{% endif %}">
+                        {% if template.is_active %}Active{% else %}Inactive{% endif %}
+                    </span>
+                </div>
+            </div>
+            <!-- Content -->
+            <div class="p-4">
+                <div class="flex items-start justify-between">
+                    <div>
+                        <a href="/automation/templates/{{ template.template_id }}" class="font-medium text-rose-600 hover:text-rose-700 dark:text-rose-400">
+                            {{ template.template_name }}
+                        </a>
+                        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ template.template_type }}</p>
+                    </div>
+                </div>
+                {% if template.description %}
+                <p class="mt-2 text-sm text-slate-600 dark:text-slate-400 line-clamp-2">{{ template.description }}</p>
+                {% endif %}
+                <div class="mt-4 flex items-center justify-between border-t border-slate-200 pt-4 dark:border-slate-700">
+                    <span class="text-xs text-slate-500 dark:text-slate-400">Updated {{ template.updated_at }}</span>
+                    <div class="flex items-center gap-2">
+                        <a href="/automation/templates/{{ template.template_id }}/preview"
+                           class="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300"
+                           title="Preview">
+                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                            </svg>
+                        </a>
+                        <a href="/automation/templates/{{ template.template_id }}/edit"
+                           class="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300"
+                           title="Edit">
+                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                            </svg>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50">
+        <div class="px-6 py-12 text-center">
+            <svg class="mx-auto h-12 w-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+            </svg>
+            <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">No document templates found</p>
+            <a href="/automation/templates/new" class="mt-4 inline-flex items-center gap-2 rounded-lg bg-rose-50 px-4 py-2 text-sm font-medium text-rose-700 hover:bg-rose-100 dark:bg-rose-900/20 dark:text-rose-400">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                </svg>
+                Create Template
+            </a>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -33,6 +33,7 @@ class SettingDomain(enum.Enum):
     email = "email"
     features = "features"
     reporting = "reporting"
+    payments = "payments"
 
 
 class DomainSetting(Base):

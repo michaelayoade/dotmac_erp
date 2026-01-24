@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.models.ifrs.lease.lease_contract import LeaseClassification, LeaseStatus
+from app.models.finance.lease.lease_contract import LeaseClassification, LeaseStatus
 from tests.ifrs.lease.conftest import (
     MockLeaseContract,
     MockLeaseLiability,
@@ -22,7 +22,7 @@ class TestLeaseContractService:
 
     def test_calculate_lease_term_months(self):
         """Test lease term calculation in months."""
-        from app.services.ifrs.lease.lease_contract import LeaseContractService
+        from app.services.finance.lease.lease_contract import LeaseContractService
 
         result = LeaseContractService.calculate_lease_term_months(
             commencement_date=date(2024, 1, 1),
@@ -35,7 +35,7 @@ class TestLeaseContractService:
 
     def test_calculate_lease_term_with_renewal(self):
         """Test lease term calculation including renewal option."""
-        from app.services.ifrs.lease.lease_contract import LeaseContractService
+        from app.services.finance.lease.lease_contract import LeaseContractService
 
         result = LeaseContractService.calculate_lease_term_months(
             commencement_date=date(2024, 1, 1),
@@ -48,7 +48,7 @@ class TestLeaseContractService:
 
     def test_calculate_lease_term_renewal_not_certain(self):
         """Test that renewal months are not added when not reasonably certain."""
-        from app.services.ifrs.lease.lease_contract import LeaseContractService
+        from app.services.finance.lease.lease_contract import LeaseContractService
 
         result = LeaseContractService.calculate_lease_term_months(
             commencement_date=date(2024, 1, 1),
@@ -61,7 +61,7 @@ class TestLeaseContractService:
 
     def test_determine_discount_rate_implicit_known(self):
         """Test discount rate uses implicit rate when known."""
-        from app.services.ifrs.lease.lease_contract import LeaseContractService
+        from app.services.finance.lease.lease_contract import LeaseContractService
 
         result = LeaseContractService.determine_discount_rate(
             ibr=Decimal("0.06"),
@@ -73,7 +73,7 @@ class TestLeaseContractService:
 
     def test_determine_discount_rate_ibr_fallback(self):
         """Test discount rate falls back to IBR when implicit not known."""
-        from app.services.ifrs.lease.lease_contract import LeaseContractService
+        from app.services.finance.lease.lease_contract import LeaseContractService
 
         result = LeaseContractService.determine_discount_rate(
             ibr=Decimal("0.06"),
@@ -85,7 +85,7 @@ class TestLeaseContractService:
 
     def test_get_contract_success(self, mock_db, mock_contract):
         """Test getting a lease contract by ID."""
-        from app.services.ifrs.lease.lease_contract import LeaseContractService
+        from app.services.finance.lease.lease_contract import LeaseContractService
 
         mock_db.get.return_value = mock_contract
 
@@ -96,7 +96,7 @@ class TestLeaseContractService:
 
     def test_get_contract_not_found(self, mock_db):
         """Test getting non-existent contract raises HTTPException."""
-        from app.services.ifrs.lease.lease_contract import LeaseContractService
+        from app.services.finance.lease.lease_contract import LeaseContractService
         from fastapi import HTTPException
 
         mock_db.get.return_value = None
@@ -108,7 +108,7 @@ class TestLeaseContractService:
 
     def test_approve_contract_success(self, mock_db, org_id, mock_contract, approver_id):
         """Test successful contract approval."""
-        from app.services.ifrs.lease.lease_contract import LeaseContractService
+        from app.services.finance.lease.lease_contract import LeaseContractService
 
         mock_contract.status = LeaseStatus.DRAFT
         mock_db.get.return_value = mock_contract
@@ -125,7 +125,7 @@ class TestLeaseContractService:
 
     def test_approve_contract_not_found(self, mock_db, org_id, approver_id):
         """Test approving non-existent contract fails."""
-        from app.services.ifrs.lease.lease_contract import LeaseContractService
+        from app.services.finance.lease.lease_contract import LeaseContractService
         from fastapi import HTTPException
 
         mock_db.get.return_value = None
@@ -142,7 +142,7 @@ class TestLeaseContractService:
 
     def test_approve_contract_wrong_status(self, mock_db, org_id, mock_contract, approver_id):
         """Test approving contract with wrong status fails."""
-        from app.services.ifrs.lease.lease_contract import LeaseContractService
+        from app.services.finance.lease.lease_contract import LeaseContractService
         from fastapi import HTTPException
 
         mock_contract.status = LeaseStatus.ACTIVE  # Already active
@@ -161,7 +161,7 @@ class TestLeaseContractService:
 
     def test_approve_contract_sod_violation(self, mock_db, org_id, mock_contract, user_id):
         """Test segregation of duties violation (creator cannot approve)."""
-        from app.services.ifrs.lease.lease_contract import LeaseContractService
+        from app.services.finance.lease.lease_contract import LeaseContractService
         from fastapi import HTTPException
 
         mock_contract.status = LeaseStatus.DRAFT
@@ -181,7 +181,7 @@ class TestLeaseContractService:
 
     def test_terminate_contract_success(self, mock_db, org_id, mock_active_contract):
         """Test successful contract termination."""
-        from app.services.ifrs.lease.lease_contract import LeaseContractService
+        from app.services.finance.lease.lease_contract import LeaseContractService
 
         mock_db.get.return_value = mock_active_contract
 
@@ -198,7 +198,7 @@ class TestLeaseContractService:
 
     def test_terminate_contract_not_found(self, mock_db, org_id):
         """Test terminating non-existent contract fails."""
-        from app.services.ifrs.lease.lease_contract import LeaseContractService
+        from app.services.finance.lease.lease_contract import LeaseContractService
         from fastapi import HTTPException
 
         mock_db.get.return_value = None
@@ -215,7 +215,7 @@ class TestLeaseContractService:
 
     def test_terminate_contract_wrong_status(self, mock_db, org_id, mock_contract):
         """Test terminating contract with wrong status fails."""
-        from app.services.ifrs.lease.lease_contract import LeaseContractService
+        from app.services.finance.lease.lease_contract import LeaseContractService
         from fastapi import HTTPException
 
         mock_contract.status = LeaseStatus.DRAFT  # Not active
@@ -233,7 +233,7 @@ class TestLeaseContractService:
 
     def test_list_contracts(self, mock_db, org_id):
         """Test listing lease contracts."""
-        from app.services.ifrs.lease.lease_contract import LeaseContractService
+        from app.services.finance.lease.lease_contract import LeaseContractService
 
         mock_contracts = [MockLeaseContract(organization_id=org_id) for _ in range(5)]
         mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = mock_contracts
@@ -244,7 +244,7 @@ class TestLeaseContractService:
 
     def test_list_contracts_with_classification_filter(self, mock_db, org_id):
         """Test listing contracts with classification filter."""
-        from app.services.ifrs.lease.lease_contract import LeaseContractService
+        from app.services.finance.lease.lease_contract import LeaseContractService
 
         mock_contracts = [
             MockLeaseContract(organization_id=org_id, classification=LeaseClassification.FINANCE)
@@ -261,7 +261,7 @@ class TestLeaseContractService:
 
     def test_list_contracts_with_status_filter(self, mock_db, org_id):
         """Test listing contracts with status filter."""
-        from app.services.ifrs.lease.lease_contract import LeaseContractService
+        from app.services.finance.lease.lease_contract import LeaseContractService
 
         mock_contracts = [
             MockLeaseContract(organization_id=org_id, status=LeaseStatus.ACTIVE)
@@ -278,7 +278,7 @@ class TestLeaseContractService:
 
     def test_get_liability_success(self, mock_db, mock_liability):
         """Test getting lease liability."""
-        from app.services.ifrs.lease.lease_contract import LeaseContractService
+        from app.services.finance.lease.lease_contract import LeaseContractService
 
         mock_db.query.return_value.filter.return_value.first.return_value = mock_liability
 
@@ -289,7 +289,7 @@ class TestLeaseContractService:
 
     def test_get_liability_not_found(self, mock_db):
         """Test getting non-existent liability returns None."""
-        from app.services.ifrs.lease.lease_contract import LeaseContractService
+        from app.services.finance.lease.lease_contract import LeaseContractService
 
         mock_db.query.return_value.filter.return_value.first.return_value = None
 
@@ -299,7 +299,7 @@ class TestLeaseContractService:
 
     def test_get_asset_success(self, mock_db, mock_asset):
         """Test getting ROU asset."""
-        from app.services.ifrs.lease.lease_contract import LeaseContractService
+        from app.services.finance.lease.lease_contract import LeaseContractService
 
         mock_db.query.return_value.filter.return_value.first.return_value = mock_asset
 
@@ -310,7 +310,7 @@ class TestLeaseContractService:
 
     def test_get_asset_not_found(self, mock_db):
         """Test getting non-existent asset returns None."""
-        from app.services.ifrs.lease.lease_contract import LeaseContractService
+        from app.services.finance.lease.lease_contract import LeaseContractService
 
         mock_db.query.return_value.filter.return_value.first.return_value = None
 

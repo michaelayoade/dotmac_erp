@@ -1,5 +1,5 @@
 """
-Asset Sync Service - ERPNext to DotMac Books.
+Asset Sync Service - ERPNext to DotMac ERP.
 """
 import uuid
 from datetime import datetime
@@ -9,9 +9,9 @@ from typing import Any, Optional
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.ifrs.gl.account import Account
-from app.models.ifrs.fa.asset import Asset, AssetStatus
-from app.models.ifrs.fa.asset_category import AssetCategory, DepreciationMethod
+from app.models.finance.gl.account import Account
+from app.models.finance.fa.asset import Asset, AssetStatus
+from app.models.finance.fa.asset_category import AssetCategory, DepreciationMethod
 from app.services.erpnext.mappings.assets import AssetMapping, AssetCategoryMapping
 
 from .base import BaseSyncService
@@ -76,7 +76,7 @@ class AssetCategorySyncService(BaseSyncService[AssetCategory]):
             yield from client.get_asset_categories()
 
     def transform_record(self, record: dict[str, Any]) -> dict[str, Any]:
-        """Transform ERPNext asset category to DotMac Books format."""
+        """Transform ERPNext asset category to DotMac ERP format."""
         return self._mapping.transform_record(record)
 
     def create_entity(self, data: dict[str, Any]) -> AssetCategory:
@@ -183,7 +183,7 @@ class AssetSyncService(BaseSyncService[Asset]):
             yield from client.get_assets()
 
     def transform_record(self, record: dict[str, Any]) -> dict[str, Any]:
-        """Transform ERPNext asset to DotMac Books format."""
+        """Transform ERPNext asset to DotMac ERP format."""
         return self._mapping.transform_record(record)
 
     def create_entity(self, data: dict[str, Any]) -> Asset:

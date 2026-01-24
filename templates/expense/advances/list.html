@@ -1,0 +1,138 @@
+{% extends "expense/base_expense.html" %}
+{% from "components/macros.html" import pagination, empty_state %}
+
+{% block page_title %}Cash Advances{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 mt-1">
+    <a href="/expense" class="hover:text-slate-700 dark:hover:text-slate-300">Expense</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="text-slate-700 dark:text-slate-300">Cash Advances</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="flex flex-wrap items-center justify-between gap-4">
+        <div>
+            <h1 class="text-2xl font-semibold text-slate-900 dark:text-white font-display">Cash Advances</h1>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Manage employee cash advances and settlements</p>
+        </div>
+        <a href="/expense/advances/new" class="btn btn-primary">
+            <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+            </svg>
+            New Advance
+        </a>
+    </div>
+
+    <!-- Filters -->
+    <div class="card p-4">
+        <form method="get" class="flex flex-wrap items-end gap-4">
+            <div class="min-w-[180px]">
+                <label class="form-label">Status</label>
+                <select name="status" class="form-input form-select">
+                    <option value="">All Statuses</option>
+                    {% for s in statuses %}
+                    <option value="{{ s }}" {{ 'selected' if status == s else '' }}>{{ s | replace("_", " ") | title }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="btn btn-secondary">
+                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
+                </svg>
+                Filter
+            </button>
+            {% if status %}
+            <a href="/expense/advances/list" class="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300">Clear</a>
+            {% endif %}
+        </form>
+    </div>
+
+    <!-- Advances Table -->
+    <div class="card overflow-hidden">
+        {% if advances %}
+        <div class="table-container">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Advance #</th>
+                        <th>Employee</th>
+                        <th>Purpose</th>
+                        <th class="text-right">Requested</th>
+                        <th class="text-right">Approved</th>
+                        <th class="text-right">Outstanding</th>
+                        <th>Status</th>
+                        <th class="text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for adv in advances %}
+                    <tr>
+                        <td class="font-mono text-slate-900 dark:text-white">
+                            <a href="/expense/advances/{{ adv.advance_id }}" class="hover:text-amber-600">
+                                {{ adv.advance_number }}
+                            </a>
+                        </td>
+                        <td class="text-slate-600 dark:text-slate-400">
+                            {{ adv.employee.full_name if adv.employee else 'N/A' }}
+                        </td>
+                        <td class="text-slate-600 dark:text-slate-400 max-w-xs truncate">
+                            {{ adv.purpose }}
+                        </td>
+                        <td class="text-right font-mono text-slate-900 dark:text-white">
+                            {{ "{:,.2f}".format(adv.requested_amount) }}
+                        </td>
+                        <td class="text-right font-mono text-slate-600 dark:text-slate-400">
+                            {{ "{:,.2f}".format(adv.approved_amount) if adv.approved_amount else '—' }}
+                        </td>
+                        <td class="text-right font-mono">
+                            {% if adv.outstanding_balance > 0 %}
+                            <span class="text-amber-600 dark:text-amber-400">{{ "{:,.2f}".format(adv.outstanding_balance) }}</span>
+                            {% else %}
+                            <span class="text-emerald-600 dark:text-emerald-400">Settled</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if adv.status.value == 'DRAFT' %}
+                            <span class="badge badge-neutral">Draft</span>
+                            {% elif adv.status.value == 'SUBMITTED' %}
+                            <span class="badge badge-warning">Submitted</span>
+                            {% elif adv.status.value == 'APPROVED' %}
+                            <span class="badge badge-info">Approved</span>
+                            {% elif adv.status.value == 'DISBURSED' %}
+                            <span class="badge badge-primary">Disbursed</span>
+                            {% elif adv.status.value == 'PARTIALLY_SETTLED' %}
+                            <span class="badge badge-warning">Partial</span>
+                            {% elif adv.status.value == 'FULLY_SETTLED' %}
+                            <span class="badge badge-success">Settled</span>
+                            {% elif adv.status.value == 'REJECTED' %}
+                            <span class="badge badge-danger">Rejected</span>
+                            {% else %}
+                            <span class="badge badge-neutral">{{ adv.status.value }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-right">
+                            <a href="/expense/advances/{{ adv.advance_id }}" class="text-teal-600 hover:text-teal-700 dark:text-teal-400">
+                                View →
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {{ pagination(page=page, total_pages=total_pages, total_count=total, limit=20, filters={"status": status}) }}
+        {% else %}
+        {{ empty_state(
+            "No cash advances found",
+            "Create a cash advance request to get started.",
+            icon="cash"
+        ) }}
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,371 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}{% if employee %}Edit Employee{% else %}New Employee{% endif %}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400">Employees</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white">{% if employee %}{{ employee.employee_code }}{% else %}New{% endif %}</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl">
+    {# Error alert #}
+    {% if error %}
+    <div class="mb-6 p-4 rounded-lg bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-800">
+        <div class="flex items-center gap-2 text-red-700 dark:text-red-400">
+            <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span>{{ error }}</span>
+        </div>
+    </div>
+    {% endif %}
+
+    <form method="post" action="/people/hr/employees/{% if employee %}{{ employee.employee_id }}/edit{% else %}new{% endif %}" class="space-y-6">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+        {# Personal Information (Person fields - for new employees or display only for existing) #}
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Personal Information</h3>
+            </div>
+            <div class="card-body space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="first_name" class="form-label{% if not employee %} required{% endif %}">First Name</label>
+                        <input type="text" name="first_name" id="first_name"
+                            value="{{ person.first_name if person else form_data.first_name | default('', true) }}"
+                            {% if employee %}readonly class="form-input w-full bg-slate-50 dark:bg-slate-800"{% else %}required class="form-input w-full {% if errors.first_name %}border-red-500{% endif %}"{% endif %}>
+                        {% if errors.first_name %}
+                        <p class="text-sm text-red-500 mt-1">{{ errors.first_name }}</p>
+                        {% endif %}
+                    </div>
+                    <div>
+                        <label for="last_name" class="form-label{% if not employee %} required{% endif %}">Last Name</label>
+                        <input type="text" name="last_name" id="last_name"
+                            value="{{ person.last_name if person else form_data.last_name | default('', true) }}"
+                            {% if employee %}readonly class="form-input w-full bg-slate-50 dark:bg-slate-800"{% else %}required class="form-input w-full {% if errors.last_name %}border-red-500{% endif %}"{% endif %}>
+                        {% if errors.last_name %}
+                        <p class="text-sm text-red-500 mt-1">{{ errors.last_name }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+                <div>
+                    <label for="email" class="form-label{% if not employee %} required{% endif %}">Email</label>
+                    <input type="email" name="email" id="email"
+                        value="{{ person.email if person else form_data.email | default('', true) }}"
+                        {% if employee %}readonly class="form-input w-full bg-slate-50 dark:bg-slate-800"{% else %}required class="form-input w-full {% if errors.email %}border-red-500{% endif %}"{% endif %}>
+                    {% if errors.email %}
+                    <p class="text-sm text-red-500 mt-1">{{ errors.email }}</p>
+                    {% endif %}
+                    {% if employee %}
+                    <p class="text-xs text-slate-500 mt-1">Personal info is managed in the Person record.</p>
+                    {% endif %}
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="phone" class="form-label">Phone</label>
+                        <input type="text" name="phone" id="phone"
+                            value="{{ person.phone if person else form_data.phone | default('', true) }}"
+                            {% if employee %}readonly class="form-input w-full bg-slate-50 dark:bg-slate-800"{% else %}class="form-input w-full"{% endif %}>
+                    </div>
+                    <div>
+                        <label for="date_of_birth" class="form-label">Date of Birth</label>
+                        <input type="date" name="date_of_birth" id="date_of_birth"
+                            value="{{ person.date_of_birth.isoformat() if person and person.date_of_birth else form_data.date_of_birth | default('', true) }}"
+                            {% if employee %}readonly class="form-input w-full bg-slate-50 dark:bg-slate-800"{% else %}class="form-input w-full"{% endif %}>
+                    </div>
+                </div>
+                <div>
+                    <label for="gender" class="form-label">Gender</label>
+                    <select name="gender" id="gender" class="form-input w-full" {% if employee %}disabled{% endif %}>
+                        <option value="">Select gender</option>
+                        {% for g in genders %}
+                        <option value="{{ g }}"
+                            {{ 'selected' if (person and person.gender.value == g) or (form_data.gender == g) }}>
+                            {{ g | replace('_', ' ') | title }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="address_line1" class="form-label">Address Line 1</label>
+                        <input type="text" name="address_line1" id="address_line1"
+                            value="{{ person.address_line1 if person else form_data.address_line1 | default('', true) }}"
+                            {% if employee %}readonly class="form-input w-full bg-slate-50 dark:bg-slate-800"{% else %}class="form-input w-full"{% endif %}>
+                    </div>
+                    <div>
+                        <label for="address_line2" class="form-label">Address Line 2</label>
+                        <input type="text" name="address_line2" id="address_line2"
+                            value="{{ person.address_line2 if person else form_data.address_line2 | default('', true) }}"
+                            {% if employee %}readonly class="form-input w-full bg-slate-50 dark:bg-slate-800"{% else %}class="form-input w-full"{% endif %}>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="city" class="form-label">City</label>
+                        <input type="text" name="city" id="city"
+                            value="{{ person.city if person else form_data.city | default('', true) }}"
+                            {% if employee %}readonly class="form-input w-full bg-slate-50 dark:bg-slate-800"{% else %}class="form-input w-full"{% endif %}>
+                    </div>
+                    <div>
+                        <label for="region" class="form-label">State/Region</label>
+                        <input type="text" name="region" id="region"
+                            value="{{ person.region if person else form_data.region | default('', true) }}"
+                            {% if employee %}readonly class="form-input w-full bg-slate-50 dark:bg-slate-800"{% else %}class="form-input w-full"{% endif %}>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="postal_code" class="form-label">Postal Code</label>
+                        <input type="text" name="postal_code" id="postal_code"
+                            value="{{ person.postal_code if person else form_data.postal_code | default('', true) }}"
+                            {% if employee %}readonly class="form-input w-full bg-slate-50 dark:bg-slate-800"{% else %}class="form-input w-full"{% endif %}>
+                    </div>
+                    <div>
+                        <label for="country_code" class="form-label">Country Code</label>
+                        <input type="text" name="country_code" id="country_code"
+                            value="{{ person.country_code if person else form_data.country_code | default('', true) }}"
+                            {% if employee %}readonly class="form-input w-full bg-slate-50 dark:bg-slate-800"{% else %}class="form-input w-full" placeholder="US"{% endif %}>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {# Employee Information #}
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Employment Details</h3>
+            </div>
+            <div class="card-body space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="employee_code" class="form-label">Employee Code</label>
+                        <input type="text" name="employee_code" id="employee_code"
+                            value="{{ employee.employee_code if employee else form_data.employee_code | default('', true) }}"
+                            placeholder="Auto-generated if empty"
+                            class="form-input w-full {% if errors.employee_code %}border-red-500{% endif %}">
+                        {% if errors.employee_code %}
+                        <p class="text-sm text-red-500 mt-1">{{ errors.employee_code }}</p>
+                        {% endif %}
+                    </div>
+                    <div>
+                        <label for="date_of_joining" class="form-label{% if not employee %} required{% endif %}">Date of Joining</label>
+                        <input type="date" name="date_of_joining" id="date_of_joining"
+                            value="{{ employee.date_of_joining.isoformat() if employee and employee.date_of_joining else form_data.date_of_joining | default('', true) }}"
+                            {% if not employee %}required{% endif %}
+                            class="form-input w-full {% if errors.date_of_joining %}border-red-500{% endif %}">
+                        {% if errors.date_of_joining %}
+                        <p class="text-sm text-red-500 mt-1">{{ errors.date_of_joining }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="department_id" class="form-label">Department</label>
+                        <select name="department_id" id="department_id" class="form-input w-full">
+                            <option value="">Select Department</option>
+                            {% for dept in departments %}
+                            <option value="{{ dept.department_id }}"
+                                {{ 'selected' if (employee and employee.department_id == dept.department_id) or (form_data.department_id == dept.department_id | string) }}>
+                                {{ dept.department_name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label for="designation_id" class="form-label">Designation</label>
+                        <select name="designation_id" id="designation_id" class="form-input w-full">
+                            <option value="">Select Designation</option>
+                            {% for desig in designations %}
+                            <option value="{{ desig.designation_id }}"
+                                {{ 'selected' if (employee and employee.designation_id == desig.designation_id) or (form_data.designation_id == desig.designation_id | string) }}>
+                                {{ desig.designation_name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="employment_type_id" class="form-label">Employment Type</label>
+                        <select name="employment_type_id" id="employment_type_id" class="form-input w-full">
+                            <option value="">Select Employment Type</option>
+                            {% for emp_type in employment_types %}
+                            <option value="{{ emp_type.employment_type_id }}"
+                                {{ 'selected' if (employee and employee.employment_type_id == emp_type.employment_type_id) or (form_data.employment_type_id == emp_type.employment_type_id | string) }}>
+                                {{ emp_type.type_name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label for="grade_id" class="form-label">Grade</label>
+                        <select name="grade_id" id="grade_id" class="form-input w-full">
+                            <option value="">Select Grade</option>
+                            {% for grade in grades %}
+                            <option value="{{ grade.grade_id }}"
+                                {{ 'selected' if (employee and employee.grade_id == grade.grade_id) or (form_data.grade_id == grade.grade_id | string) }}>
+                                {{ grade.grade_name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="reports_to_id" class="form-label">Reports To</label>
+                        <select name="reports_to_id" id="reports_to_id" class="form-input w-full">
+                            <option value="">Select Manager</option>
+                            {% for mgr in managers %}
+                            <option value="{{ mgr.employee_id }}"
+                                {{ 'selected' if (employee and employee.reports_to_id == mgr.employee_id) or (form_data.reports_to_id == mgr.employee_id | string) }}>
+                                {{ mgr.employee_code }} - {{ mgr.full_name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label for="cost_center_id" class="form-label">Cost Center</label>
+                        <select name="cost_center_id" id="cost_center_id" class="form-input w-full">
+                            <option value="">Select Cost Center</option>
+                            {% for cc in cost_centers %}
+                            <option value="{{ cc.cost_center_id }}"
+                                {{ 'selected' if (employee and employee.cost_center_id == cc.cost_center_id) or (form_data.cost_center_id == cc.cost_center_id | string) }}>
+                                {{ cc.cost_center_code }} - {{ cc.cost_center_name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="linked_person_id" class="form-label">Linked User Account</label>
+                        <select name="linked_person_id" id="linked_person_id" class="form-input w-full">
+                            <option value="">No linked user</option>
+                            {% for user in user_accounts %}
+                            <option value="{{ user.person_id }}"
+                                {{ 'selected' if (employee and employee.person_id == user.person_id) or (form_data.linked_person_id == user.person_id | string) }}>
+                                {{ user.label }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <p class="text-xs text-slate-500 mt-1">Link this employee to an existing user account.</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="assigned_location_id" class="form-label">Assigned Branch</label>
+                        <select name="assigned_location_id" id="assigned_location_id" class="form-input w-full">
+                            <option value="">Select Branch</option>
+                            {% for loc in locations %}
+                            <option value="{{ loc.location_id }}"
+                                {{ 'selected' if (employee and employee.assigned_location_id == loc.location_id) or (form_data.assigned_location_id == loc.location_id | string) }}>
+                                {{ loc.location_name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label for="default_shift_type_id" class="form-label">Default Shift Type</label>
+                        <select name="default_shift_type_id" id="default_shift_type_id" class="form-input w-full">
+                            <option value="">Select Shift Type</option>
+                            {% for shift in shift_types %}
+                            <option value="{{ shift.shift_type_id }}"
+                                {{ 'selected' if (employee and employee.default_shift_type_id == shift.shift_type_id) or (form_data.default_shift_type_id == shift.shift_type_id | string) }}>
+                                {{ shift.shift_name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="probation_end_date" class="form-label">Probation End Date</label>
+                        <input type="date" name="probation_end_date" id="probation_end_date"
+                            value="{{ employee.probation_end_date.isoformat() if employee and employee.probation_end_date else form_data.probation_end_date | default('', true) }}"
+                            class="form-input w-full">
+                    </div>
+                    <div>
+                        <label for="status" class="form-label">Status</label>
+                        <select name="status" id="status" class="form-input w-full">
+                            {% for s in statuses %}
+                            <option value="{{ s }}"
+                                {{ 'selected' if (employee and employee.status.value == s) or (form_data.status == s) or (not employee and not form_data.status and s == 'DRAFT') }}>
+                                {{ s }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label for="notes" class="form-label">Notes</label>
+                    <textarea name="notes" id="notes" rows="3" class="form-input w-full">{{ employee.notes if employee else form_data.notes | default('', true) }}</textarea>
+                </div>
+            </div>
+        </div>
+
+        {# Bank Details (optional) #}
+        <div class="card" x-data="{ expanded: {{ 'true' if employee and employee.bank_name else 'false' }} }">
+            <div class="card-header cursor-pointer flex items-center justify-between" @click="expanded = !expanded">
+                <h3 class="font-medium text-slate-900 dark:text-white">Bank Details</h3>
+                <span class="text-slate-400 text-sm">(Optional)</span>
+            </div>
+            <div class="card-body space-y-4" x-show="expanded" x-collapse>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="bank_name" class="form-label">Bank Name</label>
+                        <input type="text" name="bank_name" id="bank_name"
+                            value="{{ employee.bank_name if employee else form_data.bank_name | default('', true) }}"
+                            class="form-input w-full">
+                    </div>
+                    <div>
+                        <label for="bank_account_name" class="form-label">Account Name</label>
+                        <input type="text" name="bank_account_name" id="bank_account_name"
+                            value="{{ employee.bank_account_name if employee else form_data.bank_account_name | default('', true) }}"
+                            class="form-input w-full">
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="bank_account_number" class="form-label">Account Number</label>
+                        <input type="text" name="bank_account_number" id="bank_account_number"
+                            value="{{ employee.bank_account_number if employee else form_data.bank_account_number | default('', true) }}"
+                            class="form-input w-full font-mono">
+                    </div>
+                    <div>
+                        <label for="bank_branch_code" class="form-label">Branch/Sort Code</label>
+                        <input type="text" name="bank_branch_code" id="bank_branch_code"
+                            value="{{ employee.bank_branch_code if employee else form_data.bank_branch_code | default('', true) }}"
+                            class="form-input w-full font-mono">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {# Form Actions #}
+        <div class="flex justify-end gap-3">
+            <a href="/people/hr/employees{% if employee %}/{{ employee.employee_id }}{% endif %}"
+               class="btn btn-secondary">
+                Cancel
+            </a>
+            <button type="submit" class="btn btn-primary">
+                {% if employee %}Update{% else %}Create{% endif %} Employee
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

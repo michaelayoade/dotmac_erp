@@ -12,8 +12,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi import HTTPException
 
-from app.models.ifrs.inv.inventory_count import CountStatus
-from app.services.ifrs.inv.count import (
+from app.models.finance.inv.inventory_count import CountStatus
+from app.services.finance.inv.count import (
     InventoryCountService,
     CountInput,
     CountLineInput,
@@ -851,7 +851,7 @@ class TestModuleInstance:
 
     def test_singleton_instance_exists(self):
         """Should have module-level inventory_count_service instance."""
-        from app.services.ifrs.inv.count import inventory_count_service
+        from app.services.finance.inv.count import inventory_count_service
 
         assert inventory_count_service is not None
         assert isinstance(inventory_count_service, InventoryCountService)

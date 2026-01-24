@@ -1,4 +1,31 @@
+#!/usr/bin/env python3
+"""
+RBAC Seed Script - Granular Module Permissions
+
+Permission Naming Convention:
+  {module}:{submodule}:{action}
+
+Actions:
+  - read     : View records
+  - create   : Create new records (draft state)
+  - update   : Modify existing records
+  - delete   : Remove records (soft delete)
+  - post     : Finalize/post transactions
+  - approve  : Approve workflows
+  - void     : Cancel/void posted records
+  - manage   : Full control including config
+
+Approval Tiers (for financial controls):
+  - approve:tier1  : Low value (configurable limit)
+  - approve:tier2  : Medium value
+  - approve:tier3  : High value / unlimited
+"""
 import argparse
+import os
+import sys
+
+# Add project root to path
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from dotenv import load_dotenv
 
@@ -7,28 +34,1569 @@ from app.models.person import Person
 from app.models.rbac import Permission, PersonRole, Role, RolePermission
 
 
-DEFAULT_PERMISSIONS = [
-    ("audit:read", "Read audit events"),
-    ("auth:manage", "Manage authentication"),
-    ("people:read", "Read people profiles"),
-    ("people:write", "Manage people profiles"),
+# =============================================================================
+# Platform Permissions (system-wide)
+# =============================================================================
+PLATFORM_PERMISSIONS = [
+    ("audit:read", "View audit logs and events"),
+    ("audit:export", "Export audit data"),
+    ("auth:manage", "Manage authentication settings"),
+    ("rbac:read", "View roles and permissions"),
     ("rbac:manage", "Manage roles and permissions"),
+    ("scheduler:read", "View scheduled tasks"),
     ("scheduler:manage", "Manage scheduled tasks"),
+    ("settings:read", "View application settings"),
     ("settings:manage", "Manage application settings"),
+    ("integrations:manage", "Manage third-party integrations"),
 ]
 
+# =============================================================================
+# Finance Module Permissions
+# =============================================================================
+FINANCE_PERMISSIONS = [
+    # -------------------------------------------------------------------------
+    # Module Access Gate
+    # -------------------------------------------------------------------------
+    ("finance:access", "Access finance module"),
+    ("finance:dashboard", "View finance dashboard"),
+
+    # -------------------------------------------------------------------------
+    # General Ledger (GL)
+    # -------------------------------------------------------------------------
+    ("gl:accounts:read", "View chart of accounts"),
+    ("gl:accounts:create", "Create GL accounts"),
+    ("gl:accounts:update", "Modify GL accounts"),
+    ("gl:accounts:delete", "Deactivate GL accounts"),
+
+    ("gl:journals:read", "View journal entries"),
+    ("gl:journals:create", "Create journal entries (draft)"),
+    ("gl:journals:post", "Post journal entries to ledger"),
+    ("gl:journals:reverse", "Reverse posted journals"),
+    ("gl:journals:void", "Void/reverse posted journals"),
+    ("gl:journals:approve", "Approve journal entries"),
+
+    ("gl:periods:read", "View fiscal periods"),
+    ("gl:periods:create", "Create fiscal periods"),
+    ("gl:periods:manage", "Manage fiscal periods"),
+
+    ("gl:balances:read", "View account balances"),
+    ("gl:periods:close", "Close fiscal periods"),
+    ("gl:periods:reopen", "Reopen closed periods"),
+
+    ("gl:budgets:read", "View budgets"),
+    ("gl:budgets:manage", "Manage budgets"),
+
+    # -------------------------------------------------------------------------
+    # Accounts Receivable (AR)
+    # -------------------------------------------------------------------------
+    ("ar:customers:read", "View customers"),
+    ("ar:customers:create", "Create customers"),
+    ("ar:customers:update", "Modify customers"),
+    ("ar:customers:delete", "Deactivate customers"),
+
+    ("ar:invoices:read", "View AR invoices"),
+    ("ar:invoices:create", "Create AR invoices"),
+    ("ar:invoices:update", "Modify draft invoices"),
+    ("ar:invoices:post", "Post AR invoices"),
+    ("ar:invoices:void", "Void AR invoices"),
+
+    ("ar:receipts:read", "View customer receipts"),
+    ("ar:receipts:create", "Create customer receipts"),
+    ("ar:receipts:post", "Post customer receipts"),
+    ("ar:receipts:void", "Void customer receipts"),
+
+    ("ar:credit_notes:read", "View credit notes"),
+    ("ar:credit_notes:create", "Create credit notes"),
+    ("ar:credit_notes:post", "Post credit notes"),
+
+    ("ar:quotes:read", "View quotes"),
+    ("ar:quotes:create", "Create quotes"),
+    ("ar:quotes:approve", "Approve quotes"),
+    ("ar:quotes:convert", "Convert quotes to orders/invoices"),
+
+    ("ar:orders:read", "View sales orders"),
+    ("ar:orders:create", "Create sales orders"),
+    ("ar:orders:approve", "Approve sales orders"),
+
+    ("ar:aging:read", "View AR aging reports"),
+    ("ar:ecl:read", "View expected credit loss reports"),
+    ("ar:ecl:calculate", "Calculate expected credit loss"),
+    ("ar:ecl:manage", "Manage expected credit loss"),
+
+    ("ar:contracts:read", "View IFRS 15 contracts"),
+    ("ar:contracts:create", "Create IFRS 15 contracts"),
+    ("ar:contracts:update", "Modify IFRS 15 contracts"),
+    ("ar:contracts:approve", "Activate IFRS 15 contracts"),
+    ("ar:contracts:post", "Post contract revenue recognition"),
+
+    # -------------------------------------------------------------------------
+    # Accounts Payable (AP)
+    # -------------------------------------------------------------------------
+    ("ap:suppliers:read", "View suppliers"),
+    ("ap:suppliers:create", "Create suppliers"),
+    ("ap:suppliers:update", "Modify suppliers"),
+    ("ap:suppliers:delete", "Deactivate suppliers"),
+
+    ("ap:invoices:read", "View AP invoices"),
+    ("ap:invoices:create", "Create AP invoices"),
+    ("ap:invoices:update", "Modify draft AP invoices"),
+    ("ap:invoices:submit", "Submit AP invoices for approval"),
+    ("ap:invoices:approve", "Approve AP invoices"),
+    ("ap:invoices:post", "Post AP invoices"),
+    ("ap:invoices:void", "Void AP invoices"),
+
+    ("ap:payments:read", "View supplier payments"),
+    ("ap:payments:create", "Create supplier payments"),
+    ("ap:payments:post", "Post supplier payments"),
+    ("ap:payments:void", "Void supplier payments"),
+    ("ap:payments:approve:tier1", "Approve payments (Tier 1 limit)"),
+    ("ap:payments:approve:tier2", "Approve payments (Tier 2 limit)"),
+    ("ap:payments:approve:tier3", "Approve payments (unlimited)"),
+
+    ("ap:purchase_orders:read", "View purchase orders"),
+    ("ap:purchase_orders:create", "Create purchase orders"),
+    ("ap:purchase_orders:submit", "Submit POs for approval"),
+    ("ap:purchase_orders:approve", "Approve purchase orders"),
+    ("ap:purchase_orders:void", "Cancel purchase orders"),
+
+    ("ap:goods_receipts:read", "View goods receipts"),
+    ("ap:goods_receipts:create", "Create goods receipts"),
+    ("ap:goods_receipts:update", "Update goods receipts"),
+    ("ap:goods_receipts:approve", "Accept/approve goods receipts"),
+
+    ("ap:payment_batches:read", "View payment batches"),
+    ("ap:payment_batches:create", "Create payment batches"),
+    ("ap:payment_batches:update", "Add payments to batches"),
+    ("ap:payment_batches:approve", "Approve payment batches"),
+    ("ap:payment_batches:process", "Process approved batches"),
+    ("ap:payment_batches:export", "Generate bank files"),
+    ("ap:payment_batches:create", "Create payment batches"),
+    ("ap:payment_batches:approve", "Approve payment batches"),
+
+    ("ap:aging:read", "View AP aging reports"),
+
+    # -------------------------------------------------------------------------
+    # Fixed Assets (FA)
+    # -------------------------------------------------------------------------
+    ("fa:assets:read", "View fixed assets"),
+    ("fa:assets:create", "Create fixed assets"),
+    ("fa:assets:update", "Modify fixed assets"),
+    ("fa:assets:capitalize", "Capitalize assets"),
+    ("fa:assets:dispose", "Dispose assets"),
+    ("fa:assets:post", "Post asset acquisition to GL"),
+    ("fa:assets:transfer", "Transfer assets between locations"),
+
+    ("fa:depreciation:read", "View depreciation schedules"),
+    ("fa:depreciation:run", "Run depreciation"),
+    ("fa:depreciation:post", "Post depreciation journals"),
+
+    ("fa:disposals:create", "Create asset disposals"),
+    ("fa:disposals:post", "Post disposal to GL"),
+
+    ("fa:revaluation:create", "Create asset revaluations"),
+    ("fa:revaluation:post", "Post revaluations"),
+
+    ("fa:impairment:create", "Record asset impairments"),
+    ("fa:impairment:post", "Post impairments"),
+
+    ("fa:categories:read", "View asset categories"),
+    ("fa:categories:manage", "Manage asset categories"),
+
+    # -------------------------------------------------------------------------
+    # Banking
+    # -------------------------------------------------------------------------
+    ("banking:accounts:read", "View bank accounts"),
+    ("banking:accounts:create", "Create bank accounts"),
+    ("banking:accounts:update", "Modify bank accounts"),
+    ("banking:accounts:delete", "Deactivate bank accounts"),
+    ("banking:accounts:manage", "Manage bank account status"),
+
+    ("banking:statements:read", "View bank statements"),
+    ("banking:statements:import", "Import bank statements"),
+    ("banking:statements:delete", "Delete bank statements"),
+
+    ("banking:reconciliation:read", "View reconciliations"),
+    ("banking:reconciliation:create", "Create reconciliations"),
+    ("banking:reconciliation:update", "Update reconciliation matches"),
+    ("banking:reconciliation:submit", "Submit reconciliation for review"),
+    ("banking:reconciliation:approve", "Approve/reject reconciliations"),
+    ("banking:reconciliation:complete", "Complete reconciliations"),
+
+    ("banking:transfers:read", "View bank transfers"),
+    ("banking:transfers:create", "Create bank transfers"),
+    ("banking:transfers:approve", "Approve bank transfers"),
+
+    ("banking:rules:read", "View transaction rules"),
+    ("banking:rules:manage", "Manage transaction rules"),
+
+    # -------------------------------------------------------------------------
+    # Inventory (INV)
+    # -------------------------------------------------------------------------
+    ("inv:items:read", "View inventory items"),
+    ("inv:items:create", "Create inventory items"),
+    ("inv:items:update", "Modify inventory items"),
+    ("inv:items:delete", "Deactivate inventory items"),
+
+    ("inv:warehouses:read", "View warehouses"),
+    ("inv:warehouses:manage", "Manage warehouses"),
+
+    ("inv:transactions:read", "View inventory transactions"),
+    ("inv:transactions:create", "Create inventory transactions"),
+    ("inv:transactions:post", "Post transactions to GL"),
+    ("inv:transactions:receipt", "Record inventory receipts"),
+    ("inv:transactions:issue", "Record inventory issues"),
+    ("inv:transactions:transfer", "Transfer between warehouses"),
+    ("inv:transactions:adjust", "Adjust inventory quantities"),
+
+    ("inv:stock:read", "View stock balances"),
+    ("inv:stock:allocate", "Allocate/reserve inventory"),
+
+    ("inv:counts:read", "View inventory counts"),
+    ("inv:counts:create", "Create inventory counts"),
+    ("inv:counts:post", "Post count adjustments"),
+
+    ("inv:valuation:read", "View inventory valuation"),
+    ("inv:valuation:create", "Create FIFO cost layers"),
+    ("inv:valuation:update", "Consume FIFO layers"),
+    ("inv:valuation:calculate", "Calculate NRV write-downs"),
+    ("inv:valuation:revalue", "Revalue inventory"),
+
+    ("inv:lots:read", "View inventory lots"),
+    ("inv:lots:create", "Create inventory lots"),
+    ("inv:lots:allocate", "Allocate/consume from lots"),
+    ("inv:lots:quarantine", "Quarantine/release lots"),
+
+    ("inv:price_lists:read", "View price lists"),
+    ("inv:price_lists:manage", "Manage price lists"),
+
+    ("inv:categories:read", "View item categories"),
+    ("inv:categories:create", "Create item categories"),
+    ("inv:categories:manage", "Manage item categories"),
+
+    ("inv:bom:read", "View bills of materials"),
+    ("inv:bom:manage", "Manage bills of materials"),
+
+    # -------------------------------------------------------------------------
+    # Tax (IAS 12)
+    # -------------------------------------------------------------------------
+    ("tax:jurisdictions:read", "View tax jurisdictions"),
+    ("tax:jurisdictions:create", "Create tax jurisdictions"),
+    ("tax:jurisdictions:manage", "Manage tax jurisdictions"),
+
+    ("tax:codes:read", "View tax codes"),
+    ("tax:codes:create", "Create tax codes"),
+    ("tax:codes:calculate", "Calculate tax amounts"),
+    ("tax:codes:manage", "Manage tax codes"),
+
+    ("tax:transactions:read", "View tax transactions"),
+    ("tax:transactions:create", "Create tax transactions"),
+    ("tax:transactions:post", "Post tax transactions to GL"),
+
+    ("tax:deferred:read", "View deferred tax"),
+    ("tax:deferred:create", "Create deferred tax entries"),
+    ("tax:deferred:calculate", "Calculate deferred tax"),
+    ("tax:deferred:post", "Post deferred tax to GL"),
+
+    ("tax:reconciliation:read", "View tax reconciliations"),
+    ("tax:reconciliation:create", "Create tax reconciliations"),
+
+    ("tax:periods:read", "View tax periods"),
+    ("tax:periods:create", "Create tax periods"),
+    ("tax:periods:generate", "Generate transactions for periods"),
+    ("tax:periods:extend", "Extend tax period deadlines"),
+
+    ("tax:returns:read", "View tax returns"),
+    ("tax:returns:create", "Create tax returns"),
+    ("tax:returns:review", "Review tax returns"),
+    ("tax:returns:submit", "Submit tax returns"),
+    ("tax:returns:file", "Mark returns as filed"),
+    ("tax:returns:payment", "Record tax return payments"),
+    ("tax:returns:amend", "Amend filed tax returns"),
+
+    ("tax:wht:read", "View withholding tax"),
+    ("tax:wht:manage", "Manage WHT certificates"),
+
+    # -------------------------------------------------------------------------
+    # Lease Accounting (IFRS 16)
+    # -------------------------------------------------------------------------
+    ("lease:contracts:read", "View lease contracts"),
+    ("lease:contracts:create", "Create lease contracts"),
+    ("lease:contracts:update", "Modify lease contracts"),
+    ("lease:contracts:activate", "Activate leases"),
+    ("lease:contracts:commence", "Commence lease contracts"),
+    ("lease:contracts:terminate", "Terminate leases"),
+    ("lease:contracts:modify", "Record lease modifications"),
+
+    ("lease:payments:read", "View lease payment schedules"),
+    ("lease:payments:create", "Create lease payments"),
+    ("lease:payments:update", "Update lease payments"),
+    ("lease:payments:record", "Record lease payments"),
+
+    ("lease:calculations:read", "View lease calculations"),
+    ("lease:calculations:run", "Run lease calculations"),
+    ("lease:calculations:calculate", "Calculate lease values"),
+    ("lease:journals:post", "Post lease journals"),
+    ("lease:postings:post", "Post lease postings to GL"),
+
+    ("lease:modifications:read", "View lease modifications"),
+    ("lease:modifications:create", "Create lease modifications"),
+    ("lease:modifications:approve", "Approve lease modifications"),
+
+    ("lease:index:adjust", "Adjust lease for index changes"),
+
+    # -------------------------------------------------------------------------
+    # Financial Instruments (IFRS 9)
+    # -------------------------------------------------------------------------
+    ("fin_inst:instruments:read", "View financial instruments"),
+    ("fin_inst:instruments:create", "Create financial instruments"),
+    ("fin_inst:instruments:update", "Modify instruments"),
+    ("fin_inst:instruments:assess", "Assess ECL staging for instruments"),
+
+    ("fin_inst:valuation:read", "View valuations"),
+    ("fin_inst:valuation:record", "Record valuations"),
+    ("fin_inst:valuations:read", "View instrument valuations"),
+    ("fin_inst:valuations:create", "Create instrument valuations"),
+
+    ("fin_inst:accruals:create", "Create interest accruals"),
+    ("fin_inst:accruals:post", "Post interest accruals to GL"),
+
+    ("fin_inst:hedges:read", "View hedge relationships"),
+    ("fin_inst:hedges:create", "Designate hedge relationships"),
+    ("fin_inst:hedges:test", "Perform hedge effectiveness tests"),
+    ("fin_inst:hedges:discontinue", "Discontinue hedge relationships"),
+    ("fin_inst:hedges:manage", "Manage hedge accounting"),
+
+    # -------------------------------------------------------------------------
+    # Consolidation (IFRS 10)
+    # -------------------------------------------------------------------------
+    ("cons:entities:read", "View legal entities"),
+    ("cons:entities:create", "Create legal entities"),
+    ("cons:entities:update", "Update legal entities"),
+    ("cons:entities:manage", "Manage legal entities"),
+
+    ("cons:ownership:read", "View ownership interests"),
+    ("cons:ownership:create", "Create ownership interests"),
+
+    ("cons:eliminations:read", "View elimination entries"),
+    ("cons:eliminations:create", "Create eliminations"),
+    ("cons:eliminations:generate", "Generate elimination entries"),
+    ("cons:eliminations:post", "Post elimination entries to GL"),
+
+    ("cons:intercompany:read", "View intercompany balances"),
+    ("cons:intercompany:create", "Create intercompany transactions"),
+    ("cons:intercompany:match", "Match intercompany transactions"),
+    ("cons:intercompany:reconcile", "Reconcile intercompany"),
+
+    ("cons:runs:read", "View consolidation runs"),
+    ("cons:runs:create", "Create consolidation runs"),
+    ("cons:runs:manage", "Manage consolidation runs"),
+    ("cons:runs:execute", "Execute consolidation"),
+
+    # -------------------------------------------------------------------------
+    # Foreign Exchange
+    # -------------------------------------------------------------------------
+    ("fx:rates:read", "View exchange rates"),
+    ("fx:rates:manage", "Manage exchange rates"),
+
+    ("fx:revaluation:run", "Run FX revaluation"),
+    ("fx:revaluation:post", "Post FX gains/losses"),
+
+    # -------------------------------------------------------------------------
+    # Financial Reporting (IAS 1)
+    # -------------------------------------------------------------------------
+    ("reports:definitions:read", "View report definitions"),
+    ("reports:definitions:create", "Create report definitions"),
+    ("reports:definitions:clone", "Clone report definitions"),
+    ("reports:definitions:manage", "Manage report definitions"),
+
+    ("reports:lines:read", "View report lines"),
+    ("reports:lines:create", "Create report lines"),
+    ("reports:lines:reorder", "Reorder report lines"),
+
+    ("reports:instances:read", "View generated reports"),
+    ("reports:instances:create", "Create report instances"),
+    ("reports:instances:generate", "Generate reports"),
+    ("reports:instances:data", "View report instance data"),
+    ("reports:instances:export", "Export reports"),
+
+    ("reports:disclosures:read", "View disclosure checklists"),
+    ("reports:disclosures:create", "Create disclosure checklists"),
+    ("reports:disclosures:complete", "Complete disclosure items"),
+    ("reports:disclosures:review", "Review disclosure checklists"),
+
+    ("reports:schedules:read", "View report schedules"),
+    ("reports:schedules:create", "Create report schedules"),
+    ("reports:schedules:run", "Run scheduled reports"),
+    ("reports:schedules:manage", "Manage report schedules"),
+
+    ("reports:trial_balance:read", "View trial balance"),
+    ("reports:financial_statements:read", "View financial statements"),
+    ("reports:gl_detail:read", "View general ledger detail"),
+
+    # -------------------------------------------------------------------------
+    # Import/Export
+    # -------------------------------------------------------------------------
+    ("import:read", "View import configurations"),
+    ("import:preview", "Preview import data"),
+    ("import:execute", "Execute data imports"),
+
+    # -------------------------------------------------------------------------
+    # Reporting API (rpt: prefix - matches API endpoints)
+    # -------------------------------------------------------------------------
+    ("rpt:definitions:read", "View report definitions (API)"),
+    ("rpt:definitions:create", "Create report definitions (API)"),
+    ("rpt:definitions:clone", "Clone report definitions (API)"),
+
+    ("rpt:lines:read", "View report lines (API)"),
+    ("rpt:lines:create", "Create report lines (API)"),
+    ("rpt:lines:reorder", "Reorder report lines (API)"),
+
+    ("rpt:instances:read", "View report instances (API)"),
+    ("rpt:instances:create", "Create report instances (API)"),
+    ("rpt:instances:generate", "Generate report instances (API)"),
+    ("rpt:instances:data", "View report instance data (API)"),
+
+    ("rpt:disclosures:read", "View disclosure checklists (API)"),
+    ("rpt:disclosures:create", "Create disclosure checklists (API)"),
+    ("rpt:disclosures:complete", "Complete disclosure items (API)"),
+    ("rpt:disclosures:review", "Review disclosure checklists (API)"),
+
+    ("rpt:schedules:read", "View report schedules (API)"),
+    ("rpt:schedules:create", "Create report schedules (API)"),
+    ("rpt:schedules:run", "Run scheduled reports (API)"),
+    ("rpt:schedules:manage", "Manage report schedules (API)"),
+
+    # -------------------------------------------------------------------------
+    # Payments (Paystack Integration)
+    # -------------------------------------------------------------------------
+    ("payments:intents:read", "View payment intents"),
+    ("payments:intents:create", "Create payment intents"),
+    ("payments:webhooks:manage", "Manage payment webhooks"),
+    ("payments:settings:manage", "Manage payment gateway settings"),
+
+    # -------------------------------------------------------------------------
+    # Automation
+    # -------------------------------------------------------------------------
+    ("automation:recurring:read", "View recurring templates"),
+    ("automation:recurring:manage", "Manage recurring templates"),
+
+    ("automation:workflows:read", "View workflow rules"),
+    ("automation:workflows:manage", "Manage workflow rules"),
+
+    ("automation:templates:read", "View document templates"),
+    ("automation:templates:manage", "Manage document templates"),
+
+    # -------------------------------------------------------------------------
+    # Organization Setup
+    # -------------------------------------------------------------------------
+    ("org:business_units:read", "View business units"),
+    ("org:business_units:manage", "Manage business units"),
+
+    ("org:cost_centers:read", "View cost centers"),
+    ("org:cost_centers:manage", "Manage cost centers"),
+
+    ("org:projects:read", "View projects"),
+    ("org:projects:manage", "Manage projects"),
+
+    ("org:locations:read", "View locations"),
+    ("org:locations:manage", "Manage locations"),
+
+    ("org:segments:read", "View reporting segments"),
+    ("org:segments:manage", "Manage reporting segments"),
+]
+
+# =============================================================================
+# HR/People Module Permissions
+# =============================================================================
+HR_PERMISSIONS = [
+    # -------------------------------------------------------------------------
+    # Module Access Gate
+    # -------------------------------------------------------------------------
+    ("hr:access", "Access HR/People module"),
+    ("hr:dashboard", "View HR dashboard"),
+
+    # -------------------------------------------------------------------------
+    # Employee Management (Core HR)
+    # -------------------------------------------------------------------------
+    ("hr:employees:read", "View employee records"),
+    ("hr:employees:read_sensitive", "View sensitive employee data (salary, personal)"),
+    ("hr:employees:create", "Create employee records"),
+    ("hr:employees:update", "Modify employee records"),
+    ("hr:employees:delete", "Deactivate employees"),
+    ("hr:employees:terminate", "Process employee terminations"),
+    ("hr:employees:transfer", "Process employee transfers"),
+    ("hr:employees:promote", "Process promotions"),
+
+    ("hr:departments:read", "View departments"),
+    ("hr:departments:manage", "Manage departments"),
+
+    ("hr:designations:read", "View designations/job titles"),
+    ("hr:designations:manage", "Manage designations"),
+
+    ("hr:grades:read", "View employee grades"),
+    ("hr:grades:manage", "Manage employee grades"),
+
+    ("hr:employment_types:read", "View employment types"),
+    ("hr:employment_types:manage", "Manage employment types"),
+
+    # -------------------------------------------------------------------------
+    # Onboarding & Offboarding
+    # -------------------------------------------------------------------------
+    ("hr:onboarding:read", "View onboarding checklists"),
+    ("hr:onboarding:create", "Create onboarding tasks"),
+    ("hr:onboarding:manage", "Manage onboarding process"),
+
+    ("hr:offboarding:read", "View offboarding/separation"),
+    ("hr:offboarding:create", "Initiate offboarding"),
+    ("hr:offboarding:manage", "Manage offboarding process"),
+
+    ("hr:checklists:read", "View checklist templates"),
+    ("hr:checklists:manage", "Manage checklist templates"),
+
+    # -------------------------------------------------------------------------
+    # Payroll
+    # -------------------------------------------------------------------------
+    ("payroll:components:read", "View salary components"),
+    ("payroll:components:manage", "Manage salary components"),
+
+    ("payroll:structures:read", "View salary structures"),
+    ("payroll:structures:create", "Create salary structures"),
+    ("payroll:structures:update", "Modify salary structures"),
+    ("payroll:structures:delete", "Deactivate salary structures"),
+
+    ("payroll:assignments:read", "View salary assignments"),
+    ("payroll:assignments:create", "Assign salary to employees"),
+    ("payroll:assignments:update", "Modify salary assignments"),
+
+    ("payroll:slips:read", "View salary slips"),
+    ("payroll:slips:read_own", "View own salary slip only"),
+    ("payroll:slips:create", "Generate salary slips"),
+    ("payroll:slips:update", "Modify draft salary slips"),
+    ("payroll:slips:submit", "Submit salary slips"),
+    ("payroll:slips:cancel", "Cancel salary slips"),
+
+    ("payroll:entries:read", "View payroll entries"),
+    ("payroll:entries:create", "Create payroll runs"),
+    ("payroll:entries:process", "Process payroll"),
+    ("payroll:entries:approve", "Approve payroll"),
+    ("payroll:entries:post", "Post payroll to GL"),
+
+    ("payroll:tax:read", "View employee tax profiles"),
+    ("payroll:tax:manage", "Manage tax profiles and bands"),
+
+    # -------------------------------------------------------------------------
+    # Leave Management
+    # -------------------------------------------------------------------------
+    ("leave:types:read", "View leave types"),
+    ("leave:types:manage", "Manage leave types"),
+
+    ("leave:policies:read", "View leave policies"),
+    ("leave:policies:manage", "Manage leave policies"),
+
+    ("leave:allocations:read", "View leave allocations"),
+    ("leave:allocations:create", "Create leave allocations"),
+    ("leave:allocations:update", "Modify leave allocations"),
+
+    ("leave:applications:read", "View all leave applications"),
+    ("leave:applications:read_team", "View team leave applications"),
+    ("leave:applications:read_own", "View own leave applications"),
+    ("leave:applications:create", "Apply for leave (self)"),
+    ("leave:applications:create_for_others", "Apply leave for others"),
+    ("leave:applications:approve:tier1", "Approve leave (direct reports)"),
+    ("leave:applications:approve:tier2", "Approve leave (department)"),
+    ("leave:applications:approve:tier3", "Approve all leave"),
+    ("leave:applications:cancel", "Cancel leave applications"),
+
+    ("leave:holidays:read", "View holiday lists"),
+    ("leave:holidays:manage", "Manage holiday lists"),
+
+    ("leave:balance:read", "View leave balances"),
+    ("leave:balance:read_own", "View own leave balance"),
+    ("leave:balance:adjust", "Adjust leave balances"),
+
+    # -------------------------------------------------------------------------
+    # Attendance
+    # -------------------------------------------------------------------------
+    ("attendance:records:read", "View all attendance records"),
+    ("attendance:records:read_team", "View team attendance"),
+    ("attendance:records:read_own", "View own attendance"),
+    ("attendance:records:create", "Mark attendance manually"),
+    ("attendance:records:update", "Modify attendance records"),
+    ("attendance:records:bulk_mark", "Bulk mark attendance"),
+
+    ("attendance:requests:read", "View attendance requests"),
+    ("attendance:requests:read_own", "View own attendance requests"),
+    ("attendance:requests:create", "Create attendance requests"),
+    ("attendance:requests:approve", "Approve attendance requests"),
+
+    ("attendance:shifts:read", "View shift types"),
+    ("attendance:shifts:manage", "Manage shift types"),
+
+    ("attendance:assignments:read", "View shift assignments"),
+    ("attendance:assignments:create", "Assign shifts to employees"),
+    ("attendance:assignments:update", "Modify shift assignments"),
+
+    ("attendance:reports:read", "View attendance reports"),
+
+    # -------------------------------------------------------------------------
+    # Performance Management
+    # -------------------------------------------------------------------------
+    ("perf:cycles:read", "View appraisal cycles"),
+    ("perf:cycles:manage", "Manage appraisal cycles"),
+
+    ("perf:templates:read", "View appraisal templates"),
+    ("perf:templates:manage", "Manage appraisal templates"),
+
+    ("perf:kras:read", "View KRAs"),
+    ("perf:kras:manage", "Manage KRAs"),
+
+    ("perf:kpis:read", "View KPIs"),
+    ("perf:kpis:manage", "Manage KPIs"),
+
+    ("perf:scorecards:read", "View scorecards"),
+    ("perf:scorecards:manage", "Manage scorecards"),
+
+    ("perf:appraisals:read", "View all appraisals"),
+    ("perf:appraisals:read_team", "View team appraisals"),
+    ("perf:appraisals:read_own", "View own appraisal"),
+    ("perf:appraisals:create", "Create appraisals"),
+    ("perf:appraisals:self_review", "Submit self-review"),
+    ("perf:appraisals:review", "Review team member appraisals"),
+    ("perf:appraisals:approve", "Approve/finalize appraisals"),
+
+    ("perf:goals:read", "View goals"),
+    ("perf:goals:create", "Create goals"),
+    ("perf:goals:update", "Update goal progress"),
+
+    # -------------------------------------------------------------------------
+    # Recruitment
+    # -------------------------------------------------------------------------
+    ("recruit:openings:read", "View job openings"),
+    ("recruit:openings:create", "Create job openings"),
+    ("recruit:openings:update", "Modify job openings"),
+    ("recruit:openings:close", "Close job openings"),
+    ("recruit:openings:publish", "Publish job openings"),
+
+    ("recruit:applicants:read", "View job applicants"),
+    ("recruit:applicants:create", "Add applicants"),
+    ("recruit:applicants:update", "Update applicant status"),
+    ("recruit:applicants:delete", "Remove applicants"),
+
+    ("recruit:interviews:read", "View interview schedules"),
+    ("recruit:interviews:create", "Schedule interviews"),
+    ("recruit:interviews:feedback", "Submit interview feedback"),
+
+    ("recruit:offers:read", "View job offers"),
+    ("recruit:offers:create", "Create job offers"),
+    ("recruit:offers:approve", "Approve job offers"),
+    ("recruit:offers:send", "Send offers to candidates"),
+
+    ("recruit:reports:read", "View recruitment reports"),
+
+    # -------------------------------------------------------------------------
+    # Training & Development
+    # -------------------------------------------------------------------------
+    ("training:programs:read", "View training programs"),
+    ("training:programs:create", "Create training programs"),
+    ("training:programs:update", "Modify training programs"),
+    ("training:programs:delete", "Delete training programs"),
+
+    ("training:events:read", "View training events/sessions"),
+    ("training:events:create", "Create training events"),
+    ("training:events:manage", "Manage event attendance"),
+
+    ("training:enrollments:read", "View training enrollments"),
+    ("training:enrollments:create", "Enroll employees in training"),
+    ("training:enrollments:self_enroll", "Self-enroll in training"),
+
+    ("training:feedback:read", "View training feedback"),
+    ("training:feedback:submit", "Submit training feedback"),
+
+    ("training:certifications:read", "View employee certifications"),
+    ("training:certifications:manage", "Manage certifications"),
+
+    # -------------------------------------------------------------------------
+    # Employee Assets
+    # -------------------------------------------------------------------------
+    ("hr:assets:read", "View employee asset assignments"),
+    ("hr:assets:assign", "Assign assets to employees"),
+    ("hr:assets:return", "Process asset returns"),
+    ("hr:assets:report", "View asset assignment reports"),
+
+    # -------------------------------------------------------------------------
+    # HR Settings & Configuration
+    # -------------------------------------------------------------------------
+    ("hr:settings:read", "View HR settings"),
+    ("hr:settings:manage", "Manage HR settings"),
+
+    # -------------------------------------------------------------------------
+    # Self-Service (Employee Portal)
+    # -------------------------------------------------------------------------
+    ("selfservice:profile:read", "View own profile"),
+    ("selfservice:profile:update", "Update own profile"),
+    ("selfservice:documents:read", "View own documents"),
+    ("selfservice:documents:upload", "Upload own documents"),
+]
+
+# =============================================================================
+# Expense Module Permissions
+# =============================================================================
+EXPENSE_PERMISSIONS = [
+    # -------------------------------------------------------------------------
+    # Module Access Gate
+    # -------------------------------------------------------------------------
+    ("expense:access", "Access expense module"),
+    ("expense:dashboard", "View expense dashboard"),
+
+    # -------------------------------------------------------------------------
+    # Expense Claims
+    # -------------------------------------------------------------------------
+    ("expense:claims:read", "View all expense claims"),
+    ("expense:claims:read_team", "View team expense claims"),
+    ("expense:claims:read_own", "View own expense claims"),
+    ("expense:claims:create", "Submit expense claims"),
+    ("expense:claims:update", "Modify draft claims"),
+    ("expense:claims:delete", "Delete draft claims"),
+    ("expense:claims:submit", "Submit claims for approval"),
+    ("expense:claims:approve:tier1", "Approve expenses (Tier 1 limit)"),
+    ("expense:claims:approve:tier2", "Approve expenses (Tier 2 limit)"),
+    ("expense:claims:approve:tier3", "Approve expenses (unlimited)"),
+    ("expense:claims:reject", "Reject expense claims"),
+    ("expense:claims:reimburse", "Process reimbursements"),
+    ("expense:claims:post", "Post expenses to GL"),
+
+    ("expense:categories:read", "View expense categories"),
+    ("expense:categories:manage", "Manage expense categories"),
+
+    ("expense:policies:read", "View expense policies"),
+    ("expense:policies:manage", "Manage expense policies"),
+
+    # -------------------------------------------------------------------------
+    # Cash Advances
+    # -------------------------------------------------------------------------
+    ("expense:advances:read", "View all cash advances"),
+    ("expense:advances:read_own", "View own cash advances"),
+    ("expense:advances:create", "Request cash advances"),
+    ("expense:advances:approve:tier1", "Approve advances (Tier 1)"),
+    ("expense:advances:approve:tier2", "Approve advances (Tier 2)"),
+    ("expense:advances:approve:tier3", "Approve advances (unlimited)"),
+    ("expense:advances:disburse", "Disburse cash advances"),
+    ("expense:advances:settle", "Settle cash advances"),
+
+    # -------------------------------------------------------------------------
+    # Corporate Cards
+    # -------------------------------------------------------------------------
+    ("expense:cards:read", "View corporate cards"),
+    ("expense:cards:manage", "Manage corporate cards"),
+    ("expense:cards:assign", "Assign cards to employees"),
+    ("expense:cards:transactions:read", "View card transactions"),
+    ("expense:cards:transactions:reconcile", "Reconcile card transactions"),
+
+    # -------------------------------------------------------------------------
+    # Reports
+    # -------------------------------------------------------------------------
+    ("expense:reports:read", "View expense reports"),
+    ("expense:reports:export", "Export expense data"),
+]
+
+# =============================================================================
+# Operations Module Permissions
+# =============================================================================
+OPERATIONS_PERMISSIONS = [
+    # -------------------------------------------------------------------------
+    # Module Access Gate
+    # -------------------------------------------------------------------------
+    ("operations:access", "Access operations module"),
+    ("operations:dashboard", "View operations dashboard"),
+
+    # -------------------------------------------------------------------------
+    # Support/Ticketing
+    # -------------------------------------------------------------------------
+    ("support:tickets:read", "View all tickets"),
+    ("support:tickets:read_own", "View own tickets"),
+    ("support:tickets:create", "Create tickets"),
+    ("support:tickets:update", "Update tickets"),
+    ("support:tickets:assign", "Assign tickets"),
+    ("support:tickets:resolve", "Resolve tickets"),
+    ("support:tickets:close", "Close tickets"),
+
+    ("support:categories:read", "View ticket categories"),
+    ("support:categories:manage", "Manage ticket categories"),
+
+    # -------------------------------------------------------------------------
+    # Task Management
+    # -------------------------------------------------------------------------
+    ("tasks:read", "View all tasks"),
+    ("tasks:read_own", "View own tasks"),
+    ("tasks:create", "Create tasks"),
+    ("tasks:update", "Update tasks"),
+    ("tasks:assign", "Assign tasks"),
+    ("tasks:complete", "Complete tasks"),
+]
+
+
+# =============================================================================
+# Combined Permission List
+# =============================================================================
+DEFAULT_PERMISSIONS = (
+    PLATFORM_PERMISSIONS
+    + FINANCE_PERMISSIONS
+    + HR_PERMISSIONS
+    + EXPENSE_PERMISSIONS
+    + OPERATIONS_PERMISSIONS
+)
+
+
+# =============================================================================
+# Role Definitions
+# =============================================================================
 DEFAULT_ROLES = [
-    ("admin", "Full system access"),
-    ("auditor", "Audit read-only access"),
-    ("operator", "Settings and scheduler operations"),
-    ("support", "People and account support"),
+    # -------------------------------------------------------------------------
+    # Platform Roles
+    # -------------------------------------------------------------------------
+    ("admin", "Full system administrator"),
+    ("auditor", "Read-only audit access"),
+    ("operator", "System operations and settings"),
+
+    # -------------------------------------------------------------------------
+    # Finance Roles
+    # -------------------------------------------------------------------------
+    ("finance_director", "Finance executive with full control and approvals"),
+    ("finance_manager", "Finance management with posting and approval rights"),
+    ("senior_accountant", "Experienced accountant with limited approvals"),
+    ("accountant", "Standard accounting operations"),
+    ("junior_accountant", "Data entry and draft creation only"),
+    ("finance_viewer", "Read-only finance access"),
+    ("ap_clerk", "Accounts payable specialist"),
+    ("ar_clerk", "Accounts receivable specialist"),
+    ("inventory_manager", "Inventory control specialist"),
+    ("tax_specialist", "Tax compliance and reporting"),
+
+    # -------------------------------------------------------------------------
+    # HR Roles
+    # -------------------------------------------------------------------------
+    ("hr_director", "HR executive with full module access"),
+    ("hr_manager", "HR management with approvals"),
+    ("hr_officer", "Standard HR operations"),
+    ("hr_assistant", "Basic HR data entry"),
+    ("hr_viewer", "Read-only HR access"),
+    ("payroll_manager", "Payroll processing with approvals"),
+    ("payroll_officer", "Payroll data entry"),
+    ("recruiter", "Recruitment specialist"),
+    ("training_manager", "Training and development"),
+
+    # -------------------------------------------------------------------------
+    # Expense Roles
+    # -------------------------------------------------------------------------
+    ("expense_admin", "Expense module administrator"),
+    ("expense_approver", "Expense approval authority"),
+    ("expense_processor", "Expense processing and reimbursement"),
+
+    # -------------------------------------------------------------------------
+    # Operations Roles
+    # -------------------------------------------------------------------------
+    ("operations_manager", "Operations management"),
+    ("support_agent", "Support ticket handling"),
+
+    # -------------------------------------------------------------------------
+    # Cross-Functional Roles
+    # -------------------------------------------------------------------------
+    ("department_manager", "Department head with team approvals"),
+    ("employee", "Standard employee self-service"),
 ]
 
+
+# =============================================================================
+# Role -> Permission Mappings
+# =============================================================================
 ROLE_PERMISSIONS = {
+    # -------------------------------------------------------------------------
+    # Platform Roles
+    # -------------------------------------------------------------------------
     "admin": [perm for perm, _ in DEFAULT_PERMISSIONS],
-    "auditor": ["audit:read"],
-    "operator": ["scheduler:manage", "settings:manage"],
-    "support": ["people:read"],
+
+    "auditor": [
+        "audit:read", "audit:export",
+        "finance:access", "finance:dashboard",
+        "gl:accounts:read", "gl:journals:read", "gl:periods:read", "gl:budgets:read",
+        "ar:customers:read", "ar:invoices:read", "ar:receipts:read", "ar:aging:read",
+        "ap:suppliers:read", "ap:invoices:read", "ap:payments:read", "ap:aging:read",
+        "fa:assets:read", "fa:depreciation:read", "fa:categories:read",
+        "banking:accounts:read", "banking:statements:read", "banking:reconciliation:read",
+        "inv:items:read", "inv:warehouses:read", "inv:transactions:read", "inv:valuation:read",
+        # Tax - read access
+        "tax:jurisdictions:read", "tax:codes:read", "tax:transactions:read",
+        "tax:deferred:read", "tax:reconciliation:read", "tax:periods:read", "tax:returns:read",
+        # Lease - read access
+        "lease:contracts:read", "lease:payments:read", "lease:calculations:read", "lease:modifications:read",
+        # Financial Instruments - read access
+        "fin_inst:instruments:read", "fin_inst:valuations:read", "fin_inst:hedges:read",
+        # Consolidation - read access
+        "cons:entities:read", "cons:ownership:read", "cons:eliminations:read",
+        "cons:intercompany:read", "cons:runs:read",
+        # Reports - read access
+        "reports:definitions:read", "reports:lines:read",
+        "reports:instances:read", "reports:instances:data",
+        "reports:disclosures:read", "reports:schedules:read",
+        "reports:trial_balance:read", "reports:financial_statements:read",
+        # Reporting API (rpt: prefix) - read access
+        "rpt:definitions:read", "rpt:lines:read",
+        "rpt:instances:read", "rpt:instances:data",
+        "rpt:disclosures:read", "rpt:schedules:read",
+        "hr:access", "hr:dashboard",
+        "hr:employees:read", "hr:departments:read",
+        "payroll:entries:read", "payroll:slips:read",
+        "expense:access", "expense:claims:read",
+    ],
+
+    "operator": [
+        "scheduler:read", "scheduler:manage",
+        "settings:read", "settings:manage",
+        "integrations:manage",
+    ],
+
+    # -------------------------------------------------------------------------
+    # Finance Roles
+    # -------------------------------------------------------------------------
+    "finance_director": [
+        "finance:access", "finance:dashboard",
+        # GL - full control
+        "gl:accounts:read", "gl:accounts:create", "gl:accounts:update", "gl:accounts:delete",
+        "gl:journals:read", "gl:journals:create", "gl:journals:post", "gl:journals:reverse", "gl:journals:approve",
+        "gl:periods:read", "gl:periods:manage", "gl:periods:close", "gl:periods:reopen",
+        "gl:budgets:read", "gl:budgets:manage",
+        # AR - full control
+        "ar:customers:read", "ar:customers:create", "ar:customers:update", "ar:customers:delete",
+        "ar:invoices:read", "ar:invoices:create", "ar:invoices:update", "ar:invoices:post", "ar:invoices:void",
+        "ar:receipts:read", "ar:receipts:create", "ar:receipts:post", "ar:receipts:void",
+        "ar:credit_notes:read", "ar:credit_notes:create", "ar:credit_notes:post",
+        "ar:quotes:read", "ar:quotes:create", "ar:quotes:approve", "ar:quotes:convert",
+        "ar:orders:read", "ar:orders:create", "ar:orders:approve",
+        "ar:aging:read", "ar:ecl:manage",
+        # AP - full control with highest approval
+        "ap:suppliers:read", "ap:suppliers:create", "ap:suppliers:update", "ap:suppliers:delete",
+        "ap:invoices:read", "ap:invoices:create", "ap:invoices:update", "ap:invoices:post", "ap:invoices:void",
+        "ap:payments:read", "ap:payments:create", "ap:payments:post", "ap:payments:void",
+        "ap:payments:approve:tier1", "ap:payments:approve:tier2", "ap:payments:approve:tier3",
+        "ap:purchase_orders:read", "ap:purchase_orders:create", "ap:purchase_orders:approve",
+        "ap:goods_receipts:read", "ap:goods_receipts:create",
+        "ap:payment_batches:read", "ap:payment_batches:create", "ap:payment_batches:approve",
+        "ap:aging:read",
+        # FA, Banking, Inventory, Tax - full
+        "fa:assets:read", "fa:assets:create", "fa:assets:update", "fa:assets:capitalize",
+        "fa:assets:dispose", "fa:assets:post", "fa:assets:transfer",
+        "fa:depreciation:read", "fa:depreciation:run", "fa:depreciation:post",
+        "fa:disposals:create", "fa:disposals:post",
+        "fa:revaluation:create", "fa:revaluation:post",
+        "fa:impairment:create", "fa:impairment:post",
+        "fa:categories:read", "fa:categories:manage",
+        "banking:accounts:read", "banking:accounts:create", "banking:accounts:update", "banking:accounts:delete",
+        "banking:accounts:manage",
+        "banking:statements:read", "banking:statements:import", "banking:statements:delete",
+        "banking:reconciliation:read", "banking:reconciliation:create", "banking:reconciliation:update",
+        "banking:reconciliation:submit", "banking:reconciliation:approve", "banking:reconciliation:complete",
+        "banking:transfers:read", "banking:transfers:create", "banking:transfers:approve",
+        "banking:rules:read", "banking:rules:manage",
+        "inv:items:read", "inv:items:create", "inv:items:update", "inv:items:delete",
+        "inv:warehouses:read", "inv:warehouses:manage",
+        "inv:transactions:read", "inv:transactions:create", "inv:transactions:post",
+        "inv:transactions:receipt", "inv:transactions:issue",
+        "inv:transactions:transfer", "inv:transactions:adjust",
+        "inv:stock:read", "inv:stock:allocate",
+        "inv:counts:read", "inv:counts:create", "inv:counts:post",
+        "inv:valuation:read", "inv:valuation:create", "inv:valuation:update",
+        "inv:valuation:calculate", "inv:valuation:revalue",
+        "inv:lots:read", "inv:lots:create", "inv:lots:allocate", "inv:lots:quarantine",
+        "inv:price_lists:read", "inv:price_lists:manage",
+        "inv:categories:read", "inv:categories:create", "inv:categories:manage",
+        "inv:bom:read", "inv:bom:manage",
+        "tax:codes:read", "tax:codes:manage",
+        "tax:jurisdictions:read", "tax:jurisdictions:manage",
+        "tax:transactions:read",
+        "tax:returns:read", "tax:returns:create", "tax:returns:submit", "tax:returns:file",
+        "tax:deferred:read", "tax:deferred:calculate",
+        "tax:wht:read", "tax:wht:manage",
+        # Lease (IFRS 16) - full control
+        "lease:contracts:read", "lease:contracts:create", "lease:contracts:update",
+        "lease:contracts:activate", "lease:contracts:commence", "lease:contracts:terminate", "lease:contracts:modify",
+        "lease:payments:read", "lease:payments:create", "lease:payments:update", "lease:payments:record",
+        "lease:calculations:read", "lease:calculations:run", "lease:calculations:calculate",
+        "lease:journals:post", "lease:postings:post",
+        "lease:modifications:read", "lease:modifications:create", "lease:modifications:approve",
+        "lease:index:adjust",
+        # Financial Instruments (IFRS 9) - full control
+        "fin_inst:instruments:read", "fin_inst:instruments:create", "fin_inst:instruments:update", "fin_inst:instruments:assess",
+        "fin_inst:valuation:read", "fin_inst:valuation:record",
+        "fin_inst:valuations:read", "fin_inst:valuations:create",
+        "fin_inst:accruals:create", "fin_inst:accruals:post",
+        "fin_inst:hedges:read", "fin_inst:hedges:create", "fin_inst:hedges:test", "fin_inst:hedges:discontinue", "fin_inst:hedges:manage",
+        # Consolidation (IFRS 10) - full control
+        "cons:entities:read", "cons:entities:create", "cons:entities:update", "cons:entities:manage",
+        "cons:ownership:read", "cons:ownership:create",
+        "cons:eliminations:read", "cons:eliminations:create", "cons:eliminations:generate", "cons:eliminations:post",
+        "cons:intercompany:read", "cons:intercompany:create", "cons:intercompany:match", "cons:intercompany:reconcile",
+        "cons:runs:read", "cons:runs:create", "cons:runs:manage", "cons:runs:execute",
+        "fx:rates:read", "fx:rates:manage", "fx:revaluation:run", "fx:revaluation:post",
+        # Import/Export
+        "import:read", "import:preview", "import:execute",
+        # Reports (IAS 1), Payments, Automation, Org - full control
+        "reports:definitions:read", "reports:definitions:create", "reports:definitions:clone", "reports:definitions:manage",
+        "reports:lines:read", "reports:lines:create", "reports:lines:reorder",
+        "reports:instances:read", "reports:instances:create", "reports:instances:generate", "reports:instances:data", "reports:instances:export",
+        "reports:disclosures:read", "reports:disclosures:create", "reports:disclosures:complete", "reports:disclosures:review",
+        "reports:schedules:read", "reports:schedules:create", "reports:schedules:run", "reports:schedules:manage",
+        "reports:trial_balance:read", "reports:financial_statements:read", "reports:gl_detail:read",
+        # Reporting API (rpt: prefix)
+        "rpt:definitions:read", "rpt:definitions:create", "rpt:definitions:clone",
+        "rpt:lines:read", "rpt:lines:create", "rpt:lines:reorder",
+        "rpt:instances:read", "rpt:instances:create", "rpt:instances:generate", "rpt:instances:data",
+        "rpt:disclosures:read", "rpt:disclosures:create", "rpt:disclosures:complete", "rpt:disclosures:review",
+        "rpt:schedules:read", "rpt:schedules:create", "rpt:schedules:run", "rpt:schedules:manage",
+        "payments:intents:read", "payments:intents:create", "payments:webhooks:manage", "payments:settings:manage",
+        "automation:recurring:read", "automation:recurring:manage",
+        "automation:workflows:read", "automation:workflows:manage",
+        "automation:templates:read", "automation:templates:manage",
+        "org:business_units:read", "org:business_units:manage",
+        "org:cost_centers:read", "org:cost_centers:manage",
+        "org:projects:read", "org:projects:manage",
+        "org:locations:read", "org:locations:manage",
+        "org:segments:read", "org:segments:manage",
+    ],
+
+    "finance_manager": [
+        "finance:access", "finance:dashboard",
+        # GL
+        "gl:accounts:read", "gl:accounts:create", "gl:accounts:update",
+        "gl:journals:read", "gl:journals:create", "gl:journals:post", "gl:journals:reverse", "gl:journals:approve",
+        "gl:periods:read", "gl:periods:manage", "gl:periods:close",
+        "gl:budgets:read", "gl:budgets:manage",
+        # AR
+        "ar:customers:read", "ar:customers:create", "ar:customers:update",
+        "ar:invoices:read", "ar:invoices:create", "ar:invoices:update", "ar:invoices:post", "ar:invoices:void",
+        "ar:receipts:read", "ar:receipts:create", "ar:receipts:post", "ar:receipts:void",
+        "ar:credit_notes:read", "ar:credit_notes:create", "ar:credit_notes:post",
+        "ar:quotes:read", "ar:quotes:create", "ar:quotes:approve", "ar:quotes:convert",
+        "ar:orders:read", "ar:orders:create", "ar:orders:approve",
+        "ar:aging:read", "ar:ecl:manage",
+        # AP with tier 2 approval
+        "ap:suppliers:read", "ap:suppliers:create", "ap:suppliers:update",
+        "ap:invoices:read", "ap:invoices:create", "ap:invoices:update", "ap:invoices:post", "ap:invoices:void",
+        "ap:payments:read", "ap:payments:create", "ap:payments:post", "ap:payments:void",
+        "ap:payments:approve:tier1", "ap:payments:approve:tier2",
+        "ap:purchase_orders:read", "ap:purchase_orders:create", "ap:purchase_orders:approve",
+        "ap:goods_receipts:read", "ap:goods_receipts:create",
+        "ap:payment_batches:read", "ap:payment_batches:create", "ap:payment_batches:approve",
+        "ap:aging:read",
+        # FA
+        "fa:assets:read", "fa:assets:create", "fa:assets:update", "fa:assets:capitalize",
+        "fa:assets:dispose", "fa:assets:post", "fa:assets:transfer",
+        "fa:depreciation:read", "fa:depreciation:run", "fa:depreciation:post",
+        "fa:disposals:create", "fa:disposals:post",
+        "fa:revaluation:create", "fa:revaluation:post",
+        "fa:categories:read", "fa:categories:manage",
+        # Banking
+        "banking:accounts:read", "banking:accounts:create", "banking:accounts:update",
+        "banking:accounts:manage",
+        "banking:statements:read", "banking:statements:import", "banking:statements:delete",
+        "banking:reconciliation:read", "banking:reconciliation:create", "banking:reconciliation:update",
+        "banking:reconciliation:submit", "banking:reconciliation:approve", "banking:reconciliation:complete",
+        "banking:transfers:read", "banking:transfers:create", "banking:transfers:approve",
+        "banking:rules:read", "banking:rules:manage",
+        # Inventory
+        "inv:items:read", "inv:items:create", "inv:items:update",
+        "inv:warehouses:read", "inv:warehouses:manage",
+        "inv:transactions:read", "inv:transactions:create", "inv:transactions:post",
+        "inv:transactions:receipt", "inv:transactions:issue",
+        "inv:transactions:transfer", "inv:transactions:adjust",
+        "inv:stock:read", "inv:stock:allocate",
+        "inv:counts:read", "inv:counts:create", "inv:counts:post",
+        "inv:valuation:read", "inv:valuation:create", "inv:valuation:update", "inv:valuation:calculate",
+        "inv:lots:read", "inv:lots:create", "inv:lots:allocate", "inv:lots:quarantine",
+        "inv:price_lists:read", "inv:price_lists:manage",
+        "inv:categories:read", "inv:categories:create", "inv:categories:manage",
+        # Tax (IAS 12)
+        "tax:jurisdictions:read", "tax:jurisdictions:create",
+        "tax:codes:read", "tax:codes:create", "tax:codes:calculate", "tax:codes:manage",
+        "tax:transactions:read", "tax:transactions:create", "tax:transactions:post",
+        "tax:deferred:read", "tax:deferred:create", "tax:deferred:calculate", "tax:deferred:post",
+        "tax:reconciliation:read", "tax:reconciliation:create",
+        "tax:periods:read", "tax:periods:create", "tax:periods:generate",
+        "tax:returns:read", "tax:returns:create", "tax:returns:review", "tax:returns:submit",
+        "tax:wht:read", "tax:wht:manage",
+        # Lease (IFRS 16)
+        "lease:contracts:read", "lease:contracts:create", "lease:contracts:update",
+        "lease:contracts:activate", "lease:contracts:commence", "lease:contracts:terminate",
+        "lease:payments:read", "lease:payments:create", "lease:payments:update", "lease:payments:record",
+        "lease:calculations:read", "lease:calculations:run", "lease:calculations:calculate",
+        "lease:journals:post", "lease:postings:post",
+        "lease:modifications:read", "lease:modifications:create",
+        # Financial Instruments (IFRS 9)
+        "fin_inst:instruments:read", "fin_inst:instruments:create", "fin_inst:instruments:assess",
+        "fin_inst:valuations:read", "fin_inst:valuations:create",
+        "fin_inst:accruals:create", "fin_inst:accruals:post",
+        "fin_inst:hedges:read", "fin_inst:hedges:create", "fin_inst:hedges:test",
+        # Consolidation (IFRS 10) - read and create
+        "cons:entities:read", "cons:entities:create",
+        "cons:ownership:read", "cons:ownership:create",
+        "cons:eliminations:read", "cons:eliminations:create",
+        "cons:intercompany:read", "cons:intercompany:create", "cons:intercompany:match",
+        "cons:runs:read", "cons:runs:create",
+        # Import
+        "import:read", "import:preview", "import:execute",
+        # Reports (IAS 1)
+        "reports:definitions:read", "reports:definitions:create",
+        "reports:lines:read", "reports:lines:create",
+        "reports:instances:read", "reports:instances:create", "reports:instances:generate", "reports:instances:data", "reports:instances:export",
+        "reports:disclosures:read", "reports:disclosures:create", "reports:disclosures:complete",
+        "reports:schedules:read", "reports:schedules:create", "reports:schedules:run",
+        "reports:trial_balance:read", "reports:financial_statements:read", "reports:gl_detail:read",
+        # Reporting API (rpt: prefix)
+        "rpt:definitions:read", "rpt:definitions:create",
+        "rpt:lines:read", "rpt:lines:create",
+        "rpt:instances:read", "rpt:instances:create", "rpt:instances:generate", "rpt:instances:data",
+        "rpt:disclosures:read", "rpt:disclosures:create", "rpt:disclosures:complete",
+        "rpt:schedules:read", "rpt:schedules:create", "rpt:schedules:run",
+        # Org
+        "org:business_units:read", "org:cost_centers:read", "org:projects:read",
+        "org:locations:read", "org:segments:read",
+    ],
+
+    "senior_accountant": [
+        "finance:access", "finance:dashboard",
+        "gl:accounts:read", "gl:journals:read", "gl:journals:create", "gl:journals:post",
+        "gl:periods:read", "gl:budgets:read",
+        "ar:customers:read", "ar:customers:create", "ar:customers:update",
+        "ar:invoices:read", "ar:invoices:create", "ar:invoices:update", "ar:invoices:post",
+        "ar:receipts:read", "ar:receipts:create", "ar:receipts:post",
+        "ar:credit_notes:read", "ar:credit_notes:create", "ar:credit_notes:post",
+        "ar:aging:read",
+        "ap:suppliers:read", "ap:suppliers:create", "ap:suppliers:update",
+        "ap:invoices:read", "ap:invoices:create", "ap:invoices:update", "ap:invoices:post",
+        "ap:payments:read", "ap:payments:create", "ap:payments:post",
+        "ap:payments:approve:tier1",
+        "ap:purchase_orders:read",
+        "ap:goods_receipts:read", "ap:goods_receipts:create",
+        "ap:aging:read",
+        "banking:accounts:read",
+        "banking:statements:read", "banking:statements:import",
+        "banking:reconciliation:read", "banking:reconciliation:create", "banking:reconciliation:update",
+        "banking:reconciliation:submit", "banking:reconciliation:complete",
+        "inv:items:read", "inv:transactions:read", "inv:stock:read",
+        "tax:codes:read", "tax:transactions:read", "tax:returns:read",
+        "reports:instances:read", "reports:instances:generate",
+        "reports:trial_balance:read", "reports:financial_statements:read", "reports:gl_detail:read",
+    ],
+
+    "accountant": [
+        "finance:access", "finance:dashboard",
+        "gl:accounts:read", "gl:journals:read", "gl:journals:create",
+        "gl:periods:read",
+        "ar:customers:read", "ar:invoices:read", "ar:invoices:create", "ar:invoices:update",
+        "ar:receipts:read", "ar:receipts:create",
+        "ar:aging:read",
+        "ap:suppliers:read", "ap:invoices:read", "ap:invoices:create", "ap:invoices:update",
+        "ap:payments:read", "ap:payments:create",
+        "ap:goods_receipts:read", "ap:goods_receipts:create",
+        "ap:aging:read",
+        "banking:accounts:read", "banking:statements:read",
+        "banking:reconciliation:read", "banking:reconciliation:create", "banking:reconciliation:update",
+        "inv:items:read", "inv:transactions:read", "inv:stock:read",
+        "tax:codes:read", "tax:transactions:read",
+        "reports:instances:read", "reports:trial_balance:read",
+    ],
+
+    "junior_accountant": [
+        "finance:access", "finance:dashboard",
+        "gl:accounts:read", "gl:journals:read", "gl:journals:create",
+        "ar:customers:read", "ar:invoices:read", "ar:invoices:create",
+        "ap:suppliers:read", "ap:invoices:read", "ap:invoices:create",
+        "ap:goods_receipts:read",
+        "banking:accounts:read", "banking:statements:read",
+        "inv:items:read",
+        "reports:instances:read",
+    ],
+
+    "finance_viewer": [
+        "finance:access", "finance:dashboard",
+        "gl:accounts:read", "gl:journals:read", "gl:periods:read", "gl:budgets:read",
+        "ar:customers:read", "ar:invoices:read", "ar:receipts:read", "ar:aging:read",
+        "ap:suppliers:read", "ap:invoices:read", "ap:payments:read", "ap:aging:read",
+        "fa:assets:read", "fa:depreciation:read", "fa:categories:read",
+        "banking:accounts:read", "banking:statements:read", "banking:reconciliation:read",
+        "inv:items:read", "inv:warehouses:read", "inv:transactions:read", "inv:valuation:read",
+        "inv:stock:read", "inv:lots:read", "inv:categories:read",
+        # Tax - read access
+        "tax:jurisdictions:read", "tax:codes:read", "tax:transactions:read",
+        "tax:deferred:read", "tax:reconciliation:read", "tax:periods:read", "tax:returns:read",
+        # Lease - read access
+        "lease:contracts:read", "lease:payments:read", "lease:calculations:read", "lease:modifications:read",
+        # Financial Instruments - read access
+        "fin_inst:instruments:read", "fin_inst:valuations:read", "fin_inst:hedges:read",
+        # Consolidation - read access
+        "cons:entities:read", "cons:ownership:read", "cons:eliminations:read",
+        "cons:intercompany:read", "cons:runs:read",
+        # Reports - read access
+        "reports:definitions:read", "reports:lines:read",
+        "reports:instances:read", "reports:instances:data",
+        "reports:disclosures:read", "reports:schedules:read",
+        "reports:trial_balance:read", "reports:financial_statements:read",
+        # Reporting API (rpt: prefix) - read access
+        "rpt:definitions:read", "rpt:lines:read",
+        "rpt:instances:read", "rpt:instances:data",
+        "rpt:disclosures:read", "rpt:schedules:read",
+    ],
+
+    "ap_clerk": [
+        "finance:access", "finance:dashboard",
+        "ap:suppliers:read", "ap:suppliers:create", "ap:suppliers:update",
+        "ap:invoices:read", "ap:invoices:create", "ap:invoices:update",
+        "ap:payments:read", "ap:payments:create",
+        "ap:purchase_orders:read",
+        "ap:goods_receipts:read", "ap:goods_receipts:create",
+        "ap:aging:read",
+        "gl:accounts:read",
+        "banking:accounts:read",
+    ],
+
+    "ar_clerk": [
+        "finance:access", "finance:dashboard",
+        "ar:customers:read", "ar:customers:create", "ar:customers:update",
+        "ar:invoices:read", "ar:invoices:create", "ar:invoices:update",
+        "ar:receipts:read", "ar:receipts:create",
+        "ar:credit_notes:read", "ar:credit_notes:create",
+        "ar:quotes:read", "ar:quotes:create",
+        "ar:orders:read", "ar:orders:create",
+        "ar:aging:read",
+        "gl:accounts:read",
+        "banking:accounts:read",
+    ],
+
+    "inventory_manager": [
+        "finance:access", "finance:dashboard",
+        "inv:items:read", "inv:items:create", "inv:items:update", "inv:items:delete",
+        "inv:warehouses:read", "inv:warehouses:manage",
+        "inv:transactions:read", "inv:transactions:create", "inv:transactions:post",
+        "inv:transactions:receipt", "inv:transactions:issue",
+        "inv:transactions:transfer", "inv:transactions:adjust",
+        "inv:stock:read", "inv:stock:allocate",
+        "inv:counts:read", "inv:counts:create", "inv:counts:post",
+        "inv:valuation:read", "inv:valuation:create", "inv:valuation:update",
+        "inv:valuation:calculate", "inv:valuation:revalue",
+        "inv:lots:read", "inv:lots:create", "inv:lots:allocate", "inv:lots:quarantine",
+        "inv:price_lists:read", "inv:price_lists:manage",
+        "inv:categories:read", "inv:categories:create", "inv:categories:manage",
+        "inv:bom:read", "inv:bom:manage",
+        "gl:accounts:read",
+    ],
+
+    "tax_specialist": [
+        "finance:access", "finance:dashboard",
+        # Tax jurisdictions and codes
+        "tax:jurisdictions:read", "tax:jurisdictions:create", "tax:jurisdictions:manage",
+        "tax:codes:read", "tax:codes:create", "tax:codes:calculate", "tax:codes:manage",
+        # Tax transactions
+        "tax:transactions:read", "tax:transactions:create", "tax:transactions:post",
+        # Deferred tax
+        "tax:deferred:read", "tax:deferred:create", "tax:deferred:calculate", "tax:deferred:post",
+        # Tax reconciliation
+        "tax:reconciliation:read", "tax:reconciliation:create",
+        # Tax periods
+        "tax:periods:read", "tax:periods:create", "tax:periods:generate", "tax:periods:extend",
+        # Tax returns
+        "tax:returns:read", "tax:returns:create", "tax:returns:review",
+        "tax:returns:submit", "tax:returns:file", "tax:returns:payment", "tax:returns:amend",
+        # WHT
+        "tax:wht:read", "tax:wht:manage",
+        # Supporting access
+        "gl:accounts:read", "gl:journals:read",
+        "ar:invoices:read", "ap:invoices:read",
+        "reports:instances:read",
+    ],
+
+    # -------------------------------------------------------------------------
+    # HR Roles
+    # -------------------------------------------------------------------------
+    "hr_director": [
+        "hr:access", "hr:dashboard",
+        # Full employee management
+        "hr:employees:read", "hr:employees:read_sensitive", "hr:employees:create",
+        "hr:employees:update", "hr:employees:delete", "hr:employees:terminate",
+        "hr:employees:transfer", "hr:employees:promote",
+        "hr:departments:read", "hr:departments:manage",
+        "hr:designations:read", "hr:designations:manage",
+        "hr:grades:read", "hr:grades:manage",
+        "hr:employment_types:read", "hr:employment_types:manage",
+        # Onboarding/Offboarding
+        "hr:onboarding:read", "hr:onboarding:create", "hr:onboarding:manage",
+        "hr:offboarding:read", "hr:offboarding:create", "hr:offboarding:manage",
+        "hr:checklists:read", "hr:checklists:manage",
+        # Full payroll
+        "payroll:components:read", "payroll:components:manage",
+        "payroll:structures:read", "payroll:structures:create", "payroll:structures:update", "payroll:structures:delete",
+        "payroll:assignments:read", "payroll:assignments:create", "payroll:assignments:update",
+        "payroll:slips:read", "payroll:slips:create", "payroll:slips:update", "payroll:slips:submit", "payroll:slips:cancel",
+        "payroll:entries:read", "payroll:entries:create", "payroll:entries:process", "payroll:entries:approve", "payroll:entries:post",
+        "payroll:tax:read", "payroll:tax:manage",
+        # Full leave
+        "leave:types:read", "leave:types:manage",
+        "leave:policies:read", "leave:policies:manage",
+        "leave:allocations:read", "leave:allocations:create", "leave:allocations:update",
+        "leave:applications:read", "leave:applications:create_for_others",
+        "leave:applications:approve:tier1", "leave:applications:approve:tier2", "leave:applications:approve:tier3",
+        "leave:applications:cancel",
+        "leave:holidays:read", "leave:holidays:manage",
+        "leave:balance:read", "leave:balance:adjust",
+        # Full attendance
+        "attendance:records:read", "attendance:records:create", "attendance:records:update", "attendance:records:bulk_mark",
+        "attendance:requests:read", "attendance:requests:approve",
+        "attendance:shifts:read", "attendance:shifts:manage",
+        "attendance:assignments:read", "attendance:assignments:create", "attendance:assignments:update",
+        "attendance:reports:read",
+        # Full performance
+        "perf:cycles:read", "perf:cycles:manage",
+        "perf:templates:read", "perf:templates:manage",
+        "perf:kras:read", "perf:kras:manage",
+        "perf:kpis:read", "perf:kpis:manage",
+        "perf:scorecards:read", "perf:scorecards:manage",
+        "perf:appraisals:read", "perf:appraisals:create", "perf:appraisals:review", "perf:appraisals:approve",
+        "perf:goals:read", "perf:goals:create", "perf:goals:update",
+        # Full recruitment
+        "recruit:openings:read", "recruit:openings:create", "recruit:openings:update", "recruit:openings:close", "recruit:openings:publish",
+        "recruit:applicants:read", "recruit:applicants:create", "recruit:applicants:update", "recruit:applicants:delete",
+        "recruit:interviews:read", "recruit:interviews:create", "recruit:interviews:feedback",
+        "recruit:offers:read", "recruit:offers:create", "recruit:offers:approve", "recruit:offers:send",
+        "recruit:reports:read",
+        # Full training
+        "training:programs:read", "training:programs:create", "training:programs:update", "training:programs:delete",
+        "training:events:read", "training:events:create", "training:events:manage",
+        "training:enrollments:read", "training:enrollments:create",
+        "training:feedback:read",
+        "training:certifications:read", "training:certifications:manage",
+        # Assets
+        "hr:assets:read", "hr:assets:assign", "hr:assets:return", "hr:assets:report",
+        # Settings
+        "hr:settings:read", "hr:settings:manage",
+    ],
+
+    "hr_manager": [
+        "hr:access", "hr:dashboard",
+        "hr:employees:read", "hr:employees:read_sensitive", "hr:employees:create",
+        "hr:employees:update", "hr:employees:terminate", "hr:employees:transfer", "hr:employees:promote",
+        "hr:departments:read", "hr:departments:manage",
+        "hr:designations:read", "hr:designations:manage",
+        "hr:grades:read", "hr:grades:manage",
+        "hr:employment_types:read",
+        "hr:onboarding:read", "hr:onboarding:create", "hr:onboarding:manage",
+        "hr:offboarding:read", "hr:offboarding:create", "hr:offboarding:manage",
+        "hr:checklists:read", "hr:checklists:manage",
+        "payroll:structures:read", "payroll:assignments:read",
+        "payroll:slips:read",
+        "payroll:entries:read", "payroll:entries:approve",
+        "leave:types:read", "leave:policies:read",
+        "leave:allocations:read", "leave:allocations:create", "leave:allocations:update",
+        "leave:applications:read", "leave:applications:approve:tier2", "leave:applications:approve:tier3",
+        "leave:holidays:read", "leave:holidays:manage",
+        "leave:balance:read", "leave:balance:adjust",
+        "attendance:records:read", "attendance:records:create", "attendance:records:update",
+        "attendance:requests:read", "attendance:requests:approve",
+        "attendance:shifts:read", "attendance:shifts:manage",
+        "attendance:assignments:read", "attendance:assignments:create", "attendance:assignments:update",
+        "attendance:reports:read",
+        "perf:cycles:read", "perf:templates:read",
+        "perf:appraisals:read", "perf:appraisals:create", "perf:appraisals:review", "perf:appraisals:approve",
+        "perf:goals:read",
+        "recruit:openings:read", "recruit:openings:create", "recruit:openings:update", "recruit:openings:close",
+        "recruit:applicants:read", "recruit:applicants:create", "recruit:applicants:update",
+        "recruit:interviews:read", "recruit:interviews:create", "recruit:interviews:feedback",
+        "recruit:offers:read", "recruit:offers:create", "recruit:offers:approve",
+        "recruit:reports:read",
+        "training:programs:read", "training:events:read", "training:events:manage",
+        "training:enrollments:read", "training:enrollments:create",
+        "hr:assets:read", "hr:assets:assign", "hr:assets:return", "hr:assets:report",
+        "hr:settings:read",
+    ],
+
+    "hr_officer": [
+        "hr:access", "hr:dashboard",
+        "hr:employees:read", "hr:employees:create", "hr:employees:update",
+        "hr:departments:read", "hr:designations:read", "hr:grades:read", "hr:employment_types:read",
+        "hr:onboarding:read", "hr:onboarding:create",
+        "hr:offboarding:read", "hr:offboarding:create",
+        "hr:checklists:read",
+        "leave:allocations:read", "leave:allocations:create",
+        "leave:applications:read", "leave:applications:approve:tier1",
+        "leave:holidays:read",
+        "leave:balance:read",
+        "attendance:records:read", "attendance:records:create",
+        "attendance:requests:read", "attendance:requests:approve",
+        "attendance:shifts:read",
+        "attendance:assignments:read", "attendance:assignments:create",
+        "attendance:reports:read",
+        "perf:appraisals:read_team",
+        "recruit:openings:read",
+        "recruit:applicants:read", "recruit:applicants:create", "recruit:applicants:update",
+        "recruit:interviews:read", "recruit:interviews:create",
+        "training:events:read", "training:enrollments:read", "training:enrollments:create",
+        "hr:assets:read", "hr:assets:assign", "hr:assets:return",
+    ],
+
+    "hr_assistant": [
+        "hr:access", "hr:dashboard",
+        "hr:employees:read", "hr:employees:create",
+        "hr:departments:read", "hr:designations:read", "hr:grades:read",
+        "hr:onboarding:read",
+        "leave:applications:read",
+        "leave:balance:read",
+        "attendance:records:read",
+        "recruit:applicants:read", "recruit:applicants:create",
+        "training:events:read",
+    ],
+
+    "hr_viewer": [
+        "hr:access", "hr:dashboard",
+        "hr:employees:read",
+        "hr:departments:read", "hr:designations:read", "hr:grades:read",
+        "leave:applications:read", "leave:balance:read",
+        "attendance:records:read", "attendance:reports:read",
+        "recruit:openings:read", "recruit:applicants:read",
+    ],
+
+    "payroll_manager": [
+        "hr:access", "hr:dashboard",
+        "hr:employees:read", "hr:employees:read_sensitive",
+        "payroll:components:read", "payroll:components:manage",
+        "payroll:structures:read", "payroll:structures:create", "payroll:structures:update",
+        "payroll:assignments:read", "payroll:assignments:create", "payroll:assignments:update",
+        "payroll:slips:read", "payroll:slips:create", "payroll:slips:update", "payroll:slips:submit", "payroll:slips:cancel",
+        "payroll:entries:read", "payroll:entries:create", "payroll:entries:process", "payroll:entries:approve", "payroll:entries:post",
+        "payroll:tax:read", "payroll:tax:manage",
+        "attendance:records:read", "attendance:reports:read",
+        "leave:balance:read",
+    ],
+
+    "payroll_officer": [
+        "hr:access", "hr:dashboard",
+        "hr:employees:read",
+        "payroll:components:read",
+        "payroll:structures:read",
+        "payroll:assignments:read", "payroll:assignments:create",
+        "payroll:slips:read", "payroll:slips:create", "payroll:slips:update",
+        "payroll:entries:read", "payroll:entries:create", "payroll:entries:process",
+        "payroll:tax:read",
+        "attendance:records:read",
+        "leave:balance:read",
+    ],
+
+    "recruiter": [
+        "hr:access", "hr:dashboard",
+        "hr:employees:read",
+        "hr:departments:read", "hr:designations:read",
+        "recruit:openings:read", "recruit:openings:create", "recruit:openings:update", "recruit:openings:publish",
+        "recruit:applicants:read", "recruit:applicants:create", "recruit:applicants:update",
+        "recruit:interviews:read", "recruit:interviews:create", "recruit:interviews:feedback",
+        "recruit:offers:read", "recruit:offers:create",
+        "recruit:reports:read",
+    ],
+
+    "training_manager": [
+        "hr:access", "hr:dashboard",
+        "hr:employees:read",
+        "training:programs:read", "training:programs:create", "training:programs:update", "training:programs:delete",
+        "training:events:read", "training:events:create", "training:events:manage",
+        "training:enrollments:read", "training:enrollments:create",
+        "training:feedback:read",
+        "training:certifications:read", "training:certifications:manage",
+    ],
+
+    # -------------------------------------------------------------------------
+    # Expense Roles
+    # -------------------------------------------------------------------------
+    "expense_admin": [
+        "expense:access", "expense:dashboard",
+        "expense:claims:read", "expense:claims:create", "expense:claims:update", "expense:claims:delete",
+        "expense:claims:submit", "expense:claims:approve:tier1", "expense:claims:approve:tier2", "expense:claims:approve:tier3",
+        "expense:claims:reject", "expense:claims:reimburse", "expense:claims:post",
+        "expense:categories:read", "expense:categories:manage",
+        "expense:policies:read", "expense:policies:manage",
+        "expense:advances:read", "expense:advances:create",
+        "expense:advances:approve:tier1", "expense:advances:approve:tier2", "expense:advances:approve:tier3",
+        "expense:advances:disburse", "expense:advances:settle",
+        "expense:cards:read", "expense:cards:manage", "expense:cards:assign",
+        "expense:cards:transactions:read", "expense:cards:transactions:reconcile",
+        "expense:reports:read", "expense:reports:export",
+    ],
+
+    "expense_approver": [
+        "expense:access", "expense:dashboard",
+        "expense:claims:read", "expense:claims:read_team",
+        "expense:claims:approve:tier2",
+        "expense:claims:reject",
+        "expense:advances:read",
+        "expense:advances:approve:tier2",
+        "expense:reports:read",
+    ],
+
+    "expense_processor": [
+        "expense:access", "expense:dashboard",
+        "expense:claims:read",
+        "expense:claims:reimburse", "expense:claims:post",
+        "expense:advances:read", "expense:advances:disburse", "expense:advances:settle",
+        "expense:cards:transactions:read", "expense:cards:transactions:reconcile",
+        "expense:reports:read",
+    ],
+
+    # -------------------------------------------------------------------------
+    # Operations Roles
+    # -------------------------------------------------------------------------
+    "operations_manager": [
+        "operations:access", "operations:dashboard",
+        "support:tickets:read", "support:tickets:create", "support:tickets:update",
+        "support:tickets:assign", "support:tickets:resolve", "support:tickets:close",
+        "support:categories:read", "support:categories:manage",
+        "tasks:read", "tasks:create", "tasks:update", "tasks:assign", "tasks:complete",
+    ],
+
+    "support_agent": [
+        "operations:access", "operations:dashboard",
+        "support:tickets:read", "support:tickets:create", "support:tickets:update",
+        "support:tickets:resolve",
+        "support:categories:read",
+        "tasks:read", "tasks:read_own", "tasks:update", "tasks:complete",
+    ],
+
+    # -------------------------------------------------------------------------
+    # Cross-Functional Roles
+    # -------------------------------------------------------------------------
+    "department_manager": [
+        # Team management permissions
+        "hr:employees:read",
+        "leave:applications:read_team", "leave:applications:approve:tier1",
+        "attendance:records:read_team",
+        "perf:appraisals:read_team", "perf:appraisals:review",
+        "perf:goals:read", "perf:goals:create", "perf:goals:update",
+        "expense:claims:read_team", "expense:claims:approve:tier1",
+        "tasks:read", "tasks:create", "tasks:assign",
+    ],
+
+    "employee": [
+        # Self-service permissions
+        "selfservice:profile:read", "selfservice:profile:update",
+        "selfservice:documents:read", "selfservice:documents:upload",
+        "leave:applications:read_own", "leave:applications:create",
+        "leave:balance:read_own",
+        "attendance:records:read_own",
+        "attendance:requests:read_own", "attendance:requests:create",
+        "perf:appraisals:read_own", "perf:appraisals:self_review",
+        "perf:goals:read", "perf:goals:update",
+        "expense:claims:read_own", "expense:claims:create", "expense:claims:update",
+        "expense:claims:delete", "expense:claims:submit",
+        "expense:advances:read_own", "expense:advances:create",
+        "payroll:slips:read_own",
+        "training:events:read", "training:enrollments:self_enroll",
+        "training:feedback:submit",
+        "support:tickets:read_own", "support:tickets:create",
+        "tasks:read_own", "tasks:update", "tasks:complete",
+    ],
 }
 
 
@@ -36,6 +1604,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Seed RBAC roles and permissions.")
     parser.add_argument("--admin-email", help="Email to map to admin role.")
     parser.add_argument("--admin-person-id", help="Person ID to map to admin role.")
+    parser.add_argument("--dry-run", action="store_true", help="Print changes without applying.")
     return parser.parse_args()
 
 
@@ -94,6 +1663,22 @@ def _ensure_person_role(db, person_id, role_id):
 def main():
     load_dotenv()
     args = parse_args()
+
+    if args.dry_run:
+        print("=== DRY RUN MODE ===")
+        print(f"\nTotal Permissions: {len(DEFAULT_PERMISSIONS)}")
+        print(f"Total Roles: {len(DEFAULT_ROLES)}")
+        print("\nPermissions by module:")
+        print(f"  Platform: {len(PLATFORM_PERMISSIONS)}")
+        print(f"  Finance: {len(FINANCE_PERMISSIONS)}")
+        print(f"  HR/People: {len(HR_PERMISSIONS)}")
+        print(f"  Expense: {len(EXPENSE_PERMISSIONS)}")
+        print(f"  Operations: {len(OPERATIONS_PERMISSIONS)}")
+        print("\nRole -> Permission counts:")
+        for role_name, perms in ROLE_PERMISSIONS.items():
+            print(f"  {role_name}: {len(perms)} permissions")
+        return
+
     db = SessionLocal()
     try:
         for name, description in DEFAULT_ROLES:
@@ -111,6 +1696,7 @@ def main():
             for key in permission_keys:
                 permission = permissions.get(key)
                 if not permission:
+                    print(f"Warning: Permission '{key}' not found for role '{role_name}'")
                     continue
                 _ensure_role_permission(db, role.id, permission.id)
         db.commit()
@@ -128,6 +1714,8 @@ def main():
             db.commit()
             print("Admin role assigned.")
         print("RBAC seed complete.")
+        print(f"  Roles: {len(DEFAULT_ROLES)}")
+        print(f"  Permissions: {len(DEFAULT_PERMISSIONS)}")
     finally:
         db.close()
 

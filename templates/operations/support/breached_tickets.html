@@ -1,0 +1,171 @@
+{% extends "operations/base_operations.html" %}
+
+{% block page_title %}Breached Tickets{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+    <a href="/operations/dashboard" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Operations</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <a href="/operations/support/dashboard" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">SLA Dashboard</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="font-medium text-slate-900 dark:text-white">Breached Tickets</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    {# Filters #}
+    <div class="card p-4">
+        <form method="get" class="flex flex-wrap gap-4 items-end">
+            <div>
+                <label for="breach_type" class="form-label">Breach Type</label>
+                <select name="breach_type" id="breach_type" class="form-input">
+                    <option value="all" {{ 'selected' if breach_type == 'all' }}>All Breaches</option>
+                    <option value="response" {{ 'selected' if breach_type == 'response' }}>Response Only</option>
+                    <option value="resolution" {{ 'selected' if breach_type == 'resolution' }}>Resolution Only</option>
+                </select>
+            </div>
+            <div class="flex items-center gap-2">
+                <input type="checkbox" name="include_resolved" id="include_resolved" value="true"
+                    class="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500"
+                    {{ 'checked' if include_resolved }}>
+                <label for="include_resolved" class="text-sm text-slate-700 dark:text-slate-300">Include resolved tickets</label>
+            </div>
+            <button type="submit" class="btn btn-primary h-10">
+                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
+                </svg>
+                Filter
+            </button>
+        </form>
+    </div>
+
+    {# Summary #}
+    <div class="flex items-center gap-3">
+        <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400">
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+            </svg>
+        </div>
+        <div>
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white">{{ total_count }} Breached Ticket{{ 's' if total_count != 1 else '' }}</h2>
+            <p class="text-sm text-slate-500 dark:text-slate-400">
+                {% if breach_type == 'response' %}Response SLA breaches{% elif breach_type == 'resolution' %}Resolution SLA breaches{% else %}All SLA breaches{% endif %}
+                {% if include_resolved %} (including resolved){% endif %}
+            </p>
+        </div>
+    </div>
+
+    {# Tickets Table #}
+    <div class="card overflow-hidden">
+        {% if tickets %}
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead>
+                    <tr class="border-b border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50">
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Ticket</th>
+                        <th class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Status</th>
+                        <th class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Priority</th>
+                        <th class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Response Breach</th>
+                        <th class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Resolution Breach</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Assigned To</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Team</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                    {% for ticket in tickets %}
+                    <tr class="group hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                        <td class="px-4 py-4">
+                            <a href="{{ ticket.ticket_url }}" class="block">
+                                <span class="font-mono text-xs text-amber-600 dark:text-amber-400 hover:underline">{{ ticket.ticket_number }}</span>
+                                <p class="text-sm font-medium text-slate-900 dark:text-white mt-0.5 truncate max-w-xs" title="{{ ticket.subject }}">{{ ticket.subject }}</p>
+                                <p class="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Created: {{ ticket.created_at }}</p>
+                            </a>
+                        </td>
+                        <td class="px-4 py-4 text-center">
+                            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ring-1 ring-inset {{ ticket.status_badge }}">
+                                {{ ticket.status_label }}
+                            </span>
+                        </td>
+                        <td class="px-4 py-4 text-center">
+                            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ring-1 ring-inset {{ ticket.priority_badge }}">
+                                {{ ticket.priority_label }}
+                            </span>
+                        </td>
+                        <td class="px-4 py-4 text-center">
+                            {% if ticket.response_breached %}
+                            <div class="text-rose-600 dark:text-rose-400">
+                                <span class="font-semibold">+{{ "%.1f"|format(ticket.response_breach_hours) }}h</span>
+                                <p class="text-xs">Target: {{ ticket.response_target_hours }}h</p>
+                                {% if ticket.response_hours %}
+                                <p class="text-xs">Actual: {{ "%.1f"|format(ticket.response_hours) }}h</p>
+                                {% else %}
+                                <p class="text-xs text-slate-400">No response yet</p>
+                                {% endif %}
+                            </div>
+                            {% else %}
+                            <span class="text-emerald-600 dark:text-emerald-400 text-sm">
+                                <svg class="h-5 w-5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                </svg>
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-4 text-center">
+                            {% if ticket.resolution_breached %}
+                            <div class="text-rose-600 dark:text-rose-400">
+                                <span class="font-semibold">+{{ "%.1f"|format(ticket.resolution_breach_hours) }}h</span>
+                                <p class="text-xs">Target: {{ ticket.resolution_target_hours }}h</p>
+                                {% if ticket.resolution_hours %}
+                                <p class="text-xs">Actual: {{ "%.1f"|format(ticket.resolution_hours) }}h</p>
+                                {% else %}
+                                <p class="text-xs text-slate-400">Not resolved</p>
+                                {% endif %}
+                            </div>
+                            {% else %}
+                            <span class="text-emerald-600 dark:text-emerald-400 text-sm">
+                                <svg class="h-5 w-5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                </svg>
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-4">
+                            {% if ticket.assigned_to_name %}
+                            <span class="text-sm text-slate-700 dark:text-slate-300">{{ ticket.assigned_to_name }}</span>
+                            {% else %}
+                            <span class="text-sm text-slate-400 dark:text-slate-500 italic">Unassigned</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-4">
+                            {% if ticket.team_name %}
+                            <span class="text-sm text-slate-700 dark:text-slate-300">{{ ticket.team_name }}</span>
+                            {% else %}
+                            <span class="text-sm text-slate-400 dark:text-slate-500 italic">No team</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="px-6 py-16 text-center">
+            <div class="mx-auto w-24 h-24 rounded-full bg-gradient-to-br from-emerald-100 to-emerald-50 dark:from-emerald-900/30 dark:to-emerald-900/10 flex items-center justify-center mb-6">
+                <svg class="h-12 w-12 text-emerald-500 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 13l4 4L19 7"/>
+                </svg>
+            </div>
+            <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-2">No breached tickets!</h3>
+            <p class="text-sm text-slate-500 dark:text-slate-400 max-w-sm mx-auto">
+                All tickets are within SLA. Keep up the great work!
+            </p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

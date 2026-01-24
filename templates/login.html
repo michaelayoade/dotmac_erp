@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Login - {{ brand.name }}{% endblock %}
+{% block title %}Sign in - {{ brand.name }}{% endblock %}
 
 {% block body %}
 <div class="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center px-4 py-12 bg-mesh">
@@ -34,8 +34,8 @@
         <!-- Login Card -->
         <div class="stagger-in card p-8" x-data="loginForm()">
             <div class="text-center mb-6">
-                <h1 class="text-2xl font-semibold text-slate-900 dark:text-white font-display">Welcome back</h1>
-                <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">Sign in to your account to continue</p>
+                <h1 class="text-2xl font-semibold text-slate-900 dark:text-white font-display">Sign in</h1>
+                <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">Access your {{ brand_name }} workspace.</p>
             </div>
 
             <!-- Session Expired / Access Denied Alert -->
@@ -49,7 +49,7 @@
                     <p class="text-sm text-amber-700 dark:text-amber-300">You don't have permission to access that page. Please sign in with an authorized account.</p>
                 </div>
             </div>
-            {% elif next != '/dashboard' and next != '/' %}
+            {% elif next != '/' %}
             <div class="mb-6 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-4">
                 <div class="flex items-start gap-3">
                     <svg class="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -91,7 +91,7 @@
             <form @submit.prevent="handleSubmit" class="space-y-5">
                 <!-- Username/Email Field -->
                 <div x-show="!mfaRequired">
-                    <label for="username" class="form-label form-label-required">Username or Email</label>
+                    <label for="username" class="form-label form-label-required">Work email or username</label>
                     <input
                         type="text"
                         id="username"
@@ -99,7 +99,7 @@
                         x-model="username"
                         :disabled="loading"
                         autocomplete="username"
-                        placeholder="Enter your username or email"
+                        placeholder="Enter your work email or username"
                         class="form-input"
                         required
                     />
@@ -154,14 +154,14 @@
                         placeholder="Enter 6-digit code"
                         class="form-input text-center text-xl tracking-[0.5em] font-mono"
                     />
-                    <p class="form-hint">Enter the code from your authenticator app</p>
+                    <p class="form-hint">Enter the code from your authenticator app.</p>
                 </div>
 
                 <!-- Remember Me & Forgot Password -->
                 <div x-show="!mfaRequired" class="flex items-center justify-between">
                     <label class="flex items-center gap-2 cursor-pointer">
                         <input type="checkbox" x-model="rememberMe" class="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800" />
-                        <span class="text-sm text-slate-600 dark:text-slate-400">Remember me</span>
+                        <span class="text-sm text-slate-600 dark:text-slate-400">Keep me signed in</span>
                     </label>
                     <a href="/forgot-password" class="text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300">
                         Forgot password?
@@ -209,7 +209,7 @@
             <p class="text-center text-sm text-slate-600 dark:text-slate-400" x-show="!mfaRequired">
                 Don't have an account?
                 <a href="/register" class="font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300">
-                    Create one
+                    Request access
                 </a>
             </p>
         </div>
@@ -286,12 +286,13 @@ function loginForm() {
 
             // Store access token in cookie
             if (data.access_token) {
-                document.cookie = `access_token=${data.access_token}; path=/; max-age=${this.rememberMe ? 86400 * 30 : 86400}; SameSite=Lax`;
+                const secure = window.location.protocol === 'https:' ? '; Secure' : '';
+                document.cookie = `access_token=${data.access_token}; path=/; max-age=${this.rememberMe ? 86400 * 30 : 86400}; SameSite=Lax${secure}`;
             }
 
             // Redirect to intended destination or dashboard
             const params = new URLSearchParams(window.location.search);
-            const next = params.get('next') || '/dashboard';
+            const next = params.get('next') || '/';
             window.location.href = next;
         },
 
@@ -315,12 +316,13 @@ function loginForm() {
 
             // Store access token in cookie
             if (data.access_token) {
-                document.cookie = `access_token=${data.access_token}; path=/; max-age=${this.rememberMe ? 86400 * 30 : 86400}; SameSite=Lax`;
+                const secure = window.location.protocol === 'https:' ? '; Secure' : '';
+                document.cookie = `access_token=${data.access_token}; path=/; max-age=${this.rememberMe ? 86400 * 30 : 86400}; SameSite=Lax${secure}`;
             }
 
             // Redirect to intended destination or dashboard
             const params = new URLSearchParams(window.location.search);
-            const next = params.get('next') || '/dashboard';
+            const next = params.get('next') || '/';
             window.location.href = next;
         },
 

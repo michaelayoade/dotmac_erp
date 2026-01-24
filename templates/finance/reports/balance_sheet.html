@@ -1,0 +1,311 @@
+{% extends "finance/base_finance.html" %}
+
+{% block page_title %}Statement of financial position{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 mt-1">
+    <a href="/dashboard" class="hover:text-slate-700 dark:hover:text-slate-300">Dashboard</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <a href="/finance/reports" class="hover:text-slate-700 dark:hover:text-slate-300">Reports</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="text-slate-700 dark:text-slate-300">Statement of financial position</span>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<button onclick="window.print()" class="btn btn-secondary h-9 px-3">
+    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
+    </svg>
+    Print
+</button>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-6">
+    <!-- Filter Card -->
+    <div class="card p-4">
+        <form method="get" class="flex flex-wrap items-end gap-4">
+            <div class="flex-1 min-w-[200px]">
+                <label class="form-label">As of date</label>
+                <input type="date" name="as_of_date" value="{{ as_of_date }}" class="form-input">
+            </div>
+            <button type="submit" class="btn btn-primary">
+                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+                Refresh
+            </button>
+        </form>
+    </div>
+
+    <!-- Report -->
+    <div class="card p-6 print:shadow-none print:border-0">
+        <div class="text-center mb-8 print:mb-4">
+            <h1 class="text-2xl font-semibold text-slate-900 dark:text-white font-display">Statement of financial position</h1>
+            <p class="text-slate-500 dark:text-slate-400 mt-1">As of {{ as_of_date }}</p>
+            <p class="text-sm text-slate-400 dark:text-slate-500">{{ period_name }}</p>
+        </div>
+
+        <!-- Balance Status -->
+        <div class="flex justify-center mb-6 print:hidden">
+            {% if is_balanced %}
+            <span class="badge badge-success">
+                <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                </svg>
+                Assets = Liabilities + Equity
+            </span>
+            {% else %}
+            <span class="badge badge-danger">
+                <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                </svg>
+                Out of balance
+            </span>
+            {% endif %}
+        </div>
+
+        {% if balance_sheet_lines %}
+        <div class="grid gap-8 lg:grid-cols-2">
+            <section class="space-y-6">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white border-b-2 border-blue-200 dark:border-blue-800 pb-2">
+                    <span class="flex items-center gap-2">
+                        <span class="h-3 w-3 rounded-full bg-blue-500"></span>
+                        Assets
+                    </span>
+                </h2>
+                <div>
+                    <h3 class="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-2">Current Assets</h3>
+                    <table class="w-full text-sm">
+                        <tbody>
+                            {% for item in balance_sheet_lines.current_assets %}
+                            <tr>
+                                <td class="py-1 px-2 text-slate-700 dark:text-slate-300">{{ item.name }}</td>
+                                <td class="py-1 px-2 text-right font-mono text-slate-900 dark:text-white">{{ item.amount }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div>
+                    <h3 class="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-2">Non-Current Assets</h3>
+                    <table class="w-full text-sm">
+                        <tbody>
+                            {% for item in balance_sheet_lines.non_current_assets %}
+                            <tr>
+                                <td class="py-1 px-2 text-slate-700 dark:text-slate-300">{{ item.name }}</td>
+                                <td class="py-1 px-2 text-right font-mono text-slate-900 dark:text-white">{{ item.amount }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot>
+                            <tr class="border-t border-blue-200 dark:border-blue-800">
+                                <td class="py-2 px-2 font-semibold text-slate-700 dark:text-slate-300">Total Assets</td>
+                                <td class="py-2 px-2 text-right font-mono font-semibold text-blue-600 dark:text-blue-400">{{ total_assets }}</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </section>
+
+            <section class="space-y-6">
+                <div>
+                    <h2 class="text-lg font-semibold text-slate-900 dark:text-white border-b-2 border-rose-200 dark:border-rose-800 pb-2 mb-4">
+                        <span class="flex items-center gap-2">
+                            <span class="h-3 w-3 rounded-full bg-rose-500"></span>
+                            Liabilities
+                        </span>
+                    </h2>
+                    <h3 class="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-2">Current Liabilities</h3>
+                    <table class="w-full text-sm mb-4">
+                        <tbody>
+                            {% for item in balance_sheet_lines.current_liabilities %}
+                            <tr>
+                                <td class="py-1 px-2 text-slate-700 dark:text-slate-300">{{ item.name }}</td>
+                                <td class="py-1 px-2 text-right font-mono text-slate-900 dark:text-white">{{ item.amount }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    <h3 class="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-2">Non-Current Liabilities</h3>
+                    <table class="w-full text-sm">
+                        <tbody>
+                            {% for item in balance_sheet_lines.non_current_liabilities %}
+                            <tr>
+                                <td class="py-1 px-2 text-slate-700 dark:text-slate-300">{{ item.name }}</td>
+                                <td class="py-1 px-2 text-right font-mono text-slate-900 dark:text-white">{{ item.amount }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot>
+                            <tr class="border-t border-rose-200 dark:border-rose-800">
+                                <td class="py-2 px-2 font-semibold text-slate-700 dark:text-slate-300">Total Liabilities</td>
+                                <td class="py-2 px-2 text-right font-mono font-semibold text-rose-600 dark:text-rose-400">{{ total_liabilities }}</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+                <div>
+                    <h2 class="text-lg font-semibold text-slate-900 dark:text-white border-b-2 border-emerald-200 dark:border-emerald-800 pb-2 mb-4">
+                        <span class="flex items-center gap-2">
+                            <span class="h-3 w-3 rounded-full bg-emerald-500"></span>
+                            Equity
+                        </span>
+                    </h2>
+                    <table class="w-full text-sm">
+                        <tbody>
+                            {% for item in balance_sheet_lines.equity %}
+                            <tr>
+                                <td class="py-1 px-2 text-slate-700 dark:text-slate-300">{{ item.name }}</td>
+                                <td class="py-1 px-2 text-right font-mono text-slate-900 dark:text-white">{{ item.amount }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot>
+                            <tr class="border-t border-emerald-200 dark:border-emerald-800">
+                                <td class="py-2 px-2 font-semibold text-slate-700 dark:text-slate-300">Total Equity</td>
+                                <td class="py-2 px-2 text-right font-mono font-semibold text-emerald-600 dark:text-emerald-400">{{ total_equity }}</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+
+                <div class="pt-4 border-t-2 border-slate-300 dark:border-slate-600">
+                    <div class="flex justify-between items-center py-3 px-2 rounded-lg bg-slate-100 dark:bg-slate-800">
+                        <span class="font-bold text-slate-900 dark:text-white">Total Liabilities + Equity</span>
+                        <span class="font-mono font-bold text-slate-900 dark:text-white">{{ total_liabilities_equity }}</span>
+                    </div>
+                </div>
+            </section>
+        </div>
+        {% else %}
+        <div class="grid gap-8 lg:grid-cols-2">
+            <!-- Assets Column -->
+            <section>
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white border-b-2 border-blue-200 dark:border-blue-800 pb-2 mb-4">
+                    <span class="flex items-center gap-2">
+                        <span class="h-3 w-3 rounded-full bg-blue-500"></span>
+                        Assets
+                    </span>
+                </h2>
+                {% if asset_items %}
+                <table class="w-full text-sm">
+                    <tbody>
+                        {% for item in asset_items %}
+                        <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/30">
+                            <td class="py-2 px-2 font-mono text-xs text-slate-500 w-20">{{ item.account_code }}</td>
+                            <td class="py-2 px-2 text-slate-700 dark:text-slate-300">{{ item.account_name }}</td>
+                            <td class="py-2 px-2 text-right font-mono text-slate-900 dark:text-white w-28">{{ item.amount }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot>
+                        <tr class="border-t-2 border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20">
+                            <td class="py-3 px-2"></td>
+                            <td class="py-3 px-2 font-bold text-slate-900 dark:text-white">Total Assets</td>
+                            <td class="py-3 px-2 text-right font-mono font-bold text-blue-600 dark:text-blue-400">{{ total_assets }}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+                {% else %}
+                <p class="text-sm text-slate-500 dark:text-slate-400 py-4">No assets recorded</p>
+                {% endif %}
+            </section>
+
+            <!-- Liabilities & Equity Column -->
+            <section class="space-y-6">
+                <!-- Liabilities -->
+                <div>
+                    <h2 class="text-lg font-semibold text-slate-900 dark:text-white border-b-2 border-rose-200 dark:border-rose-800 pb-2 mb-4">
+                        <span class="flex items-center gap-2">
+                            <span class="h-3 w-3 rounded-full bg-rose-500"></span>
+                            Liabilities
+                        </span>
+                    </h2>
+                    {% if liability_items %}
+                    <table class="w-full text-sm">
+                        <tbody>
+                            {% for item in liability_items %}
+                            <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/30">
+                                <td class="py-2 px-2 font-mono text-xs text-slate-500 w-20">{{ item.account_code }}</td>
+                                <td class="py-2 px-2 text-slate-700 dark:text-slate-300">{{ item.account_name }}</td>
+                                <td class="py-2 px-2 text-right font-mono text-slate-900 dark:text-white w-28">{{ item.amount }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot>
+                            <tr class="border-t border-rose-200 dark:border-rose-800">
+                                <td class="py-2 px-2"></td>
+                                <td class="py-2 px-2 font-semibold text-slate-700 dark:text-slate-300">Total Liabilities</td>
+                                <td class="py-2 px-2 text-right font-mono font-semibold text-rose-600 dark:text-rose-400">{{ total_liabilities }}</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                    {% else %}
+                    <p class="text-sm text-slate-500 dark:text-slate-400 py-4">No liabilities recorded</p>
+                    {% endif %}
+                </div>
+
+                <!-- Equity -->
+                <div>
+                    <h2 class="text-lg font-semibold text-slate-900 dark:text-white border-b-2 border-emerald-200 dark:border-emerald-800 pb-2 mb-4">
+                        <span class="flex items-center gap-2">
+                            <span class="h-3 w-3 rounded-full bg-emerald-500"></span>
+                            Equity
+                        </span>
+                    </h2>
+                    {% if equity_items %}
+                    <table class="w-full text-sm">
+                        <tbody>
+                            {% for item in equity_items %}
+                            <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/30">
+                                <td class="py-2 px-2 font-mono text-xs text-slate-500 w-20">{{ item.account_code }}</td>
+                                <td class="py-2 px-2 text-slate-700 dark:text-slate-300">{{ item.account_name }}</td>
+                                <td class="py-2 px-2 text-right font-mono text-slate-900 dark:text-white w-28">{{ item.amount }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot>
+                            <tr class="border-t border-emerald-200 dark:border-emerald-800">
+                                <td class="py-2 px-2"></td>
+                                <td class="py-2 px-2 font-semibold text-slate-700 dark:text-slate-300">Total Equity</td>
+                                <td class="py-2 px-2 text-right font-mono font-semibold text-emerald-600 dark:text-emerald-400">{{ total_equity }}</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                    {% else %}
+                    <p class="text-sm text-slate-500 dark:text-slate-400 py-4">No equity recorded</p>
+                    {% endif %}
+                </div>
+
+                <!-- Total L+E -->
+                <div class="pt-4 border-t-2 border-slate-300 dark:border-slate-600">
+                    <div class="flex justify-between items-center py-3 px-2 rounded-lg bg-slate-100 dark:bg-slate-800">
+                        <span class="font-bold text-slate-900 dark:text-white">Total Liabilities + Equity</span>
+                        <span class="font-mono font-bold text-slate-900 dark:text-white">{{ total_liabilities_equity }}</span>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- Empty State -->
+        {% if not asset_items and not liability_items and not equity_items %}
+        <div class="empty-state">
+            <div class="empty-state-icon">
+                <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
+                </svg>
+            </div>
+            <h3 class="empty-state-title">No Data Available</h3>
+            <p class="empty-state-description">No balance sheet accounts found for the selected period.</p>
+        </div>
+        {% endif %}
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

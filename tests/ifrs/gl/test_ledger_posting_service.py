@@ -10,9 +10,9 @@ from uuid import uuid4
 import pytest
 from fastapi import HTTPException
 
-from app.models.ifrs.gl.journal_entry import JournalStatus
-from app.models.ifrs.gl.posting_batch import BatchStatus
-from app.services.ifrs.gl.ledger_posting import (
+from app.models.finance.gl.journal_entry import JournalStatus
+from app.models.finance.gl.posting_batch import BatchStatus
+from app.services.finance.gl.ledger_posting import (
     LedgerPostingService,
     PostingRequest,
     PostingEntry,

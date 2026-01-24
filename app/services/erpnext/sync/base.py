@@ -1,5 +1,5 @@
 """
-Base Sync Service for ERPNext to DotMac Books migration.
+Base Sync Service for ERPNext to DotMac ERP migration.
 """
 import logging
 import uuid
@@ -46,7 +46,7 @@ class SyncResult:
 
 class BaseSyncService(ABC, Generic[T]):
     """
-    Base class for syncing entities from ERPNext to DotMac Books.
+    Base class for syncing entities from ERPNext to DotMac ERP.
 
     Handles:
     - Sync state tracking
@@ -57,7 +57,7 @@ class BaseSyncService(ABC, Generic[T]):
 
     # Subclasses must define these
     source_doctype: str  # ERPNext DocType name
-    target_table: str  # DotMac Books table (schema.table)
+    target_table: str  # DotMac ERP table (schema.table)
 
     def __init__(
         self,
@@ -87,20 +87,20 @@ class BaseSyncService(ABC, Generic[T]):
     @abstractmethod
     def transform_record(self, record: dict[str, Any]) -> dict[str, Any]:
         """
-        Transform ERPNext record to DotMac Books format.
+        Transform ERPNext record to DotMac ERP format.
 
         Args:
             record: ERPNext document
 
         Returns:
-            Transformed data for DotMac Books entity
+            Transformed data for DotMac ERP entity
         """
         pass
 
     @abstractmethod
     def create_entity(self, data: dict[str, Any]) -> T:
         """
-        Create DotMac Books entity from transformed data.
+        Create DotMac ERP entity from transformed data.
 
         Args:
             data: Transformed data
@@ -113,7 +113,7 @@ class BaseSyncService(ABC, Generic[T]):
     @abstractmethod
     def update_entity(self, entity: T, data: dict[str, Any]) -> T:
         """
-        Update existing DotMac Books entity.
+        Update existing DotMac ERP entity.
 
         Args:
             entity: Existing entity
@@ -177,7 +177,7 @@ class BaseSyncService(ABC, Generic[T]):
 
     def find_existing_entity(self, source_name: str) -> Optional[T]:
         """
-        Find existing DotMac Books entity by sync record.
+        Find existing DotMac ERP entity by sync record.
 
         Returns None if no sync record or target_id not set.
         """

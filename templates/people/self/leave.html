@@ -1,0 +1,145 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}My Leave{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/self/attendance" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Self Service</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">My Leave</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+            <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">My Leave</h1>
+            <p class="text-sm text-slate-500 dark:text-slate-400">Submit leave requests and track balances.</p>
+        </div>
+    </div>
+
+    <div class="card p-6">
+        <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Request Leave</h2>
+        <form method="post" action="/people/self/leave/apply" class="mt-4 grid gap-4 sm:grid-cols-2">
+            <div>
+                <label for="leave_type_id" class="form-label">Leave Type</label>
+                <select name="leave_type_id" id="leave_type_id" class="form-select w-full" required>
+                    {% for lt in leave_types %}
+                    <option value="{{ lt.leave_type_id }}">{{ lt.leave_type_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label for="from_date" class="form-label">From</label>
+                <input type="date" name="from_date" id="from_date" class="form-input w-full" required>
+            </div>
+            <div>
+                <label for="to_date" class="form-label">To</label>
+                <input type="date" name="to_date" id="to_date" class="form-input w-full" required>
+            </div>
+            <div class="flex items-end gap-2">
+                <label class="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                    <input type="checkbox" name="half_day" class="rounded border-slate-300 text-teal-600 focus:ring-teal-500">
+                    Half day
+                </label>
+            </div>
+            <div class="sm:col-span-2">
+                <label for="reason" class="form-label">Reason</label>
+                <textarea name="reason" id="reason" rows="3" class="form-textarea w-full"></textarea>
+            </div>
+            <div class="sm:col-span-2 flex justify-end">
+                <button type="submit" class="btn btn-primary">Submit Request</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="card">
+        <div class="p-4 border-b border-slate-200 dark:border-slate-700">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Leave Balances</h2>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+                <thead>
+                    <tr class="bg-slate-50 dark:bg-slate-800/50">
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Type</th>
+                        <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Allocated</th>
+                        <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Taken</th>
+                        <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Balance</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                    {% for bal in balances %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                        <td class="px-4 py-3 text-sm text-slate-700 dark:text-slate-300">
+                            {{ bal.leave_type_name }}
+                        </td>
+                        <td class="px-4 py-3 text-right text-sm text-slate-700 dark:text-slate-300 font-mono">{{ bal.total_allocated }}</td>
+                        <td class="px-4 py-3 text-right text-sm text-slate-700 dark:text-slate-300 font-mono">{{ bal.leaves_used }}</td>
+                        <td class="px-4 py-3 text-right text-sm text-slate-700 dark:text-slate-300 font-mono">{{ bal.balance }}</td>
+                    </tr>
+                    {% endfor %}
+                    {% if balances | length == 0 %}
+                    <tr>
+                        <td colspan="4" class="px-4 py-6 text-center text-sm text-slate-500 dark:text-slate-400">No balances available.</td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="p-4 border-b border-slate-200 dark:border-slate-700">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white">My Applications</h2>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+                <thead>
+                    <tr class="bg-slate-50 dark:bg-slate-800/50">
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Application</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Type</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Dates</th>
+                        <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Days</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Status</th>
+                        <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                    {% for app in applications %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                        <td class="px-4 py-3 text-sm text-slate-700 dark:text-slate-300">
+                            <a href="/people/self/leave/{{ app.application_id }}" class="text-teal-600 hover:text-teal-700 dark:text-teal-300 dark:hover:text-teal-200">
+                                {{ app.application_number }}
+                            </a>
+                        </td>
+                        <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">
+                            {{ app.leave_type.leave_type_name if app.leave_type else app.leave_type_id }}
+                        </td>
+                        <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">{{ app.from_date }} → {{ app.to_date }}</td>
+                        <td class="px-4 py-3 text-right text-sm text-slate-700 dark:text-slate-300 font-mono">{{ app.total_leave_days }}</td>
+                        <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">{{ app.status.value }}</td>
+                        <td class="px-4 py-3 text-right text-sm">
+                            {% if app.status.value in ["DRAFT", "SUBMITTED", "APPROVED"] %}
+                            <form method="post" action="/people/self/leave/{{ app.application_id }}/cancel">
+                                <button type="submit" class="text-rose-600 hover:text-rose-700 dark:text-rose-300 dark:hover:text-rose-200">Cancel</button>
+                            </form>
+                            {% else %}
+                            <span class="text-slate-400">-</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    {% if applications | length == 0 %}
+                    <tr>
+                        <td colspan="6" class="px-4 py-6 text-center text-sm text-slate-500 dark:text-slate-400">No leave applications found.</td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -22,7 +22,7 @@ class TestFAPostingAdapterDepreciation:
 
     def test_post_depreciation_run_not_found(self, mock_db, org_id, user_id):
         """Test posting non-existent depreciation run fails."""
-        from app.services.ifrs.fa.fa_posting_adapter import FAPostingAdapter
+        from app.services.finance.fa.fa_posting_adapter import FAPostingAdapter
 
         mock_db.get.return_value = None
 
@@ -39,8 +39,8 @@ class TestFAPostingAdapterDepreciation:
 
     def test_post_depreciation_run_wrong_status(self, mock_db, org_id, user_id):
         """Test posting depreciation run with wrong status fails."""
-        from app.services.ifrs.fa.fa_posting_adapter import FAPostingAdapter
-        from app.models.ifrs.fa.depreciation_run import DepreciationRunStatus
+        from app.services.finance.fa.fa_posting_adapter import FAPostingAdapter
+        from app.models.finance.fa.depreciation_run import DepreciationRunStatus
 
         mock_run = MockDepreciationRun(
             organization_id=org_id,
@@ -62,8 +62,8 @@ class TestFAPostingAdapterDepreciation:
 
     def test_post_depreciation_run_no_schedules(self, mock_db, org_id, user_id):
         """Test posting depreciation run without schedules fails."""
-        from app.services.ifrs.fa.fa_posting_adapter import FAPostingAdapter
-        from app.models.ifrs.fa.depreciation_run import DepreciationRunStatus
+        from app.services.finance.fa.fa_posting_adapter import FAPostingAdapter
+        from app.models.finance.fa.depreciation_run import DepreciationRunStatus
 
         mock_run = MockDepreciationRun(
             organization_id=org_id,
@@ -91,7 +91,7 @@ class TestFAPostingAdapterDisposal:
 
     def test_post_disposal_not_found(self, mock_db, org_id, user_id):
         """Test posting non-existent disposal fails."""
-        from app.services.ifrs.fa.fa_posting_adapter import FAPostingAdapter
+        from app.services.finance.fa.fa_posting_adapter import FAPostingAdapter
 
         mock_db.get.return_value = None
 
@@ -112,7 +112,7 @@ class TestFAPostingAdapterRevaluation:
 
     def test_post_revaluation_not_found(self, mock_db, org_id, user_id):
         """Test posting non-existent revaluation fails."""
-        from app.services.ifrs.fa.fa_posting_adapter import FAPostingAdapter
+        from app.services.finance.fa.fa_posting_adapter import FAPostingAdapter
 
         mock_db.get.return_value = None
 
@@ -129,7 +129,7 @@ class TestFAPostingAdapterRevaluation:
 
     def test_post_revaluation_asset_not_found(self, mock_db, org_id, user_id):
         """Test posting revaluation with missing asset."""
-        from app.services.ifrs.fa.fa_posting_adapter import FAPostingAdapter
+        from app.services.finance.fa.fa_posting_adapter import FAPostingAdapter
 
         mock_reval = MagicMock()
         mock_reval.asset_id = uuid.uuid4()
@@ -148,7 +148,7 @@ class TestFAPostingAdapterRevaluation:
 
     def test_post_revaluation_category_not_found(self, mock_db, org_id, user_id):
         """Test posting revaluation with missing category."""
-        from app.services.ifrs.fa.fa_posting_adapter import FAPostingAdapter
+        from app.services.finance.fa.fa_posting_adapter import FAPostingAdapter
 
         mock_reval = MagicMock()
         mock_reval.asset_id = uuid.uuid4()
@@ -168,7 +168,7 @@ class TestFAPostingAdapterRevaluation:
 
     def test_post_revaluation_no_surplus_account(self, mock_db, org_id, user_id):
         """Test posting revaluation without surplus account configured."""
-        from app.services.ifrs.fa.fa_posting_adapter import FAPostingAdapter
+        from app.services.finance.fa.fa_posting_adapter import FAPostingAdapter
 
         mock_reval = MagicMock()
         mock_reval.asset_id = uuid.uuid4()
@@ -195,8 +195,8 @@ class TestFAPostingAdapterDepreciationSuccess:
 
     def test_post_depreciation_run_success(self, mock_db, org_id, user_id):
         """Test successful depreciation run posting."""
-        from app.services.ifrs.fa.fa_posting_adapter import FAPostingAdapter
-        from app.models.ifrs.fa.depreciation_run import DepreciationRunStatus
+        from app.services.finance.fa.fa_posting_adapter import FAPostingAdapter
+        from app.models.finance.fa.depreciation_run import DepreciationRunStatus
 
         mock_run = MockDepreciationRun(organization_id=org_id)
         mock_run.status = DepreciationRunStatus.POSTING
@@ -241,8 +241,8 @@ class TestFAPostingAdapterDepreciationSuccess:
 
     def test_post_depreciation_run_aggregates_by_account(self, mock_db, org_id, user_id):
         """Test depreciation posting aggregates amounts by account."""
-        from app.services.ifrs.fa.fa_posting_adapter import FAPostingAdapter
-        from app.models.ifrs.fa.depreciation_run import DepreciationRunStatus
+        from app.services.finance.fa.fa_posting_adapter import FAPostingAdapter
+        from app.models.finance.fa.depreciation_run import DepreciationRunStatus
 
         expense_account_1 = uuid.uuid4()
         accum_account_1 = uuid.uuid4()
@@ -303,7 +303,7 @@ class TestFAPostingAdapterDisposalSuccess:
 
     def test_post_disposal_with_gain(self, mock_db, org_id, user_id):
         """Test posting disposal with gain."""
-        from app.services.ifrs.fa.fa_posting_adapter import FAPostingAdapter
+        from app.services.finance.fa.fa_posting_adapter import FAPostingAdapter
 
         mock_disposal = MagicMock()
         mock_disposal.asset_id = uuid.uuid4()
@@ -345,7 +345,7 @@ class TestFAPostingAdapterDisposalSuccess:
 
     def test_post_disposal_with_loss(self, mock_db, org_id, user_id):
         """Test posting disposal with loss."""
-        from app.services.ifrs.fa.fa_posting_adapter import FAPostingAdapter
+        from app.services.finance.fa.fa_posting_adapter import FAPostingAdapter
 
         mock_disposal = MagicMock()
         mock_disposal.asset_id = uuid.uuid4()
@@ -386,7 +386,7 @@ class TestFAPostingAdapterDisposalSuccess:
 
     def test_post_disposal_asset_not_found(self, mock_db, org_id, user_id):
         """Test posting disposal with missing asset."""
-        from app.services.ifrs.fa.fa_posting_adapter import FAPostingAdapter
+        from app.services.finance.fa.fa_posting_adapter import FAPostingAdapter
 
         mock_disposal = MagicMock()
         mock_disposal.asset_id = uuid.uuid4()
@@ -405,7 +405,7 @@ class TestFAPostingAdapterDisposalSuccess:
 
     def test_post_disposal_category_not_found(self, mock_db, org_id, user_id):
         """Test posting disposal with missing category."""
-        from app.services.ifrs.fa.fa_posting_adapter import FAPostingAdapter
+        from app.services.finance.fa.fa_posting_adapter import FAPostingAdapter
 
         mock_disposal = MagicMock()
         mock_disposal.asset_id = uuid.uuid4()
@@ -429,7 +429,7 @@ class TestFAPostingAdapterRevaluationSuccess:
 
     def test_post_revaluation_surplus(self, mock_db, org_id, user_id):
         """Test posting revaluation surplus."""
-        from app.services.ifrs.fa.fa_posting_adapter import FAPostingAdapter
+        from app.services.finance.fa.fa_posting_adapter import FAPostingAdapter
 
         mock_reval = MagicMock()
         mock_reval.asset_id = uuid.uuid4()
@@ -471,7 +471,7 @@ class TestFAPostingAdapterRevaluationSuccess:
 
     def test_post_revaluation_deficit_to_pl(self, mock_db, org_id, user_id):
         """Test posting revaluation deficit to P&L."""
-        from app.services.ifrs.fa.fa_posting_adapter import FAPostingAdapter
+        from app.services.finance.fa.fa_posting_adapter import FAPostingAdapter
 
         mock_reval = MagicMock()
         mock_reval.asset_id = uuid.uuid4()

@@ -16,12 +16,12 @@ import pytest
 
 # ============ Mock Enums ============
 
-from app.models.ifrs.banking.bank_account import BankAccountStatus, BankAccountType
-from app.models.ifrs.banking.bank_reconciliation import (
+from app.models.finance.banking.bank_account import BankAccountStatus, BankAccountType
+from app.models.finance.banking.bank_reconciliation import (
     ReconciliationMatchType,
     ReconciliationStatus,
 )
-from app.models.ifrs.banking.bank_statement import BankStatementStatus, StatementLineType
+from app.models.finance.banking.bank_statement import BankStatementStatus, StatementLineType
 
 MockBankAccountStatus = BankAccountStatus
 MockBankAccountType = BankAccountType

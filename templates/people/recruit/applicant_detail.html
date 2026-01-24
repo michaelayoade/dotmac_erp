@@ -1,0 +1,309 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}{{ applicant.full_name }}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/recruit/applicants" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Applicants</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">{{ applicant.application_number }}</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="flex flex-wrap items-start justify-between gap-4">
+        <div>
+            <div class="flex items-center gap-3">
+                <div class="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-purple-600 text-white text-lg font-semibold shadow-sm">
+                    {{ applicant.full_name[:2] | upper }}
+                </div>
+                <div>
+                    <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">{{ applicant.full_name }}</h1>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">{{ applicant.application_number }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+            {% set status_colors = {
+                'NEW': 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
+                'SCREENING': 'bg-sky-50 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300',
+                'SHORTLISTED': 'bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300',
+                'INTERVIEW_SCHEDULED': 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
+                'INTERVIEW_COMPLETED': 'bg-violet-50 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300',
+                'SELECTED': 'bg-teal-50 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300',
+                'OFFER_EXTENDED': 'bg-cyan-50 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300',
+                'OFFER_ACCEPTED': 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300',
+                'OFFER_DECLINED': 'bg-orange-50 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300',
+                'HIRED': 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300',
+                'REJECTED': 'bg-rose-50 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300',
+                'WITHDRAWN': 'bg-gray-50 text-gray-700 dark:bg-gray-900/30 dark:text-gray-300'
+            } %}
+            <span class="inline-flex rounded-full px-3 py-1 text-sm font-medium {{ status_colors.get(applicant.status.value, status_colors.NEW) }}">
+                {{ applicant.status.value | replace('_', ' ') | title }}
+            </span>
+        </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div class="card p-4">
+            <div class="text-sm text-slate-500 dark:text-slate-400">Job Opening</div>
+            <div class="text-lg font-semibold text-slate-900 dark:text-white">{{ applicant.job_opening.job_title if applicant.job_opening else 'Unknown' }}</div>
+        </div>
+        <div class="card p-4">
+            <div class="text-sm text-slate-500 dark:text-slate-400">Applied On</div>
+            <div class="text-lg font-semibold text-slate-900 dark:text-white">{{ applicant.applied_on.strftime('%d %b %Y') if applicant.applied_on else '-' }}</div>
+        </div>
+        <div class="card p-4">
+            <div class="text-sm text-slate-500 dark:text-slate-400">Experience</div>
+            <div class="text-lg font-semibold text-slate-900 dark:text-white">{{ applicant.years_of_experience or 0 }} years</div>
+        </div>
+        <div class="card p-4">
+            <div class="text-sm text-slate-500 dark:text-slate-400">Rating</div>
+            <div class="flex items-center gap-1">
+                {% for i in range(5) %}
+                <svg class="h-5 w-5 {% if applicant.overall_rating and i < applicant.overall_rating %}text-amber-400{% else %}text-slate-300 dark:text-slate-600{% endif %}" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                </svg>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Actions Panel -->
+    {% if applicant.status.value not in ['HIRED', 'REJECTED', 'WITHDRAWN'] %}
+    <div class="card p-4">
+        <h2 class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">Pipeline Actions</h2>
+        <div class="flex flex-wrap gap-2">
+            <a href="/people/recruit/applicants/{{ applicant.applicant_id }}/edit" class="btn btn-secondary btn-sm">Edit</a>
+
+            {% if applicant.status.value == 'NEW' %}
+            <form method="post" action="/people/recruit/applicants/{{ applicant.applicant_id }}/advance" class="inline">
+                {{ request.state.csrf_form | safe }}
+                <input type="hidden" name="to_status" value="SCREENING">
+                <button type="submit" class="btn btn-primary btn-sm">Move to Screening</button>
+            </form>
+            {% elif applicant.status.value == 'SCREENING' %}
+            <form method="post" action="/people/recruit/applicants/{{ applicant.applicant_id }}/advance" class="inline">
+                {{ request.state.csrf_form | safe }}
+                <input type="hidden" name="to_status" value="SHORTLISTED">
+                <button type="submit" class="btn btn-primary btn-sm">Shortlist</button>
+            </form>
+            {% elif applicant.status.value == 'SHORTLISTED' %}
+            <a href="/people/recruit/interviews/new?applicant_id={{ applicant.applicant_id }}" class="btn btn-primary btn-sm">Schedule Interview</a>
+            {% elif applicant.status.value == 'INTERVIEW_COMPLETED' %}
+            <form method="post" action="/people/recruit/applicants/{{ applicant.applicant_id }}/advance" class="inline">
+                {{ request.state.csrf_form | safe }}
+                <input type="hidden" name="to_status" value="SELECTED">
+                <button type="submit" class="btn btn-primary btn-sm">Select Candidate</button>
+            </form>
+            {% elif applicant.status.value == 'SELECTED' %}
+            <a href="/people/recruit/offers/new?applicant_id={{ applicant.applicant_id }}&job_opening_id={{ applicant.job_opening_id }}" class="btn btn-primary btn-sm">Create Offer</a>
+            {% endif %}
+
+            <form method="post" action="/people/recruit/applicants/{{ applicant.applicant_id }}/reject" class="inline"
+                onsubmit="return confirm('Are you sure you want to reject this applicant?')">
+                {{ request.state.csrf_form | safe }}
+                <button type="submit" class="btn btn-danger btn-sm">Reject</button>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Left Column - Details -->
+        <div class="lg:col-span-2 space-y-6">
+            <!-- Contact Information -->
+            <div class="card">
+                <div class="p-4 border-b border-slate-200 dark:border-slate-700">
+                    <h2 class="text-lg font-medium text-slate-900 dark:text-white">Contact Information</h2>
+                </div>
+                <div class="p-4 grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                    <div>
+                        <div class="text-slate-500 dark:text-slate-400">Email</div>
+                        <div class="text-slate-900 dark:text-white">
+                            <a href="mailto:{{ applicant.email }}" class="text-violet-600 hover:text-violet-700">{{ applicant.email }}</a>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="text-slate-500 dark:text-slate-400">Phone</div>
+                        <div class="text-slate-900 dark:text-white">{{ applicant.phone or '-' }}</div>
+                    </div>
+                    <div>
+                        <div class="text-slate-500 dark:text-slate-400">Location</div>
+                        <div class="text-slate-900 dark:text-white">{{ applicant.city or '-' }}{% if applicant.country_code %}, {{ applicant.country_code }}{% endif %}</div>
+                    </div>
+                    <div>
+                        <div class="text-slate-500 dark:text-slate-400">Date of Birth</div>
+                        <div class="text-slate-900 dark:text-white">{{ applicant.date_of_birth.strftime('%d %b %Y') if applicant.date_of_birth else '-' }}</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Professional Details -->
+            <div class="card">
+                <div class="p-4 border-b border-slate-200 dark:border-slate-700">
+                    <h2 class="text-lg font-medium text-slate-900 dark:text-white">Professional Background</h2>
+                </div>
+                <div class="p-4 grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                    <div>
+                        <div class="text-slate-500 dark:text-slate-400">Current Employer</div>
+                        <div class="text-slate-900 dark:text-white">{{ applicant.current_employer or '-' }}</div>
+                    </div>
+                    <div>
+                        <div class="text-slate-500 dark:text-slate-400">Current Job Title</div>
+                        <div class="text-slate-900 dark:text-white">{{ applicant.current_job_title or '-' }}</div>
+                    </div>
+                    <div>
+                        <div class="text-slate-500 dark:text-slate-400">Experience</div>
+                        <div class="text-slate-900 dark:text-white">{{ applicant.years_of_experience or 0 }} years</div>
+                    </div>
+                    <div>
+                        <div class="text-slate-500 dark:text-slate-400">Highest Qualification</div>
+                        <div class="text-slate-900 dark:text-white">{{ applicant.highest_qualification or '-' }}</div>
+                    </div>
+                    {% if applicant.skills %}
+                    <div class="md:col-span-2">
+                        <div class="text-slate-500 dark:text-slate-400 mb-1">Skills</div>
+                        <div class="flex flex-wrap gap-1">
+                            {% for skill in applicant.skills.split(',') %}
+                            <span class="inline-flex px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-xs text-slate-600 dark:text-slate-400">{{ skill | trim }}</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Cover Letter -->
+            {% if applicant.cover_letter %}
+            <div class="card">
+                <div class="p-4 border-b border-slate-200 dark:border-slate-700">
+                    <h2 class="text-lg font-medium text-slate-900 dark:text-white">Cover Letter</h2>
+                </div>
+                <div class="p-4">
+                    <p class="text-sm text-slate-600 dark:text-slate-400 whitespace-pre-wrap">{{ applicant.cover_letter }}</p>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Interviews -->
+            <div class="card">
+                <div class="p-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                    <h2 class="text-lg font-medium text-slate-900 dark:text-white">Interviews</h2>
+                    {% if applicant.status.value in ['SHORTLISTED', 'INTERVIEW_SCHEDULED', 'INTERVIEW_COMPLETED'] %}
+                    <a href="/people/recruit/interviews/new?applicant_id={{ applicant.applicant_id }}" class="btn btn-secondary btn-sm">Schedule</a>
+                    {% endif %}
+                </div>
+                {% if interviews %}
+                <div class="divide-y divide-slate-200 dark:divide-slate-700">
+                    {% for interview in interviews %}
+                    <div class="p-4 flex items-center justify-between">
+                        <div>
+                            <div class="text-sm font-medium text-slate-900 dark:text-white">{{ interview.round.value | replace('_', ' ') | title }}</div>
+                            <div class="text-xs text-slate-500 dark:text-slate-400">{{ interview.scheduled_from.strftime('%d %b %Y %H:%M') if interview.scheduled_from else '-' }}</div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            {% if interview.rating %}
+                            <span class="text-sm text-slate-600 dark:text-slate-400">Rating: {{ interview.rating }}/5</span>
+                            {% endif %}
+                            <span class="inline-flex rounded-full px-2 py-0.5 text-xs font-medium {% if interview.status.value == 'COMPLETED' %}bg-emerald-50 text-emerald-700{% elif interview.status.value == 'SCHEDULED' %}bg-amber-50 text-amber-700{% else %}bg-slate-100 text-slate-700{% endif %}">
+                                {{ interview.status.value | title }}
+                            </span>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="p-8 text-center text-slate-500 dark:text-slate-400 text-sm">
+                    No interviews scheduled.
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Offers -->
+            {% if offers %}
+            <div class="card">
+                <div class="p-4 border-b border-slate-200 dark:border-slate-700">
+                    <h2 class="text-lg font-medium text-slate-900 dark:text-white">Job Offers</h2>
+                </div>
+                <div class="divide-y divide-slate-200 dark:divide-slate-700">
+                    {% for offer in offers %}
+                    <div class="p-4 flex items-center justify-between">
+                        <div>
+                            <div class="text-sm font-medium text-slate-900 dark:text-white">{{ offer.offer_number }}</div>
+                            <div class="text-xs text-slate-500 dark:text-slate-400">{{ offer.offer_date.strftime('%d %b %Y') if offer.offer_date else '-' }} &bull; {{ "{:,.2f}".format(offer.base_salary) }} {{ offer.currency_code }}</div>
+                        </div>
+                        <span class="inline-flex rounded-full px-2 py-0.5 text-xs font-medium {% if offer.status.value == 'ACCEPTED' %}bg-emerald-50 text-emerald-700{% elif offer.status.value == 'EXTENDED' %}bg-amber-50 text-amber-700{% elif offer.status.value == 'DECLINED' %}bg-rose-50 text-rose-700{% else %}bg-slate-100 text-slate-700{% endif %}">
+                            {{ offer.status.value | title }}
+                        </span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Right Column - Meta -->
+        <div class="space-y-6">
+            <!-- Application Details -->
+            <div class="card">
+                <div class="p-4 border-b border-slate-200 dark:border-slate-700">
+                    <h2 class="text-lg font-medium text-slate-900 dark:text-white">Application Details</h2>
+                </div>
+                <div class="p-4 space-y-3 text-sm">
+                    <div>
+                        <div class="text-slate-500 dark:text-slate-400">Source</div>
+                        <div class="text-slate-900 dark:text-white">{{ applicant.source or '-' }}</div>
+                    </div>
+                    <div>
+                        <div class="text-slate-500 dark:text-slate-400">Applied</div>
+                        <div class="text-slate-900 dark:text-white">{{ applicant.created_at.strftime('%d %b %Y %H:%M') if applicant.created_at else '-' }}</div>
+                    </div>
+                    {% if applicant.resume_url %}
+                    <div>
+                        <div class="text-slate-500 dark:text-slate-400">Resume</div>
+                        <a href="{{ applicant.resume_url }}" target="_blank" class="text-violet-600 hover:text-violet-700 flex items-center gap-1">
+                            View Resume
+                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+                            </svg>
+                        </a>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Notes -->
+            {% if applicant.notes %}
+            <div class="card">
+                <div class="p-4 border-b border-slate-200 dark:border-slate-700">
+                    <h2 class="text-lg font-medium text-slate-900 dark:text-white">Notes</h2>
+                </div>
+                <div class="p-4">
+                    <p class="text-sm text-slate-600 dark:text-slate-400 whitespace-pre-wrap">{{ applicant.notes }}</p>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Danger Zone -->
+            <div class="card border-rose-200 dark:border-rose-900">
+                <div class="p-4 border-b border-rose-200 dark:border-rose-900">
+                    <h2 class="text-lg font-medium text-rose-700 dark:text-rose-400">Danger Zone</h2>
+                </div>
+                <div class="p-4">
+                    <form method="post" action="/people/recruit/applicants/{{ applicant.applicant_id }}/delete"
+                        onsubmit="return confirm('Are you sure you want to delete this applicant? This cannot be undone.')">
+                        {{ request.state.csrf_form | safe }}
+                        <button type="submit" class="btn btn-danger btn-sm w-full">Delete Applicant</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

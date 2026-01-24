@@ -8,7 +8,7 @@ from uuid import uuid4
 
 import pytest
 
-from app.services.ifrs.banking.bank_account import (
+from app.services.finance.banking.bank_account import (
     BankAccountService,
     BankAccountInput,
 )
@@ -225,7 +225,7 @@ class TestListBankAccounts:
 
     def test_list_with_status_filter(self, service, mock_db, org_id):
         """Test listing accounts with status filter."""
-        from app.models.ifrs.banking.bank_account import BankAccountStatus
+        from app.models.finance.banking.bank_account import BankAccountStatus
 
         accounts = [MockBankAccount(organization_id=org_id, status="active")]
 
@@ -311,7 +311,7 @@ class TestUpdateStatus:
 
     def test_update_status_success(self, service, mock_db, org_id):
         """Test successful status update."""
-        from app.models.ifrs.banking.bank_account import BankAccountStatus
+        from app.models.finance.banking.bank_account import BankAccountStatus
 
         account = MockBankAccount(organization_id=org_id, status="active")
         mock_db.get.return_value = account
@@ -325,7 +325,7 @@ class TestUpdateStatus:
     def test_update_status_nonexistent_fails(self, service, mock_db, org_id):
         """Test updating status of non-existent account fails."""
         from fastapi import HTTPException
-        from app.models.ifrs.banking.bank_account import BankAccountStatus
+        from app.models.finance.banking.bank_account import BankAccountStatus
 
         mock_db.get.return_value = None
 
@@ -376,7 +376,7 @@ class TestDeactivateBankAccount:
 
     def test_deactivate_success(self, service, mock_db, org_id, user_id):
         """Test successful bank account deactivation."""
-        from app.models.ifrs.banking.bank_account import BankAccountStatus
+        from app.models.finance.banking.bank_account import BankAccountStatus
 
         account = MockBankAccount(organization_id=org_id, status="active")
         mock_db.get.return_value = account
@@ -416,7 +416,7 @@ class TestDeactivateBankAccount:
     def test_deactivate_already_closed_fails(self, service, mock_db, org_id):
         """Test deactivating already closed account fails."""
         from fastapi import HTTPException
-        from app.models.ifrs.banking.bank_account import BankAccountStatus
+        from app.models.finance.banking.bank_account import BankAccountStatus
 
         account = MockBankAccount(
             organization_id=org_id,

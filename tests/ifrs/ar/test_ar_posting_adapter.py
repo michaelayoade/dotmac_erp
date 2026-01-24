@@ -15,9 +15,9 @@ from unittest.mock import MagicMock, patch, PropertyMock
 
 import pytest
 
-from app.models.ifrs.ar.invoice import InvoiceStatus, InvoiceType
-from app.models.ifrs.ar.customer_payment import PaymentStatus
-from app.services.ifrs.ar.ar_posting_adapter import ARPostingAdapter, ARPostingResult
+from app.models.finance.ar.invoice import InvoiceStatus, InvoiceType
+from app.models.finance.ar.customer_payment import PaymentStatus
+from app.services.finance.ar.ar_posting_adapter import ARPostingAdapter, ARPostingResult
 
 
 # ============ Mock Classes ============
@@ -297,7 +297,7 @@ class TestPostInvoice:
         """Test posting when customer not found."""
 
         def get_side_effect(model, id):
-            from app.models.ifrs.ar.invoice import Invoice
+            from app.models.finance.ar.invoice import Invoice
 
             if model == Invoice or str(id) == str(mock_invoice.invoice_id):
                 return mock_invoice
@@ -322,8 +322,8 @@ class TestPostInvoice:
         """Test posting invoice with no lines."""
 
         def get_side_effect(model, id):
-            from app.models.ifrs.ar.invoice import Invoice
-            from app.models.ifrs.ar.customer import Customer
+            from app.models.finance.ar.invoice import Invoice
+            from app.models.finance.ar.customer import Customer
 
             if str(id) == str(mock_invoice.invoice_id):
                 return mock_invoice
@@ -854,7 +854,7 @@ class TestPostPayment:
         """Test posting when customer not found."""
 
         def get_side_effect(model, id):
-            from app.models.ifrs.ar.customer_payment import CustomerPayment
+            from app.models.finance.ar.customer_payment import CustomerPayment
 
             if model == CustomerPayment or str(id) == str(mock_payment.payment_id):
                 return mock_payment

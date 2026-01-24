@@ -503,11 +503,14 @@ class ExpenseService:
         claim_id: UUID,
         *,
         skip_limit_check: bool = False,
+        skip_receipt_validation: bool = False,
+        notify_approvers: bool = True,
     ) -> "SubmitClaimResult":
         """
         Submit an expense claim for approval.
 
-        Evaluates expense limits before submission and may:
+        Evaluates expense limits and receipt requirements before submission:
+        - Validates receipts are attached for categories that require them
         - Block submission if limits are exceeded with BLOCK action
         - Route to PENDING_APPROVAL if approval is required
         - Allow submission with WARNING if limits are soft
@@ -516,11 +519,14 @@ class ExpenseService:
             org_id: Organization ID
             claim_id: Claim to submit
             skip_limit_check: If True, skip limit evaluation (admin override)
+            skip_receipt_validation: If True, skip receipt requirement check
+            notify_approvers: If True, send notification to eligible approvers
 
         Returns:
             SubmitClaimResult with claim and evaluation details
         """
         from app.services.expense.limit_service import ExpenseLimitService
+        from app.services.expense.approval_service import ExpenseApprovalService
         from app.models.expense import LimitResultType
 
         claim = self.get_claim(org_id, claim_id)
@@ -532,6 +538,21 @@ class ExpenseService:
 
         if not claim.items:
             raise ExpenseServiceError("Cannot submit claim with no items")
+
+        # Validate receipt requirements
+        receipt_warnings = []
+        if not skip_receipt_validation:
+            approval_service = ExpenseApprovalService(self.db, self.ctx)
+            validation_result = approval_service.validate_receipt_requirements(claim)
+
+            if not validation_result.is_valid:
+                # Block submission if required receipts are missing
+                raise ExpenseServiceError(
+                    f"Missing required receipts: {'; '.join(validation_result.missing_receipts)}"
+                )
+
+            # Collect warnings (will be included in result)
+            receipt_warnings = validation_result.warnings
 
         # Evaluate limits (unless skipped)
         evaluation_result = None
@@ -554,30 +575,61 @@ class ExpenseService:
                 # Route to PENDING_APPROVAL status
                 claim.status = ExpenseClaimStatus.PENDING_APPROVAL
                 self.db.flush()
+
+                # Send notifications to eligible approvers
+                if notify_approvers and evaluation_result.eligible_approvers:
+                    self._notify_approvers(claim, evaluation_result.eligible_approvers)
+
+                # Combine warnings
+                warning_msg = None
+                if receipt_warnings:
+                    warning_msg = "; ".join(receipt_warnings)
+
                 return SubmitClaimResult(
                     claim=claim,
                     evaluation_result=evaluation_result,
                     requires_approval=True,
                     eligible_approvers=evaluation_result.eligible_approvers,
+                    warning_message=warning_msg,
                 )
 
             elif evaluation_result.result == LimitResultType.WARNING:
                 # Allow submission but include warning
                 claim.status = ExpenseClaimStatus.SUBMITTED
                 self.db.flush()
+
+                # Combine limit warning with receipt warnings
+                all_warnings = [evaluation_result.message] + receipt_warnings
                 return SubmitClaimResult(
                     claim=claim,
                     evaluation_result=evaluation_result,
-                    warning_message=evaluation_result.message,
+                    warning_message="; ".join(all_warnings),
                 )
 
         # Normal submission (passed or skipped)
         claim.status = ExpenseClaimStatus.SUBMITTED
         self.db.flush()
+
+        # Include any receipt warnings
+        warning_msg = "; ".join(receipt_warnings) if receipt_warnings else None
+
         return SubmitClaimResult(
             claim=claim,
             evaluation_result=evaluation_result,
+            warning_message=warning_msg,
         )
+
+    def _notify_approvers(self, claim: ExpenseClaim, approvers: List["EligibleApprover"]) -> None:
+        """Send approval request notifications to eligible approvers."""
+        from app.services.expense.expense_notifications import ExpenseNotificationService
+        from app.models.people.hr.employee import Employee
+
+        notification_service = ExpenseNotificationService(self.db)
+
+        for approver_info in approvers[:3]:  # Limit to top 3 approvers
+            approver = self.db.get(Employee, approver_info.employee_id)
+            if approver:
+                notification_service.notify_approval_needed(claim, approver)
 
     def approve_claim(
         self,
@@ -587,11 +639,30 @@ class ExpenseService:
         approver_id: Optional[UUID] = None,
         approved_amounts: Optional[List[dict]] = None,
         notes: Optional[str] = None,
+        auto_post_gl: bool = False,
+        create_supplier_invoice: bool = False,
+        send_notification: bool = True,
     ) -> ExpenseClaim:
-        """Approve an expense claim."""
+        """
+        Approve an expense claim.
+
+        Args:
+            org_id: Organization ID
+            claim_id: Claim to approve
+            approver_id: ID of the approver
+            approved_amounts: Optional per-item approved amounts
+            notes: Approval notes
+            auto_post_gl: If True, post to GL immediately after approval
+            create_supplier_invoice: If True, create AP invoice for payment
+            send_notification: If True, send approval notification email
+
+        Returns:
+            The approved expense claim
+        """
         claim = self.get_claim(org_id, claim_id)
 
-        if claim.status != ExpenseClaimStatus.SUBMITTED:
+        # Allow approval from SUBMITTED or PENDING_APPROVAL status
+        if claim.status not in {ExpenseClaimStatus.SUBMITTED, ExpenseClaimStatus.PENDING_APPROVAL}:
             raise ExpenseClaimStatusError(
                 claim.status.value, ExpenseClaimStatus.APPROVED.value
             )
@@ -617,6 +688,65 @@ class ExpenseService:
         claim.net_payable_amount = total_approved - claim.advance_adjusted
 
         self.db.flush()
+
+        # Post to GL if requested
+        if auto_post_gl and approver_id:
+            from app.services.expense.expense_posting_adapter import ExpensePostingAdapter
+
+            posting_result = ExpensePostingAdapter.post_expense_claim(
+                self.db,
+                org_id,
+                claim_id,
+                date.today(),
+                approver_id,
+                auto_post=True,
+            )
+
+            if not posting_result.success:
+                # Log but don't fail the approval
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(
+                    "GL posting failed for claim %s: %s",
+                    claim_id,
+                    posting_result.message,
+                )
+
+        # Create supplier invoice if requested
+        if create_supplier_invoice and approver_id:
+            from app.services.expense.expense_posting_adapter import ExpensePostingAdapter
+
+            invoice_result = ExpensePostingAdapter.create_supplier_invoice_from_expense(
+                self.db,
+                org_id,
+                claim_id,
+                approver_id,
+            )
+
+            if not invoice_result.success:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(
+                    "Supplier invoice creation failed for claim %s: %s",
+                    claim_id,
+                    invoice_result.message,
+                )
+
+        # Send notification if requested
+        if send_notification and claim.employee and claim.employee.work_email:
+            from app.services.expense.expense_notifications import ExpenseNotificationService
+
+            notification_service = ExpenseNotificationService(self.db)
+            approver_name = None
+            if approver_id:
+                from app.models.people.hr.employee import Employee
+                approver = self.db.get(Employee, approver_id)
+                if approver:
+                    approver_name = f"{approver.first_name} {approver.last_name}"
+
+            notification_service.notify_claim_approved(claim, approver_name=approver_name)
+
+        self.db.flush()
         return claim
 
     def reject_claim(
@@ -626,11 +756,25 @@ class ExpenseService:
         *,
         approver_id: Optional[UUID] = None,
         reason: str,
+        send_notification: bool = True,
     ) -> ExpenseClaim:
-        """Reject an expense claim."""
+        """
+        Reject an expense claim.
+
+        Args:
+            org_id: Organization ID
+            claim_id: Claim to reject
+            approver_id: ID of the approver rejecting
+            reason: Reason for rejection
+            send_notification: If True, send rejection notification email
+
+        Returns:
+            The rejected expense claim
+        """
         claim = self.get_claim(org_id, claim_id)
 
-        if claim.status != ExpenseClaimStatus.SUBMITTED:
+        # Allow rejection from SUBMITTED or PENDING_APPROVAL status
+        if claim.status not in {ExpenseClaimStatus.SUBMITTED, ExpenseClaimStatus.PENDING_APPROVAL}:
             raise ExpenseClaimStatusError(
                 claim.status.value, ExpenseClaimStatus.REJECTED.value
             )
@@ -639,6 +783,24 @@ class ExpenseService:
         claim.approver_id = approver_id
         claim.approved_on = date.today()
         claim.rejection_reason = reason
+
+        # Send notification if requested
+        if send_notification and claim.employee and claim.employee.work_email:
+            from app.services.expense.expense_notifications import ExpenseNotificationService
+
+            notification_service = ExpenseNotificationService(self.db)
+            approver_name = None
+            if approver_id:
+                from app.models.people.hr.employee import Employee
+                approver = self.db.get(Employee, approver_id)
+                if approver:
+                    approver_name = f"{approver.first_name} {approver.last_name}"
+
+            notification_service.notify_claim_rejected(
+                claim,
+                reason,
+                approver_name=approver_name,
+            )
 
         self.db.flush()
         return claim
@@ -713,8 +875,21 @@ class ExpenseService:
         *,
         payment_reference: Optional[str] = None,
         payment_date: Optional[date] = None,
+        send_notification: bool = True,
     ) -> ExpenseClaim:
-        """Mark an expense claim as paid."""
+        """
+        Mark an expense claim as paid.
+
+        Args:
+            org_id: Organization ID
+            claim_id: Claim to mark paid
+            payment_reference: Payment reference number
+            payment_date: Date of payment (defaults to today)
+            send_notification: If True, send payment notification email
+
+        Returns:
+            The paid expense claim
+        """
         claim = self.get_claim(org_id, claim_id)
 
         if claim.status != ExpenseClaimStatus.APPROVED:
@@ -725,6 +900,17 @@ class ExpenseService:
         claim.status = ExpenseClaimStatus.PAID
         claim.paid_on = payment_date or date.today()
         claim.payment_reference = payment_reference
+
+        # Send payment notification
+        if send_notification and claim.employee and claim.employee.work_email:
+            from app.services.expense.expense_notifications import ExpenseNotificationService
+
+            notification_service = ExpenseNotificationService(self.db)
+            notification_service.notify_claim_paid(
+                claim,
+                payment_reference=payment_reference,
+                payment_date=claim.paid_on,
+            )
 
         self.db.flush()
         return claim

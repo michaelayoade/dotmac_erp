@@ -9,8 +9,8 @@ module.exports = {
     extend: {
       fontFamily: {
         sans: ['DM Sans', 'system-ui', 'sans-serif'],
-        display: ['DM Sans', 'system-ui', 'sans-serif'],
-        mono: ['JetBrains Mono', 'monospace'],
+        display: ['Fraunces', 'Georgia', 'serif'],
+        mono: ['JetBrains Mono', 'ui-monospace', 'monospace'],
       },
       colors: {
         // Refined teal-cyan palette
@@ -47,37 +47,36 @@ module.exports = {
           light: '#334155',
           muted: '#64748b',
           faint: '#94a3b8',
-        }
+        },
+        // Module colors for easy Tailwind access
+        'module-finance': '#0d9488',
+        'module-people': '#8b5cf6',
+        'module-expense': '#f59e0b',
+        'module-operations': '#3b82f6',
+        'module-admin': '#6366f1',
       },
-      animation: {
-        'fade-up': 'fadeUp 0.5s ease forwards',
-        'fade-in': 'fadeIn 0.3s ease forwards',
-        'slide-in': 'slideIn 0.3s ease forwards',
-        'pulse-soft': 'pulseSoft 2s ease-in-out infinite',
-        'shimmer': 'shimmer 2s linear infinite',
+      borderRadius: {
+        'card': '16px',
+        'btn': '10px',
+        'input': '10px',
+        'badge': '6px',
+        'icon': '12px',
       },
-      keyframes: {
-        fadeUp: {
-          '0%': { opacity: '0', transform: 'translateY(20px)' },
-          '100%': { opacity: '1', transform: 'translateY(0)' },
-        },
-        fadeIn: {
-          '0%': { opacity: '0' },
-          '100%': { opacity: '1' },
-        },
-        slideIn: {
-          '0%': { opacity: '0', transform: 'translateX(-10px)' },
-          '100%': { opacity: '1', transform: 'translateX(0)' },
-        },
-        pulseSoft: {
-          '0%, 100%': { opacity: '1' },
-          '50%': { opacity: '0.7' },
-        },
-        shimmer: {
-          '0%': { backgroundPosition: '-200% 0' },
-          '100%': { backgroundPosition: '200% 0' },
-        },
+      spacing: {
+        'input-x': '16px',
+        'input-y': '12px',
+        'card': '24px',
+        'card-sm': '16px',
+        'card-lg': '32px',
       },
+      boxShadow: {
+        'card': '0 1px 3px rgba(15, 23, 42, 0.04), 0 4px 12px rgba(15, 23, 42, 0.06)',
+        'card-hover': '0 8px 24px rgba(15, 23, 42, 0.12)',
+        'btn': '0 4px 12px rgba(26, 31, 54, 0.25)',
+        'btn-hover': '0 8px 20px rgba(26, 31, 54, 0.35)',
+      },
+      // Animations defined in input.css to avoid duplication
+      // Use @keyframes in CSS for complex animations
     }
   },
   plugins: [],

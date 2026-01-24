@@ -1,0 +1,100 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}New Attendance{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a>
+    <span class="mx-2">/</span>
+    <a href="/people/attendance" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Attendance</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">New</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl space-y-6">
+    <div>
+        <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">New Attendance</h1>
+        <p class="text-sm text-slate-500 dark:text-slate-400">Record attendance for a specific day.</p>
+    </div>
+
+    {% if error %}
+    <div class="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-900/40 dark:bg-rose-900/20 dark:text-rose-300">
+        {{ error }}
+    </div>
+    {% endif %}
+
+    <form method="post" action="/people/attendance/records/new" class="card p-6 space-y-6">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                <label class="form-label">Employee</label>
+                <select name="employee_id" class="form-select" required>
+                    <option value="">Select employee</option>
+                    {% for emp in employees %}
+                    <option value="{{ emp.employee_id }}" {% if form_data.employee_id == emp.employee_id|string %}selected{% endif %}>
+                        {{ emp.employee_code }} - {{ emp.full_name }}
+                    </option>
+                    {% endfor %}
+                </select>
+                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    Need an employee? <a href="/people/hr/employees" class="text-teal-600 hover:text-teal-700 dark:text-teal-400">Open employee list</a>
+                </p>
+            </div>
+            <div>
+                <label class="form-label">Attendance Date</label>
+                <input type="date" name="attendance_date" required
+                       value="{{ form_data.attendance_date | default('') }}"
+                       class="form-input">
+            </div>
+            <div>
+                <label class="form-label">Status</label>
+                <select name="status" class="form-select" required>
+                    <option value="">Select status</option>
+                    {% for s in statuses %}
+                    <option value="{{ s }}" {% if form_data.status == s %}selected{% endif %}>{{ s | replace("_", " ") | title }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="form-label">Shift Type (optional)</label>
+                <select name="shift_type_id" class="form-select">
+                    <option value="">No shift</option>
+                    {% for shift in shifts %}
+                    <option value="{{ shift.shift_type_id }}" {% if form_data.shift_type_id == shift.shift_type_id|string %}selected{% endif %}>
+                        {{ shift.shift_code }} - {{ shift.shift_name }}
+                    </option>
+                    {% endfor %}
+                </select>
+                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    Manage shifts at <a href="/people/attendance/shifts" class="text-teal-600 hover:text-teal-700 dark:text-teal-400">shift types</a>.
+                </p>
+            </div>
+            <div>
+                <label class="form-label">Check In (optional)</label>
+                <input type="datetime-local" name="check_in"
+                       value="{{ form_data.check_in | default('') }}"
+                       class="form-input">
+            </div>
+            <div>
+                <label class="form-label">Check Out (optional)</label>
+                <input type="datetime-local" name="check_out"
+                       value="{{ form_data.check_out | default('') }}"
+                       class="form-input">
+            </div>
+        </div>
+
+        <div>
+            <label class="form-label">Remarks</label>
+            <textarea name="remarks" rows="3" class="form-input" placeholder="Optional notes">{{ form_data.remarks | default('') }}</textarea>
+        </div>
+
+        <div class="flex items-center gap-3">
+            <button type="submit" class="btn btn-primary">Create Attendance</button>
+            <a href="/people/attendance" class="btn btn-secondary">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

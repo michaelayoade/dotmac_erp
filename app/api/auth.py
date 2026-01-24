@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
+from app.services.auth_dependencies import require_permission
 from app.schemas.auth import (
     ApiKeyCreate,
     ApiKeyGenerateRequest,
@@ -39,7 +40,11 @@ def get_db():
     status_code=status.HTTP_201_CREATED,
     tags=["user-credentials"],
 )
-def create_user_credential(payload: UserCredentialCreate, db: Session = Depends(get_db)):
+def create_user_credential(
+    payload: UserCredentialCreate,
+    auth: dict = Depends(require_permission("auth:manage")),
+    db: Session = Depends(get_db),
+):
     return auth_service.user_credentials.create(db, payload)
 
 
@@ -48,7 +53,11 @@ def create_user_credential(payload: UserCredentialCreate, db: Session = Depends(
     response_model=UserCredentialRead,
     tags=["user-credentials"],
 )
-def get_user_credential(credential_id: str, db: Session = Depends(get_db)):
+def get_user_credential(
+    credential_id: str,
+    auth: dict = Depends(require_permission("auth:manage")),
+    db: Session = Depends(get_db),
+):
     return auth_service.user_credentials.get(db, credential_id)
 
 
@@ -65,6 +74,7 @@ def list_user_credentials(
     order_dir: str = Query(default="desc", pattern="^(asc|desc)$"),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
+    auth: dict = Depends(require_permission("auth:manage")),
     db: Session = Depends(get_db),
 ):
     return auth_service.user_credentials.list_response(
@@ -78,7 +88,10 @@ def list_user_credentials(
     tags=["user-credentials"],
 )
 def update_user_credential(
-    credential_id: str, payload: UserCredentialUpdate, db: Session = Depends(get_db)
+    credential_id: str,
+    payload: UserCredentialUpdate,
+    auth: dict = Depends(require_permission("auth:manage")),
+    db: Session = Depends(get_db),
 ):
     return auth_service.user_credentials.update(db, credential_id, payload)
 
@@ -88,7 +101,11 @@ def update_user_credential(
     status_code=status.HTTP_204_NO_CONTENT,
     tags=["user-credentials"],
 )
-def delete_user_credential(credential_id: str, db: Session = Depends(get_db)):
+def delete_user_credential(
+    credential_id: str,
+    auth: dict = Depends(require_permission("auth:manage")),
+    db: Session = Depends(get_db),
+):
     auth_service.user_credentials.delete(db, credential_id)
 
 
@@ -98,7 +115,11 @@ def delete_user_credential(credential_id: str, db: Session = Depends(get_db)):
     status_code=status.HTTP_201_CREATED,
     tags=["mfa-methods"],
 )
-def create_mfa_method(payload: MFAMethodCreate, db: Session = Depends(get_db)):
+def create_mfa_method(
+    payload: MFAMethodCreate,
+    auth: dict = Depends(require_permission("auth:manage")),
+    db: Session = Depends(get_db),
+):
     return auth_service.mfa_methods.create(db, payload)
 
 
@@ -107,7 +128,11 @@ def create_mfa_method(payload: MFAMethodCreate, db: Session = Depends(get_db)):
     response_model=MFAMethodRead,
     tags=["mfa-methods"],
 )
-def get_mfa_method(method_id: str, db: Session = Depends(get_db)):
+def get_mfa_method(
+    method_id: str,
+    auth: dict = Depends(require_permission("auth:manage")),
+    db: Session = Depends(get_db),
+):
     return auth_service.mfa_methods.get(db, method_id)
 
 
@@ -126,6 +151,7 @@ def list_mfa_methods(
     order_dir: str = Query(default="desc", pattern="^(asc|desc)$"),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
+    auth: dict = Depends(require_permission("auth:manage")),
     db: Session = Depends(get_db),
 ):
     return auth_service.mfa_methods.list_response(
@@ -148,7 +174,10 @@ def list_mfa_methods(
     tags=["mfa-methods"],
 )
 def update_mfa_method(
-    method_id: str, payload: MFAMethodUpdate, db: Session = Depends(get_db)
+    method_id: str,
+    payload: MFAMethodUpdate,
+    auth: dict = Depends(require_permission("auth:manage")),
+    db: Session = Depends(get_db),
 ):
     return auth_service.mfa_methods.update(db, method_id, payload)
 
@@ -158,7 +187,11 @@ def update_mfa_method(
     status_code=status.HTTP_204_NO_CONTENT,
     tags=["mfa-methods"],
 )
-def delete_mfa_method(method_id: str, db: Session = Depends(get_db)):
+def delete_mfa_method(
+    method_id: str,
+    auth: dict = Depends(require_permission("auth:manage")),
+    db: Session = Depends(get_db),
+):
     auth_service.mfa_methods.delete(db, method_id)
 
 
@@ -168,7 +201,11 @@ def delete_mfa_method(method_id: str, db: Session = Depends(get_db)):
     status_code=status.HTTP_201_CREATED,
     tags=["sessions"],
 )
-def create_session(payload: SessionCreate, db: Session = Depends(get_db)):
+def create_session(
+    payload: SessionCreate,
+    auth: dict = Depends(require_permission("auth:manage")),
+    db: Session = Depends(get_db),
+):
     return auth_service.sessions.create(db, payload)
 
 
@@ -177,7 +214,11 @@ def create_session(payload: SessionCreate, db: Session = Depends(get_db)):
     response_model=SessionRead,
     tags=["sessions"],
 )
-def get_session(session_id: str, db: Session = Depends(get_db)):
+def get_session(
+    session_id: str,
+    auth: dict = Depends(require_permission("auth:manage")),
+    db: Session = Depends(get_db),
+):
     return auth_service.sessions.get(db, session_id)
 
 
@@ -188,15 +229,16 @@ def get_session(session_id: str, db: Session = Depends(get_db)):
 )
 def list_sessions(
     person_id: str | None = None,
-    status: str | None = None,
+    session_status: str | None = None,
     order_by: str = Query(default="created_at"),
     order_dir: str = Query(default="desc", pattern="^(asc|desc)$"),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
+    auth: dict = Depends(require_permission("auth:manage")),
     db: Session = Depends(get_db),
 ):
     return auth_service.sessions.list_response(
-        db, person_id, status, order_by, order_dir, limit, offset
+        db, person_id, session_status, order_by, order_dir, limit, offset
     )
 
 
@@ -206,7 +248,10 @@ def list_sessions(
     tags=["sessions"],
 )
 def update_session(
-    session_id: str, payload: SessionUpdate, db: Session = Depends(get_db)
+    session_id: str,
+    payload: SessionUpdate,
+    auth: dict = Depends(require_permission("auth:manage")),
+    db: Session = Depends(get_db),
 ):
     return auth_service.sessions.update(db, session_id, payload)
 
@@ -216,7 +261,11 @@ def update_session(
     status_code=status.HTTP_204_NO_CONTENT,
     tags=["sessions"],
 )
-def delete_session(session_id: str, db: Session = Depends(get_db)):
+def delete_session(
+    session_id: str,
+    auth: dict = Depends(require_permission("auth:manage")),
+    db: Session = Depends(get_db),
+):
     auth_service.sessions.delete(db, session_id)
 
 
@@ -226,7 +275,11 @@ def delete_session(session_id: str, db: Session = Depends(get_db)):
     status_code=status.HTTP_201_CREATED,
     tags=["api-keys"],
 )
-def create_api_key(payload: ApiKeyCreate, db: Session = Depends(get_db)):
+def create_api_key(
+    payload: ApiKeyCreate,
+    auth: dict = Depends(require_permission("auth:manage")),
+    db: Session = Depends(get_db),
+):
     return auth_service.api_keys.create(db, payload)
 
 
@@ -239,6 +292,7 @@ def create_api_key(payload: ApiKeyCreate, db: Session = Depends(get_db)):
 def generate_api_key(
     payload: ApiKeyGenerateRequest,
     request: Request,
+    auth: dict = Depends(require_permission("auth:manage")),
     db: Session = Depends(get_db),
 ):
     return auth_service.api_keys.generate_with_rate_limit(db, payload, request)
@@ -249,7 +303,11 @@ def generate_api_key(
     response_model=ApiKeyRead,
     tags=["api-keys"],
 )
-def get_api_key(key_id: str, db: Session = Depends(get_db)):
+def get_api_key(
+    key_id: str,
+    auth: dict = Depends(require_permission("auth:manage")),
+    db: Session = Depends(get_db),
+):
     return auth_service.api_keys.get(db, key_id)
 
 
@@ -265,6 +323,7 @@ def list_api_keys(
     order_dir: str = Query(default="desc", pattern="^(asc|desc)$"),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
+    auth: dict = Depends(require_permission("auth:manage")),
     db: Session = Depends(get_db),
 ):
     return auth_service.api_keys.list_response(
@@ -277,7 +336,12 @@ def list_api_keys(
     response_model=ApiKeyRead,
     tags=["api-keys"],
 )
-def update_api_key(key_id: str, payload: ApiKeyUpdate, db: Session = Depends(get_db)):
+def update_api_key(
+    key_id: str,
+    payload: ApiKeyUpdate,
+    auth: dict = Depends(require_permission("auth:manage")),
+    db: Session = Depends(get_db),
+):
     return auth_service.api_keys.update(db, key_id, payload)
 
 
@@ -286,5 +350,9 @@ def update_api_key(key_id: str, payload: ApiKeyUpdate, db: Session = Depends(get
     status_code=status.HTTP_204_NO_CONTENT,
     tags=["api-keys"],
 )
-def delete_api_key(key_id: str, db: Session = Depends(get_db)):
+def delete_api_key(
+    key_id: str,
+    auth: dict = Depends(require_permission("auth:manage")),
+    db: Session = Depends(get_db),
+):
     auth_service.api_keys.revoke(db, key_id)

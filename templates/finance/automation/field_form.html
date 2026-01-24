@@ -1,0 +1,178 @@
+{% extends "finance/base_finance.html" %}
+
+{% block page_title %}{% if is_edit %}Edit{% else %}New{% endif %} Custom Field{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/automation" class="hover:text-teal-600 dark:hover:text-teal-400">Automation</a>
+    <span class="mx-2">/</span>
+    <a href="/automation/fields" class="hover:text-teal-600 dark:hover:text-teal-400">Custom Fields</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white">{% if is_edit %}Edit{% else %}New{% endif %}</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-3xl">
+    <form method="post" action="/automation/fields/{% if is_edit %}{{ field.field_id }}/edit{% else %}new{% endif %}" class="space-y-6">
+        <!-- Basic Info -->
+        <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50">
+            <div class="border-b border-slate-200 px-6 py-4 dark:border-slate-700">
+                <h3 class="font-semibold text-slate-900 dark:text-white">Field Definition</h3>
+            </div>
+            <div class="p-6 space-y-4">
+                <div class="grid gap-4 sm:grid-cols-2">
+                    <div>
+                        <label for="entity_type" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Entity Type *</label>
+                        <select id="entity_type" name="entity_type" required {% if is_edit %}disabled{% endif %}
+                                class="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                            <option value="">Select entity...</option>
+                            {% for et in entity_types %}
+                            <option value="{{ et.value }}" {{ 'selected' if (field.entity_type_raw if field else form_data.entity_type) == et.value else '' }}>{{ et.label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label for="field_type" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Field Type *</label>
+                        <select id="field_type" name="field_type" required {% if is_edit %}disabled{% endif %}
+                                class="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                            <option value="">Select type...</option>
+                            {% for ft in field_types %}
+                            <option value="{{ ft.value }}" {{ 'selected' if (field.field_type_raw if field else form_data.field_type) == ft.value else '' }}>{{ ft.label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="grid gap-4 sm:grid-cols-2">
+                    <div>
+                        <label for="field_code" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Field Code *</label>
+                        <input type="text" id="field_code" name="field_code" required {% if is_edit %}readonly{% endif %}
+                               value="{{ field.field_code if field else form_data.field_code | default('') }}"
+                               pattern="[a-zA-Z_][a-zA-Z0-9_]*"
+                               placeholder="e.g., custom_reference"
+                               class="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2 font-mono focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white {% if is_edit %}bg-slate-50 dark:bg-slate-900{% endif %}">
+                        <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Unique identifier (letters, numbers, underscores)</p>
+                    </div>
+                    <div>
+                        <label for="field_name" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Display Name *</label>
+                        <input type="text" id="field_name" name="field_name" required
+                               value="{{ field.field_name if field else form_data.field_name | default('') }}"
+                               placeholder="e.g., Custom Reference"
+                               class="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                    </div>
+                </div>
+                <div>
+                    <label for="description" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Description</label>
+                    <textarea id="description" name="description" rows="2"
+                              class="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">{{ field.description if field else form_data.description | default('') }}</textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- Validation -->
+        <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50">
+            <div class="border-b border-slate-200 px-6 py-4 dark:border-slate-700">
+                <h3 class="font-semibold text-slate-900 dark:text-white">Validation</h3>
+            </div>
+            <div class="p-6 space-y-4">
+                <label class="flex items-center gap-3">
+                    <input type="checkbox" name="is_required" {{ 'checked' if (field.is_required if field else form_data.is_required) else '' }}
+                           class="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500">
+                    <span class="text-sm text-slate-700 dark:text-slate-300">Required field</span>
+                </label>
+                <div>
+                    <label for="default_value" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Default Value</label>
+                    <input type="text" id="default_value" name="default_value"
+                           value="{{ field.default_value if field else form_data.default_value | default('') }}"
+                           class="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                </div>
+                <div class="grid gap-4 sm:grid-cols-2">
+                    <div>
+                        <label for="max_length" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Max Length</label>
+                        <input type="number" id="max_length" name="max_length" min="1"
+                               value="{{ field.max_length if field else form_data.max_length | default('') }}"
+                               class="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                    </div>
+                    <div>
+                        <label for="section_name" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Section Name</label>
+                        <input type="text" id="section_name" name="section_name"
+                               value="{{ field.section_name if field else form_data.section_name | default('') }}"
+                               placeholder="e.g., Additional Information"
+                               class="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Display Options -->
+        <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50">
+            <div class="border-b border-slate-200 px-6 py-4 dark:border-slate-700">
+                <h3 class="font-semibold text-slate-900 dark:text-white">Display Options</h3>
+            </div>
+            <div class="p-6 space-y-4">
+                <div class="grid gap-4 sm:grid-cols-2">
+                    <div>
+                        <label for="placeholder" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Placeholder</label>
+                        <input type="text" id="placeholder" name="placeholder"
+                               value="{{ field.placeholder if field else form_data.placeholder | default('') }}"
+                               class="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                    </div>
+                    <div>
+                        <label for="display_order" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Display Order</label>
+                        <input type="number" id="display_order" name="display_order" min="0"
+                               value="{{ field.display_order if field else form_data.display_order | default('0') }}"
+                               class="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                    </div>
+                </div>
+                <div>
+                    <label for="help_text" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Help Text</label>
+                    <input type="text" id="help_text" name="help_text"
+                           value="{{ field.help_text if field else form_data.help_text | default('') }}"
+                           class="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                </div>
+                <div class="space-y-3">
+                    <label class="flex items-center gap-3">
+                        <input type="checkbox" name="show_in_form" {{ 'checked' if (field.show_in_form if field else True) else '' }}
+                               class="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500">
+                        <span class="text-sm text-slate-700 dark:text-slate-300">Show in forms</span>
+                    </label>
+                    <label class="flex items-center gap-3">
+                        <input type="checkbox" name="show_in_list" {{ 'checked' if (field.show_in_list if field else form_data.show_in_list) else '' }}
+                               class="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500">
+                        <span class="text-sm text-slate-700 dark:text-slate-300">Show in list views</span>
+                    </label>
+                    <label class="flex items-center gap-3">
+                        <input type="checkbox" name="show_in_detail" {{ 'checked' if (field.show_in_detail if field else True) else '' }}
+                               class="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500">
+                        <span class="text-sm text-slate-700 dark:text-slate-300">Show in detail views</span>
+                    </label>
+                    <label class="flex items-center gap-3">
+                        <input type="checkbox" name="show_in_print" {{ 'checked' if (field.show_in_print if field else form_data.show_in_print) else '' }}
+                               class="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500">
+                        <span class="text-sm text-slate-700 dark:text-slate-300">Show in print/PDF</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <!-- Error Message -->
+        {% if error %}
+        <div class="rounded-lg bg-rose-50 p-4 dark:bg-rose-900/20">
+            <p class="text-sm text-rose-700 dark:text-rose-400">{{ error }}</p>
+        </div>
+        {% endif %}
+
+        <!-- Actions -->
+        <div class="flex items-center justify-end gap-3">
+            <a href="/automation/fields" class="rounded-lg px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800">
+                Cancel
+            </a>
+            <button type="submit" class="rounded-lg bg-gradient-to-r from-amber-600 to-amber-500 px-6 py-2 text-sm font-medium text-white shadow-lg shadow-amber-500/25 hover:from-amber-700 hover:to-amber-600">
+                {% if is_edit %}Update Field{% else %}Create Field{% endif %}
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

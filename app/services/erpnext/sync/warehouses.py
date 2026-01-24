@@ -1,5 +1,5 @@
 """
-Warehouse Sync Service - ERPNext to DotMac Books.
+Warehouse Sync Service - ERPNext to DotMac ERP.
 """
 import uuid
 from datetime import datetime
@@ -8,7 +8,7 @@ from typing import Any, Optional
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.ifrs.inv.warehouse import Warehouse
+from app.models.finance.inv.warehouse import Warehouse
 from app.services.erpnext.mappings.warehouses import WarehouseMapping
 
 from .base import BaseSyncService
@@ -41,7 +41,7 @@ class WarehouseSyncService(BaseSyncService[Warehouse]):
             yield from client.get_warehouses()
 
     def transform_record(self, record: dict[str, Any]) -> dict[str, Any]:
-        """Transform ERPNext warehouse to DotMac Books format."""
+        """Transform ERPNext warehouse to DotMac ERP format."""
         return self._mapping.transform_record(record)
 
     def create_entity(self, data: dict[str, Any]) -> Warehouse:

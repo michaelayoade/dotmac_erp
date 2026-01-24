@@ -16,9 +16,9 @@ import pytest
 
 # ============ Mock Enums ============
 
-from app.models.ifrs.ap.supplier import SupplierType
-from app.models.ifrs.ap.supplier_invoice import SupplierInvoiceStatus, SupplierInvoiceType
-from app.models.ifrs.ap.supplier_payment import APPaymentStatus, APPaymentMethod
+from app.models.finance.ap.supplier import SupplierType
+from app.models.finance.ap.supplier_invoice import SupplierInvoiceStatus, SupplierInvoiceType
+from app.models.finance.ap.supplier_payment import APPaymentStatus, APPaymentMethod
 
 MockSupplierType = SupplierType
 MockSupplierInvoiceStatus = SupplierInvoiceStatus

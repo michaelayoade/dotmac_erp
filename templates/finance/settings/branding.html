@@ -1,0 +1,774 @@
+{% extends "finance/base_finance.html" %}
+
+{% block page_title %}Branding{% endblock %}
+
+{% block page_styles %}
+<style>
+    /* Color picker styling */
+    .color-swatch {
+        width: 48px;
+        height: 48px;
+        border-radius: 8px;
+        border: 2px solid rgba(0,0,0,0.1);
+        cursor: pointer;
+        transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .color-swatch:hover {
+        transform: scale(1.05);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    .color-input {
+        opacity: 0;
+        position: absolute;
+        width: 48px;
+        height: 48px;
+        cursor: pointer;
+    }
+    .palette-chip {
+        width: 32px;
+        height: 24px;
+        border-radius: 4px;
+        border: 1px solid rgba(0,0,0,0.1);
+    }
+
+    /* Preview panel */
+    .preview-panel {
+        background: var(--preview-bg, #f8fafc);
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1);
+    }
+    .preview-header {
+        background: var(--preview-header-bg, #0f172a);
+        padding: 12px 16px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+    .preview-sidebar {
+        background: var(--preview-sidebar-bg, #1e293b);
+        width: 48px;
+        padding: 12px 8px;
+    }
+    .preview-content {
+        padding: 16px;
+        flex: 1;
+    }
+    .preview-card {
+        background: white;
+        border-radius: var(--preview-radius, 8px);
+        padding: 12px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .preview-btn {
+        background: var(--preview-primary, #0d9488);
+        color: white;
+        padding: 6px 12px;
+        border-radius: var(--preview-radius, 8px);
+        font-size: 12px;
+        font-weight: 500;
+    }
+
+    /* Section collapse */
+    .section-content {
+        max-height: 2000px;
+        overflow: hidden;
+        transition: max-height 0.3s ease-out;
+    }
+    .section-collapsed .section-content {
+        max-height: 0;
+    }
+</style>
+{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+    <a href="/finance/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <a href="/settings" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Settings</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="font-medium text-slate-900 dark:text-white">Branding</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div x-data="brandingEditor()" class="stagger-in">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Branding</h1>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                Customize your organization's visual identity.
+            </p>
+        </div>
+        <div class="flex items-center gap-3">
+            <button type="button" @click="resetToDefaults()"
+                    class="btn btn-secondary">
+                Reset to defaults
+            </button>
+            <button type="button" @click="saveBranding()"
+                    :disabled="saving"
+                    class="btn btn-teal">
+                <span x-show="!saving">Save changes</span>
+                <span x-show="saving" class="flex items-center gap-2">
+                    <svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                    </svg>
+                    Saving...
+                </span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Success/Error Messages -->
+    <div x-show="message" x-transition class="mb-6">
+        <div :class="messageType === 'success' ? 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800' : 'bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800'"
+             class="rounded-lg border p-4">
+            <div class="flex items-center gap-3">
+                <svg x-show="messageType === 'success'" class="h-5 w-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                </svg>
+                <svg x-show="messageType === 'error'" class="h-5 w-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <p :class="messageType === 'success' ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'"
+                   class="text-sm" x-text="message"></p>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid gap-6 lg:grid-cols-5">
+        <!-- Configuration Panel (3 cols) -->
+        <div class="lg:col-span-3 space-y-6">
+
+            <!-- Identity Section -->
+            <div class="card" :class="{ 'section-collapsed': !sections.identity }">
+                <button type="button" @click="sections.identity = !sections.identity"
+                        class="w-full p-6 flex items-center justify-between text-left">
+                    <div class="flex items-center gap-3">
+                        <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-violet-100 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400">
+                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Identity</h2>
+                            <p class="text-sm text-slate-500 dark:text-slate-400">Logo, name, and brand mark</p>
+                        </div>
+                    </div>
+                    <svg class="h-5 w-5 text-slate-400 transition-transform" :class="{ 'rotate-180': sections.identity }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                </button>
+                <div class="section-content">
+                    <div class="px-6 pb-6 space-y-4 border-t border-slate-100 dark:border-slate-800 pt-4">
+                        <div class="grid gap-4 sm:grid-cols-2">
+                            <div>
+                                <label class="form-label">Display Name</label>
+                                <input type="text" x-model="config.display_name"
+                                       placeholder="Your Company Name"
+                                       class="form-input">
+                                <p class="mt-1 text-xs text-slate-500">Shown in header and documents</p>
+                            </div>
+                            <div>
+                                <label class="form-label">Tagline</label>
+                                <input type="text" x-model="config.tagline"
+                                       placeholder="Your company slogan"
+                                       class="form-input">
+                            </div>
+                        </div>
+                        <div class="grid gap-4 sm:grid-cols-2">
+                            <div>
+                                <label class="form-label">Brand Mark</label>
+                                <input type="text" x-model="config.brand_mark"
+                                       maxlength="4"
+                                       placeholder="AB"
+                                       class="form-input w-24 text-center text-lg font-bold uppercase">
+                                <p class="mt-1 text-xs text-slate-500">2-4 letter abbreviation</p>
+                            </div>
+                            <div>
+                                <label class="form-label">Logo URL</label>
+                                <input type="url" x-model="config.logo_url"
+                                       placeholder="https://..."
+                                       class="form-input">
+                                <p class="mt-1 text-xs text-slate-500">URL to your logo image</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Colors Section -->
+            <div class="card" :class="{ 'section-collapsed': !sections.colors }">
+                <button type="button" @click="sections.colors = !sections.colors"
+                        class="w-full p-6 flex items-center justify-between text-left">
+                    <div class="flex items-center gap-3">
+                        <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400">
+                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Colors</h2>
+                            <p class="text-sm text-slate-500 dark:text-slate-400">Primary and accent color palette</p>
+                        </div>
+                    </div>
+                    <svg class="h-5 w-5 text-slate-400 transition-transform" :class="{ 'rotate-180': sections.colors }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                </button>
+                <div class="section-content">
+                    <div class="px-6 pb-6 space-y-6 border-t border-slate-100 dark:border-slate-800 pt-4">
+                        <!-- Primary Color -->
+                        <div>
+                            <label class="form-label mb-3">Primary Color</label>
+                            <div class="flex items-center gap-4">
+                                <div class="relative">
+                                    <input type="color" x-model="config.primary_color"
+                                           @input="generatePalette('primary')"
+                                           class="color-input">
+                                    <div class="color-swatch" :style="{ backgroundColor: config.primary_color }"></div>
+                                </div>
+                                <input type="text" x-model="config.primary_color"
+                                       @input="generatePalette('primary')"
+                                       placeholder="#0D9488"
+                                       class="form-input w-28 font-mono text-sm uppercase">
+                                <div class="flex gap-1" x-show="primaryPalette.length">
+                                    <template x-for="shade in primaryPalette.slice(0, 6)" :key="shade">
+                                        <div class="palette-chip" :style="{ backgroundColor: shade }"></div>
+                                    </template>
+                                </div>
+                            </div>
+                            <p class="mt-2 text-xs text-slate-500">Used for buttons, links, and active states</p>
+                        </div>
+
+                        <!-- Accent Color -->
+                        <div>
+                            <label class="form-label mb-3">Accent Color</label>
+                            <div class="flex items-center gap-4">
+                                <div class="relative">
+                                    <input type="color" x-model="config.accent_color"
+                                           @input="generatePalette('accent')"
+                                           class="color-input">
+                                    <div class="color-swatch" :style="{ backgroundColor: config.accent_color }"></div>
+                                </div>
+                                <input type="text" x-model="config.accent_color"
+                                       @input="generatePalette('accent')"
+                                       placeholder="#D97706"
+                                       class="form-input w-28 font-mono text-sm uppercase">
+                                <div class="flex gap-1" x-show="accentPalette.length">
+                                    <template x-for="shade in accentPalette.slice(0, 6)" :key="shade">
+                                        <div class="palette-chip" :style="{ backgroundColor: shade }"></div>
+                                    </template>
+                                </div>
+                            </div>
+                            <p class="mt-2 text-xs text-slate-500">Secondary color for highlights and accents</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Typography Section -->
+            <div class="card" :class="{ 'section-collapsed': !sections.typography }">
+                <button type="button" @click="sections.typography = !sections.typography"
+                        class="w-full p-6 flex items-center justify-between text-left">
+                    <div class="flex items-center gap-3">
+                        <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
+                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h8m-8 6h16"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Typography</h2>
+                            <p class="text-sm text-slate-500 dark:text-slate-400">Font families for headings and body</p>
+                        </div>
+                    </div>
+                    <svg class="h-5 w-5 text-slate-400 transition-transform" :class="{ 'rotate-180': sections.typography }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                </button>
+                <div class="section-content">
+                    <div class="px-6 pb-6 space-y-4 border-t border-slate-100 dark:border-slate-800 pt-4">
+                        <div class="grid gap-4 sm:grid-cols-2">
+                            <div>
+                                <label class="form-label">Display Font</label>
+                                <select x-model="config.font_family_display" class="form-input form-select">
+                                    <option value="">System Default (DM Sans)</option>
+                                    <template x-for="font in fonts.filter(f => f.category !== 'monospace')" :key="font.name">
+                                        <option :value="font.name" x-text="font.name"></option>
+                                    </template>
+                                </select>
+                                <p class="mt-1 text-xs text-slate-500">For headings and titles</p>
+                            </div>
+                            <div>
+                                <label class="form-label">Body Font</label>
+                                <select x-model="config.font_family_body" class="form-input form-select">
+                                    <option value="">System Default (DM Sans)</option>
+                                    <template x-for="font in fonts.filter(f => f.category === 'sans-serif')" :key="font.name">
+                                        <option :value="font.name" x-text="font.name"></option>
+                                    </template>
+                                </select>
+                                <p class="mt-1 text-xs text-slate-500">For paragraphs and UI text</p>
+                            </div>
+                        </div>
+                        <!-- Font Preview -->
+                        <div class="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-4 mt-4">
+                            <p class="text-sm text-slate-500 dark:text-slate-400 mb-2">Preview:</p>
+                            <p class="text-2xl font-bold text-slate-900 dark:text-white"
+                               :style="{ fontFamily: config.font_family_display || 'DM Sans' }">
+                                The quick brown fox jumps
+                            </p>
+                            <p class="text-base text-slate-600 dark:text-slate-300 mt-1"
+                               :style="{ fontFamily: config.font_family_body || 'DM Sans' }">
+                                Lorem ipsum dolor sit amet, consectetur adipiscing elit.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Style Section -->
+            <div class="card" :class="{ 'section-collapsed': !sections.style }">
+                <button type="button" @click="sections.style = !sections.style"
+                        class="w-full p-6 flex items-center justify-between text-left">
+                    <div class="flex items-center gap-3">
+                        <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">
+                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Style</h2>
+                            <p class="text-sm text-slate-500 dark:text-slate-400">UI appearance and shape preferences</p>
+                        </div>
+                    </div>
+                    <svg class="h-5 w-5 text-slate-400 transition-transform" :class="{ 'rotate-180': sections.style }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                </button>
+                <div class="section-content">
+                    <div class="px-6 pb-6 space-y-4 border-t border-slate-100 dark:border-slate-800 pt-4">
+                        <!-- Border Radius -->
+                        <div>
+                            <label class="form-label mb-3">Border Radius</label>
+                            <div class="flex gap-3">
+                                <template x-for="option in radiusOptions" :key="option.value">
+                                    <button type="button" @click="config.border_radius = option.value"
+                                            :class="config.border_radius === option.value ? 'border-teal-500 bg-teal-50 dark:bg-teal-900/20' : 'border-slate-200 dark:border-slate-700'"
+                                            class="flex-1 p-3 rounded-lg border-2 transition-colors text-center">
+                                        <div class="w-12 h-8 mx-auto mb-2 bg-slate-300 dark:bg-slate-600"
+                                             :style="{ borderRadius: option.radius }"></div>
+                                        <span class="text-sm font-medium text-slate-700 dark:text-slate-300" x-text="option.label"></span>
+                                    </button>
+                                </template>
+                            </div>
+                        </div>
+
+                        <!-- Button Style -->
+                        <div>
+                            <label class="form-label mb-3">Button Style</label>
+                            <div class="flex gap-3">
+                                <template x-for="option in buttonOptions" :key="option.value">
+                                    <button type="button" @click="config.button_style = option.value"
+                                            :class="config.button_style === option.value ? 'border-teal-500 bg-teal-50 dark:bg-teal-900/20' : 'border-slate-200 dark:border-slate-700'"
+                                            class="flex-1 p-3 rounded-lg border-2 transition-colors text-center">
+                                        <div class="flex justify-center mb-2">
+                                            <span :class="option.btnClass" class="px-3 py-1 text-xs font-medium rounded">
+                                                Button
+                                            </span>
+                                        </div>
+                                        <span class="text-sm font-medium text-slate-700 dark:text-slate-300" x-text="option.label"></span>
+                                    </button>
+                                </template>
+                            </div>
+                        </div>
+
+                        <!-- Sidebar Style -->
+                        <div>
+                            <label class="form-label mb-3">Sidebar Style</label>
+                            <div class="flex gap-3">
+                                <template x-for="option in sidebarOptions" :key="option.value">
+                                    <button type="button" @click="config.sidebar_style = option.value"
+                                            :class="config.sidebar_style === option.value ? 'border-teal-500 bg-teal-50 dark:bg-teal-900/20' : 'border-slate-200 dark:border-slate-700'"
+                                            class="flex-1 p-3 rounded-lg border-2 transition-colors text-center">
+                                        <div class="w-12 h-8 mx-auto mb-2 rounded" :style="{ backgroundColor: option.color }"></div>
+                                        <span class="text-sm font-medium text-slate-700 dark:text-slate-300" x-text="option.label"></span>
+                                    </button>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Live Preview Panel (2 cols) -->
+        <div class="lg:col-span-2">
+            <div class="sticky top-4">
+                <div class="card p-4">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="font-semibold text-slate-900 dark:text-white">Live Preview</h3>
+                        <button type="button" @click="previewDark = !previewDark"
+                                class="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 flex items-center gap-1">
+                            <template x-if="previewDark">
+                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
+                                </svg>
+                            </template>
+                            <template x-if="!previewDark">
+                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+                                </svg>
+                            </template>
+                            <span x-text="previewDark ? 'Light' : 'Dark'"></span>
+                        </button>
+                    </div>
+
+                    <!-- Mini ERP Preview -->
+                    <div class="preview-panel"
+                         :class="{ 'dark': previewDark }"
+                         :style="getPreviewStyles()">
+
+                        <!-- Header -->
+                        <div class="preview-header">
+                            <div class="w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-bold"
+                                 :style="{ backgroundColor: config.primary_color || '#0d9488' }">
+                                <span x-text="config.brand_mark || 'DM'"></span>
+                            </div>
+                            <span class="text-white text-sm font-medium" x-text="config.display_name || 'Your Company'"></span>
+                        </div>
+
+                        <div class="flex">
+                            <!-- Sidebar -->
+                            <div class="preview-sidebar"
+                                 :style="getSidebarStyles()">
+                                <div class="space-y-2">
+                                    <div class="w-8 h-8 rounded-lg bg-white/10"></div>
+                                    <div class="w-8 h-8 rounded-lg bg-white/10"></div>
+                                    <div class="w-8 h-8 rounded-lg"
+                                         :style="{ backgroundColor: config.primary_color || '#0d9488' }"></div>
+                                    <div class="w-8 h-8 rounded-lg bg-white/10"></div>
+                                </div>
+                            </div>
+
+                            <!-- Content -->
+                            <div class="preview-content" :style="{ background: previewDark ? '#0f172a' : '#f8fafc' }">
+                                <h4 class="text-sm font-semibold mb-3"
+                                    :style="{ color: previewDark ? 'white' : '#0f172a', fontFamily: config.font_family_display || 'DM Sans' }">
+                                    Dashboard
+                                </h4>
+
+                                <!-- Stats Cards -->
+                                <div class="grid grid-cols-2 gap-2 mb-3">
+                                    <div class="preview-card" :style="{ borderRadius: getBorderRadius(), background: previewDark ? '#1e293b' : 'white' }">
+                                        <p class="text-[10px] text-slate-500">Revenue</p>
+                                        <p class="text-sm font-bold" :style="{ color: previewDark ? 'white' : '#0f172a' }">$24,500</p>
+                                    </div>
+                                    <div class="preview-card" :style="{ borderRadius: getBorderRadius(), background: previewDark ? '#1e293b' : 'white' }">
+                                        <p class="text-[10px] text-slate-500">Invoices</p>
+                                        <p class="text-sm font-bold" :style="{ color: previewDark ? 'white' : '#0f172a' }">12</p>
+                                    </div>
+                                </div>
+
+                                <!-- Button -->
+                                <button class="preview-btn w-full text-center"
+                                        :style="getButtonStyles()">
+                                    Create Invoice
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Component Samples -->
+                    <div class="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mb-3">Component Samples</p>
+                        <div class="flex flex-wrap gap-2">
+                            <button :style="{ backgroundColor: config.primary_color || '#0d9488', borderRadius: getBorderRadius() }"
+                                    class="px-3 py-1.5 text-white text-xs font-medium">
+                                Primary
+                            </button>
+                            <button :style="{ backgroundColor: config.accent_color || '#d97706', borderRadius: getBorderRadius() }"
+                                    class="px-3 py-1.5 text-white text-xs font-medium">
+                                Accent
+                            </button>
+                            <span :style="{ backgroundColor: (config.primary_color || '#0d9488') + '20', color: config.primary_color || '#0d9488', borderRadius: getBorderRadius() }"
+                                  class="px-2 py-1 text-xs font-medium">
+                                Badge
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function brandingEditor() {
+    return {
+        config: {
+            display_name: '{{ branding.display_name or "" }}',
+            tagline: '{{ branding.tagline or "" }}',
+            brand_mark: '{{ branding.brand_mark or "" }}',
+            logo_url: '{{ branding.logo_url or "" }}',
+            primary_color: '{{ branding.primary_color or "#0D9488" }}',
+            accent_color: '{{ branding.accent_color or "#D97706" }}',
+            font_family_display: '{{ branding.font_family_display or "" }}',
+            font_family_body: '{{ branding.font_family_body or "" }}',
+            border_radius: '{{ branding.border_radius or "rounded" }}',
+            button_style: '{{ branding.button_style or "gradient" }}',
+            sidebar_style: '{{ branding.sidebar_style or "dark" }}',
+        },
+
+        sections: {
+            identity: true,
+            colors: true,
+            typography: false,
+            style: false,
+        },
+
+        saving: false,
+        message: '',
+        messageType: 'success',
+        previewDark: false,
+
+        primaryPalette: [],
+        accentPalette: [],
+
+        fonts: [
+            { name: 'DM Sans', category: 'sans-serif' },
+            { name: 'Inter', category: 'sans-serif' },
+            { name: 'Plus Jakarta Sans', category: 'sans-serif' },
+            { name: 'Space Grotesk', category: 'sans-serif' },
+            { name: 'Outfit', category: 'sans-serif' },
+            { name: 'Sora', category: 'sans-serif' },
+            { name: 'Manrope', category: 'sans-serif' },
+            { name: 'Source Serif 4', category: 'serif' },
+            { name: 'Fraunces', category: 'serif' },
+            { name: 'Lora', category: 'serif' },
+            { name: 'JetBrains Mono', category: 'monospace' },
+            { name: 'Fira Code', category: 'monospace' },
+        ],
+
+        radiusOptions: [
+            { value: 'sharp', label: 'Sharp', radius: '0px' },
+            { value: 'rounded', label: 'Rounded', radius: '8px' },
+            { value: 'pill', label: 'Pill', radius: '16px' },
+        ],
+
+        buttonOptions: [
+            { value: 'solid', label: 'Solid', btnClass: 'bg-teal-600 text-white' },
+            { value: 'gradient', label: 'Gradient', btnClass: 'bg-gradient-to-r from-teal-600 to-teal-500 text-white' },
+            { value: 'outline', label: 'Outline', btnClass: 'border-2 border-teal-600 text-teal-600' },
+        ],
+
+        sidebarOptions: [
+            { value: 'dark', label: 'Dark', color: '#1e293b' },
+            { value: 'light', label: 'Light', color: '#f1f5f9' },
+            { value: 'brand', label: 'Brand', color: '#115e59' },
+        ],
+
+        init() {
+            this.generatePalette('primary');
+            this.generatePalette('accent');
+        },
+
+        generatePalette(type) {
+            const color = type === 'primary' ? this.config.primary_color : this.config.accent_color;
+            if (!color || !color.match(/^#[0-9A-Fa-f]{6}$/)) return;
+
+            // Simple palette generation (light to dark variations)
+            const palette = [];
+            for (let i = 0; i < 6; i++) {
+                const lightness = 95 - (i * 15);
+                palette.push(this.adjustLightness(color, lightness));
+            }
+
+            if (type === 'primary') {
+                this.primaryPalette = palette;
+            } else {
+                this.accentPalette = palette;
+            }
+        },
+
+        adjustLightness(hex, targetL) {
+            // Convert hex to HSL, adjust lightness, convert back
+            let r = parseInt(hex.slice(1, 3), 16) / 255;
+            let g = parseInt(hex.slice(3, 5), 16) / 255;
+            let b = parseInt(hex.slice(5, 7), 16) / 255;
+
+            let max = Math.max(r, g, b), min = Math.min(r, g, b);
+            let h, s, l = (max + min) / 2;
+
+            if (max === min) {
+                h = s = 0;
+            } else {
+                let d = max - min;
+                s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+                switch (max) {
+                    case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
+                    case g: h = ((b - r) / d + 2) / 6; break;
+                    case b: h = ((r - g) / d + 4) / 6; break;
+                }
+            }
+
+            // Adjust lightness
+            l = targetL / 100;
+
+            // Convert back to RGB
+            let r2, g2, b2;
+            if (s === 0) {
+                r2 = g2 = b2 = l;
+            } else {
+                const hue2rgb = (p, q, t) => {
+                    if (t < 0) t += 1;
+                    if (t > 1) t -= 1;
+                    if (t < 1/6) return p + (q - p) * 6 * t;
+                    if (t < 1/2) return q;
+                    if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+                    return p;
+                };
+                const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+                const p = 2 * l - q;
+                r2 = hue2rgb(p, q, h + 1/3);
+                g2 = hue2rgb(p, q, h);
+                b2 = hue2rgb(p, q, h - 1/3);
+            }
+
+            return '#' + [r2, g2, b2].map(x => {
+                const hex = Math.round(x * 255).toString(16);
+                return hex.length === 1 ? '0' + hex : hex;
+            }).join('');
+        },
+
+        getBorderRadius() {
+            const map = { sharp: '0px', rounded: '8px', pill: '16px' };
+            return map[this.config.border_radius] || '8px';
+        },
+
+        getPreviewStyles() {
+            return {
+                '--preview-primary': this.config.primary_color || '#0d9488',
+                '--preview-radius': this.getBorderRadius(),
+            };
+        },
+
+        getSidebarStyles() {
+            const styles = {
+                dark: { backgroundColor: '#1e293b' },
+                light: { backgroundColor: '#f1f5f9' },
+                brand: { backgroundColor: this.config.primary_color ? this.adjustLightness(this.config.primary_color, 25) : '#115e59' },
+            };
+            return styles[this.config.sidebar_style] || styles.dark;
+        },
+
+        getButtonStyles() {
+            const primary = this.config.primary_color || '#0d9488';
+            const radius = this.getBorderRadius();
+
+            if (this.config.button_style === 'outline') {
+                return {
+                    background: 'transparent',
+                    border: `2px solid ${primary}`,
+                    color: primary,
+                    borderRadius: radius,
+                };
+            } else if (this.config.button_style === 'solid') {
+                return {
+                    background: primary,
+                    borderRadius: radius,
+                };
+            } else {
+                // gradient
+                return {
+                    background: `linear-gradient(135deg, ${primary}, ${this.adjustLightness(primary, 45)})`,
+                    borderRadius: radius,
+                };
+            }
+        },
+
+        async saveBranding() {
+            this.saving = true;
+            this.message = '';
+
+            try {
+                const orgId = '{{ org_id }}';
+                const brandingId = '{{ branding.branding_id or "" }}';
+
+                const payload = {
+                    display_name: this.config.display_name || null,
+                    tagline: this.config.tagline || null,
+                    brand_mark: this.config.brand_mark || null,
+                    logo_url: this.config.logo_url || null,
+                    primary_color: this.config.primary_color || null,
+                    accent_color: this.config.accent_color || null,
+                    font_family_display: this.config.font_family_display || null,
+                    font_family_body: this.config.font_family_body || null,
+                    border_radius: this.config.border_radius || null,
+                    button_style: this.config.button_style || null,
+                    sidebar_style: this.config.sidebar_style || null,
+                };
+
+                let url, method;
+                if (brandingId) {
+                    url = `/api/v1/settings/branding/${brandingId}`;
+                    method = 'PUT';
+                } else {
+                    url = '/api/v1/settings/branding';
+                    method = 'POST';
+                    payload.organization_id = orgId;
+                }
+
+                const response = await fetch(url, {
+                    method: method,
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(payload),
+                });
+
+                if (response.ok) {
+                    this.message = 'Branding saved successfully. Refresh to see changes.';
+                    this.messageType = 'success';
+                } else {
+                    const data = await response.json();
+                    this.message = data.detail || 'Failed to save branding';
+                    this.messageType = 'error';
+                }
+            } catch (error) {
+                this.message = 'An error occurred while saving';
+                this.messageType = 'error';
+            } finally {
+                this.saving = false;
+            }
+        },
+
+        resetToDefaults() {
+            this.config = {
+                display_name: '',
+                tagline: '',
+                brand_mark: '',
+                logo_url: '',
+                primary_color: '#0D9488',
+                accent_color: '#D97706',
+                font_family_display: '',
+                font_family_body: '',
+                border_radius: 'rounded',
+                button_style: 'gradient',
+                sidebar_style: 'dark',
+            };
+            this.generatePalette('primary');
+            this.generatePalette('accent');
+        },
+    };
+}
+</script>
+{% endblock %}

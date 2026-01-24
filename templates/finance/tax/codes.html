@@ -1,0 +1,169 @@
+{% extends "finance/base_finance.html" %}
+{% from "components/macros.html" import search_autosuggest, pagination, status_badge, empty_state, stats_card %}
+
+{% block page_title %}Tax Codes{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="font-medium text-slate-900 dark:text-white">Tax Codes</span>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<a href="/finance/tax/codes/new" class="btn btn-primary">
+    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+    </svg>
+    New Tax Code
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    {# Stats Row #}
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {{ stats_card("Total Tax Codes", total_count | default(codes | length if codes else 0), icon="document", color="slate") }}
+        {{ stats_card("VAT Codes", vat_count | default(0), icon="percent", color="teal") }}
+        {{ stats_card("WHT Codes", wht_count | default(0), icon="currency", color="amber") }}
+        {{ stats_card("Active", active_count | default(0), icon="check-circle", color="emerald") }}
+    </div>
+
+    {# Search with Auto-suggest and Filters #}
+    {{ search_autosuggest(
+        search=search,
+        entity_type="tax_codes",
+        filters=[
+            {
+                "name": "tax_type",
+                "label": "All Types",
+                "value": tax_type,
+                "options": tax_type_options | default([]),
+            },
+            {
+                "name": "is_active",
+                "label": "All Status",
+                "value": is_active,
+                "options": [
+                    {"value": "true", "label": "Active"},
+                    {"value": "false", "label": "Inactive"}
+                ]
+            }
+        ],
+        base_url="/tax/codes",
+        placeholder="Search tax codes by code or name..."
+    ) }}
+
+    {# Tax Codes Table #}
+    <div class="card">
+        <div class="table-container">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Code</th>
+                        <th>Name</th>
+                        <th>Type</th>
+                        <th class="text-right">Rate</th>
+                        <th>Applies To</th>
+                        <th class="text-center">Status</th>
+                        <th class="text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for code in codes %}
+                    <tr class="group">
+                        <td>
+                            <span class="font-mono text-sm font-semibold text-slate-900 dark:text-white">{{ code.tax_code }}</span>
+                        </td>
+                        <td>
+                            <span class="text-sm text-slate-600 dark:text-slate-400">{{ code.tax_name }}</span>
+                        </td>
+                        <td>
+                            <span class="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium
+                                {% if code.tax_type == 'VAT' %}bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400
+                                {% elif code.tax_type == 'WITHHOLDING' %}bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400
+                                {% elif code.tax_type == 'STAMP_DUTY' %}bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400
+                                {% else %}bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-400{% endif %}">
+                                {{ code.tax_type | replace('_', ' ') | title }}
+                            </span>
+                        </td>
+                        <td class="text-right font-mono text-sm text-slate-600 dark:text-slate-400">
+                            {% if code.rate_type == 'FIXED' %}
+                            ₦{{ code.tax_rate }}
+                            {% else %}
+                            {{ code.tax_rate }}%
+                            {% endif %}
+                        </td>
+                        <td class="text-sm text-slate-600 dark:text-slate-400">
+                            {% if code.applies_to_sales and code.applies_to_purchases %}
+                            <span class="text-xs">Sales, Purchases</span>
+                            {% elif code.applies_to_sales %}
+                            <span class="text-xs">Sales</span>
+                            {% elif code.applies_to_purchases %}
+                            <span class="text-xs">Purchases</span>
+                            {% else %}
+                            <span class="text-xs text-slate-400">—</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            {{ status_badge('active' if code.is_active else 'inactive', 'sm') }}
+                        </td>
+                        <td>
+                            <div class="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <a href="/finance/tax/codes/{{ code.tax_code_id }}/edit"
+                                   class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300 transition-colors"
+                                   title="Edit tax code">
+                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                                    </svg>
+                                </a>
+                                <form method="post" action="/finance/tax/codes/{{ code.tax_code_id }}/toggle" class="inline">
+                                    <button type="submit"
+                                            class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300 transition-colors"
+                                            title="{{ 'Deactivate' if code.is_active else 'Activate' }}">
+                                        {% if code.is_active %}
+                                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+                                        </svg>
+                                        {% else %}
+                                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                        </svg>
+                                        {% endif %}
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="py-12">
+                            {{ empty_state(
+                                'No tax codes found',
+                                'Get started by creating your first tax code' if not (search or tax_type or is_active) else 'Try adjusting your search or filter criteria',
+                                'percent',
+                                'Create Tax Code' if not (search or tax_type or is_active) else none,
+                                '/tax/codes/new' if not (search or tax_type or is_active) else none
+                            ) }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {# Pagination #}
+        {{ pagination(
+            page=page | default(1),
+            total_pages=total_pages | default(1),
+            total_count=total_count | default(codes | length if codes else 0),
+            limit=limit | default(50),
+            search=search,
+            filters={"tax_type": tax_type, "jurisdiction_id": jurisdiction_id, "is_active": is_active}
+        ) }}
+    </div>
+</div>
+{% endblock %}

@@ -9,14 +9,14 @@ from uuid import uuid4
 
 import pytest
 
-from app.services.ifrs.inv.fifo_valuation import (
+from app.services.finance.inv.fifo_valuation import (
     FIFOValuationService,
     FIFOInventory,
     FIFOLayer,
     ConsumptionResult,
     NRVCalculation,
 )
-from app.models.ifrs.inv.item import CostingMethod
+from app.models.finance.inv.item import CostingMethod
 from tests.ifrs.inv.conftest import (
     MockItem,
     MockInventoryLot,

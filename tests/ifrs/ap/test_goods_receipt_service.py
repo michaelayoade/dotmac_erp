@@ -17,7 +17,7 @@ from uuid import uuid4
 
 from fastapi import HTTPException
 
-from app.services.ifrs.ap.goods_receipt import (
+from app.services.finance.ap.goods_receipt import (
     GoodsReceiptService,
     GoodsReceiptInput,
     GRLineInput,

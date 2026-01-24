@@ -1,0 +1,197 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}{% if structure %}Edit Structure{% else %}New Salary Structure{% endif %}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/payroll/structures" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Salary Structures</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">{% if structure %}Edit{% else %}New{% endif %}</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto">
+    <form action="/people/payroll/structures/new" method="post" class="card" x-data="structureForm()">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <div class="p-6 border-b border-slate-200 dark:border-slate-700">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white">
+                {% if structure %}Edit Salary Structure{% else %}Create Salary Structure{% endif %}
+            </h2>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                Define pay components, formulas, and calculation rules for this salary structure.
+            </p>
+        </div>
+
+        <div class="p-6 space-y-6">
+            {# Basic Information #}
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label for="structure_code" class="form-label">Code <span class="text-red-500">*</span></label>
+                    <input type="text" name="structure_code" id="structure_code" required
+                        value="{{ structure.structure_code if structure else '' }}"
+                        placeholder="STRUCT-001"
+                        class="form-input w-full font-mono uppercase">
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Unique identifier</p>
+                </div>
+                <div>
+                    <label for="payroll_frequency" class="form-label">Payroll Frequency <span class="text-red-500">*</span></label>
+                    <select name="payroll_frequency" id="payroll_frequency" required class="form-select w-full">
+                        {% for f in frequencies %}
+                        <option value="{{ f }}" {% if structure and structure.payroll_frequency.value == f %}selected{% endif %}>{{ f | title }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div>
+                <label for="structure_name" class="form-label">Name <span class="text-red-500">*</span></label>
+                <input type="text" name="structure_name" id="structure_name" required
+                    value="{{ structure.structure_name if structure else '' }}"
+                    placeholder="Standard Monthly Salary"
+                    class="form-input w-full">
+            </div>
+
+            <div>
+                <label for="description" class="form-label">Description</label>
+                <textarea name="description" id="description" rows="2" class="form-input w-full"
+                    placeholder="Optional description...">{{ structure.description if structure else '' }}</textarea>
+            </div>
+
+            {# Earnings Section #}
+            <div class="p-4 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-sm font-medium text-emerald-900 dark:text-emerald-100 flex items-center gap-2">
+                        <svg class="h-4 w-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                        </svg>
+                        Earnings Components
+                    </h3>
+                    <button type="button" @click="addEarning()" class="text-xs font-medium text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300">
+                        + Add Earning
+                    </button>
+                </div>
+
+                <div class="space-y-3">
+                    <template x-for="(earning, index) in earnings" :key="index">
+                        <div class="flex items-center gap-3 p-3 bg-white dark:bg-slate-800 rounded-lg border border-emerald-100 dark:border-emerald-800">
+                            <select x-model="earning.component_id" name="earning_component[]" required class="form-select flex-1 text-sm">
+                                <option value="">Select component...</option>
+                                {% for comp in components %}
+                                {% if comp.component_type.value == 'EARNING' %}
+                                <option value="{{ comp.component_id }}">{{ comp.component_name }}</option>
+                                {% endif %}
+                                {% endfor %}
+                            </select>
+                            <input type="text" x-model="earning.formula" name="earning_formula[]"
+                                placeholder="Formula or amount"
+                                class="form-input w-40 text-sm font-mono">
+                            <button type="button" @click="removeEarning(index)" class="p-1.5 text-slate-400 hover:text-red-500 transition-colors">
+                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </template>
+                </div>
+
+                <p class="mt-3 text-xs text-emerald-700 dark:text-emerald-400">
+                    Use formulas like <code class="bg-emerald-100 dark:bg-emerald-900 px-1 rounded">base * 0.25</code> or fixed amounts like <code class="bg-emerald-100 dark:bg-emerald-900 px-1 rounded">5000</code>
+                </p>
+            </div>
+
+            {# Deductions Section #}
+            <div class="p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-sm font-medium text-red-900 dark:text-red-100 flex items-center gap-2">
+                        <svg class="h-4 w-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/>
+                        </svg>
+                        Deduction Components
+                    </h3>
+                    <button type="button" @click="addDeduction()" class="text-xs font-medium text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300">
+                        + Add Deduction
+                    </button>
+                </div>
+
+                <div class="space-y-3">
+                    <template x-for="(deduction, index) in deductions" :key="index">
+                        <div class="flex items-center gap-3 p-3 bg-white dark:bg-slate-800 rounded-lg border border-red-100 dark:border-red-800">
+                            <select x-model="deduction.component_id" name="deduction_component[]" required class="form-select flex-1 text-sm">
+                                <option value="">Select component...</option>
+                                {% for comp in components %}
+                                {% if comp.component_type.value == 'DEDUCTION' %}
+                                <option value="{{ comp.component_id }}">{{ comp.component_name }}</option>
+                                {% endif %}
+                                {% endfor %}
+                            </select>
+                            <input type="text" x-model="deduction.formula" name="deduction_formula[]"
+                                placeholder="Formula or amount"
+                                class="form-input w-40 text-sm font-mono">
+                            <button type="button" @click="removeDeduction(index)" class="p-1.5 text-slate-400 hover:text-red-500 transition-colors">
+                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </template>
+                </div>
+
+                <p class="mt-3 text-xs text-red-700 dark:text-red-400">
+                    Common deductions: PAYE, Pension, Insurance. Use <code class="bg-red-100 dark:bg-red-900 px-1 rounded">gross * 0.05</code> for percentage-based.
+                </p>
+            </div>
+
+            {# Settings #}
+            <div class="space-y-3">
+                <label class="flex items-center gap-3">
+                    <input type="checkbox" name="is_active" value="true"
+                        {% if (not structure) or (structure and structure.is_active) %}checked{% endif %}
+                        class="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500">
+                    <span class="text-sm text-slate-700 dark:text-slate-300">Active</span>
+                    <span class="text-xs text-slate-500 dark:text-slate-400">Can be assigned to employees</span>
+                </label>
+            </div>
+        </div>
+
+        <div class="px-6 py-4 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-700 flex items-center justify-end gap-3">
+            <a href="/people/payroll/structures" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">
+                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                </svg>
+                {% if structure %}Update{% else %}Create{% endif %} Structure
+            </button>
+        </div>
+    </form>
+</div>
+
+<script>
+function structureForm() {
+    return {
+        earnings: [{ component_id: '', formula: '' }],
+        deductions: [],
+
+        addEarning() {
+            this.earnings.push({ component_id: '', formula: '' });
+        },
+
+        removeEarning(index) {
+            if (this.earnings.length > 1) {
+                this.earnings.splice(index, 1);
+            }
+        },
+
+        addDeduction() {
+            this.deductions.push({ component_id: '', formula: '' });
+        },
+
+        removeDeduction(index) {
+            this.deductions.splice(index, 1);
+        }
+    };
+}
+</script>
+{% endblock %}

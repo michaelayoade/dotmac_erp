@@ -6,6 +6,7 @@ Create Date: 2025-02-12
 """
 
 from alembic import op
+from app.alembic_utils import ensure_enum
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
@@ -24,16 +25,8 @@ def _has_column(inspector, table_name: str, column_name: str, schema: str) -> bo
 
 
 def _ensure_reset_frequency_type() -> None:
-    op.execute(
-        """
-        DO $$
-        BEGIN
-            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'reset_frequency') THEN
-                CREATE TYPE reset_frequency AS ENUM ('NEVER', 'YEARLY', 'MONTHLY');
-            END IF;
-        END$$;
-        """
-    )
+    bind = op.get_bind()
+    ensure_enum(bind, "reset_frequency", "NEVER", "YEARLY", "MONTHLY")
 
 
 def upgrade() -> None:

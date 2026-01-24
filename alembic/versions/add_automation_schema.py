@@ -6,6 +6,7 @@ Create Date: 2025-02-04
 """
 
 from alembic import op
+from app.alembic_utils import ensure_enum
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.dialects.postgresql import UUID, JSONB
@@ -25,132 +26,124 @@ def upgrade() -> None:
     op.execute("CREATE SCHEMA IF NOT EXISTS automation")
 
     # Create enums
-    op.execute("""
-        DO $$
-        BEGIN
-            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'recurring_entity_type') THEN
-                CREATE TYPE recurring_entity_type AS ENUM (
-                    'INVOICE', 'BILL', 'EXPENSE', 'JOURNAL'
-                );
-            END IF;
-        END$$;
-    """)
-
-    op.execute("""
-        DO $$
-        BEGIN
-            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'recurring_frequency') THEN
-                CREATE TYPE recurring_frequency AS ENUM (
-                    'DAILY', 'WEEKLY', 'BIWEEKLY', 'MONTHLY', 'QUARTERLY', 'SEMI_ANNUALLY', 'ANNUALLY'
-                );
-            END IF;
-        END$$;
-    """)
-
-    op.execute("""
-        DO $$
-        BEGIN
-            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'recurring_status') THEN
-                CREATE TYPE recurring_status AS ENUM (
-                    'ACTIVE', 'PAUSED', 'COMPLETED', 'EXPIRED', 'CANCELLED'
-                );
-            END IF;
-        END$$;
-    """)
-
-    op.execute("""
-        DO $$
-        BEGIN
-            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'recurring_log_status') THEN
-                CREATE TYPE recurring_log_status AS ENUM (
-                    'SUCCESS', 'FAILED', 'SKIPPED'
-                );
-            END IF;
-        END$$;
-    """)
-
-    op.execute("""
-        DO $$
-        BEGIN
-            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'workflow_entity_type') THEN
-                CREATE TYPE workflow_entity_type AS ENUM (
-                    'INVOICE', 'BILL', 'EXPENSE', 'JOURNAL', 'PAYMENT', 'CUSTOMER', 'SUPPLIER',
-                    'QUOTE', 'SALES_ORDER', 'PURCHASE_ORDER', 'BANK_TRANSACTION', 'RECONCILIATION'
-                );
-            END IF;
-        END$$;
-    """)
-
-    op.execute("""
-        DO $$
-        BEGIN
-            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'workflow_trigger_event') THEN
-                CREATE TYPE workflow_trigger_event AS ENUM (
-                    'ON_CREATE', 'ON_UPDATE', 'ON_DELETE', 'ON_STATUS_CHANGE', 'ON_FIELD_CHANGE',
-                    'ON_APPROVAL', 'ON_REJECTION', 'ON_DUE_DATE', 'ON_OVERDUE', 'ON_THRESHOLD'
-                );
-            END IF;
-        END$$;
-    """)
-
-    op.execute("""
-        DO $$
-        BEGIN
-            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'workflow_action_type') THEN
-                CREATE TYPE workflow_action_type AS ENUM (
-                    'SEND_EMAIL', 'SEND_NOTIFICATION', 'VALIDATE', 'UPDATE_FIELD', 'CREATE_TASK', 'WEBHOOK', 'BLOCK'
-                );
-            END IF;
-        END$$;
-    """)
-
-    op.execute("""
-        DO $$
-        BEGIN
-            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'workflow_execution_status') THEN
-                CREATE TYPE workflow_execution_status AS ENUM (
-                    'PENDING', 'RUNNING', 'SUCCESS', 'FAILED', 'SKIPPED', 'BLOCKED'
-                );
-            END IF;
-        END$$;
-    """)
-
-    op.execute("""
-        DO $$
-        BEGIN
-            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'custom_field_entity_type') THEN
-                CREATE TYPE custom_field_entity_type AS ENUM (
-                    'CUSTOMER', 'SUPPLIER', 'INVOICE', 'BILL', 'EXPENSE', 'QUOTE',
-                    'SALES_ORDER', 'PURCHASE_ORDER', 'ITEM', 'PROJECT', 'ASSET', 'JOURNAL', 'PAYMENT'
-                );
-            END IF;
-        END$$;
-    """)
-
-    op.execute("""
-        DO $$
-        BEGIN
-            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'custom_field_type') THEN
-                CREATE TYPE custom_field_type AS ENUM (
-                    'TEXT', 'TEXTAREA', 'NUMBER', 'DECIMAL', 'DATE', 'DATETIME',
-                    'BOOLEAN', 'SELECT', 'MULTISELECT', 'EMAIL', 'URL', 'PHONE', 'CURRENCY'
-                );
-            END IF;
-        END$$;
-    """)
-
-    op.execute("""
-        DO $$
-        BEGIN
-            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'document_template_type') THEN
-                CREATE TYPE document_template_type AS ENUM (
-                    'INVOICE', 'CREDIT_NOTE', 'QUOTE', 'SALES_ORDER', 'PURCHASE_ORDER', 'BILL',
-                    'RECEIPT', 'STATEMENT', 'PAYMENT_RECEIPT',
-                    'EMAIL_INVOICE', 'EMAIL_QUOTE', 'EMAIL_REMINDER', 'EMAIL_OVERDUE', 'EMAIL_PAYMENT', 'EMAIL_NOTIFICATION'
-                );
-            END IF;
-        END$$;
-    """)
+    ensure_enum(bind, "recurring_entity_type", "INVOICE", "BILL", "EXPENSE", "JOURNAL")
+    ensure_enum(
+        bind,
+        "recurring_frequency",
+        "DAILY",
+        "WEEKLY",
+        "BIWEEKLY",
+        "MONTHLY",
+        "QUARTERLY",
+        "SEMI_ANNUALLY",
+        "ANNUALLY",
+    )
+    ensure_enum(bind, "recurring_status", "ACTIVE", "PAUSED", "COMPLETED", "EXPIRED", "CANCELLED")
+    ensure_enum(bind, "recurring_log_status", "SUCCESS", "FAILED", "SKIPPED")
+    ensure_enum(
+        bind,
+        "workflow_entity_type",
+        "INVOICE",
+        "BILL",
+        "EXPENSE",
+        "JOURNAL",
+        "PAYMENT",
+        "CUSTOMER",
+        "SUPPLIER",
+        "QUOTE",
+        "SALES_ORDER",
+        "PURCHASE_ORDER",
+        "BANK_TRANSACTION",
+        "RECONCILIATION",
+    )
+    ensure_enum(
+        bind,
+        "workflow_trigger_event",
+        "ON_CREATE",
+        "ON_UPDATE",
+        "ON_DELETE",
+        "ON_STATUS_CHANGE",
+        "ON_FIELD_CHANGE",
+        "ON_APPROVAL",
+        "ON_REJECTION",
+        "ON_DUE_DATE",
+        "ON_OVERDUE",
+        "ON_THRESHOLD",
+    )
+    ensure_enum(
+        bind,
+        "workflow_action_type",
+        "SEND_EMAIL",
+        "SEND_NOTIFICATION",
+        "VALIDATE",
+        "UPDATE_FIELD",
+        "CREATE_TASK",
+        "WEBHOOK",
+        "BLOCK",
+    )
+    ensure_enum(
+        bind,
+        "workflow_execution_status",
+        "PENDING",
+        "RUNNING",
+        "SUCCESS",
+        "FAILED",
+        "SKIPPED",
+        "BLOCKED",
+    )
+    ensure_enum(
+        bind,
+        "custom_field_entity_type",
+        "CUSTOMER",
+        "SUPPLIER",
+        "INVOICE",
+        "BILL",
+        "EXPENSE",
+        "QUOTE",
+        "SALES_ORDER",
+        "PURCHASE_ORDER",
+        "ITEM",
+        "PROJECT",
+        "ASSET",
+        "JOURNAL",
+        "PAYMENT",
+    )
+    ensure_enum(
+        bind,
+        "custom_field_type",
+        "TEXT",
+        "TEXTAREA",
+        "NUMBER",
+        "DECIMAL",
+        "DATE",
+        "DATETIME",
+        "BOOLEAN",
+        "SELECT",
+        "MULTISELECT",
+        "EMAIL",
+        "URL",
+        "PHONE",
+        "CURRENCY",
+    )
+    ensure_enum(
+        bind,
+        "document_template_type",
+        "INVOICE",
+        "CREDIT_NOTE",
+        "QUOTE",
+        "SALES_ORDER",
+        "PURCHASE_ORDER",
+        "BILL",
+        "RECEIPT",
+        "STATEMENT",
+        "PAYMENT_RECEIPT",
+        "EMAIL_INVOICE",
+        "EMAIL_QUOTE",
+        "EMAIL_REMINDER",
+        "EMAIL_OVERDUE",
+        "EMAIL_PAYMENT",
+        "EMAIL_NOTIFICATION",
+    )
 
     # Create recurring_template table
     if not inspector.has_table("recurring_template", schema="automation"):

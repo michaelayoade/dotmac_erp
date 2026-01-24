@@ -1,0 +1,208 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}{% if leave_type %}Edit Leave Type{% else %}New Leave Type{% endif %}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a>
+    <span class="mx-2">/</span>
+    <a href="/people/leave" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Leave</a>
+    <span class="mx-2">/</span>
+    <a href="/people/leave/types" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Types</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">{% if leave_type %}Edit{% else %}New{% endif %}</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-6">
+    {% if error %}
+    <div class="p-4 rounded-lg bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-800">
+        <div class="flex items-center gap-2 text-red-700 dark:text-red-400">
+            <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span>{{ error }}</span>
+        </div>
+    </div>
+    {% endif %}
+
+    <form method="post" class="space-y-6">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+        <!-- Basic Information -->
+        <div class="card">
+            <div class="card-header border-b border-slate-200 dark:border-slate-700 p-4">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Basic Information</h2>
+                <p class="text-sm text-slate-500 dark:text-slate-400">Define the leave type code and name.</p>
+            </div>
+            <div class="card-body p-4 space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="leave_type_code" class="form-label">Leave Type Code <span class="text-rose-500">*</span></label>
+                        <input type="text" name="leave_type_code" id="leave_type_code"
+                            value="{{ form_data.leave_type_code if form_data else (leave_type.leave_type_code if leave_type else '') }}"
+                            class="form-input w-full {% if errors and errors.leave_type_code %}border-red-500{% endif %}"
+                            placeholder="e.g., AL, SL, ML"
+                            {% if leave_type %}readonly{% endif %}
+                            required>
+                        {% if errors and errors.leave_type_code %}
+                        <p class="text-sm text-red-500 mt-1">{{ errors.leave_type_code }}</p>
+                        {% endif %}
+                        <p class="form-hint mt-1 text-sm text-slate-500">Unique short code for this leave type</p>
+                    </div>
+                    <div>
+                        <label for="leave_type_name" class="form-label">Leave Type Name <span class="text-rose-500">*</span></label>
+                        <input type="text" name="leave_type_name" id="leave_type_name"
+                            value="{{ form_data.leave_type_name if form_data else (leave_type.leave_type_name if leave_type else '') }}"
+                            class="form-input w-full {% if errors and errors.leave_type_name %}border-red-500{% endif %}"
+                            placeholder="e.g., Annual Leave, Sick Leave"
+                            required>
+                        {% if errors and errors.leave_type_name %}
+                        <p class="text-sm text-red-500 mt-1">{{ errors.leave_type_name }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+                <div>
+                    <label for="description" class="form-label">Description</label>
+                    <textarea name="description" id="description" rows="3"
+                        class="form-input w-full"
+                        placeholder="Optional description of leave policy">{{ form_data.description if form_data else (leave_type.description if leave_type else '') }}</textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- Leave Policy -->
+        <div class="card">
+            <div class="card-header border-b border-slate-200 dark:border-slate-700 p-4">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Leave Policy</h2>
+                <p class="text-sm text-slate-500 dark:text-slate-400">Configure leave limits and rules.</p>
+            </div>
+            <div class="card-body p-4 space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="max_days_per_year" class="form-label">Maximum Days Per Year</label>
+                        <input type="number" name="max_days_per_year" id="max_days_per_year"
+                            value="{{ form_data.max_days_per_year if form_data else (leave_type.max_days_per_year if leave_type and leave_type.max_days_per_year else '') }}"
+                            class="form-input w-full"
+                            step="0.5" min="0"
+                            placeholder="Leave blank for unlimited">
+                        <p class="form-hint mt-1 text-sm text-slate-500">Maximum days per year</p>
+                    </div>
+                    <div>
+                        <label for="max_continuous_days" class="form-label">Maximum Continuous Days</label>
+                        <input type="number" name="max_continuous_days" id="max_continuous_days"
+                            value="{{ form_data.max_continuous_days if form_data else (leave_type.max_continuous_days if leave_type and leave_type.max_continuous_days else '') }}"
+                            class="form-input w-full"
+                            min="1"
+                            placeholder="Leave blank for no limit">
+                        <p class="form-hint mt-1 text-sm text-slate-500">Max consecutive days per application</p>
+                    </div>
+                </div>
+
+                <!-- Leave Type Flags -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4">
+                    <label class="flex items-center gap-3 cursor-pointer">
+                        <input type="checkbox" name="is_lwp" value="true"
+                            class="rounded border-slate-300 text-violet-600 focus:ring-violet-500"
+                            {% if (form_data and form_data.is_lwp) or (leave_type and leave_type.is_lwp) %}checked{% endif %}>
+                        <span class="text-sm text-slate-700 dark:text-slate-300">Leave Without Pay (LWP)</span>
+                    </label>
+                    <label class="flex items-center gap-3 cursor-pointer">
+                        <input type="checkbox" name="is_compensatory" value="true"
+                            class="rounded border-slate-300 text-violet-600 focus:ring-violet-500"
+                            {% if (form_data and form_data.is_compensatory) or (leave_type and leave_type.is_compensatory) %}checked{% endif %}>
+                        <span class="text-sm text-slate-700 dark:text-slate-300">Compensatory Leave</span>
+                    </label>
+                    <label class="flex items-center gap-3 cursor-pointer">
+                        <input type="checkbox" name="is_optional" value="true"
+                            class="rounded border-slate-300 text-violet-600 focus:ring-violet-500"
+                            {% if (form_data and form_data.is_optional) or (leave_type and leave_type.is_optional) %}checked{% endif %}>
+                        <span class="text-sm text-slate-700 dark:text-slate-300">Optional Holiday</span>
+                    </label>
+                    <label class="flex items-center gap-3 cursor-pointer">
+                        <input type="checkbox" name="include_holidays" value="true"
+                            class="rounded border-slate-300 text-violet-600 focus:ring-violet-500"
+                            {% if (form_data and form_data.include_holidays) or (leave_type and leave_type.include_holidays) %}checked{% endif %}>
+                        <span class="text-sm text-slate-700 dark:text-slate-300">Include Holidays in Count</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <!-- Carry Forward & Encashment -->
+        <div class="card">
+            <div class="card-header border-b border-slate-200 dark:border-slate-700 p-4">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Carry Forward & Encashment</h2>
+                <p class="text-sm text-slate-500 dark:text-slate-400">Configure how unused leave is handled.</p>
+            </div>
+            <div class="card-body p-4 space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- Carry Forward -->
+                    <div class="space-y-3" x-data="{ enabled: {{ 'true' if (leave_type and leave_type.allow_carry_forward) or (form_data and form_data.allow_carry_forward) else 'false' }} }">
+                        <label class="flex items-center gap-3 cursor-pointer">
+                            <input type="checkbox" name="allow_carry_forward" value="true"
+                                class="rounded border-slate-300 text-violet-600 focus:ring-violet-500"
+                                x-model="enabled"
+                                {% if (form_data and form_data.allow_carry_forward) or (leave_type and leave_type.allow_carry_forward) %}checked{% endif %}>
+                            <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Allow Carry Forward</span>
+                        </label>
+                        <div x-show="enabled" x-transition class="pl-6">
+                            <label for="max_carry_forward_days" class="form-label">Max Carry Forward Days</label>
+                            <input type="number" name="max_carry_forward_days" id="max_carry_forward_days"
+                                value="{{ form_data.max_carry_forward_days if form_data else (leave_type.max_carry_forward_days if leave_type and leave_type.max_carry_forward_days else '') }}"
+                                class="form-input w-full"
+                                step="0.5" min="0"
+                                placeholder="Leave blank for unlimited">
+                        </div>
+                    </div>
+
+                    <!-- Encashment -->
+                    <div class="space-y-3" x-data="{ enabled: {{ 'true' if (leave_type and leave_type.allow_encashment) or (form_data and form_data.allow_encashment) else 'false' }} }">
+                        <label class="flex items-center gap-3 cursor-pointer">
+                            <input type="checkbox" name="allow_encashment" value="true"
+                                class="rounded border-slate-300 text-violet-600 focus:ring-violet-500"
+                                x-model="enabled"
+                                {% if (form_data and form_data.allow_encashment) or (leave_type and leave_type.allow_encashment) %}checked{% endif %}>
+                            <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Allow Encashment</span>
+                        </label>
+                        <div x-show="enabled" x-transition class="pl-6">
+                            <label for="encashment_threshold_days" class="form-label">Encashment Threshold Days</label>
+                            <input type="number" name="encashment_threshold_days" id="encashment_threshold_days"
+                                value="{{ form_data.encashment_threshold_days if form_data else (leave_type.encashment_threshold_days if leave_type and leave_type.encashment_threshold_days else '') }}"
+                                class="form-input w-full"
+                                step="0.5" min="0"
+                                placeholder="Minimum balance required for encashment">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Status -->
+        <div class="card">
+            <div class="card-body p-4">
+                <label class="flex items-center gap-3 cursor-pointer">
+                    <input type="checkbox" name="is_active" value="true"
+                        class="rounded border-slate-300 text-violet-600 focus:ring-violet-500"
+                        {% if not leave_type or leave_type.is_active %}checked{% endif %}>
+                    <div>
+                        <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Active</span>
+                        <p class="text-sm text-slate-500">Inactive leave types cannot be used for new allocations</p>
+                    </div>
+                </label>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex items-center justify-end gap-3">
+            <a href="/people/leave/types" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">
+                {% if leave_type %}Update Leave Type{% else %}Create Leave Type{% endif %}
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

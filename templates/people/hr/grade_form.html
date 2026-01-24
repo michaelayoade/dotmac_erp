@@ -1,0 +1,113 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}{% if grade %}Edit Employee Grade{% else %}New Employee Grade{% endif %}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr/grades" class="hover:text-teal-600 dark:hover:text-teal-400">Grades</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white">{% if grade %}{{ grade.grade_code }}{% else %}New{% endif %}</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-xl">
+    {# Error alert #}
+    {% if error %}
+    <div class="mb-6 p-4 rounded-lg bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-800">
+        <div class="flex items-center gap-2 text-red-700 dark:text-red-400">
+            <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span>{{ error }}</span>
+        </div>
+    </div>
+    {% endif %}
+
+    <form method="post" action="/people/hr/grades/{% if grade %}{{ grade.grade_id }}/edit{% else %}new{% endif %}" class="space-y-6">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Grade Details</h3>
+            </div>
+            <div class="card-body space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="grade_code" class="form-label required">Grade Code</label>
+                        <input type="text" name="grade_code" id="grade_code"
+                            value="{{ grade.grade_code if grade else '' }}"
+                            required
+                            class="form-input w-full {% if errors.grade_code %}border-red-500{% endif %}">
+                        {% if errors.grade_code %}
+                        <p class="text-sm text-red-500 mt-1">{{ errors.grade_code }}</p>
+                        {% endif %}
+                    </div>
+                    <div>
+                        <label for="grade_name" class="form-label required">Grade Name</label>
+                        <input type="text" name="grade_name" id="grade_name"
+                            value="{{ grade.grade_name if grade else '' }}"
+                            required
+                            class="form-input w-full {% if errors.grade_name %}border-red-500{% endif %}">
+                        {% if errors.grade_name %}
+                        <p class="text-sm text-red-500 mt-1">{{ errors.grade_name }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div>
+                    <label for="description" class="form-label">Description</label>
+                    <textarea name="description" id="description" rows="3"
+                        class="form-input w-full">{{ grade.description if grade else '' }}</textarea>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label for="rank" class="form-label">Rank</label>
+                        <input type="number" name="rank" id="rank"
+                            value="{{ grade.rank if grade else 0 }}"
+                            class="form-input w-full {% if errors.rank %}border-red-500{% endif %}">
+                        {% if errors.rank %}
+                        <p class="text-sm text-red-500 mt-1">{{ errors.rank }}</p>
+                        {% endif %}
+                    </div>
+                    <div>
+                        <label for="min_salary" class="form-label">Min Salary</label>
+                        <input type="number" step="0.01" name="min_salary" id="min_salary"
+                            value="{{ grade.min_salary if grade and grade.min_salary is not none else '' }}"
+                            class="form-input w-full {% if errors.min_salary %}border-red-500{% endif %}">
+                        {% if errors.min_salary %}
+                        <p class="text-sm text-red-500 mt-1">{{ errors.min_salary }}</p>
+                        {% endif %}
+                    </div>
+                    <div>
+                        <label for="max_salary" class="form-label">Max Salary</label>
+                        <input type="number" step="0.01" name="max_salary" id="max_salary"
+                            value="{{ grade.max_salary if grade and grade.max_salary is not none else '' }}"
+                            class="form-input w-full {% if errors.max_salary %}border-red-500{% endif %}">
+                        {% if errors.max_salary %}
+                        <p class="text-sm text-red-500 mt-1">{{ errors.max_salary }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="flex items-center">
+                    <input type="checkbox" name="is_active" id="is_active" value="true"
+                        {{ 'checked' if not grade or grade.is_active }}
+                        class="rounded border-slate-300 text-teal-600 focus:ring-teal-500">
+                    <label for="is_active" class="ml-2 text-sm text-slate-700 dark:text-slate-300">Active</label>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex justify-end gap-3">
+            <a href="/people/hr/grades" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">
+                {% if grade %}Update{% else %}Create{% endif %} Grade
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

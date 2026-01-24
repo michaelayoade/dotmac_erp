@@ -1,0 +1,250 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}{% if opening %}Edit Job Opening{% else %}New Job Opening{% endif %}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a>
+    <span class="mx-2">/</span>
+    <a href="/people/recruit/jobs" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Job Openings</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">{% if opening %}{{ opening.job_code }}{% else %}New{% endif %}</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl">
+    {% if error %}
+    <div class="mb-6 p-4 rounded-lg bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-800">
+        <div class="flex items-center gap-2 text-red-700 dark:text-red-400">
+            <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span>{{ error }}</span>
+        </div>
+    </div>
+    {% endif %}
+
+    <form method="post" action="/people/recruit/jobs/{% if opening %}{{ opening.job_opening_id }}/edit{% else %}new{% endif %}" class="space-y-6">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+        {# Basic Information #}
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Basic Information</h3>
+            </div>
+            <div class="card-body space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="job_code" class="form-label required">Job Code</label>
+                        <input type="text" name="job_code" id="job_code"
+                            value="{{ opening.job_code if opening else form_data.job_code | default('', true) }}"
+                            required class="form-input w-full"
+                            placeholder="JOB-001">
+                    </div>
+                    <div>
+                        <label for="job_title" class="form-label required">Job Title</label>
+                        <input type="text" name="job_title" id="job_title"
+                            value="{{ opening.job_title if opening else form_data.job_title | default('', true) }}"
+                            required class="form-input w-full"
+                            placeholder="Software Engineer">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="department_id" class="form-label">Department</label>
+                        <select name="department_id" id="department_id" class="form-input w-full">
+                            <option value="">Select Department</option>
+                            {% for dept in departments %}
+                            <option value="{{ dept.department_id }}"
+                                {{ 'selected' if (opening and opening.department_id == dept.department_id) or (form_data and form_data.department_id == dept.department_id | string) }}>
+                                {{ dept.department_name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label for="designation_id" class="form-label">Designation</label>
+                        <select name="designation_id" id="designation_id" class="form-input w-full">
+                            <option value="">Select Designation</option>
+                            {% for desig in designations %}
+                            <option value="{{ desig.designation_id }}"
+                                {{ 'selected' if (opening and opening.designation_id == desig.designation_id) or (form_data and form_data.designation_id == desig.designation_id | string) }}>
+                                {{ desig.designation_name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="employment_type" class="form-label required">Employment Type</label>
+                        <select name="employment_type" id="employment_type" required class="form-input w-full">
+                            {% set current_type = opening.employment_type if opening else form_data.employment_type | default('FULL_TIME', true) %}
+                            <option value="FULL_TIME" {{ 'selected' if current_type == 'FULL_TIME' }}>Full Time</option>
+                            <option value="PART_TIME" {{ 'selected' if current_type == 'PART_TIME' }}>Part Time</option>
+                            <option value="CONTRACT" {{ 'selected' if current_type == 'CONTRACT' }}>Contract</option>
+                            <option value="INTERN" {{ 'selected' if current_type == 'INTERN' }}>Intern</option>
+                            <option value="TEMPORARY" {{ 'selected' if current_type == 'TEMPORARY' }}>Temporary</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="number_of_positions" class="form-label required">Number of Positions</label>
+                        <input type="number" name="number_of_positions" id="number_of_positions" min="1"
+                            value="{{ opening.number_of_positions if opening else form_data.number_of_positions | default('1', true) }}"
+                            required class="form-input w-full">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="location" class="form-label">Location</label>
+                        <input type="text" name="location" id="location"
+                            value="{{ opening.location if opening else form_data.location | default('', true) }}"
+                            class="form-input w-full"
+                            placeholder="Lagos, Nigeria">
+                    </div>
+                    <div class="flex items-center pt-6">
+                        <label class="inline-flex items-center gap-2">
+                            <input type="checkbox" name="is_remote" value="true"
+                                {{ 'checked' if (opening and opening.is_remote) or (form_data and form_data.is_remote) }}
+                                class="rounded border-slate-300 text-teal-600 focus:ring-teal-500">
+                            <span class="text-sm text-slate-700 dark:text-slate-300">Remote position</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div>
+                    <label for="reports_to_id" class="form-label">Reports To</label>
+                    <select name="reports_to_id" id="reports_to_id" class="form-input w-full">
+                        <option value="">Select Manager</option>
+                        {% for mgr in managers %}
+                        <option value="{{ mgr.employee_id }}"
+                            {{ 'selected' if (opening and opening.reports_to_id == mgr.employee_id) or (form_data and form_data.reports_to_id == mgr.employee_id | string) }}>
+                            {{ mgr.employee_code }} - {{ mgr.full_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        {# Compensation #}
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Compensation</h3>
+            </div>
+            <div class="card-body space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label for="currency_code" class="form-label">Currency</label>
+                        <select name="currency_code" id="currency_code" class="form-input w-full">
+                            {% set current_currency = opening.currency_code if opening else form_data.currency_code | default('NGN', true) %}
+                            <option value="NGN" {{ 'selected' if current_currency == 'NGN' }}>NGN</option>
+                            <option value="USD" {{ 'selected' if current_currency == 'USD' }}>USD</option>
+                            <option value="GBP" {{ 'selected' if current_currency == 'GBP' }}>GBP</option>
+                            <option value="EUR" {{ 'selected' if current_currency == 'EUR' }}>EUR</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="min_salary" class="form-label">Min Salary</label>
+                        <input type="number" name="min_salary" id="min_salary" step="0.01" min="0"
+                            value="{{ opening.min_salary if opening else form_data.min_salary | default('', true) }}"
+                            class="form-input w-full"
+                            placeholder="0.00">
+                    </div>
+                    <div>
+                        <label for="max_salary" class="form-label">Max Salary</label>
+                        <input type="number" name="max_salary" id="max_salary" step="0.01" min="0"
+                            value="{{ opening.max_salary if opening else form_data.max_salary | default('', true) }}"
+                            class="form-input w-full"
+                            placeholder="0.00">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {# Timeline #}
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Timeline</h3>
+            </div>
+            <div class="card-body space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="posted_on" class="form-label">Posted On</label>
+                        <input type="date" name="posted_on" id="posted_on"
+                            value="{{ opening.posted_on.isoformat() if opening and opening.posted_on else form_data.posted_on | default('', true) }}"
+                            class="form-input w-full">
+                        <p class="text-xs text-slate-500 mt-1">Leave blank to set when publishing</p>
+                    </div>
+                    <div>
+                        <label for="closes_on" class="form-label">Closes On</label>
+                        <input type="date" name="closes_on" id="closes_on"
+                            value="{{ opening.closes_on.isoformat() if opening and opening.closes_on else form_data.closes_on | default('', true) }}"
+                            class="form-input w-full">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {# Requirements #}
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Requirements</h3>
+            </div>
+            <div class="card-body space-y-4">
+                <div>
+                    <label for="min_experience_years" class="form-label">Minimum Experience (years)</label>
+                    <input type="number" name="min_experience_years" id="min_experience_years" min="0"
+                        value="{{ opening.min_experience_years if opening else form_data.min_experience_years | default('', true) }}"
+                        class="form-input w-full md:w-32">
+                </div>
+
+                <div>
+                    <label for="required_skills" class="form-label">Required Skills</label>
+                    <textarea name="required_skills" id="required_skills" rows="3" class="form-input w-full"
+                        placeholder="List required skills, one per line">{{ opening.required_skills if opening else form_data.required_skills | default('', true) }}</textarea>
+                </div>
+
+                <div>
+                    <label for="preferred_skills" class="form-label">Preferred Skills</label>
+                    <textarea name="preferred_skills" id="preferred_skills" rows="3" class="form-input w-full"
+                        placeholder="List preferred skills, one per line">{{ opening.preferred_skills if opening else form_data.preferred_skills | default('', true) }}</textarea>
+                </div>
+
+                <div>
+                    <label for="education_requirements" class="form-label">Education Requirements</label>
+                    <textarea name="education_requirements" id="education_requirements" rows="2" class="form-input w-full"
+                        placeholder="Required educational qualifications">{{ opening.education_requirements if opening else form_data.education_requirements | default('', true) }}</textarea>
+                </div>
+            </div>
+        </div>
+
+        {# Description #}
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Job Description</h3>
+            </div>
+            <div class="card-body">
+                <textarea name="description" id="description" rows="6" class="form-input w-full"
+                    placeholder="Full job description, responsibilities, and expectations">{{ opening.description if opening else form_data.description | default('', true) }}</textarea>
+            </div>
+        </div>
+
+        {# Form Actions #}
+        <div class="flex justify-end gap-3">
+            <a href="/people/recruit/jobs{% if opening %}/{{ opening.job_opening_id }}{% endif %}" class="btn btn-secondary">
+                Cancel
+            </a>
+            <button type="submit" class="btn btn-primary">
+                {% if opening %}Update{% else %}Create{% endif %} Job Opening
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

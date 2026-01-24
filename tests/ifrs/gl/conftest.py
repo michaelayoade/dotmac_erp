@@ -15,9 +15,9 @@ import pytest
 
 # ============ Mock Enums ============
 
-from app.models.ifrs.gl.account import AccountType, NormalBalance
-from app.models.ifrs.gl.fiscal_period import PeriodStatus
-from app.models.ifrs.gl.journal_entry import JournalStatus, JournalType
+from app.models.finance.gl.account import AccountType, NormalBalance
+from app.models.finance.gl.fiscal_period import PeriodStatus
+from app.models.finance.gl.journal_entry import JournalStatus, JournalType
 
 MockAccountType = AccountType
 MockNormalBalance = NormalBalance

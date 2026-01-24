@@ -1,0 +1,125 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}{% if is_edit %}Edit Shift Type{% else %}New Shift Type{% endif %}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a>
+    <span class="mx-2">/</span>
+    <a href="/people/attendance" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Attendance</a>
+    <span class="mx-2">/</span>
+    <a href="/people/attendance/shifts" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Shift Types</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">{% if is_edit %}Edit{% else %}New{% endif %}</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl space-y-6">
+    <div>
+        <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">{% if is_edit %}Edit Shift Type{% else %}New Shift Type{% endif %}</h1>
+        <p class="text-sm text-slate-500 dark:text-slate-400">Define standard hours, grace periods, and rules.</p>
+    </div>
+
+    {% if error %}
+    <div class="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-900/40 dark:bg-rose-900/20 dark:text-rose-300">
+        {{ error }}
+    </div>
+    {% endif %}
+
+    <form method="post" action="{{ form_action | default('/people/attendance/shifts/new') }}" class="card p-6 space-y-6">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                <label class="form-label">Shift Code</label>
+                <input type="text" name="shift_code" required maxlength="30"
+                       value="{{ form_data.shift_code | default('') }}"
+                       class="form-input" placeholder="DAY-01">
+            </div>
+            <div>
+                <label class="form-label">Shift Name</label>
+                <input type="text" name="shift_name" required maxlength="100"
+                       value="{{ form_data.shift_name | default('') }}"
+                       class="form-input" placeholder="Day Shift">
+            </div>
+            <div>
+                <label class="form-label">Start Time</label>
+                <input type="time" name="start_time" required
+                       value="{{ form_data.start_time | default('09:00') }}"
+                       class="form-input">
+            </div>
+            <div>
+                <label class="form-label">End Time</label>
+                <input type="time" name="end_time" required
+                       value="{{ form_data.end_time | default('17:00') }}"
+                       class="form-input">
+            </div>
+            <div>
+                <label class="form-label">Working Hours (optional)</label>
+                <input type="number" step="0.01" min="0" name="working_hours"
+                       value="{{ form_data.working_hours | default('') }}"
+                       class="form-input" placeholder="8.00">
+            </div>
+            <div>
+                <label class="form-label">Break Duration (minutes)</label>
+                <input type="number" min="0" name="break_duration_minutes"
+                       value="{{ form_data.break_duration_minutes | default('60') }}"
+                       class="form-input">
+            </div>
+            <div>
+                <label class="form-label">Late Entry Grace (minutes)</label>
+                <input type="number" min="0" name="late_entry_grace_period"
+                       value="{{ form_data.late_entry_grace_period | default('0') }}"
+                       class="form-input">
+            </div>
+            <div>
+                <label class="form-label">Early Exit Grace (minutes)</label>
+                <input type="number" min="0" name="early_exit_grace_period"
+                       value="{{ form_data.early_exit_grace_period | default('0') }}"
+                       class="form-input">
+            </div>
+            <div>
+                <label class="form-label">Half-day Threshold (hours)</label>
+                <input type="number" step="0.01" min="0" name="half_day_threshold_hours"
+                       value="{{ form_data.half_day_threshold_hours | default('') }}"
+                       class="form-input" placeholder="4.00">
+            </div>
+            <div>
+                <label class="form-label">Overtime Threshold (hours)</label>
+                <input type="number" step="0.01" min="0" name="overtime_threshold_hours"
+                       value="{{ form_data.overtime_threshold_hours | default('') }}"
+                       class="form-input" placeholder="9.00">
+            </div>
+        </div>
+
+        <div>
+            <label class="form-label">Description</label>
+            <textarea name="description" rows="3" class="form-input" placeholder="Optional notes">{{ form_data.description | default('') }}</textarea>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                <input type="checkbox" name="enable_half_day" class="form-checkbox"
+                       {% if form_data.enable_half_day is not defined or form_data.enable_half_day %}checked{% endif %}>
+                Enable half-day
+            </label>
+            <label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                <input type="checkbox" name="enable_overtime" class="form-checkbox"
+                       {% if form_data.enable_overtime %}checked{% endif %}>
+                Enable overtime
+            </label>
+            <label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                <input type="checkbox" name="is_active" class="form-checkbox"
+                       {% if form_data.is_active is not defined or form_data.is_active %}checked{% endif %}>
+                Active
+            </label>
+        </div>
+
+        <div class="flex items-center gap-3">
+            <button type="submit" class="btn btn-primary">{% if is_edit %}Save Changes{% else %}Create Shift{% endif %}</button>
+            <a href="/people/attendance/shifts" class="btn btn-secondary">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

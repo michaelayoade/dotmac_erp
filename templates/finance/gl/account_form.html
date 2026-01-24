@@ -1,0 +1,473 @@
+{% extends "finance/base_finance.html" %}
+
+{% block page_title %}{{ "Edit Account" if account else "New Account" }}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400">
+    <a href="/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/finance/gl/accounts" class="hover:text-primary-600 dark:hover:text-primary-400">Chart of Accounts</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white">{{ "Edit" if account else "New" }}</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-6">
+    {% if error %}
+    <div class="rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20">
+        <div class="flex items-center gap-3">
+            <svg class="h-5 w-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <p class="text-sm font-medium text-red-700 dark:text-red-400">{{ error }}</p>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800/50">
+        <h2 class="text-xl font-semibold text-slate-900 dark:text-white">Account Details</h2>
+        <p class="mt-1 text-sm text-slate-500">Define account structure and controls.</p>
+        <form method="POST" action="/finance/gl/accounts/{% if account %}{{ account.id }}/edit{% else %}new{% endif %}" enctype="application/x-www-form-urlencoded" class="mt-6 space-y-6">
+            <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+            <div class="grid gap-4 sm:grid-cols-2">
+                <div>
+                    <label class="form-label">Account Code</label>
+                    <div class="relative">
+                        <input type="text" name="account_code" id="account_code" class="form-input {% if not account %}pr-20{% endif %}"
+                               value="{{ form_data.account_code if form_data else (account.account_code if account else '') }}"
+                               placeholder="Select category first"
+                               {% if account %}readonly{% endif %} required>
+                        {% if not account %}
+                        <button type="button" id="use_suggested_code"
+                                class="absolute right-2 top-1/2 -translate-y-1/2 hidden px-2 py-1 text-xs font-medium text-primary-600 hover:text-primary-700 bg-primary-50 hover:bg-primary-100 dark:bg-primary-900/30 dark:hover:bg-primary-900/50 dark:text-primary-400 rounded transition-colors"
+                                title="Use suggested code">
+                            Use
+                        </button>
+                        {% endif %}
+                    </div>
+                    <p id="code_hint" class="mt-1 text-xs text-slate-500 dark:text-slate-400 hidden"></p>
+                </div>
+                <div>
+                    <label class="form-label">Account Name</label>
+                    <input type="text" name="account_name" id="account_name" class="form-input"
+                           value="{{ form_data.account_name if form_data else (account.account_name if account else '') }}" required>
+                </div>
+                <div>
+                    <label class="form-label">Category</label>
+                    <select name="category_id" id="category_id" class="form-select form-input" required>
+                        <option value="">Select category</option>
+                        {% set selected_category = form_data.category_id if form_data else (account.category_id|string if account else '') %}
+                        {% for category in account_categories %}
+                        <option value="{{ category.category_id }}"
+                                data-ifrs-category="{{ category.ifrs_category }}"
+                                {% if selected_category == category.category_id|string %}selected{% endif %}>
+                            {{ category.category_code }} - {{ category.category_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label">Account Type</label>
+                    <select name="account_type" id="account_type" class="form-select form-input" required>
+                        <option value="">Select type</option>
+                        {% set selected_type = form_data.account_type if form_data else (account.account_type.value if account else '') %}
+                        {% for value in account_types %}
+                        <option value="{{ value }}" {% if selected_type == value %}selected{% endif %}>{{ value }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label">Normal Balance</label>
+                    <select name="normal_balance" id="normal_balance" class="form-select form-input" required>
+                        <option value="">Select balance</option>
+                        {% set selected_balance = form_data.normal_balance if form_data else (account.normal_balance.value if account else '') %}
+                        {% for value in normal_balances %}
+                        <option value="{{ value }}" {% if selected_balance == value %}selected{% endif %}>{{ value }}</option>
+                        {% endfor %}
+                    </select>
+                    <p id="balance_hint" class="mt-1 text-xs text-slate-500 dark:text-slate-400 hidden"></p>
+                </div>
+                <div class="sm:col-span-2">
+                    <label class="form-label">Description</label>
+                    <textarea name="description" class="form-input" rows="3">{{ form_data.description if form_data else (account.description if account else '') }}</textarea>
+                </div>
+                <div class="sm:col-span-2">
+                    <label class="form-label">Search Terms <span class="text-slate-400 font-normal">(auto-generated)</span></label>
+                    <input type="text" name="search_terms" id="search_terms" class="form-input"
+                           value="{{ form_data.search_terms if form_data else (account.search_terms if account else '') }}"
+                           placeholder="Auto-generated from account name" />
+                </div>
+            </div>
+
+            <!-- Account Options - Collapsible -->
+            <details class="group" {% if account %}open{% endif %}>
+                <summary class="flex cursor-pointer items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300 select-none">
+                    <svg class="h-4 w-4 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                    </svg>
+                    Account Options
+                    <span class="text-xs text-slate-400 font-normal">(smart defaults applied)</span>
+                </summary>
+                <div class="mt-4 grid gap-4 sm:grid-cols-2 pl-6">
+                    {% set fd = form_data %}
+                    <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                        <input type="checkbox" name="is_active" id="is_active" value="true" class="rounded"
+                               {% if fd %}{% if fd.is_active %}checked{% endif %}{% elif account %}{% if account.is_active %}checked{% endif %}{% else %}checked{% endif %}>
+                        Active
+                    </label>
+                    <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                        <input type="checkbox" name="is_posting_allowed" id="is_posting_allowed" value="true" class="rounded"
+                               {% if fd %}{% if fd.is_posting_allowed %}checked{% endif %}{% elif account %}{% if account.is_posting_allowed %}checked{% endif %}{% else %}checked{% endif %}>
+                        Posting Allowed
+                        <span id="posting_hint" class="text-xs text-slate-400 hidden"></span>
+                    </label>
+                    <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                        <input type="checkbox" name="is_budgetable" id="is_budgetable" value="true" class="rounded"
+                               {% if fd %}{% if fd.is_budgetable %}checked{% endif %}{% elif account and account.is_budgetable %}checked{% endif %}>
+                        Budgetable
+                    </label>
+                    <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                        <input type="checkbox" name="is_reconciliation_required" id="is_reconciliation_required" value="true" class="rounded"
+                               {% if fd %}{% if fd.is_reconciliation_required %}checked{% endif %}{% elif account and account.is_reconciliation_required %}checked{% endif %}>
+                        Reconciliation Required
+                    </label>
+                    <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                        <input type="checkbox" name="is_multi_currency" id="is_multi_currency" value="true" class="rounded"
+                               {% if fd %}{% if fd.is_multi_currency %}checked{% endif %}{% elif account and account.is_multi_currency %}checked{% endif %}>
+                        Multi-currency
+                    </label>
+                    <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                        <input type="checkbox" name="is_cash_equivalent" id="is_cash_equivalent" value="true" class="rounded"
+                               {% if fd %}{% if fd.is_cash_equivalent %}checked{% endif %}{% elif account and account.is_cash_equivalent %}checked{% endif %}>
+                        Cash Equivalent <span class="text-xs text-slate-400">(IAS 7)</span>
+                    </label>
+                    <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                        <input type="checkbox" name="is_financial_instrument" id="is_financial_instrument" value="true" class="rounded"
+                               {% if fd %}{% if fd.is_financial_instrument %}checked{% endif %}{% elif account and account.is_financial_instrument %}checked{% endif %}>
+                        Financial Instrument <span class="text-xs text-slate-400">(IFRS 9)</span>
+                    </label>
+                    <div>
+                        <label class="form-label">Default Currency</label>
+                        <input type="text" name="default_currency_code" id="default_currency_code" class="form-input"
+                               value="{{ form_data.default_currency_code if form_data else (account.default_currency_code if account else default_currency_code) }}"
+                               placeholder="{{ default_currency_code }}">
+                    </div>
+                    <div>
+                        <label class="form-label">Subledger Link <span class="text-slate-400 font-normal">(auto-detected)</span></label>
+                        <select name="subledger_type" id="subledger_type" class="form-select form-input">
+                            <option value="">None</option>
+                            {% set selected_subledger = form_data.subledger_type if form_data else (account.subledger_type if account else '') %}
+                            {% for value in subledger_types %}
+                            <option value="{{ value }}" {% if selected_subledger == value %}selected{% endif %}>{{ value }}</option>
+                            {% endfor %}
+                        </select>
+                        <p class="mt-1 text-xs text-slate-400">Links to AR, AP, Bank, Inventory, or Fixed Asset modules</p>
+                    </div>
+                </div>
+            </details>
+            <div class="flex items-center justify-between border-t border-slate-200 dark:border-slate-700 pt-6">
+                <a href="/finance/gl/accounts" class="text-sm text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">
+                    Cancel
+                </a>
+                <button type="submit"
+                        class="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-primary-600/25 hover:bg-primary-700 transition-colors">
+                    {{ "Update Account" if account else "Create Account" }}
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+(function() {
+    const isEditMode = {{ 'true' if account else 'false' }};
+
+    // Form elements
+    const els = {
+        accountCode: document.getElementById('account_code'),
+        accountName: document.getElementById('account_name'),
+        categorySelect: document.getElementById('category_id'),
+        accountTypeSelect: document.getElementById('account_type'),
+        normalBalanceSelect: document.getElementById('normal_balance'),
+        subledgerSelect: document.getElementById('subledger_type'),
+        searchTerms: document.getElementById('search_terms'),
+        // Hints
+        codeHint: document.getElementById('code_hint'),
+        useSuggestedBtn: document.getElementById('use_suggested_code'),
+        balanceHint: document.getElementById('balance_hint'),
+        postingHint: document.getElementById('posting_hint'),
+        // Checkboxes
+        isPostingAllowed: document.getElementById('is_posting_allowed'),
+        isBudgetable: document.getElementById('is_budgetable'),
+        isReconciliationRequired: document.getElementById('is_reconciliation_required'),
+        isCashEquivalent: document.getElementById('is_cash_equivalent'),
+        isFinancialInstrument: document.getElementById('is_financial_instrument'),
+    };
+
+    // Store suggested code
+    let suggestedCode = null;
+
+    // Standard accounting normal balance rules
+    const normalBalanceMap = {
+        'ASSETS': 'DEBIT',
+        'EXPENSES': 'DEBIT',
+        'LIABILITIES': 'CREDIT',
+        'EQUITY': 'CREDIT',
+        'REVENUE': 'CREDIT',
+        'OTHER_COMPREHENSIVE_INCOME': 'CREDIT'
+    };
+
+    const balanceHints = {
+        'ASSETS': 'Assets normally have a debit balance',
+        'EXPENSES': 'Expenses normally have a debit balance',
+        'LIABILITIES': 'Liabilities normally have a credit balance',
+        'EQUITY': 'Equity normally has a credit balance',
+        'REVENUE': 'Revenue normally has a credit balance',
+        'OTHER_COMPREHENSIVE_INCOME': 'OCI normally has a credit balance'
+    };
+
+    const codePrefixNames = {
+        '1': 'Assets (1xxx)',
+        '2': 'Liabilities (2xxx)',
+        '3': 'Equity (3xxx)',
+        '4': 'Revenue (4xxx)',
+        '5': 'Expenses (5xxx)',
+        '6': 'OCI (6xxx)'
+    };
+
+    // Fetch suggested account code from API
+    async function fetchSuggestedCode(categoryId) {
+        if (isEditMode || !categoryId) return;
+
+        try {
+            const response = await fetch(`/finance/gl/accounts/suggest-code/${categoryId}`);
+            const data = await response.json();
+
+            if (data.suggested_code) {
+                suggestedCode = data.suggested_code;
+                const prefixName = codePrefixNames[data.prefix] || `${data.prefix}xxx`;
+
+                // Show hint with suggestion
+                els.codeHint.innerHTML = `Suggested: <strong>${suggestedCode}</strong> (${prefixName})`;
+                els.codeHint.classList.remove('hidden');
+
+                // Show "Use" button if field is empty or has placeholder
+                if (!els.accountCode.value || !userChanged['account_code']) {
+                    els.useSuggestedBtn?.classList.remove('hidden');
+                }
+
+                // Auto-fill if empty and user hasn't typed anything
+                if (!els.accountCode.value && !userChanged['account_code']) {
+                    els.accountCode.value = suggestedCode;
+                    els.accountCode.placeholder = '';
+                }
+            }
+        } catch (err) {
+            console.error('Failed to fetch suggested code:', err);
+        }
+    }
+
+    // Use suggested code button handler
+    function useSuggestedCode() {
+        if (suggestedCode) {
+            els.accountCode.value = suggestedCode;
+            els.useSuggestedBtn?.classList.add('hidden');
+        }
+    }
+
+    // Categories that are typically budgeted
+    const budgetableCategories = ['EXPENSES', 'REVENUE'];
+
+    // Subledgers that require reconciliation
+    const reconcilableSubledgers = ['BANK', 'AR', 'AP', 'INVENTORY'];
+
+    // Subledgers that are cash equivalents (IAS 7)
+    const cashEquivalentSubledgers = ['BANK'];
+
+    // Keywords suggesting financial instruments (IFRS 9)
+    const financialInstrumentKeywords = ['investment', 'loan', 'bond', 'derivative', 'receivable', 'payable', 'debt', 'security', 'equity investment'];
+
+    // Subledger detection rules (order matters - first match wins)
+    const subledgerKeywords = {
+        'BANK': ['bank', 'cash at bank', 'cash in bank', 'checking', 'savings', 'current account', 'petty cash'],
+        'AR': ['receivable', 'trade debtor', 'customer', 'accounts receivable', 'a/r', 'debtors'],
+        'AP': ['payable', 'trade creditor', 'supplier', 'accounts payable', 'a/p', 'creditors', 'accrued'],
+        'INVENTORY': ['inventory', 'stock', 'goods', 'raw material', 'finished goods', 'work in progress', 'wip'],
+        'ASSET': ['equipment', 'vehicle', 'machinery', 'furniture', 'fixture', 'building', 'land', 'property', 'plant', 'computer', 'ppe', 'fixed asset', 'capital asset']
+    };
+
+    // Track if user manually changed fields
+    const userChanged = {};
+
+    function markUserChanged(fieldId) {
+        userChanged[fieldId] = true;
+    }
+
+    // Auto-generate search terms from account name
+    function updateSearchTerms() {
+        if (isEditMode || userChanged['search_terms']) return;
+        const name = els.accountName.value.trim();
+        if (name && !els.searchTerms.value) {
+            els.searchTerms.value = name.toLowerCase();
+        }
+    }
+
+    // Update defaults when category changes
+    function updateCategoryDefaults() {
+        const selectedOption = els.categorySelect.options[els.categorySelect.selectedIndex];
+        const ifrsCategory = selectedOption?.dataset?.ifrsCategory;
+
+        if (!ifrsCategory) {
+            els.balanceHint.classList.add('hidden');
+            return;
+        }
+
+        // Show balance hint
+        const hint = balanceHints[ifrsCategory];
+        if (hint) {
+            els.balanceHint.textContent = hint;
+            els.balanceHint.classList.remove('hidden');
+        }
+
+        if (isEditMode) return;
+
+        // Auto-select normal balance
+        if (!userChanged['normal_balance'] && els.normalBalanceSelect.value === '') {
+            const suggestedBalance = normalBalanceMap[ifrsCategory];
+            if (suggestedBalance) {
+                els.normalBalanceSelect.value = suggestedBalance;
+            }
+        }
+
+        // Auto-select account type
+        if (!userChanged['account_type'] && els.accountTypeSelect.value === '') {
+            els.accountTypeSelect.value = 'POSTING';
+        }
+
+        // Auto-set budgetable based on category
+        if (!userChanged['is_budgetable']) {
+            els.isBudgetable.checked = budgetableCategories.includes(ifrsCategory);
+        }
+    }
+
+    // Update defaults when account type changes
+    function updateAccountTypeDefaults() {
+        if (isEditMode) return;
+        const accountType = els.accountTypeSelect.value;
+
+        // CONTROL accounts don't allow direct posting
+        if (!userChanged['is_posting_allowed']) {
+            if (accountType === 'CONTROL') {
+                els.isPostingAllowed.checked = false;
+                els.postingHint.textContent = '(control accounts aggregate)';
+                els.postingHint.classList.remove('hidden');
+            } else {
+                els.isPostingAllowed.checked = true;
+                els.postingHint.classList.add('hidden');
+            }
+        }
+    }
+
+    // Update defaults when subledger changes
+    function updateSubledgerDefaults() {
+        if (isEditMode) return;
+        const subledger = els.subledgerSelect.value;
+
+        // Reconciliation required for certain subledgers
+        if (!userChanged['is_reconciliation_required']) {
+            els.isReconciliationRequired.checked = reconcilableSubledgers.includes(subledger);
+        }
+
+        // Cash equivalent for bank accounts (IAS 7)
+        if (!userChanged['is_cash_equivalent']) {
+            els.isCashEquivalent.checked = cashEquivalentSubledgers.includes(subledger);
+        }
+    }
+
+    // Check if account name suggests a financial instrument
+    function updateFinancialInstrumentDefault() {
+        if (isEditMode || userChanged['is_financial_instrument']) return;
+        const name = els.accountName.value.toLowerCase();
+        const isFinancial = financialInstrumentKeywords.some(kw => name.includes(kw));
+        els.isFinancialInstrument.checked = isFinancial;
+    }
+
+    // Auto-detect subledger from account name
+    function detectSubledger() {
+        if (isEditMode || userChanged['subledger_type']) return;
+        const name = els.accountName.value.toLowerCase();
+        const ifrsCategory = els.categorySelect.options[els.categorySelect.selectedIndex]?.dataset?.ifrsCategory;
+
+        // Only auto-detect for Assets and Liabilities categories
+        if (!['ASSETS', 'LIABILITIES'].includes(ifrsCategory)) {
+            els.subledgerSelect.value = '';
+            updateSubledgerDefaults();
+            return;
+        }
+
+        // Find matching subledger
+        let detected = '';
+        for (const [subledger, keywords] of Object.entries(subledgerKeywords)) {
+            if (keywords.some(kw => name.includes(kw))) {
+                // Additional validation: AR/BANK/INVENTORY/ASSET only for Assets, AP only for Liabilities
+                if (subledger === 'AP' && ifrsCategory !== 'LIABILITIES') continue;
+                if (['AR', 'BANK', 'INVENTORY', 'ASSET'].includes(subledger) && ifrsCategory !== 'ASSETS') continue;
+                detected = subledger;
+                break;
+            }
+        }
+
+        els.subledgerSelect.value = detected;
+        updateSubledgerDefaults();
+    }
+
+    // Event listeners
+    els.accountName.addEventListener('blur', () => {
+        updateSearchTerms();
+        updateFinancialInstrumentDefault();
+        detectSubledger();
+    });
+
+    els.categorySelect.addEventListener('change', () => {
+        updateCategoryDefaults();
+        fetchSuggestedCode(els.categorySelect.value);
+        detectSubledger(); // Re-detect subledger when category changes
+    });
+
+    els.accountTypeSelect.addEventListener('change', updateAccountTypeDefaults);
+    els.subledgerSelect.addEventListener('change', updateSubledgerDefaults);
+
+    // Use suggested code button
+    els.useSuggestedBtn?.addEventListener('click', useSuggestedCode);
+
+    // Track manual changes
+    els.accountCode.addEventListener('input', () => {
+        markUserChanged('account_code');
+        // Hide the "Use" button if user is typing
+        if (els.accountCode.value !== suggestedCode) {
+            els.useSuggestedBtn?.classList.add('hidden');
+        }
+    });
+    els.searchTerms.addEventListener('input', () => markUserChanged('search_terms'));
+    els.normalBalanceSelect.addEventListener('change', () => markUserChanged('normal_balance'));
+    els.accountTypeSelect.addEventListener('change', () => markUserChanged('account_type'));
+    els.subledgerSelect.addEventListener('change', () => markUserChanged('subledger_type'));
+    els.isPostingAllowed.addEventListener('change', () => markUserChanged('is_posting_allowed'));
+    els.isBudgetable.addEventListener('change', () => markUserChanged('is_budgetable'));
+    els.isReconciliationRequired.addEventListener('change', () => markUserChanged('is_reconciliation_required'));
+    els.isCashEquivalent.addEventListener('change', () => markUserChanged('is_cash_equivalent'));
+    els.isFinancialInstrument.addEventListener('change', () => markUserChanged('is_financial_instrument'));
+
+    // Initialize on page load
+    updateCategoryDefaults();
+    updateAccountTypeDefaults();
+    updateSubledgerDefaults();
+
+    // Fetch initial suggested code if category already selected
+    if (els.categorySelect.value && !isEditMode) {
+        fetchSuggestedCode(els.categorySelect.value);
+    }
+})();
+</script>
+{% endblock %}

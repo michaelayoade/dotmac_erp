@@ -1,5 +1,5 @@
 """
-Warehouse mapping from ERPNext to DotMac Books.
+Warehouse mapping from ERPNext to DotMac ERP.
 """
 from typing import Any
 
@@ -13,7 +13,7 @@ from .base import (
 
 
 class WarehouseMapping(DocTypeMapping):
-    """Map ERPNext Warehouse to DotMac Books inv.warehouse."""
+    """Map ERPNext Warehouse to DotMac ERP inv.warehouse."""
 
     def __init__(self):
         super().__init__(

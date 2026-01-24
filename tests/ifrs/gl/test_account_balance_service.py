@@ -9,7 +9,7 @@ from uuid import uuid4
 
 import pytest
 
-from app.services.ifrs.gl.account_balance import (
+from app.services.finance.gl.account_balance import (
     AccountBalanceService,
     BalanceSummary,
 )

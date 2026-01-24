@@ -8,13 +8,13 @@ from uuid import uuid4
 
 import pytest
 
-from app.services.ifrs.inv.item import (
+from app.services.finance.inv.item import (
     ItemService,
     ItemCategoryService,
     ItemInput,
     ItemCategoryInput,
 )
-from app.models.ifrs.inv.item import ItemType, CostingMethod
+from app.models.finance.inv.item import ItemType, CostingMethod
 from tests.ifrs.inv.conftest import (
     MockItem,
     MockItemCategory,

@@ -19,8 +19,8 @@ from dotenv import load_dotenv
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.db import SessionLocal
-from app.models.ifrs.core_org.organization import Organization
-from app.services.ifrs.tax.seed import seed_nigeria_tax_data
+from app.models.finance.core_org.organization import Organization
+from app.services.finance.tax.seed import seed_nigeria_tax_data
 
 
 def parse_args() -> argparse.Namespace:

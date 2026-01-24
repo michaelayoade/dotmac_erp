@@ -11,8 +11,8 @@ from unittest.mock import MagicMock, patch, PropertyMock
 
 import pytest
 
-from app.services.ifrs.ar.sales_order import SalesOrderService
-from app.models.ifrs.ar.sales_order import SOStatus, FulfillmentStatus
+from app.services.finance.ar.sales_order import SalesOrderService
+from app.models.finance.ar.sales_order import SOStatus, FulfillmentStatus
 
 
 class MockSalesOrder:

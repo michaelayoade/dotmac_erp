@@ -18,7 +18,7 @@ from uuid import uuid4
 
 from fastapi import HTTPException
 
-from app.services.ifrs.ar.contract import (
+from app.services.finance.ar.contract import (
     ContractService,
     ContractInput,
     PerformanceObligationInput,

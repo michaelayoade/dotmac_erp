@@ -1,0 +1,46 @@
+{% extends "finance/base_finance.html" %}
+
+{% block page_title %}Lease Modifications{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400">
+    <a href="/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white">Lease Modifications</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50">
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead>
+                    <tr class="border-b border-slate-200 dark:border-slate-700">
+                        <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Lease</th>
+                        <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Type</th>
+                        <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Effective Date</th>
+                        <th class="px-6 py-4 text-right text-xs font-medium uppercase tracking-wider text-slate-500">Liability Adj</th>
+                        <th class="px-6 py-4 text-right text-xs font-medium uppercase tracking-wider text-slate-500">Asset Adj</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                    {% for mod in modifications %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                        <td class="px-6 py-4 text-sm text-slate-900 dark:text-white">{{ mod.lease_id }}</td>
+                        <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{{ mod.modification_type }}</td>
+                        <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{{ mod.effective_date }}</td>
+                        <td class="px-6 py-4 text-right text-sm text-slate-600 dark:text-slate-400">{{ mod.liability_adjustment }}</td>
+                        <td class="px-6 py-4 text-right text-sm text-slate-600 dark:text-slate-400">{{ mod.rou_asset_adjustment }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5" class="px-6 py-12 text-center text-sm text-slate-500">No modifications found</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

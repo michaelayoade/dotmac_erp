@@ -1,0 +1,200 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}{% if kpi %}Edit KPI{% else %}New KPI{% endif %}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a>
+    <span class="mx-2">/</span>
+    <a href="/people/perf/goals" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Goals & KPIs</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">{% if kpi %}Edit{% else %}New{% endif %}</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl">
+    {% if error %}
+    <div class="mb-6 p-4 rounded-lg bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-800">
+        <div class="flex items-center gap-2 text-red-700 dark:text-red-400">
+            <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span>{{ error }}</span>
+        </div>
+    </div>
+    {% endif %}
+
+    <form method="post" action="/people/perf/goals/{% if kpi %}{{ kpi.kpi_id }}/edit{% else %}new{% endif %}" class="space-y-6">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+        {# Basic Information #}
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">KPI Details</h3>
+            </div>
+            <div class="card-body space-y-4">
+                <div>
+                    <label for="kpi_name" class="form-label required">KPI Name</label>
+                    <input type="text" name="kpi_name" id="kpi_name"
+                        value="{{ kpi.kpi_name if kpi else form_data.kpi_name | default('', true) }}"
+                        required class="form-input w-full {% if errors and errors.kpi_name %}border-red-500{% endif %}"
+                        placeholder="e.g., Increase Sales Revenue">
+                    {% if errors and errors.kpi_name %}
+                    <p class="text-sm text-red-500 mt-1">{{ errors.kpi_name }}</p>
+                    {% endif %}
+                </div>
+
+                <div>
+                    <label for="employee_id" class="form-label required">Employee</label>
+                    <select name="employee_id" id="employee_id" required class="form-input w-full {% if errors and errors.employee_id %}border-red-500{% endif %}" {% if kpi %}disabled{% endif %}>
+                        <option value="">Select Employee</option>
+                        {% for emp in employees %}
+                        <option value="{{ emp.employee_id }}"
+                            {{ 'selected' if (kpi and kpi.employee_id == emp.employee_id) or (form_data and form_data.employee_id == emp.employee_id | string) }}>
+                            {{ emp.employee_code }} - {{ emp.full_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    {% if kpi %}
+                    <input type="hidden" name="employee_id" value="{{ kpi.employee_id }}">
+                    <p class="text-xs text-slate-500 mt-1">Employee cannot be changed after creation.</p>
+                    {% endif %}
+                    {% if errors and errors.employee_id %}
+                    <p class="text-sm text-red-500 mt-1">{{ errors.employee_id }}</p>
+                    {% endif %}
+                </div>
+
+                <div>
+                    <label for="kra_id" class="form-label">Related KRA</label>
+                    <select name="kra_id" id="kra_id" class="form-input w-full">
+                        <option value="">No specific KRA</option>
+                        {% for kra in kras %}
+                        <option value="{{ kra.kra_id }}"
+                            {{ 'selected' if (kpi and kpi.kra_id == kra.kra_id) or (form_data and form_data.kra_id == kra.kra_id | string) }}>
+                            {{ kra.kra_code }} - {{ kra.kra_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label for="description" class="form-label">Description</label>
+                    <textarea name="description" id="description" rows="3" class="form-input w-full"
+                        placeholder="Describe what this KPI measures and how success is determined">{{ kpi.description if kpi else form_data.description | default('', true) }}</textarea>
+                </div>
+            </div>
+        </div>
+
+        {# Period and Targets #}
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Period & Targets</h3>
+            </div>
+            <div class="card-body space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="period_start" class="form-label required">Period Start</label>
+                        <input type="date" name="period_start" id="period_start"
+                            value="{{ kpi.period_start.isoformat() if kpi and kpi.period_start else form_data.period_start | default('', true) }}"
+                            required class="form-input w-full {% if errors and errors.period_start %}border-red-500{% endif %}">
+                        {% if errors and errors.period_start %}
+                        <p class="text-sm text-red-500 mt-1">{{ errors.period_start }}</p>
+                        {% endif %}
+                    </div>
+                    <div>
+                        <label for="period_end" class="form-label required">Period End</label>
+                        <input type="date" name="period_end" id="period_end"
+                            value="{{ kpi.period_end.isoformat() if kpi and kpi.period_end else form_data.period_end | default('', true) }}"
+                            required class="form-input w-full {% if errors and errors.period_end %}border-red-500{% endif %}">
+                        {% if errors and errors.period_end %}
+                        <p class="text-sm text-red-500 mt-1">{{ errors.period_end }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="target_value" class="form-label required">Target Value</label>
+                        <input type="number" name="target_value" id="target_value" step="0.01"
+                            value="{{ kpi.target_value if kpi else form_data.target_value | default('', true) }}"
+                            required class="form-input w-full {% if errors and errors.target_value %}border-red-500{% endif %}"
+                            placeholder="100">
+                        {% if errors and errors.target_value %}
+                        <p class="text-sm text-red-500 mt-1">{{ errors.target_value }}</p>
+                        {% endif %}
+                    </div>
+                    <div>
+                        <label for="unit_of_measure" class="form-label">Unit of Measure</label>
+                        <input type="text" name="unit_of_measure" id="unit_of_measure"
+                            value="{{ kpi.unit_of_measure if kpi else form_data.unit_of_measure | default('', true) }}"
+                            class="form-input w-full"
+                            placeholder="e.g., %, units, NGN">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label for="threshold_value" class="form-label">Threshold (Min)</label>
+                        <input type="number" name="threshold_value" id="threshold_value" step="0.01"
+                            value="{{ kpi.threshold_value if kpi else form_data.threshold_value | default('', true) }}"
+                            class="form-input w-full"
+                            placeholder="70">
+                        <p class="text-xs text-slate-500 mt-1">Minimum acceptable</p>
+                    </div>
+                    <div>
+                        <label for="target_display" class="form-label">Target</label>
+                        <input type="text" disabled
+                            value="{{ kpi.target_value if kpi else form_data.target_value | default('100', true) }}"
+                            class="form-input w-full bg-slate-50 dark:bg-slate-800">
+                        <p class="text-xs text-slate-500 mt-1">Expected result</p>
+                    </div>
+                    <div>
+                        <label for="stretch_value" class="form-label">Stretch (Max)</label>
+                        <input type="number" name="stretch_value" id="stretch_value" step="0.01"
+                            value="{{ kpi.stretch_value if kpi else form_data.stretch_value | default('', true) }}"
+                            class="form-input w-full"
+                            placeholder="120">
+                        <p class="text-xs text-slate-500 mt-1">Exceptional result</p>
+                    </div>
+                </div>
+
+                <div>
+                    <label for="weightage" class="form-label">Weightage (%)</label>
+                    <input type="number" name="weightage" id="weightage" step="0.01" min="0" max="100"
+                        value="{{ kpi.weightage if kpi else form_data.weightage | default('0', true) }}"
+                        class="form-input w-full"
+                        placeholder="10">
+                    <p class="text-xs text-slate-500 mt-1">How much this KPI contributes to overall performance score</p>
+                </div>
+            </div>
+        </div>
+
+        {# Additional Notes #}
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Additional Information</h3>
+            </div>
+            <div class="card-body space-y-4">
+                <div>
+                    <label for="notes" class="form-label">Notes</label>
+                    <textarea name="notes" id="notes" rows="3" class="form-input w-full"
+                        placeholder="Any additional notes or context for this KPI">{{ kpi.notes if kpi else form_data.notes | default('', true) }}</textarea>
+                </div>
+            </div>
+        </div>
+
+        {# Form Actions #}
+        <div class="flex justify-end gap-3">
+            <a href="/people/perf/goals{% if kpi %}/{{ kpi.kpi_id }}{% endif %}" class="btn btn-secondary">
+                Cancel
+            </a>
+            <button type="submit" class="btn btn-primary">
+                {% if kpi %}Update{% else %}Create{% endif %} KPI
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

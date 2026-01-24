@@ -11,8 +11,8 @@ from uuid import uuid4
 
 import pytest
 
-from app.models.ifrs.common.attachment import AttachmentCategory
-from app.services.ifrs.common.attachment import (
+from app.models.finance.common.attachment import AttachmentCategory
+from app.services.finance.common.attachment import (
     AttachmentService,
     AttachmentInput,
     AttachmentView,

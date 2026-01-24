@@ -1,0 +1,104 @@
+{% extends "expense/base_expense.html" %}
+
+{% block page_title %}Expense Claims{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 mt-1">
+    <a href="/expense" class="hover:text-slate-700 dark:hover:text-slate-300">Expense</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="text-slate-700 dark:text-slate-300">Claims</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Filters -->
+    <div class="card p-4">
+        <form method="get" class="flex flex-wrap items-end gap-4">
+            <div class="min-w-[150px]">
+                <label class="form-label">Status</label>
+                <select name="status" class="form-input form-select">
+                    <option value="">All Statuses</option>
+                    {% for s in statuses %}
+                    <option value="{{ s }}" {% if filter_status == s %}selected{% endif %}>{{ s }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="min-w-[150px]">
+                <label class="form-label">Start Date</label>
+                <input type="date" name="start_date" value="{{ filter_start_date }}" class="form-input">
+            </div>
+            <div class="min-w-[150px]">
+                <label class="form-label">End Date</label>
+                <input type="date" name="end_date" value="{{ filter_end_date }}" class="form-input">
+            </div>
+            <button type="submit" class="btn btn-secondary">Filter</button>
+        </form>
+    </div>
+
+    <!-- Status Summary -->
+    <div class="grid gap-4 sm:grid-cols-3 lg:grid-cols-6">
+        {% for s in statuses %}
+        <div class="card p-4">
+            <p class="text-sm text-slate-500 dark:text-slate-400">{{ s }}</p>
+            <p class="text-2xl font-bold text-slate-900 dark:text-white">{{ status_counts.get(s, 0) }}</p>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Claims List -->
+    <div class="card overflow-hidden">
+        {% if claims %}
+        <div class="table-container">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Claim</th>
+                        <th>Employee</th>
+                        <th>Date</th>
+                        <th class="text-right">Amount</th>
+                        <th>Status</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for claim in claims %}
+                    <tr>
+                        <td>
+                            <a href="/expense/claims/{{ claim.claim_id }}" class="font-mono text-amber-600 hover:text-amber-700 dark:text-amber-400">
+                                {{ claim.claim_number }}
+                            </a>
+                            <div class="text-xs text-slate-500 dark:text-slate-400">{{ claim.purpose }}</div>
+                        </td>
+                        <td class="text-slate-600 dark:text-slate-300">
+                            {{ claim.employee.full_name if claim.employee else '-' }}
+                        </td>
+                        <td class="text-slate-500">{{ claim.claim_date }}</td>
+                        <td class="text-right font-mono text-slate-900 dark:text-white">{{ claim.total_claimed_amount }}</td>
+                        <td>
+                            <span class="badge badge-neutral">{{ claim.status.value if claim.status else 'DRAFT' }}</span>
+                        </td>
+                        <td class="text-right">
+                            <a href="/expense/claims/{{ claim.claim_id }}" class="table-action-btn" title="View">
+                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                                </svg>
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state p-12">
+            <h3 class="empty-state-title">No Expense Claims</h3>
+            <p class="empty-state-description">No claims match your filters.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

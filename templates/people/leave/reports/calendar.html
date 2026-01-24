@@ -1,0 +1,181 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}Leave Calendar{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/leave" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Leave</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">Calendar</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">Leave Calendar</h1>
+            <p class="text-sm text-slate-500 dark:text-slate-400">View who's on leave during a period</p>
+        </div>
+        <a href="/people/leave" class="btn btn-secondary">
+            <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+            </svg>
+            Back
+        </a>
+    </div>
+
+    <!-- Filters -->
+    <div class="card">
+        <form method="get" class="p-4">
+            <div class="flex flex-wrap gap-4 items-end">
+                <div class="w-44">
+                    <label for="start_date" class="form-label">From</label>
+                    <input type="date" name="start_date" id="start_date" value="{{ start_date }}"
+                        class="form-input w-full">
+                </div>
+                <div class="w-44">
+                    <label for="end_date" class="form-label">To</label>
+                    <input type="date" name="end_date" id="end_date" value="{{ end_date }}"
+                        class="form-input w-full">
+                </div>
+                <div class="w-56">
+                    <label for="department_id" class="form-label">Department</label>
+                    <select name="department_id" id="department_id" class="form-select w-full">
+                        <option value="">All Departments</option>
+                        {% for dept in departments %}
+                        <option value="{{ dept.department_id }}" {% if department_id == dept.department_id|string %}selected{% endif %}>
+                            {{ dept.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-secondary h-10">Apply Filter</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Summary -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="card p-5">
+            <div class="flex items-center gap-4">
+                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-teal-100 dark:bg-teal-900/30">
+                    <svg class="h-6 w-6 text-teal-600 dark:text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">Period</p>
+                    <p class="text-lg font-semibold text-slate-900 dark:text-white">{{ start_date }} to {{ end_date }}</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="card p-5">
+            <div class="flex items-center gap-4">
+                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-violet-100 dark:bg-violet-900/30">
+                    <svg class="h-6 w-6 text-violet-600 dark:text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">Leave Events</p>
+                    <p class="text-2xl font-semibold text-slate-900 dark:text-white">{{ report.total_events }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Leave Events List -->
+    <div class="card">
+        <div class="border-b border-slate-200 dark:border-slate-700 px-5 py-4">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Leave Events</h2>
+        </div>
+        {% if report.leave_events %}
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+                <thead>
+                    <tr class="bg-slate-50 dark:bg-slate-800/50">
+                        <th class="px-5 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Employee</th>
+                        <th class="px-5 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Department</th>
+                        <th class="px-5 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Leave Type</th>
+                        <th class="px-5 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">From</th>
+                        <th class="px-5 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">To</th>
+                        <th class="px-5 py-3 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Days</th>
+                        <th class="px-5 py-3 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                    {% for event in report.leave_events %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                        <td class="px-5 py-3">
+                            <div class="flex items-center gap-3">
+                                <div class="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-purple-600 text-xs font-semibold text-white">
+                                    {{ event.employee_name.split()[0][0] }}{{ event.employee_name.split()[-1][0] if event.employee_name.split()|length > 1 else '' }}
+                                </div>
+                                <span class="font-medium text-slate-900 dark:text-white">{{ event.employee_name }}</span>
+                            </div>
+                        </td>
+                        <td class="px-5 py-3 text-sm text-slate-600 dark:text-slate-400">{{ event.department_name }}</td>
+                        <td class="px-5 py-3">
+                            <span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300">
+                                {{ event.leave_type_name }}
+                            </span>
+                        </td>
+                        <td class="px-5 py-3 text-sm text-slate-600 dark:text-slate-400">{{ event.from_date }}</td>
+                        <td class="px-5 py-3 text-sm text-slate-600 dark:text-slate-400">{{ event.to_date }}</td>
+                        <td class="px-5 py-3 text-right text-sm font-medium text-slate-700 dark:text-slate-300">
+                            {{ event.total_days }}{% if event.half_day %} (half){% endif %}
+                        </td>
+                        <td class="px-5 py-3 text-right">
+                            <a href="/people/leave/applications/{{ event.application_id }}" class="text-teal-600 dark:text-teal-400 hover:underline text-sm">View</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="p-8 text-center">
+            <p class="text-slate-500 dark:text-slate-400">No approved leave found for the selected period.</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Timeline View -->
+    {% if report.leave_events %}
+    <div class="card">
+        <div class="border-b border-slate-200 dark:border-slate-700 px-5 py-4">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Timeline View</h2>
+        </div>
+        <div class="p-5 space-y-3">
+            {% for event in report.leave_events %}
+            <div class="flex items-center gap-4 p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50">
+                <div class="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-teal-500 to-cyan-600 text-sm font-semibold text-white">
+                    {{ event.employee_name.split()[0][0] }}{{ event.employee_name.split()[-1][0] if event.employee_name.split()|length > 1 else '' }}
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="font-medium text-slate-900 dark:text-white">{{ event.employee_name }}</div>
+                    <div class="text-sm text-slate-500 dark:text-slate-400">
+                        {{ event.leave_type_name }} - {{ event.from_date }} to {{ event.to_date }}
+                        <span class="text-slate-400 dark:text-slate-500">({{ event.total_days }} days)</span>
+                    </div>
+                </div>
+                <a href="/people/leave/applications/{{ event.application_id }}" class="btn btn-secondary btn-sm">View</a>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Quick Links -->
+    <div class="flex gap-4">
+        <a href="/people/leave/reports/balance" class="btn btn-secondary">View Balances</a>
+        <a href="/people/leave/reports/usage" class="btn btn-secondary">View Usage</a>
+        <a href="/people/leave/reports/trends" class="btn btn-secondary">View Trends</a>
+    </div>
+</div>
+{% endblock %}

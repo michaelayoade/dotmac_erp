@@ -131,7 +131,7 @@ def test_chart_of_accounts(file_path: str) -> None:
 if __name__ == "__main__":
     import sys
 
-    test_file = "/Users/michaelayoade/Downloads/Projects/dotmac_books/books_backup/Books backup/Chart_of_Accounts.csv"
+    test_file = "/Users/michaelayoade/Downloads/Projects/dotmac_erp/books_backup/Books backup/Chart_of_Accounts.csv"
 
     if len(sys.argv) > 1:
         test_file = sys.argv[1]

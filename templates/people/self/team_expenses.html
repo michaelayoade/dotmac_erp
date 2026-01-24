@@ -1,0 +1,241 @@
+{% extends "people/base_people.html" %}
+{% from "components/macros.html" import pagination %}
+
+{% block page_title %}Team Expenses{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/self/attendance" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Self Service</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">Team Expenses</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+            <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">Team Expense Claims</h1>
+            <p class="text-sm text-slate-500 dark:text-slate-400">Approve or reject expense claims from direct reports.</p>
+        </div>
+    </div>
+
+    <div class="card">
+        <form method="get" class="p-4">
+            <div class="flex flex-wrap items-end gap-4">
+                <div class="w-44">
+                    <label for="status" class="form-label">Status</label>
+                    <select name="status" id="status" class="form-select w-full">
+                        <option value="">All Statuses</option>
+                        {% for s in statuses %}
+                        <option value="{{ s }}" {% if status == s %}selected{% endif %}>{{ s | replace("_", " ") | title }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-secondary h-10">Filter</button>
+            </div>
+        </form>
+    </div>
+
+    {% if claims %}
+    <div class="card overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+                <thead>
+                    <tr class="bg-slate-50 dark:bg-slate-800/50">
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider w-8"></th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Claim</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Employee</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Date</th>
+                        <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Amount</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Status</th>
+                        <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700" x-data="{ expanded: {} }">
+                    {% for claim in claims %}
+                    <!-- Main Row -->
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer"
+                        @click="expanded['{{ claim.claim_id }}'] = !expanded['{{ claim.claim_id }}']">
+                        <td class="px-4 py-3">
+                            <svg class="h-4 w-4 text-slate-400 transition-transform duration-200"
+                                 :class="expanded['{{ claim.claim_id }}'] ? 'rotate-90' : ''"
+                                 fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                            </svg>
+                        </td>
+                        <td class="px-4 py-3">
+                            <div class="text-sm font-medium text-slate-900 dark:text-white">{{ claim.claim_number }}</div>
+                            <div class="text-xs text-slate-500 dark:text-slate-400">{{ claim.purpose }}</div>
+                        </td>
+                        <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">
+                            {{ claim.employee.full_name if claim.employee else claim.employee_id }}
+                        </td>
+                        <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">{{ claim.claim_date }}</td>
+                        <td class="px-4 py-3 text-right text-sm text-slate-700 dark:text-slate-300 font-mono">{{ claim.total_claimed_amount }}</td>
+                        <td class="px-4 py-3 text-sm">
+                            {% if claim.status.value == "SUBMITTED" %}
+                            <span class="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
+                                Pending Review
+                            </span>
+                            {% elif claim.status.value == "APPROVED" %}
+                            <span class="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400">
+                                Approved
+                            </span>
+                            {% elif claim.status.value == "REJECTED" %}
+                            <span class="inline-flex items-center rounded-full bg-rose-100 px-2.5 py-0.5 text-xs font-medium text-rose-800 dark:bg-rose-900/30 dark:text-rose-400">
+                                Rejected
+                            </span>
+                            {% elif claim.status.value == "PAID" %}
+                            <span class="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
+                                Paid
+                            </span>
+                            {% else %}
+                            <span class="text-slate-500">{{ claim.status.value }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-right text-sm" @click.stop>
+                            {% if claim.status.value == "SUBMITTED" %}
+                            <div class="flex items-center justify-end gap-2">
+                                <form method="post" action="/people/self/team/expenses/{{ claim.claim_id }}/approve">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                    <button type="submit" class="btn btn-success btn-sm">Approve</button>
+                                </form>
+                                <button type="button" class="btn btn-danger btn-sm"
+                                        onclick="document.getElementById('reject-modal-{{ claim.claim_id }}').classList.remove('hidden')">
+                                    Reject
+                                </button>
+                            </div>
+                            {% else %}
+                            <span class="text-slate-400">-</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <!-- Expanded Detail Row -->
+                    <tr x-show="expanded['{{ claim.claim_id }}']" x-collapse class="bg-slate-50/50 dark:bg-slate-800/30">
+                        <td colspan="7" class="px-4 py-4">
+                            <div class="ml-8 space-y-4">
+                                <!-- Line Items -->
+                                <div>
+                                    <h4 class="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-2">Line Items</h4>
+                                    <div class="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
+                                        <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700 text-sm">
+                                            <thead class="bg-slate-50 dark:bg-slate-900/50">
+                                                <tr>
+                                                    <th class="px-3 py-2 text-left text-xs font-medium text-slate-500">Description</th>
+                                                    <th class="px-3 py-2 text-left text-xs font-medium text-slate-500">Category</th>
+                                                    <th class="px-3 py-2 text-right text-xs font-medium text-slate-500">Amount</th>
+                                                    <th class="px-3 py-2 text-center text-xs font-medium text-slate-500">Receipt</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+                                                {% for item in claim.items %}
+                                                <tr>
+                                                    <td class="px-3 py-2 text-slate-900 dark:text-white">{{ item.description }}</td>
+                                                    <td class="px-3 py-2 text-slate-600 dark:text-slate-400">
+                                                        {{ item.category.category_name if item.category else 'N/A' }}
+                                                        {% if item.category and item.category.requires_receipt %}
+                                                        <span class="text-amber-500">*</span>
+                                                        {% endif %}
+                                                    </td>
+                                                    <td class="px-3 py-2 text-right font-mono text-slate-700 dark:text-slate-300">{{ item.claimed_amount }}</td>
+                                                    <td class="px-3 py-2 text-center">
+                                                        {% if item.receipt_url %}
+                                                        <a href="{{ item.receipt_url }}" target="_blank" class="inline-flex items-center text-teal-600 hover:text-teal-700">
+                                                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                                            </svg>
+                                                        </a>
+                                                        {% elif item.category and item.category.requires_receipt %}
+                                                        <span class="inline-flex items-center text-rose-500" title="Receipt required but missing">
+                                                            <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                                                                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                                                            </svg>
+                                                        </span>
+                                                        {% else %}
+                                                        <span class="text-slate-300">—</span>
+                                                        {% endif %}
+                                                    </td>
+                                                </tr>
+                                                {% else %}
+                                                <tr>
+                                                    <td colspan="4" class="px-3 py-4 text-center text-slate-400">No line items</td>
+                                                </tr>
+                                                {% endfor %}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+
+                                <!-- Approval Info -->
+                                {% if claim.approver_id or claim.approved_on or claim.rejection_reason %}
+                                <div class="flex flex-wrap gap-4 text-sm">
+                                    {% if claim.approved_on %}
+                                    <div>
+                                        <span class="text-slate-500 dark:text-slate-400">Approved:</span>
+                                        <span class="ml-1 text-slate-700 dark:text-slate-300">{{ claim.approved_on.strftime('%Y-%m-%d %H:%M') if claim.approved_on else '-' }}</span>
+                                    </div>
+                                    {% endif %}
+                                    {% if claim.rejection_reason %}
+                                    <div>
+                                        <span class="text-slate-500 dark:text-slate-400">Reason:</span>
+                                        <span class="ml-1 text-rose-600 dark:text-rose-400">{{ claim.rejection_reason }}</span>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                                {% endif %}
+
+                                <!-- Journal Entry Link (if posted) -->
+                                {% if claim.journal_entry_id %}
+                                <div class="flex items-center gap-2 text-sm">
+                                    <span class="text-slate-500 dark:text-slate-400">Posted to GL:</span>
+                                    <a href="/finance/gl/journals/{{ claim.journal_entry_id }}" class="text-teal-600 hover:text-teal-700 dark:text-teal-400 font-mono">
+                                        View Journal Entry →
+                                    </a>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+
+                    <!-- Reject Modal -->
+                    {% if claim.status.value == "SUBMITTED" %}
+                    <div id="reject-modal-{{ claim.claim_id }}" class="hidden fixed inset-0 z-50 overflow-y-auto" aria-modal="true">
+                        <div class="flex min-h-screen items-center justify-center p-4">
+                            <div class="fixed inset-0 bg-black/50" onclick="this.parentElement.parentElement.classList.add('hidden')"></div>
+                            <div class="relative bg-white dark:bg-slate-800 rounded-xl shadow-xl max-w-md w-full p-6">
+                                <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Reject Expense Claim</h3>
+                                <form method="post" action="/people/self/team/expenses/{{ claim.claim_id }}/reject">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                    <div class="mb-4">
+                                        <label class="form-label">Rejection Reason</label>
+                                        <textarea name="reason" rows="3" class="form-input w-full" required placeholder="Please provide a reason for rejection..."></textarea>
+                                    </div>
+                                    <div class="flex justify-end gap-3">
+                                        <button type="button" class="btn btn-secondary" onclick="this.closest('.fixed').classList.add('hidden')">Cancel</button>
+                                        <button type="submit" class="btn btn-danger">Reject Claim</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if total_pages > 1 %}
+        <div class="px-4 py-3 border-t border-slate-200 dark:border-slate-700">
+            {{ pagination(page=page, total_pages=total_pages, total_count=total, limit=20, filters={"status": status}) }}
+        </div>
+        {% endif %}
+    </div>
+    {% else %}
+    <div class="card p-8 text-center">
+        <p class="text-slate-500 dark:text-slate-400">No team expense claims.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

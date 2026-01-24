@@ -17,7 +17,7 @@ router = APIRouter(tags=["web-auth"])
 @router.get("/login", response_class=HTMLResponse)
 def login_page(
     request: Request,
-    next: str = Query(default="/dashboard"),
+    next: str = Query(default="/"),
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
     """

@@ -1,0 +1,199 @@
+{% extends "finance/base_finance.html" %}
+
+{% block page_title %}{{ rule.rule_name }}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/automation" class="hover:text-teal-600 dark:hover:text-teal-400">Automation</a>
+    <span class="mx-2">/</span>
+    <a href="/automation/workflows" class="hover:text-teal-600 dark:hover:text-teal-400">Workflows</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white">{{ rule.rule_name }}</span>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<div class="flex items-center gap-2">
+    <form method="post" action="/automation/workflows/{{ rule.rule_id }}/toggle">
+        <button type="submit" class="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium
+            {% if rule.is_active %}bg-amber-50 text-amber-700 hover:bg-amber-100 dark:bg-amber-900/20 dark:text-amber-400
+            {% else %}bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-900/20 dark:text-emerald-400{% endif %}">
+            {% if rule.is_active %}
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            Deactivate
+            {% else %}
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            Activate
+            {% endif %}
+        </button>
+    </form>
+    <a href="/automation/workflows/{{ rule.rule_id }}/edit"
+       class="inline-flex items-center gap-2 rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300">
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+        </svg>
+        Edit
+    </a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="grid gap-6 lg:grid-cols-3">
+        <div class="lg:col-span-2 space-y-6">
+            <!-- Rule Details -->
+            <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50">
+                <div class="border-b border-slate-200 px-6 py-4 dark:border-slate-700">
+                    <div class="flex items-center justify-between">
+                        <h3 class="font-semibold text-slate-900 dark:text-white">Rule Details</h3>
+                        <span class="inline-flex rounded-full px-3 py-1 text-sm font-medium
+                            {% if rule.is_active %}bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400
+                            {% else %}bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-400{% endif %}">
+                            {% if rule.is_active %}Active{% else %}Inactive{% endif %}
+                        </span>
+                    </div>
+                </div>
+                <div class="p-6">
+                    <dl class="grid gap-4 sm:grid-cols-2">
+                        <div>
+                            <dt class="text-sm text-slate-500 dark:text-slate-400">Entity Type</dt>
+                            <dd class="mt-1 font-medium text-slate-900 dark:text-white">{{ rule.entity_type }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm text-slate-500 dark:text-slate-400">Trigger Event</dt>
+                            <dd class="mt-1 font-medium text-slate-900 dark:text-white">{{ rule.trigger_event }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm text-slate-500 dark:text-slate-400">Action Type</dt>
+                            <dd class="mt-1 font-medium text-slate-900 dark:text-white">{{ rule.action_type }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm text-slate-500 dark:text-slate-400">Priority</dt>
+                            <dd class="mt-1 font-medium text-slate-900 dark:text-white">{{ rule.priority }}</dd>
+                        </div>
+                    </dl>
+                    {% if rule.description %}
+                    <div class="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+                        <dt class="text-sm text-slate-500 dark:text-slate-400">Description</dt>
+                        <dd class="mt-1 text-slate-900 dark:text-white">{{ rule.description }}</dd>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Execution History -->
+            <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50">
+                <div class="border-b border-slate-200 px-6 py-4 dark:border-slate-700">
+                    <h3 class="font-semibold text-slate-900 dark:text-white">Execution History</h3>
+                </div>
+                <div class="divide-y divide-slate-200 dark:divide-slate-700">
+                    {% for ex in rule.executions %}
+                    <div class="px-6 py-4">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-3">
+                                <span class="inline-flex rounded-full px-2 py-0.5 text-xs font-medium
+                                    {% if ex.status_color == 'emerald' %}bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400
+                                    {% elif ex.status_color == 'rose' %}bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400
+                                    {% elif ex.status_color == 'blue' %}bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400
+                                    {% else %}bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-400{% endif %}">
+                                    {{ ex.status }}
+                                </span>
+                                <span class="text-sm text-slate-500 dark:text-slate-400">{{ ex.triggered_at }}</span>
+                            </div>
+                            {% if ex.duration_ms %}
+                            <span class="text-xs text-slate-400 dark:text-slate-500">{{ ex.duration_ms }}ms</span>
+                            {% endif %}
+                        </div>
+                        <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">
+                            {{ ex.entity_type }} {{ ex.entity_id[:8] }}...
+                        </p>
+                        {% if ex.error_message %}
+                        <p class="mt-1 text-sm text-rose-600 dark:text-rose-400">{{ ex.error_message }}</p>
+                        {% endif %}
+                    </div>
+                    {% else %}
+                    <div class="px-6 py-8 text-center">
+                        <p class="text-sm text-slate-500 dark:text-slate-400">No executions yet</p>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="space-y-6">
+            <!-- Stats -->
+            <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800/50">
+                <h3 class="font-semibold text-slate-900 dark:text-white mb-4">Statistics</h3>
+                <dl class="space-y-4">
+                    <div>
+                        <dt class="text-sm text-slate-500 dark:text-slate-400">Total Executions</dt>
+                        <dd class="mt-1 text-2xl font-bold text-slate-900 dark:text-white">{{ rule.execution_count }}</dd>
+                    </div>
+                    <div class="flex gap-4">
+                        <div class="flex-1">
+                            <dt class="text-sm text-slate-500 dark:text-slate-400">Success</dt>
+                            <dd class="mt-1 text-xl font-bold text-emerald-600 dark:text-emerald-400">{{ rule.success_count }}</dd>
+                        </div>
+                        <div class="flex-1">
+                            <dt class="text-sm text-slate-500 dark:text-slate-400">Failed</dt>
+                            <dd class="mt-1 text-xl font-bold text-rose-600 dark:text-rose-400">{{ rule.failure_count }}</dd>
+                        </div>
+                    </div>
+                    {% if rule.last_executed_at %}
+                    <div>
+                        <dt class="text-sm text-slate-500 dark:text-slate-400">Last Executed</dt>
+                        <dd class="mt-1 text-sm text-slate-900 dark:text-white">{{ rule.last_executed_at }}</dd>
+                    </div>
+                    {% endif %}
+                </dl>
+            </div>
+
+            <!-- Options -->
+            <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800/50">
+                <h3 class="font-semibold text-slate-900 dark:text-white mb-4">Options</h3>
+                <dl class="space-y-3">
+                    <div class="flex items-center justify-between">
+                        <dt class="text-sm text-slate-500 dark:text-slate-400">Stop on Match</dt>
+                        <dd>
+                            {% if rule.stop_on_match %}
+                            <span class="text-emerald-600 dark:text-emerald-400">Yes</span>
+                            {% else %}
+                            <span class="text-slate-500 dark:text-slate-400">No</span>
+                            {% endif %}
+                        </dd>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <dt class="text-sm text-slate-500 dark:text-slate-400">Async Execution</dt>
+                        <dd>
+                            {% if rule.execute_async %}
+                            <span class="text-emerald-600 dark:text-emerald-400">Yes</span>
+                            {% else %}
+                            <span class="text-slate-500 dark:text-slate-400">No</span>
+                            {% endif %}
+                        </dd>
+                    </div>
+                </dl>
+            </div>
+
+            <!-- Danger Zone -->
+            <div class="rounded-xl border border-rose-200 bg-rose-50 p-6 dark:border-rose-800 dark:bg-rose-900/20">
+                <h3 class="font-semibold text-rose-700 dark:text-rose-400 mb-4">Danger Zone</h3>
+                <form method="post" action="/automation/workflows/{{ rule.rule_id }}/delete"
+                      onsubmit="return confirm('Are you sure you want to delete this workflow rule? This action cannot be undone.')">
+                    <button type="submit" class="w-full rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-700">
+                        Delete Rule
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

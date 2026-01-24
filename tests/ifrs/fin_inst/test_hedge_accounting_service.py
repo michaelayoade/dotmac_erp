@@ -9,7 +9,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from app.models.ifrs.fin_inst.hedge_relationship import HedgeType, HedgeStatus
+from app.models.finance.fin_inst.hedge_relationship import HedgeType, HedgeStatus
 from tests.ifrs.fin_inst.conftest import (
     MockFinancialInstrument,
     MockHedgeRelationship,
@@ -22,7 +22,7 @@ class TestHedgeAccountingService:
 
     def test_calculate_effectiveness_ratio_zero_hedged_change(self):
         """Test effectiveness ratio with zero hedged item change."""
-        from app.services.ifrs.fin_inst.hedge_accounting import HedgeAccountingService
+        from app.services.finance.fin_inst.hedge_accounting import HedgeAccountingService
 
         result = HedgeAccountingService.calculate_effectiveness_ratio(
             hedging_instrument_change=Decimal("1000.00"),
@@ -33,7 +33,7 @@ class TestHedgeAccountingService:
 
     def test_calculate_effectiveness_ratio_perfect_hedge(self):
         """Test effectiveness ratio for perfect hedge."""
-        from app.services.ifrs.fin_inst.hedge_accounting import HedgeAccountingService
+        from app.services.finance.fin_inst.hedge_accounting import HedgeAccountingService
 
         result = HedgeAccountingService.calculate_effectiveness_ratio(
             hedging_instrument_change=Decimal("1000.00"),
@@ -44,7 +44,7 @@ class TestHedgeAccountingService:
 
     def test_calculate_effectiveness_ratio_highly_effective(self):
         """Test effectiveness ratio within 80-125% range."""
-        from app.services.ifrs.fin_inst.hedge_accounting import HedgeAccountingService
+        from app.services.finance.fin_inst.hedge_accounting import HedgeAccountingService
 
         result = HedgeAccountingService.calculate_effectiveness_ratio(
             hedging_instrument_change=Decimal("950.00"),
@@ -55,7 +55,7 @@ class TestHedgeAccountingService:
 
     def test_is_highly_effective_true(self):
         """Test is_highly_effective returns true for ratio in range."""
-        from app.services.ifrs.fin_inst.hedge_accounting import HedgeAccountingService
+        from app.services.finance.fin_inst.hedge_accounting import HedgeAccountingService
 
         assert HedgeAccountingService.is_highly_effective(Decimal("0.80")) is True
         assert HedgeAccountingService.is_highly_effective(Decimal("1.00")) is True
@@ -63,14 +63,14 @@ class TestHedgeAccountingService:
 
     def test_is_highly_effective_false(self):
         """Test is_highly_effective returns false for ratio outside range."""
-        from app.services.ifrs.fin_inst.hedge_accounting import HedgeAccountingService
+        from app.services.finance.fin_inst.hedge_accounting import HedgeAccountingService
 
         assert HedgeAccountingService.is_highly_effective(Decimal("0.75")) is False
         assert HedgeAccountingService.is_highly_effective(Decimal("1.30")) is False
 
     def test_calculate_ineffectiveness_fair_value_hedge(self):
         """Test ineffectiveness calculation for fair value hedge."""
-        from app.services.ifrs.fin_inst.hedge_accounting import HedgeAccountingService
+        from app.services.finance.fin_inst.hedge_accounting import HedgeAccountingService
 
         ineffectiveness, effective = HedgeAccountingService.calculate_ineffectiveness(
             hedge_type=HedgeType.FAIR_VALUE,
@@ -85,7 +85,7 @@ class TestHedgeAccountingService:
 
     def test_calculate_ineffectiveness_cash_flow_hedge(self):
         """Test ineffectiveness calculation for cash flow hedge."""
-        from app.services.ifrs.fin_inst.hedge_accounting import HedgeAccountingService
+        from app.services.finance.fin_inst.hedge_accounting import HedgeAccountingService
 
         ineffectiveness, effective = HedgeAccountingService.calculate_ineffectiveness(
             hedge_type=HedgeType.CASH_FLOW,
@@ -100,7 +100,7 @@ class TestHedgeAccountingService:
 
     def test_designate_hedge_instrument_not_found(self, mock_db, org_id, user_id):
         """Test hedge designation fails when instrument not found."""
-        from app.services.ifrs.fin_inst.hedge_accounting import (
+        from app.services.finance.fin_inst.hedge_accounting import (
             HedgeAccountingService,
             HedgeDesignationInput,
         )
@@ -134,7 +134,7 @@ class TestHedgeAccountingService:
         self, mock_db, org_id, user_id, mock_instrument
     ):
         """Test hedge designation fails with duplicate code."""
-        from app.services.ifrs.fin_inst.hedge_accounting import (
+        from app.services.finance.fin_inst.hedge_accounting import (
             HedgeAccountingService,
             HedgeDesignationInput,
         )
@@ -168,7 +168,7 @@ class TestHedgeAccountingService:
 
     def test_designate_hedge_success(self, mock_db, org_id, user_id, mock_instrument):
         """Test successful hedge designation."""
-        from app.services.ifrs.fin_inst.hedge_accounting import (
+        from app.services.finance.fin_inst.hedge_accounting import (
             HedgeAccountingService,
             HedgeDesignationInput,
         )
@@ -199,7 +199,7 @@ class TestHedgeAccountingService:
 
     def test_approve_hedge_not_found(self, mock_db, org_id, approver_id):
         """Test hedge approval fails when not found."""
-        from app.services.ifrs.fin_inst.hedge_accounting import HedgeAccountingService
+        from app.services.finance.fin_inst.hedge_accounting import HedgeAccountingService
         from fastapi import HTTPException
 
         mock_db.get.return_value = None
@@ -216,7 +216,7 @@ class TestHedgeAccountingService:
 
     def test_approve_hedge_wrong_status(self, mock_db, org_id, mock_hedge, approver_id):
         """Test hedge approval fails for non-designated hedge."""
-        from app.services.ifrs.fin_inst.hedge_accounting import HedgeAccountingService
+        from app.services.finance.fin_inst.hedge_accounting import HedgeAccountingService
         from fastapi import HTTPException
 
         mock_hedge.status = HedgeStatus.ACTIVE  # Already active
@@ -234,7 +234,7 @@ class TestHedgeAccountingService:
 
     def test_approve_hedge_sod_violation(self, mock_db, org_id, mock_hedge, user_id):
         """Test segregation of duties violation on approval."""
-        from app.services.ifrs.fin_inst.hedge_accounting import HedgeAccountingService
+        from app.services.finance.fin_inst.hedge_accounting import HedgeAccountingService
         from fastapi import HTTPException
 
         mock_hedge.status = HedgeStatus.DESIGNATED
@@ -254,7 +254,7 @@ class TestHedgeAccountingService:
 
     def test_approve_hedge_success(self, mock_db, org_id, mock_hedge, approver_id):
         """Test successful hedge approval."""
-        from app.services.ifrs.fin_inst.hedge_accounting import HedgeAccountingService
+        from app.services.finance.fin_inst.hedge_accounting import HedgeAccountingService
 
         mock_hedge.status = HedgeStatus.DESIGNATED
         mock_db.get.return_value = mock_hedge
@@ -271,7 +271,7 @@ class TestHedgeAccountingService:
 
     def test_perform_effectiveness_test_not_found(self, mock_db, org_id, user_id):
         """Test effectiveness test fails when hedge not found."""
-        from app.services.ifrs.fin_inst.hedge_accounting import (
+        from app.services.finance.fin_inst.hedge_accounting import (
             HedgeAccountingService,
             EffectivenessTestInput,
         )
@@ -301,7 +301,7 @@ class TestHedgeAccountingService:
         self, mock_db, org_id, user_id, mock_hedge
     ):
         """Test effectiveness test fails for discontinued hedge."""
-        from app.services.ifrs.fin_inst.hedge_accounting import (
+        from app.services.finance.fin_inst.hedge_accounting import (
             HedgeAccountingService,
             EffectivenessTestInput,
         )
@@ -330,7 +330,7 @@ class TestHedgeAccountingService:
 
     def test_discontinue_hedge_not_found(self, mock_db, org_id):
         """Test discontinuation fails when hedge not found."""
-        from app.services.ifrs.fin_inst.hedge_accounting import HedgeAccountingService
+        from app.services.finance.fin_inst.hedge_accounting import HedgeAccountingService
         from fastapi import HTTPException
 
         mock_db.get.return_value = None
@@ -347,7 +347,7 @@ class TestHedgeAccountingService:
 
     def test_discontinue_hedge_wrong_status(self, mock_db, org_id, mock_hedge):
         """Test discontinuation fails for already discontinued hedge."""
-        from app.services.ifrs.fin_inst.hedge_accounting import HedgeAccountingService
+        from app.services.finance.fin_inst.hedge_accounting import HedgeAccountingService
         from fastapi import HTTPException
 
         mock_hedge.status = HedgeStatus.DISCONTINUED
@@ -365,7 +365,7 @@ class TestHedgeAccountingService:
 
     def test_discontinue_hedge_success(self, mock_db, org_id, mock_hedge):
         """Test successful hedge discontinuation."""
-        from app.services.ifrs.fin_inst.hedge_accounting import HedgeAccountingService
+        from app.services.finance.fin_inst.hedge_accounting import HedgeAccountingService
 
         mock_hedge.status = HedgeStatus.ACTIVE
         mock_db.get.return_value = mock_hedge
@@ -382,7 +382,7 @@ class TestHedgeAccountingService:
 
     def test_reclassify_to_pl_not_found(self, mock_db, org_id, user_id):
         """Test OCI reclassification fails when hedge not found."""
-        from app.services.ifrs.fin_inst.hedge_accounting import HedgeAccountingService
+        from app.services.finance.fin_inst.hedge_accounting import HedgeAccountingService
         from fastapi import HTTPException
 
         mock_db.get.return_value = None
@@ -401,7 +401,7 @@ class TestHedgeAccountingService:
 
     def test_reclassify_to_pl_not_cash_flow(self, mock_db, org_id, user_id, mock_hedge):
         """Test OCI reclassification fails for non-cash flow hedge."""
-        from app.services.ifrs.fin_inst.hedge_accounting import HedgeAccountingService
+        from app.services.finance.fin_inst.hedge_accounting import HedgeAccountingService
         from fastapi import HTTPException
 
         mock_hedge.hedge_type = HedgeType.FAIR_VALUE
@@ -422,7 +422,7 @@ class TestHedgeAccountingService:
 
     def test_get_hedge_success(self, mock_db, mock_hedge):
         """Test getting a hedge by ID."""
-        from app.services.ifrs.fin_inst.hedge_accounting import HedgeAccountingService
+        from app.services.finance.fin_inst.hedge_accounting import HedgeAccountingService
 
         mock_db.get.return_value = mock_hedge
 
@@ -433,7 +433,7 @@ class TestHedgeAccountingService:
 
     def test_get_hedge_not_found(self, mock_db):
         """Test getting non-existent hedge raises HTTPException."""
-        from app.services.ifrs.fin_inst.hedge_accounting import HedgeAccountingService
+        from app.services.finance.fin_inst.hedge_accounting import HedgeAccountingService
         from fastapi import HTTPException
 
         mock_db.get.return_value = None
@@ -445,7 +445,7 @@ class TestHedgeAccountingService:
 
     def test_list_hedges(self, mock_db, org_id):
         """Test listing hedges."""
-        from app.services.ifrs.fin_inst.hedge_accounting import HedgeAccountingService
+        from app.services.finance.fin_inst.hedge_accounting import HedgeAccountingService
 
         mock_hedges = [MockHedgeRelationship(organization_id=org_id) for _ in range(5)]
         mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = mock_hedges
@@ -456,7 +456,7 @@ class TestHedgeAccountingService:
 
     def test_list_hedges_with_type_filter(self, mock_db, org_id):
         """Test listing hedges with type filter."""
-        from app.services.ifrs.fin_inst.hedge_accounting import HedgeAccountingService
+        from app.services.finance.fin_inst.hedge_accounting import HedgeAccountingService
 
         mock_hedges = [
             MockHedgeRelationship(
@@ -476,7 +476,7 @@ class TestHedgeAccountingService:
 
     def test_list_effectiveness_tests(self, mock_db, mock_hedge):
         """Test listing effectiveness tests for a hedge."""
-        from app.services.ifrs.fin_inst.hedge_accounting import HedgeAccountingService
+        from app.services.finance.fin_inst.hedge_accounting import HedgeAccountingService
 
         mock_tests = [
             MockHedgeEffectiveness(hedge_id=mock_hedge.hedge_id) for _ in range(3)

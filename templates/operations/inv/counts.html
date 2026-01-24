@@ -1,0 +1,207 @@
+{% extends "operations/base_operations.html" %}
+{% from "components/macros.html" import status_badge, pagination, empty_state %}
+
+{% block page_title %}Stock Counts{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+    <a href="/operations/dashboard" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Dashboard</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="font-medium text-slate-900 dark:text-white">Stock Counts</span>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<a href="/operations/inv/counts/new" class="btn btn-primary">
+    <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+    </svg>
+    New Count
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6 stagger-in">
+    <!-- Stats Row -->
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div class="card p-4">
+            <div class="flex items-center gap-3">
+                <div class="card-icon bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ total_count | default(0) }}</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Total Counts</p>
+                </div>
+            </div>
+        </div>
+        <div class="card p-4">
+            <div class="flex items-center gap-3">
+                <div class="card-icon bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ in_progress_count | default(0) }}</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">In Progress</p>
+                </div>
+            </div>
+        </div>
+        <div class="card p-4">
+            <div class="flex items-center gap-3">
+                <div class="card-icon bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ completed_count | default(0) }}</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Completed</p>
+                </div>
+            </div>
+        </div>
+        <div class="card p-4">
+            <div class="flex items-center gap-3">
+                <div class="card-icon bg-rose-50 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ variance_count | default(0) }}</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">With Variances</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Search & Filters -->
+    <div class="card p-4">
+        <form method="get" action="/operations/inv/counts" class="flex flex-wrap items-center gap-4">
+            <div class="relative flex-1 min-w-[200px]">
+                <svg class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                </svg>
+                <input type="text" name="search" value="{{ search | default('') }}"
+                       placeholder="Search by count number..."
+                       class="form-input pl-10 w-full">
+            </div>
+            <select name="status" class="form-select">
+                <option value="">All Status</option>
+                <option value="DRAFT" {{ 'selected' if status == 'DRAFT' else '' }}>Draft</option>
+                <option value="IN_PROGRESS" {{ 'selected' if status == 'IN_PROGRESS' else '' }}>In Progress</option>
+                <option value="COMPLETED" {{ 'selected' if status == 'COMPLETED' else '' }}>Completed</option>
+                <option value="POSTED" {{ 'selected' if status == 'POSTED' else '' }}>Posted</option>
+            </select>
+            <select name="warehouse" class="form-select">
+                <option value="">All Warehouses</option>
+                {% for wh in warehouses | default([]) %}
+                <option value="{{ wh.warehouse_id }}" {{ 'selected' if warehouse == wh.warehouse_id|string else '' }}>
+                    {{ wh.warehouse_name }}
+                </option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-secondary">Filter</button>
+            <a href="/operations/inv/counts" class="btn btn-ghost">Clear</a>
+        </form>
+    </div>
+
+    <!-- Counts Table -->
+    <div class="card overflow-hidden">
+        {% if counts | default([]) | length > 0 %}
+        <div class="overflow-x-auto">
+            <table class="table-ledger">
+                <thead>
+                    <tr>
+                        <th>Count #</th>
+                        <th>Date</th>
+                        <th>Warehouse</th>
+                        <th>Type</th>
+                        <th class="text-right">Items</th>
+                        <th class="text-right">Counted</th>
+                        <th class="text-right">Variance</th>
+                        <th>Status</th>
+                        <th class="w-12"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for count in counts %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer"
+                        onclick="window.location='/operations/inv/counts/{{ count.count_id }}'">
+                        <td class="font-medium text-slate-900 dark:text-white">{{ count.count_number }}</td>
+                        <td>{{ count.count_date.strftime('%Y-%m-%d') if count.count_date else '-' }}</td>
+                        <td>{{ count.warehouse.warehouse_name if count.warehouse else 'All Warehouses' }}</td>
+                        <td>
+                            {% if count.is_cycle_count %}
+                            <span class="inline-flex items-center gap-1 text-xs font-medium text-violet-600 dark:text-violet-400">
+                                <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                                </svg>
+                                Cycle
+                            </span>
+                            {% elif count.is_full_count %}
+                            <span class="inline-flex items-center gap-1 text-xs font-medium text-blue-600 dark:text-blue-400">
+                                <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                                </svg>
+                                Full
+                            </span>
+                            {% else %}
+                            <span class="text-xs text-slate-500">Partial</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-right font-mono">{{ count.total_items | default(0) }}</td>
+                        <td class="text-right font-mono">{{ count.items_counted | default(0) }}</td>
+                        <td class="text-right font-mono">
+                            {% if count.total_variance_value and count.total_variance_value != 0 %}
+                            <span class="{{ 'text-rose-600' if count.total_variance_value < 0 else 'text-emerald-600' }}">
+                                {{ '{:,.2f}'.format(count.total_variance_value) }}
+                            </span>
+                            {% else %}
+                            <span class="text-slate-400">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% set status_colors = {
+                                'DRAFT': 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300',
+                                'IN_PROGRESS': 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+                                'COMPLETED': 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+                                'POSTED': 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+                                'CANCELLED': 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400'
+                            } %}
+                            <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium {{ status_colors.get(count.status.value, status_colors['DRAFT']) }}">
+                                {{ count.status.value | replace('_', ' ') | title }}
+                            </span>
+                        </td>
+                        <td>
+                            <a href="/operations/inv/counts/{{ count.count_id }}" class="text-slate-400 hover:text-amber-600 dark:hover:text-amber-400">
+                                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                                </svg>
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        {{ empty_state(
+            title="No stock counts yet",
+            description="Create your first inventory count to verify stock levels.",
+            action_url="/operations/inv/counts/new",
+            action_label="New Count"
+        ) }}
+        {% endif %}
+    </div>
+
+    {% if counts | default([]) | length > 0 %}
+    {{ pagination(page, total_pages, '/operations/inv/counts') }}
+    {% endif %}
+</div>
+{% endblock %}

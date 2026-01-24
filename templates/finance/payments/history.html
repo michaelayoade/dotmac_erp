@@ -1,0 +1,128 @@
+{% extends "finance/base_finance.html" %}
+
+{% block page_title %}Payment History{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400">
+    <a href="/finance/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white">Payment History</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Filters -->
+    <div class="flex flex-wrap items-center justify-between gap-4">
+        <div class="flex items-center gap-2">
+            <form method="GET" class="flex items-center gap-2">
+                <select name="status"
+                        onchange="this.form.submit()"
+                        class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-primary-500 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800">
+                    <option value="">All Statuses</option>
+                    {% for s in statuses %}
+                    <option value="{{ s }}" {% if status_filter == s %}selected{% endif %}>{{ s }}</option>
+                    {% endfor %}
+                </select>
+            </form>
+        </div>
+        <p class="text-sm text-slate-500 dark:text-slate-400">
+            {{ total }} payment{{ 's' if total != 1 else '' }} found
+        </p>
+    </div>
+
+    <!-- Payment Intents Table -->
+    <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50">
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+                <thead class="bg-slate-50 dark:bg-slate-800">
+                    <tr>
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Reference</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Invoice</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Amount</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Status</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Created</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Paid At</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                    {% for intent in intents %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/70">
+                        <td class="whitespace-nowrap px-4 py-3">
+                            <span class="font-mono text-sm text-slate-900 dark:text-white">{{ intent.paystack_reference }}</span>
+                        </td>
+                        <td class="whitespace-nowrap px-4 py-3">
+                            {% if intent.intent_metadata and intent.intent_metadata.invoice_number %}
+                            <a href="/finance/ar/invoices/{{ intent.source_id }}"
+                               class="font-mono text-sm text-primary-600 hover:underline dark:text-primary-400">
+                                {{ intent.intent_metadata.invoice_number }}
+                            </a>
+                            {% else %}
+                            <span class="text-sm text-slate-500">-</span>
+                            {% endif %}
+                        </td>
+                        <td class="whitespace-nowrap px-4 py-3">
+                            <span class="text-sm font-medium text-slate-900 dark:text-white">
+                                {{ intent.currency_code }} {{ intent.amount | format_currency }}
+                            </span>
+                        </td>
+                        <td class="whitespace-nowrap px-4 py-3">
+                            {% set status_colors = {
+                                'PENDING': 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+                                'PROCESSING': 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+                                'COMPLETED': 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+                                'FAILED': 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400',
+                                'ABANDONED': 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-400',
+                                'EXPIRED': 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-400'
+                            } %}
+                            <span class="inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium {{ status_colors.get(intent.status.value, 'bg-slate-100 text-slate-700') }}">
+                                {{ intent.status.value }}
+                            </span>
+                        </td>
+                        <td class="whitespace-nowrap px-4 py-3 text-sm text-slate-500 dark:text-slate-400">
+                            {{ intent.created_at.strftime('%Y-%m-%d %H:%M') }}
+                        </td>
+                        <td class="whitespace-nowrap px-4 py-3 text-sm text-slate-500 dark:text-slate-400">
+                            {% if intent.paid_at %}
+                            {{ intent.paid_at.strftime('%Y-%m-%d %H:%M') }}
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6" class="px-4 py-8 text-center text-sm text-slate-500 dark:text-slate-400">
+                            No payment intents found
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Pagination -->
+    {% if total_pages > 1 %}
+    <nav class="flex items-center justify-center gap-2">
+        {% if current_page > 1 %}
+        <a href="?page={{ current_page - 1 }}{% if status_filter %}&status={{ status_filter }}{% endif %}"
+           class="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700">
+            Previous
+        </a>
+        {% endif %}
+
+        <span class="text-sm text-slate-500 dark:text-slate-400">
+            Page {{ current_page }} of {{ total_pages }}
+        </span>
+
+        {% if current_page < total_pages %}
+        <a href="?page={{ current_page + 1 }}{% if status_filter %}&status={{ status_filter }}{% endif %}"
+           class="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700">
+            Next
+        </a>
+        {% endif %}
+    </nav>
+    {% endif %}
+</div>
+{% endblock %}

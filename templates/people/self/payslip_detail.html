@@ -1,0 +1,297 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}Payslip {{ slip.slip_number }}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/self/payslips" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">My Payslips</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">{{ slip.slip_number }}</span>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<button onclick="window.print()" class="btn btn-secondary">
+    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
+    </svg>
+    Print
+</button>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6 print:space-y-4">
+    {# Status Banner #}
+    {% set status_banners = {
+        'POSTED': {'bg': 'bg-emerald-50 dark:bg-emerald-900/20', 'border': 'border-emerald-200 dark:border-emerald-800', 'text': 'text-emerald-700 dark:text-emerald-300', 'icon_bg': 'bg-emerald-100 dark:bg-emerald-900/50', 'icon': 'text-emerald-500'},
+        'PAID': {'bg': 'bg-teal-50 dark:bg-teal-900/20', 'border': 'border-teal-200 dark:border-teal-800', 'text': 'text-teal-700 dark:text-teal-300', 'icon_bg': 'bg-teal-100 dark:bg-teal-900/50', 'icon': 'text-teal-500'}
+    } %}
+    {% set banner = status_banners.get(slip.status.value, status_banners.POSTED) %}
+
+    <div class="rounded-lg border {{ banner.border }} {{ banner.bg }} p-4 print:hidden">
+        <div class="flex items-center gap-3">
+            <div class="flex h-10 w-10 items-center justify-center rounded-full {{ banner.icon_bg }}">
+                <svg class="h-5 w-5 {{ banner.icon }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                </svg>
+            </div>
+            <div>
+                <p class="font-semibold {{ banner.text }}">{{ slip.status.value | title }}</p>
+                <p class="text-sm {{ banner.text }} opacity-75">
+                    {% if slip.status.value == 'PAID' %}
+                    Payment processed
+                    {% else %}
+                    Payslip posted
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 print:grid-cols-3">
+        {# Employee & Period Info #}
+        <div class="card p-6 print:p-4 print:border print:border-slate-300">
+            <h3 class="text-sm font-semibold text-slate-900 dark:text-white mb-4 print:text-black">Employee Information</h3>
+            <div class="space-y-3">
+                <div class="flex items-center gap-3">
+                    <div class="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-purple-600 text-white text-sm font-semibold shadow-lg shadow-violet-500/25 print:shadow-none print:bg-violet-500">
+                        {{ slip.employee_name[:2] | upper if slip.employee_name else 'NA' }}
+                    </div>
+                    <div>
+                        <p class="font-medium text-slate-900 dark:text-white print:text-black">{{ slip.employee_name }}</p>
+                        <p class="text-sm text-slate-500 dark:text-slate-400 print:text-slate-600">{{ slip.employee.employee_code if slip.employee else 'N/A' }}</p>
+                    </div>
+                </div>
+                <div class="pt-3 border-t border-slate-100 dark:border-slate-800 print:border-slate-300">
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 print:text-slate-600">Period</p>
+                            <p class="text-sm font-medium text-slate-900 dark:text-white print:text-black">
+                                {{ slip.start_date.strftime('%b %d') }} - {{ slip.end_date.strftime('%b %d, %Y') }}
+                            </p>
+                        </div>
+                        <div>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 print:text-slate-600">Payment Days</p>
+                            <p class="text-sm font-medium text-slate-900 dark:text-white print:text-black">{{ slip.payment_days }} / {{ slip.total_working_days }}</p>
+                        </div>
+                    </div>
+                </div>
+                {% if slip.bank_name %}
+                <div class="pt-3 border-t border-slate-100 dark:border-slate-800 print:border-slate-300">
+                    <p class="text-xs text-slate-500 dark:text-slate-400 print:text-slate-600 mb-1">Bank Details</p>
+                    <p class="text-sm text-slate-900 dark:text-white print:text-black">{{ slip.bank_name }}</p>
+                    <p class="text-sm text-slate-600 dark:text-slate-400 print:text-slate-600 font-mono">
+                        {{ '•' * (slip.bank_account_number | length - 4) }}{{ slip.bank_account_number[-4:] if slip.bank_account_number else '-' }}
+                    </p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        {# Summary Card #}
+        <div class="lg:col-span-2 card p-6 print:p-4 print:border print:border-slate-300">
+            <h3 class="text-sm font-semibold text-slate-900 dark:text-white mb-4 print:text-black">Pay Summary</h3>
+            <div class="grid grid-cols-3 gap-4">
+                <div class="text-center p-4 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 print:bg-emerald-50">
+                    <p class="text-xs text-emerald-600 dark:text-emerald-400 print:text-emerald-700 mb-1">Gross Pay</p>
+                    <p class="text-2xl font-bold text-emerald-700 dark:text-emerald-300 print:text-emerald-700 font-mono">
+                        {{ "{:,.2f}".format(slip.gross_pay) }}
+                    </p>
+                    <p class="text-xs text-emerald-600 dark:text-emerald-400 print:text-emerald-700">{{ slip.currency_code }}</p>
+                </div>
+                <div class="text-center p-4 rounded-lg bg-red-50 dark:bg-red-900/20 print:bg-red-50">
+                    <p class="text-xs text-red-600 dark:text-red-400 print:text-red-700 mb-1">Total Deductions</p>
+                    <p class="text-2xl font-bold text-red-700 dark:text-red-300 print:text-red-700 font-mono">
+                        ({{ "{:,.2f}".format(slip.total_deduction) }})
+                    </p>
+                    <p class="text-xs text-red-600 dark:text-red-400 print:text-red-700">{{ slip.currency_code }}</p>
+                </div>
+                <div class="text-center p-4 rounded-lg bg-teal-50 dark:bg-teal-900/20 print:bg-teal-50">
+                    <p class="text-xs text-teal-600 dark:text-teal-400 print:text-teal-700 mb-1">Net Pay</p>
+                    <p class="text-2xl font-bold text-teal-700 dark:text-teal-300 print:text-teal-700 font-mono">
+                        {{ "{:,.2f}".format(slip.net_pay) }}
+                    </p>
+                    <p class="text-xs text-teal-600 dark:text-teal-400 print:text-teal-700">{{ slip.currency_code }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# Earnings & Deductions #}
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 print:grid-cols-2">
+        {# Earnings #}
+        <div class="card print:border print:border-slate-300">
+            <div class="px-4 py-3 border-b border-slate-200 dark:border-slate-700 print:border-slate-300 flex items-center justify-between">
+                <h3 class="font-semibold text-slate-900 dark:text-white print:text-black flex items-center gap-2">
+                    <span class="flex h-6 w-6 items-center justify-center rounded bg-emerald-100 dark:bg-emerald-900/50 print:bg-emerald-100">
+                        <svg class="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 print:text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                        </svg>
+                    </span>
+                    Earnings
+                </h3>
+                <span class="text-sm font-mono text-emerald-600 dark:text-emerald-400 print:text-emerald-600">{{ "{:,.2f}".format(slip.gross_pay) }}</span>
+            </div>
+            <div class="divide-y divide-slate-100 dark:divide-slate-800 print:divide-slate-300">
+                {% for earning in slip.earnings %}
+                <div class="px-4 py-3 flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-slate-900 dark:text-white print:text-black">{{ earning.component_name }}</p>
+                        {% if earning.abbr %}
+                        <p class="text-xs text-slate-500 dark:text-slate-400 print:text-slate-600">{{ earning.abbr }}</p>
+                        {% endif %}
+                    </div>
+                    <span class="font-mono text-sm text-slate-900 dark:text-white print:text-black">{{ "{:,.2f}".format(earning.amount) }}</span>
+                </div>
+                {% else %}
+                <div class="px-4 py-8 text-center text-sm text-slate-500 dark:text-slate-400 print:text-slate-600">
+                    No earnings recorded
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        {# Deductions #}
+        <div class="card print:border print:border-slate-300">
+            <div class="px-4 py-3 border-b border-slate-200 dark:border-slate-700 print:border-slate-300 flex items-center justify-between">
+                <h3 class="font-semibold text-slate-900 dark:text-white print:text-black flex items-center gap-2">
+                    <span class="flex h-6 w-6 items-center justify-center rounded bg-red-100 dark:bg-red-900/50 print:bg-red-100">
+                        <svg class="h-3.5 w-3.5 text-red-600 dark:text-red-400 print:text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/>
+                        </svg>
+                    </span>
+                    Deductions
+                </h3>
+                <span class="text-sm font-mono text-red-600 dark:text-red-400 print:text-red-600">({{ "{:,.2f}".format(slip.total_deduction) }})</span>
+            </div>
+            <div class="divide-y divide-slate-100 dark:divide-slate-800 print:divide-slate-300">
+                {% for deduction in slip.deductions %}
+                <div class="px-4 py-3 flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-slate-900 dark:text-white print:text-black">{{ deduction.component_name }}</p>
+                        {% if deduction.abbr %}
+                        <p class="text-xs text-slate-500 dark:text-slate-400 print:text-slate-600">{{ deduction.abbr }}</p>
+                        {% endif %}
+                    </div>
+                    <span class="font-mono text-sm text-red-600 dark:text-red-400 print:text-red-600">({{ "{:,.2f}".format(deduction.amount) }})</span>
+                </div>
+                {% else %}
+                <div class="px-4 py-8 text-center text-sm text-slate-500 dark:text-slate-400 print:text-slate-600">
+                    No deductions recorded
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    {# PAYE Tax Breakdown #}
+    {% if paye_breakdown %}
+    <div class="card print:border print:border-slate-300">
+        <div class="px-4 py-3 border-b border-slate-200 dark:border-slate-700 print:border-slate-300">
+            <h3 class="font-semibold text-slate-900 dark:text-white print:text-black flex items-center gap-2">
+                <span class="flex h-6 w-6 items-center justify-center rounded bg-violet-100 dark:bg-violet-900/50 print:bg-violet-100">
+                    <svg class="h-3.5 w-3.5 text-violet-600 dark:text-violet-400 print:text-violet-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+                    </svg>
+                </span>
+                PAYE Tax Calculation (NTA 2025)
+            </h3>
+        </div>
+        <div class="p-4 grid grid-cols-1 lg:grid-cols-2 gap-6 print:grid-cols-2">
+            {# Left: Summary #}
+            <div class="space-y-4">
+                <h4 class="text-sm font-medium text-slate-700 dark:text-slate-300 print:text-slate-700">Annual Calculation Summary</h4>
+                <dl class="space-y-2 text-sm">
+                    <div class="flex justify-between py-1">
+                        <dt class="text-slate-500 dark:text-slate-400 print:text-slate-600">Annual Gross</dt>
+                        <dd class="font-mono text-slate-900 dark:text-white print:text-black">{{ "{:,.2f}".format(paye_breakdown.annual_gross) }}</dd>
+                    </div>
+                    <div class="flex justify-between py-1">
+                        <dt class="text-slate-500 dark:text-slate-400 print:text-slate-600">Less: Pension ({{ (paye_breakdown.pension_rate * 100) | int }}%)</dt>
+                        <dd class="font-mono text-red-600 dark:text-red-400 print:text-red-600">({{ "{:,.2f}".format(paye_breakdown.pension_amount) }})</dd>
+                    </div>
+                    <div class="flex justify-between py-1">
+                        <dt class="text-slate-500 dark:text-slate-400 print:text-slate-600">Less: NHF ({{ (paye_breakdown.nhf_rate * 100) | round(1) }}%)</dt>
+                        <dd class="font-mono text-red-600 dark:text-red-400 print:text-red-600">({{ "{:,.2f}".format(paye_breakdown.nhf_amount) }})</dd>
+                    </div>
+                    {% if paye_breakdown.nhis_amount > 0 %}
+                    <div class="flex justify-between py-1">
+                        <dt class="text-slate-500 dark:text-slate-400 print:text-slate-600">Less: NHIS</dt>
+                        <dd class="font-mono text-red-600 dark:text-red-400 print:text-red-600">({{ "{:,.2f}".format(paye_breakdown.nhis_amount) }})</dd>
+                    </div>
+                    {% endif %}
+                    {% if paye_breakdown.rent_relief > 0 %}
+                    <div class="flex justify-between py-1">
+                        <dt class="text-slate-500 dark:text-slate-400 print:text-slate-600">Less: Rent Relief (20% of rent, max 500K)</dt>
+                        <dd class="font-mono text-red-600 dark:text-red-400 print:text-red-600">({{ "{:,.2f}".format(paye_breakdown.rent_relief) }})</dd>
+                    </div>
+                    {% endif %}
+                    <div class="flex justify-between py-2 border-t border-slate-200 dark:border-slate-700 print:border-slate-300 font-medium">
+                        <dt class="text-slate-700 dark:text-slate-300 print:text-slate-700">Taxable Income</dt>
+                        <dd class="font-mono text-slate-900 dark:text-white print:text-black">{{ "{:,.2f}".format(paye_breakdown.taxable_income) }}</dd>
+                    </div>
+                    <div class="flex justify-between py-2 border-t border-slate-200 dark:border-slate-700 print:border-slate-300">
+                        <dt class="text-slate-700 dark:text-slate-300 print:text-slate-700 font-medium">Annual Tax</dt>
+                        <dd class="font-mono font-bold text-violet-600 dark:text-violet-400 print:text-violet-600">{{ "{:,.2f}".format(paye_breakdown.annual_tax) }}</dd>
+                    </div>
+                    <div class="flex justify-between py-2 bg-violet-50 dark:bg-violet-900/20 print:bg-violet-50 rounded-lg px-3 -mx-3">
+                        <dt class="text-violet-700 dark:text-violet-300 print:text-violet-700 font-semibold">Monthly PAYE</dt>
+                        <dd class="font-mono font-bold text-violet-700 dark:text-violet-300 print:text-violet-700">{{ "{:,.2f}".format(paye_breakdown.monthly_tax) }}</dd>
+                    </div>
+                    <div class="flex justify-between py-1 text-xs">
+                        <dt class="text-slate-400 dark:text-slate-500 print:text-slate-500">Effective Tax Rate</dt>
+                        <dd class="font-mono text-slate-500 dark:text-slate-400 print:text-slate-500">{{ "{:.1f}".format(paye_breakdown.effective_rate * 100) }}%</dd>
+                    </div>
+                </dl>
+            </div>
+
+            {# Right: Tax Bands #}
+            <div class="space-y-4">
+                <h4 class="text-sm font-medium text-slate-700 dark:text-slate-300 print:text-slate-700">Tax by Band (Progressive)</h4>
+                <div class="space-y-2">
+                    {% for band in paye_breakdown.band_breakdowns %}
+                    <div class="rounded-lg border border-slate-100 dark:border-slate-800 print:border-slate-300 p-3">
+                        <div class="flex items-center justify-between mb-1">
+                            <span class="text-xs font-medium text-slate-600 dark:text-slate-400 print:text-slate-600">{{ band.band_name }}</span>
+                            <span class="text-xs text-slate-500 dark:text-slate-500 print:text-slate-500">{{ band.rate_percent }}%</span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs text-slate-400 dark:text-slate-500 print:text-slate-500">{{ band.range_display }}</span>
+                            <span class="font-mono text-sm {% if band.tax_amount > 0 %}text-violet-600 dark:text-violet-400 print:text-violet-600{% else %}text-slate-400{% endif %}">
+                                {{ "{:,.2f}".format(band.tax_amount) }}
+                            </span>
+                        </div>
+                        {% if band.taxable_in_band > 0 %}
+                        <div class="mt-1 text-xs text-slate-400 dark:text-slate-500 print:text-slate-500">
+                            Taxable: {{ "{:,.2f}".format(band.taxable_in_band) }}
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {# Back Button #}
+    <div class="print:hidden">
+        <a href="/people/self/payslips" class="btn btn-secondary">
+            <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+            </svg>
+            Back to Payslips
+        </a>
+    </div>
+</div>
+
+<style>
+@media print {
+    .print\:hidden { display: none !important; }
+    .card { box-shadow: none !important; }
+    body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+}
+</style>
+{% endblock %}

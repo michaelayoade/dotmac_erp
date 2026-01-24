@@ -48,7 +48,7 @@ class TestFXService:
             'app.models.ifrs.core_fx.exchange_rate_type': MagicMock(),
             'app.models.ifrs.core_org.organization': MagicMock(),
         }):
-            from app.services.ifrs.platform.fx import FXService
+            from app.services.finance.platform.fx import FXService
             return FXService
 
     def test_get_rate_same_currency_returns_one(

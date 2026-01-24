@@ -16,9 +16,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.models.ifrs.cons.consolidation_run import ConsolidationStatus
-from app.models.ifrs.cons.elimination_entry import EliminationType
-from app.services.ifrs.cons.cons_posting_adapter import (
+from app.models.finance.cons.consolidation_run import ConsolidationStatus
+from app.models.finance.cons.elimination_entry import EliminationType
+from app.services.finance.cons.cons_posting_adapter import (
     CONSPostingAdapter,
     CONSPostingResult,
 )
@@ -227,7 +227,7 @@ class TestPostEliminationEntry:
         """Test posting when elimination entry not found."""
 
         def get_side_effect(model, id):
-            from app.models.ifrs.cons.consolidation_run import ConsolidationRun
+            from app.models.finance.cons.consolidation_run import ConsolidationRun
 
             if model == ConsolidationRun:
                 return mock_run

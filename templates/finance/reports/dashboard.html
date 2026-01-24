@@ -1,0 +1,568 @@
+{% extends "finance/base_finance.html" %}
+
+{% block page_title %}Reports{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 mt-1">
+    <a href="/dashboard" class="hover:text-slate-700 dark:hover:text-slate-300">Dashboard</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="text-slate-700 dark:text-slate-300">Reports</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto space-y-8">
+    <!-- Period Filter -->
+    <div class="card p-4">
+        <form method="get" class="flex flex-wrap items-end gap-4">
+            <div class="flex-1 min-w-[150px]">
+                <label class="form-label">Start date</label>
+                <input type="date" name="start_date" value="{{ key_metrics.start_date }}" class="form-input">
+            </div>
+            <div class="flex-1 min-w-[150px]">
+                <label class="form-label">End date</label>
+                <input type="date" name="end_date" value="{{ key_metrics.end_date }}" class="form-input">
+            </div>
+            <button type="submit" class="btn btn-primary">
+                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+                Apply filter
+            </button>
+            <div class="flex-shrink-0">
+                <p class="text-sm text-slate-500 dark:text-slate-400">Period: <span class="font-medium text-slate-700 dark:text-slate-300">{{ key_metrics.period_name }}</span></p>
+            </div>
+        </form>
+    </div>
+
+    <!-- Key Metrics Summary Cards -->
+    <section class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <!-- Total Assets -->
+        <a href="/finance/reports/balance-sheet" class="card card-hover p-5 group">
+            <div class="flex items-center justify-between mb-3">
+                <span class="text-sm font-medium text-slate-500 dark:text-slate-400">Total Assets</span>
+                <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
+                    </svg>
+                </div>
+            </div>
+            <p class="text-2xl font-bold text-slate-900 dark:text-white font-mono">{{ key_metrics.total_assets }}</p>
+            <p class="text-xs text-slate-400 dark:text-slate-500 mt-1 group-hover:text-teal-500 transition-colors">View Statement of Financial Position</p>
+        </a>
+
+        <!-- Total Liabilities -->
+        <a href="/finance/reports/balance-sheet" class="card card-hover p-5 group">
+            <div class="flex items-center justify-between mb-3">
+                <span class="text-sm font-medium text-slate-500 dark:text-slate-400">Total Liabilities</span>
+                <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z"/>
+                    </svg>
+                </div>
+            </div>
+            <p class="text-2xl font-bold text-slate-900 dark:text-white font-mono">{{ key_metrics.total_liabilities }}</p>
+            <p class="text-xs text-slate-400 dark:text-slate-500 mt-1 group-hover:text-teal-500 transition-colors">View Statement of Financial Position</p>
+        </a>
+
+        <!-- Net Income -->
+        <a href="/finance/reports/income-statement" class="card card-hover p-5 group">
+            <div class="flex items-center justify-between mb-3">
+                <span class="text-sm font-medium text-slate-500 dark:text-slate-400">Net Income</span>
+                <div class="flex h-9 w-9 items-center justify-center rounded-lg {% if key_metrics.is_profit %}bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400{% else %}bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400{% endif %}">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+                    </svg>
+                </div>
+            </div>
+            <p class="text-2xl font-bold {% if key_metrics.is_profit %}text-emerald-600 dark:text-emerald-400{% else %}text-rose-600 dark:text-rose-400{% endif %} font-mono">{{ key_metrics.net_income }}</p>
+            <p class="text-xs text-slate-400 dark:text-slate-500 mt-1 group-hover:text-teal-500 transition-colors">View Statement of Profit or Loss</p>
+        </a>
+
+        <!-- Total Equity -->
+        <a href="/finance/reports/balance-sheet" class="card card-hover p-5 group">
+            <div class="flex items-center justify-between mb-3">
+                <span class="text-sm font-medium text-slate-500 dark:text-slate-400">Total Equity</span>
+                <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-violet-100 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3"/>
+                    </svg>
+                </div>
+            </div>
+            <p class="text-2xl font-bold text-slate-900 dark:text-white font-mono">{{ key_metrics.total_equity }}</p>
+            <p class="text-xs text-slate-400 dark:text-slate-500 mt-1 group-hover:text-teal-500 transition-colors">View Statement of Financial Position</p>
+        </a>
+    </section>
+
+    <!-- P&L and AP/AR Summary Row -->
+    <section class="grid gap-6 lg:grid-cols-3">
+        <!-- P&L Summary with Mini Chart -->
+        <div class="card p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="font-semibold text-slate-900 dark:text-white">Profit &amp; loss summary</h3>
+                <a href="/finance/reports/income-statement" class="text-sm text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300">View report</a>
+            </div>
+
+            <!-- Revenue vs Expenses Visual Bar -->
+            <div class="mb-4">
+                <div class="flex items-center gap-3 mb-2">
+                    <div class="flex-1">
+                        <div class="flex justify-between text-xs mb-1">
+                            <span class="text-slate-500 dark:text-slate-400">Revenue</span>
+                            <span class="font-mono text-emerald-600 dark:text-emerald-400">{{ key_metrics.total_revenue }}</span>
+                        </div>
+                        <div class="h-3 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                            <div class="h-full bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full transition-all" style="width: 100%"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3">
+                    <div class="flex-1">
+                        <div class="flex justify-between text-xs mb-1">
+                            <span class="text-slate-500 dark:text-slate-400">Expenses</span>
+                            <span class="font-mono text-rose-600 dark:text-rose-400">{{ key_metrics.total_expenses }}</span>
+                        </div>
+                        <div class="h-3 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                            {% set expense_pct = (key_metrics.total_expenses_raw / key_metrics.total_revenue_raw * 100) if key_metrics.total_revenue_raw > 0 else 0 %}
+                            <div class="h-full bg-gradient-to-r from-rose-500 to-pink-500 rounded-full transition-all" style="width: {{ [expense_pct, 100] | min }}%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Net Result -->
+            <div class="flex items-center justify-between py-3 rounded-lg {% if key_metrics.is_profit %}bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20{% else %}bg-gradient-to-r from-rose-50 to-pink-50 dark:from-rose-900/20 dark:to-pink-900/20{% endif %} px-4 -mx-2">
+                <div class="flex items-center gap-2">
+                    {% if key_metrics.is_profit %}
+                    <svg class="h-5 w-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+                    </svg>
+                    {% else %}
+                    <svg class="h-5 w-5 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6"/>
+                    </svg>
+                    {% endif %}
+                    <span class="text-sm font-semibold text-slate-900 dark:text-white">Net {{ 'Income' if key_metrics.is_profit else 'Loss' }}</span>
+                </div>
+                <span class="font-mono font-bold text-lg {% if key_metrics.is_profit %}text-emerald-600 dark:text-emerald-400{% else %}text-rose-600 dark:text-rose-400{% endif %}">{{ key_metrics.net_income }}</span>
+            </div>
+        </div>
+
+        <!-- AP Summary with Mini Aging Chart -->
+        <a href="/finance/reports/ap-aging" class="card card-hover p-6 group">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="font-semibold text-slate-900 dark:text-white">Accounts Payable</h3>
+                <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400">
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2z"/>
+                    </svg>
+                </div>
+            </div>
+            <div class="space-y-3">
+                <div>
+                    <p class="text-2xl font-bold text-slate-900 dark:text-white font-mono">{{ key_metrics.ap_total }}</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Total Outstanding</p>
+                </div>
+            </div>
+            <p class="text-xs text-slate-400 mt-4 group-hover:text-teal-500 transition-colors flex items-center gap-1">
+                View aging report
+                <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                </svg>
+            </p>
+        </a>
+
+        <!-- AR Summary with Mini Aging Chart -->
+        <a href="/finance/reports/ar-aging" class="card card-hover p-6 group">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="font-semibold text-slate-900 dark:text-white">Accounts Receivable</h3>
+                <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-100 text-teal-600 dark:bg-teal-900/30 dark:text-teal-400">
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
+                    </svg>
+                </div>
+            </div>
+            <div class="space-y-3">
+                <div>
+                    <p class="text-2xl font-bold text-slate-900 dark:text-white font-mono">{{ key_metrics.ar_total }}</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Total Outstanding</p>
+                </div>
+            </div>
+            <p class="text-xs text-slate-400 mt-4 group-hover:text-teal-500 transition-colors flex items-center gap-1">
+                View aging report
+                <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                </svg>
+            </p>
+        </a>
+    </section>
+
+    <!-- Tax and Expense Summary Row -->
+    <section class="grid gap-6 lg:grid-cols-2">
+        <!-- Tax Summary with Visual -->
+        <a href="/finance/reports/tax-summary" class="card card-hover p-6 group">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="font-semibold text-slate-900 dark:text-white">Tax Position</h3>
+                <div class="flex h-8 w-8 items-center justify-center rounded-lg {% if key_metrics.is_tax_payable %}bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400{% else %}bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400{% endif %}">
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z"/>
+                    </svg>
+                </div>
+            </div>
+            <div class="space-y-4">
+                <!-- Net Tax with Visual Indicator -->
+                <div class="flex items-center gap-4">
+                    <div class="flex-1">
+                        <p class="text-2xl font-bold {% if key_metrics.is_tax_payable %}text-amber-600 dark:text-amber-400{% else %}text-blue-600 dark:text-blue-400{% endif %} font-mono">{{ key_metrics.net_tax }}</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">{{ 'Net Payable' if key_metrics.is_tax_payable else 'Net Refundable' }}</p>
+                    </div>
+                    <!-- Mini Tax Balance Indicator -->
+                    <div class="flex flex-col items-center">
+                        <div class="relative w-16 h-16">
+                            <svg class="w-full h-full -rotate-90" viewBox="0 0 36 36">
+                                <circle cx="18" cy="18" r="14" fill="none" stroke="currentColor"
+                                        class="text-slate-100 dark:text-slate-800" stroke-width="3"/>
+                                {% set tax_ratio = (key_metrics.output_tax_raw / (key_metrics.output_tax_raw + key_metrics.input_tax_raw) * 100) if (key_metrics.output_tax_raw + key_metrics.input_tax_raw) > 0 else 50 %}
+                                <circle cx="18" cy="18" r="14" fill="none"
+                                        class="{% if key_metrics.is_tax_payable %}text-amber-500{% else %}text-blue-500{% endif %}"
+                                        stroke="currentColor" stroke-width="3"
+                                        stroke-dasharray="{{ tax_ratio * 0.88 }}, 88"
+                                        stroke-linecap="round"/>
+                            </svg>
+                            <div class="absolute inset-0 flex items-center justify-center">
+                                {% if key_metrics.is_tax_payable %}
+                                <svg class="h-5 w-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/>
+                                </svg>
+                                {% else %}
+                                <svg class="h-5 w-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/>
+                                </svg>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Output vs Input Tax Bars -->
+                <div class="space-y-2">
+                    <div class="flex items-center gap-3">
+                        <span class="text-xs text-slate-500 dark:text-slate-400 w-16">Output</span>
+                        <div class="flex-1 h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                            <div class="h-full bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full" style="width: 100%"></div>
+                        </div>
+                        <span class="text-xs font-mono text-emerald-600 dark:text-emerald-400 w-20 text-right">{{ key_metrics.output_tax }}</span>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span class="text-xs text-slate-500 dark:text-slate-400 w-16">Input</span>
+                        <div class="flex-1 h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                            {% set input_pct = (key_metrics.input_tax_raw / key_metrics.output_tax_raw * 100) if key_metrics.output_tax_raw > 0 else 0 %}
+                            <div class="h-full bg-gradient-to-r from-rose-500 to-pink-500 rounded-full" style="width: {{ [input_pct, 100] | min }}%"></div>
+                        </div>
+                        <span class="text-xs font-mono text-rose-600 dark:text-rose-400 w-20 text-right">{{ key_metrics.input_tax }}</span>
+                    </div>
+                </div>
+
+                {% if key_metrics.overdue_tax_periods > 0 %}
+                <div class="flex items-center gap-2 py-2 px-3 rounded-lg bg-rose-50 dark:bg-rose-900/20 animate-pulse">
+                    <svg class="h-4 w-4 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                    </svg>
+                    <span class="text-xs font-medium text-rose-700 dark:text-rose-300">{{ key_metrics.overdue_tax_periods }} overdue tax period{{ 's' if key_metrics.overdue_tax_periods > 1 else '' }}</span>
+                </div>
+                {% endif %}
+            </div>
+            <p class="text-xs text-slate-400 mt-4 group-hover:text-teal-500 transition-colors flex items-center gap-1">
+                View Tax Summary
+                <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                </svg>
+            </p>
+        </a>
+
+        <!-- Expense Summary with Visual -->
+        <a href="/finance/reports/expense-summary" class="card card-hover p-6 group">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="font-semibold text-slate-900 dark:text-white">Expenses</h3>
+                <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400">
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2z"/>
+                    </svg>
+                </div>
+            </div>
+            <div class="space-y-4">
+                <div class="flex items-center gap-4">
+                    <div class="flex-1">
+                        <p class="text-2xl font-bold text-rose-600 dark:text-rose-400 font-mono">{{ key_metrics.total_expenses }}</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Total for Period</p>
+                    </div>
+                    <!-- Expense Ratio Indicator -->
+                    <div class="relative w-16 h-16">
+                        <svg class="w-full h-full -rotate-90" viewBox="0 0 36 36">
+                            <circle cx="18" cy="18" r="14" fill="none" stroke="currentColor"
+                                    class="text-slate-100 dark:text-slate-800" stroke-width="3"/>
+                            {% set expense_ratio = (key_metrics.total_expenses_raw / key_metrics.total_revenue_raw * 100) if key_metrics.total_revenue_raw > 0 else 0 %}
+                            <circle cx="18" cy="18" r="14" fill="none"
+                                    class="{% if expense_ratio > 100 %}text-rose-500{% elif expense_ratio > 80 %}text-amber-500{% else %}text-emerald-500{% endif %}"
+                                    stroke="currentColor" stroke-width="3"
+                                    stroke-dasharray="{{ ([expense_ratio, 100] | min) * 0.88 }}, 88"
+                                    stroke-linecap="round"/>
+                        </svg>
+                        <div class="absolute inset-0 flex items-center justify-center">
+                            <span class="text-xs font-bold {% if expense_ratio > 100 %}text-rose-600 dark:text-rose-400{% elif expense_ratio > 80 %}text-amber-600 dark:text-amber-400{% else %}text-emerald-600 dark:text-emerald-400{% endif %}">
+                                {{ "%.0f"|format(expense_ratio) }}%
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Expense vs Revenue Comparison -->
+                <div class="space-y-2">
+                    <div class="flex items-center gap-3">
+                        <span class="text-xs text-slate-500 dark:text-slate-400 w-16">Revenue</span>
+                        <div class="flex-1 h-2.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                            <div class="h-full bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full" style="width: 100%"></div>
+                        </div>
+                        <span class="text-xs font-mono text-emerald-600 dark:text-emerald-400 w-20 text-right">{{ key_metrics.total_revenue }}</span>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span class="text-xs text-slate-500 dark:text-slate-400 w-16">Expenses</span>
+                        <div class="flex-1 h-2.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                            {% set exp_pct = (key_metrics.total_expenses_raw / key_metrics.total_revenue_raw * 100) if key_metrics.total_revenue_raw > 0 else 0 %}
+                            <div class="h-full bg-gradient-to-r from-rose-500 to-pink-500 rounded-full" style="width: {{ [exp_pct, 100] | min }}%"></div>
+                        </div>
+                        <span class="text-xs font-mono text-rose-600 dark:text-rose-400 w-20 text-right">{{ key_metrics.total_expenses }}</span>
+                    </div>
+                </div>
+
+                <!-- Profit Margin Indicator -->
+                <div class="flex items-center justify-between py-2 px-3 rounded-lg {% if key_metrics.is_profit %}bg-emerald-50 dark:bg-emerald-900/20{% else %}bg-rose-50 dark:bg-rose-900/20{% endif %}">
+                    <span class="text-xs text-slate-600 dark:text-slate-400">Margin</span>
+                    {% set margin = ((key_metrics.total_revenue_raw - key_metrics.total_expenses_raw) / key_metrics.total_revenue_raw * 100) if key_metrics.total_revenue_raw > 0 else 0 %}
+                    <span class="text-sm font-mono font-semibold {% if margin > 0 %}text-emerald-600 dark:text-emerald-400{% else %}text-rose-600 dark:text-rose-400{% endif %}">
+                        {{ "%.1f"|format(margin) }}%
+                    </span>
+                </div>
+            </div>
+            <p class="text-xs text-slate-400 mt-4 group-hover:text-teal-500 transition-colors flex items-center gap-1">
+                View Expense Summary
+                <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                </svg>
+            </p>
+        </a>
+    </section>
+
+    <!-- Standard Reports Grid -->
+    <section>
+        <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4 font-display">Standard reports</h2>
+        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {% for report in standard_reports %}
+            <a href="{{ report.url }}" class="card card-hover p-5 group">
+                <div class="flex items-start gap-4">
+                    <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-teal-50 to-emerald-50 text-teal-600 dark:from-teal-900/30 dark:to-emerald-900/30 dark:text-teal-400 group-hover:from-teal-100 group-hover:to-emerald-100 dark:group-hover:from-teal-900/50 dark:group-hover:to-emerald-900/50 transition-colors">
+                        {% if report.icon == 'scale' %}
+                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3"/>
+                        </svg>
+                        {% elif report.icon == 'trending-up' %}
+                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+                        </svg>
+                        {% elif report.icon == 'layers' %}
+                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
+                        </svg>
+                        {% elif report.icon == 'clock' %}
+                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        {% elif report.icon == 'users' %}
+                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
+                        </svg>
+                        {% elif report.icon == 'book-open' %}
+                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+                        </svg>
+                        {% elif report.icon == 'receipt' %}
+                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z"/>
+                        </svg>
+                        {% elif report.icon == 'credit-card' %}
+                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
+                        </svg>
+                        {% else %}
+                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        </svg>
+                        {% endif %}
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <h3 class="font-semibold text-slate-900 dark:text-white group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors">{{ report.name }}</h3>
+                        <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">{{ report.description }}</p>
+                    </div>
+                    <svg class="h-5 w-5 text-slate-300 dark:text-slate-600 group-hover:text-teal-500 dark:group-hover:text-teal-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                    </svg>
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+    </section>
+
+    <!-- Custom Reports Section -->
+    {% if financial_statements or operational_reports or compliance_reports %}
+    <section class="grid gap-6 lg:grid-cols-3">
+        <!-- Financial Statements -->
+        <div class="card p-6">
+            <div class="flex items-center gap-3 mb-4">
+                <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                </div>
+                <h3 class="font-semibold text-slate-900 dark:text-white">Financial Statements</h3>
+            </div>
+            <ul class="space-y-2">
+                {% for report in financial_statements %}
+                <li>
+                    <a href="/finance/reports/{{ report.report_code | lower }}" class="flex items-center gap-2 text-sm text-slate-600 hover:text-teal-600 dark:text-slate-400 dark:hover:text-teal-400 transition-colors">
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                        </svg>
+                        {{ report.report_name }}
+                    </a>
+                </li>
+                {% else %}
+                <li class="text-sm text-slate-500 dark:text-slate-400">No custom financial statements defined</li>
+                {% endfor %}
+            </ul>
+        </div>
+
+        <!-- Operational Reports -->
+        <div class="card p-6">
+            <div class="flex items-center gap-3 mb-4">
+                <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+                    </svg>
+                </div>
+                <h3 class="font-semibold text-slate-900 dark:text-white">Operational reports</h3>
+            </div>
+            <ul class="space-y-2">
+                {% for report in operational_reports %}
+                <li>
+                    <a href="/finance/reports/{{ report.report_code | lower }}" class="flex items-center gap-2 text-sm text-slate-600 hover:text-teal-600 dark:text-slate-400 dark:hover:text-teal-400 transition-colors">
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                        </svg>
+                        {{ report.report_name }}
+                    </a>
+                </li>
+                {% else %}
+                <li class="text-sm text-slate-500 dark:text-slate-400">No custom operational reports defined</li>
+                {% endfor %}
+            </ul>
+        </div>
+
+        <!-- Compliance Reports -->
+        <div class="card p-6">
+            <div class="flex items-center gap-3 mb-4">
+                <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-violet-100 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                    </svg>
+                </div>
+                <h3 class="font-semibold text-slate-900 dark:text-white">Compliance &amp; tax</h3>
+            </div>
+            <ul class="space-y-2">
+                {% for report in compliance_reports %}
+                <li>
+                    <a href="/finance/reports/{{ report.report_code | lower }}" class="flex items-center gap-2 text-sm text-slate-600 hover:text-teal-600 dark:text-slate-400 dark:hover:text-teal-400 transition-colors">
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                        </svg>
+                        {{ report.report_name }}
+                    </a>
+                </li>
+                {% else %}
+                <li class="text-sm text-slate-500 dark:text-slate-400">No custom compliance reports defined</li>
+                {% endfor %}
+            </ul>
+        </div>
+    </section>
+    {% endif %}
+
+    <!-- Recent Reports -->
+    {% if recent_reports %}
+    <section>
+        <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4 font-display">Recently Generated</h2>
+        <div class="card overflow-hidden">
+            <div class="table-container">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Report</th>
+                            <th>Type</th>
+                            <th>Format</th>
+                            <th>Generated</th>
+                            <th>Status</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for report in recent_reports %}
+                        <tr>
+                            <td class="font-medium text-slate-900 dark:text-white">{{ report.report_name }}</td>
+                            <td>{{ report.report_type }}</td>
+                            <td>{{ report.output_format }}</td>
+                            <td class="text-slate-500">{{ report.queued_at }}</td>
+                            <td>
+                                {% if report.status == 'COMPLETED' %}
+                                <span class="badge badge-success">
+                                    <span class="badge-dot"></span>
+                                    Completed
+                                </span>
+                                {% elif report.status == 'GENERATING' %}
+                                <span class="badge badge-info">
+                                    <span class="badge-dot"></span>
+                                    Generating
+                                </span>
+                                {% elif report.status == 'QUEUED' %}
+                                <span class="badge badge-warning">
+                                    <span class="badge-dot"></span>
+                                    Queued
+                                </span>
+                                {% elif report.status == 'FAILED' %}
+                                <span class="badge badge-danger">
+                                    <span class="badge-dot"></span>
+                                    Failed
+                                </span>
+                                {% else %}
+                                <span class="badge badge-neutral">{{ report.status }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="table-actions">
+                                    <a href="/finance/reports/instances/{{ report.instance_id }}" class="table-action-btn" title="View">
+                                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                                        </svg>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+    {% endif %}
+</div>
+{% endblock %}

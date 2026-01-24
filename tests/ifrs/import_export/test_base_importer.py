@@ -16,7 +16,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.services.ifrs.import_export.base import (
+from app.services.finance.import_export.base import (
     BaseImporter,
     FieldMapping,
     ImportConfig,

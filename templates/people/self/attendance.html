@@ -1,0 +1,151 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}My Attendance{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/self/attendance" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Self Service</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">My Attendance</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+            <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">My Attendance</h1>
+            <p class="text-sm text-slate-500 dark:text-slate-400">Check in, check out, and track your month.</p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+            <form method="post" action="/people/self/attendance/check-in" data-geo-action="check in">
+                <input type="hidden" name="latitude">
+                <input type="hidden" name="longitude">
+                <button type="submit" class="btn btn-primary" {% if today_record and today_record.check_in %}disabled{% endif %}>Check In</button>
+            </form>
+            <form method="post" action="/people/self/attendance/check-out" data-geo-action="check out">
+                <input type="hidden" name="latitude">
+                <input type="hidden" name="longitude">
+                <button type="submit" class="btn btn-secondary" {% if not today_record or not today_record.check_in or today_record.check_out %}disabled{% endif %}>Check Out</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="grid gap-4 sm:grid-cols-3">
+        <div class="card p-5">
+            <p class="text-sm text-slate-500 dark:text-slate-400">Today</p>
+            <p class="mt-2 text-lg font-semibold text-slate-900 dark:text-white">
+                {% if today_record %}
+                    {{ today_record.status.value if today_record.status else "Recorded" }}
+                {% else %}
+                    No record
+                {% endif %}
+            </p>
+            <div class="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                Check-in: {{ today_record.check_in.strftime("%H:%M") if today_record and today_record.check_in else "-" }}
+            </div>
+            <div class="text-xs text-slate-500 dark:text-slate-400">
+                Check-out: {{ today_record.check_out.strftime("%H:%M") if today_record and today_record.check_out else "-" }}
+            </div>
+        </div>
+        <div class="card p-5">
+            <p class="text-sm text-slate-500 dark:text-slate-400">Attendance %</p>
+            <p class="mt-2 text-2xl font-semibold text-slate-900 dark:text-white">{{ summary.attendance_percentage }}%</p>
+            <p class="text-xs text-slate-500 dark:text-slate-400">This month</p>
+        </div>
+        <div class="card p-5">
+            <p class="text-sm text-slate-500 dark:text-slate-400">Total Hours</p>
+            <p class="mt-2 text-2xl font-semibold text-slate-900 dark:text-white">{{ summary.total_working_hours }}</p>
+            <p class="text-xs text-slate-500 dark:text-slate-400">This month</p>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="p-4 border-b border-slate-200 dark:border-slate-700">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Recent Records</h2>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+                <thead>
+                    <tr class="bg-slate-50 dark:bg-slate-800/50">
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Date</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Status</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Check In</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Check Out</th>
+                        <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Hours</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                    {% for rec in recent_records %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                        <td class="px-4 py-3 text-sm text-slate-700 dark:text-slate-300">{{ rec.attendance_date }}</td>
+                        <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">{{ rec.status.value }}</td>
+                        <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">
+                            {{ rec.check_in.strftime("%H:%M") if rec.check_in else "-" }}
+                        </td>
+                        <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">
+                            {{ rec.check_out.strftime("%H:%M") if rec.check_out else "-" }}
+                        </td>
+                        <td class="px-4 py-3 text-right text-sm text-slate-700 dark:text-slate-300 font-mono">
+                            {{ rec.working_hours if rec.working_hours is not none else "-" }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const showToast = (message, type = 'error') => {
+            window.dispatchEvent(new CustomEvent('show-toast', {
+                detail: { message, type }
+            }));
+        };
+
+        const errorParam = new URLSearchParams(window.location.search).get('error');
+        if (errorParam) {
+            showToast(errorParam, 'error');
+            const url = new URL(window.location.href);
+            url.searchParams.delete('error');
+            window.history.replaceState({}, '', url.toString());
+        }
+
+        const forms = document.querySelectorAll('form[data-geo-action]');
+        forms.forEach((form) => {
+            form.addEventListener('submit', (event) => {
+                if (form.dataset.geoSubmitting === '1') {
+                    return;
+                }
+                event.preventDefault();
+                if (!navigator.geolocation) {
+                    showToast('Geolocation is not supported by your browser.', 'error');
+                    return;
+                }
+                const actionLabel = form.dataset.geoAction || 'check in/out';
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        const latInput = form.querySelector('input[name="latitude"]');
+                        const lonInput = form.querySelector('input[name="longitude"]');
+                        if (latInput) latInput.value = position.coords.latitude;
+                        if (lonInput) lonInput.value = position.coords.longitude;
+                        form.dataset.geoSubmitting = '1';
+                        form.submit();
+                    },
+                    () => {
+                        showToast(`Unable to get your location for ${actionLabel}.`, 'error');
+                    },
+                    {
+                        enableHighAccuracy: true,
+                        timeout: 10000,
+                        maximumAge: 0,
+                    }
+                );
+            });
+        });
+    });
+</script>
+{% endblock %}

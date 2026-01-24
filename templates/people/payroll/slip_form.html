@@ -1,0 +1,111 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}{% if slip %}Edit Salary Slip{% else %}New Salary Slip{% endif %}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/payroll/slips" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Salary Slips</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">{% if slip %}Edit{% else %}New{% endif %}</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+    {% if error %}
+    <div class="mb-6 p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+        <div class="flex items-center gap-3">
+            <svg class="h-5 w-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <p class="text-sm text-red-700 dark:text-red-300">{{ error }}</p>
+        </div>
+    </div>
+    {% endif %}
+
+    <form action="/people/payroll/slips/new" method="post" class="card">
+        <div class="p-6 border-b border-slate-200 dark:border-slate-700">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white">
+                {% if slip %}Edit Salary Slip{% else %}Generate Salary Slip{% endif %}
+            </h2>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                Select an employee and pay period. The slip will be calculated from their salary structure.
+            </p>
+        </div>
+
+        <div class="p-6 space-y-6">
+            {# Employee Selection #}
+            <div>
+                <label for="employee_id" class="form-label">Employee <span class="text-red-500">*</span></label>
+                <select name="employee_id" id="employee_id" required class="form-select w-full">
+                    <option value="">Select an employee...</option>
+                    {% for emp in employees %}
+                    <option value="{{ emp.employee_id }}">{{ emp.employee_code }} - {{ emp.full_name }}</option>
+                    {% endfor %}
+                </select>
+                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    Only active employees with salary structure assignments are shown.
+                </p>
+            </div>
+
+            {# Pay Period #}
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label for="start_date" class="form-label">Period Start <span class="text-red-500">*</span></label>
+                    <input type="date" name="start_date" id="start_date" required class="form-input w-full">
+                </div>
+                <div>
+                    <label for="end_date" class="form-label">Period End <span class="text-red-500">*</span></label>
+                    <input type="date" name="end_date" id="end_date" required class="form-input w-full">
+                </div>
+            </div>
+
+            {# Posting Date #}
+            <div>
+                <label for="posting_date" class="form-label">Posting Date</label>
+                <input type="date" name="posting_date" id="posting_date" class="form-input w-full">
+                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    Leave blank to use period end date.
+                </p>
+            </div>
+
+            {# Working Days #}
+            <div class="p-4 rounded-lg bg-slate-50 dark:bg-slate-800/50">
+                <h3 class="text-sm font-medium text-slate-900 dark:text-white mb-3">Working Days</h3>
+                <div class="grid grid-cols-3 gap-4">
+                    <div>
+                        <label for="total_working_days" class="form-label text-xs">Total Days</label>
+                        <input type="number" name="total_working_days" id="total_working_days"
+                            step="0.5" min="0" placeholder="Auto"
+                            class="form-input w-full">
+                    </div>
+                    <div>
+                        <label for="absent_days" class="form-label text-xs">Absent Days</label>
+                        <input type="number" name="absent_days" id="absent_days"
+                            step="0.5" min="0" value="0"
+                            class="form-input w-full">
+                    </div>
+                    <div>
+                        <label for="leave_without_pay" class="form-label text-xs">LWP Days</label>
+                        <input type="number" name="leave_without_pay" id="leave_without_pay"
+                            step="0.5" min="0" value="0"
+                            class="form-input w-full">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="px-6 py-4 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-700 flex items-center justify-end gap-3">
+            <a href="/people/payroll/slips" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">
+                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                Generate Slip
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

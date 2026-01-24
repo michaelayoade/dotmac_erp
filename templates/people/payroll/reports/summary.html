@@ -1,0 +1,200 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}Payroll Summary{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/payroll/runs" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Payroll</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">Summary Report</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">Payroll Summary</h1>
+            <p class="text-sm text-slate-500 dark:text-slate-400">Overview of payroll costs for the selected period</p>
+        </div>
+        <a href="/people/payroll/runs" class="btn btn-secondary">
+            <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+            </svg>
+            Back
+        </a>
+    </div>
+
+    <!-- Filters -->
+    <div class="card">
+        <form method="get" class="p-4">
+            <div class="flex flex-wrap gap-4 items-end">
+                <div class="w-44">
+                    <label for="start_date" class="form-label">From</label>
+                    <input type="date" name="start_date" id="start_date" value="{{ start_date }}"
+                        class="form-input w-full">
+                </div>
+                <div class="w-44">
+                    <label for="end_date" class="form-label">To</label>
+                    <input type="date" name="end_date" id="end_date" value="{{ end_date }}"
+                        class="form-input w-full">
+                </div>
+                <button type="submit" class="btn btn-secondary h-10">Apply Filter</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div class="card p-5">
+            <div class="flex items-center gap-4">
+                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-teal-100 dark:bg-teal-900/30">
+                    <svg class="h-6 w-6 text-teal-600 dark:text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">Gross Pay</p>
+                    <p class="text-2xl font-semibold text-slate-900 dark:text-white font-mono">{{ "{:,.2f}".format(report.total_gross) }}</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="card p-5">
+            <div class="flex items-center gap-4">
+                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-rose-100 dark:bg-rose-900/30">
+                    <svg class="h-6 w-6 text-rose-600 dark:text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">Deductions</p>
+                    <p class="text-2xl font-semibold text-rose-600 dark:text-rose-400 font-mono">{{ "{:,.2f}".format(report.total_deductions) }}</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="card p-5">
+            <div class="flex items-center gap-4">
+                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-green-100 dark:bg-green-900/30">
+                    <svg class="h-6 w-6 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">Net Pay</p>
+                    <p class="text-2xl font-semibold text-green-600 dark:text-green-400 font-mono">{{ "{:,.2f}".format(report.total_net) }}</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="card p-5">
+            <div class="flex items-center gap-4">
+                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-violet-100 dark:bg-violet-900/30">
+                    <svg class="h-6 w-6 text-violet-600 dark:text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">Employees Paid</p>
+                    <p class="text-2xl font-semibold text-slate-900 dark:text-white">{{ report.total_employees }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cost Distribution -->
+    <div class="card">
+        <div class="border-b border-slate-200 dark:border-slate-700 px-5 py-4">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Cost Distribution</h2>
+        </div>
+        <div class="p-5">
+            {% set total = report.total_gross %}
+            {% set deduction_pct = (report.total_deductions / total * 100) if total > 0 else 0 %}
+            {% set net_pct = (report.total_net / total * 100) if total > 0 else 0 %}
+
+            <div class="flex h-8 rounded-lg overflow-hidden">
+                <div class="bg-green-500 transition-all" style="width: {{ net_pct }}%" title="Net Pay: {{ "{:.1f}".format(net_pct) }}%"></div>
+                <div class="bg-rose-500 transition-all" style="width: {{ deduction_pct }}%" title="Deductions: {{ "{:.1f}".format(deduction_pct) }}%"></div>
+            </div>
+            <div class="flex items-center justify-center gap-6 mt-4">
+                <div class="flex items-center gap-2">
+                    <div class="w-3 h-3 rounded bg-green-500"></div>
+                    <span class="text-sm text-slate-600 dark:text-slate-400">Net Pay ({{ "{:.1f}".format(net_pct) }}%)</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <div class="w-3 h-3 rounded bg-rose-500"></div>
+                    <span class="text-sm text-slate-600 dark:text-slate-400">Deductions ({{ "{:.1f}".format(deduction_pct) }}%)</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Status Breakdown -->
+    <div class="card">
+        <div class="border-b border-slate-200 dark:border-slate-700 px-5 py-4">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Breakdown by Status</h2>
+        </div>
+        {% if report.status_breakdown %}
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+                <thead>
+                    <tr class="bg-slate-50 dark:bg-slate-800/50">
+                        <th class="px-5 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Status</th>
+                        <th class="px-5 py-3 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Runs</th>
+                        <th class="px-5 py-3 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Employees</th>
+                        <th class="px-5 py-3 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Gross Pay</th>
+                        <th class="px-5 py-3 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Deductions</th>
+                        <th class="px-5 py-3 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Net Pay</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                    {% for item in report.status_breakdown %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                        <td class="px-5 py-3">
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                                {% if item.status == 'POSTED' %}bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300
+                                {% elif item.status == 'APPROVED' %}bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300
+                                {% elif item.status == 'SUBMITTED' %}bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300
+                                {% else %}bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300{% endif %}">
+                                {{ item.status }}
+                            </span>
+                        </td>
+                        <td class="px-5 py-3 text-right text-sm text-slate-700 dark:text-slate-300">{{ item.run_count }}</td>
+                        <td class="px-5 py-3 text-right text-sm text-slate-700 dark:text-slate-300">{{ item.employee_count }}</td>
+                        <td class="px-5 py-3 text-right text-sm font-mono text-slate-700 dark:text-slate-300">{{ "{:,.2f}".format(item.total_gross) }}</td>
+                        <td class="px-5 py-3 text-right text-sm font-mono text-rose-600 dark:text-rose-400">{{ "{:,.2f}".format(item.total_deductions) }}</td>
+                        <td class="px-5 py-3 text-right text-sm font-mono font-medium text-green-600 dark:text-green-400">{{ "{:,.2f}".format(item.total_net) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr class="bg-slate-50 dark:bg-slate-800/50 font-semibold">
+                        <td class="px-5 py-3 text-slate-900 dark:text-white">Total</td>
+                        <td class="px-5 py-3 text-right text-slate-900 dark:text-white">{{ report.total_runs }}</td>
+                        <td class="px-5 py-3 text-right text-slate-900 dark:text-white">{{ report.total_employees }}</td>
+                        <td class="px-5 py-3 text-right font-mono text-slate-900 dark:text-white">{{ "{:,.2f}".format(report.total_gross) }}</td>
+                        <td class="px-5 py-3 text-right font-mono text-rose-600 dark:text-rose-400">{{ "{:,.2f}".format(report.total_deductions) }}</td>
+                        <td class="px-5 py-3 text-right font-mono text-green-600 dark:text-green-400">{{ "{:,.2f}".format(report.total_net) }}</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+        {% else %}
+        <div class="p-8 text-center">
+            <p class="text-slate-500 dark:text-slate-400">No payroll data found for the selected period.</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Quick Links -->
+    <div class="flex gap-4">
+        <a href="/people/payroll/reports/by-department" class="btn btn-secondary">By Department</a>
+        <a href="/people/payroll/reports/tax-summary" class="btn btn-secondary">Tax Summary</a>
+        <a href="/people/payroll/reports/trends" class="btn btn-secondary">View Trends</a>
+    </div>
+</div>
+{% endblock %}

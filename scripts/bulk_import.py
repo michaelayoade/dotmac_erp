@@ -28,26 +28,26 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from sqlalchemy.orm import Session
 from app.db import SessionLocal
-from app.models.ifrs.gl.account import Account, AccountType, NormalBalance
-from app.models.ifrs.gl.account_category import AccountCategory, IFRSCategory
-from app.models.ifrs.gl.fiscal_year import FiscalYear
-from app.models.ifrs.gl.fiscal_period import FiscalPeriod, PeriodStatus
-from app.models.ifrs.gl.journal_entry import JournalEntry, JournalType, JournalStatus
-from app.models.ifrs.gl.journal_entry_line import JournalEntryLine
-from app.models.ifrs.ar.customer import Customer, CustomerType, RiskCategory
-from app.models.ifrs.ar.invoice import Invoice, InvoiceType, InvoiceStatus
-from app.models.ifrs.ar.invoice_line import InvoiceLine
-from app.models.ifrs.ar.customer_payment import CustomerPayment, PaymentMethod, PaymentStatus
-from app.models.ifrs.ap.supplier import Supplier, SupplierType
-from app.models.ifrs.ap.supplier_invoice import SupplierInvoice, SupplierInvoiceType, SupplierInvoiceStatus
-from app.models.ifrs.ap.supplier_invoice_line import SupplierInvoiceLine
-from app.models.ifrs.ap.supplier_payment import SupplierPayment, APPaymentMethod, APPaymentStatus
-from app.models.ifrs.inv.item import Item, ItemType, CostingMethod
-from app.models.ifrs.inv.item_category import ItemCategory
+from app.models.finance.gl.account import Account, AccountType, NormalBalance
+from app.models.finance.gl.account_category import AccountCategory, IFRSCategory
+from app.models.finance.gl.fiscal_year import FiscalYear
+from app.models.finance.gl.fiscal_period import FiscalPeriod, PeriodStatus
+from app.models.finance.gl.journal_entry import JournalEntry, JournalType, JournalStatus
+from app.models.finance.gl.journal_entry_line import JournalEntryLine
+from app.models.finance.ar.customer import Customer, CustomerType, RiskCategory
+from app.models.finance.ar.invoice import Invoice, InvoiceType, InvoiceStatus
+from app.models.finance.ar.invoice_line import InvoiceLine
+from app.models.finance.ar.customer_payment import CustomerPayment, PaymentMethod, PaymentStatus
+from app.models.finance.ap.supplier import Supplier, SupplierType
+from app.models.finance.ap.supplier_invoice import SupplierInvoice, SupplierInvoiceType, SupplierInvoiceStatus
+from app.models.finance.ap.supplier_invoice_line import SupplierInvoiceLine
+from app.models.finance.ap.supplier_payment import SupplierPayment, APPaymentMethod, APPaymentStatus
+from app.models.finance.inv.item import Item, ItemType, CostingMethod
+from app.models.finance.inv.item_category import ItemCategory
 
 
 # Import paths
-IMPORT_PATH = Path("/Users/michaelayoade/Downloads/Projects/dotmac_books/books_backup/import_ready")
+IMPORT_PATH = Path("/Users/michaelayoade/Downloads/Projects/dotmac_erp/books_backup/import_ready")
 
 
 class BulkImporter:

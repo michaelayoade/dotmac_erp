@@ -9,8 +9,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.models.ifrs.lease.lease_contract import LeaseStatus
-from app.models.ifrs.lease.lease_payment_schedule import PaymentStatus
+from app.models.finance.lease.lease_contract import LeaseStatus
+from app.models.finance.lease.lease_payment_schedule import PaymentStatus
 from tests.ifrs.lease.conftest import (
     MockLeaseContract,
     MockLeaseLiability,
@@ -24,7 +24,7 @@ class TestLeaseVariablePaymentService:
 
     def test_record_variable_payment_not_found(self, mock_db, org_id):
         """Test recording variable payment on non-existent schedule fails."""
-        from app.services.ifrs.lease.lease_variable_payment import (
+        from app.services.finance.lease.lease_variable_payment import (
             LeaseVariablePaymentService,
             VariablePaymentInput,
         )
@@ -48,7 +48,7 @@ class TestLeaseVariablePaymentService:
         self, mock_db, org_id, mock_payment_schedule
     ):
         """Test recording variable payment on paid schedule fails."""
-        from app.services.ifrs.lease.lease_variable_payment import (
+        from app.services.finance.lease.lease_variable_payment import (
             LeaseVariablePaymentService,
             VariablePaymentInput,
         )
@@ -74,7 +74,7 @@ class TestLeaseVariablePaymentService:
         self, mock_db, org_id, mock_payment_schedule
     ):
         """Test successful variable payment recording."""
-        from app.services.ifrs.lease.lease_variable_payment import (
+        from app.services.finance.lease.lease_variable_payment import (
             LeaseVariablePaymentService,
             VariablePaymentInput,
         )
@@ -99,7 +99,7 @@ class TestLeaseVariablePaymentService:
 
     def test_apply_index_adjustment_contract_not_found(self, mock_db, org_id, user_id):
         """Test index adjustment fails when contract not found."""
-        from app.services.ifrs.lease.lease_variable_payment import (
+        from app.services.finance.lease.lease_variable_payment import (
             LeaseVariablePaymentService,
             IndexAdjustmentInput,
         )
@@ -125,7 +125,7 @@ class TestLeaseVariablePaymentService:
         self, mock_db, org_id, user_id, mock_contract
     ):
         """Test index adjustment fails for non-active contract."""
-        from app.services.ifrs.lease.lease_variable_payment import (
+        from app.services.finance.lease.lease_variable_payment import (
             LeaseVariablePaymentService,
             IndexAdjustmentInput,
         )
@@ -152,7 +152,7 @@ class TestLeaseVariablePaymentService:
         self, mock_db, org_id, user_id, mock_active_contract
     ):
         """Test index adjustment fails when liability not found."""
-        from app.services.ifrs.lease.lease_variable_payment import (
+        from app.services.finance.lease.lease_variable_payment import (
             LeaseVariablePaymentService,
             IndexAdjustmentInput,
         )
@@ -183,7 +183,7 @@ class TestLeaseVariablePaymentService:
 
     def test_get_scheduled_payments(self, mock_db, mock_contract):
         """Test getting scheduled payments for a lease."""
-        from app.services.ifrs.lease.lease_variable_payment import (
+        from app.services.finance.lease.lease_variable_payment import (
             LeaseVariablePaymentService,
         )
 
@@ -201,7 +201,7 @@ class TestLeaseVariablePaymentService:
 
     def test_get_scheduled_payments_include_paid(self, mock_db, mock_contract):
         """Test getting all payments including paid ones."""
-        from app.services.ifrs.lease.lease_variable_payment import (
+        from app.services.finance.lease.lease_variable_payment import (
             LeaseVariablePaymentService,
         )
 
@@ -223,7 +223,7 @@ class TestLeaseVariablePaymentService:
 
     def test_mark_payment_paid_not_found(self, mock_db):
         """Test marking non-existent payment fails."""
-        from app.services.ifrs.lease.lease_variable_payment import (
+        from app.services.finance.lease.lease_variable_payment import (
             LeaseVariablePaymentService,
         )
         from fastapi import HTTPException
@@ -242,7 +242,7 @@ class TestLeaseVariablePaymentService:
 
     def test_mark_payment_paid_already_paid(self, mock_db, mock_payment_schedule):
         """Test marking already paid payment fails."""
-        from app.services.ifrs.lease.lease_variable_payment import (
+        from app.services.finance.lease.lease_variable_payment import (
             LeaseVariablePaymentService,
         )
         from fastapi import HTTPException
@@ -262,7 +262,7 @@ class TestLeaseVariablePaymentService:
 
     def test_mark_payment_paid_success(self, mock_db, mock_payment_schedule):
         """Test successful payment marking."""
-        from app.services.ifrs.lease.lease_variable_payment import (
+        from app.services.finance.lease.lease_variable_payment import (
             LeaseVariablePaymentService,
         )
 

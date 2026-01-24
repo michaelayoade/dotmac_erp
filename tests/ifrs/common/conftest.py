@@ -11,7 +11,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from app.models.ifrs.common.attachment import AttachmentCategory
+from app.models.finance.common.attachment import AttachmentCategory
 
 
 class MockAttachment:

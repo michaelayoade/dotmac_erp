@@ -41,12 +41,12 @@ class TestCreateSupplierInvoice:
 
     def test_create_invoice_success(self, mock_db, org_id, user_id):
         """Test successful invoice creation."""
-        from app.services.ifrs.ap.supplier_invoice import (
+        from app.services.finance.ap.supplier_invoice import (
             SupplierInvoiceService,
             SupplierInvoiceInput,
             InvoiceLineInput,
         )
-        from app.models.ifrs.ap.supplier_invoice import SupplierInvoiceType
+        from app.models.finance.ap.supplier_invoice import SupplierInvoiceType
 
         supplier = MockSupplier(organization_id=org_id)
         mock_db.get.return_value = supplier
@@ -96,12 +96,12 @@ class TestCreateSupplierInvoice:
     def test_create_invoice_invalid_supplier_fails(self, mock_db, org_id, user_id):
         """Test that invalid supplier fails validation."""
         from fastapi import HTTPException
-        from app.services.ifrs.ap.supplier_invoice import (
+        from app.services.finance.ap.supplier_invoice import (
             SupplierInvoiceService,
             SupplierInvoiceInput,
             InvoiceLineInput,
         )
-        from app.models.ifrs.ap.supplier_invoice import SupplierInvoiceType
+        from app.models.finance.ap.supplier_invoice import SupplierInvoiceType
 
         mock_db.get.return_value = None  # Supplier not found
 
@@ -135,11 +135,11 @@ class TestCreateSupplierInvoice:
     def test_create_invoice_empty_lines_fails(self, mock_db, org_id, user_id):
         """Test that invoice with no lines fails."""
         from fastapi import HTTPException
-        from app.services.ifrs.ap.supplier_invoice import (
+        from app.services.finance.ap.supplier_invoice import (
             SupplierInvoiceService,
             SupplierInvoiceInput,
         )
-        from app.models.ifrs.ap.supplier_invoice import SupplierInvoiceType
+        from app.models.finance.ap.supplier_invoice import SupplierInvoiceType
 
         supplier = MockSupplier(organization_id=org_id)
         mock_db.get.return_value = supplier
@@ -168,7 +168,7 @@ class TestSubmitSupplierInvoice:
 
     def test_submit_draft_invoice(self, mock_db, org_id, user_id):
         """Test submitting a draft invoice."""
-        from app.services.ifrs.ap.supplier_invoice import SupplierInvoiceService
+        from app.services.finance.ap.supplier_invoice import SupplierInvoiceService
 
         invoice = MockSupplierInvoice(
             organization_id=org_id,
@@ -188,7 +188,7 @@ class TestSubmitSupplierInvoice:
     def test_submit_non_draft_fails(self, mock_db, org_id, user_id):
         """Test submitting non-draft invoice fails."""
         from fastapi import HTTPException
-        from app.services.ifrs.ap.supplier_invoice import SupplierInvoiceService
+        from app.services.finance.ap.supplier_invoice import SupplierInvoiceService
 
         invoice = MockSupplierInvoice(
             organization_id=org_id,
@@ -211,7 +211,7 @@ class TestApproveSupplierInvoice:
 
     def test_approve_submitted_invoice(self, mock_db, org_id, user_id):
         """Test approving a submitted invoice."""
-        from app.services.ifrs.ap.supplier_invoice import SupplierInvoiceService
+        from app.services.finance.ap.supplier_invoice import SupplierInvoiceService
 
         submitter_id = uuid4()
         invoice = MockSupplierInvoice(
@@ -233,7 +233,7 @@ class TestApproveSupplierInvoice:
     def test_self_approval_fails_sod(self, mock_db, org_id):
         """Test that self-approval fails segregation of duties."""
         from fastapi import HTTPException
-        from app.services.ifrs.ap.supplier_invoice import SupplierInvoiceService
+        from app.services.finance.ap.supplier_invoice import SupplierInvoiceService
 
         submitter_id = uuid4()
         invoice = MockSupplierInvoice(
@@ -260,7 +260,7 @@ class TestVoidSupplierInvoice:
 
     def test_void_draft_invoice(self, mock_db, org_id, user_id):
         """Test voiding a draft invoice."""
-        from app.services.ifrs.ap.supplier_invoice import SupplierInvoiceService
+        from app.services.finance.ap.supplier_invoice import SupplierInvoiceService
 
         invoice = MockSupplierInvoice(
             organization_id=org_id,
@@ -280,7 +280,7 @@ class TestVoidSupplierInvoice:
     def test_void_paid_invoice_fails(self, mock_db, org_id, user_id):
         """Test that voiding paid invoice fails."""
         from fastapi import HTTPException
-        from app.services.ifrs.ap.supplier_invoice import SupplierInvoiceService
+        from app.services.finance.ap.supplier_invoice import SupplierInvoiceService
 
         invoice = MockSupplierInvoice(
             organization_id=org_id,
@@ -303,7 +303,7 @@ class TestGetSupplierInvoice:
 
     def test_get_existing_invoice(self, mock_db, org_id):
         """Test getting existing invoice."""
-        from app.services.ifrs.ap.supplier_invoice import SupplierInvoiceService
+        from app.services.finance.ap.supplier_invoice import SupplierInvoiceService
 
         invoice = MockSupplierInvoice(organization_id=org_id)
         mock_db.get.return_value = invoice
@@ -316,7 +316,7 @@ class TestGetSupplierInvoice:
     def test_get_nonexistent_raises(self, mock_db):
         """Test getting non-existent invoice raises exception."""
         from fastapi import HTTPException
-        from app.services.ifrs.ap.supplier_invoice import SupplierInvoiceService
+        from app.services.finance.ap.supplier_invoice import SupplierInvoiceService
 
         mock_db.get.return_value = None
 
@@ -332,7 +332,7 @@ class TestListSupplierInvoices:
 
     def test_list_with_filters(self, mock_db, org_id):
         """Test listing invoices with filters."""
-        from app.services.ifrs.ap.supplier_invoice import SupplierInvoiceService
+        from app.services.finance.ap.supplier_invoice import SupplierInvoiceService
 
         invoices = [MockSupplierInvoice(organization_id=org_id)]
         mock_query = MagicMock()
@@ -359,7 +359,7 @@ class TestGetInvoiceLines:
 
     def test_get_invoice_lines(self, mock_db, org_id):
         """Test getting lines for an invoice."""
-        from app.services.ifrs.ap.supplier_invoice import SupplierInvoiceService
+        from app.services.finance.ap.supplier_invoice import SupplierInvoiceService
 
         invoice_id = uuid4()
         invoice = MockSupplierInvoice(
@@ -388,12 +388,12 @@ class TestUpdateSupplierInvoice:
 
     def test_update_draft_invoice(self, mock_db, org_id):
         """Test updating a draft invoice."""
-        from app.services.ifrs.ap.supplier_invoice import (
+        from app.services.finance.ap.supplier_invoice import (
             SupplierInvoiceService,
             SupplierInvoiceInput,
             InvoiceLineInput,
         )
-        from app.models.ifrs.ap.supplier_invoice import SupplierInvoiceType
+        from app.models.finance.ap.supplier_invoice import SupplierInvoiceType
 
         invoice = MockSupplierInvoice(
             organization_id=org_id,
@@ -439,12 +439,12 @@ class TestUpdateSupplierInvoice:
     def test_update_non_draft_fails(self, mock_db, org_id):
         """Test that updating non-draft invoice fails."""
         from fastapi import HTTPException
-        from app.services.ifrs.ap.supplier_invoice import (
+        from app.services.finance.ap.supplier_invoice import (
             SupplierInvoiceService,
             SupplierInvoiceInput,
             InvoiceLineInput,
         )
-        from app.models.ifrs.ap.supplier_invoice import SupplierInvoiceType
+        from app.models.finance.ap.supplier_invoice import SupplierInvoiceType
 
         invoice = MockSupplierInvoice(
             organization_id=org_id,
@@ -474,12 +474,12 @@ class TestUpdateSupplierInvoice:
     def test_update_invoice_not_found(self, mock_db, org_id):
         """Test updating non-existent invoice."""
         from fastapi import HTTPException
-        from app.services.ifrs.ap.supplier_invoice import (
+        from app.services.finance.ap.supplier_invoice import (
             SupplierInvoiceService,
             SupplierInvoiceInput,
             InvoiceLineInput,
         )
-        from app.models.ifrs.ap.supplier_invoice import SupplierInvoiceType
+        from app.models.finance.ap.supplier_invoice import SupplierInvoiceType
 
         mock_db.get.return_value = None
 
@@ -507,7 +507,7 @@ class TestPostSupplierInvoice:
 
     def test_post_approved_invoice(self, mock_db, org_id, user_id):
         """Test posting an approved invoice."""
-        from app.services.ifrs.ap.supplier_invoice import SupplierInvoiceService
+        from app.services.finance.ap.supplier_invoice import SupplierInvoiceService
 
         invoice = MockSupplierInvoice(
             organization_id=org_id,
@@ -537,7 +537,7 @@ class TestPostSupplierInvoice:
     def test_post_non_approved_fails(self, mock_db, org_id, user_id):
         """Test that posting non-approved invoice fails."""
         from fastapi import HTTPException
-        from app.services.ifrs.ap.supplier_invoice import SupplierInvoiceService
+        from app.services.finance.ap.supplier_invoice import SupplierInvoiceService
 
         invoice = MockSupplierInvoice(
             organization_id=org_id,
@@ -557,7 +557,7 @@ class TestPostSupplierInvoice:
     def test_post_invoice_adapter_failure(self, mock_db, org_id, user_id):
         """Test posting fails when adapter returns error."""
         from fastapi import HTTPException
-        from app.services.ifrs.ap.supplier_invoice import SupplierInvoiceService
+        from app.services.finance.ap.supplier_invoice import SupplierInvoiceService
 
         invoice = MockSupplierInvoice(
             organization_id=org_id,
@@ -586,7 +586,7 @@ class TestPutOnHold:
 
     def test_put_posted_invoice_on_hold(self, mock_db, org_id):
         """Test putting a posted invoice on hold."""
-        from app.services.ifrs.ap.supplier_invoice import SupplierInvoiceService
+        from app.services.finance.ap.supplier_invoice import SupplierInvoiceService
 
         invoice = MockSupplierInvoice(
             organization_id=org_id,
@@ -606,7 +606,7 @@ class TestPutOnHold:
     def test_put_paid_invoice_on_hold_fails(self, mock_db, org_id):
         """Test that paid invoice cannot be put on hold."""
         from fastapi import HTTPException
-        from app.services.ifrs.ap.supplier_invoice import SupplierInvoiceService
+        from app.services.finance.ap.supplier_invoice import SupplierInvoiceService
 
         invoice = MockSupplierInvoice(
             organization_id=org_id,
@@ -629,7 +629,7 @@ class TestReleaseFromHold:
 
     def test_release_approved_invoice_from_hold(self, mock_db, org_id):
         """Test releasing an approved invoice from hold."""
-        from app.services.ifrs.ap.supplier_invoice import SupplierInvoiceService
+        from app.services.finance.ap.supplier_invoice import SupplierInvoiceService
 
         approver_id = uuid4()
         invoice = MockSupplierInvoice(
@@ -650,7 +650,7 @@ class TestReleaseFromHold:
 
     def test_release_submitted_invoice_from_hold(self, mock_db, org_id):
         """Test releasing a submitted (not yet approved) invoice from hold."""
-        from app.services.ifrs.ap.supplier_invoice import SupplierInvoiceService
+        from app.services.finance.ap.supplier_invoice import SupplierInvoiceService
 
         invoice = MockSupplierInvoice(
             organization_id=org_id,
@@ -671,7 +671,7 @@ class TestReleaseFromHold:
     def test_release_non_held_invoice_fails(self, mock_db, org_id):
         """Test that releasing non-held invoice fails."""
         from fastapi import HTTPException
-        from app.services.ifrs.ap.supplier_invoice import SupplierInvoiceService
+        from app.services.finance.ap.supplier_invoice import SupplierInvoiceService
 
         invoice = MockSupplierInvoice(
             organization_id=org_id,
@@ -694,7 +694,7 @@ class TestRecordPayment:
 
     def test_record_partial_payment(self, mock_db, org_id):
         """Test recording a partial payment."""
-        from app.services.ifrs.ap.supplier_invoice import SupplierInvoiceService
+        from app.services.finance.ap.supplier_invoice import SupplierInvoiceService
 
         invoice = MockSupplierInvoice(
             organization_id=org_id,
@@ -716,7 +716,7 @@ class TestRecordPayment:
 
     def test_record_full_payment(self, mock_db, org_id):
         """Test recording full payment."""
-        from app.services.ifrs.ap.supplier_invoice import SupplierInvoiceService
+        from app.services.finance.ap.supplier_invoice import SupplierInvoiceService
 
         invoice = MockSupplierInvoice(
             organization_id=org_id,
@@ -737,7 +737,7 @@ class TestRecordPayment:
 
     def test_record_payment_on_partially_paid(self, mock_db, org_id):
         """Test recording payment on partially paid invoice."""
-        from app.services.ifrs.ap.supplier_invoice import SupplierInvoiceService
+        from app.services.finance.ap.supplier_invoice import SupplierInvoiceService
 
         invoice = MockSupplierInvoice(
             organization_id=org_id,
@@ -760,7 +760,7 @@ class TestRecordPayment:
     def test_record_payment_on_non_posted_fails(self, mock_db, org_id):
         """Test that payment on non-posted invoice fails."""
         from fastapi import HTTPException
-        from app.services.ifrs.ap.supplier_invoice import SupplierInvoiceService
+        from app.services.finance.ap.supplier_invoice import SupplierInvoiceService
 
         invoice = MockSupplierInvoice(
             organization_id=org_id,
@@ -783,12 +783,12 @@ class TestCreditNoteHandling:
 
     def test_create_credit_note_negative_amounts(self, mock_db, org_id, user_id):
         """Test that credit notes have negative amounts."""
-        from app.services.ifrs.ap.supplier_invoice import (
+        from app.services.finance.ap.supplier_invoice import (
             SupplierInvoiceService,
             SupplierInvoiceInput,
             InvoiceLineInput,
         )
-        from app.models.ifrs.ap.supplier_invoice import SupplierInvoiceType
+        from app.models.finance.ap.supplier_invoice import SupplierInvoiceType
 
         supplier = MockSupplier(organization_id=org_id)
         mock_db.get.return_value = supplier
@@ -843,12 +843,12 @@ class TestInactiveSupplierHandling:
     def test_create_invoice_inactive_supplier_fails(self, mock_db, org_id, user_id):
         """Test that creating invoice for inactive supplier fails."""
         from fastapi import HTTPException
-        from app.services.ifrs.ap.supplier_invoice import (
+        from app.services.finance.ap.supplier_invoice import (
             SupplierInvoiceService,
             SupplierInvoiceInput,
             InvoiceLineInput,
         )
-        from app.models.ifrs.ap.supplier_invoice import SupplierInvoiceType
+        from app.models.finance.ap.supplier_invoice import SupplierInvoiceType
 
         supplier = MockSupplier(organization_id=org_id, is_active=False)
         mock_db.get.return_value = supplier
@@ -888,7 +888,7 @@ class TestInvoiceNotFoundScenarios:
     def test_submit_invoice_not_found(self, mock_db, org_id, user_id):
         """Test submitting non-existent invoice."""
         from fastapi import HTTPException
-        from app.services.ifrs.ap.supplier_invoice import SupplierInvoiceService
+        from app.services.finance.ap.supplier_invoice import SupplierInvoiceService
 
         mock_db.get.return_value = None
 
@@ -903,7 +903,7 @@ class TestInvoiceNotFoundScenarios:
     def test_approve_invoice_not_found(self, mock_db, org_id, user_id):
         """Test approving non-existent invoice."""
         from fastapi import HTTPException
-        from app.services.ifrs.ap.supplier_invoice import SupplierInvoiceService
+        from app.services.finance.ap.supplier_invoice import SupplierInvoiceService
 
         mock_db.get.return_value = None
 
@@ -918,7 +918,7 @@ class TestInvoiceNotFoundScenarios:
     def test_void_invoice_not_found(self, mock_db, org_id, user_id):
         """Test voiding non-existent invoice."""
         from fastapi import HTTPException
-        from app.services.ifrs.ap.supplier_invoice import SupplierInvoiceService
+        from app.services.finance.ap.supplier_invoice import SupplierInvoiceService
 
         mock_db.get.return_value = None
 
@@ -933,7 +933,7 @@ class TestInvoiceNotFoundScenarios:
     def test_get_invoice_lines_not_found(self, mock_db, org_id):
         """Test getting lines for non-existent invoice."""
         from fastapi import HTTPException
-        from app.services.ifrs.ap.supplier_invoice import SupplierInvoiceService
+        from app.services.finance.ap.supplier_invoice import SupplierInvoiceService
 
         mock_db.get.return_value = None
 

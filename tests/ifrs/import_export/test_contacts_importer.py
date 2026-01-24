@@ -10,13 +10,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.services.ifrs.import_export.contacts import (
+from app.services.finance.import_export.contacts import (
     CustomerImporter,
     SupplierImporter,
     get_ar_control_account,
     get_ap_control_account,
 )
-from app.services.ifrs.import_export.base import ImportConfig
+from app.services.finance.import_export.base import ImportConfig
 
 
 # ============ Fixtures ============
@@ -97,7 +97,7 @@ class TestCustomerImporter:
         self, mock_customer_cls, mock_db, import_config, ar_control_account_id
     ):
         """Customer type should be COMPANY when company_name is provided."""
-        from app.models.ifrs.ar.customer import CustomerType
+        from app.models.finance.ar.customer import CustomerType
 
         importer = CustomerImporter(mock_db, import_config, ar_control_account_id)
         row = {
@@ -118,7 +118,7 @@ class TestCustomerImporter:
         self, mock_customer_cls, mock_db, import_config, ar_control_account_id
     ):
         """Customer type should be INDIVIDUAL when only first/last name provided."""
-        from app.models.ifrs.ar.customer import CustomerType
+        from app.models.finance.ar.customer import CustomerType
 
         importer = CustomerImporter(mock_db, import_config, ar_control_account_id)
         row = {
@@ -230,7 +230,7 @@ class TestSupplierImporter:
         self, mock_supplier_cls, mock_db, import_config, ap_control_account_id
     ):
         """Supplier type should be VENDOR for companies."""
-        from app.models.ifrs.ap.supplier import SupplierType
+        from app.models.finance.ap.supplier import SupplierType
 
         importer = SupplierImporter(mock_db, import_config, ap_control_account_id)
         row = {

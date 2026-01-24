@@ -16,9 +16,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.models.ifrs.ap.supplier_invoice import SupplierInvoiceStatus, SupplierInvoiceType
-from app.models.ifrs.ap.supplier_payment import APPaymentStatus
-from app.services.ifrs.ap.ap_posting_adapter import APPostingAdapter, APPostingResult
+from app.models.finance.ap.supplier_invoice import SupplierInvoiceStatus, SupplierInvoiceType
+from app.models.finance.ap.supplier_payment import APPaymentStatus
+from app.services.finance.ap.ap_posting_adapter import APPostingAdapter, APPostingResult
 
 
 # ============ Mock Classes ============
@@ -315,7 +315,7 @@ class TestPostInvoice:
         """Test posting when supplier not found."""
 
         def get_side_effect(model, id):
-            from app.models.ifrs.ap.supplier_invoice import SupplierInvoice
+            from app.models.finance.ap.supplier_invoice import SupplierInvoice
 
             if model == SupplierInvoice or str(id) == str(mock_invoice.invoice_id):
                 return mock_invoice

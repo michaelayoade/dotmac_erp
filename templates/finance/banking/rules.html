@@ -1,0 +1,217 @@
+{% extends "finance/base_finance.html" %}
+
+{% block page_title %}Transaction Rules{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400">
+    <a href="/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/finance/banking/accounts" class="hover:text-primary-600 dark:hover:text-primary-400">Banking</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white">Transaction Rules</span>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<a href="/finance/banking/rules/new" data-testid="rules-new"
+   class="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-primary-600 to-primary-500 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-primary-500/25 btn-hover">
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+    </svg>
+    New Rule
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Stats Summary -->
+    <div class="grid gap-4 sm:grid-cols-4">
+        <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800/50">
+            <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Total Rules</p>
+            <p class="mt-1 text-2xl font-bold text-slate-900 dark:text-white">{{ total_count | default(0) }}</p>
+        </div>
+        <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800/50">
+            <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Active</p>
+            <p class="mt-1 text-2xl font-bold text-green-600 dark:text-green-400">{{ active_count | default(0) }}</p>
+        </div>
+        <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800/50">
+            <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Auto-Apply</p>
+            <p class="mt-1 text-2xl font-bold text-blue-600 dark:text-blue-400">{{ auto_apply_count | default(0) }}</p>
+        </div>
+        <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800/50">
+            <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Total Matches</p>
+            <p class="mt-1 text-2xl font-bold text-purple-600 dark:text-purple-400">{{ total_matches | default(0) }}</p>
+        </div>
+    </div>
+
+    <!-- Info Banner -->
+    <div class="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
+        <div class="flex items-start gap-3">
+            <svg class="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <div class="text-sm text-blue-700 dark:text-blue-300">
+                <p class="font-medium">How Transaction Rules Work</p>
+                <p class="mt-1">Rules are evaluated in priority order (lowest number first). When a transaction matches a rule's conditions, the specified action is applied. Rules can auto-categorize transactions, flag them for review, or split them across multiple accounts.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-800/50">
+        <form method="get" class="flex flex-wrap items-center gap-4">
+            <select name="rule_type" data-testid="rules-type"
+                    class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                <option value="">All Types</option>
+                {% for t in rule_types %}
+                <option value="{{ t }}" {{ 'selected' if rule_type == t else '' }}>{{ t | replace('_', ' ') | title }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit"
+                    class="rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600">
+                Filter
+            </button>
+        </form>
+    </div>
+
+    <!-- Rules Table -->
+    <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50">
+        <div class="overflow-x-auto">
+            <table class="w-full" data-testid="rules-table">
+                <thead>
+                    <tr class="border-b border-slate-200 dark:border-slate-700">
+                        <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Priority</th>
+                        <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Rule</th>
+                        <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Type</th>
+                        <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Action</th>
+                        <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Target Account</th>
+                        <th class="px-6 py-4 text-right text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Matches</th>
+                        <th class="px-6 py-4 text-center text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Auto</th>
+                        <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Status</th>
+                        <th class="px-6 py-4 text-right text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                    {% for rule in rules %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <span class="inline-flex items-center justify-center h-6 w-6 rounded-full bg-slate-100 text-xs font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-300">
+                                {{ rule.priority }}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4">
+                            <a href="/finance/banking/rules/{{ rule.rule_id }}" class="text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">
+                                {{ rule.rule_name }}
+                            </a>
+                            {% if rule.description %}
+                            <p class="text-xs text-slate-500 dark:text-slate-400 truncate max-w-xs">{{ rule.description }}</p>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            {% set type_colors = {
+                                'PAYEE_MATCH': 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+                                'DESCRIPTION_CONTAINS': 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+                                'DESCRIPTION_REGEX': 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
+                                'AMOUNT_RANGE': 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400',
+                                'REFERENCE_MATCH': 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
+                                'COMBINED': 'bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-400'
+                            } %}
+                            <span class="inline-flex rounded-full px-2 py-0.5 text-xs font-medium {{ type_colors.get(rule.rule_type, 'bg-slate-100 text-slate-700') }}">
+                                {{ rule.rule_type | replace('_', ' ') | title }}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            {% set action_colors = {
+                                'CATEGORIZE': 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+                                'FLAG_REVIEW': 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
+                                'SPLIT': 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
+                                'IGNORE': 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-400'
+                            } %}
+                            <span class="inline-flex rounded-full px-2 py-0.5 text-xs font-medium {{ action_colors.get(rule.action, 'bg-slate-100 text-slate-700') }}">
+                                {{ rule.action | replace('_', ' ') | title }}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">
+                            {% if rule.target_account %}
+                            {{ rule.target_account.account_code }} - {{ rule.target_account.account_name }}
+                            {% else %}
+                            <span class="text-slate-400">-</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-right">
+                            <span class="text-sm font-medium text-slate-900 dark:text-white">{{ rule.match_count | default(0) }}</span>
+                            {% if rule.success_count %}
+                            <p class="text-xs text-green-600 dark:text-green-400">{{ rule.success_count }} applied</p>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-center">
+                            {% if rule.auto_apply %}
+                            <svg class="mx-auto h-5 w-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                            </svg>
+                            {% else %}
+                            <svg class="mx-auto h-5 w-5 text-slate-300 dark:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            {% if rule.is_active %}
+                            <span class="inline-flex rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">Active</span>
+                            {% else %}
+                            <span class="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-400">Inactive</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-right">
+                            <div class="flex items-center justify-end gap-2">
+                                <a href="/finance/banking/rules/{{ rule.rule_id }}"
+                                   class="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300"
+                                   title="Edit">
+                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                                    </svg>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="9" class="px-6 py-12 text-center">
+                            <svg class="mx-auto h-12 w-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
+                            </svg>
+                            <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">No transaction rules found</p>
+                            <a href="/finance/banking/rules/new" class="mt-4 inline-flex items-center text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">
+                                <svg class="mr-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                                </svg>
+                                Create your first rule
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        {% if total_pages > 1 %}
+        <div class="flex items-center justify-between border-t border-slate-200 px-6 py-4 dark:border-slate-700">
+            <p class="text-sm text-slate-500 dark:text-slate-400">
+                Showing {{ offset + 1 }} to {{ offset + rules | length }} of {{ total_count }} rules
+            </p>
+            <div class="flex items-center gap-2">
+                {% if page > 1 %}
+                <a href="?page={{ page - 1 }}{% if rule_type %}&rule_type={{ rule_type }}{% endif %}"
+                   class="rounded-lg border border-slate-300 px-3 py-1 text-sm hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-800">Previous</a>
+                {% endif %}
+                {% if page < total_pages %}
+                <a href="?page={{ page + 1 }}{% if rule_type %}&rule_type={{ rule_type }}{% endif %}"
+                   class="rounded-lg border border-slate-300 px-3 py-1 text-sm hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-800">Next</a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

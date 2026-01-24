@@ -12,9 +12,9 @@ from uuid import uuid4
 
 from fastapi import HTTPException
 
-from app.models.ifrs.ap.payment_batch import APBatchStatus
-from app.models.ifrs.ap.supplier_payment import APPaymentStatus
-from app.services.ifrs.ap.payment_batch import (
+from app.models.finance.ap.payment_batch import APBatchStatus
+from app.models.finance.ap.supplier_payment import APPaymentStatus
+from app.services.finance.ap.payment_batch import (
     PaymentBatchService,
     PaymentBatchInput,
     BatchPaymentItem,

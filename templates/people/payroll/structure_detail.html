@@ -1,0 +1,206 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}{{ structure.structure_name }}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/payroll/structures" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Salary Structures</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">{{ structure.structure_code }}</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    {# Header Card #}
+    <div class="card p-6">
+        <div class="flex items-start justify-between">
+            <div class="flex items-center gap-4">
+                <div class="flex h-16 w-16 items-center justify-center rounded-xl bg-gradient-to-br from-lime-500 to-emerald-600 text-white shadow-lg shadow-lime-500/25">
+                    <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+                    </svg>
+                </div>
+                <div>
+                    <h2 class="text-xl font-semibold text-slate-900 dark:text-white">{{ structure.structure_name }}</h2>
+                    <p class="text-sm font-mono text-slate-500 dark:text-slate-400">{{ structure.structure_code }}</p>
+                    {% if structure.description %}
+                    <p class="mt-2 text-sm text-slate-600 dark:text-slate-400 max-w-xl">{{ structure.description }}</p>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="flex items-center gap-3">
+                {% if structure.is_active %}
+                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-600/20 dark:bg-emerald-900/30 dark:text-emerald-400">
+                    Active
+                </span>
+                {% else %}
+                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+                    Inactive
+                </span>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="mt-6 pt-6 border-t border-slate-200 dark:border-slate-700 grid grid-cols-2 md:grid-cols-3 gap-4">
+            <div>
+                <p class="text-xs text-slate-500 dark:text-slate-400">Payroll Frequency</p>
+                <p class="mt-1 text-sm font-medium text-slate-900 dark:text-white">{{ structure.payroll_frequency.value | title }}</p>
+            </div>
+            <div>
+                <p class="text-xs text-slate-500 dark:text-slate-400">Currency</p>
+                <p class="mt-1 text-sm font-medium text-slate-900 dark:text-white">{{ structure.currency_code }}</p>
+            </div>
+            <div>
+                <p class="text-xs text-slate-500 dark:text-slate-400">Created</p>
+                <p class="mt-1 text-sm font-medium text-slate-900 dark:text-white">{{ structure.created_at.strftime('%b %d, %Y') }}</p>
+            </div>
+        </div>
+    </div>
+
+    {# Earnings & Deductions #}
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {# Earnings #}
+        <div class="card">
+            <div class="px-4 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                <h3 class="font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+                    <span class="flex h-6 w-6 items-center justify-center rounded bg-emerald-100 dark:bg-emerald-900/50">
+                        <svg class="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                        </svg>
+                    </span>
+                    Earnings
+                </h3>
+                <span class="text-sm text-emerald-600 dark:text-emerald-400 font-medium">{{ structure.earnings | length }} components</span>
+            </div>
+            <div class="divide-y divide-slate-100 dark:divide-slate-800">
+                {% for earning in structure.earnings %}
+                <div class="px-4 py-3 flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-slate-900 dark:text-white">{{ earning.component.component_name }}</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">
+                            {% if earning.formula %}
+                            Formula: <code class="text-xs bg-slate-100 dark:bg-slate-800 px-1 rounded">{{ earning.formula }}</code>
+                            {% else %}
+                            Fixed amount
+                            {% endif %}
+                        </p>
+                    </div>
+                    {% if earning.amount %}
+                    <span class="font-mono text-sm text-slate-900 dark:text-white">{{ "{:,.2f}".format(earning.amount) }}</span>
+                    {% endif %}
+                </div>
+                {% else %}
+                <div class="px-4 py-8 text-center text-sm text-slate-500 dark:text-slate-400">
+                    No earnings defined
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        {# Deductions #}
+        <div class="card">
+            <div class="px-4 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                <h3 class="font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+                    <span class="flex h-6 w-6 items-center justify-center rounded bg-red-100 dark:bg-red-900/50">
+                        <svg class="h-3.5 w-3.5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/>
+                        </svg>
+                    </span>
+                    Deductions
+                </h3>
+                <span class="text-sm text-red-600 dark:text-red-400 font-medium">{{ structure.deductions | length }} components</span>
+            </div>
+            <div class="divide-y divide-slate-100 dark:divide-slate-800">
+                {% for deduction in structure.deductions %}
+                <div class="px-4 py-3 flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-slate-900 dark:text-white">{{ deduction.component.component_name }}</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">
+                            {% if deduction.formula %}
+                            Formula: <code class="text-xs bg-slate-100 dark:bg-slate-800 px-1 rounded">{{ deduction.formula }}</code>
+                            {% else %}
+                            Fixed amount
+                            {% endif %}
+                        </p>
+                    </div>
+                    {% if deduction.amount %}
+                    <span class="font-mono text-sm text-red-600 dark:text-red-400">({{ "{:,.2f}".format(deduction.amount) }})</span>
+                    {% endif %}
+                </div>
+                {% else %}
+                <div class="px-4 py-8 text-center text-sm text-slate-500 dark:text-slate-400">
+                    No deductions defined
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    {# Assigned Employees #}
+    <div class="card">
+        <div class="px-4 py-3 border-b border-slate-200 dark:border-slate-700">
+            <h3 class="font-semibold text-slate-900 dark:text-white">Assigned Employees</h3>
+            <p class="text-sm text-slate-500 dark:text-slate-400">Employees using this salary structure</p>
+        </div>
+        {% if structure.assignments %}
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/50">
+                    <tr>
+                        <th class="px-4 py-3 text-left font-medium">Employee</th>
+                        <th class="px-4 py-3 text-left font-medium">Department</th>
+                        <th class="px-4 py-3 text-right font-medium">Base Pay</th>
+                        <th class="px-4 py-3 text-left font-medium">Effective From</th>
+                        <th class="px-4 py-3 text-center font-medium">Status</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                    {% for assignment in structure.assignments %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/30">
+                        <td class="px-4 py-3">
+                            <div class="flex items-center gap-3">
+                                <div class="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-teal-400 to-emerald-500 text-white text-xs font-semibold">
+                                    {{ assignment.employee.full_name[:2] | upper if assignment.employee else 'NA' }}
+                                </div>
+                                <div>
+                                    <p class="text-sm font-medium text-slate-900 dark:text-white">{{ assignment.employee.full_name if assignment.employee else 'N/A' }}</p>
+                                    <p class="text-xs text-slate-500 dark:text-slate-400">{{ assignment.employee.employee_code if assignment.employee else '' }}</p>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">
+                            {{ assignment.employee.department.department_name if assignment.employee and assignment.employee.department else '-' }}
+                        </td>
+                        <td class="px-4 py-3 text-sm font-mono text-right text-slate-900 dark:text-white">
+                            {{ "{:,.2f}".format(assignment.base_pay) if assignment.base_pay else '-' }}
+                        </td>
+                        <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">
+                            {{ assignment.from_date.strftime('%b %d, %Y') }}
+                        </td>
+                        <td class="px-4 py-3 text-center">
+                            {% if not assignment.to_date or assignment.to_date >= now().date() %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+                                Active
+                            </span>
+                            {% else %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+                                Ended
+                            </span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="px-4 py-8 text-center text-sm text-slate-500 dark:text-slate-400">
+            No employees assigned to this structure yet
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

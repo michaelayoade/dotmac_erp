@@ -1,6 +1,7 @@
 """
-Account Sync Service - ERPNext to DotMac Books.
+Account Sync Service - ERPNext to DotMac ERP.
 """
+import logging
 import uuid
 from datetime import datetime
 from typing import Any, Optional
@@ -8,8 +9,13 @@ from typing import Any, Optional
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.ifrs.gl.account import Account
-from app.models.ifrs.gl.account_category import AccountCategory
+logger = logging.getLogger(__name__)
+
+# Maximum account code length in the database
+MAX_ACCOUNT_CODE_LENGTH = 20
+
+from app.models.finance.gl.account import Account
+from app.models.finance.gl.account_category import AccountCategory
 from app.services.erpnext.mappings.accounts import AccountMapping, ROOT_TYPE_MAP
 
 from .base import BaseSyncService
@@ -59,7 +65,7 @@ class AccountSyncService(BaseSyncService[Account]):
         ]
 
     def transform_record(self, record: dict[str, Any]) -> dict[str, Any]:
-        """Transform ERPNext account to DotMac Books format."""
+        """Transform ERPNext account to DotMac ERP format."""
         return self._mapping.transform_record(record)
 
     def _get_or_create_category(self, root_type: str) -> uuid.UUID:
@@ -117,9 +123,20 @@ class AccountSyncService(BaseSyncService[Account]):
         else:
             account_type = "POSTING"
 
+        account_code = data["account_code"]
+        if len(account_code) > MAX_ACCOUNT_CODE_LENGTH:
+            logger.warning(
+                "Account code '%s' truncated to %d chars (was %d). "
+                "This may cause lookup collisions. Consider extending gl.account.account_code column.",
+                account_code[:MAX_ACCOUNT_CODE_LENGTH],
+                MAX_ACCOUNT_CODE_LENGTH,
+                len(account_code),
+            )
+            account_code = account_code[:MAX_ACCOUNT_CODE_LENGTH]
+
         account = Account(
             organization_id=self.organization_id,
-            account_code=data["account_code"][:20],  # Truncate to 20 chars
+            account_code=account_code,
             account_name=data["account_name"][:200],
             category_id=category_id,
             account_type=account_type,
@@ -165,12 +182,16 @@ class AccountSyncService(BaseSyncService[Account]):
         return entity.account_id
 
     def find_existing_entity(self, source_name: str) -> Optional[Account]:
-        """Find existing account by code."""
+        """Find existing account by sync entity or code.
+
+        Primary lookup is via sync_entity (stores full source_name).
+        Fallback lookup by truncated code is for legacy compatibility only.
+        """
         # Check cache first
         if source_name in self._account_cache:
             return self._account_cache[source_name]
 
-        # Check sync entity
+        # Primary: check sync entity (stores full source_name, avoids truncation issues)
         sync_entity = self.get_sync_entity(source_name)
         if sync_entity and sync_entity.target_id:
             account = self.db.get(Account, sync_entity.target_id)
@@ -178,8 +199,15 @@ class AccountSyncService(BaseSyncService[Account]):
                 self._account_cache[source_name] = account
                 return account
 
-        # Try to find by code (truncated to 20 chars for initial import)
-        code = source_name[:20] if source_name else ""
+        # Fallback: try to find by code (may be truncated - legacy compatibility only)
+        code = source_name[:MAX_ACCOUNT_CODE_LENGTH] if source_name else ""
+        if len(source_name) > MAX_ACCOUNT_CODE_LENGTH:
+            logger.debug(
+                "Looking up account by truncated code '%s' (full name: '%s'). "
+                "Prefer sync_entity lookup for accuracy.",
+                code,
+                source_name,
+            )
         result = self.db.execute(
             select(Account).where(
                 Account.organization_id == self.organization_id,

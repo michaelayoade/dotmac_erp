@@ -12,8 +12,8 @@ from uuid import uuid4
 
 from fastapi import HTTPException
 
-from app.models.ifrs.tax.deferred_tax_basis import DifferenceType
-from app.services.ifrs.tax.deferred_tax import (
+from app.models.finance.tax.deferred_tax_basis import DifferenceType
+from app.services.finance.tax.deferred_tax import (
     DeferredTaxService,
     DeferredTaxBasisInput,
     DeferredTaxCalculationResult,

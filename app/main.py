@@ -47,6 +47,8 @@ from app.api.finance import (
 from app.api.people import router as people_hr_router
 from app.api.expense import router as expense_router
 from app.api.expense_limits import router as expense_limits_router
+from app.api.support import router as support_router
+from app.api.pm import router as pm_router
 from app.db import SessionLocal
 from app.services import audit as audit_service
 from app.api.deps import require_role, require_user_auth, require_tenant_auth
@@ -275,6 +277,12 @@ _include_api_router(people_hr_router, dependencies=[Depends(require_tenant_auth)
 # Expense Management (independent module)
 _include_api_router(expense_router, dependencies=[Depends(require_tenant_auth)])
 _include_api_router(expense_limits_router, dependencies=[Depends(require_tenant_auth)])
+
+# Support/Helpdesk (Operations module)
+_include_api_router(support_router, dependencies=[Depends(require_tenant_auth)])
+
+# Project Management (Operations module)
+_include_api_router(pm_router, dependencies=[Depends(require_tenant_auth)])
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 

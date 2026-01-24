@@ -12,23 +12,23 @@ from unittest.mock import MagicMock, patch, PropertyMock
 import pytest
 from fastapi import HTTPException
 
-from app.models.ifrs.cons.consolidation_run import (
+from app.models.finance.cons.consolidation_run import (
     ConsolidationRun,
     ConsolidationStatus,
 )
-from app.models.ifrs.cons.elimination_entry import (
+from app.models.finance.cons.elimination_entry import (
     EliminationEntry,
     EliminationType,
 )
-from app.models.ifrs.cons.consolidated_balance import ConsolidatedBalance
-from app.models.ifrs.cons.legal_entity import (
+from app.models.finance.cons.consolidated_balance import ConsolidatedBalance
+from app.models.finance.cons.legal_entity import (
     LegalEntity,
     ConsolidationMethod,
     EntityType,
 )
-from app.models.ifrs.cons.intercompany_balance import IntercompanyBalance
-from app.models.ifrs.cons.ownership_interest import OwnershipInterest
-from app.services.ifrs.cons.consolidation import (
+from app.models.finance.cons.intercompany_balance import IntercompanyBalance
+from app.models.finance.cons.ownership_interest import OwnershipInterest
+from app.services.finance.cons.consolidation import (
     ConsolidationService,
     ConsolidationRunInput,
     EliminationInput,

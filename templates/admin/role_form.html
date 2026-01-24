@@ -16,6 +16,7 @@
     </div>
 
     <form action="{{ '/admin/roles/' ~ role_data.id ~ '/edit' if role_data else '/admin/roles/new' }}" method="POST" class="space-y-6">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <!-- Error Alert -->
         {% if error %}
         <div class="rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-4">

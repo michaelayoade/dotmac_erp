@@ -1,0 +1,163 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}Leave Settings{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+    <a href="/people/hr/employees" class="hover:text-violet-600 dark:hover:text-violet-400 transition-colors">People</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <a href="/people/settings" class="hover:text-violet-600 dark:hover:text-violet-400 transition-colors">Settings</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="font-medium text-slate-900 dark:text-white">Leave Settings</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-6 stagger-in">
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Leave Settings</h1>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                Configure leave year and accrual policies.
+            </p>
+        </div>
+    </div>
+
+    <!-- Success Message -->
+    {% if request.query_params.get('saved') %}
+    <div class="rounded-lg bg-green-50 border border-green-200 p-4 dark:bg-green-900/20 dark:border-green-800">
+        <div class="flex items-center gap-3">
+            <svg class="h-5 w-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+            </svg>
+            <p class="text-sm text-green-700 dark:text-green-300">Leave settings updated successfully.</p>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Error Message -->
+    {% if error %}
+    <div class="rounded-lg bg-red-50 border border-red-200 p-4 dark:bg-red-900/20 dark:border-red-800">
+        <div class="flex items-center gap-3">
+            <svg class="h-5 w-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <p class="text-sm text-red-700 dark:text-red-300">{{ error }}</p>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if organization %}
+    <form method="POST" action="/people/settings/leave" class="space-y-6">
+        <!-- Leave Year Configuration -->
+        <div class="card p-6">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Leave Year Configuration</h2>
+            <div class="grid gap-6 sm:grid-cols-2">
+                <div>
+                    <label for="hr_leave_year_start_month" class="form-label">Leave Year Start Month</label>
+                    <select id="hr_leave_year_start_month" name="hr_leave_year_start_month" class="form-input form-select">
+                        <option value="">-- Select Month --</option>
+                        {% for month_value, month_label in months %}
+                        <option value="{{ month_value }}" {{ 'selected' if organization.hr_leave_year_start_month == month_value else '' }}>{{ month_label }}</option>
+                        {% endfor %}
+                    </select>
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Month when leave allocations reset</p>
+                </div>
+            </div>
+
+            <!-- Leave year explanation -->
+            <div class="mt-4 p-4 bg-slate-50 dark:bg-slate-800 rounded-lg">
+                <p class="text-xs font-medium text-slate-700 dark:text-slate-300 mb-2">About leave year:</p>
+                <ul class="space-y-1 text-xs text-slate-600 dark:text-slate-400">
+                    <li>The leave year determines when annual leave allocations are credited to employees.</li>
+                    <li>Common choices are <strong>January</strong> (calendar year) or the fiscal year start month.</li>
+                    <li>Existing balances can be configured to carry over or expire at the end of the leave year.</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Current Leave Year Summary -->
+        <div class="card p-6 bg-violet-50 dark:bg-violet-900/20 border-violet-200 dark:border-violet-800">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Current Configuration</h2>
+            <div class="grid gap-4 sm:grid-cols-3">
+                <div>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Leave Year Starts</p>
+                    <p class="text-sm font-medium text-slate-900 dark:text-white">
+                        {% if organization.hr_leave_year_start_month %}
+                            {% for month_value, month_label in months %}
+                                {% if organization.hr_leave_year_start_month == month_value %}{{ month_label }}{% endif %}
+                            {% endfor %}
+                        {% else %}
+                            Not configured (defaults to January)
+                        {% endif %}
+                    </p>
+                </div>
+                <div>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Fiscal Year End</p>
+                    <p class="text-sm font-medium text-slate-900 dark:text-white">
+                        {% if organization.fiscal_year_end_month %}
+                            {% for month_value, month_label in months %}
+                                {% if organization.fiscal_year_end_month == month_value %}{{ month_label }}{% endif %}
+                            {% endfor %}
+                        {% else %}
+                            Not set
+                        {% endif %}
+                    </p>
+                </div>
+                <div>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Probation Period</p>
+                    <p class="text-sm font-medium text-slate-900 dark:text-white">
+                        {{ organization.hr_probation_days or 'Not set' }}{% if organization.hr_probation_days %} days{% endif %}
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Leave Types Link -->
+        <div class="card p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h3 class="font-semibold text-slate-900 dark:text-white">Leave Types</h3>
+                    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                        Configure annual leave, sick leave, and other leave types with their accrual rules.
+                    </p>
+                </div>
+                <a href="/people/leave/types" class="btn btn-secondary">
+                    Manage Leave Types
+                    <svg class="h-4 w-4 ml-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/>
+                    </svg>
+                </a>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex items-center justify-end gap-4 py-4">
+            <a href="/people/settings" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">
+                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                </svg>
+                Save changes
+            </button>
+        </div>
+    </form>
+    {% else %}
+    <div class="card p-12 text-center">
+        <svg class="mx-auto h-12 w-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        <h3 class="mt-4 text-lg font-medium text-slate-900 dark:text-white">Organization not found</h3>
+        <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">Unable to load leave settings.</p>
+        <a href="/people/settings" class="mt-4 inline-block text-violet-600 hover:text-violet-700 dark:text-violet-400">
+            &larr; Back to settings
+        </a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

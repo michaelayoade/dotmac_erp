@@ -6,6 +6,7 @@ Create Date: 2025-02-15
 """
 
 from alembic import op
+from app.alembic_utils import ensure_enum
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.dialects.postgresql import UUID
@@ -26,38 +27,9 @@ def upgrade() -> None:
     inspector = sa.inspect(bind)
 
     # Enums
-    op.execute(
-        """
-        DO $$
-        BEGIN
-            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'price_list_type') THEN
-                CREATE TYPE price_list_type AS ENUM ('SALES', 'PURCHASE');
-            END IF;
-        END$$;
-        """
-    )
-    op.execute(
-        """
-        DO $$
-        BEGIN
-            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'bom_type') THEN
-                CREATE TYPE bom_type AS ENUM ('ASSEMBLY', 'KIT', 'PHANTOM');
-            END IF;
-        END$$;
-        """
-    )
-    op.execute(
-        """
-        DO $$
-        BEGIN
-            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'count_status') THEN
-                CREATE TYPE count_status AS ENUM (
-                    'DRAFT', 'IN_PROGRESS', 'COMPLETED', 'POSTED', 'CANCELLED'
-                );
-            END IF;
-        END$$;
-        """
-    )
+    ensure_enum(bind, "price_list_type", "SALES", "PURCHASE")
+    ensure_enum(bind, "bom_type", "ASSEMBLY", "KIT", "PHANTOM")
+    ensure_enum(bind, "count_status", "DRAFT", "IN_PROGRESS", "COMPLETED", "POSTED", "CANCELLED")
 
     # Inventory lot enhancements
     if inspector.has_table("inventory_lot", schema="inv"):

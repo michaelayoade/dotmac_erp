@@ -1,7 +1,8 @@
 """
 ERPNext API Client.
 
-Read-only client for fetching data from ERPNext via Frappe REST API.
+Client for fetching and writing data to ERPNext via Frappe REST API.
+Supports bidirectional sync for migration scenarios.
 """
 import logging
 import time
@@ -744,3 +745,776 @@ class ERPNextClient:
             ],
             order_by="posting_date asc",
         )
+
+    # --------------------------
+    # Write operations (for bidirectional sync)
+    # --------------------------
+
+    def create_document(
+        self,
+        doctype: str,
+        data: dict[str, Any],
+    ) -> dict[str, Any]:
+        """
+        Create a new document in ERPNext.
+
+        Args:
+            doctype: DocType name (e.g., 'Employee', 'Expense Claim')
+            data: Document data fields
+
+        Returns:
+            Created document data including 'name'
+
+        Raises:
+            ERPNextError: On validation or permission error
+        """
+        payload = {"doctype": doctype, **data}
+        result = self._request(
+            "POST",
+            f"/api/resource/{doctype}",
+            json=payload,
+        )
+        return result.get("data", {})
+
+    def update_document(
+        self,
+        doctype: str,
+        name: str,
+        data: dict[str, Any],
+    ) -> dict[str, Any]:
+        """
+        Update an existing document in ERPNext.
+
+        Args:
+            doctype: DocType name
+            name: Document name/ID
+            data: Fields to update
+
+        Returns:
+            Updated document data
+
+        Raises:
+            ERPNextError: On validation or permission error
+        """
+        result = self._request(
+            "PUT",
+            f"/api/resource/{doctype}/{name}",
+            json=data,
+        )
+        return result.get("data", {})
+
+    def delete_document(
+        self,
+        doctype: str,
+        name: str,
+    ) -> bool:
+        """
+        Delete a document from ERPNext.
+
+        Note: Many ERPNext documents cannot be deleted if they have
+        linked transactions. Use cancel_document for such cases.
+
+        Args:
+            doctype: DocType name
+            name: Document name/ID
+
+        Returns:
+            True if deleted successfully
+
+        Raises:
+            ERPNextError: On error (e.g., linked documents exist)
+        """
+        self._request("DELETE", f"/api/resource/{doctype}/{name}")
+        return True
+
+    def submit_document(
+        self,
+        doctype: str,
+        name: str,
+    ) -> dict[str, Any]:
+        """
+        Submit a document (change docstatus from Draft to Submitted).
+
+        For workflow documents like Sales Invoice, Purchase Invoice,
+        Journal Entry, Expense Claim, etc.
+
+        Args:
+            doctype: DocType name
+            name: Document name/ID
+
+        Returns:
+            Updated document data
+
+        Raises:
+            ERPNextError: On validation or workflow error
+        """
+        result = self._request(
+            "POST",
+            "/api/method/frappe.client.submit",
+            json={"doc": {"doctype": doctype, "name": name}},
+        )
+        return result.get("message", {})
+
+    def cancel_document(
+        self,
+        doctype: str,
+        name: str,
+    ) -> dict[str, Any]:
+        """
+        Cancel a submitted document (change docstatus to Cancelled).
+
+        Creates reversal entries where applicable.
+
+        Args:
+            doctype: DocType name
+            name: Document name/ID
+
+        Returns:
+            Cancelled document data
+
+        Raises:
+            ERPNextError: On validation or workflow error
+        """
+        result = self._request(
+            "POST",
+            "/api/method/frappe.client.cancel",
+            json={"doctype": doctype, "name": name},
+        )
+        return result.get("message", {})
+
+    def run_method(
+        self,
+        doctype: str,
+        name: str,
+        method: str,
+        args: Optional[dict[str, Any]] = None,
+    ) -> Any:
+        """
+        Run a whitelisted method on a document.
+
+        Useful for workflow transitions, custom actions, etc.
+
+        Args:
+            doctype: DocType name
+            name: Document name/ID
+            method: Method name to call
+            args: Optional method arguments
+
+        Returns:
+            Method result
+
+        Raises:
+            ERPNextError: On error
+        """
+        payload = {"doctype": doctype, "name": name, "method": method}
+        if args:
+            payload["args"] = args
+
+        result = self._request(
+            "POST",
+            "/api/method/frappe.client.run_doc_method",
+            json=payload,
+        )
+        return result.get("message")
+
+    # --------------------------
+    # HR-specific convenience methods
+    # --------------------------
+
+    def get_departments(self, company: Optional[str] = None):
+        """
+        Get departments.
+
+        Args:
+            company: Company name (defaults to config.company)
+
+        Yields:
+            Department documents
+        """
+        company = company or self.config.company
+        filters: dict[str, Any] = {}
+
+        if company:
+            filters["company"] = company
+
+        yield from self.get_all_documents(
+            doctype="Department",
+            filters=filters,
+            fields=[
+                "name",
+                "department_name",
+                "parent_department",
+                "company",
+                "is_group",
+                "disabled",
+                "modified",
+            ],
+            order_by="lft asc",  # Tree order
+        )
+
+    def get_designations(self):
+        """
+        Get designations (job titles).
+
+        Yields:
+            Designation documents
+        """
+        yield from self.get_all_documents(
+            doctype="Designation",
+            fields=[
+                "name",
+                "designation_name",
+                "modified",
+            ],
+            order_by="designation_name asc",
+        )
+
+    def get_employment_types(self):
+        """
+        Get employment types (full-time, part-time, etc.).
+
+        Yields:
+            Employment Type documents
+        """
+        yield from self.get_all_documents(
+            doctype="Employment Type",
+            fields=[
+                "name",
+                "modified",
+            ],
+            order_by="name asc",
+        )
+
+    def get_employee_grades(self):
+        """
+        Get employee grades (salary bands).
+
+        Yields:
+            Employee Grade documents
+        """
+        yield from self.get_all_documents(
+            doctype="Employee Grade",
+            fields=[
+                "name",
+                "default_base_pay",
+                "modified",
+            ],
+            order_by="name asc",
+        )
+
+    def get_employees(
+        self,
+        company: Optional[str] = None,
+        include_inactive: bool = False,
+    ):
+        """
+        Get employees.
+
+        Args:
+            company: Company name (defaults to config.company)
+            include_inactive: Include left/inactive employees
+
+        Yields:
+            Employee documents
+        """
+        company = company or self.config.company
+        filters: dict[str, Any] = {}
+
+        if company:
+            filters["company"] = company
+        if not include_inactive:
+            filters["status"] = "Active"
+
+        yield from self.get_all_documents(
+            doctype="Employee",
+            filters=filters,
+            fields=[
+                "name",
+                "employee_name",
+                "first_name",
+                "middle_name",
+                "last_name",
+                "gender",
+                "date_of_birth",
+                "date_of_joining",
+                "relieving_date",
+                "status",
+                "department",
+                "designation",
+                "employment_type",
+                "grade",
+                "reports_to",
+                "user_id",
+                "cell_number",
+                "personal_email",
+                "company_email",
+                "prefered_email",
+                "bank_name",
+                "bank_ac_no",
+                "company",
+                "modified",
+            ],
+            order_by="employee_name asc",
+        )
+
+    def get_leave_types(self):
+        """
+        Get leave types.
+
+        Yields:
+            Leave Type documents
+        """
+        yield from self.get_all_documents(
+            doctype="Leave Type",
+            fields=[
+                "name",
+                "leave_type_name",
+                "max_leaves_allowed",
+                "max_continuous_days_allowed",
+                "is_carry_forward",
+                "is_earned_leave",
+                "is_compensatory",
+                "is_lwp",
+                "allow_negative",
+                "include_holiday",
+                "modified",
+            ],
+            order_by="leave_type_name asc",
+        )
+
+    def get_leave_allocations(
+        self,
+        company: Optional[str] = None,
+        fiscal_year: Optional[str] = None,
+    ):
+        """
+        Get leave allocations.
+
+        Args:
+            company: Company name (defaults to config.company)
+            fiscal_year: Fiscal year name (optional)
+
+        Yields:
+            Leave Allocation documents
+        """
+        company = company or self.config.company
+        filters: dict[str, Any] = {"docstatus": 1}  # Only submitted
+
+        if company:
+            filters["company"] = company
+        if fiscal_year:
+            filters["fiscal_year"] = fiscal_year
+
+        yield from self.get_all_documents(
+            doctype="Leave Allocation",
+            filters=filters,
+            fields=[
+                "name",
+                "employee",
+                "employee_name",
+                "leave_type",
+                "from_date",
+                "to_date",
+                "new_leaves_allocated",
+                "carry_forward",
+                "carry_forwarded_leaves",
+                "total_leaves_allocated",
+                "company",
+                "modified",
+            ],
+            order_by="from_date desc",
+        )
+
+    def get_leave_applications(
+        self,
+        company: Optional[str] = None,
+        from_date: Optional[datetime] = None,
+    ):
+        """
+        Get leave applications.
+
+        Args:
+            company: Company name (defaults to config.company)
+            from_date: Filter applications from this date
+
+        Yields:
+            Leave Application documents
+        """
+        company = company or self.config.company
+        filters: dict[str, Any] = {}
+
+        if company:
+            filters["company"] = company
+        if from_date:
+            filters["from_date"] = [">=", from_date.strftime("%Y-%m-%d")]
+
+        yield from self.get_all_documents(
+            doctype="Leave Application",
+            filters=filters,
+            fields=[
+                "name",
+                "employee",
+                "employee_name",
+                "leave_type",
+                "from_date",
+                "to_date",
+                "total_leave_days",
+                "half_day",
+                "half_day_date",
+                "status",
+                "docstatus",
+                "description",
+                "leave_approver",
+                "company",
+                "modified",
+            ],
+            order_by="from_date desc",
+        )
+
+    def get_shift_types(self):
+        """
+        Get shift types.
+
+        Yields:
+            Shift Type documents
+        """
+        yield from self.get_all_documents(
+            doctype="Shift Type",
+            fields=[
+                "name",
+                "start_time",
+                "end_time",
+                "enable_auto_attendance",
+                "early_exit_grace_period",
+                "late_entry_grace_period",
+                "working_hours_threshold_for_half_day",
+                "working_hours_threshold_for_absent",
+                "modified",
+            ],
+            order_by="name asc",
+        )
+
+    def get_attendance(
+        self,
+        company: Optional[str] = None,
+        from_date: Optional[datetime] = None,
+    ):
+        """
+        Get attendance records.
+
+        Args:
+            company: Company name (defaults to config.company)
+            from_date: Filter attendance from this date
+
+        Yields:
+            Attendance documents
+        """
+        company = company or self.config.company
+        filters: dict[str, Any] = {"docstatus": 1}  # Only submitted
+
+        if company:
+            filters["company"] = company
+        if from_date:
+            filters["attendance_date"] = [">=", from_date.strftime("%Y-%m-%d")]
+
+        yield from self.get_all_documents(
+            doctype="Attendance",
+            filters=filters,
+            fields=[
+                "name",
+                "employee",
+                "employee_name",
+                "attendance_date",
+                "status",
+                "shift",
+                "in_time",
+                "out_time",
+                "working_hours",
+                "early_exit",
+                "late_entry",
+                "leave_type",
+                "leave_application",
+                "company",
+                "modified",
+            ],
+            order_by="attendance_date desc",
+        )
+
+    def get_expense_claim_types(self):
+        """
+        Get expense claim types (categories).
+
+        Yields:
+            Expense Claim Type documents
+        """
+        yield from self.get_all_documents(
+            doctype="Expense Claim Type",
+            fields=[
+                "name",
+                "expense_type",
+                "description",
+                "modified",
+            ],
+            order_by="expense_type asc",
+        )
+
+    def get_expense_claims(
+        self,
+        company: Optional[str] = None,
+        from_date: Optional[datetime] = None,
+    ):
+        """
+        Get expense claims with their items.
+
+        Args:
+            company: Company name (defaults to config.company)
+            from_date: Filter claims posted from this date
+
+        Yields:
+            Expense Claim documents (with nested expenses)
+        """
+        company = company or self.config.company
+        filters: dict[str, Any] = {}
+
+        if company:
+            filters["company"] = company
+        if from_date:
+            filters["posting_date"] = [">=", from_date.strftime("%Y-%m-%d")]
+
+        for claim in self.get_all_documents(
+            doctype="Expense Claim",
+            filters=filters,
+            fields=[
+                "name",
+                "employee",
+                "employee_name",
+                "expense_approver",
+                "posting_date",
+                "approval_status",
+                "status",
+                "docstatus",
+                "total_claimed_amount",
+                "total_sanctioned_amount",
+                "total_amount_reimbursed",
+                "remark",
+                "company",
+                "cost_center",
+                "project",
+                "modified",
+            ],
+            order_by="posting_date desc",
+        ):
+            # Fetch expense items for each claim (gracefully handle permission errors)
+            try:
+                claim["expenses"] = self.list_documents(
+                    doctype="Expense Claim Detail",
+                    filters={"parent": claim["name"]},
+                    fields=[
+                        "name",
+                        "expense_date",
+                        "expense_type",
+                        "description",
+                        "amount",
+                        "sanctioned_amount",
+                        "cost_center",
+                        "modified",
+                    ],
+                )
+            except ERPNextError as e:
+                # Permission denied or other error - continue without items
+                import logging
+                logging.getLogger(__name__).warning(
+                    "Could not fetch expense items for %s: %s", claim["name"], e.message
+                )
+                claim["expenses"] = []
+            yield claim
+
+    def get_projects(
+        self,
+        company: Optional[str] = None,
+        include_completed: bool = False,
+    ):
+        """
+        Get projects.
+
+        Args:
+            company: Company name (defaults to config.company)
+            include_completed: Include completed/cancelled projects
+
+        Yields:
+            Project documents
+        """
+        company = company or self.config.company
+        filters: dict[str, Any] = {}
+
+        if company:
+            filters["company"] = company
+        if not include_completed:
+            filters["status"] = ["not in", ["Completed", "Cancelled"]]
+
+        yield from self.get_all_documents(
+            doctype="Project",
+            filters=filters,
+            fields=[
+                "name",
+                "project_name",
+                "status",
+                "is_active",
+                "expected_start_date",
+                "expected_end_date",
+                "actual_start_date",
+                "actual_end_date",
+                "estimated_costing",
+                "total_costing_amount",
+                "percent_complete",
+                "company",
+                "cost_center",
+                "customer",  # Customer link for client projects
+                "modified",
+            ],
+            order_by="project_name asc",
+        )
+
+    def get_issues(
+        self,
+        from_date: Optional[datetime] = None,
+        include_closed: bool = False,
+    ):
+        """
+        Get helpdesk issues/tickets.
+
+        Args:
+            from_date: Filter issues from this date
+            include_closed: Include closed issues
+
+        Yields:
+            Issue documents (HD Ticket in newer ERPNext)
+        """
+        filters: dict[str, Any] = {}
+
+        if from_date:
+            filters["opening_date"] = [">=", from_date.strftime("%Y-%m-%d")]
+        if not include_closed:
+            filters["status"] = ["not in", ["Closed", "Resolved"]]
+
+        # Try HD Ticket first (ERPNext v14+), fallback to Issue
+        try:
+            yield from self.get_all_documents(
+                doctype="HD Ticket",
+                filters=filters,
+                fields=[
+                    "name",
+                    "subject",
+                    "description",
+                    "status",
+                    "priority",
+                    "raised_by",
+                    "owner",
+                    "opening_date",
+                    "resolution_date",
+                    "resolution_details",
+                    "customer",  # Customer link for support tickets
+                    "modified",
+                ],
+                order_by="opening_date desc",
+            )
+        except ERPNextError as e:
+            if e.status_code == 404:
+                # Fall back to Issue DocType
+                yield from self.get_all_documents(
+                    doctype="Issue",
+                    filters=filters,
+                    fields=[
+                        "name",
+                        "subject",
+                        "description",
+                        "status",
+                        "priority",
+                        "raised_by",
+                        "owner",
+                        "opening_date",
+                        "resolution_date",
+                        "resolution_details",
+                        "project",
+                        "customer",  # Customer link for support tickets
+                        "modified",
+                    ],
+                    order_by="opening_date desc",
+                )
+            else:
+                raise
+
+    def get_material_requests(
+        self,
+        company: Optional[str] = None,
+        from_date: Optional[datetime] = None,
+        include_cancelled: bool = False,
+    ):
+        """
+        Get material requests with their items.
+
+        Material Requests are inventory requisitions that can be linked to
+        projects, support tickets, and tasks.
+
+        Args:
+            company: Company name (defaults to config.company)
+            from_date: Filter requests from this date
+            include_cancelled: Include cancelled requests
+
+        Yields:
+            Material Request documents (with nested items)
+        """
+        company = company or self.config.company
+        filters: dict[str, Any] = {}
+
+        if company:
+            filters["company"] = company
+        if from_date:
+            filters["transaction_date"] = [">=", from_date.strftime("%Y-%m-%d")]
+        if not include_cancelled:
+            filters["status"] = ["not in", ["Cancelled", "Stopped"]]
+
+        for request in self.get_all_documents(
+            doctype="Material Request",
+            filters=filters,
+            # Note: Some fields like requested_by, reason may be restricted
+            # Only fetch fields known to be permitted in ERPNext API
+            fields=[
+                "name",
+                "material_request_type",
+                "status",
+                "transaction_date",
+                "schedule_date",
+                "set_warehouse",
+                "company",
+                "modified",
+            ],
+            order_by="transaction_date desc",
+        ):
+            # Fetch items for each request
+            try:
+                request["items"] = self.list_documents(
+                    doctype="Material Request Item",
+                    filters={"parent": request["name"]},
+                    fields=[
+                        "name",
+                        "item_code",
+                        "item_name",
+                        "warehouse",
+                        "qty",
+                        "ordered_qty",
+                        "stock_uom",
+                        "schedule_date",
+                        "project",
+                        "modified",
+                    ],
+                )
+            except ERPNextError as e:
+                # Permission denied or other error - continue without items
+                logger.warning(
+                    "Could not fetch items for Material Request %s: %s",
+                    request["name"],
+                    e.message,
+                )
+                request["items"] = []
+            yield request

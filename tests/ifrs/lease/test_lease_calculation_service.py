@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.models.ifrs.lease.lease_contract import LeaseClassification, LeaseStatus
+from app.models.finance.lease.lease_contract import LeaseClassification, LeaseStatus
 from tests.ifrs.lease.conftest import (
     MockLeaseContract,
     MockLeaseLiability,
@@ -22,7 +22,7 @@ class TestLeaseCalculationService:
 
     def test_calculate_pv_zero_payments(self):
         """Test PV calculation with zero payments."""
-        from app.services.ifrs.lease.lease_calculation import LeaseCalculationService
+        from app.services.finance.lease.lease_calculation import LeaseCalculationService
 
         result = LeaseCalculationService.calculate_pv(
             payment=Decimal("0"),
@@ -34,7 +34,7 @@ class TestLeaseCalculationService:
 
     def test_calculate_pv_zero_periods(self):
         """Test PV calculation with zero periods."""
-        from app.services.ifrs.lease.lease_calculation import LeaseCalculationService
+        from app.services.finance.lease.lease_calculation import LeaseCalculationService
 
         result = LeaseCalculationService.calculate_pv(
             payment=Decimal("1000"),
@@ -46,7 +46,7 @@ class TestLeaseCalculationService:
 
     def test_calculate_pv_zero_rate(self):
         """Test PV calculation with zero interest rate."""
-        from app.services.ifrs.lease.lease_calculation import LeaseCalculationService
+        from app.services.finance.lease.lease_calculation import LeaseCalculationService
 
         result = LeaseCalculationService.calculate_pv(
             payment=Decimal("1000"),
@@ -59,7 +59,7 @@ class TestLeaseCalculationService:
 
     def test_calculate_pv_ordinary_annuity(self):
         """Test PV calculation for ordinary annuity (arrears)."""
-        from app.services.ifrs.lease.lease_calculation import LeaseCalculationService
+        from app.services.finance.lease.lease_calculation import LeaseCalculationService
 
         result = LeaseCalculationService.calculate_pv(
             payment=Decimal("1000"),
@@ -75,7 +75,7 @@ class TestLeaseCalculationService:
 
     def test_calculate_pv_annuity_due(self):
         """Test PV calculation for annuity due (advance)."""
-        from app.services.ifrs.lease.lease_calculation import LeaseCalculationService
+        from app.services.finance.lease.lease_calculation import LeaseCalculationService
 
         result_advance = LeaseCalculationService.calculate_pv(
             payment=Decimal("1000"),
@@ -96,7 +96,7 @@ class TestLeaseCalculationService:
 
     def test_calculate_pv_single_zero_periods(self):
         """Test single PV with zero periods returns amount."""
-        from app.services.ifrs.lease.lease_calculation import LeaseCalculationService
+        from app.services.finance.lease.lease_calculation import LeaseCalculationService
 
         result = LeaseCalculationService.calculate_pv_single(
             amount=Decimal("10000"),
@@ -108,7 +108,7 @@ class TestLeaseCalculationService:
 
     def test_calculate_pv_single_zero_rate(self):
         """Test single PV with zero rate returns amount."""
-        from app.services.ifrs.lease.lease_calculation import LeaseCalculationService
+        from app.services.finance.lease.lease_calculation import LeaseCalculationService
 
         result = LeaseCalculationService.calculate_pv_single(
             amount=Decimal("10000"),
@@ -120,7 +120,7 @@ class TestLeaseCalculationService:
 
     def test_calculate_pv_single(self):
         """Test single PV calculation."""
-        from app.services.ifrs.lease.lease_calculation import LeaseCalculationService
+        from app.services.finance.lease.lease_calculation import LeaseCalculationService
 
         result = LeaseCalculationService.calculate_pv_single(
             amount=Decimal("10000"),
@@ -133,42 +133,42 @@ class TestLeaseCalculationService:
 
     def test_get_periods_per_year_monthly(self):
         """Test periods per year for monthly frequency."""
-        from app.services.ifrs.lease.lease_calculation import LeaseCalculationService
+        from app.services.finance.lease.lease_calculation import LeaseCalculationService
 
         result = LeaseCalculationService.get_periods_per_year("MONTHLY")
         assert result == 12
 
     def test_get_periods_per_year_quarterly(self):
         """Test periods per year for quarterly frequency."""
-        from app.services.ifrs.lease.lease_calculation import LeaseCalculationService
+        from app.services.finance.lease.lease_calculation import LeaseCalculationService
 
         result = LeaseCalculationService.get_periods_per_year("QUARTERLY")
         assert result == 4
 
     def test_get_periods_per_year_semi_annual(self):
         """Test periods per year for semi-annual frequency."""
-        from app.services.ifrs.lease.lease_calculation import LeaseCalculationService
+        from app.services.finance.lease.lease_calculation import LeaseCalculationService
 
         result = LeaseCalculationService.get_periods_per_year("SEMI_ANNUAL")
         assert result == 2
 
     def test_get_periods_per_year_annual(self):
         """Test periods per year for annual frequency."""
-        from app.services.ifrs.lease.lease_calculation import LeaseCalculationService
+        from app.services.finance.lease.lease_calculation import LeaseCalculationService
 
         result = LeaseCalculationService.get_periods_per_year("ANNUAL")
         assert result == 1
 
     def test_get_periods_per_year_unknown_defaults_monthly(self):
         """Test unknown frequency defaults to monthly."""
-        from app.services.ifrs.lease.lease_calculation import LeaseCalculationService
+        from app.services.finance.lease.lease_calculation import LeaseCalculationService
 
         result = LeaseCalculationService.get_periods_per_year("UNKNOWN")
         assert result == 12
 
     def test_generate_amortization_schedule_not_found(self, mock_db):
         """Test amortization schedule generation for non-existent lease."""
-        from app.services.ifrs.lease.lease_calculation import LeaseCalculationService
+        from app.services.finance.lease.lease_calculation import LeaseCalculationService
         from fastapi import HTTPException
 
         mock_db.get.return_value = None
@@ -183,7 +183,7 @@ class TestLeaseCalculationService:
 
     def test_generate_amortization_schedule_no_liability(self, mock_db, mock_contract):
         """Test amortization schedule with no liability fails."""
-        from app.services.ifrs.lease.lease_calculation import LeaseCalculationService
+        from app.services.finance.lease.lease_calculation import LeaseCalculationService
         from fastapi import HTTPException
 
         mock_db.get.return_value = mock_contract
@@ -200,7 +200,7 @@ class TestLeaseCalculationService:
 
     def test_calculate_interest_accrual_not_found(self, mock_db):
         """Test interest accrual calculation for non-existent lease."""
-        from app.services.ifrs.lease.lease_calculation import LeaseCalculationService
+        from app.services.finance.lease.lease_calculation import LeaseCalculationService
         from fastapi import HTTPException
 
         mock_db.get.return_value = None
@@ -216,7 +216,7 @@ class TestLeaseCalculationService:
 
     def test_calculate_interest_accrual_no_liability(self, mock_db, mock_contract):
         """Test interest accrual with no liability fails."""
-        from app.services.ifrs.lease.lease_calculation import LeaseCalculationService
+        from app.services.finance.lease.lease_calculation import LeaseCalculationService
         from fastapi import HTTPException
 
         mock_db.get.return_value = mock_contract
@@ -233,7 +233,7 @@ class TestLeaseCalculationService:
 
     def test_calculate_interest_accrual_success(self, mock_db, mock_contract, mock_liability):
         """Test successful interest accrual calculation."""
-        from app.services.ifrs.lease.lease_calculation import LeaseCalculationService
+        from app.services.finance.lease.lease_calculation import LeaseCalculationService
 
         mock_contract.discount_rate_used = Decimal("0.06")  # 6% annual
         mock_liability.current_liability_balance = Decimal("120000.00")
@@ -254,7 +254,7 @@ class TestLeaseCalculationService:
 
     def test_calculate_rou_depreciation_not_found(self, mock_db):
         """Test ROU depreciation for non-existent lease asset."""
-        from app.services.ifrs.lease.lease_calculation import LeaseCalculationService
+        from app.services.finance.lease.lease_calculation import LeaseCalculationService
         from fastapi import HTTPException
 
         mock_db.query.return_value.filter.return_value.first.return_value = None
@@ -269,7 +269,7 @@ class TestLeaseCalculationService:
 
     def test_calculate_rou_depreciation_zero_life(self, mock_db, mock_asset):
         """Test ROU depreciation with zero useful life returns zero."""
-        from app.services.ifrs.lease.lease_calculation import LeaseCalculationService
+        from app.services.finance.lease.lease_calculation import LeaseCalculationService
 
         mock_asset.useful_life_months = 0
         mock_db.query.return_value.filter.return_value.first.return_value = mock_asset
@@ -283,7 +283,7 @@ class TestLeaseCalculationService:
 
     def test_calculate_rou_depreciation_success(self, mock_db, mock_asset):
         """Test successful ROU depreciation calculation."""
-        from app.services.ifrs.lease.lease_calculation import LeaseCalculationService
+        from app.services.finance.lease.lease_calculation import LeaseCalculationService
 
         mock_asset.initial_rou_asset_value = Decimal("120000.00")
         mock_asset.residual_value = Decimal("0")
@@ -302,7 +302,7 @@ class TestLeaseCalculationService:
 
     def test_calculate_rou_depreciation_multiple_periods(self, mock_db, mock_asset):
         """Test ROU depreciation for multiple periods."""
-        from app.services.ifrs.lease.lease_calculation import LeaseCalculationService
+        from app.services.finance.lease.lease_calculation import LeaseCalculationService
 
         mock_asset.initial_rou_asset_value = Decimal("120000.00")
         mock_asset.residual_value = Decimal("0")
@@ -321,7 +321,7 @@ class TestLeaseCalculationService:
 
     def test_calculate_rou_depreciation_with_residual(self, mock_db, mock_asset):
         """Test ROU depreciation with residual value."""
-        from app.services.ifrs.lease.lease_calculation import LeaseCalculationService
+        from app.services.finance.lease.lease_calculation import LeaseCalculationService
 
         mock_asset.initial_rou_asset_value = Decimal("120000.00")
         mock_asset.residual_value = Decimal("20000.00")
@@ -341,7 +341,7 @@ class TestLeaseCalculationService:
 
     def test_calculate_rou_depreciation_capped_at_carrying(self, mock_db, mock_asset):
         """Test depreciation doesn't exceed carrying amount minus residual."""
-        from app.services.ifrs.lease.lease_calculation import LeaseCalculationService
+        from app.services.finance.lease.lease_calculation import LeaseCalculationService
 
         mock_asset.initial_rou_asset_value = Decimal("120000.00")
         mock_asset.residual_value = Decimal("0")
@@ -360,7 +360,7 @@ class TestLeaseCalculationService:
 
     def test_calculate_rou_depreciation_fully_depreciated(self, mock_db, mock_asset):
         """Test depreciation returns zero when fully depreciated."""
-        from app.services.ifrs.lease.lease_calculation import LeaseCalculationService
+        from app.services.finance.lease.lease_calculation import LeaseCalculationService
 
         mock_asset.initial_rou_asset_value = Decimal("120000.00")
         mock_asset.residual_value = Decimal("10000.00")

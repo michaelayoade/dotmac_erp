@@ -1,0 +1,102 @@
+{% extends "operations/base_operations.html" %}
+
+{% block page_title %}{{ 'Edit Team' if team else 'New Team' }}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+    <a href="/operations/dashboard" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Operations</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <a href="/operations/support/tickets" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Support</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <a href="/operations/support/teams" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Teams</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="font-medium text-slate-900 dark:text-white">{{ 'Edit' if team else 'New' }}</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl">
+    {% if error %}
+    <div class="mb-6 p-4 rounded-lg bg-rose-50 border border-rose-200 dark:bg-rose-900/20 dark:border-rose-800">
+        <div class="flex items-start gap-3">
+            <svg class="h-5 w-5 text-rose-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <p class="text-sm text-rose-700 dark:text-rose-400">{{ error }}</p>
+        </div>
+    </div>
+    {% endif %}
+
+    <form method="post" action="/operations/support/teams{{ '/' + team.team_id if team else '' }}" class="card">
+        <div class="p-6 space-y-6">
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label for="team_code" class="form-label">Team Code <span class="text-rose-500">*</span></label>
+                    <input type="text" name="team_code" id="team_code"
+                           value="{{ team.team_code if team else '' }}"
+                           placeholder="e.g., SUPPORT-L1"
+                           class="form-input w-full font-mono uppercase"
+                           {{ 'readonly' if team }}
+                           required>
+                    <p class="text-xs text-slate-500 mt-1">Unique identifier for the team</p>
+                </div>
+                <div>
+                    <label for="team_name" class="form-label">Team Name <span class="text-rose-500">*</span></label>
+                    <input type="text" name="team_name" id="team_name"
+                           value="{{ team.team_name if team else '' }}"
+                           placeholder="e.g., Level 1 Support"
+                           class="form-input w-full"
+                           required>
+                </div>
+            </div>
+
+            <div>
+                <label for="description" class="form-label">Description</label>
+                <textarea name="description" id="description" rows="3"
+                          placeholder="Describe the team's responsibilities..."
+                          class="form-input w-full">{{ team.description if team else '' }}</textarea>
+            </div>
+
+            <div>
+                <label for="lead_id" class="form-label">Team Lead</label>
+                <select name="lead_id" id="lead_id" class="form-input w-full">
+                    <option value="">No team lead</option>
+                    {% for emp in employees %}
+                    <option value="{{ emp.employee_id }}" {{ 'selected' if team and team.lead_id and team.lead_id|string == emp.employee_id }}>
+                        {{ emp.full_name }} ({{ emp.employee_code }})
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="flex items-center gap-3">
+                <input type="checkbox" name="auto_assign" id="auto_assign" value="true"
+                       class="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-600 dark:border-slate-600 dark:bg-slate-800"
+                       {{ 'checked' if team and team.auto_assign }}>
+                <div>
+                    <label for="auto_assign" class="font-medium text-slate-900 dark:text-white">Enable auto-assignment</label>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">Automatically assign new tickets to available team members</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="px-6 py-4 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between">
+            <a href="/operations/support/teams" class="btn btn-secondary">
+                Cancel
+            </a>
+            <button type="submit" class="btn btn-primary">
+                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                </svg>
+                {{ 'Update Team' if team else 'Create Team' }}
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

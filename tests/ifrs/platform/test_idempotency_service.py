@@ -36,7 +36,7 @@ class TestIdempotencyService:
         with patch.dict('sys.modules', {
             'app.models.ifrs.platform.idempotency_record': MagicMock(),
         }):
-            from app.services.ifrs.platform.idempotency import IdempotencyService
+            from app.services.finance.platform.idempotency import IdempotencyService
             return IdempotencyService
 
     def test_check_returns_none_for_new_key(self, service, mock_db_session, organization_id):

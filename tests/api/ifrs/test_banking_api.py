@@ -10,10 +10,10 @@ from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, Header, HTTPException
 from fastapi.testclient import TestClient
 
-from app.api.ifrs.banking import router, get_db, _get_org_id, _get_user_id
+from app.api.finance.banking import router, get_db, _get_org_id, _get_user_id
 from app.api.deps import require_tenant_auth
 from tests.api.ifrs.conftest import (
     MockBankAccount,
@@ -49,11 +49,18 @@ def mock_auth(org_id, user_id):
 
 
 @pytest.fixture
-def client(app, mock_db, mock_auth):
+def client(app, mock_db, mock_auth, auth_headers):
     """Create test client with mocked dependencies."""
     app.dependency_overrides[get_db] = lambda: mock_db
-    app.dependency_overrides[require_tenant_auth] = lambda: mock_auth
-    return TestClient(app)
+    def _require_tenant_auth_override(authorization: str | None = Header(default=None)):
+        if not authorization:
+            raise HTTPException(status_code=401, detail="Unauthorized")
+        return mock_auth
+
+    app.dependency_overrides[require_tenant_auth] = _require_tenant_auth_override
+    test_client = TestClient(app)
+    test_client.headers.update(auth_headers)
+    return test_client
 
 
 class TestBankAccountAPI:

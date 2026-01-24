@@ -50,24 +50,29 @@ def admin_users_new(
 
 
 @router.post("/users/new", response_class=HTMLResponse)
-def admin_users_create(
+async def admin_users_create(
     request: Request,
-    first_name: str = Form(...),
-    last_name: str = Form(...),
-    email: str = Form(...),
-    username: str = Form(...),
-    organization_id: str = Form(...),
-    password: str = Form(...),
-    password_confirm: str = Form(...),
-    display_name: str = Form(default=""),
-    phone: str = Form(default=""),
-    status: str = Form(default="active"),
-    must_change_password: str = Form(default=""),
-    roles: list[str] = Form(default=[]),
     db: Session = Depends(get_db),
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
     """Handle create user form submission."""
+    form = getattr(request.state, "csrf_form", None)
+    if form is None:
+        form = await request.form()
+
+    first_name = (form.get("first_name") or "").strip()
+    last_name = (form.get("last_name") or "").strip()
+    email = (form.get("email") or "").strip()
+    username = (form.get("username") or "").strip()
+    organization_id = (form.get("organization_id") or "").strip()
+    password = form.get("password") or ""
+    password_confirm = form.get("password_confirm") or ""
+    display_name = (form.get("display_name") or "").strip()
+    phone = (form.get("phone") or "").strip()
+    status = (form.get("status") or "active").strip()
+    must_change_password = form.get("must_change_password") or ""
+    roles = form.getlist("roles") if hasattr(form, "getlist") else []
+
     return admin_web_service.users_create_response(
         request,
         db,
@@ -110,26 +115,31 @@ def admin_users_edit(
 
 
 @router.post("/users/{user_id}/edit", response_class=HTMLResponse)
-def admin_users_update(
+async def admin_users_update(
     request: Request,
     user_id: str,
-    first_name: str = Form(...),
-    last_name: str = Form(...),
-    email: str = Form(...),
-    username: str = Form(...),
-    organization_id: str = Form(...),
-    password: str = Form(default=""),
-    password_confirm: str = Form(default=""),
-    display_name: str = Form(default=""),
-    phone: str = Form(default=""),
-    status: str = Form(default="active"),
-    must_change_password: str = Form(default=""),
-    email_verified: str = Form(default=""),
-    roles: list[str] = Form(default=[]),
     db: Session = Depends(get_db),
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
     """Handle edit user form submission."""
+    form = getattr(request.state, "csrf_form", None)
+    if form is None:
+        form = await request.form()
+
+    first_name = (form.get("first_name") or "").strip()
+    last_name = (form.get("last_name") or "").strip()
+    email = (form.get("email") or "").strip()
+    username = (form.get("username") or "").strip()
+    organization_id = (form.get("organization_id") or "").strip()
+    password = form.get("password") or ""
+    password_confirm = form.get("password_confirm") or ""
+    display_name = (form.get("display_name") or "").strip()
+    phone = (form.get("phone") or "").strip()
+    status = (form.get("status") or "active").strip()
+    must_change_password = form.get("must_change_password") or ""
+    email_verified = form.get("email_verified") or ""
+    roles = form.getlist("roles") if hasattr(form, "getlist") else []
+
     return admin_web_service.users_update_response(
         request,
         db,
@@ -186,16 +196,21 @@ def admin_roles_new(
 
 
 @router.post("/roles/new", response_class=HTMLResponse)
-def admin_roles_create(
+async def admin_roles_create(
     request: Request,
-    name: str = Form(...),
-    description: str = Form(default=""),
-    is_active: str = Form(default=""),
-    permissions: list[str] = Form(default=[]),
     db: Session = Depends(get_db),
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
     """Handle create role form submission."""
+    form = getattr(request.state, "csrf_form", None)
+    if form is None:
+        form = await request.form()
+
+    name = (form.get("name") or "").strip()
+    description = (form.get("description") or "").strip()
+    is_active = form.get("is_active") or ""
+    permissions = form.getlist("permissions") if hasattr(form, "getlist") else []
+
     return admin_web_service.roles_create_response(
         request,
         db,
@@ -230,17 +245,22 @@ def admin_roles_edit(
 
 
 @router.post("/roles/{role_id}/edit", response_class=HTMLResponse)
-def admin_roles_update(
+async def admin_roles_update(
     request: Request,
     role_id: str,
-    name: str = Form(...),
-    description: str = Form(default=""),
-    is_active: str = Form(default=""),
-    permissions: list[str] = Form(default=[]),
     db: Session = Depends(get_db),
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
     """Handle edit role form submission."""
+    form = getattr(request.state, "csrf_form", None)
+    if form is None:
+        form = await request.form()
+
+    name = (form.get("name") or "").strip()
+    description = (form.get("description") or "").strip()
+    is_active = form.get("is_active") or ""
+    permissions = form.getlist("permissions") if hasattr(form, "getlist") else []
+
     return admin_web_service.roles_update_response(
         request,
         db,
@@ -288,15 +308,21 @@ def admin_permissions_new(
 
 
 @router.post("/permissions/new", response_class=HTMLResponse)
-def admin_permissions_create(
+async def admin_permissions_create(
     request: Request,
-    key: str = Form(...),
-    description: str = Form(default=""),
-    is_active: str = Form(default=""),
     db: Session = Depends(get_db),
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
     """Handle create permission form submission."""
+    form = getattr(request.state, "csrf_form", None)
+    if form is None:
+        form = await request.form()
+        request.state.csrf_form = form
+
+    key = (form.get("key") or "").strip()
+    description = (form.get("description") or "").strip()
+    is_active = form.get("is_active") or ""
+
     return admin_web_service.permissions_create_response(
         request,
         db,
@@ -330,16 +356,22 @@ def admin_permissions_edit(
 
 
 @router.post("/permissions/{permission_id}/edit", response_class=HTMLResponse)
-def admin_permissions_update(
+async def admin_permissions_update(
     request: Request,
     permission_id: str,
-    key: str = Form(...),
-    description: str = Form(default=""),
-    is_active: str = Form(default=""),
     db: Session = Depends(get_db),
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
     """Handle edit permission form submission."""
+    form = getattr(request.state, "csrf_form", None)
+    if form is None:
+        form = await request.form()
+        request.state.csrf_form = form
+
+    key = (form.get("key") or "").strip()
+    description = (form.get("description") or "").strip()
+    is_active = form.get("is_active") or ""
+
     return admin_web_service.permissions_update_response(
         request,
         db,
@@ -533,18 +565,40 @@ def admin_settings_new(
 
 
 @router.post("/settings/new", response_class=HTMLResponse)
-def admin_settings_create(
+async def admin_settings_create(
     request: Request,
-    domain: str = Form(...),
-    key: str = Form(...),
-    value_type: str = Form(...),
-    value: str = Form(default=""),
-    is_secret: str = Form(default=""),
-    is_active: str = Form(default=""),
     db: Session = Depends(get_db),
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
     """Handle create setting form submission."""
+    form = getattr(request.state, "csrf_form", None)
+    if form is None:
+        form = await request.form()
+
+    domain = (form.get("domain") or "").strip()
+    key = (form.get("key") or "").strip()
+    value_type = (form.get("value_type") or "").strip()
+    value = form.get("value") or ""
+    is_secret = form.get("is_secret") or ""
+    is_active = form.get("is_active") or ""
+    if not (domain and key and value_type):
+        content_type = (request.headers.get("content-type") or "").lower()
+        if content_type.startswith("application/json"):
+            try:
+                payload = await request.json()
+            except Exception:
+                payload = {}
+            if isinstance(payload, dict):
+                domain = domain or str(payload.get("domain") or "").strip()
+                key = key or str(payload.get("key") or "").strip()
+                value_type = value_type or str(payload.get("value_type") or "").strip()
+                if not value:
+                    value = payload.get("value") or ""
+                if not is_secret:
+                    is_secret = payload.get("is_secret") or ""
+                if not is_active:
+                    is_active = payload.get("is_active") or ""
+
     return admin_web_service.settings_create_response(
         request,
         db,
@@ -581,19 +635,41 @@ def admin_settings_edit(
 
 
 @router.post("/settings/{setting_id}/edit", response_class=HTMLResponse)
-def admin_settings_update(
+async def admin_settings_update(
     request: Request,
     setting_id: str,
-    domain: str = Form(...),
-    key: str = Form(...),
-    value_type: str = Form(...),
-    value: str = Form(default=""),
-    is_secret: str = Form(default=""),
-    is_active: str = Form(default=""),
     db: Session = Depends(get_db),
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
     """Handle edit setting form submission."""
+    form = getattr(request.state, "csrf_form", None)
+    if form is None:
+        form = await request.form()
+
+    domain = (form.get("domain") or "").strip()
+    key = (form.get("key") or "").strip()
+    value_type = (form.get("value_type") or "").strip()
+    value = form.get("value") or ""
+    is_secret = form.get("is_secret") or ""
+    is_active = form.get("is_active") or ""
+    if not (domain and key and value_type):
+        content_type = (request.headers.get("content-type") or "").lower()
+        if content_type.startswith("application/json"):
+            try:
+                payload = await request.json()
+            except Exception:
+                payload = {}
+            if isinstance(payload, dict):
+                domain = domain or str(payload.get("domain") or "").strip()
+                key = key or str(payload.get("key") or "").strip()
+                value_type = value_type or str(payload.get("value_type") or "").strip()
+                if not value:
+                    value = payload.get("value") or ""
+                if not is_secret:
+                    is_secret = payload.get("is_secret") or ""
+                if not is_active:
+                    is_active = payload.get("is_active") or ""
+
     return admin_web_service.settings_update_response(
         request,
         db,

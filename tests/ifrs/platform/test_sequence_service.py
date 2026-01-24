@@ -34,7 +34,7 @@ class TestSequenceService:
         with patch.dict('sys.modules', {
             'app.models.ifrs.core_config.numbering_sequence': MagicMock(),
         }):
-            from app.services.ifrs.platform.sequence import SequenceService
+            from app.services.finance.platform.sequence import SequenceService
             return SequenceService
 
     @pytest.fixture

@@ -1,5 +1,5 @@
 """
-Item Sync Service - ERPNext to DotMac Books.
+Item Sync Service - ERPNext to DotMac ERP.
 """
 import uuid
 from datetime import datetime
@@ -9,19 +9,20 @@ from typing import Any, Optional
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.ifrs.gl.account import Account
-from app.models.ifrs.inv.item import Item
-from app.models.ifrs.inv.item_category import ItemCategory
+from app.models.finance.gl.account import Account
+from app.models.finance.inv.item import Item
+from app.models.finance.inv.item_category import ItemCategory
 from app.services.erpnext.mappings.items import ItemMapping, ItemCategoryMapping
 
 from .base import BaseSyncService
 
 
 # Default account codes for item categories
-DEFAULT_INVENTORY_ACCOUNT = "ACC00041"  # Inventory Asset
-DEFAULT_COGS_ACCOUNT = "ACC00042"  # Cost of Goods Sold
-DEFAULT_REVENUE_ACCOUNT = "ACC00012"  # Sales
-DEFAULT_ADJUSTMENT_ACCOUNT = "ACC00098"  # Inventory Shrinkage
+# These should match the chart of accounts in the target organization
+DEFAULT_INVENTORY_ACCOUNT = "1300"  # Materials
+DEFAULT_COGS_ACCOUNT = "5000"  # Purchases
+DEFAULT_REVENUE_ACCOUNT = "4010"  # Other Business Revenue
+DEFAULT_ADJUSTMENT_ACCOUNT = "1300"  # Materials (used for inventory adjustments)
 
 
 # Valid values for item_type (VARCHAR)
@@ -93,7 +94,7 @@ class ItemCategorySyncService(BaseSyncService[ItemCategory]):
             yield from client.get_item_groups()
 
     def transform_record(self, record: dict[str, Any]) -> dict[str, Any]:
-        """Transform ERPNext item group to DotMac Books format."""
+        """Transform ERPNext item group to DotMac ERP format."""
         return self._mapping.transform_record(record)
 
     def create_entity(self, data: dict[str, Any]) -> ItemCategory:
@@ -191,7 +192,7 @@ class ItemSyncService(BaseSyncService[Item]):
             yield from client.get_items()
 
     def transform_record(self, record: dict[str, Any]) -> dict[str, Any]:
-        """Transform ERPNext item to DotMac Books format."""
+        """Transform ERPNext item to DotMac ERP format."""
         return self._mapping.transform_record(record)
 
     def _get_or_create_category(self, category_name: str) -> uuid.UUID:

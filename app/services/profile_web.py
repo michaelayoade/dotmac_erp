@@ -53,7 +53,7 @@ class ProfileWebService:
             }
         )
 
-        return templates.TemplateResponse(request, "ifrs/two_factor.html", context)
+        return templates.TemplateResponse(request, "finance/two_factor.html", context)
 
     def sessions_response(
         self,
@@ -91,7 +91,7 @@ class ProfileWebService:
             }
         )
 
-        return templates.TemplateResponse(request, "ifrs/sessions.html", context)
+        return templates.TemplateResponse(request, "finance/sessions.html", context)
 
     def change_password_response(
         self,
@@ -114,7 +114,7 @@ class ProfileWebService:
             }
         )
 
-        return templates.TemplateResponse(request, "ifrs/change_password.html", context)
+        return templates.TemplateResponse(request, "finance/change_password.html", context)
 
     def profile_response(
         self,
@@ -173,7 +173,7 @@ class ProfileWebService:
             }
         )
 
-        return templates.TemplateResponse(request, "ifrs/profile.html", context)
+        return templates.TemplateResponse(request, "finance/profile.html", context)
 
 
 profile_web_service = ProfileWebService()

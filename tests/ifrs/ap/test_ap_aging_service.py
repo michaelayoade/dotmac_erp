@@ -10,8 +10,8 @@ from decimal import Decimal
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
-from app.models.ifrs.ap.supplier_invoice import SupplierInvoiceStatus
-from app.services.ifrs.ap.ap_aging import (
+from app.models.finance.ap.supplier_invoice import SupplierInvoiceStatus
+from app.services.finance.ap.ap_aging import (
     APAgingService,
     AgingBucket,
     SupplierAgingSummary,

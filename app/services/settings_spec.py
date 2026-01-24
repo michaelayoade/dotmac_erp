@@ -96,7 +96,7 @@ SETTINGS_SPECS: list[SettingSpec] = [
         key="totp_issuer",
         env_var="TOTP_ISSUER",
         value_type=SettingValueType.string,
-        default="dotmac_books",
+        default="dotmac_erp",
     ),
     SettingSpec(
         domain=SettingDomain.auth,
@@ -465,6 +465,69 @@ SETTINGS_SPECS: list[SettingSpec] = [
         env_var=None,
         value_type=SettingValueType.string,
         default=None,
+    ),
+    # Payments Domain Settings (Paystack Integration)
+    SettingSpec(
+        domain=SettingDomain.payments,
+        key="paystack_enabled",
+        env_var="PAYSTACK_ENABLED",
+        value_type=SettingValueType.boolean,
+        default=False,
+    ),
+    SettingSpec(
+        domain=SettingDomain.payments,
+        key="paystack_public_key",
+        env_var="PAYSTACK_PUBLIC_KEY",
+        value_type=SettingValueType.string,
+        default=None,
+    ),
+    SettingSpec(
+        domain=SettingDomain.payments,
+        key="paystack_secret_key",
+        env_var="PAYSTACK_SECRET_KEY",
+        value_type=SettingValueType.string,
+        default=None,
+        is_secret=True,
+    ),
+    SettingSpec(
+        domain=SettingDomain.payments,
+        key="paystack_webhook_secret",
+        env_var="PAYSTACK_WEBHOOK_SECRET",
+        value_type=SettingValueType.string,
+        default=None,
+        is_secret=True,
+    ),
+    SettingSpec(
+        domain=SettingDomain.payments,
+        key="paystack_callback_base_url",
+        env_var="PAYSTACK_CALLBACK_BASE_URL",
+        value_type=SettingValueType.string,
+        default=None,
+    ),
+    # Paystack Bank Account Linkage
+    # Bank account UUID where Paystack collections are settled
+    SettingSpec(
+        domain=SettingDomain.payments,
+        key="paystack_collection_bank_account_id",
+        env_var=None,
+        value_type=SettingValueType.string,
+        default=None,
+    ),
+    # Bank account UUID used as source for Paystack transfers (payouts)
+    SettingSpec(
+        domain=SettingDomain.payments,
+        key="paystack_transfer_bank_account_id",
+        env_var=None,
+        value_type=SettingValueType.string,
+        default=None,
+    ),
+    # Enable Paystack Transfer API for expense reimbursements
+    SettingSpec(
+        domain=SettingDomain.payments,
+        key="paystack_transfers_enabled",
+        env_var="PAYSTACK_TRANSFERS_ENABLED",
+        value_type=SettingValueType.boolean,
+        default=False,
     ),
 ]
 

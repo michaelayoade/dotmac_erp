@@ -1,0 +1,429 @@
+{% extends "finance/base_finance.html" %}
+
+{% block page_title %}AR Aging Report{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 mt-1">
+    <a href="/dashboard" class="hover:text-slate-700 dark:hover:text-slate-300">Dashboard</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <a href="/finance/ar" class="hover:text-slate-700 dark:hover:text-slate-300">Receivables</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="text-slate-700 dark:text-slate-300">Aging Report</span>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<div class="flex items-center gap-2">
+    <button onclick="window.print()" class="btn btn-secondary h-9 px-3">
+        <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
+        </svg>
+        Print
+    </button>
+    <a href="/finance/ar/invoices" class="btn btn-primary h-9 px-3">
+        View Invoices
+    </a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto space-y-6" x-data="agingReport()" x-init="initCharts()">
+    <!-- Filter Card -->
+    <div class="card p-4">
+        <form method="get" class="flex flex-wrap items-end gap-4">
+            <div class="flex-1 min-w-[150px]">
+                <label class="form-label">As of Date</label>
+                <input type="date" name="as_of_date" value="{{ as_of_date }}" class="form-input">
+            </div>
+            <div class="flex-1 min-w-[150px]">
+                <label class="form-label">Customer</label>
+                <select name="customer_id" class="form-select">
+                    <option value="">All Customers</option>
+                    {% for customer in customers %}
+                    <option value="{{ customer.customer_id }}" {{ 'selected' if customer.customer_id == selected_customer_id }}>{{ customer.legal_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary">
+                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+                Refresh
+            </button>
+        </form>
+    </div>
+
+    {% if aging_summary %}
+    <!-- Summary Cards -->
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <!-- Total Outstanding -->
+        <div class="card p-5 bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-800/80 dark:to-slate-800/40 border-slate-200/80 dark:border-slate-700/50">
+            <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Total Outstanding</p>
+            <p class="text-2xl font-bold text-slate-900 dark:text-white font-mono mt-2">{{ aging_summary.total }}</p>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">{{ aging_summary.invoice_count }} invoices</p>
+        </div>
+
+        <!-- Current -->
+        <div class="card p-5 border-l-4 border-l-emerald-500">
+            <div class="flex items-center justify-between">
+                <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Current</p>
+                <span class="text-xs font-mono text-emerald-600 dark:text-emerald-400">{{ aging_summary.current_pct }}%</span>
+            </div>
+            <p class="text-xl font-bold text-emerald-600 dark:text-emerald-400 font-mono mt-2">{{ aging_summary.current }}</p>
+        </div>
+
+        <!-- 1-30 Days -->
+        <div class="card p-5 border-l-4 border-l-amber-500">
+            <div class="flex items-center justify-between">
+                <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">1-30 Days</p>
+                <span class="text-xs font-mono text-amber-600 dark:text-amber-400">{{ aging_summary.days_30_pct }}%</span>
+            </div>
+            <p class="text-xl font-bold text-amber-600 dark:text-amber-400 font-mono mt-2">{{ aging_summary.days_30 }}</p>
+        </div>
+
+        <!-- 31-60 Days -->
+        <div class="card p-5 border-l-4 border-l-orange-500">
+            <div class="flex items-center justify-between">
+                <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">31-60 Days</p>
+                <span class="text-xs font-mono text-orange-600 dark:text-orange-400">{{ aging_summary.days_60_pct }}%</span>
+            </div>
+            <p class="text-xl font-bold text-orange-600 dark:text-orange-400 font-mono mt-2">{{ aging_summary.days_60 }}</p>
+        </div>
+
+        <!-- 60+ Days -->
+        <div class="card p-5 border-l-4 border-l-rose-500">
+            <div class="flex items-center justify-between">
+                <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">60+ Days</p>
+                <span class="text-xs font-mono text-rose-600 dark:text-rose-400">{{ aging_summary.days_90_pct }}%</span>
+            </div>
+            <p class="text-xl font-bold text-rose-600 dark:text-rose-400 font-mono mt-2">{{ aging_summary.days_90 }}</p>
+        </div>
+    </div>
+
+    <!-- Charts Row -->
+    <div class="grid gap-6 lg:grid-cols-3">
+        <!-- Aging Distribution Chart -->
+        <div class="lg:col-span-2 card p-6">
+            <div class="flex items-center justify-between mb-6">
+                <div>
+                    <h3 class="text-base font-semibold text-slate-900 dark:text-white font-display">Aging Distribution</h3>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">Outstanding by age bucket</p>
+                </div>
+                <div class="flex items-center gap-3 text-xs">
+                    <span class="flex items-center gap-1.5">
+                        <span class="w-2.5 h-2.5 rounded-sm bg-emerald-500"></span>
+                        <span class="text-slate-500 dark:text-slate-400">Current</span>
+                    </span>
+                    <span class="flex items-center gap-1.5">
+                        <span class="w-2.5 h-2.5 rounded-sm bg-amber-500"></span>
+                        <span class="text-slate-500 dark:text-slate-400">1-30</span>
+                    </span>
+                    <span class="flex items-center gap-1.5">
+                        <span class="w-2.5 h-2.5 rounded-sm bg-orange-500"></span>
+                        <span class="text-slate-500 dark:text-slate-400">31-60</span>
+                    </span>
+                    <span class="flex items-center gap-1.5">
+                        <span class="w-2.5 h-2.5 rounded-sm bg-rose-500"></span>
+                        <span class="text-slate-500 dark:text-slate-400">60+</span>
+                    </span>
+                </div>
+            </div>
+            <div class="h-72">
+                <canvas id="agingBarChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Aging Breakdown Donut -->
+        <div class="card p-6">
+            <div class="mb-6">
+                <h3 class="text-base font-semibold text-slate-900 dark:text-white font-display">Aging Breakdown</h3>
+                <p class="text-sm text-slate-500 dark:text-slate-400">Percentage distribution</p>
+            </div>
+            <div class="h-52 flex items-center justify-center">
+                <canvas id="agingDonutChart"></canvas>
+            </div>
+
+            <!-- DSO Metric -->
+            <div class="mt-6 p-4 rounded-xl bg-gradient-to-br from-teal-50 to-emerald-50 dark:from-teal-900/20 dark:to-emerald-900/20 border border-teal-100 dark:border-teal-800/50">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-xs font-semibold uppercase tracking-wider text-teal-700 dark:text-teal-300">Days Sales Outstanding</p>
+                        <p class="text-2xl font-bold text-teal-600 dark:text-teal-400 font-mono mt-1">{{ aging_summary.dso | default(0) }}</p>
+                    </div>
+                    <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-teal-100 dark:bg-teal-900/40">
+                        <svg class="h-6 w-6 text-teal-600 dark:text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </div>
+                </div>
+                <p class="text-xs text-teal-600/80 dark:text-teal-400/60 mt-2">Average collection period</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Customer Aging Table -->
+    <div class="card overflow-hidden">
+        <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+            <h3 class="font-semibold text-slate-900 dark:text-white">Customer Aging Detail</h3>
+        </div>
+        <div class="table-container">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th class="w-64">Customer</th>
+                        <th class="text-right">Current</th>
+                        <th class="text-right">1-30 Days</th>
+                        <th class="text-right">31-60 Days</th>
+                        <th class="text-right">60+ Days</th>
+                        <th class="text-right">Total</th>
+                        <th class="w-48">Distribution</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in customer_aging %}
+                    <tr class="group hover:bg-slate-50 dark:hover:bg-slate-800/30">
+                        <td>
+                            <a href="/finance/ar/customers/{{ row.customer_id }}" class="font-medium text-slate-900 dark:text-white hover:text-teal-600 dark:hover:text-teal-400">
+                                {{ row.customer_name }}
+                            </a>
+                            <p class="text-xs text-slate-500 dark:text-slate-400">{{ row.customer_code }}</p>
+                        </td>
+                        <td class="text-right font-mono text-sm {% if row.current_raw > 0 %}text-emerald-600 dark:text-emerald-400{% else %}text-slate-400{% endif %}">
+                            {{ row.current }}
+                        </td>
+                        <td class="text-right font-mono text-sm {% if row.days_30_raw > 0 %}text-amber-600 dark:text-amber-400{% else %}text-slate-400{% endif %}">
+                            {{ row.days_30 }}
+                        </td>
+                        <td class="text-right font-mono text-sm {% if row.days_60_raw > 0 %}text-orange-600 dark:text-orange-400{% else %}text-slate-400{% endif %}">
+                            {{ row.days_60 }}
+                        </td>
+                        <td class="text-right font-mono text-sm {% if row.days_90_raw > 0 %}text-rose-600 dark:text-rose-400{% else %}text-slate-400{% endif %}">
+                            {{ row.days_90 }}
+                        </td>
+                        <td class="text-right font-mono font-semibold text-slate-900 dark:text-white">
+                            {{ row.total }}
+                        </td>
+                        <td>
+                            <!-- Inline Stacked Bar -->
+                            <div class="h-3 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden flex">
+                                {% if row.current_pct > 0 %}
+                                <div class="h-full bg-emerald-500" style="width: {{ row.current_pct }}%"></div>
+                                {% endif %}
+                                {% if row.days_30_pct > 0 %}
+                                <div class="h-full bg-amber-500" style="width: {{ row.days_30_pct }}%"></div>
+                                {% endif %}
+                                {% if row.days_60_pct > 0 %}
+                                <div class="h-full bg-orange-500" style="width: {{ row.days_60_pct }}%"></div>
+                                {% endif %}
+                                {% if row.days_90_pct > 0 %}
+                                <div class="h-full bg-rose-500" style="width: {{ row.days_90_pct }}%"></div>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="text-center py-12">
+                            <div class="empty-state">
+                                <p class="text-slate-500 dark:text-slate-400">No aging data available</p>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                {% if customer_aging %}
+                <tfoot>
+                    <tr class="bg-slate-50 dark:bg-slate-800/50 font-semibold">
+                        <td class="text-slate-900 dark:text-white">Total</td>
+                        <td class="text-right font-mono text-emerald-600 dark:text-emerald-400">{{ aging_summary.current }}</td>
+                        <td class="text-right font-mono text-amber-600 dark:text-amber-400">{{ aging_summary.days_30 }}</td>
+                        <td class="text-right font-mono text-orange-600 dark:text-orange-400">{{ aging_summary.days_60 }}</td>
+                        <td class="text-right font-mono text-rose-600 dark:text-rose-400">{{ aging_summary.days_90 }}</td>
+                        <td class="text-right font-mono text-slate-900 dark:text-white">{{ aging_summary.total }}</td>
+                        <td></td>
+                    </tr>
+                </tfoot>
+                {% endif %}
+            </table>
+        </div>
+    </div>
+
+    {% else %}
+    <!-- Empty State -->
+    <div class="card p-12 text-center">
+        <div class="empty-state">
+            <div class="empty-state-icon mx-auto">
+                <svg class="h-12 w-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                </svg>
+            </div>
+            <h3 class="empty-state-title mt-4">No aging data yet</h3>
+            <p class="empty-state-description">AR aging report will appear here once invoices are created.</p>
+            <a href="/finance/ar/invoices/new" class="btn btn-primary mt-6">
+                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                </svg>
+                Create Invoice
+            </a>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Chart Data -->
+<script id="aging-data" type="application/json">{{ aging_chart_data | safe }}</script>
+
+<script>
+function agingReport() {
+    return {
+        chartData: {},
+        charts: {},
+        isDarkMode: false,
+
+        initCharts() {
+            const dataEl = document.getElementById('aging-data');
+            if (dataEl) {
+                try {
+                    this.chartData = JSON.parse(dataEl.textContent);
+                } catch (e) {
+                    this.chartData = {};
+                }
+            }
+
+            this.isDarkMode = document.documentElement.classList.contains('dark');
+
+            if (typeof Chart === 'undefined' || !this.chartData.buckets) return;
+
+            this.initBarChart();
+            this.initDonutChart();
+        },
+
+        getColors() {
+            return {
+                current: '#10b981',
+                days30: '#f59e0b',
+                days60: '#f97316',
+                days90: '#ef4444',
+                text: this.isDarkMode ? '#e2e8f0' : '#334155',
+                textMuted: this.isDarkMode ? '#94a3b8' : '#64748b',
+                grid: this.isDarkMode ? 'rgba(148, 163, 184, 0.1)' : 'rgba(15, 23, 42, 0.05)',
+            };
+        },
+
+        initBarChart() {
+            const ctx = document.getElementById('agingBarChart');
+            if (!ctx) return;
+
+            const colors = this.getColors();
+            const data = this.chartData;
+
+            this.charts.bar = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Aging Distribution'],
+                    datasets: [
+                        {
+                            label: 'Current',
+                            data: [data.buckets.current],
+                            backgroundColor: colors.current,
+                            borderRadius: 4,
+                        },
+                        {
+                            label: '1-30 Days',
+                            data: [data.buckets.days_30],
+                            backgroundColor: colors.days30,
+                            borderRadius: 4,
+                        },
+                        {
+                            label: '31-60 Days',
+                            data: [data.buckets.days_60],
+                            backgroundColor: colors.days60,
+                            borderRadius: 4,
+                        },
+                        {
+                            label: '60+ Days',
+                            data: [data.buckets.days_90],
+                            backgroundColor: colors.days90,
+                            borderRadius: 4,
+                        }
+                    ]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: (ctx) => ctx.dataset.label + ': $' + ctx.raw.toLocaleString()
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            stacked: true,
+                            grid: { color: colors.grid },
+                            ticks: {
+                                callback: (v) => '$' + (v / 1000).toFixed(0) + 'k'
+                            }
+                        },
+                        y: {
+                            stacked: true,
+                            display: false,
+                        }
+                    }
+                }
+            });
+        },
+
+        initDonutChart() {
+            const ctx = document.getElementById('agingDonutChart');
+            if (!ctx) return;
+
+            const colors = this.getColors();
+            const data = this.chartData;
+
+            this.charts.donut = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Current', '1-30 Days', '31-60 Days', '60+ Days'],
+                    datasets: [{
+                        data: [
+                            data.buckets.current,
+                            data.buckets.days_30,
+                            data.buckets.days_60,
+                            data.buckets.days_90
+                        ],
+                        backgroundColor: [colors.current, colors.days30, colors.days60, colors.days90],
+                        borderWidth: 0,
+                        hoverOffset: 6,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '60%',
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: (ctx) => {
+                                    const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                                    const pct = ((ctx.raw / total) * 100).toFixed(1);
+                                    return ctx.label + ': $' + ctx.raw.toLocaleString() + ' (' + pct + '%)';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    };
+}
+</script>
+{% endblock %}

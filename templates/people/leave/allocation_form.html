@@ -1,0 +1,242 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}{% if allocation %}Edit Leave Allocation{% else %}New Leave Allocation{% endif %}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a>
+    <span class="mx-2">/</span>
+    <a href="/people/leave" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Leave</a>
+    <span class="mx-2">/</span>
+    <a href="/people/leave/allocations" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Allocations</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">{% if allocation %}Edit{% else %}New{% endif %}</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto space-y-6">
+    {% if error %}
+    <div class="p-4 rounded-lg bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-800">
+        <div class="flex items-center gap-2 text-red-700 dark:text-red-400">
+            <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span>{{ error }}</span>
+        </div>
+    </div>
+    {% endif %}
+
+    <form method="post" class="space-y-6">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+        <!-- Employee & Leave Type Selection -->
+        <div class="card">
+            <div class="card-header border-b border-slate-200 dark:border-slate-700 p-4">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Allocation Details</h2>
+                <p class="text-sm text-slate-500 dark:text-slate-400">Assign leave days to an employee.</p>
+            </div>
+            <div class="card-body p-4 space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="employee_id" class="form-label">Employee <span class="text-rose-500">*</span></label>
+                        <select name="employee_id" id="employee_id"
+                            class="form-select w-full {% if errors and errors.employee_id %}border-red-500{% endif %}"
+                            {% if allocation %}disabled{% endif %}
+                            required>
+                            <option value="">Select Employee</option>
+                            {% for emp in employees %}
+                            <option value="{{ emp.employee_id }}"
+                                {% if (form_data and form_data.employee_id == emp.employee_id|string) or (allocation and allocation.employee_id == emp.employee_id) %}selected{% endif %}>
+                                {{ emp.full_name }} ({{ emp.employee_number }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                        {% if allocation %}
+                        <input type="hidden" name="employee_id" value="{{ allocation.employee_id }}">
+                        {% endif %}
+                        {% if errors and errors.employee_id %}
+                        <p class="text-sm text-red-500 mt-1">{{ errors.employee_id }}</p>
+                        {% endif %}
+                    </div>
+                    <div>
+                        <label for="leave_type_id" class="form-label">Leave Type <span class="text-rose-500">*</span></label>
+                        <select name="leave_type_id" id="leave_type_id"
+                            class="form-select w-full {% if errors and errors.leave_type_id %}border-red-500{% endif %}"
+                            {% if allocation %}disabled{% endif %}
+                            required>
+                            <option value="">Select Leave Type</option>
+                            {% for lt in leave_types %}
+                            <option value="{{ lt.leave_type_id }}"
+                                data-max-days="{{ lt.max_days_allowed if lt.max_days_allowed else '' }}"
+                                {% if (form_data and form_data.leave_type_id == lt.leave_type_id|string) or (allocation and allocation.leave_type_id == lt.leave_type_id) %}selected{% endif %}>
+                                {{ lt.leave_type_name }} ({{ lt.leave_type_code }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                        {% if allocation %}
+                        <input type="hidden" name="leave_type_id" value="{{ allocation.leave_type_id }}">
+                        {% endif %}
+                        {% if errors and errors.leave_type_id %}
+                        <p class="text-sm text-red-500 mt-1">{{ errors.leave_type_id }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Allocation Period -->
+        <div class="card">
+            <div class="card-header border-b border-slate-200 dark:border-slate-700 p-4">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Allocation Period</h2>
+                <p class="text-sm text-slate-500 dark:text-slate-400">Define the validity period for this allocation.</p>
+            </div>
+            <div class="card-body p-4 space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="from_date" class="form-label">From Date <span class="text-rose-500">*</span></label>
+                        <input type="date" name="from_date" id="from_date"
+                            value="{{ form_data.from_date if form_data else (allocation.from_date.isoformat() if allocation else '') }}"
+                            class="form-input w-full {% if errors and errors.from_date %}border-red-500{% endif %}"
+                            required>
+                        {% if errors and errors.from_date %}
+                        <p class="text-sm text-red-500 mt-1">{{ errors.from_date }}</p>
+                        {% endif %}
+                    </div>
+                    <div>
+                        <label for="to_date" class="form-label">To Date <span class="text-rose-500">*</span></label>
+                        <input type="date" name="to_date" id="to_date"
+                            value="{{ form_data.to_date if form_data else (allocation.to_date.isoformat() if allocation else '') }}"
+                            class="form-input w-full {% if errors and errors.to_date %}border-red-500{% endif %}"
+                            required>
+                        {% if errors and errors.to_date %}
+                        <p class="text-sm text-red-500 mt-1">{{ errors.to_date }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+                <!-- Quick period selector -->
+                <div class="flex flex-wrap gap-2 pt-2">
+                    <button type="button" class="text-xs px-3 py-1.5 rounded-full bg-slate-100 text-slate-600 hover:bg-violet-100 hover:text-violet-700 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-violet-900/30 dark:hover:text-violet-300 transition-colors"
+                        onclick="setYearPeriod(new Date().getFullYear())">Current Year</button>
+                    <button type="button" class="text-xs px-3 py-1.5 rounded-full bg-slate-100 text-slate-600 hover:bg-violet-100 hover:text-violet-700 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-violet-900/30 dark:hover:text-violet-300 transition-colors"
+                        onclick="setYearPeriod(new Date().getFullYear() + 1)">Next Year</button>
+                    <button type="button" class="text-xs px-3 py-1.5 rounded-full bg-slate-100 text-slate-600 hover:bg-violet-100 hover:text-violet-700 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-violet-900/30 dark:hover:text-violet-300 transition-colors"
+                        onclick="setFiscalYear()">Fiscal Year (Apr-Mar)</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Leave Days -->
+        <div class="card">
+            <div class="card-header border-b border-slate-200 dark:border-slate-700 p-4">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Leave Days</h2>
+                <p class="text-sm text-slate-500 dark:text-slate-400">Specify allocated and carried forward days.</p>
+            </div>
+            <div class="card-body p-4 space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="new_leaves_allocated" class="form-label">New Leaves Allocated <span class="text-rose-500">*</span></label>
+                        <input type="number" name="new_leaves_allocated" id="new_leaves_allocated"
+                            value="{{ form_data.new_leaves_allocated if form_data else (allocation.new_leaves_allocated if allocation else '') }}"
+                            class="form-input w-full {% if errors and errors.new_leaves_allocated %}border-red-500{% endif %}"
+                            step="0.5" min="0"
+                            required>
+                        {% if errors and errors.new_leaves_allocated %}
+                        <p class="text-sm text-red-500 mt-1">{{ errors.new_leaves_allocated }}</p>
+                        {% endif %}
+                        <p class="form-hint mt-1 text-sm text-slate-500">Fresh leave days for this period</p>
+                    </div>
+                    <div>
+                        <label for="carry_forward_leaves" class="form-label">Carry Forward Leaves</label>
+                        <input type="number" name="carry_forward_leaves" id="carry_forward_leaves"
+                            value="{{ form_data.carry_forward_leaves if form_data else (allocation.carry_forward_leaves if allocation else '0') }}"
+                            class="form-input w-full"
+                            step="0.5" min="0">
+                        <p class="form-hint mt-1 text-sm text-slate-500">Leave days carried from previous period</p>
+                    </div>
+                </div>
+
+                <!-- Summary -->
+                <div class="mt-4 p-4 bg-violet-50 dark:bg-violet-900/20 rounded-lg">
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Total Allocated Days</span>
+                        <span id="total_days" class="text-lg font-bold text-violet-700 dark:text-violet-300">
+                            {% if allocation %}{{ allocation.total_leaves_allocated }}{% else %}0{% endif %}
+                        </span>
+                    </div>
+                </div>
+
+                {% if allocation %}
+                <!-- Current Usage (Edit mode only) -->
+                <div class="mt-4 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg space-y-2">
+                    <div class="flex items-center justify-between text-sm">
+                        <span class="text-slate-600 dark:text-slate-400">Leaves Taken</span>
+                        <span class="font-medium text-slate-900 dark:text-white">{{ allocation.leaves_used }}</span>
+                    </div>
+                    <div class="flex items-center justify-between text-sm">
+                        <span class="text-slate-600 dark:text-slate-400">Leaves Encashed</span>
+                        <span class="font-medium text-slate-900 dark:text-white">{{ allocation.leaves_encashed }}</span>
+                    </div>
+                    <div class="flex items-center justify-between text-sm pt-2 border-t border-slate-200 dark:border-slate-700">
+                        <span class="font-medium text-slate-700 dark:text-slate-300">Available Balance</span>
+                        <span class="font-bold text-emerald-600 dark:text-emerald-400">
+                            {{ allocation.total_leaves_allocated - allocation.leaves_used - allocation.leaves_encashed }}
+                        </span>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Notes -->
+        <div class="card">
+            <div class="card-body p-4">
+                <label for="notes" class="form-label">Notes</label>
+                <textarea name="notes" id="notes" rows="2"
+                    class="form-input w-full"
+                    placeholder="Optional notes for this allocation">{{ form_data.notes if form_data else (allocation.notes if allocation else '') }}</textarea>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex items-center justify-end gap-3">
+            <a href="/people/leave/allocations" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">
+                {% if allocation %}Update Allocation{% else %}Create Allocation{% endif %}
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function setYearPeriod(year) {
+    document.getElementById('from_date').value = year + '-01-01';
+    document.getElementById('to_date').value = year + '-12-31';
+}
+
+function setFiscalYear() {
+    const today = new Date();
+    let startYear = today.getFullYear();
+    // If we're before April, fiscal year started last year
+    if (today.getMonth() < 3) {
+        startYear--;
+    }
+    document.getElementById('from_date').value = startYear + '-04-01';
+    document.getElementById('to_date').value = (startYear + 1) + '-03-31';
+}
+
+// Calculate total days
+function updateTotal() {
+    const newLeaves = parseFloat(document.getElementById('new_leaves_allocated').value) || 0;
+    const carryForward = parseFloat(document.getElementById('carry_forward_leaves').value) || 0;
+    document.getElementById('total_days').textContent = (newLeaves + carryForward).toFixed(1).replace(/\.0$/, '');
+}
+
+document.getElementById('new_leaves_allocated').addEventListener('input', updateTotal);
+document.getElementById('carry_forward_leaves').addEventListener('input', updateTotal);
+</script>
+{% endblock %}

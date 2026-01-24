@@ -12,7 +12,7 @@ from app.models import (  # noqa: F401
     person,
     rbac,
     scheduler,
-    ifrs,
+    finance,
 )
 
 config = context.config

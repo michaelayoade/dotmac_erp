@@ -12,8 +12,8 @@ import pytest
 
 
 # ============ Import Actual Enums ============
-from app.models.ifrs.fa.asset import AssetStatus as MockAssetStatus
-from app.models.ifrs.fa.asset_category import DepreciationMethod as MockDepreciationMethod
+from app.models.finance.fa.asset import AssetStatus as MockAssetStatus
+from app.models.finance.fa.asset_category import DepreciationMethod as MockDepreciationMethod
 
 
 # ============ Mock Models ============

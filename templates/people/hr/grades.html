@@ -1,0 +1,117 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}Employee Grades{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400">People</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">Employee Grades</span>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<a href="/people/hr/grades/new" class="btn btn-primary">
+    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+    </svg>
+    New Grade
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    {# Search #}
+    <form method="get" class="card p-4">
+        <div class="flex gap-4 items-end">
+            <div class="flex-1">
+                <label for="search" class="form-label">Search</label>
+                <input type="text" name="search" id="search" value="{{ search }}"
+                    placeholder="Search grades..."
+                    class="form-input w-full">
+            </div>
+            <button type="submit" class="btn btn-secondary">Search</button>
+        </div>
+    </form>
+
+    {# Grades Table #}
+    <div class="card">
+        <div class="table-container">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Code</th>
+                        <th>Name</th>
+                        <th class="text-right">Rank</th>
+                        <th class="text-right">Min Salary</th>
+                        <th class="text-right">Max Salary</th>
+                        <th class="text-center">Status</th>
+                        <th class="text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for grade in grades %}
+                    <tr class="group">
+                        <td>
+                            <span class="font-mono text-sm font-medium text-slate-900 dark:text-white">
+                                {{ grade.grade_code }}
+                            </span>
+                        </td>
+                        <td class="font-medium text-slate-900 dark:text-white">{{ grade.grade_name }}</td>
+                        <td class="text-right text-slate-500 dark:text-slate-400">{{ grade.rank }}</td>
+                        <td class="text-right text-slate-500 dark:text-slate-400">{{ grade.min_salary or '-' }}</td>
+                        <td class="text-right text-slate-500 dark:text-slate-400">{{ grade.max_salary or '-' }}</td>
+                        <td class="text-center">
+                            {% if grade.is_active %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300">
+                                Active
+                            </span>
+                            {% else %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300">
+                                Inactive
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td class="text-right">
+                            <a href="/people/hr/grades/{{ grade.grade_id }}/edit"
+                               class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                               aria-label="Edit {{ grade.grade_name }}" title="Edit grade">
+                                <svg class="h-4 w-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                                </svg>
+                            </a>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="text-center py-8 text-slate-500">
+                            No grades found.
+                            <a href="/people/hr/grades/new" class="text-teal-600 hover:text-teal-700">Create your first grade</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {# Pagination #}
+        {% if total_pages > 1 %}
+        <div class="px-4 py-3 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between">
+            <div class="text-sm text-slate-500 dark:text-slate-400">
+                Showing page {{ page }} of {{ total_pages }} ({{ total }} total)
+            </div>
+            <div class="flex gap-2">
+                {% if has_prev %}
+                <a href="?page={{ page - 1 }}&search={{ search }}" class="btn btn-secondary btn-sm">Previous</a>
+                {% endif %}
+                {% if has_next %}
+                <a href="?page={{ page + 1 }}&search={{ search }}" class="btn btn-secondary btn-sm">Next</a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -15,8 +15,8 @@ from uuid import uuid4
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from app.services.ifrs.import_export.base import ImportConfig, ImportResult
-from app.services.ifrs.import_export.accounts import (
+from app.services.finance.import_export.base import ImportConfig, ImportResult
+from app.services.finance.import_export.accounts import (
     ZOHO_ACCOUNT_TYPE_MAPPING,
     AccountImporter,
 )
@@ -102,7 +102,7 @@ def test_field_transformation() -> None:
     print("Testing Field Transformations")
     print('='*60)
 
-    from app.services.ifrs.import_export.base import BaseImporter
+    from app.services.finance.import_export.base import BaseImporter
 
     # Test date parsing
     test_dates = ["2022-01-01", "01/01/2022", "2022/01/01", "01-01-2022"]
@@ -199,7 +199,7 @@ def simulate_import(file_path: str) -> None:
 
 if __name__ == "__main__":
     # Default test file
-    test_file = "/Users/michaelayoade/Downloads/Projects/dotmac_books/books_backup/Books backup/Chart_of_Accounts.csv"
+    test_file = "/Users/michaelayoade/Downloads/Projects/dotmac_erp/books_backup/Books backup/Chart_of_Accounts.csv"
 
     if len(sys.argv) > 1:
         test_file = sys.argv[1]

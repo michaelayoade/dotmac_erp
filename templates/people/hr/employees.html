@@ -1,0 +1,365 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}Employees{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">Employees</span>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<div class="flex items-center gap-3">
+    <a href="/people/hr/employees/org-chart" class="btn btn-secondary">Org Chart</a>
+    <a href="/people/hr/employees/new" class="btn btn-primary group">
+        <svg class="h-4 w-4 mr-1.5 transition-transform group-hover:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+        </svg>
+        New Employee
+    </a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    {# Stats Cards with Icons #}
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {# Total Employees #}
+        <div class="card p-5 relative overflow-hidden group hover:shadow-lg transition-shadow">
+            <div class="absolute top-0 right-0 w-24 h-24 -mr-8 -mt-8 rounded-full bg-gradient-to-br from-sky-500/10 to-sky-500/5 dark:from-sky-400/10 dark:to-sky-400/5 group-hover:scale-110 transition-transform"></div>
+            <div class="flex items-start justify-between relative">
+                <div>
+                    <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Total Employees</p>
+                    <p class="text-3xl font-bold text-slate-900 dark:text-white mt-1">{{ stats.total | default(0) }}</p>
+                </div>
+                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-sky-50 text-sky-600 dark:bg-sky-900/30 dark:text-sky-400">
+                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+                    </svg>
+                </div>
+            </div>
+        </div>
+
+        {# Active #}
+        <div class="card p-5 relative overflow-hidden group hover:shadow-lg transition-shadow">
+            <div class="absolute top-0 right-0 w-24 h-24 -mr-8 -mt-8 rounded-full bg-gradient-to-br from-emerald-500/10 to-emerald-500/5 dark:from-emerald-400/10 dark:to-emerald-400/5 group-hover:scale-110 transition-transform"></div>
+            <div class="flex items-start justify-between relative">
+                <div>
+                    <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Active</p>
+                    <p class="text-3xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">{{ stats.active | default(0) }}</p>
+                </div>
+                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
+                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+            </div>
+        </div>
+
+        {# On Leave #}
+        <div class="card p-5 relative overflow-hidden group hover:shadow-lg transition-shadow">
+            <div class="absolute top-0 right-0 w-24 h-24 -mr-8 -mt-8 rounded-full bg-gradient-to-br from-amber-500/10 to-amber-500/5 dark:from-amber-400/10 dark:to-amber-400/5 group-hover:scale-110 transition-transform"></div>
+            <div class="flex items-start justify-between relative">
+                <div>
+                    <p class="text-sm font-medium text-slate-500 dark:text-slate-400">On Leave</p>
+                    <p class="text-3xl font-bold text-amber-600 dark:text-amber-400 mt-1">{{ stats.on_leave | default(0) }}</p>
+                </div>
+                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">
+                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                    </svg>
+                </div>
+            </div>
+        </div>
+
+        {# Inactive #}
+        <div class="card p-5 relative overflow-hidden group hover:shadow-lg transition-shadow">
+            <div class="absolute top-0 right-0 w-24 h-24 -mr-8 -mt-8 rounded-full bg-gradient-to-br from-slate-500/10 to-slate-500/5 dark:from-slate-400/10 dark:to-slate-400/5 group-hover:scale-110 transition-transform"></div>
+            <div class="flex items-start justify-between relative">
+                <div>
+                    <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Inactive</p>
+                    <p class="text-3xl font-bold text-slate-500 dark:text-slate-400 mt-1">{{ stats.inactive | default(0) }}</p>
+                </div>
+                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+                    </svg>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# Search and Filters #}
+    <div class="card">
+        <form method="get" class="p-4">
+            <div class="flex flex-wrap gap-4 items-end">
+                <div class="flex-1 min-w-[240px]">
+                    <label for="search" class="form-label">Search</label>
+                    <div class="relative">
+                        <svg class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                        </svg>
+                        <input type="text" name="search" id="search" value="{{ search | default('') }}"
+                            placeholder="Search by name, email, or employee code..."
+                            class="form-input w-full pl-10">
+                    </div>
+                </div>
+                <div class="w-40">
+                    <label for="status" class="form-label">Status</label>
+                    <select name="status" id="status" class="form-input w-full">
+                        <option value="">All Status</option>
+                        <option value="active" {{ 'selected' if status == 'active' }}>Active</option>
+                        <option value="draft" {{ 'selected' if status == 'draft' }}>Draft</option>
+                        <option value="on_leave" {{ 'selected' if status == 'on_leave' }}>On Leave</option>
+                        <option value="suspended" {{ 'selected' if status == 'suspended' }}>Suspended</option>
+                        <option value="resigned" {{ 'selected' if status == 'resigned' }}>Resigned</option>
+                        <option value="terminated" {{ 'selected' if status == 'terminated' }}>Terminated</option>
+                    </select>
+                </div>
+                <div class="w-48">
+                    <label for="department_id" class="form-label">Department</label>
+                    <select name="department_id" id="department_id" class="form-input w-full">
+                        <option value="">All Departments</option>
+                        {% for dept in departments %}
+                        <option value="{{ dept.department_id }}" {{ 'selected' if department_id == dept.department_id|string }}>
+                            {{ dept.department_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-secondary h-10">
+                    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
+                    </svg>
+                    Filter
+                </button>
+            </div>
+        </form>
+    </div>
+
+    {# Employees Table #}
+    <div class="card overflow-hidden">
+        {% if employees %}
+        <form method="post">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <div class="p-4 border-b border-slate-200 dark:border-slate-700 space-y-3">
+                <div class="text-sm font-medium text-slate-700 dark:text-slate-300">Bulk actions</div>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                    <div>
+                        <label for="bulk_department_id" class="form-label">Department</label>
+                        <select name="department_id" id="bulk_department_id" class="form-input w-full">
+                            <option value="">No change</option>
+                            {% for dept in departments %}
+                            <option value="{{ dept.department_id }}">{{ dept.department_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label for="bulk_designation_id" class="form-label">Designation</label>
+                        <select name="designation_id" id="bulk_designation_id" class="form-input w-full">
+                            <option value="">No change</option>
+                            {% for desig in designations %}
+                            <option value="{{ desig.designation_id }}">{{ desig.designation_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label for="bulk_reports_to_id" class="form-label">Reports To</label>
+                        <select name="reports_to_id" id="bulk_reports_to_id" class="form-input w-full">
+                            <option value="">No change</option>
+                            {% for mgr in managers %}
+                            <option value="{{ mgr.employee_id }}">{{ mgr.employee_code }} - {{ mgr.full_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label for="bulk_status" class="form-label">Status</label>
+                        <select name="status" id="bulk_status" class="form-input w-full">
+                            <option value="">No change</option>
+                            <option value="draft">Draft</option>
+                            <option value="active">Active</option>
+                            <option value="on_leave">On Leave</option>
+                            <option value="suspended">Suspended</option>
+                            <option value="resigned">Resigned</option>
+                            <option value="terminated">Terminated</option>
+                            <option value="retired">Retired</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="flex flex-wrap gap-3">
+                    <button type="submit" formaction="/people/hr/employees/bulk-update" class="btn btn-secondary">
+                        Apply Updates
+                    </button>
+                    <button type="submit" formaction="/people/hr/employees/bulk-delete" class="btn btn-danger"
+                            onclick="return confirm('Delete selected employees?');">
+                        Delete Selected
+                    </button>
+                </div>
+            </div>
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead>
+                    <tr class="border-b border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50">
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400"></th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Employee</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Department</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Designation</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Joined</th>
+                        <th class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Status</th>
+                        <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                    {% for emp in employees %}
+                    <tr class="group hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                        <td class="px-4 py-4">
+                            <input type="checkbox" name="employee_ids" value="{{ emp.employee_id }}"
+                                   class="rounded border-slate-300 text-teal-600 focus:ring-teal-500">
+                        </td>
+                        <td class="px-4 py-4">
+                            <div class="flex items-center gap-3">
+                                {# Avatar with initials #}
+                                <div class="flex-shrink-0">
+                                    <div class="h-10 w-10 rounded-full bg-gradient-to-br from-sky-400 to-sky-600 flex items-center justify-center text-white text-sm font-semibold shadow-sm">
+                                        {{ emp.person_name[:2] | upper if emp.person_name else 'NA' }}
+                                    </div>
+                                </div>
+                                <div class="min-w-0">
+                                    <a href="/people/hr/employees/{{ emp.employee_id }}"
+                                       class="font-medium text-slate-900 dark:text-white hover:text-teal-600 dark:hover:text-teal-400 transition-colors truncate block">
+                                        {{ emp.person_name }}
+                                    </a>
+                                    <div class="flex items-center gap-2 mt-0.5">
+                                        <span class="font-mono text-xs text-slate-500 dark:text-slate-400">{{ emp.employee_code }}</span>
+                                        <span class="text-slate-300 dark:text-slate-600">·</span>
+                                        <span class="text-xs text-slate-500 dark:text-slate-400 truncate">{{ emp.email }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="px-4 py-4">
+                            {% if emp.department_name %}
+                            <span class="text-sm text-slate-700 dark:text-slate-300">{{ emp.department_name }}</span>
+                            {% else %}
+                            <span class="text-sm text-slate-400 dark:text-slate-500">—</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-4">
+                            {% if emp.designation_name %}
+                            <span class="text-sm text-slate-700 dark:text-slate-300">{{ emp.designation_name }}</span>
+                            {% else %}
+                            <span class="text-sm text-slate-400 dark:text-slate-500">—</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-4">
+                            {% if emp.date_of_joining %}
+                            <span class="text-sm text-slate-600 dark:text-slate-400">{{ emp.date_of_joining.strftime('%b %d, %Y') }}</span>
+                            {% else %}
+                            <span class="text-sm text-slate-400 dark:text-slate-500">—</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-4 text-center">
+                            {% set status_styles = {
+                                'ACTIVE': 'bg-emerald-50 text-emerald-700 ring-emerald-600/20 dark:bg-emerald-900/30 dark:text-emerald-400 dark:ring-emerald-400/20',
+                                'DRAFT': 'bg-slate-50 text-slate-700 ring-slate-600/20 dark:bg-slate-800 dark:text-slate-400 dark:ring-slate-400/20',
+                                'ON_LEAVE': 'bg-amber-50 text-amber-700 ring-amber-600/20 dark:bg-amber-900/30 dark:text-amber-400 dark:ring-amber-400/20',
+                                'SUSPENDED': 'bg-orange-50 text-orange-700 ring-orange-600/20 dark:bg-orange-900/30 dark:text-orange-400 dark:ring-orange-400/20',
+                                'RESIGNED': 'bg-slate-50 text-slate-600 ring-slate-500/20 dark:bg-slate-800 dark:text-slate-500 dark:ring-slate-500/20',
+                                'TERMINATED': 'bg-red-50 text-red-700 ring-red-600/20 dark:bg-red-900/30 dark:text-red-400 dark:ring-red-400/20'
+                            } %}
+                            {% set status_class = status_styles.get(emp.status | upper, status_styles.DRAFT) %}
+                            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ring-1 ring-inset {{ status_class }}">
+                                {{ emp.status | replace('_', ' ') | title }}
+                            </span>
+                        </td>
+                        <td class="px-4 py-4 text-right">
+                            <div class="flex items-center justify-end gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                                <a href="/people/hr/employees/{{ emp.employee_id }}"
+                                   class="p-2 rounded-lg text-slate-400 hover:text-teal-600 hover:bg-teal-50 dark:hover:text-teal-400 dark:hover:bg-teal-900/30 transition-colors"
+                                   title="View details">
+                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                                    </svg>
+                                </a>
+                                <a href="/people/hr/employees/{{ emp.employee_id }}/edit"
+                                   class="p-2 rounded-lg text-slate-400 hover:text-sky-600 hover:bg-sky-50 dark:hover:text-sky-400 dark:hover:bg-sky-900/30 transition-colors"
+                                   title="Edit employee">
+                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                                    </svg>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        </form>
+
+        {# Pagination #}
+        {% if total_pages > 1 %}
+        <div class="px-4 py-3 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between bg-slate-50/30 dark:bg-slate-800/30">
+            <div class="text-sm text-slate-500 dark:text-slate-400">
+                Showing page <span class="font-medium text-slate-700 dark:text-slate-300">{{ page }}</span> of <span class="font-medium text-slate-700 dark:text-slate-300">{{ total_pages }}</span>
+                <span class="hidden sm:inline">({{ total }} total employees)</span>
+            </div>
+            <div class="flex gap-2">
+                {% if has_prev %}
+                <a href="?page={{ page - 1 }}&search={{ search | default('') }}&status={{ status | default('') }}&department_id={{ department_id | default('') }}"
+                   class="btn btn-secondary btn-sm">
+                    <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                    </svg>
+                    Previous
+                </a>
+                {% endif %}
+                {% if has_next %}
+                <a href="?page={{ page + 1 }}&search={{ search | default('') }}&status={{ status | default('') }}&department_id={{ department_id | default('') }}"
+                   class="btn btn-secondary btn-sm">
+                    Next
+                    <svg class="h-4 w-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                    </svg>
+                </a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        {% else %}
+        {# Empty State #}
+        <div class="px-6 py-16 text-center">
+            <div class="mx-auto w-24 h-24 rounded-full bg-gradient-to-br from-sky-100 to-sky-50 dark:from-sky-900/30 dark:to-sky-900/10 flex items-center justify-center mb-6">
+                <svg class="h-12 w-12 text-sky-500 dark:text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+                </svg>
+            </div>
+            <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-2">No employees yet</h3>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mb-6 max-w-sm mx-auto">
+                Get started by adding your first employee. You can import from a spreadsheet or add them one by one.
+            </p>
+            <div class="flex items-center justify-center gap-3">
+                <a href="/people/hr/employees/new" class="btn btn-primary">
+                    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                    </svg>
+                    Add Employee
+                </a>
+                <button type="button" class="btn btn-secondary" disabled>
+                    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+                    </svg>
+                    Import
+                </button>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

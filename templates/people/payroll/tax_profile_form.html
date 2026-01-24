@@ -1,0 +1,257 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}{% if profile %}Edit Tax Profile{% else %}New Tax Profile{% endif %}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a>
+    <span class="mx-2">/</span>
+    <a href="/people/payroll/tax/profiles" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Tax Profiles</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">{% if profile %}Edit{% else %}New{% endif %}</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto">
+    <form method="post" class="space-y-6">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+        {# Employee Selection (only for new) #}
+        {% if not profile %}
+        <div class="card">
+            <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Employee</h2>
+            </div>
+            <div class="p-6">
+                <label for="employee_id" class="form-label">Select Employee</label>
+                <select name="employee_id" id="employee_id" class="form-select w-full" required>
+                    <option value="">-- Select Employee --</option>
+                    {% for emp in employees %}
+                    <option value="{{ emp.employee_id }}" {% if selected_employee_id == emp.employee_id | string %}selected{% endif %}>
+                        {{ emp.full_name }} ({{ emp.employee_code }})
+                    </option>
+                    {% endfor %}
+                </select>
+                {% if employees | length == 0 %}
+                <p class="text-sm text-amber-600 dark:text-amber-400 mt-2">
+                    All employees already have tax profiles.
+                </p>
+                {% endif %}
+            </div>
+        </div>
+        {% else %}
+        {# Show employee info for edit #}
+        <div class="card p-6">
+            <div class="flex items-center gap-4">
+                <div class="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-teal-500 to-emerald-600 text-white text-lg font-semibold">
+                    {{ employee.full_name[0] | upper }}
+                </div>
+                <div>
+                    <h2 class="text-xl font-semibold text-slate-900 dark:text-white">{{ employee.full_name }}</h2>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">{{ employee.employee_code }} &middot; {{ employee.designation_name or 'No designation' }}</p>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        {# Tax Identification #}
+        <div class="card">
+            <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Tax Identification</h2>
+                <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Official tax registration details</p>
+            </div>
+            <div class="p-6 space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="tin" class="form-label">Tax Identification Number (TIN)</label>
+                        <input type="text" name="tin" id="tin"
+                            value="{{ profile.tin if profile else '' }}"
+                            placeholder="e.g., 12345678-0001"
+                            class="form-input w-full font-mono">
+                    </div>
+                    <div>
+                        <label for="tax_state" class="form-label">Tax State</label>
+                        <select name="tax_state" id="tax_state" class="form-select w-full">
+                            <option value="">-- Select State --</option>
+                            {% for state in nigeria_states %}
+                            <option value="{{ state }}" {% if profile and profile.tax_state == state %}selected{% endif %}>
+                                {{ state }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">State for PAYE remittance</p>
+                    </div>
+                </div>
+
+                {% if not profile %}
+                <div>
+                    <label for="effective_from" class="form-label">Effective From</label>
+                    <input type="date" name="effective_from" id="effective_from"
+                        value="{{ today().isoformat() if not profile else '' }}"
+                        class="form-input w-full"
+                        required>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        {# Rent Relief #}
+        <div class="card">
+            <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Rent Relief</h2>
+                <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">NTA 2025: 20% of annual rent (max &#x20A6;500,000)</p>
+            </div>
+            <div class="p-6 space-y-4">
+                <div>
+                    <label for="annual_rent" class="form-label">Annual Rent Paid</label>
+                    <div class="relative">
+                        <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">&#x20A6;</span>
+                        <input type="number" name="annual_rent" id="annual_rent"
+                            value="{{ profile.annual_rent if profile else '0' }}"
+                            placeholder="1,200,000"
+                            step="1000"
+                            min="0"
+                            class="form-input w-full pl-8">
+                    </div>
+                </div>
+
+                <div class="flex items-start gap-3">
+                    <input type="checkbox" name="rent_receipt_verified" id="rent_receipt_verified"
+                        {% if profile and profile.rent_receipt_verified %}checked{% endif %}
+                        class="form-checkbox mt-0.5">
+                    <div>
+                        <label for="rent_receipt_verified" class="text-sm font-medium text-slate-700 dark:text-slate-300">
+                            Rent Receipt/Agreement Verified
+                        </label>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                            Rent relief is only applied when documentation is verified
+                        </p>
+                    </div>
+                </div>
+
+                {% if profile and profile.rent_relief_amount %}
+                <div class="bg-teal-50 dark:bg-teal-900/20 rounded-lg p-4">
+                    <p class="text-sm text-teal-700 dark:text-teal-300">
+                        <strong>Calculated Relief:</strong> &#x20A6;{{ "{:,.0f}".format(profile.rent_relief_amount) }} per year
+                    </p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        {# Statutory Rates #}
+        <div class="card">
+            <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Statutory Deduction Rates</h2>
+                <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">These deductions are subtracted from gross income before calculating taxable income</p>
+            </div>
+            <div class="p-6">
+                <div class="grid grid-cols-3 gap-4">
+                    <div>
+                        <label for="pension_rate" class="form-label">Pension (%)</label>
+                        <div class="relative">
+                            <input type="number" name="pension_rate" id="pension_rate"
+                                value="{{ (profile.pension_rate * 100) if profile else default_pension_rate }}"
+                                step="0.1"
+                                min="0"
+                                max="100"
+                                class="form-input w-full pr-8">
+                            <span class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">%</span>
+                        </div>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Standard: 8%</p>
+                    </div>
+                    <div>
+                        <label for="nhf_rate" class="form-label">NHF (%)</label>
+                        <div class="relative">
+                            <input type="number" name="nhf_rate" id="nhf_rate"
+                                value="{{ (profile.nhf_rate * 100) if profile else default_nhf_rate }}"
+                                step="0.1"
+                                min="0"
+                                max="100"
+                                class="form-input w-full pr-8">
+                            <span class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">%</span>
+                        </div>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Standard: 2.5%</p>
+                    </div>
+                    <div>
+                        <label for="nhis_rate" class="form-label">NHIS (%)</label>
+                        <div class="relative">
+                            <input type="number" name="nhis_rate" id="nhis_rate"
+                                value="{{ (profile.nhis_rate * 100) if profile else default_nhis_rate }}"
+                                step="0.1"
+                                min="0"
+                                max="100"
+                                class="form-input w-full pr-8">
+                            <span class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">%</span>
+                        </div>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Variable</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {# Tax Exemption #}
+        <div class="card">
+            <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Tax Exemption</h2>
+            </div>
+            <div class="p-6 space-y-4">
+                <div class="flex items-start gap-3">
+                    <input type="checkbox" name="is_tax_exempt" id="is_tax_exempt"
+                        {% if profile and profile.is_tax_exempt %}checked{% endif %}
+                        class="form-checkbox mt-0.5"
+                        x-data
+                        @change="$refs.exemptionReason.classList.toggle('hidden', !$el.checked)">
+                    <div>
+                        <label for="is_tax_exempt" class="text-sm font-medium text-slate-700 dark:text-slate-300">
+                            Employee is exempt from income tax
+                        </label>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                            No PAYE tax will be calculated for this employee
+                        </p>
+                    </div>
+                </div>
+
+                <div id="exemption_reason_container" class="{% if not profile or not profile.is_tax_exempt %}hidden{% endif %}">
+                    <label for="exemption_reason" class="form-label">Exemption Reason</label>
+                    <textarea name="exemption_reason" id="exemption_reason"
+                        rows="2"
+                        class="form-input w-full"
+                        placeholder="Explain why this employee is exempt from tax...">{{ profile.exemption_reason if profile else '' }}</textarea>
+                </div>
+            </div>
+        </div>
+
+        {# Actions #}
+        <div class="flex items-center justify-end gap-3">
+            <a href="/people/payroll/tax/profiles" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">
+                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                </svg>
+                {% if profile %}Update Profile{% else %}Create Profile{% endif %}
+            </button>
+        </div>
+    </form>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const exemptCheckbox = document.getElementById('is_tax_exempt');
+    const reasonContainer = document.getElementById('exemption_reason_container');
+
+    if (exemptCheckbox && reasonContainer) {
+        exemptCheckbox.addEventListener('change', function() {
+            if (this.checked) {
+                reasonContainer.classList.remove('hidden');
+            } else {
+                reasonContainer.classList.add('hidden');
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

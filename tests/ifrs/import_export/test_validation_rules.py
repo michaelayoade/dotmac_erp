@@ -12,7 +12,7 @@ from decimal import Decimal
 
 import pytest
 
-from app.services.ifrs.import_export.base import ValidationRule, EMAIL_PATTERN
+from app.services.finance.import_export.base import ValidationRule, EMAIL_PATTERN
 
 
 # ============ TestRequiredRule ============

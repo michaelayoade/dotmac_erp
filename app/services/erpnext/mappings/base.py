@@ -1,5 +1,5 @@
 """
-Base mapping utilities for ERPNext to DotMac Books transformations.
+Base mapping utilities for ERPNext to DotMac ERP transformations.
 """
 from dataclasses import dataclass, field
 from datetime import date, datetime
@@ -9,10 +9,10 @@ from typing import Any, Callable, Optional
 
 @dataclass
 class FieldMapping:
-    """Define mapping from ERPNext field to DotMac Books field."""
+    """Define mapping from ERPNext field to DotMac ERP field."""
 
     source: str  # ERPNext field name
-    target: str  # DotMac Books field name
+    target: str  # DotMac ERP field name
     required: bool = False
     default: Any = None
     transformer: Optional[Callable[[Any], Any]] = None
@@ -31,12 +31,12 @@ class DocTypeMapping:
     """Base mapping configuration for a DocType."""
 
     source_doctype: str  # ERPNext DocType name
-    target_table: str  # DotMac Books table (schema.table)
+    target_table: str  # DotMac ERP table (schema.table)
     fields: list[FieldMapping] = field(default_factory=list)
     unique_key: str = "name"  # ERPNext unique identifier field
 
     def transform_record(self, record: dict[str, Any]) -> dict[str, Any]:
-        """Transform an ERPNext record to DotMac Books format."""
+        """Transform an ERPNext record to DotMac ERP format."""
         result = {}
         for mapping in self.fields:
             source_value = record.get(mapping.source)
@@ -50,18 +50,24 @@ class DocTypeMapping:
 
 
 def parse_date(value: Any) -> Optional[date]:
-    """Parse date from ERPNext format."""
+    """Parse date from ERPNext format.
+
+    Handles both date-only and datetime formats from ERPNext.
+    """
     if value is None:
         return None
-    if isinstance(value, date):
+    if isinstance(value, date) and not isinstance(value, datetime):
         return value
     if isinstance(value, datetime):
         return value.date()
     if isinstance(value, str):
-        try:
-            return datetime.strptime(value, "%Y-%m-%d").date()
-        except ValueError:
-            return None
+        # Try multiple formats - ERPNext sometimes sends datetime for date fields
+        for fmt in ["%Y-%m-%d", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M:%S.%f"]:
+            try:
+                return datetime.strptime(value, fmt).date()
+            except ValueError:
+                continue
+        return None
     return None
 
 

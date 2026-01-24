@@ -1,0 +1,69 @@
+{% extends "operations/base_operations.html" %}
+
+{% block title %}Gantt Chart - {{ project.project_name }}{% endblock %}
+
+{% block head %}
+{{ super() }}
+<link rel="stylesheet" href="https://cdn.dhtmlx.com/gantt/edge/dhtmlxgantt.css">
+<script src="https://cdn.dhtmlx.com/gantt/edge/dhtmlxgantt.js"></script>
+<style>
+    .gantt_container { height: calc(100vh - 200px); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="flex items-start justify-between">
+        <div>
+            <div class="flex items-center gap-2">
+                <a href="/operations/projects/{{ project.project_code }}" class="text-slate-400 hover:text-slate-600">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                    </svg>
+                </a>
+                <h1 class="text-2xl font-display font-semibold text-slate-900 dark:text-white">Gantt Chart</h1>
+            </div>
+            <p class="mt-1 text-sm text-slate-500">{{ project.project_name }}</p>
+        </div>
+    </div>
+
+    <div id="gantt_container" class="gantt_container rounded-lg border border-slate-200 bg-white dark:border-slate-700"></div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    gantt.config.date_format = "%Y-%m-%d";
+    gantt.config.readonly = true;
+    gantt.init("gantt_container");
+
+    {% if gantt_data %}
+    const data = {
+        data: [
+            {% for task in gantt_data.tasks %}
+            {
+                id: "{{ task.id }}",
+                text: "{{ task.text }}",
+                start_date: "{{ task.start_date.isoformat() if task.start_date else '' }}",
+                duration: {{ task.duration or 1 }},
+                progress: {{ task.progress }},
+                parent: {% if task.parent %}"{{ task.parent }}"{% else %}0{% endif %},
+                type: "{{ task.type }}"
+            }{% if not loop.last %},{% endif %}
+            {% endfor %}
+        ],
+        links: [
+            {% for link in gantt_data.links %}
+            {
+                id: "{{ link.id }}",
+                source: "{{ link.source }}",
+                target: "{{ link.target }}",
+                type: "{{ link.type }}"
+            }{% if not loop.last %},{% endif %}
+            {% endfor %}
+        ]
+    };
+    gantt.parse(data);
+    {% endif %}
+});
+</script>
+{% endblock %}

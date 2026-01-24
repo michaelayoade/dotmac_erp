@@ -1,0 +1,212 @@
+{% extends "finance/base_finance.html" %}
+{% from "components/macros.html" import search_autosuggest, pagination, status_badge, empty_state, stats_card, bulk_select_header, bulk_select_cell, bulk_action_bar, bulk_icon_delete, bulk_icon_export, bulk_icon_activate, bulk_icon_deactivate %}
+
+{% block page_title %}Suppliers{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="font-medium text-slate-900 dark:text-white">Suppliers</span>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<a href="/finance/ap/suppliers/new" class="btn btn-primary">
+    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+    </svg>
+    New Supplier
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    {# Stats Row #}
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {{ stats_card("Total Suppliers", total_suppliers | default(0), icon="users", color="teal") }}
+        {{ stats_card("Active", active_count | default(0), icon="check-circle", color="emerald") }}
+        {{ stats_card("Total Payables", total_payables | default("₦0"), icon="currency", color="rose") }}
+        {{ stats_card("Overdue Invoices", overdue_count | default(0), icon="clock", color="amber") }}
+    </div>
+
+    {# Search with Auto-suggest and Filters #}
+    {{ search_autosuggest(
+        search=search,
+        entity_type="suppliers",
+        filters=[
+            {
+                "name": "status",
+                "label": "All Status",
+                "value": status,
+                "options": [
+                    {"value": "active", "label": "Active"},
+                    {"value": "inactive", "label": "Inactive"}
+                ]
+            }
+        ],
+        base_url="/finance/ap/suppliers",
+        placeholder="Search suppliers by name, code, or tax ID..."
+    ) }}
+
+    {# Suppliers Table with Bulk Selection #}
+    <div x-data="bulkActions({ entityName: 'suppliers' })">
+        <div class="card">
+            <div class="table-container">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            {{ bulk_select_header() }}
+                            <th>Supplier Code</th>
+                            <th>Supplier Name</th>
+                            <th>Tax ID</th>
+                            <th>Payment Terms</th>
+                            <th class="text-right">Balance</th>
+                            <th class="text-center">Status</th>
+                            <th>Created</th>
+                            <th class="text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for supplier in suppliers %}
+                        <tr class="group">
+                            {{ bulk_select_cell(supplier.supplier_id) }}
+                            <td>
+                                <span class="font-mono text-sm font-semibold text-slate-700 dark:text-slate-300">{{ supplier.supplier_code }}</span>
+                            </td>
+                            <td>
+                                <a href="/finance/ap/suppliers/{{ supplier.supplier_id }}" class="group/link flex items-center gap-3">
+                                    <div class="h-9 w-9 rounded-full bg-gradient-to-br from-rose-400 to-pink-500 flex items-center justify-center text-white text-xs font-semibold shadow-sm">
+                                        {{ supplier.supplier_name[:2] | upper }}
+                                    </div>
+                                    <div>
+                                        <span class="font-medium text-teal-600 group-hover/link:text-teal-700 dark:text-teal-400 dark:group-hover/link:text-teal-300 transition-colors">
+                                            {{ supplier.supplier_name }}
+                                        </span>
+                                        {% if supplier.contact_email %}
+                                        <p class="text-xs text-slate-500 dark:text-slate-400">{{ supplier.contact_email }}</p>
+                                        {% endif %}
+                                    </div>
+                                </a>
+                            </td>
+                            <td class="text-slate-600 dark:text-slate-400">{{ supplier.tax_id | default("—") }}</td>
+                            <td>
+                                <span class="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-300">
+                                    Net {{ supplier.payment_terms_days | default(30) }}
+                                </span>
+                            </td>
+                            <td class="text-right font-mono font-semibold text-slate-900 dark:text-white">{{ supplier.balance | default("₦0.00") }}</td>
+                            <td class="text-center">
+                                {{ status_badge('active' if supplier.is_active else 'inactive', 'sm') }}
+                            </td>
+                            <td>
+                                <div class="text-sm text-slate-600 dark:text-slate-400">
+                                    {% if supplier.created_at %}
+                                    {{ supplier.created_at.strftime('%b %d, %Y') }}
+                                    {% else %}
+                                    —
+                                    {% endif %}
+                                </div>
+                                {% if supplier.created_by_name %}
+                                <div class="text-xs text-slate-400 dark:text-slate-500">
+                                    by {{ supplier.created_by_name }}
+                                </div>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <a href="/finance/ap/suppliers/{{ supplier.supplier_id }}"
+                                       class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300 transition-colors"
+                                       title="View details">
+                                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                                        </svg>
+                                    </a>
+                                    <a href="/finance/ap/suppliers/{{ supplier.supplier_id }}/edit"
+                                       class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300 transition-colors"
+                                       title="Edit supplier">
+                                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                                        </svg>
+                                    </a>
+                                    <a href="/finance/ap/invoices?supplier_id={{ supplier.supplier_id }}"
+                                       class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300 transition-colors"
+                                       title="View invoices">
+                                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                        </svg>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="9" class="py-12">
+                                {{ empty_state(
+                                    'No suppliers found',
+                                    'Get started by adding your first supplier' if not (search or status) else 'Try adjusting your search or filter criteria',
+                                    'users',
+                                    'Add Supplier' if not (search or status) else none,
+                                    '/finance/ap/suppliers/new' if not (search or status) else none
+                                ) }}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            {# Pagination #}
+            {{ pagination(
+                page=page,
+                total_pages=total_pages,
+                total_count=total_count,
+                limit=limit,
+                search=search,
+                filters={"status": status}
+            ) }}
+        </div>
+
+        {# Bulk Action Bar #}
+        {{ bulk_action_bar(
+            actions=[
+                {
+                    "name": "export",
+                    "label": "Export",
+                    "endpoint": "/finance/ap/suppliers/bulk-export",
+                    "icon": bulk_icon_export(),
+                    "class": "btn-secondary"
+                },
+                {
+                    "name": "activate",
+                    "label": "Activate",
+                    "endpoint": "/finance/ap/suppliers/bulk-activate",
+                    "icon": bulk_icon_activate(),
+                    "class": "btn-secondary",
+                    "confirm": "Activate selected suppliers?"
+                },
+                {
+                    "name": "deactivate",
+                    "label": "Deactivate",
+                    "endpoint": "/finance/ap/suppliers/bulk-deactivate",
+                    "icon": bulk_icon_deactivate(),
+                    "class": "btn-secondary",
+                    "confirm": "Deactivate selected suppliers?"
+                },
+                {
+                    "name": "delete",
+                    "label": "Delete",
+                    "endpoint": "/finance/ap/suppliers/bulk-delete",
+                    "icon": bulk_icon_delete(),
+                    "class": "btn-bulk-danger",
+                    "confirm": "Delete selected suppliers? This action cannot be undone."
+                }
+            ],
+            entity_name="suppliers"
+        ) }}
+    </div>
+</div>
+{% endblock %}

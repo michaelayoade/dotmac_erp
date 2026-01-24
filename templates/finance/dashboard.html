@@ -1,0 +1,794 @@
+{% extends "finance/base_finance.html" %}
+{% from "components/macros.html" import stats_card, empty_state, section_card, status_badge %}
+
+{% block page_title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="dashboard-finance space-y-8 page-enter">
+    <!-- Finance Hero Header -->
+    <div class="finance-stat-grid stagger-in" style="animation-delay: 0ms;" data-testid="dashboard-stats">
+        <div class="flex flex-wrap items-center justify-between gap-4 mb-8">
+            <div>
+                <h2 class="text-xl font-semibold text-slate-900 dark:text-white font-display">Financial Overview</h2>
+                <p class="text-sm text-slate-500 dark:text-slate-400">{{ selected_year_label }} performance metrics</p>
+            </div>
+            <form method="get" class="flex items-center gap-3">
+                <label for="year-filter" class="text-sm text-slate-500 dark:text-slate-400">Period</label>
+                <select id="year-filter" name="year" class="form-select" onchange="this.form.submit()">
+                    <option value="all" {% if selected_year is none %}selected{% endif %}>All years</option>
+                    {% for year_option in available_years %}
+                    <option value="{{ year_option }}" {% if year_option == selected_year %}selected{% endif %}>{{ year_option }}</option>
+                    {% endfor %}
+                </select>
+            </form>
+        </div>
+
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-10">
+            <!-- Revenue -->
+            <div class="stat-hero" data-testid="dashboard-stat-total-revenue">
+                <div class="stat-hero-icon stat-hero-icon-finance">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+                    </svg>
+                </div>
+                <span class="stat-hero-label">Revenue</span>
+                <span class="stat-hero-value">{{ stats.total_revenue | default(currency_zero) }}</span>
+                {% if stats.revenue_trend %}
+                <span class="stat-hero-trend {{ 'stat-hero-trend-up' if stats.revenue_trend > 0 else 'stat-hero-trend-down' }}">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        {% if stats.revenue_trend > 0 %}
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/>
+                        {% else %}
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/>
+                        {% endif %}
+                    </svg>
+                    {{ stats.revenue_trend | abs }}% vs last period
+                </span>
+                {% endif %}
+            </div>
+
+            <!-- Expenses -->
+            <div class="stat-hero" data-testid="dashboard-stat-total-expenses">
+                <div class="stat-hero-icon stat-hero-icon-finance">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/>
+                    </svg>
+                </div>
+                <span class="stat-hero-label">Expenses</span>
+                <span class="stat-hero-value">{{ stats.total_expenses | default(currency_zero) }}</span>
+            </div>
+
+            <!-- Net Income -->
+            <div class="stat-hero" data-testid="dashboard-stat-net-income">
+                <div class="stat-hero-icon stat-hero-icon-finance">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                    </svg>
+                </div>
+                <span class="stat-hero-label">Net Income</span>
+                <span class="stat-hero-value">{{ stats.net_income | default(currency_zero) }}</span>
+                {% if stats.income_trend %}
+                <span class="stat-hero-trend {{ 'stat-hero-trend-up' if stats.income_trend > 0 else 'stat-hero-trend-down' }}">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        {% if stats.income_trend > 0 %}
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/>
+                        {% else %}
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/>
+                        {% endif %}
+                    </svg>
+                    {{ stats.income_trend | abs }}% vs last period
+                </span>
+                {% endif %}
+            </div>
+
+            <!-- Cash Flow -->
+            <div class="stat-hero" data-testid="dashboard-stat-cash-flow">
+                <div class="stat-hero-icon stat-hero-icon-finance">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+                <span class="stat-hero-label">Net Cash Flow</span>
+                <span class="stat-hero-value">{{ stats.net_cash_flow | default(currency_zero) }}</span>
+                <span class="stat-hero-trend text-slate-500 dark:text-slate-400">
+                    In {{ stats.cash_inflow | default(currency_zero) }} / Out {{ stats.cash_outflow | default(currency_zero) }}
+                </span>
+            </div>
+        </div>
+
+        <!-- Secondary Metrics Bar -->
+        <div class="mt-8 pt-6 border-t border-teal-100/50 dark:border-teal-800/30 grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div class="text-center">
+                <span class="block text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">COGS</span>
+                <span class="block text-lg font-semibold font-mono text-slate-900 dark:text-white mt-1">{{ stats.cogs_spend | default(currency_zero) }}</span>
+            </div>
+            <div class="text-center">
+                <span class="block text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">OpEx</span>
+                <span class="block text-lg font-semibold font-mono text-slate-900 dark:text-white mt-1">{{ stats.opex_spend | default(currency_zero) }}</span>
+            </div>
+            <div class="text-center">
+                <span class="block text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">AR Control</span>
+                <span class="block text-lg font-semibold font-mono text-teal-600 dark:text-teal-400 mt-1">{{ stats.ar_control_balance | default(currency_zero) }}</span>
+            </div>
+            <div class="text-center">
+                <span class="block text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">AP Control</span>
+                <span class="block text-lg font-semibold font-mono text-amber-600 dark:text-amber-400 mt-1">{{ stats.ap_control_balance | default(currency_zero) }}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reconciliation Alerts -->
+    {% if not subledger_reconciliation.ar_ok or not subledger_reconciliation.ap_ok %}
+    <div class="stagger-in bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/50 rounded-xl p-4" style="animation-delay: 25ms;">
+        <div class="flex items-start gap-3">
+            <svg class="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+            </svg>
+            <div class="flex-1">
+                <p class="text-sm font-medium text-amber-800 dark:text-amber-200">Subledger Reconciliation Alert</p>
+                <div class="mt-1 text-sm text-amber-700 dark:text-amber-300 space-y-1">
+                    {% if not subledger_reconciliation.ar_ok %}
+                    <p>AR Control variance: {{ subledger_reconciliation.ar_diff }}</p>
+                    {% endif %}
+                    {% if not subledger_reconciliation.ap_ok %}
+                    <p>AP Control variance: {{ subledger_reconciliation.ap_diff }}</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Primary Charts Row: Revenue Trend (Full Width) -->
+    <div class="stagger-in card p-6" style="animation-delay: 50ms;">
+        <div class="flex items-center justify-between mb-6">
+            <div>
+                <h3 class="text-base font-semibold text-slate-900 dark:text-white font-display">Revenue vs Expenses</h3>
+                <p class="text-sm text-slate-500 dark:text-slate-400">
+                    {% if selected_year %}{{ selected_year }} monthly trend{% else %}12-month trend{% endif %}
+                </p>
+            </div>
+            <div class="flex items-center gap-4 text-xs">
+                <span class="flex items-center gap-1.5">
+                    <span class="w-3 h-3 rounded-full bg-teal-500"></span>
+                    <span class="text-slate-600 dark:text-slate-400">Revenue</span>
+                </span>
+                <span class="flex items-center gap-1.5">
+                    <span class="w-3 h-3 rounded-full bg-rose-500"></span>
+                    <span class="text-slate-600 dark:text-slate-400">Expenses</span>
+                </span>
+            </div>
+        </div>
+        {% if chart_data.monthly_trend %}
+        <div class="h-80">
+            <canvas data-chart="trendLine" data-chart-config='{{ {
+                "labels": chart_data.monthly_trend | map(attribute="month_short") | list,
+                "datasets": [
+                    {"label": "Revenue", "data": chart_data.monthly_trend | map(attribute="revenue") | list},
+                    {"label": "Expenses", "data": chart_data.monthly_trend | map(attribute="expenses") | list}
+                ]
+            } | tojson }}'></canvas>
+        </div>
+        {% else %}
+        {{ empty_state("No trend data", "Record transactions to see trends") }}
+        {% endif %}
+    </div>
+
+    <!-- Secondary Charts Row: Cash Flow & Profit Gauge -->
+    <div class="grid gap-6 lg:grid-cols-3">
+        <!-- Monthly Cash Flow Chart -->
+        <div class="lg:col-span-2 stagger-in card p-6" style="animation-delay: 100ms;">
+            <div class="flex items-center justify-between mb-6">
+                <div>
+                    <h3 class="text-base font-semibold text-slate-900 dark:text-white font-display">Cash Flow</h3>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">
+                        {% if selected_year %}{{ selected_year }} inflows & outflows{% else %}6-month inflows & outflows{% endif %}
+                    </p>
+                </div>
+                <div class="flex items-center gap-4 text-xs">
+                    <span class="flex items-center gap-1.5">
+                        <span class="w-3 h-3 rounded-full bg-emerald-500"></span>
+                        <span class="text-slate-600 dark:text-slate-400">Inflow</span>
+                    </span>
+                    <span class="flex items-center gap-1.5">
+                        <span class="w-3 h-3 rounded-full bg-red-500"></span>
+                        <span class="text-slate-600 dark:text-slate-400">Outflow</span>
+                    </span>
+                </div>
+            </div>
+            {% if chart_data.cash_flow %}
+            <div class="h-64">
+                <canvas data-chart="groupedBar" data-chart-config='{{ {
+                    "labels": chart_data.cash_flow | map(attribute="month") | list,
+                    "datasets": [
+                        {"label": "Inflow", "data": chart_data.cash_flow | map(attribute="inflow") | list},
+                        {"label": "Outflow", "data": chart_data.cash_flow | map(attribute="outflow") | list}
+                    ]
+                } | tojson }}'></canvas>
+            </div>
+            {% else %}
+            {{ empty_state("No cash flow data", "Record transactions to see cash flow") }}
+            {% endif %}
+        </div>
+
+        <!-- Profit Margin Gauge -->
+        <div class="stagger-in card p-6" style="animation-delay: 125ms;">
+            <div class="mb-4">
+                <h3 class="text-base font-semibold text-slate-900 dark:text-white font-display">Profit Margin</h3>
+                <p class="text-sm text-slate-500 dark:text-slate-400">Net income ratio</p>
+            </div>
+            <div class="h-48 flex items-center justify-center">
+                <canvas id="profitGaugeChart"></canvas>
+            </div>
+            <div class="mt-4 grid grid-cols-2 gap-4 text-center">
+                <div>
+                    <span class="block text-xs text-slate-500 dark:text-slate-400">Gross Margin</span>
+                    <span class="block text-lg font-semibold font-mono text-slate-900 dark:text-white" id="grossMarginValue">--</span>
+                </div>
+                <div>
+                    <span class="block text-xs text-slate-500 dark:text-slate-400">Net Margin</span>
+                    <span class="block text-lg font-semibold font-mono text-teal-600 dark:text-teal-400" id="netMarginValue">--</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Analytics Row: Customers, Suppliers, Account Distribution, AR/AP Aging -->
+    <div class="grid gap-6 lg:grid-cols-4">
+        <!-- Top Customers -->
+        <div class="stagger-in card p-6" style="animation-delay: 150ms;">
+            <div class="mb-4">
+                <h3 class="text-base font-semibold text-slate-900 dark:text-white font-display">Top Customers</h3>
+                <p class="text-sm text-slate-500 dark:text-slate-400">By revenue</p>
+            </div>
+            {% if chart_data.top_customers %}
+            <div class="h-52">
+                <canvas data-chart="horizontalBar" data-chart-config='{{ {
+                    "labels": chart_data.top_customers | map(attribute="name") | list,
+                    "data": chart_data.top_customers | map(attribute="revenue") | list,
+                    "color": "rgba(20, 184, 166, 0.85)"
+                } | tojson }}'></canvas>
+            </div>
+            {% else %}
+            {{ empty_state("No customer data", "Create invoices") }}
+            {% endif %}
+        </div>
+
+        <!-- Top Suppliers -->
+        <div class="stagger-in card p-6" style="animation-delay: 175ms;">
+            <div class="mb-4">
+                <h3 class="text-base font-semibold text-slate-900 dark:text-white font-display">Top Suppliers</h3>
+                <p class="text-sm text-slate-500 dark:text-slate-400">By spend</p>
+            </div>
+            {% if chart_data.top_suppliers %}
+            <div class="h-52">
+                <canvas data-chart="horizontalBar" data-chart-config='{{ {
+                    "labels": chart_data.top_suppliers | map(attribute="name") | list,
+                    "data": chart_data.top_suppliers | map(attribute="spend") | list,
+                    "color": "rgba(244, 63, 94, 0.85)"
+                } | tojson }}'></canvas>
+            </div>
+            {% else %}
+            {{ empty_state("No supplier data", "Record bills") }}
+            {% endif %}
+        </div>
+
+        <!-- Account Distribution Donut -->
+        <div class="stagger-in card p-6" style="animation-delay: 200ms;">
+            <div class="mb-4">
+                <h3 class="text-base font-semibold text-slate-900 dark:text-white font-display">Account Mix</h3>
+                <p class="text-sm text-slate-500 dark:text-slate-400">By category</p>
+            </div>
+            {% if chart_data.account_balances %}
+            <div class="h-52 flex items-center justify-center">
+                <canvas data-chart="donut" data-chart-config='{{ {
+                    "labels": chart_data.account_balances | map(attribute="category") | list,
+                    "data": chart_data.account_balances | map(attribute="balance") | list
+                } | tojson }}'></canvas>
+            </div>
+            {% else %}
+            {{ empty_state("No account data", "Set up accounts") }}
+            {% endif %}
+        </div>
+
+        <!-- AR Aging Visual -->
+        <div class="stagger-in card p-6" style="animation-delay: 225ms;">
+            <div class="mb-4">
+                <h3 class="text-base font-semibold text-slate-900 dark:text-white font-display">AR Aging</h3>
+                <p class="text-sm text-slate-500 dark:text-slate-400">Receivables breakdown</p>
+            </div>
+            <div class="h-52 flex items-center justify-center">
+                <canvas id="arAgingChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bottom Row: Working Capital & Invoice Status -->
+    <div class="grid gap-6 lg:grid-cols-3">
+        <!-- Working Capital Visual -->
+        <div class="stagger-in card p-6" style="animation-delay: 250ms;">
+            <div class="mb-6">
+                <h3 class="text-base font-semibold text-slate-900 dark:text-white font-display">Working Capital</h3>
+                <p class="text-sm text-slate-500 dark:text-slate-400">AR - AP Balance</p>
+            </div>
+            <div class="relative">
+                <!-- AR Bar -->
+                <div class="mb-4">
+                    <div class="flex justify-between text-sm mb-2">
+                        <span class="text-slate-600 dark:text-slate-400">Receivables</span>
+                        <span class="font-mono font-medium text-teal-600 dark:text-teal-400">{{ stats.ar_control_balance | default(currency_zero) }}</span>
+                    </div>
+                    <div class="h-4 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                        <div class="h-full bg-gradient-to-r from-teal-400 to-teal-600 rounded-full working-capital-bar" data-type="ar"></div>
+                    </div>
+                </div>
+                <!-- AP Bar -->
+                <div class="mb-4">
+                    <div class="flex justify-between text-sm mb-2">
+                        <span class="text-slate-600 dark:text-slate-400">Payables</span>
+                        <span class="font-mono font-medium text-amber-600 dark:text-amber-400">{{ stats.ap_control_balance | default(currency_zero) }}</span>
+                    </div>
+                    <div class="h-4 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                        <div class="h-full bg-gradient-to-r from-amber-400 to-amber-600 rounded-full working-capital-bar" data-type="ap"></div>
+                    </div>
+                </div>
+                <!-- Net Working Capital -->
+                <div class="pt-4 border-t border-slate-100 dark:border-slate-700">
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Net Working Capital</span>
+                        <span class="text-xl font-semibold font-mono text-slate-900 dark:text-white">{{ stats.net_ar_ap | default(currency_zero) }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Invoice Status - AR -->
+        <div class="stagger-in card p-6" style="animation-delay: 275ms;">
+            <div class="mb-4">
+                <h3 class="text-base font-semibold text-slate-900 dark:text-white font-display">Invoice Status</h3>
+                <p class="text-sm text-slate-500 dark:text-slate-400">AR pipeline</p>
+            </div>
+            <div class="h-40 flex items-center justify-center">
+                <canvas id="arStatusChart"></canvas>
+            </div>
+            <div class="mt-4 flex justify-center gap-4 text-xs">
+                <span class="flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+                    <span class="text-slate-600 dark:text-slate-400">Draft</span>
+                </span>
+                <span class="flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-teal-500"></span>
+                    <span class="text-slate-600 dark:text-slate-400">Posted</span>
+                </span>
+                <span class="flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                    <span class="text-slate-600 dark:text-slate-400">Paid</span>
+                </span>
+            </div>
+        </div>
+
+        <!-- Invoice Status - AP -->
+        <div class="stagger-in card p-6" style="animation-delay: 300ms;">
+            <div class="mb-4">
+                <h3 class="text-base font-semibold text-slate-900 dark:text-white font-display">Bills Status</h3>
+                <p class="text-sm text-slate-500 dark:text-slate-400">AP pipeline</p>
+            </div>
+            <div class="h-40 flex items-center justify-center">
+                <canvas id="apStatusChart"></canvas>
+            </div>
+            <div class="mt-4 flex justify-center gap-4 text-xs">
+                <span class="flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+                    <span class="text-slate-600 dark:text-slate-400">Draft</span>
+                </span>
+                <span class="flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-rose-500"></span>
+                    <span class="text-slate-600 dark:text-slate-400">Posted</span>
+                </span>
+                <span class="flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                    <span class="text-slate-600 dark:text-slate-400">Paid</span>
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Divider -->
+    <div class="divider-finance"></div>
+
+    <!-- Quick Access Row -->
+    <div class="grid gap-6 lg:grid-cols-12">
+        <!-- Quick Actions -->
+        <div class="lg:col-span-4 stagger-in" style="animation-delay: 325ms;">
+            <div class="section-label">
+                <span class="section-label-text">Quick Actions</span>
+            </div>
+            <div class="space-y-2" data-testid="dashboard-quick-actions">
+                <a href="/finance/gl/journals/new" class="cmd-action">
+                    <span class="cmd-action-key">J</span>
+                    <span class="cmd-action-label">New Journal Entry</span>
+                    <span class="cmd-action-hint">GL</span>
+                </a>
+                <a href="/finance/ar/invoices/new" class="cmd-action">
+                    <span class="cmd-action-key">I</span>
+                    <span class="cmd-action-label">Create Invoice</span>
+                    <span class="cmd-action-hint">AR</span>
+                </a>
+                <a href="/finance/ap/invoices/new" class="cmd-action">
+                    <span class="cmd-action-key">B</span>
+                    <span class="cmd-action-label">Record Bill</span>
+                    <span class="cmd-action-hint">AP</span>
+                </a>
+                <a href="/finance/ar/receipts/new" class="cmd-action">
+                    <span class="cmd-action-key">R</span>
+                    <span class="cmd-action-label">Record Receipt</span>
+                    <span class="cmd-action-hint">AR</span>
+                </a>
+            </div>
+        </div>
+
+        <!-- Reports Grid -->
+        <div class="lg:col-span-8 stagger-in" style="animation-delay: 350ms;">
+            <div class="section-label">
+                <span class="section-label-text">Financial Reports</span>
+            </div>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <a href="/finance/reports/trial-balance" class="card card-hover p-4 text-center group">
+                    <div class="text-slate-400 dark:text-slate-500 mb-2 group-hover:text-teal-500 transition-colors">
+                        <svg class="h-8 w-8 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        </svg>
+                    </div>
+                    <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Trial Balance</span>
+                </a>
+                <a href="/finance/reports/income-statement" class="card card-hover p-4 text-center group">
+                    <div class="text-slate-400 dark:text-slate-500 mb-2 group-hover:text-teal-500 transition-colors">
+                        <svg class="h-8 w-8 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+                        </svg>
+                    </div>
+                    <span class="text-sm font-medium text-slate-700 dark:text-slate-300">P&L Statement</span>
+                </a>
+                <a href="/finance/reports/balance-sheet" class="card card-hover p-4 text-center group">
+                    <div class="text-slate-400 dark:text-slate-500 mb-2 group-hover:text-teal-500 transition-colors">
+                        <svg class="h-8 w-8 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+                        </svg>
+                    </div>
+                    <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Balance Sheet</span>
+                </a>
+                <a href="/finance/reports/cash-flow" class="card card-hover p-4 text-center group">
+                    <div class="text-slate-400 dark:text-slate-500 mb-2 group-hover:text-teal-500 transition-colors">
+                        <svg class="h-8 w-8 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </div>
+                    <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Cash Flow</span>
+                </a>
+                <a href="/finance/ar/aging" class="card card-hover p-4 text-center group">
+                    <div class="text-slate-400 dark:text-slate-500 mb-2 group-hover:text-teal-500 transition-colors">
+                        <svg class="h-8 w-8 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2z"/>
+                        </svg>
+                    </div>
+                    <span class="text-sm font-medium text-slate-700 dark:text-slate-300">AR Aging</span>
+                </a>
+                <a href="/finance/ap/aging" class="card card-hover p-4 text-center group">
+                    <div class="text-slate-400 dark:text-slate-500 mb-2 group-hover:text-teal-500 transition-colors">
+                        <svg class="h-8 w-8 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
+                        </svg>
+                    </div>
+                    <span class="text-sm font-medium text-slate-700 dark:text-slate-300">AP Aging</span>
+                </a>
+                <a href="/finance/banking/reconciliations" class="card card-hover p-4 text-center group">
+                    <div class="text-slate-400 dark:text-slate-500 mb-2 group-hover:text-teal-500 transition-colors">
+                        <svg class="h-8 w-8 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </div>
+                    <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Bank Recon</span>
+                </a>
+                <a href="/finance/gl/journals" class="card card-hover p-4 text-center group">
+                    <div class="text-slate-400 dark:text-slate-500 mb-2 group-hover:text-teal-500 transition-colors">
+                        <svg class="h-8 w-8 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+                        </svg>
+                    </div>
+                    <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Journals</span>
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const isDark = document.documentElement.classList.contains('dark');
+    const gridColor = isDark ? 'rgba(148, 163, 184, 0.1)' : 'rgba(15, 23, 42, 0.05)';
+    const textColor = isDark ? '#94a3b8' : '#64748b';
+
+    Chart.defaults.font.family = "'DM Sans', system-ui, sans-serif";
+    Chart.defaults.color = textColor;
+    Chart.defaults.plugins.legend.display = false;
+
+    const colors = {
+        teal: { solid: '#14b8a6', light: 'rgba(20, 184, 166, 0.15)' },
+        rose: { solid: '#f43f5e', light: 'rgba(244, 63, 94, 0.15)' },
+        emerald: { solid: '#10b981', light: 'rgba(16, 185, 129, 0.15)' },
+        amber: { solid: '#f59e0b', light: 'rgba(245, 158, 11, 0.15)' },
+        orange: { solid: '#f97316', light: 'rgba(249, 115, 22, 0.15)' },
+        violet: { solid: '#8b5cf6', light: 'rgba(139, 92, 246, 0.15)' },
+        blue: { solid: '#3b82f6', light: 'rgba(59, 130, 246, 0.15)' },
+    };
+
+    // Chart data from backend
+    const chartData = {{ chart_data_json | safe }};
+    const stats = {
+        total_revenue: {{ (stats.total_revenue | replace(',', '') | replace(currency_prefix, '') | float) if stats.total_revenue else 0 }},
+        total_expenses: {{ (stats.total_expenses | replace(',', '') | replace(currency_prefix, '') | float) if stats.total_expenses else 0 }},
+        net_income: {{ (stats.net_income | replace(',', '') | replace(currency_prefix, '') | float) if stats.net_income else 0 }},
+        cogs_spend: {{ (stats.cogs_spend | replace(',', '') | replace(currency_prefix, '') | float) if stats.cogs_spend else 0 }},
+        ar_control: {{ (stats.ar_control_balance | replace(',', '') | replace(currency_prefix, '') | float) if stats.ar_control_balance else 0 }},
+        ap_control: {{ (stats.ap_control_balance | replace(',', '') | replace(currency_prefix, '') | float) if stats.ap_control_balance else 0 }},
+        aging_current: {{ stats.aging_current_pct | default(0) }},
+        aging_30: {{ stats.aging_30_pct | default(0) }},
+        aging_60: {{ stats.aging_60_pct | default(0) }},
+        aging_90: {{ stats.aging_90_pct | default(0) }},
+    };
+
+    // Initialize data-chart elements
+    document.querySelectorAll('[data-chart]').forEach(canvas => {
+        const chartType = canvas.dataset.chart;
+        const config = JSON.parse(canvas.dataset.chartConfig || '{}');
+
+        if (chartType === 'trendLine') {
+            new Chart(canvas, {
+                type: 'line',
+                data: {
+                    labels: config.labels || [],
+                    datasets: [
+                        {
+                            label: 'Revenue',
+                            data: config.datasets?.[0]?.data || [],
+                            borderColor: colors.teal.solid,
+                            backgroundColor: colors.teal.light,
+                            fill: true,
+                            tension: 0.4,
+                            pointRadius: 4,
+                            pointHoverRadius: 6,
+                            borderWidth: 2,
+                        },
+                        {
+                            label: 'Expenses',
+                            data: config.datasets?.[1]?.data || [],
+                            borderColor: colors.rose.solid,
+                            backgroundColor: colors.rose.light,
+                            fill: true,
+                            tension: 0.4,
+                            pointRadius: 4,
+                            pointHoverRadius: 6,
+                            borderWidth: 2,
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { intersect: false, mode: 'index' },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: isDark ? '#1e293b' : '#fff',
+                            titleColor: isDark ? '#f1f5f9' : '#0f172a',
+                            bodyColor: isDark ? '#cbd5e1' : '#475569',
+                            borderColor: isDark ? '#334155' : '#e2e8f0',
+                            borderWidth: 1,
+                            padding: 12,
+                            cornerRadius: 8,
+                        }
+                    },
+                    scales: {
+                        x: { grid: { display: false } },
+                        y: { grid: { color: gridColor }, beginAtZero: true }
+                    }
+                }
+            });
+        }
+
+        else if (chartType === 'groupedBar') {
+            new Chart(canvas, {
+                type: 'bar',
+                data: {
+                    labels: config.labels || [],
+                    datasets: [
+                        {
+                            label: 'Inflow',
+                            data: config.datasets?.[0]?.data || [],
+                            backgroundColor: colors.emerald.solid,
+                            borderRadius: 6,
+                        },
+                        {
+                            label: 'Outflow',
+                            data: config.datasets?.[1]?.data || [],
+                            backgroundColor: colors.rose.solid,
+                            borderRadius: 6,
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { grid: { display: false } },
+                        y: { grid: { color: gridColor }, beginAtZero: true }
+                    }
+                }
+            });
+        }
+
+        else if (chartType === 'donut') {
+            const categoryColors = [colors.teal.solid, colors.blue.solid, colors.violet.solid, colors.amber.solid, colors.rose.solid, colors.emerald.solid];
+            new Chart(canvas, {
+                type: 'doughnut',
+                data: {
+                    labels: config.labels || [],
+                    datasets: [{
+                        data: config.data || [],
+                        backgroundColor: categoryColors.slice(0, (config.data || []).length),
+                        borderWidth: 0,
+                        hoverOffset: 4,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '60%',
+                    plugins: { legend: { display: false } }
+                }
+            });
+        }
+
+        else if (chartType === 'horizontalBar') {
+            const barColor = config.color || colors.teal.solid;
+            new Chart(canvas, {
+                type: 'bar',
+                data: {
+                    labels: config.labels || [],
+                    datasets: [{
+                        data: config.data || [],
+                        backgroundColor: barColor,
+                        borderRadius: 4,
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { grid: { color: gridColor }, beginAtZero: true, display: false },
+                        y: { grid: { display: false } }
+                    }
+                }
+            });
+        }
+    });
+
+    // Profit Margin Gauge
+    const profitGaugeEl = document.getElementById('profitGaugeChart');
+    if (profitGaugeEl) {
+        const grossMargin = stats.total_revenue > 0 ? ((stats.total_revenue - stats.cogs_spend) / stats.total_revenue * 100) : 0;
+        const netMargin = stats.total_revenue > 0 ? (stats.net_income / stats.total_revenue * 100) : 0;
+
+        document.getElementById('grossMarginValue').textContent = grossMargin.toFixed(1) + '%';
+        document.getElementById('netMarginValue').textContent = netMargin.toFixed(1) + '%';
+
+        new Chart(profitGaugeEl, {
+            type: 'doughnut',
+            data: {
+                labels: ['Net Margin', 'Remaining'],
+                datasets: [{
+                    data: [Math.max(0, netMargin), Math.max(0, 100 - netMargin)],
+                    backgroundColor: [colors.teal.solid, isDark ? 'rgba(51, 65, 85, 0.5)' : 'rgba(226, 232, 240, 0.8)'],
+                    borderWidth: 0,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: '75%',
+                rotation: -90,
+                circumference: 180,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { enabled: false }
+                }
+            }
+        });
+    }
+
+    // AR Aging Polar Area
+    const arAgingEl = document.getElementById('arAgingChart');
+    if (arAgingEl) {
+        new Chart(arAgingEl, {
+            type: 'doughnut',
+            data: {
+                labels: ['Current', '1-30 Days', '31-60 Days', '60+ Days'],
+                datasets: [{
+                    data: [stats.aging_current || 25, stats.aging_30 || 25, stats.aging_60 || 25, stats.aging_90 || 25],
+                    backgroundColor: [colors.emerald.solid, colors.amber.solid, colors.orange.solid, colors.rose.solid],
+                    borderWidth: 0,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: '50%',
+                plugins: { legend: { display: false } }
+            }
+        });
+    }
+
+    // Invoice Status Charts
+    const invoiceStatus = chartData.invoice_status || {};
+
+    if (document.getElementById('arStatusChart')) {
+        new Chart(document.getElementById('arStatusChart'), {
+            type: 'doughnut',
+            data: {
+                labels: ['Draft', 'Posted', 'Paid'],
+                datasets: [{
+                    data: [invoiceStatus.ar?.draft || 0, invoiceStatus.ar?.posted || 0, invoiceStatus.ar?.paid || 0],
+                    backgroundColor: [colors.amber.solid, colors.teal.solid, colors.emerald.solid],
+                    borderWidth: 0,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: '55%',
+                plugins: { legend: { display: false } }
+            }
+        });
+    }
+
+    if (document.getElementById('apStatusChart')) {
+        new Chart(document.getElementById('apStatusChart'), {
+            type: 'doughnut',
+            data: {
+                labels: ['Draft', 'Posted', 'Paid'],
+                datasets: [{
+                    data: [invoiceStatus.ap?.draft || 0, invoiceStatus.ap?.posted || 0, invoiceStatus.ap?.paid || 0],
+                    backgroundColor: [colors.amber.solid, colors.rose.solid, colors.emerald.solid],
+                    borderWidth: 0,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: '55%',
+                plugins: { legend: { display: false } }
+            }
+        });
+    }
+
+    // Working Capital Bars Animation
+    const maxBalance = Math.max(stats.ar_control, stats.ap_control) || 1;
+    document.querySelectorAll('.working-capital-bar').forEach(bar => {
+        const type = bar.dataset.type;
+        const value = type === 'ar' ? stats.ar_control : stats.ap_control;
+        const pct = (value / maxBalance) * 100;
+        setTimeout(() => {
+            bar.style.width = pct + '%';
+            bar.style.transition = 'width 1s ease-out';
+        }, 100);
+    });
+});
+</script>
+{% endblock %}

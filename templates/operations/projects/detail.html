@@ -1,0 +1,178 @@
+{% extends "operations/base_operations.html" %}
+
+{% block title %}{{ project.project_name }} - Projects{% endblock %}
+
+{% set status_colors = {
+    'PLANNING': 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
+    'ACTIVE': 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
+    'ON_HOLD': 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300',
+    'COMPLETED': 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300',
+    'CANCELLED': 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
+} %}
+
+{% block page_title %}
+{{ project.project_name }}
+<span class="ml-2 inline-flex rounded-full px-2 py-1 text-xs font-medium {{ status_colors.get(project.status.value, 'bg-slate-100 text-slate-800') }}">
+    {{ project.status.value }}
+</span>
+{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 mt-1">
+    <a href="/operations/dashboard" class="hover:text-amber-600 dark:hover:text-amber-400">Operations</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+    <a href="/operations/projects" class="hover:text-amber-600 dark:hover:text-amber-400">Projects</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+    <span class="text-slate-700 dark:text-slate-300">{{ project.project_code }}</span>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<a href="/operations/projects/{{ project.project_code }}/edit"
+   class="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 transition-colors">
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+    </svg>
+    Edit
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+    <!-- Quick Links -->
+    <div class="flex flex-wrap gap-2">
+        <a href="/operations/projects/{{ project.project_code }}/tasks" class="inline-flex items-center gap-2 rounded-lg bg-amber-50 px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-300 dark:hover:bg-amber-900/50 transition-colors">
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+            </svg>
+            Tasks
+        </a>
+        <a href="/operations/projects/{{ project.project_code }}/gantt" class="inline-flex items-center gap-2 rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600 transition-colors">
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+            </svg>
+            Gantt Chart
+        </a>
+        <a href="/operations/projects/{{ project.project_code }}/team" class="inline-flex items-center gap-2 rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600 transition-colors">
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"/>
+            </svg>
+            Team
+        </a>
+        <a href="/operations/projects/{{ project.project_code }}/milestones" class="inline-flex items-center gap-2 rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600 transition-colors">
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"/>
+            </svg>
+            Milestones
+        </a>
+        <a href="/operations/projects/{{ project.project_code }}/time" class="inline-flex items-center gap-2 rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600 transition-colors">
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            Time
+        </a>
+        <a href="/operations/projects/{{ project.project_code }}/expenses" class="inline-flex items-center gap-2 rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600 transition-colors">
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/>
+            </svg>
+            Expenses
+        </a>
+    </div>
+
+    <!-- Dashboard Grid -->
+    <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <!-- Progress Card -->
+        <div class="rounded-lg border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-800">
+            <h3 class="text-sm font-medium text-slate-500 dark:text-slate-400">Progress</h3>
+            <div class="mt-4 flex items-end gap-4">
+                <span class="text-4xl font-bold text-slate-900 dark:text-white">{{ project.percent_complete|int }}%</span>
+                <div class="flex-1">
+                    <div class="h-2 rounded-full bg-slate-200 dark:bg-slate-700">
+                        <div class="h-2 rounded-full bg-amber-500" style="width: {{ project.percent_complete }}%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Timeline Card -->
+        <div class="rounded-lg border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-800">
+            <h3 class="text-sm font-medium text-slate-500 dark:text-slate-400">Timeline</h3>
+            <div class="mt-4 space-y-2">
+                <div class="flex justify-between text-sm">
+                    <span class="text-slate-600 dark:text-slate-400">Start</span>
+                    <span class="font-medium text-slate-900 dark:text-white">
+                        {% if project.start_date %}{{ project.start_date.strftime('%d %b %Y') }}{% else %}Not set{% endif %}
+                    </span>
+                </div>
+                <div class="flex justify-between text-sm">
+                    <span class="text-slate-600 dark:text-slate-400">End</span>
+                    <span class="font-medium text-slate-900 dark:text-white">
+                        {% if project.end_date %}{{ project.end_date.strftime('%d %b %Y') }}{% else %}Not set{% endif %}
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Budget Card -->
+        <div class="rounded-lg border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-800">
+            <h3 class="text-sm font-medium text-slate-500 dark:text-slate-400">Budget</h3>
+            <div class="mt-4 space-y-2">
+                <div class="flex justify-between text-sm">
+                    <span class="text-slate-600 dark:text-slate-400">Budget</span>
+                    <span class="font-medium text-slate-900 dark:text-white">
+                        {% if project.budget_amount %}{{ project.budget_currency_code or 'NGN' }} {{ '{:,.2f}'.format(project.budget_amount) }}{% else %}Not set{% endif %}
+                    </span>
+                </div>
+                <div class="flex justify-between text-sm">
+                    <span class="text-slate-600 dark:text-slate-400">Actual</span>
+                    <span class="font-medium text-slate-900 dark:text-white">
+                        {% if project.actual_cost %}{{ project.budget_currency_code or 'NGN' }} {{ '{:,.2f}'.format(project.actual_cost) }}{% else %}-{% endif %}
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Task Metrics -->
+    {% if dashboard and dashboard.task_metrics %}
+    <div class="rounded-lg border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-800">
+        <h3 class="text-lg font-medium text-slate-900 dark:text-white">Task Summary</h3>
+        <div class="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4 lg:grid-cols-6">
+            <div class="text-center">
+                <span class="text-2xl font-bold text-slate-900 dark:text-white">{{ dashboard.task_metrics.total_tasks }}</span>
+                <p class="text-sm text-slate-500 dark:text-slate-400">Total</p>
+            </div>
+            <div class="text-center">
+                <span class="text-2xl font-bold text-blue-600 dark:text-blue-400">{{ dashboard.task_metrics.open_tasks }}</span>
+                <p class="text-sm text-slate-500 dark:text-slate-400">Open</p>
+            </div>
+            <div class="text-center">
+                <span class="text-2xl font-bold text-amber-600 dark:text-amber-400">{{ dashboard.task_metrics.in_progress_tasks }}</span>
+                <p class="text-sm text-slate-500 dark:text-slate-400">In Progress</p>
+            </div>
+            <div class="text-center">
+                <span class="text-2xl font-bold text-green-600 dark:text-green-400">{{ dashboard.task_metrics.completed_tasks }}</span>
+                <p class="text-sm text-slate-500 dark:text-slate-400">Completed</p>
+            </div>
+            <div class="text-center">
+                <span class="text-2xl font-bold text-red-600 dark:text-red-400">{{ dashboard.task_metrics.overdue_tasks }}</span>
+                <p class="text-sm text-slate-500 dark:text-slate-400">Overdue</p>
+            </div>
+            <div class="text-center">
+                <span class="text-2xl font-bold text-slate-900 dark:text-white">{{ dashboard.task_metrics.completion_rate|int }}%</span>
+                <p class="text-sm text-slate-500 dark:text-slate-400">Done Rate</p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Description -->
+    {% if project.description %}
+    <div class="rounded-lg border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-800">
+        <h3 class="text-lg font-medium text-slate-900 dark:text-white">Description</h3>
+        <p class="mt-2 text-sm text-slate-600 dark:text-slate-400 whitespace-pre-line">{{ project.description }}</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

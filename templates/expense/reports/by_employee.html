@@ -1,0 +1,208 @@
+{% extends "expense/base_expense.html" %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">Expenses by Employee</h1>
+            <p class="text-sm text-slate-500 dark:text-slate-400">Breakdown of expenses by employee</p>
+        </div>
+        <a href="/expense/reports/summary" class="btn btn-secondary">
+            <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+            </svg>
+            Back to Summary
+        </a>
+    </div>
+
+    <!-- Filters -->
+    <div class="card">
+        <form method="get" class="p-4">
+            <div class="flex flex-wrap gap-4 items-end">
+                <div class="w-44">
+                    <label for="start_date" class="form-label">From</label>
+                    <input type="date" name="start_date" id="start_date" value="{{ start_date }}"
+                        class="form-input w-full">
+                </div>
+                <div class="w-44">
+                    <label for="end_date" class="form-label">To</label>
+                    <input type="date" name="end_date" id="end_date" value="{{ end_date }}"
+                        class="form-input w-full">
+                </div>
+                <div class="w-56">
+                    <label for="department_id" class="form-label">Department</label>
+                    <select name="department_id" id="department_id" class="form-select w-full">
+                        <option value="">All Departments</option>
+                        {% for dept in departments %}
+                        <option value="{{ dept.department_id }}" {% if department_id == dept.department_id|string %}selected{% endif %}>
+                            {{ dept.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-secondary h-10">Apply Filter</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="card p-5">
+            <div class="flex items-center gap-4">
+                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-violet-100 dark:bg-violet-900/30">
+                    <svg class="h-6 w-6 text-violet-600 dark:text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">Employees</p>
+                    <p class="text-2xl font-semibold text-slate-900 dark:text-white">{{ report.employees | length }}</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="card p-5">
+            <div class="flex items-center gap-4">
+                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-100 dark:bg-blue-900/30">
+                    <svg class="h-6 w-6 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">Total Claimed</p>
+                    <p class="text-2xl font-semibold text-slate-900 dark:text-white font-mono">{{ "{:,.2f}".format(report.total_claimed) }}</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="card p-5">
+            <div class="flex items-center gap-4">
+                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-green-100 dark:bg-green-900/30">
+                    <svg class="h-6 w-6 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">Total Approved</p>
+                    <p class="text-2xl font-semibold text-green-600 dark:text-green-400 font-mono">{{ "{:,.2f}".format(report.total_approved) }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Employee Breakdown Table -->
+    <div class="card">
+        <div class="border-b border-slate-200 dark:border-slate-700 px-5 py-4">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Employee Breakdown</h2>
+        </div>
+        {% if report.employees %}
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+                <thead>
+                    <tr class="bg-slate-50 dark:bg-slate-800/50">
+                        <th class="px-5 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Employee</th>
+                        <th class="px-5 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Department</th>
+                        <th class="px-5 py-3 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Claims</th>
+                        <th class="px-5 py-3 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Claimed</th>
+                        <th class="px-5 py-3 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Approved</th>
+                        <th class="px-5 py-3 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Approval Rate</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                    {% for emp in report.employees %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                        <td class="px-5 py-3">
+                            <div class="flex items-center gap-3">
+                                <div class="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-purple-600 text-xs font-semibold text-white">
+                                    {{ emp.employee_name.split()[0][0] }}{{ emp.employee_name.split()[-1][0] if emp.employee_name.split()|length > 1 else '' }}
+                                </div>
+                                <div class="font-medium text-slate-900 dark:text-white">{{ emp.employee_name }}</div>
+                            </div>
+                        </td>
+                        <td class="px-5 py-3 text-sm text-slate-600 dark:text-slate-400">
+                            {{ emp.department_name }}
+                        </td>
+                        <td class="px-5 py-3 text-right text-sm font-medium text-slate-700 dark:text-slate-300">
+                            {{ emp.claim_count }}
+                        </td>
+                        <td class="px-5 py-3 text-right text-sm font-mono text-slate-700 dark:text-slate-300">
+                            {{ "{:,.2f}".format(emp.claimed_amount) }}
+                        </td>
+                        <td class="px-5 py-3 text-right text-sm font-mono text-green-600 dark:text-green-400">
+                            {{ "{:,.2f}".format(emp.approved_amount) }}
+                        </td>
+                        <td class="px-5 py-3 text-right">
+                            {% set rate = (emp.approved_amount / emp.claimed_amount * 100) if emp.claimed_amount > 0 else 0 %}
+                            <div class="flex items-center justify-end gap-2">
+                                <div class="w-16 bg-slate-200 dark:bg-slate-700 rounded-full h-1.5">
+                                    <div class="h-1.5 rounded-full {% if rate >= 80 %}bg-green-500{% elif rate >= 50 %}bg-amber-500{% else %}bg-rose-500{% endif %}" style="width: {{ rate }}%"></div>
+                                </div>
+                                <span class="text-sm text-slate-600 dark:text-slate-400 w-12 text-right">{{ "{:.0f}".format(rate) }}%</span>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr class="bg-slate-50 dark:bg-slate-800/50 font-semibold">
+                        <td class="px-5 py-3 text-slate-900 dark:text-white" colspan="2">Total</td>
+                        <td class="px-5 py-3 text-right text-slate-900 dark:text-white">
+                            {{ report.employees | sum(attribute='claim_count') }}
+                        </td>
+                        <td class="px-5 py-3 text-right font-mono text-slate-900 dark:text-white">{{ "{:,.2f}".format(report.total_claimed) }}</td>
+                        <td class="px-5 py-3 text-right font-mono text-green-600 dark:text-green-400">{{ "{:,.2f}".format(report.total_approved) }}</td>
+                        <td class="px-5 py-3 text-right text-slate-500 dark:text-slate-400">
+                            {% set overall_rate = (report.total_approved / report.total_claimed * 100) if report.total_claimed > 0 else 0 %}
+                            {{ "{:.0f}".format(overall_rate) }}%
+                        </td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+        {% else %}
+        <div class="p-8 text-center">
+            <p class="text-slate-500 dark:text-slate-400">No expense claims found for the selected filters.</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Top Spenders -->
+    {% if report.employees and report.employees | length > 3 %}
+    <div class="card">
+        <div class="border-b border-slate-200 dark:border-slate-700 px-5 py-4">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Top Spenders</h2>
+        </div>
+        <div class="p-5">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {% for emp in report.employees[:3] %}
+                <div class="flex items-center gap-4 p-4 rounded-lg bg-slate-50 dark:bg-slate-800/50">
+                    <div class="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br {% if loop.index == 1 %}from-amber-400 to-amber-600{% elif loop.index == 2 %}from-slate-300 to-slate-500{% else %}from-orange-400 to-orange-600{% endif %} text-white font-bold">
+                        #{{ loop.index }}
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="font-medium text-slate-900 dark:text-white truncate">{{ emp.employee_name }}</div>
+                        <div class="text-sm text-slate-500 dark:text-slate-400">{{ emp.department_name }}</div>
+                        <div class="text-lg font-semibold font-mono text-slate-900 dark:text-white">{{ "{:,.2f}".format(emp.claimed_amount) }}</div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Quick Links -->
+    <div class="flex gap-4">
+        <a href="/expense/reports/summary?start_date={{ start_date }}&end_date={{ end_date }}" class="btn btn-secondary">
+            View Summary
+        </a>
+        <a href="/expense/reports/by-category?start_date={{ start_date }}&end_date={{ end_date }}" class="btn btn-secondary">
+            View by Category
+        </a>
+        <a href="/expense/reports/trends" class="btn btn-secondary">
+            View Trends
+        </a>
+    </div>
+</div>
+{% endblock %}

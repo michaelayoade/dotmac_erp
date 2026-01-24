@@ -1,0 +1,416 @@
+{% extends "finance/base_finance.html" %}
+
+{% block page_title %}New AP Payment{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400">
+    <a href="/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/finance/ap/payments" class="hover:text-primary-600 dark:hover:text-primary-400">AP Payments</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white">New Payment</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div x-data="paymentForm()" class="max-w-4xl mx-auto space-y-6">
+    <!-- Main Payment Form -->
+    <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800/50">
+        <h2 class="text-xl font-semibold text-slate-900 dark:text-white">Payment Details</h2>
+        <p class="mt-1 text-sm text-slate-500">Record supplier payment with optional withholding tax deduction.</p>
+
+        <form id="payment-form" method="POST" action="/finance/ap/payments/new" class="mt-6 space-y-6"
+              hx-post="/finance/ap/payments/new" hx-swap="innerHTML" hx-target="#form-result">
+
+            <!-- Row 1: Supplier & Date -->
+            <div class="grid gap-4 sm:grid-cols-2">
+                <div>
+                    <label class="form-label">Supplier <span class="text-red-500">*</span></label>
+                    <select class="form-select form-input" name="supplier_id" required
+                            x-model="supplierId" @change="onSupplierChange()">
+                        <option value="">Select supplier</option>
+                        {% for supplier in suppliers_list %}
+                        <option value="{{ supplier.supplier_id }}"
+                                data-wht-applicable="{{ supplier.withholding_tax_applicable|default(false)|lower }}"
+                                data-wht-code-id="{{ supplier.withholding_tax_code_id|default('') }}"
+                                {% if invoice and invoice.supplier_id|string == supplier.supplier_id|string %}selected{% endif %}>
+                            {{ supplier.supplier_name }} ({{ supplier.supplier_code }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label">Payment Date <span class="text-red-500">*</span></label>
+                    <input type="date" class="form-input" name="payment_date" required
+                           x-model="paymentDate">
+                </div>
+            </div>
+
+            <!-- Row 2: Bank Account & Payment Method -->
+            <div class="grid gap-4 sm:grid-cols-2">
+                <div>
+                    <label class="form-label">Bank Account <span class="text-red-500">*</span></label>
+                    <select class="form-select form-input" name="bank_account_id" required x-model="bankAccountId">
+                        <option value="">Select bank account</option>
+                        {% for acct in bank_accounts %}
+                        <option value="{{ acct.id }}">{{ acct.code }} - {{ acct.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label">Payment Method <span class="text-red-500">*</span></label>
+                    <select class="form-select form-input" name="payment_method" required x-model="paymentMethod">
+                        <option value="BANK_TRANSFER">Bank Transfer</option>
+                        <option value="CHECK">Check</option>
+                        <option value="WIRE">Wire</option>
+                        <option value="ACH">ACH</option>
+                        <option value="CARD">Card</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Row 3: Reference & Currency -->
+            <div class="grid gap-4 sm:grid-cols-2">
+                <div>
+                    <label class="form-label">Reference</label>
+                    <input type="text" class="form-input" name="reference" placeholder="Check number, transfer ref, etc."
+                           x-model="reference">
+                </div>
+                <div>
+                    <label class="form-label">Currency</label>
+                    <input type="text" class="form-input" name="currency_code"
+                           x-model="currencyCode" readonly>
+                </div>
+            </div>
+
+            <!-- Description -->
+            <div>
+                <label class="form-label">Description</label>
+                <input type="text" class="form-input" name="description" placeholder="Payment description"
+                       x-model="description">
+            </div>
+
+            <!-- WHT Section -->
+            <div class="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/50">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="text-sm font-medium text-slate-900 dark:text-white">Withholding Tax (WHT)</h3>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Withhold tax from supplier payment</p>
+                    </div>
+                    <label class="relative inline-flex cursor-pointer items-center">
+                        <input type="checkbox" name="has_wht" x-model="hasWht" class="peer sr-only"
+                               @change="calculateAmounts()">
+                        <div class="peer h-6 w-11 rounded-full bg-slate-200 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-slate-300 after:bg-white after:transition-all after:content-[''] peer-checked:bg-primary-600 peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 dark:border-slate-600 dark:bg-slate-700 dark:peer-focus:ring-primary-800"></div>
+                    </label>
+                </div>
+
+                <!-- WHT Details (shown when hasWht is true) -->
+                <div x-show="hasWht" x-collapse class="mt-4 space-y-4">
+                    <div class="grid gap-4 sm:grid-cols-2">
+                        <div>
+                            <label class="form-label">WHT Code <span class="text-red-500">*</span></label>
+                            <select class="form-select form-input" name="wht_code_id" x-model="whtCodeId"
+                                    @change="calculateAmounts()" :required="hasWht">
+                                <option value="">Select WHT rate</option>
+                                {% for code in wht_codes %}
+                                <option value="{{ code.id }}" data-rate="{{ code.rate }}">
+                                    {{ code.code }} - {{ code.name }} ({{ code.rate }}%)
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div>
+                            <label class="form-label">WHT Rate</label>
+                            <div class="form-input bg-slate-100 dark:bg-slate-700" x-text="whtRate + '%'"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Amount Section -->
+            <div class="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/50">
+                <h3 class="mb-4 text-sm font-medium text-slate-900 dark:text-white">Payment Amount</h3>
+                <div class="space-y-4">
+                    <!-- Gross Amount (Invoice Amount) -->
+                    <div class="grid gap-4 sm:grid-cols-2">
+                        <div>
+                            <label class="form-label">Invoice Amount (Gross) <span class="text-red-500">*</span></label>
+                            <input type="number" step="0.01" class="form-input" name="gross_amount" required
+                                   x-model.number="grossAmount" @input="calculateAmounts()"
+                                   placeholder="0.00">
+                            <p class="mt-1 text-xs text-slate-500">Full invoice amount being paid</p>
+                        </div>
+                        <div x-show="invoice">
+                            <label class="form-label">Invoice Balance</label>
+                            <div class="form-input bg-slate-100 dark:bg-slate-700" x-text="formatCurrency(invoiceBalance)"></div>
+                        </div>
+                    </div>
+
+                    <!-- WHT Amount (shown when hasWht) -->
+                    <div x-show="hasWht" class="grid gap-4 sm:grid-cols-2">
+                        <div>
+                            <label class="form-label">WHT Amount</label>
+                            <input type="number" step="0.01" class="form-input bg-amber-50 dark:bg-amber-900/20"
+                                   name="wht_amount" x-model.number="whtAmount" readonly>
+                            <p class="mt-1 text-xs text-amber-600 dark:text-amber-400">Withheld and remitted to tax authority</p>
+                        </div>
+                    </div>
+
+                    <!-- Net Amount (Amount to Pay) -->
+                    <div class="border-t border-slate-200 pt-4 dark:border-slate-700">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <label class="text-sm font-medium text-slate-900 dark:text-white">Net Amount to Pay</label>
+                                <p class="text-xs text-slate-500">Amount transferred to supplier</p>
+                            </div>
+                            <div class="text-right">
+                                <span class="text-2xl font-bold text-primary-600 dark:text-primary-400" x-text="formatCurrency(netAmount)"></span>
+                                <span class="text-sm text-slate-500" x-text="currencyCode"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Hidden field for net amount -->
+                <input type="hidden" name="amount" :value="netAmount">
+            </div>
+
+            <!-- Allocations (hidden JSON) -->
+            <input type="hidden" name="allocations" :value="JSON.stringify(allocations)">
+
+            <!-- Form Result -->
+            <div id="form-result"></div>
+
+            <!-- Submit Button -->
+            <div class="flex items-center justify-between border-t border-slate-200 pt-6 dark:border-slate-700">
+                <a href="/finance/ap/payments" class="text-sm text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">
+                    Cancel
+                </a>
+                <button type="submit"
+                        class="rounded-lg bg-primary-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-primary-700 focus:outline-none focus:ring-4 focus:ring-primary-300 dark:bg-primary-600 dark:hover:bg-primary-700 dark:focus:ring-primary-800"
+                        :disabled="!isValid">
+                    Create Payment
+                </button>
+            </div>
+        </form>
+    </div>
+
+    {% if invoice %}
+    <!-- Selected Invoice Card -->
+    <div class="rounded-xl border border-primary-200 bg-primary-50 p-6 dark:border-primary-800 dark:bg-primary-900/20">
+        <h3 class="mb-4 text-lg font-medium text-slate-900 dark:text-white">Selected Invoice</h3>
+        <div class="grid gap-4 sm:grid-cols-4">
+            <div>
+                <p class="text-xs uppercase tracking-wide text-slate-500">Invoice</p>
+                <p class="text-sm font-medium text-slate-900 dark:text-white">{{ invoice.invoice_number }}</p>
+            </div>
+            <div>
+                <p class="text-xs uppercase tracking-wide text-slate-500">Due Date</p>
+                <p class="text-sm font-medium text-slate-900 dark:text-white">{{ invoice.due_date }}</p>
+            </div>
+            <div>
+                <p class="text-xs uppercase tracking-wide text-slate-500">Total</p>
+                <p class="text-sm font-medium text-slate-900 dark:text-white">{{ invoice.total_amount }}</p>
+            </div>
+            <div>
+                <p class="text-xs uppercase tracking-wide text-slate-500">Balance</p>
+                <p class="text-sm font-medium text-slate-900 dark:text-white">{{ invoice.balance }}</p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Open Invoices Table with Allocation -->
+    <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800/50">
+        <h3 class="mb-4 text-lg font-medium text-slate-900 dark:text-white">Open Invoices - Select to Allocate Payment</h3>
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead>
+                    <tr class="border-b border-slate-200 text-left text-xs uppercase tracking-wider text-slate-500 dark:border-slate-700">
+                        <th class="px-4 py-3 w-10">
+                            <span class="sr-only">Select</span>
+                        </th>
+                        <th class="px-4 py-3">Invoice</th>
+                        <th class="px-4 py-3">Supplier</th>
+                        <th class="px-4 py-3">Due Date</th>
+                        <th class="px-4 py-3 text-right">Total</th>
+                        <th class="px-4 py-3 text-right">Balance</th>
+                        <th class="px-4 py-3 text-right">Allocate</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                    {% for inv in open_invoices %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50"
+                        :class="{ 'bg-primary-50 dark:bg-primary-900/20': selectedInvoices.includes('{{ inv.invoice_id }}') }">
+                        <td class="px-4 py-3">
+                            <input type="checkbox"
+                                   x-model="selectedInvoices"
+                                   value="{{ inv.invoice_id }}"
+                                   @change="updateAllocation('{{ inv.invoice_id }}', {{ inv.balance_raw }})"
+                                   class="rounded border-slate-300 text-primary-600 focus:ring-primary-500">
+                        </td>
+                        <td class="px-4 py-3 text-sm font-medium text-slate-900 dark:text-white">{{ inv.invoice_number }}</td>
+                        <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">{{ inv.supplier_name }}</td>
+                        <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">{{ inv.due_date }}</td>
+                        <td class="px-4 py-3 text-right text-sm text-slate-600 dark:text-slate-400">{{ inv.total_amount }}</td>
+                        <td class="px-4 py-3 text-right text-sm font-medium text-slate-900 dark:text-white">{{ inv.balance }}</td>
+                        <td class="px-4 py-3 text-right">
+                            <input type="number" step="0.01"
+                                   x-model.number="allocationAmounts['{{ inv.invoice_id }}']"
+                                   @input="recalculateGrossFromAllocations()"
+                                   :disabled="!selectedInvoices.includes('{{ inv.invoice_id }}')"
+                                   class="w-28 text-right text-sm rounded border-slate-300 dark:border-slate-600 dark:bg-slate-800 disabled:bg-slate-100 disabled:dark:bg-slate-900"
+                                   placeholder="0.00">
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="px-4 py-8 text-center text-sm text-slate-500">No open invoices</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Allocation Summary -->
+        <div class="mt-4 p-4 rounded-lg bg-slate-50 dark:bg-slate-900" x-show="selectedInvoices.length > 0">
+            <div class="flex justify-between text-sm">
+                <span class="text-slate-600 dark:text-slate-400">Total Allocated:</span>
+                <span class="font-medium" x-text="formatCurrency(totalAllocated)"></span>
+            </div>
+            <div class="flex justify-between text-sm mt-1" x-show="Math.abs(grossAmount - totalAllocated) > 0.01">
+                <span class="text-amber-600 dark:text-amber-400">Difference:</span>
+                <span class="font-medium text-amber-600" x-text="formatCurrency(grossAmount - totalAllocated)"></span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function paymentForm() {
+    // WHT codes lookup
+    const whtCodes = {
+        {% for code in wht_codes %}
+        '{{ code.id }}': { rate: {{ code.rate }}, code: '{{ code.code }}', name: '{{ code.name }}' },
+        {% endfor %}
+    };
+
+    // Pre-selected invoice data
+    const invoiceData = {{ invoice|tojson if invoice else 'null' }};
+
+    return {
+        // Form fields
+        supplierId: '{{ invoice.supplier_id if invoice else "" }}',
+        paymentDate: new Date().toISOString().split('T')[0],
+        bankAccountId: '',
+        paymentMethod: 'BANK_TRANSFER',
+        reference: '',
+        description: '',
+        currencyCode: '{{ invoice.currency_code if invoice else default_currency_code }}',
+
+        // WHT fields
+        hasWht: false,
+        whtCodeId: '',
+        whtRate: 0,
+        whtAmount: 0,
+
+        // Amount fields
+        grossAmount: invoiceData ? (invoiceData.balance_raw || 0) : 0,
+        netAmount: invoiceData ? (invoiceData.balance_raw || 0) : 0,
+        invoiceBalance: invoiceData ? (invoiceData.balance_raw || 0) : 0,
+
+        // Invoice reference
+        invoice: invoiceData,
+
+        // Allocation state - now editable
+        selectedInvoices: invoiceData ? [invoiceData.invoice_id] : [],
+        allocationAmounts: invoiceData ? { [invoiceData.invoice_id]: invoiceData.balance_raw || 0 } : {},
+
+        // Build allocations array from state
+        get allocations() {
+            return this.selectedInvoices
+                .filter(id => this.allocationAmounts[id] > 0)
+                .map(id => ({ invoice_id: id, amount: this.allocationAmounts[id] }));
+        },
+
+        // Total of all allocations
+        get totalAllocated() {
+            return this.selectedInvoices.reduce((sum, id) => {
+                return sum + (this.allocationAmounts[id] || 0);
+            }, 0);
+        },
+
+        get isValid() {
+            return this.supplierId &&
+                   this.bankAccountId &&
+                   this.grossAmount > 0 &&
+                   this.selectedInvoices.length > 0 &&
+                   (!this.hasWht || this.whtCodeId);
+        },
+
+        onSupplierChange() {
+            const option = document.querySelector(`select[name="supplier_id"] option[value="${this.supplierId}"]`);
+            if (option) {
+                const whtApplicable = option.dataset.whtApplicable === 'true';
+                const whtCodeId = option.dataset.whtCodeId;
+
+                if (whtApplicable && whtCodeId) {
+                    this.hasWht = true;
+                    this.whtCodeId = whtCodeId;
+                    this.calculateAmounts();
+                }
+            }
+        },
+
+        updateAllocation(invoiceId, balance) {
+            if (this.selectedInvoices.includes(invoiceId)) {
+                // Invoice selected - set allocation to balance
+                this.allocationAmounts[invoiceId] = balance;
+            } else {
+                // Invoice deselected - remove allocation
+                delete this.allocationAmounts[invoiceId];
+            }
+            this.recalculateGrossFromAllocations();
+        },
+
+        recalculateGrossFromAllocations() {
+            // Update gross amount based on total allocations
+            this.grossAmount = this.totalAllocated;
+            this.calculateAmounts();
+        },
+
+        calculateAmounts() {
+            if (this.hasWht && this.whtCodeId && whtCodes[this.whtCodeId]) {
+                this.whtRate = whtCodes[this.whtCodeId].rate;
+                this.whtAmount = Math.round(this.grossAmount * this.whtRate / 100 * 100) / 100;
+            } else {
+                this.whtRate = 0;
+                this.whtAmount = 0;
+            }
+            this.netAmount = Math.round((this.grossAmount - this.whtAmount) * 100) / 100;
+        },
+
+        formatCurrency(amount) {
+            return new Intl.NumberFormat('en-NG', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            }).format(amount || 0);
+        },
+
+        init() {
+            // Set today's date
+            this.paymentDate = new Date().toISOString().split('T')[0];
+
+            // Initialize amounts if invoice pre-selected
+            if (this.invoice) {
+                this.calculateAmounts();
+            }
+
+            // Check if supplier has default WHT
+            if (this.supplierId) {
+                this.onSupplierChange();
+            }
+        }
+    };
+}
+</script>
+{% endblock %}

@@ -1,0 +1,320 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}Appraisal Details{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a>
+    <span class="mx-2">/</span>
+    <a href="/people/perf/appraisals" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Appraisals</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">{{ appraisal.employee.full_name if appraisal.employee else 'Detail' }}</span>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+{% if appraisal.status.value == 'DRAFT' %}
+<a href="/people/perf/appraisals/{{ appraisal.appraisal_id }}/edit" class="btn btn-secondary">
+    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+    </svg>
+    Edit
+</a>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    {% if error %}
+    <div class="p-4 rounded-lg bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-800">
+        <div class="flex items-center gap-2 text-red-700 dark:text-red-400">
+            <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span>{{ error }}</span>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if success %}
+    <div class="p-4 rounded-lg bg-green-50 border border-green-200 dark:bg-green-900/20 dark:border-green-800">
+        <div class="flex items-center gap-2 text-green-700 dark:text-green-400">
+            <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+            </svg>
+            <span>{{ success }}</span>
+        </div>
+    </div>
+    {% endif %}
+
+    {# Appraisal Header Card #}
+    <div class="card p-6">
+        <div class="flex items-start justify-between">
+            <div class="flex items-start gap-4">
+                <div class="w-14 h-14 rounded-full bg-teal-100 dark:bg-teal-900 flex items-center justify-center">
+                    <span class="text-lg font-bold text-teal-600 dark:text-teal-400">
+                        {% if appraisal.employee %}
+                        {{ (appraisal.employee.full_name or '?')[0] }}
+                        {% else %}
+                        ?
+                        {% endif %}
+                    </span>
+                </div>
+                <div>
+                    <h2 class="text-xl font-semibold text-slate-900 dark:text-white">
+                        {{ appraisal.employee.full_name if appraisal.employee else 'Unknown Employee' }}
+                    </h2>
+                    <p class="text-slate-500 dark:text-slate-400">{{ appraisal.cycle.cycle_name if appraisal.cycle else 'Unknown Cycle' }}</p>
+                    <p class="text-sm text-slate-400 dark:text-slate-500">Manager: {{ appraisal.manager.full_name if appraisal.manager else 'Not assigned' }}</p>
+                </div>
+            </div>
+            <div>
+                {% set status_colors = {
+                    'DRAFT': 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300',
+                    'SELF_ASSESSMENT': 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
+                    'PENDING_REVIEW': 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300',
+                    'UNDER_REVIEW': 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
+                    'PENDING_CALIBRATION': 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300',
+                    'CALIBRATION': 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300',
+                    'COMPLETED': 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
+                    'CANCELLED': 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
+                } %}
+                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium {{ status_colors.get(appraisal.status.value, 'bg-slate-100 text-slate-700') }}">
+                    {{ appraisal.status.value | replace('_', ' ') | title }}
+                </span>
+            </div>
+        </div>
+    </div>
+
+    {# Status Workflow Actions #}
+    {% if appraisal.status.value not in ['COMPLETED', 'CANCELLED'] %}
+    <div class="card">
+        <div class="card-header">
+            <h3 class="font-medium text-slate-900 dark:text-white">Workflow Actions</h3>
+        </div>
+        <div class="card-body">
+            <div class="flex flex-wrap gap-3">
+                {% if appraisal.status.value == 'DRAFT' %}
+                <form method="post" action="/people/perf/appraisals/{{ appraisal.appraisal_id }}/start-self-assessment">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <button type="submit" class="btn btn-primary">Start Self Assessment</button>
+                </form>
+                <form method="post" action="/people/perf/appraisals/{{ appraisal.appraisal_id }}/cancel" onsubmit="return confirm('Are you sure you want to cancel this appraisal?')">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <button type="submit" class="btn btn-danger">Cancel Appraisal</button>
+                </form>
+                {% elif appraisal.status.value == 'SELF_ASSESSMENT' %}
+                <a href="/people/perf/appraisals/{{ appraisal.appraisal_id }}/self-assessment" class="btn btn-primary">
+                    Complete Self Assessment
+                </a>
+                {% elif appraisal.status.value == 'UNDER_REVIEW' %}
+                <a href="/people/perf/appraisals/{{ appraisal.appraisal_id }}/manager-review" class="btn btn-primary">
+                    Complete Manager Review
+                </a>
+                {% elif appraisal.status.value == 'CALIBRATION' %}
+                <a href="/people/perf/appraisals/{{ appraisal.appraisal_id }}/calibration" class="btn btn-primary">
+                    Complete Calibration
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {# Details Grid #}
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {# Appraisal Information #}
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Appraisal Information</h3>
+            </div>
+            <div class="card-body">
+                <dl class="space-y-3">
+                    <div class="flex justify-between">
+                        <dt class="text-slate-500 dark:text-slate-400">Cycle</dt>
+                        <dd class="text-slate-900 dark:text-white">{{ appraisal.cycle.cycle_name if appraisal.cycle else '-' }}</dd>
+                    </div>
+                    <div class="flex justify-between">
+                        <dt class="text-slate-500 dark:text-slate-400">Template</dt>
+                        <dd class="text-slate-900 dark:text-white">{{ appraisal.template.template_name if appraisal.template else '-' }}</dd>
+                    </div>
+                    <div class="flex justify-between">
+                        <dt class="text-slate-500 dark:text-slate-400">Created</dt>
+                        <dd class="text-slate-900 dark:text-white">{{ appraisal.created_at.strftime('%Y-%m-%d') if appraisal.created_at else '-' }}</dd>
+                    </div>
+                    {% if appraisal.completed_on %}
+                    <div class="flex justify-between">
+                        <dt class="text-slate-500 dark:text-slate-400">Completed</dt>
+                        <dd class="text-slate-900 dark:text-white">{{ appraisal.completed_on.strftime('%Y-%m-%d') }}</dd>
+                    </div>
+                    {% endif %}
+                </dl>
+            </div>
+        </div>
+
+        {# Ratings Summary #}
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Ratings Summary</h3>
+            </div>
+            <div class="card-body">
+                <dl class="space-y-3">
+                    {% if appraisal.self_overall_rating %}
+                    <div class="flex justify-between">
+                        <dt class="text-slate-500 dark:text-slate-400">Self Rating</dt>
+                        <dd class="text-slate-900 dark:text-white font-medium">{{ appraisal.self_overall_rating }}/5</dd>
+                    </div>
+                    {% endif %}
+                    {% if appraisal.manager_overall_rating %}
+                    <div class="flex justify-between">
+                        <dt class="text-slate-500 dark:text-slate-400">Manager Rating</dt>
+                        <dd class="text-slate-900 dark:text-white font-medium">{{ appraisal.manager_overall_rating }}/5</dd>
+                    </div>
+                    {% endif %}
+                    {% if appraisal.calibrated_rating %}
+                    <div class="flex justify-between">
+                        <dt class="text-slate-500 dark:text-slate-400">Calibrated Rating</dt>
+                        <dd class="text-slate-900 dark:text-white font-medium">{{ appraisal.calibrated_rating }}/5</dd>
+                    </div>
+                    {% endif %}
+                    {% if appraisal.final_rating %}
+                    <div class="flex justify-between">
+                        <dt class="text-slate-500 dark:text-slate-400">Final Rating</dt>
+                        <dd class="font-bold text-lg text-teal-600 dark:text-teal-400">
+                            {{ appraisal.final_rating }}/5
+                            {% if appraisal.rating_label %}
+                            <span class="text-sm font-normal text-slate-500 dark:text-slate-400">({{ appraisal.rating_label }})</span>
+                            {% endif %}
+                        </dd>
+                    </div>
+                    {% endif %}
+                    {% if appraisal.final_score %}
+                    <div class="flex justify-between">
+                        <dt class="text-slate-500 dark:text-slate-400">Final Score</dt>
+                        <dd class="text-slate-900 dark:text-white font-mono">{{ appraisal.final_score }}%</dd>
+                    </div>
+                    {% endif %}
+                </dl>
+            </div>
+        </div>
+    </div>
+
+    {# KRA Scores #}
+    {% if appraisal.kra_scores %}
+    <div class="card">
+        <div class="card-header">
+            <h3 class="font-medium text-slate-900 dark:text-white">KRA Scores</h3>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+                <thead>
+                    <tr class="bg-slate-50 dark:bg-slate-800/50">
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">KRA</th>
+                        <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Weight</th>
+                        <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Self</th>
+                        <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Manager</th>
+                        <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Final</th>
+                        <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Weighted</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                    {% for score in appraisal.kra_scores %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                        <td class="px-4 py-3 text-sm text-slate-900 dark:text-white">
+                            {{ score.kra.kra_name if score.kra else 'Unknown KRA' }}
+                        </td>
+                        <td class="px-4 py-3 text-sm text-right text-slate-600 dark:text-slate-400 font-mono">{{ score.weightage }}%</td>
+                        <td class="px-4 py-3 text-sm text-right text-slate-600 dark:text-slate-400">{{ score.self_rating or '-' }}</td>
+                        <td class="px-4 py-3 text-sm text-right text-slate-600 dark:text-slate-400">{{ score.manager_rating or '-' }}</td>
+                        <td class="px-4 py-3 text-sm text-right text-slate-900 dark:text-white font-medium">{{ score.final_rating or '-' }}</td>
+                        <td class="px-4 py-3 text-sm text-right text-slate-900 dark:text-white font-mono">{{ score.weighted_score or '-' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    {# Self Assessment Details #}
+    {% if appraisal.self_summary or appraisal.achievements or appraisal.challenges or appraisal.development_needs %}
+    <div class="card">
+        <div class="card-header">
+            <h3 class="font-medium text-slate-900 dark:text-white">Self Assessment</h3>
+            {% if appraisal.self_assessment_date %}
+            <span class="text-sm text-slate-500 dark:text-slate-400">Submitted: {{ appraisal.self_assessment_date.strftime('%Y-%m-%d') }}</span>
+            {% endif %}
+        </div>
+        <div class="card-body space-y-4">
+            {% if appraisal.self_summary %}
+            <div>
+                <h4 class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Summary</h4>
+                <p class="text-slate-600 dark:text-slate-400 whitespace-pre-wrap">{{ appraisal.self_summary }}</p>
+            </div>
+            {% endif %}
+            {% if appraisal.achievements %}
+            <div>
+                <h4 class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Key Achievements</h4>
+                <p class="text-slate-600 dark:text-slate-400 whitespace-pre-wrap">{{ appraisal.achievements }}</p>
+            </div>
+            {% endif %}
+            {% if appraisal.challenges %}
+            <div>
+                <h4 class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Challenges Faced</h4>
+                <p class="text-slate-600 dark:text-slate-400 whitespace-pre-wrap">{{ appraisal.challenges }}</p>
+            </div>
+            {% endif %}
+            {% if appraisal.development_needs %}
+            <div>
+                <h4 class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Development Needs</h4>
+                <p class="text-slate-600 dark:text-slate-400 whitespace-pre-wrap">{{ appraisal.development_needs }}</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    {# Manager Review Details #}
+    {% if appraisal.manager_summary or appraisal.manager_recommendations %}
+    <div class="card">
+        <div class="card-header">
+            <h3 class="font-medium text-slate-900 dark:text-white">Manager Review</h3>
+            {% if appraisal.manager_review_date %}
+            <span class="text-sm text-slate-500 dark:text-slate-400">Completed: {{ appraisal.manager_review_date.strftime('%Y-%m-%d') }}</span>
+            {% endif %}
+        </div>
+        <div class="card-body space-y-4">
+            {% if appraisal.manager_summary %}
+            <div>
+                <h4 class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Summary</h4>
+                <p class="text-slate-600 dark:text-slate-400 whitespace-pre-wrap">{{ appraisal.manager_summary }}</p>
+            </div>
+            {% endif %}
+            {% if appraisal.manager_recommendations %}
+            <div>
+                <h4 class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Recommendations</h4>
+                <p class="text-slate-600 dark:text-slate-400 whitespace-pre-wrap">{{ appraisal.manager_recommendations }}</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    {# Calibration Notes #}
+    {% if appraisal.calibration_notes %}
+    <div class="card">
+        <div class="card-header">
+            <h3 class="font-medium text-slate-900 dark:text-white">Calibration Notes</h3>
+            {% if appraisal.calibration_date %}
+            <span class="text-sm text-slate-500 dark:text-slate-400">Completed: {{ appraisal.calibration_date.strftime('%Y-%m-%d') }}</span>
+            {% endif %}
+        </div>
+        <div class="card-body">
+            <p class="text-slate-600 dark:text-slate-400 whitespace-pre-wrap">{{ appraisal.calibration_notes }}</p>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

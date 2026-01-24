@@ -11,12 +11,12 @@ from unittest.mock import MagicMock
 import pytest
 
 # Import actual enums from models
-from app.models.ifrs.fin_inst.financial_instrument import (
+from app.models.finance.fin_inst.financial_instrument import (
     InstrumentType,
     InstrumentClassification,
     InstrumentStatus,
 )
-from app.models.ifrs.fin_inst.hedge_relationship import HedgeType, HedgeStatus
+from app.models.finance.fin_inst.hedge_relationship import HedgeType, HedgeStatus
 
 
 # ============ Mock Models ============

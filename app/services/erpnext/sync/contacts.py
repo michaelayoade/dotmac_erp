@@ -1,5 +1,5 @@
 """
-Contact Sync Service - ERPNext to DotMac Books (Customers/Suppliers).
+Contact Sync Service - ERPNext to DotMac ERP (Customers/Suppliers).
 """
 import uuid
 from datetime import datetime
@@ -8,17 +8,17 @@ from typing import Any, Optional
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.ifrs.gl.account import Account
-from app.models.ifrs.ar.customer import Customer
-from app.models.ifrs.ap.supplier import Supplier
+from app.models.finance.gl.account import Account
+from app.models.finance.ar.customer import Customer
+from app.models.finance.ap.supplier import Supplier
 from app.services.erpnext.mappings.contacts import CustomerMapping, SupplierMapping
 
 from .base import BaseSyncService
 
 
-# Default account codes
-DEFAULT_AP_ACCOUNT = "ACC00007"  # Accounts Payable
-DEFAULT_AR_ACCOUNT = "ACC00005"  # Accounts Receivable
+# Default account codes (from Chart of Accounts)
+DEFAULT_AP_ACCOUNT = "2000"  # Trade Payables
+DEFAULT_AR_ACCOUNT = "1400"  # Trade Receivables
 
 
 # Customer type mapping
@@ -90,7 +90,7 @@ class CustomerSyncService(BaseSyncService[Customer]):
             yield from client.get_customers()
 
     def transform_record(self, record: dict[str, Any]) -> dict[str, Any]:
-        """Transform ERPNext customer to DotMac Books format."""
+        """Transform ERPNext customer to DotMac ERP format."""
         return self._mapping.transform_record(record)
 
     def create_entity(self, data: dict[str, Any]) -> Customer:
@@ -219,7 +219,7 @@ class SupplierSyncService(BaseSyncService[Supplier]):
             yield from client.get_suppliers()
 
     def transform_record(self, record: dict[str, Any]) -> dict[str, Any]:
-        """Transform ERPNext supplier to DotMac Books format."""
+        """Transform ERPNext supplier to DotMac ERP format."""
         return self._mapping.transform_record(record)
 
     def create_entity(self, data: dict[str, Any]) -> Supplier:

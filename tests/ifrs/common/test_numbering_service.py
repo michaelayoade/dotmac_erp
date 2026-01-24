@@ -9,11 +9,11 @@ from datetime import date, datetime
 from unittest.mock import MagicMock, AsyncMock, patch
 from uuid import uuid4
 
-from app.models.ifrs.core_config.numbering_sequence import (
+from app.models.finance.core_config.numbering_sequence import (
     SequenceType,
     ResetFrequency,
 )
-from app.services.ifrs.common.numbering import (
+from app.services.finance.common.numbering import (
     NumberingService,
     SyncNumberingService,
     DEFAULT_PREFIXES,

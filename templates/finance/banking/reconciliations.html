@@ -1,0 +1,165 @@
+{% extends "finance/base_finance.html" %}
+{% from "components/macros.html" import pagination, status_badge, empty_state, stats_card %}
+
+{% block page_title %}Bank Reconciliations{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="font-medium text-slate-900 dark:text-white">Bank Reconciliations</span>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<a href="/finance/banking/reconciliations/new" data-testid="bank-reconciliations-new" class="btn btn-primary">
+    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+    </svg>
+    New Reconciliation
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    {# Stats Row #}
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" data-testid="bank-reconciliations-stats">
+        {{ stats_card("Total", total_count | default(0), icon="document", color="slate") }}
+        {{ stats_card("In Progress", in_progress_count | default(0), icon="clock", color="amber") }}
+        {{ stats_card("Pending Review", pending_review_count | default(0), icon="eye", color="blue") }}
+        {{ stats_card("Approved", approved_count | default(0), icon="check-circle", color="emerald") }}
+    </div>
+
+    {# Filters #}
+    <div class="card p-4">
+        <form method="get" action="/finance/banking/reconciliations" class="flex flex-wrap items-center gap-4">
+            {# Account Filter #}
+            <select name="account_id" data-testid="bank-reconciliations-account" class="form-select">
+                <option value="">All Accounts</option>
+                {% for acc in accounts %}
+                <option value="{{ acc.bank_account_id }}" {{ 'selected' if account_id == acc.bank_account_id|string else '' }}>
+                    {{ acc.bank_name }} - {{ acc.account_number }}
+                </option>
+                {% endfor %}
+            </select>
+
+            {# Status Filter #}
+            <select name="status" data-testid="bank-reconciliations-status" class="form-select">
+                <option value="">All Status</option>
+                {% for s in statuses | default(['draft', 'in_progress', 'pending_review', 'approved', 'rejected']) %}
+                <option value="{{ s }}" {{ 'selected' if status == s else '' }}>{{ s | replace('_', ' ') | title }}</option>
+                {% endfor %}
+            </select>
+
+            {# Date Range #}
+            <input type="date" name="start_date" value="{{ start_date | default('') }}"
+                   data-testid="bank-reconciliations-start-date"
+                   class="form-input" placeholder="Start Date">
+            <input type="date" name="end_date" value="{{ end_date | default('') }}"
+                   data-testid="bank-reconciliations-end-date"
+                   class="form-input" placeholder="End Date">
+
+            {# Actions #}
+            <button type="submit" class="btn btn-primary">
+                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
+                </svg>
+                Filter
+            </button>
+
+            {% if account_id or status or start_date or end_date %}
+            <a href="/finance/banking/reconciliations" class="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300 transition-colors">
+                Clear
+            </a>
+            {% endif %}
+        </form>
+    </div>
+
+    {# Reconciliations Table #}
+    <div class="card">
+        <div class="table-container">
+            <table class="table" data-testid="bank-reconciliations-table">
+                <thead>
+                    <tr>
+                        <th>Bank Account</th>
+                        <th>Period</th>
+                        <th class="text-right">Statement Balance</th>
+                        <th class="text-right">GL Balance</th>
+                        <th class="text-right">Difference</th>
+                        <th class="text-center">Status</th>
+                        <th class="text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for recon in reconciliations %}
+                    <tr class="group">
+                        <td>
+                            <a href="/finance/banking/reconciliations/{{ recon.reconciliation_id }}" class="text-sm font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300 transition-colors">
+                                {{ recon.bank_name | default("Bank Account") }}
+                            </a>
+                            <p class="font-mono text-xs text-slate-500 dark:text-slate-400">{{ recon.account_number | default("") }}</p>
+                        </td>
+                        <td>
+                            <p class="text-sm text-slate-900 dark:text-white">{{ recon.reconciliation_date }}</p>
+                            <p class="text-xs text-slate-500 dark:text-slate-400">{{ recon.period_start }} - {{ recon.period_end }}</p>
+                        </td>
+                        <td class="text-right font-mono font-medium text-slate-900 dark:text-white">{{ recon.statement_closing_balance }}</td>
+                        <td class="text-right font-mono font-medium text-slate-900 dark:text-white">{{ recon.gl_closing_balance }}</td>
+                        <td class="text-right font-mono font-medium {{ 'text-emerald-600 dark:text-emerald-400' if recon.reconciliation_difference == 0 else 'text-rose-600 dark:text-rose-400' }}">
+                            {{ recon.reconciliation_difference }}
+                        </td>
+                        <td class="text-center">
+                            {{ status_badge(recon.status | default('draft'), 'sm') }}
+                        </td>
+                        <td>
+                            <div class="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <a href="/finance/banking/reconciliations/{{ recon.reconciliation_id }}"
+                                   class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300 transition-colors"
+                                   title="View reconciliation">
+                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                                    </svg>
+                                </a>
+                                {% if recon.status == 'approved' %}
+                                <a href="/finance/banking/reconciliations/{{ recon.reconciliation_id }}/report"
+                                   class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300 transition-colors"
+                                   title="View report">
+                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                    </svg>
+                                </a>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="py-12">
+                            {{ empty_state(
+                                'No reconciliations found',
+                                'Start your first bank reconciliation' if not (account_id or status or start_date or end_date) else 'Try adjusting your filter criteria',
+                                'check-circle',
+                                'New Reconciliation' if not (account_id or status or start_date or end_date) else none,
+                                '/banking/reconciliations/new' if not (account_id or status or start_date or end_date) else none
+                            ) }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {# Pagination #}
+        {{ pagination(
+            page=page | default(1),
+            total_pages=total_pages | default(1),
+            total_count=total_count | default(0),
+            limit=limit | default(50),
+            filters={"account_id": account_id, "status": status, "start_date": start_date, "end_date": end_date}
+        ) }}
+    </div>
+</div>
+{% endblock %}

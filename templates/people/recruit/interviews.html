@@ -1,0 +1,156 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}Interviews{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">Interviews</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">Interviews</h1>
+            <p class="text-sm text-slate-500 dark:text-slate-400">Schedule and manage candidate interviews</p>
+        </div>
+        <a href="/people/recruit/interviews/new" class="btn btn-primary">
+            <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+            </svg>
+            Schedule Interview
+        </a>
+    </div>
+
+    <div class="card">
+        <form method="get" class="p-4">
+            <div class="flex flex-wrap gap-4 items-end">
+                <div class="w-44">
+                    <label for="status" class="form-label">Status</label>
+                    <select name="status" id="status" class="form-select w-full">
+                        <option value="">All</option>
+                        {% for s in statuses %}
+                        <option value="{{ s }}" {% if status == s %}selected{% endif %}>{{ s | replace('_', ' ') | title }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="w-56">
+                    <label for="job_opening_id" class="form-label">Job Opening</label>
+                    <select name="job_opening_id" id="job_opening_id" class="form-select w-full">
+                        <option value="">All</option>
+                        {% for opening in job_openings %}
+                        <option value="{{ opening.job_opening_id }}" {% if job_opening_id == opening.job_opening_id|string %}selected{% endif %}>
+                            {{ opening.job_title }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="w-56">
+                    <label for="applicant_id" class="form-label">Applicant</label>
+                    <select name="applicant_id" id="applicant_id" class="form-select w-full">
+                        <option value="">All</option>
+                        {% for applicant in applicants %}
+                        <option value="{{ applicant.applicant_id }}" {% if applicant_id == applicant.applicant_id|string %}selected{% endif %}>
+                            {{ applicant.full_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="w-44">
+                    <label for="start_date" class="form-label">From</label>
+                    <input type="date" name="start_date" id="start_date" value="{{ start_date | default('') }}"
+                        class="form-input w-full">
+                </div>
+                <div class="w-44">
+                    <label for="end_date" class="form-label">To</label>
+                    <input type="date" name="end_date" id="end_date" value="{{ end_date | default('') }}"
+                        class="form-input w-full">
+                </div>
+                <button type="submit" class="btn btn-secondary h-10">Filter</button>
+            </div>
+        </form>
+    </div>
+
+    {% if interviews %}
+    <div class="card overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+                <thead>
+                    <tr class="bg-slate-50 dark:bg-slate-800/50">
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Scheduled</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Round</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Applicant</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Interviewer</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Status</th>
+                        <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                    {% for interview in interviews %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer" onclick="window.location='/people/recruit/interviews/{{ interview.interview_id }}'">
+                        <td class="px-4 py-3 text-sm">
+                            <div class="font-medium text-slate-900 dark:text-white">{{ interview.scheduled_from.strftime('%b %d, %Y') }}</div>
+                            <div class="text-xs text-slate-500 dark:text-slate-400">{{ interview.scheduled_from.strftime('%I:%M %p') }} - {{ interview.interview_type | replace('_', ' ') }}</div>
+                        </td>
+                        <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">
+                            {{ interview.round.value | replace('_', ' ') | title }}
+                        </td>
+                        <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">
+                            {{ interview.applicant.full_name if interview.applicant else '-' }}
+                        </td>
+                        <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">
+                            {% if interview.interviewer %}
+                            {{ interview.interviewer.first_name }} {{ interview.interviewer.last_name }}
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3">
+                            {% set status_color = {
+                                'SCHEDULED': 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
+                                'RESCHEDULED': 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
+                                'IN_PROGRESS': 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-300',
+                                'COMPLETED': 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
+                                'CANCELLED': 'bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300',
+                                'NO_SHOW': 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300',
+                            }.get(interview.status.value, 'bg-slate-100 text-slate-800') %}
+                            <span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full {{ status_color }}">{{ interview.status.value | replace('_', ' ') | title }}</span>
+                        </td>
+                        <td class="px-4 py-3 text-right">
+                            <a href="/people/recruit/interviews/{{ interview.interview_id }}" class="text-teal-600 dark:text-teal-400 hover:underline text-sm">View</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% else %}
+    <div class="card p-8 text-center">
+        <p class="text-slate-500 dark:text-slate-400">No interviews found.</p>
+    </div>
+    {% endif %}
+
+    {% if total_pages > 1 %}
+    <div class="flex items-center justify-between">
+        <p class="text-sm text-slate-500 dark:text-slate-400">
+            Showing page <span class="font-medium text-slate-700 dark:text-slate-300">{{ page }}</span> of
+            <span class="font-medium text-slate-700 dark:text-slate-300">{{ total_pages }}</span>
+        </p>
+        <div class="flex gap-2">
+            {% if has_prev %}
+            <a href="?page={{ page - 1 }}&status={{ status | default('') }}&job_opening_id={{ job_opening_id | default('') }}&applicant_id={{ applicant_id | default('') }}&start_date={{ start_date | default('') }}&end_date={{ end_date | default('') }}" class="btn btn-secondary btn-sm">Previous</a>
+            {% endif %}
+            {% if has_next %}
+            <a href="?page={{ page + 1 }}&status={{ status | default('') }}&job_opening_id={{ job_opening_id | default('') }}&applicant_id={{ applicant_id | default('') }}&start_date={{ start_date | default('') }}&end_date={{ end_date | default('') }}" class="btn btn-secondary btn-sm">Next</a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,230 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}{{ "Edit Job Offer" if offer else "Create Job Offer" }}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/recruit/offers" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Job Offers</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">{{ "Edit" if offer else "New" }}</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-6">
+    <div>
+        <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">{{ "Edit Job Offer" if offer else "Create Job Offer" }}</h1>
+        <p class="text-sm text-slate-500 dark:text-slate-400">{{ "Update offer details" if offer else "Create a new job offer for a candidate" }}</p>
+    </div>
+
+    {% if error %}
+    <div class="rounded-lg bg-rose-50 dark:bg-rose-900/30 border border-rose-200 dark:border-rose-800 p-4">
+        <div class="flex">
+            <svg class="h-5 w-5 text-rose-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clip-rule="evenodd" />
+            </svg>
+            <div class="ml-3">
+                <p class="text-sm font-medium text-rose-800 dark:text-rose-200">{{ error }}</p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <form method="post" class="card">
+        {{ request.state.csrf_form | safe }}
+
+        <!-- Applicant & Position Selection -->
+        {% if not offer %}
+        <div class="p-6 border-b border-slate-200 dark:border-slate-700">
+            <h2 class="text-lg font-medium text-slate-900 dark:text-white mb-4">Candidate & Position</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <label for="applicant_id" class="form-label">Applicant <span class="text-rose-500">*</span></label>
+                    <select name="applicant_id" id="applicant_id" required class="form-select w-full">
+                        <option value="">Select applicant</option>
+                        {% for applicant in applicants %}
+                        <option value="{{ applicant.applicant_id }}" {% if form_data.get('applicant_id') == applicant.applicant_id|string %}selected{% endif %}>
+                            {{ applicant.full_name }} - {{ applicant.job_opening.job_title if applicant.job_opening else 'No Position' }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label for="job_opening_id" class="form-label">Job Opening <span class="text-rose-500">*</span></label>
+                    <select name="job_opening_id" id="job_opening_id" required class="form-select w-full">
+                        <option value="">Select job opening</option>
+                        {% for opening in job_openings %}
+                        <option value="{{ opening.job_opening_id }}" {% if form_data.get('job_opening_id') == opening.job_opening_id|string %}selected{% endif %}>
+                            {{ opening.job_code }} - {{ opening.job_title }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Position Details -->
+        <div class="p-6 border-b border-slate-200 dark:border-slate-700">
+            <h2 class="text-lg font-medium text-slate-900 dark:text-white mb-4">Position Details</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <label for="designation_id" class="form-label">Designation <span class="text-rose-500">*</span></label>
+                    <select name="designation_id" id="designation_id" required class="form-select w-full">
+                        <option value="">Select designation</option>
+                        {% for designation in designations %}
+                        <option value="{{ designation.designation_id }}" {% if (form_data.get('designation_id') or (offer.designation_id|string if offer else '')) == designation.designation_id|string %}selected{% endif %}>
+                            {{ designation.title }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label for="department_id" class="form-label">Department</label>
+                    <select name="department_id" id="department_id" class="form-select w-full">
+                        <option value="">Select department</option>
+                        {% for dept in departments %}
+                        <option value="{{ dept.department_id }}" {% if (form_data.get('department_id') or (offer.department_id|string if offer else '')) == dept.department_id|string %}selected{% endif %}>
+                            {{ dept.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label for="employment_type" class="form-label">Employment Type <span class="text-rose-500">*</span></label>
+                    <select name="employment_type" id="employment_type" required class="form-select w-full">
+                        {% for t in employment_types %}
+                        <option value="{{ t }}" {% if (form_data.get('employment_type') or (offer.employment_type if offer else 'FULL_TIME')) == t %}selected{% endif %}>
+                            {{ t | replace('_', ' ') | title }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Dates -->
+        <div class="p-6 border-b border-slate-200 dark:border-slate-700">
+            <h2 class="text-lg font-medium text-slate-900 dark:text-white mb-4">Key Dates</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div>
+                    <label for="offer_date" class="form-label">Offer Date <span class="text-rose-500">*</span></label>
+                    <input type="date" name="offer_date" id="offer_date" required
+                        value="{{ form_data.get('offer_date', offer.offer_date.isoformat() if offer else '') }}"
+                        class="form-input w-full">
+                </div>
+                <div>
+                    <label for="valid_until" class="form-label">Valid Until <span class="text-rose-500">*</span></label>
+                    <input type="date" name="valid_until" id="valid_until" required
+                        value="{{ form_data.get('valid_until', offer.valid_until.isoformat() if offer else '') }}"
+                        class="form-input w-full">
+                </div>
+                <div>
+                    <label for="expected_joining_date" class="form-label">Expected Joining Date <span class="text-rose-500">*</span></label>
+                    <input type="date" name="expected_joining_date" id="expected_joining_date" required
+                        value="{{ form_data.get('expected_joining_date', offer.expected_joining_date.isoformat() if offer else '') }}"
+                        class="form-input w-full">
+                </div>
+            </div>
+        </div>
+
+        <!-- Compensation -->
+        <div class="p-6 border-b border-slate-200 dark:border-slate-700">
+            <h2 class="text-lg font-medium text-slate-900 dark:text-white mb-4">Compensation</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div>
+                    <label for="base_salary" class="form-label">Base Salary <span class="text-rose-500">*</span></label>
+                    <input type="number" name="base_salary" id="base_salary" required step="0.01" min="0"
+                        value="{{ form_data.get('base_salary', offer.base_salary if offer else '') }}"
+                        class="form-input w-full">
+                </div>
+                <div>
+                    <label for="currency_code" class="form-label">Currency <span class="text-rose-500">*</span></label>
+                    <select name="currency_code" id="currency_code" required class="form-select w-full">
+                        <option value="NGN" {% if (form_data.get('currency_code') or (offer.currency_code if offer else 'NGN')) == 'NGN' %}selected{% endif %}>NGN - Nigerian Naira</option>
+                        <option value="USD" {% if (form_data.get('currency_code') or (offer.currency_code if offer else '')) == 'USD' %}selected{% endif %}>USD - US Dollar</option>
+                        <option value="GBP" {% if (form_data.get('currency_code') or (offer.currency_code if offer else '')) == 'GBP' %}selected{% endif %}>GBP - British Pound</option>
+                        <option value="EUR" {% if (form_data.get('currency_code') or (offer.currency_code if offer else '')) == 'EUR' %}selected{% endif %}>EUR - Euro</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="pay_frequency" class="form-label">Pay Frequency <span class="text-rose-500">*</span></label>
+                    <select name="pay_frequency" id="pay_frequency" required class="form-select w-full">
+                        {% for f in pay_frequencies %}
+                        <option value="{{ f }}" {% if (form_data.get('pay_frequency') or (offer.pay_frequency if offer else 'MONTHLY')) == f %}selected{% endif %}>
+                            {{ f | replace('_', ' ') | title }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label for="signing_bonus" class="form-label">Signing Bonus</label>
+                    <input type="number" name="signing_bonus" id="signing_bonus" step="0.01" min="0"
+                        value="{{ form_data.get('signing_bonus', offer.signing_bonus if offer else '') }}"
+                        class="form-input w-full"
+                        placeholder="Optional">
+                </div>
+                <div>
+                    <label for="relocation_allowance" class="form-label">Relocation Allowance</label>
+                    <input type="number" name="relocation_allowance" id="relocation_allowance" step="0.01" min="0"
+                        value="{{ form_data.get('relocation_allowance', offer.relocation_allowance if offer else '') }}"
+                        class="form-input w-full"
+                        placeholder="Optional">
+                </div>
+            </div>
+            <div class="mt-6">
+                <label for="other_benefits" class="form-label">Other Benefits</label>
+                <textarea name="other_benefits" id="other_benefits" rows="2" class="form-input w-full"
+                    placeholder="e.g., Health insurance, Company car, Stock options...">{{ form_data.get('other_benefits', offer.other_benefits if offer else '') }}</textarea>
+            </div>
+        </div>
+
+        <!-- Employment Terms -->
+        <div class="p-6 border-b border-slate-200 dark:border-slate-700">
+            <h2 class="text-lg font-medium text-slate-900 dark:text-white mb-4">Employment Terms</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <label for="probation_months" class="form-label">Probation Period (Months)</label>
+                    <input type="number" name="probation_months" id="probation_months" min="0"
+                        value="{{ form_data.get('probation_months', offer.probation_months if offer else 3) }}"
+                        class="form-input w-full">
+                </div>
+                <div>
+                    <label for="notice_period_days" class="form-label">Notice Period (Days)</label>
+                    <input type="number" name="notice_period_days" id="notice_period_days" min="0"
+                        value="{{ form_data.get('notice_period_days', offer.notice_period_days if offer else 30) }}"
+                        class="form-input w-full">
+                </div>
+            </div>
+            <div class="mt-6">
+                <label for="terms_and_conditions" class="form-label">Terms & Conditions</label>
+                <textarea name="terms_and_conditions" id="terms_and_conditions" rows="4" class="form-input w-full"
+                    placeholder="Additional terms and conditions for the offer...">{{ form_data.get('terms_and_conditions', offer.terms_and_conditions if offer else '') }}</textarea>
+            </div>
+        </div>
+
+        <!-- Internal Notes -->
+        <div class="p-6 border-b border-slate-200 dark:border-slate-700">
+            <h2 class="text-lg font-medium text-slate-900 dark:text-white mb-4">Internal Notes</h2>
+            <div>
+                <label for="notes" class="form-label">Notes</label>
+                <textarea name="notes" id="notes" rows="3" class="form-input w-full"
+                    placeholder="Internal notes (not visible to candidate)...">{{ form_data.get('notes', offer.notes if offer else '') }}</textarea>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="p-6 flex items-center justify-end gap-3">
+            <a href="{{ '/people/recruit/offers/' ~ offer.offer_id if offer else '/people/recruit/offers' }}" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">
+                <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                </svg>
+                {{ "Update Offer" if offer else "Create Offer" }}
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

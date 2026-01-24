@@ -1,0 +1,115 @@
+{% extends "expense/base_expense.html" %}
+
+{% block page_title %}Expense Claim{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 mt-1">
+    <a href="/expense" class="hover:text-slate-700 dark:hover:text-slate-300">Expense</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <a href="/expense/claims/list" class="hover:text-slate-700 dark:hover:text-slate-300">Claims</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="text-slate-700 dark:text-slate-300">{{ claim.claim_number }}</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    {% if error %}
+    <div class="card p-4 border border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-900/20 dark:text-rose-400">
+        Action failed. Please try again or contact support. ({{ error }})
+    </div>
+    {% elif action == "approved" %}
+    <div class="card p-4 border border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-400">
+        Claim approved.
+    </div>
+    {% elif action == "rejected" %}
+    <div class="card p-4 border border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-400">
+        Claim rejected.
+    </div>
+    {% endif %}
+
+    <div class="card p-6">
+        <div class="flex flex-wrap items-center justify-between gap-4">
+            <div>
+                <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">{{ claim.claim_number }}</h1>
+                <p class="text-sm text-slate-500 dark:text-slate-400">{{ claim.purpose }}</p>
+            </div>
+            <div class="flex items-center gap-3">
+                <span class="badge badge-neutral">{{ claim.status.value if claim.status else 'DRAFT' }}</span>
+                {% if can_paystack %}
+                <a href="/finance/payments/reimburse/{{ claim.claim_id }}" class="btn btn-primary">
+                    Pay with Paystack
+                </a>
+                {% endif %}
+                {% if can_act %}
+                <form method="post" action="/expense/claims/{{ claim.claim_id }}/approve">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <button type="submit" class="btn btn-primary">Approve</button>
+                </form>
+                <form method="post" action="/expense/claims/{{ claim.claim_id }}/reject" class="flex items-center gap-2">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <input type="text" name="reason" class="form-input w-48" placeholder="Rejection reason" required>
+                    <button type="submit" class="btn btn-secondary">Reject</button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+        <div class="mt-4 grid gap-4 sm:grid-cols-3">
+            <div>
+                <p class="text-xs uppercase tracking-wider text-slate-400 dark:text-slate-500">Employee</p>
+                <p class="text-sm font-medium text-slate-900 dark:text-white">{{ claim.employee.full_name if claim.employee else '-' }}</p>
+            </div>
+            <div>
+                <p class="text-xs uppercase tracking-wider text-slate-400 dark:text-slate-500">Claim Date</p>
+                <p class="text-sm font-medium text-slate-900 dark:text-white">{{ claim.claim_date }}</p>
+            </div>
+            <div>
+                <p class="text-xs uppercase tracking-wider text-slate-400 dark:text-slate-500">Total</p>
+                <p class="text-sm font-medium text-slate-900 dark:text-white">{{ claim.total_claimed_amount }}</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="card overflow-hidden">
+        <div class="table-container">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Category</th>
+                        <th>Description</th>
+                        <th class="text-right">Amount</th>
+                        <th>Receipt</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in claim.items %}
+                    <tr>
+                        <td class="text-slate-500">{{ item.expense_date }}</td>
+                        <td class="text-slate-700 dark:text-slate-300">{{ item.category.category_name if item.category else '-' }}</td>
+                        <td class="text-slate-900 dark:text-white">{{ item.description }}</td>
+                        <td class="text-right font-mono text-slate-900 dark:text-white">{{ item.claimed_amount }}</td>
+                        <td class="text-slate-500">
+                            {% if item.receipt_url %}
+                            <span class="font-mono text-xs">{{ item.receipt_url }}</span>
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    {% if not claim.items %}
+                    <tr>
+                        <td colspan="5" class="text-center text-slate-500">No items on this claim.</td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

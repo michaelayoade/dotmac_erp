@@ -12,6 +12,7 @@ from app.services.email import (
     _get_smtp_config,
     send_email,
     send_password_reset_email,
+    validate_smtp_config,
 )
 
 
@@ -116,6 +117,44 @@ class TestSmtpConfig:
         assert config["use_ssl"] is True
         assert config["from_email"] == "app@example.com"
         assert config["from_name"] == "My App"
+
+
+class TestValidateSmtpConfig:
+    """Tests for SMTP validation."""
+
+    def test_validate_smtp_config_requires_host(self):
+        """Test validation fails when host is missing."""
+        ok, error = validate_smtp_config({"host": "", "port": 587})
+        assert ok is False
+        assert error is not None
+
+    def test_validate_smtp_config_rejects_tls_and_ssl(self):
+        """Test validation fails when TLS and SSL are both enabled."""
+        ok, error = validate_smtp_config(
+            {"host": "smtp.example.com", "port": 587, "use_tls": True, "use_ssl": True}
+        )
+        assert ok is False
+        assert error is not None
+
+    def test_validate_smtp_config_success_with_tls_and_auth(self):
+        """Test validation succeeds with TLS and authentication."""
+        mock_smtp = MagicMock()
+        with patch("app.services.email.smtplib.SMTP", return_value=mock_smtp):
+            ok, error = validate_smtp_config(
+                {
+                    "host": "smtp.example.com",
+                    "port": 587,
+                    "use_tls": True,
+                    "use_ssl": False,
+                    "username": "user",
+                    "password": "pass",
+                }
+            )
+
+        assert ok is True
+        assert error is None
+        mock_smtp.starttls.assert_called_once()
+        mock_smtp.login.assert_called_once_with("user", "pass")
 
 
 class TestSendEmail:

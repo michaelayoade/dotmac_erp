@@ -9,7 +9,7 @@ from uuid import uuid4
 
 import pytest
 
-from app.services.ifrs.platform.org_context import (
+from app.services.finance.platform.org_context import (
     OrgContextService,
     org_context_service,
 )

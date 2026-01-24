@@ -8,7 +8,7 @@ from uuid import uuid4
 
 import pytest
 
-from app.services.ifrs.ar.customer import (
+from app.services.finance.ar.customer import (
     CustomerService,
     CustomerInput,
 )
@@ -42,7 +42,7 @@ def user_id():
 @pytest.fixture
 def sample_customer_input():
     """Create sample customer input."""
-    from app.models.ifrs.ar.customer import CustomerType, RiskCategory
+    from app.models.finance.ar.customer import CustomerType, RiskCategory
 
     return CustomerInput(
         customer_code="CUS-001",
@@ -191,7 +191,7 @@ class TestUpdateRiskCategory:
 
     def test_update_risk_category_success(self, mock_db, org_id):
         """Test successful risk category update."""
-        from app.models.ifrs.ar.customer import RiskCategory
+        from app.models.finance.ar.customer import RiskCategory
 
         customer = MockCustomer(
             organization_id=org_id,

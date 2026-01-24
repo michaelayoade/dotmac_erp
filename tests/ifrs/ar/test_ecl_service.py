@@ -17,7 +17,7 @@ from uuid import uuid4
 
 from fastapi import HTTPException
 
-from app.services.ifrs.ar.ecl import (
+from app.services.finance.ar.ecl import (
     ECLService,
     ECLCalculationInput,
     GeneralApproachInput,

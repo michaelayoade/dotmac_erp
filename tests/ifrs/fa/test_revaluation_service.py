@@ -22,7 +22,7 @@ class TestAssetRevaluationService:
 
     def test_create_revaluation_upward(self, mock_db, org_id, mock_asset, mock_category, user_id):
         """Test creating an upward revaluation (surplus)."""
-        from app.services.ifrs.fa.revaluation import AssetRevaluationService, RevaluationInput
+        from app.services.finance.fa.revaluation import AssetRevaluationService, RevaluationInput
 
         mock_asset.status = MockAssetStatus.ACTIVE
         mock_asset.net_book_value = Decimal("5000")
@@ -52,7 +52,7 @@ class TestAssetRevaluationService:
 
     def test_create_revaluation_downward(self, mock_db, org_id, mock_asset, mock_category, user_id):
         """Test creating a downward revaluation (deficit)."""
-        from app.services.ifrs.fa.revaluation import AssetRevaluationService, RevaluationInput
+        from app.services.finance.fa.revaluation import AssetRevaluationService, RevaluationInput
 
         mock_asset.status = MockAssetStatus.ACTIVE
         mock_asset.net_book_value = Decimal("5000")
@@ -78,7 +78,7 @@ class TestAssetRevaluationService:
 
     def test_create_revaluation_asset_not_found(self, mock_db, org_id, user_id):
         """Test revaluation creation fails when asset not found."""
-        from app.services.ifrs.fa.revaluation import AssetRevaluationService, RevaluationInput
+        from app.services.finance.fa.revaluation import AssetRevaluationService, RevaluationInput
         from fastapi import HTTPException
 
         mock_db.get.return_value = None
@@ -98,7 +98,7 @@ class TestAssetRevaluationService:
 
     def test_create_revaluation_asset_not_active(self, mock_db, org_id, mock_asset, user_id):
         """Test revaluation fails for non-active asset."""
-        from app.services.ifrs.fa.revaluation import AssetRevaluationService, RevaluationInput
+        from app.services.finance.fa.revaluation import AssetRevaluationService, RevaluationInput
         from fastapi import HTTPException
 
         mock_asset.status = MockAssetStatus.DRAFT  # Not active
@@ -121,7 +121,7 @@ class TestAssetRevaluationService:
 
     def test_create_revaluation_not_allowed(self, mock_db, org_id, mock_asset, mock_category, user_id):
         """Test revaluation fails when not allowed for category."""
-        from app.services.ifrs.fa.revaluation import AssetRevaluationService, RevaluationInput
+        from app.services.finance.fa.revaluation import AssetRevaluationService, RevaluationInput
         from fastapi import HTTPException
 
         mock_asset.status = MockAssetStatus.ACTIVE
@@ -147,7 +147,7 @@ class TestAssetRevaluationService:
 
     def test_create_revaluation_category_not_found(self, mock_db, org_id, mock_asset, user_id):
         """Test revaluation fails when category not found."""
-        from app.services.ifrs.fa.revaluation import AssetRevaluationService, RevaluationInput
+        from app.services.finance.fa.revaluation import AssetRevaluationService, RevaluationInput
         from fastapi import HTTPException
 
         mock_asset.status = MockAssetStatus.ACTIVE
@@ -172,7 +172,7 @@ class TestAssetRevaluationService:
 
     def test_revaluation_with_prior_surplus(self, mock_db, org_id, mock_asset, mock_category, user_id):
         """Test revaluation when asset has prior revaluation surplus."""
-        from app.services.ifrs.fa.revaluation import AssetRevaluationService, RevaluationInput
+        from app.services.finance.fa.revaluation import AssetRevaluationService, RevaluationInput
 
         mock_asset.status = MockAssetStatus.ACTIVE
         mock_asset.net_book_value = Decimal("6000")  # After prior revaluation
@@ -206,7 +206,7 @@ class TestAssetRevaluationService:
 
     def test_revaluation_reverses_prior_deficit(self, mock_db, org_id, mock_asset, mock_category, user_id):
         """Test upward revaluation reverses prior P&L deficit."""
-        from app.services.ifrs.fa.revaluation import AssetRevaluationService, RevaluationInput
+        from app.services.finance.fa.revaluation import AssetRevaluationService, RevaluationInput
 
         mock_asset.status = MockAssetStatus.ACTIVE
         mock_asset.net_book_value = Decimal("4000")  # After prior impairment
@@ -240,7 +240,7 @@ class TestAssetRevaluationService:
 
     def test_approve_revaluation_success(self, mock_db, org_id, mock_asset, mock_category, user_id):
         """Test successful revaluation approval."""
-        from app.services.ifrs.fa.revaluation import AssetRevaluationService
+        from app.services.finance.fa.revaluation import AssetRevaluationService
 
         creator_id = uuid.uuid4()
         revaluation = MockAssetRevaluation(
@@ -266,7 +266,7 @@ class TestAssetRevaluationService:
 
     def test_approve_revaluation_not_found(self, mock_db, org_id, user_id):
         """Test approving non-existent revaluation fails."""
-        from app.services.ifrs.fa.revaluation import AssetRevaluationService
+        from app.services.finance.fa.revaluation import AssetRevaluationService
         from fastapi import HTTPException
 
         mock_db.get.return_value = None
@@ -278,7 +278,7 @@ class TestAssetRevaluationService:
 
     def test_approve_revaluation_sod_violation(self, mock_db, org_id, mock_asset, user_id):
         """Test creator cannot approve own revaluation (SoD)."""
-        from app.services.ifrs.fa.revaluation import AssetRevaluationService
+        from app.services.finance.fa.revaluation import AssetRevaluationService
         from fastapi import HTTPException
 
         revaluation = MockAssetRevaluation(

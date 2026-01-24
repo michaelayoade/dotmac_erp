@@ -1,0 +1,184 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}Payroll Runs{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a>
+    <span class="mx-2">/</span>
+    <a href="/people/payroll/slips" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Payroll</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">Runs</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+            <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">Payroll Runs</h1>
+            <p class="text-sm text-slate-500 dark:text-slate-400">Batch payroll processing for multiple employees.</p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+            <a href="/people/payroll/slips" class="btn btn-secondary">Individual Slips</a>
+            <a href="/people/payroll/structures" class="btn btn-secondary">Structures</a>
+            <div class="relative" x-data="{ open: false }">
+                <button @click="open = !open" type="button" class="btn btn-secondary">
+                    <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                    </svg>
+                    Reports
+                    <svg class="h-4 w-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                </button>
+                <div x-show="open" @click.away="open = false" x-cloak
+                     class="absolute right-0 z-10 mt-2 w-48 rounded-lg bg-white dark:bg-slate-800 shadow-lg ring-1 ring-black/5 dark:ring-white/10">
+                    <div class="py-1">
+                        <a href="/people/payroll/reports/summary" class="block px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700">Summary Report</a>
+                        <a href="/people/payroll/reports/by-department" class="block px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700">By Department</a>
+                        <a href="/people/payroll/reports/tax-summary" class="block px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700">Tax Summary</a>
+                        <a href="/people/payroll/reports/trends" class="block px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700">Trends</a>
+                    </div>
+                </div>
+            </div>
+            <a href="/people/payroll/runs/new" class="btn btn-primary">
+                <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                </svg>
+                New Payroll Run
+            </a>
+        </div>
+    </div>
+
+    <!-- Status tabs -->
+    <div class="border-b border-slate-200 dark:border-slate-700">
+        <nav class="flex -mb-px space-x-4 overflow-x-auto" aria-label="Status tabs">
+            <a href="/people/payroll/runs" class="px-3 py-2 text-sm font-medium border-b-2 whitespace-nowrap {% if not status %}border-violet-500 text-violet-600 dark:text-violet-400{% else %}border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400{% endif %}">
+                All <span class="ml-1 text-xs bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">{{ total }}</span>
+            </a>
+            {% for s in statuses %}
+            <a href="/people/payroll/runs?status={{ s }}" class="px-3 py-2 text-sm font-medium border-b-2 whitespace-nowrap {% if status == s %}border-violet-500 text-violet-600 dark:text-violet-400{% else %}border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400{% endif %}">
+                {{ s | replace("_", " ") | title }}
+                {% if status_counts.get(s, 0) > 0 %}
+                <span class="ml-1 text-xs bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">{{ status_counts.get(s, 0) }}</span>
+                {% endif %}
+            </a>
+            {% endfor %}
+        </nav>
+    </div>
+
+    <!-- Filters -->
+    <div class="card">
+        <form method="get" class="p-4">
+            <div class="flex flex-wrap items-end gap-4">
+                <div class="w-44">
+                    <label for="from_date" class="form-label">Period From</label>
+                    <input type="date" name="from_date" id="from_date" value="{{ from_date | default('') }}" class="form-input w-full">
+                </div>
+                <div class="w-44">
+                    <label for="to_date" class="form-label">Period To</label>
+                    <input type="date" name="to_date" id="to_date" value="{{ to_date | default('') }}" class="form-input w-full">
+                </div>
+                {% if status %}
+                <input type="hidden" name="status" value="{{ status }}">
+                {% endif %}
+                <button type="submit" class="btn btn-secondary h-10">Filter</button>
+                <a href="/people/payroll/runs" class="btn btn-ghost h-10">Clear</a>
+            </div>
+        </form>
+    </div>
+
+    {% if runs %}
+    <div class="card overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+                <thead>
+                    <tr class="bg-slate-50 dark:bg-slate-800/50">
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Entry</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Period</th>
+                        <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Employees</th>
+                        <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Gross Pay</th>
+                        <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Net Pay</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Status</th>
+                        <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                    {% for run in runs %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                        <td class="px-4 py-3">
+                            <a href="/people/payroll/runs/{{ run.entry_id }}" class="hover:text-violet-600 dark:hover:text-violet-400">
+                                <div class="text-sm font-medium text-slate-900 dark:text-white">{{ run.entry_number }}</div>
+                                <div class="text-xs text-slate-500 dark:text-slate-400">
+                                    {{ run.payroll_frequency.value | title }}{% if run.department %} - {{ run.department.department_name }}{% endif %}
+                                </div>
+                            </a>
+                        </td>
+                        <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">
+                            {{ run.start_date.strftime('%d %b') if run.start_date else '' }} - {{ run.end_date.strftime('%d %b %Y') if run.end_date else '' }}
+                        </td>
+                        <td class="px-4 py-3 text-right text-sm text-slate-700 dark:text-slate-300 font-mono">
+                            {{ run.employee_count }}
+                        </td>
+                        <td class="px-4 py-3 text-right text-sm text-slate-700 dark:text-slate-300 font-mono">
+                            {{ "{:,.2f}".format(run.total_gross_pay) }}
+                        </td>
+                        <td class="px-4 py-3 text-right text-sm font-mono font-medium text-emerald-600 dark:text-emerald-400">
+                            {{ "{:,.2f}".format(run.total_net_pay) }}
+                        </td>
+                        <td class="px-4 py-3">
+                            {% if run.status.value == "DRAFT" %}
+                            <span class="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-300">Draft</span>
+                            {% elif run.status.value == "SLIPS_CREATED" %}
+                            <span class="inline-flex rounded-full bg-sky-50 px-2.5 py-1 text-xs font-medium text-sky-700 dark:bg-sky-900/30 dark:text-sky-300">Slips Created</span>
+                            {% elif run.status.value == "SUBMITTED" %}
+                            <span class="inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">Submitted</span>
+                            {% elif run.status.value == "APPROVED" %}
+                            <span class="inline-flex rounded-full bg-violet-50 px-2.5 py-1 text-xs font-medium text-violet-700 dark:bg-violet-900/30 dark:text-violet-300">Approved</span>
+                            {% elif run.status.value == "POSTED" %}
+                            <span class="inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">Posted</span>
+                            {% elif run.status.value == "CANCELLED" %}
+                            <span class="inline-flex rounded-full bg-rose-50 px-2.5 py-1 text-xs font-medium text-rose-700 dark:bg-rose-900/30 dark:text-rose-300">Cancelled</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-right">
+                            <a href="/people/payroll/runs/{{ run.entry_id }}" class="text-sm text-violet-600 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300">View</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {% if total_pages > 1 %}
+        <div class="flex items-center justify-between border-t border-slate-200 dark:border-slate-700 px-4 py-3">
+            <div class="text-sm text-slate-600 dark:text-slate-400">
+                Showing {{ (page - 1) * 20 + 1 }} to {{ [page * 20, total] | min }} of {{ total }} runs
+            </div>
+            <div class="flex gap-2">
+                {% if has_prev %}
+                <a href="?page={{ page - 1 }}{% if status %}&status={{ status }}{% endif %}{% if from_date %}&from_date={{ from_date }}{% endif %}{% if to_date %}&to_date={{ to_date }}{% endif %}" class="btn btn-secondary btn-sm">Previous</a>
+                {% endif %}
+                {% if has_next %}
+                <a href="?page={{ page + 1 }}{% if status %}&status={{ status }}{% endif %}{% if from_date %}&from_date={{ from_date }}{% endif %}{% if to_date %}&to_date={{ to_date }}{% endif %}" class="btn btn-secondary btn-sm">Next</a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    {% else %}
+    <div class="card p-8 text-center">
+        <div class="mx-auto w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-4">
+            <svg class="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+            </svg>
+        </div>
+        <p class="text-slate-500 dark:text-slate-400 mb-4">No payroll runs found.</p>
+        <a href="/people/payroll/runs/new" class="btn btn-primary">Create First Run</a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

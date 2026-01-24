@@ -8,7 +8,7 @@ from uuid import uuid4
 
 import pytest
 
-from app.services.ifrs.ap.supplier import (
+from app.services.finance.ap.supplier import (
     SupplierService,
     SupplierInput,
 )
@@ -41,7 +41,7 @@ def user_id():
 @pytest.fixture
 def sample_supplier_input():
     """Create sample supplier input."""
-    from app.models.ifrs.ap.supplier import SupplierType
+    from app.models.finance.ap.supplier import SupplierType
 
     return SupplierInput(
         supplier_code="SUP-001",

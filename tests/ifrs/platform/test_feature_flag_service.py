@@ -33,7 +33,7 @@ class TestFeatureFlagService:
         with patch.dict('sys.modules', {
             'app.models.ifrs.core_config.system_configuration': MagicMock(),
         }):
-            from app.services.ifrs.platform.feature_flag import FeatureFlagService
+            from app.services.finance.platform.feature_flag import FeatureFlagService
             return FeatureFlagService
 
     def test_is_enabled_returns_true_for_org_flag(

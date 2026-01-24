@@ -1,7 +1,7 @@
 """
 Sync Entity Model - Track individual entity sync status.
 
-Maps external system records (ERPNext) to DotMac Books entities.
+Maps external system records (ERPNext) to DotMac ERP entities.
 """
 import enum
 import uuid
@@ -38,7 +38,7 @@ class SyncEntity(Base):
     """
     Track sync state for individual entities.
 
-    Maps external system records to DotMac Books entities, enabling:
+    Maps external system records to DotMac ERP entities, enabling:
     - Incremental syncs (only new/modified records)
     - Audit trail of imports
     - Error tracking and retry
@@ -82,13 +82,13 @@ class SyncEntity(Base):
         String(255), nullable=False
     )  # ERPNext document name
 
-    # Target entity in DotMac Books
+    # Target entity in DotMac ERP
     target_table: Mapped[str] = mapped_column(
         String(100), nullable=False
     )  # e.g., 'inv.item', 'fa.asset'
     target_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), nullable=True
-    )  # DotMac Books entity ID (null if failed)
+    )  # DotMac ERP entity ID (null if failed)
 
     # Sync status
     sync_status: Mapped[SyncStatus] = mapped_column(

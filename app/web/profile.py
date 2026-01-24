@@ -5,10 +5,12 @@ Provides profile view and edit functionality for authenticated users.
 """
 
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.services.profile_web import profile_web_service
+from app.services.person import people
+from app.schemas.person import PersonUpdate
 from app.web.deps import get_db, require_web_auth, WebAuthContext
 
 
@@ -61,3 +63,65 @@ def profile_page(
     Display the user profile page.
     """
     return profile_web_service.profile_response(request, auth, db)
+
+
+def _parse_bool(value: str | None, default: bool = False) -> bool:
+    if value is None:
+        return default
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+@router.post("/profile")
+async def update_profile(
+    request: Request,
+    auth: WebAuthContext = Depends(require_web_auth),
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    form = getattr(request.state, "csrf_form", None)
+    if form is None:
+        form = await request.form()
+
+    first_name = (form.get("first_name") or "").strip()
+    last_name = (form.get("last_name") or "").strip()
+    display_name = (form.get("display_name") or "").strip()
+    phone = (form.get("phone") or "").strip()
+    bio = (form.get("bio") or "").strip()
+
+    payload = PersonUpdate(
+        first_name=first_name or None,
+        last_name=last_name or None,
+        display_name=display_name or None,
+        phone=phone or None,
+        bio=bio or None,
+    )
+
+    people.update(db, str(auth.person_id), payload)
+    return RedirectResponse(url="/profile?updated=1", status_code=303)
+
+
+@router.post("/profile/preferences")
+async def update_profile_preferences(
+    request: Request,
+    auth: WebAuthContext = Depends(require_web_auth),
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    form = getattr(request.state, "csrf_form", None)
+    if form is None:
+        form = await request.form()
+
+    timezone = (form.get("timezone") or "").strip() or None
+    locale = (form.get("locale") or "").strip() or None
+    preferred_contact_method = (form.get("preferred_contact_method") or "").strip() or None
+    if preferred_contact_method not in {"email", "phone", "sms", "push", None}:
+        preferred_contact_method = None
+    marketing_opt_in = _parse_bool(form.get("marketing_opt_in"), False)
+
+    payload = PersonUpdate(
+        timezone=timezone,
+        locale=locale,
+        preferred_contact_method=preferred_contact_method,
+        marketing_opt_in=marketing_opt_in,
+    )
+
+    people.update(db, str(auth.person_id), payload)
+    return RedirectResponse(url="/profile?updated=1", status_code=303)

@@ -16,6 +16,8 @@ class Settings:
     db_max_overflow: int = int(os.getenv("DB_MAX_OVERFLOW", "10"))
     db_pool_timeout: int = int(os.getenv("DB_POOL_TIMEOUT", "30"))
     db_pool_recycle: int = int(os.getenv("DB_POOL_RECYCLE", "1800"))
+    # Statement timeout in milliseconds (default 30s, 0 = disabled)
+    db_statement_timeout_ms: int = int(os.getenv("DB_STATEMENT_TIMEOUT_MS", "30000"))
 
     # Avatar settings
     avatar_upload_dir: str = os.getenv("AVATAR_UPLOAD_DIR", "static/avatars")

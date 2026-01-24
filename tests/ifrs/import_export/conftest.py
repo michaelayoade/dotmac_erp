@@ -50,7 +50,7 @@ def mock_db():
 @pytest.fixture
 def import_config(organization_id, user_id):
     """Create a default import config."""
-    from app.services.ifrs.import_export.base import ImportConfig
+    from app.services.finance.import_export.base import ImportConfig
 
     return ImportConfig(
         organization_id=organization_id,
@@ -352,7 +352,7 @@ class ConcreteTestImporter:
     """
 
     def __init__(self, db, config, duplicates=None):
-        from app.services.ifrs.import_export.base import BaseImporter, FieldMapping
+        from app.services.finance.import_export.base import BaseImporter, FieldMapping
 
         self._duplicates = duplicates or set()
 

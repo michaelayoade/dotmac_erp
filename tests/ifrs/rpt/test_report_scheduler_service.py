@@ -20,11 +20,11 @@ class TestReportSchedulerServiceCreate:
 
     def test_create_schedule_success(self, mock_db, org_id, user_id, mock_report_definition):
         """Test successful schedule creation."""
-        from app.services.ifrs.rpt.report_scheduler import (
+        from app.services.finance.rpt.report_scheduler import (
             ReportSchedulerService,
             ScheduleInput,
         )
-        from app.models.ifrs.rpt.report_schedule import ScheduleFrequency
+        from app.models.finance.rpt.report_schedule import ScheduleFrequency
 
         mock_db.get.return_value = mock_report_definition
 
@@ -46,11 +46,11 @@ class TestReportSchedulerServiceCreate:
 
     def test_create_schedule_definition_not_found(self, mock_db, org_id, user_id):
         """Test creation with missing report definition."""
-        from app.services.ifrs.rpt.report_scheduler import (
+        from app.services.finance.rpt.report_scheduler import (
             ReportSchedulerService,
             ScheduleInput,
         )
-        from app.models.ifrs.rpt.report_schedule import ScheduleFrequency
+        from app.models.finance.rpt.report_schedule import ScheduleFrequency
 
         mock_db.get.return_value = None
 
@@ -70,11 +70,11 @@ class TestReportSchedulerServiceCreate:
 
     def test_create_schedule_inactive_definition(self, mock_db, org_id, user_id):
         """Test creation with inactive report definition."""
-        from app.services.ifrs.rpt.report_scheduler import (
+        from app.services.finance.rpt.report_scheduler import (
             ReportSchedulerService,
             ScheduleInput,
         )
-        from app.models.ifrs.rpt.report_schedule import ScheduleFrequency
+        from app.models.finance.rpt.report_schedule import ScheduleFrequency
 
         inactive_def = MockReportDefinition(
             organization_id=org_id,
@@ -98,11 +98,11 @@ class TestReportSchedulerServiceCreate:
 
     def test_create_schedule_unsupported_format(self, mock_db, org_id, user_id):
         """Test creation with unsupported output format."""
-        from app.services.ifrs.rpt.report_scheduler import (
+        from app.services.finance.rpt.report_scheduler import (
             ReportSchedulerService,
             ScheduleInput,
         )
-        from app.models.ifrs.rpt.report_schedule import ScheduleFrequency
+        from app.models.finance.rpt.report_schedule import ScheduleFrequency
 
         definition = MockReportDefinition(
             organization_id=org_id,
@@ -131,7 +131,7 @@ class TestReportSchedulerServiceUpdate:
 
     def test_update_schedule_success(self, mock_db, org_id, mock_report_schedule):
         """Test successful schedule update."""
-        from app.services.ifrs.rpt.report_scheduler import ReportSchedulerService
+        from app.services.finance.rpt.report_scheduler import ReportSchedulerService
 
         mock_report_schedule.organization_id = org_id
         mock_db.get.return_value = mock_report_schedule
@@ -152,7 +152,7 @@ class TestReportSchedulerServiceUpdate:
 
     def test_update_schedule_not_found(self, mock_db, org_id):
         """Test update of non-existent schedule."""
-        from app.services.ifrs.rpt.report_scheduler import ReportSchedulerService
+        from app.services.finance.rpt.report_scheduler import ReportSchedulerService
 
         mock_db.get.return_value = None
 
@@ -172,8 +172,8 @@ class TestReportSchedulerServiceUpdateTiming:
 
     def test_update_timing_success(self, mock_db, org_id, mock_report_schedule):
         """Test successful timing update."""
-        from app.services.ifrs.rpt.report_scheduler import ReportSchedulerService
-        from app.models.ifrs.rpt.report_schedule import ScheduleFrequency
+        from app.services.finance.rpt.report_scheduler import ReportSchedulerService
+        from app.models.finance.rpt.report_schedule import ScheduleFrequency
 
         mock_report_schedule.organization_id = org_id
         mock_db.get.return_value = mock_report_schedule
@@ -194,8 +194,8 @@ class TestReportSchedulerServiceUpdateTiming:
 
     def test_update_timing_not_found(self, mock_db, org_id):
         """Test timing update of non-existent schedule."""
-        from app.services.ifrs.rpt.report_scheduler import ReportSchedulerService
-        from app.models.ifrs.rpt.report_schedule import ScheduleFrequency
+        from app.services.finance.rpt.report_scheduler import ReportSchedulerService
+        from app.models.finance.rpt.report_schedule import ScheduleFrequency
 
         mock_db.get.return_value = None
 
@@ -215,8 +215,8 @@ class TestReportSchedulerServiceActivation:
 
     def test_activate_schedule_success(self, mock_db, org_id, mock_report_schedule):
         """Test successful schedule activation."""
-        from app.services.ifrs.rpt.report_scheduler import ReportSchedulerService
-        from app.models.ifrs.rpt.report_schedule import ScheduleFrequency
+        from app.services.finance.rpt.report_scheduler import ReportSchedulerService
+        from app.models.finance.rpt.report_schedule import ScheduleFrequency
 
         mock_report_schedule.organization_id = org_id
         mock_report_schedule.is_active = False
@@ -234,7 +234,7 @@ class TestReportSchedulerServiceActivation:
 
     def test_activate_schedule_not_found(self, mock_db, org_id):
         """Test activation of non-existent schedule."""
-        from app.services.ifrs.rpt.report_scheduler import ReportSchedulerService
+        from app.services.finance.rpt.report_scheduler import ReportSchedulerService
 
         mock_db.get.return_value = None
 
@@ -247,7 +247,7 @@ class TestReportSchedulerServiceActivation:
 
     def test_deactivate_schedule_success(self, mock_db, org_id, mock_report_schedule):
         """Test successful schedule deactivation."""
-        from app.services.ifrs.rpt.report_scheduler import ReportSchedulerService
+        from app.services.finance.rpt.report_scheduler import ReportSchedulerService
 
         mock_report_schedule.organization_id = org_id
         mock_report_schedule.is_active = True
@@ -263,7 +263,7 @@ class TestReportSchedulerServiceActivation:
 
     def test_deactivate_schedule_not_found(self, mock_db, org_id):
         """Test deactivation of non-existent schedule."""
-        from app.services.ifrs.rpt.report_scheduler import ReportSchedulerService
+        from app.services.finance.rpt.report_scheduler import ReportSchedulerService
 
         mock_db.get.return_value = None
 
@@ -280,8 +280,8 @@ class TestReportSchedulerServiceExecution:
 
     def test_record_execution_success(self, mock_db, mock_report_schedule):
         """Test successful execution recording."""
-        from app.services.ifrs.rpt.report_scheduler import ReportSchedulerService
-        from app.models.ifrs.rpt.report_schedule import ScheduleFrequency
+        from app.services.finance.rpt.report_scheduler import ReportSchedulerService
+        from app.models.finance.rpt.report_schedule import ScheduleFrequency
 
         mock_report_schedule.is_active = True
         mock_report_schedule.frequency = ScheduleFrequency.DAILY
@@ -298,7 +298,7 @@ class TestReportSchedulerServiceExecution:
 
     def test_record_execution_not_found(self, mock_db):
         """Test execution recording for non-existent schedule."""
-        from app.services.ifrs.rpt.report_scheduler import ReportSchedulerService
+        from app.services.finance.rpt.report_scheduler import ReportSchedulerService
 
         mock_db.get.return_value = None
 
@@ -313,7 +313,7 @@ class TestReportSchedulerServiceQueries:
 
     def test_get_due_schedules(self, mock_db, mock_report_schedule):
         """Test getting due schedules."""
-        from app.services.ifrs.rpt.report_scheduler import ReportSchedulerService
+        from app.services.finance.rpt.report_scheduler import ReportSchedulerService
 
         mock_query = MagicMock()
         mock_query.filter.return_value = mock_query
@@ -327,7 +327,7 @@ class TestReportSchedulerServiceQueries:
 
     def test_get_due_schedules_with_org_filter(self, mock_db, org_id, mock_report_schedule):
         """Test getting due schedules with organization filter."""
-        from app.services.ifrs.rpt.report_scheduler import ReportSchedulerService
+        from app.services.finance.rpt.report_scheduler import ReportSchedulerService
 
         mock_query = MagicMock()
         mock_query.filter.return_value = mock_query
@@ -343,7 +343,7 @@ class TestReportSchedulerServiceQueries:
 
     def test_get_upcoming_schedules(self, mock_db, org_id, mock_report_schedule, mock_report_definition):
         """Test getting upcoming schedules."""
-        from app.services.ifrs.rpt.report_scheduler import ReportSchedulerService
+        from app.services.finance.rpt.report_scheduler import ReportSchedulerService
 
         mock_report_schedule.report_def_id = mock_report_definition.report_def_id
 
@@ -363,7 +363,7 @@ class TestReportSchedulerServiceQueries:
 
     def test_get_schedule_by_id(self, mock_db, mock_report_schedule):
         """Test getting schedule by ID."""
-        from app.services.ifrs.rpt.report_scheduler import ReportSchedulerService
+        from app.services.finance.rpt.report_scheduler import ReportSchedulerService
 
         mock_db.get.return_value = mock_report_schedule
 
@@ -375,7 +375,7 @@ class TestReportSchedulerServiceQueries:
 
     def test_get_schedule_not_found(self, mock_db):
         """Test getting non-existent schedule."""
-        from app.services.ifrs.rpt.report_scheduler import ReportSchedulerService
+        from app.services.finance.rpt.report_scheduler import ReportSchedulerService
 
         mock_db.get.return_value = None
 
@@ -386,7 +386,7 @@ class TestReportSchedulerServiceQueries:
 
     def test_list_schedules(self, mock_db, org_id, mock_report_schedule):
         """Test listing schedules."""
-        from app.services.ifrs.rpt.report_scheduler import ReportSchedulerService
+        from app.services.finance.rpt.report_scheduler import ReportSchedulerService
 
         mock_query = MagicMock()
         mock_query.filter.return_value = mock_query
@@ -405,8 +405,8 @@ class TestReportSchedulerServiceQueries:
 
     def test_list_schedules_with_filters(self, mock_db, org_id, mock_report_schedule):
         """Test listing schedules with filters."""
-        from app.services.ifrs.rpt.report_scheduler import ReportSchedulerService
-        from app.models.ifrs.rpt.report_schedule import ScheduleFrequency
+        from app.services.finance.rpt.report_scheduler import ReportSchedulerService
+        from app.models.finance.rpt.report_schedule import ScheduleFrequency
 
         mock_query = MagicMock()
         mock_query.filter.return_value = mock_query
@@ -431,8 +431,8 @@ class TestReportSchedulerServiceNextRunCalculation:
 
     def test_calculate_next_run_daily(self):
         """Test next run calculation for daily frequency."""
-        from app.services.ifrs.rpt.report_scheduler import ReportSchedulerService
-        from app.models.ifrs.rpt.report_schedule import ScheduleFrequency
+        from app.services.finance.rpt.report_scheduler import ReportSchedulerService
+        from app.models.finance.rpt.report_schedule import ScheduleFrequency
 
         result = ReportSchedulerService._calculate_next_run(
             frequency=ScheduleFrequency.DAILY,
@@ -449,8 +449,8 @@ class TestReportSchedulerServiceNextRunCalculation:
 
     def test_calculate_next_run_weekly(self):
         """Test next run calculation for weekly frequency."""
-        from app.services.ifrs.rpt.report_scheduler import ReportSchedulerService
-        from app.models.ifrs.rpt.report_schedule import ScheduleFrequency
+        from app.services.finance.rpt.report_scheduler import ReportSchedulerService
+        from app.models.finance.rpt.report_schedule import ScheduleFrequency
 
         result = ReportSchedulerService._calculate_next_run(
             frequency=ScheduleFrequency.WEEKLY,
@@ -467,8 +467,8 @@ class TestReportSchedulerServiceNextRunCalculation:
 
     def test_calculate_next_run_monthly(self):
         """Test next run calculation for monthly frequency."""
-        from app.services.ifrs.rpt.report_scheduler import ReportSchedulerService
-        from app.models.ifrs.rpt.report_schedule import ScheduleFrequency
+        from app.services.finance.rpt.report_scheduler import ReportSchedulerService
+        from app.models.finance.rpt.report_schedule import ScheduleFrequency
 
         result = ReportSchedulerService._calculate_next_run(
             frequency=ScheduleFrequency.MONTHLY,
@@ -485,8 +485,8 @@ class TestReportSchedulerServiceNextRunCalculation:
 
     def test_calculate_next_run_on_demand(self):
         """Test next run calculation for on-demand frequency."""
-        from app.services.ifrs.rpt.report_scheduler import ReportSchedulerService
-        from app.models.ifrs.rpt.report_schedule import ScheduleFrequency
+        from app.services.finance.rpt.report_scheduler import ReportSchedulerService
+        from app.models.finance.rpt.report_schedule import ScheduleFrequency
 
         result = ReportSchedulerService._calculate_next_run(
             frequency=ScheduleFrequency.ON_DEMAND,
@@ -501,8 +501,8 @@ class TestReportSchedulerServiceNextRunCalculation:
 
     def test_calculate_next_run_quarterly(self):
         """Test next run calculation for quarterly frequency."""
-        from app.services.ifrs.rpt.report_scheduler import ReportSchedulerService
-        from app.models.ifrs.rpt.report_schedule import ScheduleFrequency
+        from app.services.finance.rpt.report_scheduler import ReportSchedulerService
+        from app.models.finance.rpt.report_schedule import ScheduleFrequency
 
         result = ReportSchedulerService._calculate_next_run(
             frequency=ScheduleFrequency.QUARTERLY,
@@ -518,8 +518,8 @@ class TestReportSchedulerServiceNextRunCalculation:
 
     def test_calculate_next_run_annually(self):
         """Test next run calculation for annually frequency."""
-        from app.services.ifrs.rpt.report_scheduler import ReportSchedulerService
-        from app.models.ifrs.rpt.report_schedule import ScheduleFrequency
+        from app.services.finance.rpt.report_scheduler import ReportSchedulerService
+        from app.models.finance.rpt.report_schedule import ScheduleFrequency
 
         now = datetime.now(timezone.utc)
 
@@ -538,8 +538,8 @@ class TestReportSchedulerServiceNextRunCalculation:
 
     def test_calculate_next_run_period_end(self):
         """Test next run calculation for period-end frequency."""
-        from app.services.ifrs.rpt.report_scheduler import ReportSchedulerService
-        from app.models.ifrs.rpt.report_schedule import ScheduleFrequency
+        from app.services.finance.rpt.report_scheduler import ReportSchedulerService
+        from app.models.finance.rpt.report_schedule import ScheduleFrequency
 
         result = ReportSchedulerService._calculate_next_run(
             frequency=ScheduleFrequency.PERIOD_END,

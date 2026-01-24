@@ -11,8 +11,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.services.ifrs.ar.quote import QuoteService
-from app.models.ifrs.ar.quote import QuoteStatus
+from app.services.finance.ar.quote import QuoteService
+from app.models.finance.ar.quote import QuoteStatus
 
 
 class MockQuote:

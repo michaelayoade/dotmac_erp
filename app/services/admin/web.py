@@ -21,7 +21,7 @@ from app.models.auth import AuthProvider, Session as AuthSession, SessionStatus,
 from app.models.audit import AuditActorType, AuditEvent
 from app.models.domain_settings import DomainSetting, SettingDomain, SettingValueType
 from app.config import settings
-from app.models.ifrs.core_org.organization import Organization
+from app.models.finance.core_org.organization import Organization
 from app.models.person import Person, PersonStatus
 from app.models.rbac import Permission, PersonRole, Role, RolePermission
 from app.models.scheduler import ScheduleType, ScheduledTask
@@ -1298,7 +1298,7 @@ class AdminWebService:
         default_currency_org_id: Optional[str] = None,
     ) -> dict:
         """Get context for organization create/edit form."""
-        from app.models.ifrs.core_org.organization import ConsolidationMethod
+        from app.models.finance.core_org.organization import ConsolidationMethod
 
         # Get parent organizations for dropdown
         parent_orgs = (
@@ -1420,7 +1420,7 @@ class AdminWebService:
         """Create a new organization. Returns (organization, error)."""
         from datetime import date as date_type
 
-        from app.models.ifrs.core_org.organization import ConsolidationMethod
+        from app.models.finance.core_org.organization import ConsolidationMethod
 
         # Check if organization code already exists
         existing = (
@@ -1506,7 +1506,7 @@ class AdminWebService:
         """Update an existing organization. Returns (organization, error)."""
         from datetime import date as date_type
 
-        from app.models.ifrs.core_org.organization import ConsolidationMethod
+        from app.models.finance.core_org.organization import ConsolidationMethod
 
         org = db.get(Organization, coerce_uuid(organization_id))
         if not org:
@@ -2267,12 +2267,15 @@ class AdminWebService:
         context: Optional[dict] = None,
         status_code: Optional[int] = None,
     ) -> HTMLResponse:
+        if status_code is None:
+            status_code = 200
         payload = {
             "title": title,
             "page_title": page_title,
             "brand": brand_context(),
             "user": auth.user,
             "active_page": active_page,
+            "csrf_token": getattr(request.state, "csrf_token", ""),
             **(context or {}),
         }
         return templates.TemplateResponse(
@@ -2776,6 +2779,29 @@ class AdminWebService:
         auth_or_redirect = self._require_admin_web_auth(request, auth)
         if isinstance(auth_or_redirect, RedirectResponse):
             return auth_or_redirect
+        if not key:
+            context = self.permission_form_context(db)
+            context.update(
+                {
+                    "error": "Permission key is required.",
+                    "success": None,
+                    "permission_data": {
+                        "key": key,
+                        "description": description,
+                        "is_active": is_active == "1",
+                    },
+                }
+            )
+            return self._render_admin_template(
+                request,
+                "admin/permission_form.html",
+                auth_or_redirect,
+                "Create Permission",
+                "Create Permission",
+                "permissions",
+                context,
+                status_code=400,
+            )
         _, error = self.create_permission(
             db=db,
             key=key,
@@ -2846,6 +2872,30 @@ class AdminWebService:
         auth_or_redirect = self._require_admin_web_auth(request, auth)
         if isinstance(auth_or_redirect, RedirectResponse):
             return auth_or_redirect
+        if not key:
+            context = self.permission_form_context(db, permission_id)
+            context.update(
+                {
+                    "error": "Permission key is required.",
+                    "success": None,
+                    "permission_data": {
+                        "id": permission_id,
+                        "key": key,
+                        "description": description,
+                        "is_active": is_active == "1",
+                    },
+                }
+            )
+            return self._render_admin_template(
+                request,
+                "admin/permission_form.html",
+                auth_or_redirect,
+                "Edit Permission",
+                "Edit Permission",
+                "permissions",
+                context,
+                status_code=400,
+            )
         _, error = self.update_permission(
             db=db,
             permission_id=permission_id,

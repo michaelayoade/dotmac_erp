@@ -1,16 +1,16 @@
 (function () {
     function initTypeahead(container) {
-        var input = container.querySelector("[data-typeahead-input]");
-        var hidden = container.querySelector("[data-typeahead-hidden]");
-        var results = container.querySelector("[data-typeahead-results]");
-        var url = container.getAttribute("data-typeahead-url");
-        var minChars = parseInt(container.getAttribute("data-typeahead-min") || "2", 10);
-        var limit = parseInt(container.getAttribute("data-typeahead-limit") || "8", 10);
+        const input = container.querySelector("[data-typeahead-input]");
+        const hidden = container.querySelector("[data-typeahead-hidden]");
+        const results = container.querySelector("[data-typeahead-results]");
+        const url = container.getAttribute("data-typeahead-url");
+        const minChars = parseInt(container.getAttribute("data-typeahead-min") || "2", 10);
+        const limit = parseInt(container.getAttribute("data-typeahead-limit") || "8", 10);
         if (!input || !hidden || !results || !url) {
             return;
         }
-        var timer = null;
-        var lastQuery = "";
+        let timer = null;
+        let lastQuery = "";
 
         function clearResults() {
             results.innerHTML = "";
@@ -21,10 +21,10 @@
                 clearResults();
                 return;
             }
-            var menu = document.createElement("div");
+            const menu = document.createElement("div");
             menu.className = "absolute z-10 mt-2 w-full rounded-lg border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-800";
             items.forEach(function (item) {
-                var button = document.createElement("button");
+                const button = document.createElement("button");
                 button.type = "button";
                 button.className = "w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-700";
                 button.textContent = item.label || item.name || "";
@@ -40,7 +40,7 @@
         }
 
         function fetchResults(query) {
-            var requestUrl = url + "?q=" + encodeURIComponent(query) + "&limit=" + limit;
+            const requestUrl = url + "?q=" + encodeURIComponent(query) + "&limit=" + limit;
             fetch(requestUrl)
                 .then(function (response) {
                     if (!response.ok) {
@@ -57,7 +57,7 @@
         }
 
         input.addEventListener("input", function () {
-            var query = input.value.trim();
+            const query = input.value.trim();
             hidden.value = "";
             if (query.length < minChars) {
                 clearResults();
@@ -83,7 +83,7 @@
     }
 
     function initAll() {
-        var containers = document.querySelectorAll("[data-typeahead-url]");
+        const containers = document.querySelectorAll("[data-typeahead-url]");
         containers.forEach(function (container) {
             initTypeahead(container);
         });

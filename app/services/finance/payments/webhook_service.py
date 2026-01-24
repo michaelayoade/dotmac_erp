@@ -1,0 +1,329 @@
+"""
+Webhook Service.
+
+Handles Paystack webhook events with idempotency and audit logging.
+"""
+import logging
+from datetime import datetime, timezone
+from typing import Any, Optional
+from uuid import UUID, uuid4
+
+from sqlalchemy.orm import Session
+
+from app.models.finance.payments.payment_intent import PaymentIntent
+from app.models.finance.payments.payment_webhook import PaymentWebhook, WebhookStatus
+from app.services.finance.payments.payment_service import PaymentService
+from app.services.finance.payments.paystack_client import PaystackClient, PaystackConfig
+
+logger = logging.getLogger(__name__)
+
+
+class WebhookService:
+    """
+    Service for processing Paystack webhooks.
+
+    Provides idempotency, signature verification, and event handling.
+    """
+
+    def __init__(self, db: Session):
+        self.db = db
+
+    def process_webhook(
+        self,
+        event_type: str,
+        event_data: dict[str, Any],
+        paystack_config: PaystackConfig,
+        raw_payload: bytes,
+        signature: str,
+    ) -> PaymentWebhook:
+        """
+        Process a Paystack webhook event.
+
+        Args:
+            event_type: Paystack event type (e.g., charge.success)
+            event_data: Event payload data
+            paystack_config: For signature verification
+            raw_payload: Raw request body
+            signature: X-Paystack-Signature header
+
+        Returns:
+            PaymentWebhook record
+
+        Raises:
+            ValueError: If signature verification fails
+        """
+        # Verify signature
+        client = PaystackClient(paystack_config)
+        if not client.verify_webhook_signature(raw_payload, signature):
+            logger.warning("Invalid webhook signature received")
+            raise ValueError("Invalid webhook signature")
+
+        # Extract reference and build idempotency key
+        reference = event_data.get("reference", "")
+        event_id = self._build_event_id(event_type, event_data)
+
+        # Check for duplicate (idempotency)
+        existing = (
+            self.db.query(PaymentWebhook)
+            .filter(PaymentWebhook.paystack_event_id == event_id)
+            .first()
+        )
+        if existing:
+            logger.info(f"Duplicate webhook received: {event_id}")
+            existing.status = WebhookStatus.DUPLICATE
+            self.db.flush()
+            return existing
+
+        # Create webhook record
+        webhook = PaymentWebhook(
+            webhook_id=uuid4(),
+            event_type=event_type,
+            paystack_event_id=event_id,
+            paystack_reference=reference,
+            payload=event_data,
+            signature=signature,
+            status=WebhookStatus.RECEIVED,
+        )
+        self.db.add(webhook)
+        self.db.flush()
+
+        try:
+            # Find payment intent by reference
+            intent: Optional[PaymentIntent] = None
+            if reference:
+                intent = (
+                    self.db.query(PaymentIntent)
+                    .filter(PaymentIntent.paystack_reference == reference)
+                    .first()
+                )
+
+            if not intent:
+                logger.warning(f"No payment intent found for reference: {reference}")
+                webhook.status = WebhookStatus.FAILED
+                webhook.error_message = f"Payment intent not found for reference: {reference}"
+                self.db.flush()
+                return webhook
+
+            # Set organization ID from intent
+            webhook.organization_id = intent.organization_id
+
+            # Update status to processing
+            webhook.status = WebhookStatus.PROCESSING
+            self.db.flush()
+
+            # Handle event
+            if event_type == "charge.success":
+                self._handle_charge_success(intent, event_data)
+            elif event_type == "charge.failed":
+                self._handle_charge_failed(intent, event_data)
+            elif event_type == "transfer.success":
+                self._handle_transfer_success(intent, event_data)
+            elif event_type == "transfer.failed":
+                self._handle_transfer_failed(intent, event_data)
+            else:
+                logger.info(f"Unhandled event type: {event_type}")
+
+            webhook.status = WebhookStatus.PROCESSED
+            webhook.processed_at = datetime.now(timezone.utc)
+
+        except Exception as e:
+            logger.exception(f"Webhook processing error: {e}")
+            webhook.status = WebhookStatus.FAILED
+            webhook.error_message = str(e)[:1000]  # Truncate long errors
+            webhook.retry_count += 1
+
+        self.db.flush()
+        return webhook
+
+    def _build_event_id(self, event_type: str, event_data: dict[str, Any]) -> str:
+        """Build unique event ID for idempotency."""
+        # Paystack doesn't provide a unique event ID, so we construct one
+        # from event type, reference, and transaction ID
+        reference = event_data.get("reference", "")
+        transaction_id = event_data.get("id", "")
+        return f"{event_type}:{reference}:{transaction_id}"
+
+    def _handle_charge_success(
+        self,
+        intent: PaymentIntent,
+        data: dict[str, Any],
+    ) -> None:
+        """
+        Handle successful charge event.
+
+        Creates customer payment and updates invoice.
+        """
+        payment_svc = PaymentService(self.db, intent.organization_id)
+
+        # Parse paid_at timestamp
+        paid_at_str = data.get("paid_at")
+        if paid_at_str:
+            # Paystack format: "2024-01-15T10:30:00.000Z"
+            try:
+                paid_at = datetime.fromisoformat(paid_at_str.replace("Z", "+00:00"))
+            except ValueError:
+                paid_at = datetime.now(timezone.utc)
+        else:
+            paid_at = datetime.now(timezone.utc)
+
+        channel = data.get("channel", "card")
+        transaction_id = str(data.get("id", ""))
+
+        payment_svc.process_successful_payment(
+            intent=intent,
+            transaction_id=transaction_id,
+            paid_at=paid_at,
+            gateway_response=data,
+            channel=channel,
+        )
+
+        logger.info(
+            f"Processed charge.success for intent {intent.intent_id}",
+            extra={
+                "intent_id": str(intent.intent_id),
+                "transaction_id": transaction_id,
+            },
+        )
+
+    def _handle_charge_failed(
+        self,
+        intent: PaymentIntent,
+        data: dict[str, Any],
+    ) -> None:
+        """Handle failed charge event."""
+        payment_svc = PaymentService(self.db, intent.organization_id)
+
+        error = data.get("gateway_response", "Payment failed")
+        payment_svc.mark_payment_failed(intent, error, data)
+
+        logger.warning(
+            f"Charge failed for intent {intent.intent_id}: {error}",
+            extra={
+                "intent_id": str(intent.intent_id),
+                "error": error,
+            },
+        )
+
+    def _handle_transfer_success(
+        self,
+        intent: PaymentIntent,
+        data: dict[str, Any],
+    ) -> None:
+        """
+        Handle successful transfer event.
+
+        This is for outbound transfers (e.g., expense reimbursements).
+        """
+        payment_svc = PaymentService(self.db, intent.organization_id)
+
+        # Parse completed_at timestamp
+        completed_at_str = data.get("completed_at") or data.get("updated_at")
+        if completed_at_str:
+            try:
+                completed_at = datetime.fromisoformat(completed_at_str.replace("Z", "+00:00"))
+            except ValueError:
+                completed_at = datetime.now(timezone.utc)
+        else:
+            completed_at = datetime.now(timezone.utc)
+
+        payment_svc.process_successful_transfer(
+            intent=intent,
+            completed_at=completed_at,
+            gateway_response=data,
+        )
+
+        logger.info(
+            f"Processed transfer.success for intent {intent.intent_id}",
+            extra={
+                "intent_id": str(intent.intent_id),
+                "transfer_code": data.get("transfer_code"),
+            },
+        )
+
+    def _handle_transfer_failed(
+        self,
+        intent: PaymentIntent,
+        data: dict[str, Any],
+    ) -> None:
+        """Handle failed transfer event."""
+        payment_svc = PaymentService(self.db, intent.organization_id)
+
+        error = data.get("reason") or data.get("message") or "Transfer failed"
+        payment_svc.mark_transfer_failed(intent, error, data)
+
+        logger.warning(
+            f"Transfer failed for intent {intent.intent_id}: {error}",
+            extra={
+                "intent_id": str(intent.intent_id),
+                "error": error,
+                "transfer_code": data.get("transfer_code"),
+            },
+        )
+
+    def get_webhook_by_event_id(self, event_id: str) -> Optional[PaymentWebhook]:
+        """Get a webhook record by event ID."""
+        return (
+            self.db.query(PaymentWebhook)
+            .filter(PaymentWebhook.paystack_event_id == event_id)
+            .first()
+        )
+
+    def retry_failed_webhook(self, webhook_id: UUID) -> PaymentWebhook:
+        """
+        Retry a failed webhook.
+
+        Args:
+            webhook_id: ID of the failed webhook
+
+        Returns:
+            Updated PaymentWebhook record
+        """
+        webhook = self.db.get(PaymentWebhook, webhook_id)
+        if not webhook:
+            raise ValueError(f"Webhook {webhook_id} not found")
+
+        if webhook.status != WebhookStatus.FAILED:
+            raise ValueError(f"Can only retry FAILED webhooks, got {webhook.status}")
+
+        # Reset status and re-process
+        webhook.status = WebhookStatus.RECEIVED
+        webhook.error_message = None
+        self.db.flush()
+
+        # Find intent and re-process
+        intent = (
+            self.db.query(PaymentIntent)
+            .filter(PaymentIntent.paystack_reference == webhook.paystack_reference)
+            .first()
+        )
+
+        if not intent:
+            webhook.status = WebhookStatus.FAILED
+            webhook.error_message = "Payment intent not found"
+            self.db.flush()
+            return webhook
+
+        try:
+            webhook.status = WebhookStatus.PROCESSING
+            self.db.flush()
+
+            if webhook.event_type == "charge.success":
+                self._handle_charge_success(intent, webhook.payload or {})
+            elif webhook.event_type == "charge.failed":
+                self._handle_charge_failed(intent, webhook.payload or {})
+            elif webhook.event_type == "transfer.success":
+                self._handle_transfer_success(intent, webhook.payload or {})
+            elif webhook.event_type == "transfer.failed":
+                self._handle_transfer_failed(intent, webhook.payload or {})
+
+            webhook.status = WebhookStatus.PROCESSED
+            webhook.processed_at = datetime.now(timezone.utc)
+
+        except Exception as e:
+            logger.exception(f"Webhook retry failed: {e}")
+            webhook.status = WebhookStatus.FAILED
+            webhook.error_message = str(e)[:1000]
+            webhook.retry_count += 1
+
+        self.db.flush()
+        return webhook

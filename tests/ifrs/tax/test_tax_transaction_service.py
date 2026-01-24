@@ -10,8 +10,8 @@ from decimal import Decimal
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
-from app.models.ifrs.tax.tax_transaction import TaxTransactionType
-from app.services.ifrs.tax.tax_transaction import (
+from app.models.finance.tax.tax_transaction import TaxTransactionType
+from app.services.finance.tax.tax_transaction import (
     TaxTransactionService,
     TaxTransactionInput,
     TaxReturnSummary,

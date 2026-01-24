@@ -1,0 +1,330 @@
+{% extends "expense/base_expense.html" %}
+
+{% block page_title %}{{ advance.advance_number if advance else 'Cash Advance' }}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 mt-1">
+    <a href="/expense" class="hover:text-slate-700 dark:hover:text-slate-300">Expense</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <a href="/expense/advances/list" class="hover:text-slate-700 dark:hover:text-slate-300">Cash Advances</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="text-slate-700 dark:text-slate-300">{{ advance.advance_number if advance else 'Not Found' }}</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-6">
+    {% if not advance %}
+    <div class="card p-12">
+        <div class="empty-state">
+            <div class="empty-state-icon">
+                <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+            </div>
+            <h3 class="empty-state-title">Advance Not Found</h3>
+            <p class="empty-state-description">{{ error or 'This cash advance could not be found.' }}</p>
+            <a href="/expense/advances/list" class="btn btn-primary mt-4">Back to Advances</a>
+        </div>
+    </div>
+    {% else %}
+    <!-- Header Card -->
+    <div class="card p-6">
+        <div class="flex items-start justify-between">
+            <div>
+                <div class="flex items-center gap-3">
+                    <h2 class="text-xl font-bold text-slate-900 dark:text-white font-mono">{{ advance.advance_number }}</h2>
+                    {% if advance.status.value == 'DRAFT' %}
+                    <span class="badge badge-neutral">Draft</span>
+                    {% elif advance.status.value == 'SUBMITTED' %}
+                    <span class="badge badge-warning">Submitted</span>
+                    {% elif advance.status.value == 'PENDING_APPROVAL' %}
+                    <span class="badge badge-warning">Pending Approval</span>
+                    {% elif advance.status.value == 'APPROVED' %}
+                    <span class="badge badge-info">Approved - Ready to Disburse</span>
+                    {% elif advance.status.value == 'DISBURSED' %}
+                    <span class="badge badge-primary">Disbursed</span>
+                    {% elif advance.status.value == 'PARTIALLY_SETTLED' %}
+                    <span class="badge badge-warning">Partially Settled</span>
+                    {% elif advance.status.value == 'FULLY_SETTLED' %}
+                    <span class="badge badge-success">Fully Settled</span>
+                    {% elif advance.status.value == 'REJECTED' %}
+                    <span class="badge badge-danger">Rejected</span>
+                    {% elif advance.status.value == 'REFUNDED' %}
+                    <span class="badge badge-info">Refunded</span>
+                    {% elif advance.status.value == 'CANCELLED' %}
+                    <span class="badge badge-neutral">Cancelled</span>
+                    {% endif %}
+                </div>
+                <p class="text-slate-500 dark:text-slate-400 mt-1">
+                    {{ advance.employee.full_name if advance.employee else 'Unknown Employee' }}
+                </p>
+            </div>
+            <div class="text-right">
+                <p class="text-3xl font-bold text-amber-600 dark:text-amber-400 font-mono">
+                    {{ "{:,.2f}".format(advance.approved_amount or advance.requested_amount) }}
+                </p>
+                <p class="text-sm text-slate-500">{{ advance.currency_code }}</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Details Grid -->
+    <div class="grid gap-6 lg:grid-cols-2">
+        <!-- Advance Info -->
+        <div class="card p-6">
+            <h3 class="font-semibold text-slate-900 dark:text-white mb-4">Advance Details</h3>
+            <dl class="space-y-3">
+                <div class="flex justify-between py-2 border-b border-slate-100 dark:border-slate-800">
+                    <dt class="text-sm text-slate-500 dark:text-slate-400">Purpose</dt>
+                    <dd class="text-sm text-slate-900 dark:text-white text-right max-w-[60%]">{{ advance.purpose }}</dd>
+                </div>
+                <div class="flex justify-between py-2 border-b border-slate-100 dark:border-slate-800">
+                    <dt class="text-sm text-slate-500 dark:text-slate-400">Request Date</dt>
+                    <dd class="text-sm text-slate-900 dark:text-white">{{ advance.request_date }}</dd>
+                </div>
+                <div class="flex justify-between py-2 border-b border-slate-100 dark:border-slate-800">
+                    <dt class="text-sm text-slate-500 dark:text-slate-400">Requested Amount</dt>
+                    <dd class="text-sm font-mono text-slate-900 dark:text-white">{{ "{:,.2f}".format(advance.requested_amount) }}</dd>
+                </div>
+                <div class="flex justify-between py-2 border-b border-slate-100 dark:border-slate-800">
+                    <dt class="text-sm text-slate-500 dark:text-slate-400">Approved Amount</dt>
+                    <dd class="text-sm font-mono text-slate-900 dark:text-white">
+                        {{ "{:,.2f}".format(advance.approved_amount) if advance.approved_amount else '—' }}
+                    </dd>
+                </div>
+                <div class="flex justify-between py-2">
+                    <dt class="text-sm text-slate-500 dark:text-slate-400">Expected Settlement</dt>
+                    <dd class="text-sm text-slate-900 dark:text-white">
+                        {{ advance.expected_settlement_date or '—' }}
+                    </dd>
+                </div>
+            </dl>
+        </div>
+
+        <!-- Settlement Info -->
+        <div class="card p-6">
+            <h3 class="font-semibold text-slate-900 dark:text-white mb-4">Settlement Status</h3>
+            <dl class="space-y-3">
+                <div class="flex justify-between py-2 border-b border-slate-100 dark:border-slate-800">
+                    <dt class="text-sm text-slate-500 dark:text-slate-400">Disbursed On</dt>
+                    <dd class="text-sm text-slate-900 dark:text-white">{{ advance.disbursed_on or '—' }}</dd>
+                </div>
+                <div class="flex justify-between py-2 border-b border-slate-100 dark:border-slate-800">
+                    <dt class="text-sm text-slate-500 dark:text-slate-400">Amount Settled</dt>
+                    <dd class="text-sm font-mono text-emerald-600 dark:text-emerald-400">{{ "{:,.2f}".format(advance.amount_settled) }}</dd>
+                </div>
+                <div class="flex justify-between py-2 border-b border-slate-100 dark:border-slate-800">
+                    <dt class="text-sm text-slate-500 dark:text-slate-400">Amount Refunded</dt>
+                    <dd class="text-sm font-mono text-slate-600 dark:text-slate-400">{{ "{:,.2f}".format(advance.amount_refunded) }}</dd>
+                </div>
+                <div class="flex justify-between py-2 border-b border-slate-100 dark:border-slate-800">
+                    <dt class="text-sm font-semibold text-slate-900 dark:text-white">Outstanding Balance</dt>
+                    <dd class="text-sm font-mono font-bold {{ 'text-amber-600 dark:text-amber-400' if advance.outstanding_balance > 0 else 'text-emerald-600 dark:text-emerald-400' }}">
+                        {{ "{:,.2f}".format(advance.outstanding_balance) }}
+                    </dd>
+                </div>
+                {% if advance.journal_entry_id %}
+                <div class="flex justify-between py-2">
+                    <dt class="text-sm text-slate-500 dark:text-slate-400">Journal Entry</dt>
+                    <dd class="text-sm">
+                        <a href="/finance/gl/journals/{{ advance.journal_entry_id }}" class="text-teal-600 hover:text-teal-700 dark:text-teal-400">
+                            View GL Entry →
+                        </a>
+                    </dd>
+                </div>
+                {% endif %}
+            </dl>
+
+            <!-- Progress Bar -->
+            {% if advance.approved_amount %}
+            <div class="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+                <div class="flex justify-between text-xs text-slate-500 mb-1">
+                    <span>Settlement Progress</span>
+                    <span>{{ ((advance.amount_settled + advance.amount_refunded) / advance.approved_amount * 100)|round|int }}%</span>
+                </div>
+                <div class="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
+                    <div class="bg-emerald-500 h-2 rounded-full" style="width: {{ ((advance.amount_settled + advance.amount_refunded) / advance.approved_amount * 100)|round|int }}%"></div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Payment Info -->
+    {% if advance.payment_mode or advance.payment_reference %}
+    <div class="card p-6">
+        <h3 class="font-semibold text-slate-900 dark:text-white mb-4">Payment Details</h3>
+        <dl class="grid gap-4 sm:grid-cols-3">
+            <div>
+                <dt class="text-sm text-slate-500 dark:text-slate-400">Payment Mode</dt>
+                <dd class="text-sm text-slate-900 dark:text-white mt-1">{{ advance.payment_mode or '—' }}</dd>
+            </div>
+            <div>
+                <dt class="text-sm text-slate-500 dark:text-slate-400">Payment Reference</dt>
+                <dd class="text-sm text-slate-900 dark:text-white mt-1 font-mono">{{ advance.payment_reference or '—' }}</dd>
+            </div>
+            {% if advance.approver %}
+            <div>
+                <dt class="text-sm text-slate-500 dark:text-slate-400">Approved By</dt>
+                <dd class="text-sm text-slate-900 dark:text-white mt-1">{{ advance.approver.full_name }}</dd>
+            </div>
+            {% endif %}
+        </dl>
+    </div>
+    {% endif %}
+
+    <!-- Linked Claims -->
+    {% if linked_claims %}
+    <div class="card p-6">
+        <h3 class="font-semibold text-slate-900 dark:text-white mb-4">Linked Expense Claims</h3>
+        <div class="space-y-2">
+            {% for claim in linked_claims %}
+            <a href="/expense/claims/{{ claim.claim_id }}" class="flex items-center justify-between p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                <div>
+                    <span class="font-mono text-sm text-slate-900 dark:text-white">{{ claim.claim_number }}</span>
+                    <span class="text-sm text-slate-500 ml-2">{{ claim.purpose }}</span>
+                </div>
+                <span class="font-mono text-sm text-slate-700 dark:text-slate-300">{{ "{:,.2f}".format(claim.total_claimed_amount) }}</span>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Notes -->
+    {% if advance.notes %}
+    <div class="card p-6">
+        <h3 class="font-semibold text-slate-900 dark:text-white mb-2">Notes</h3>
+        <p class="text-sm text-slate-600 dark:text-slate-400">{{ advance.notes }}</p>
+    </div>
+    {% endif %}
+
+    <!-- Rejection Reason -->
+    {% if advance.rejection_reason %}
+    <div class="card p-6 border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-900/20">
+        <h3 class="font-semibold text-rose-800 dark:text-rose-300 mb-2">Rejection Reason</h3>
+        <p class="text-sm text-rose-700 dark:text-rose-400">{{ advance.rejection_reason }}</p>
+    </div>
+    {% endif %}
+
+    <!-- Actions -->
+    <div class="card p-6">
+        <h3 class="font-semibold text-slate-900 dark:text-white mb-4">Actions</h3>
+        <div class="flex flex-wrap gap-3">
+            {% if can_disburse %}
+            <button type="button" class="btn btn-primary" onclick="document.getElementById('disburse-modal').classList.remove('hidden')">
+                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/>
+                </svg>
+                Disburse Advance
+            </button>
+            {% endif %}
+
+            {% if can_settle %}
+            <button type="button" class="btn btn-success" onclick="document.getElementById('settle-modal').classList.remove('hidden')">
+                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                Settle Against Claim
+            </button>
+            {% endif %}
+
+            <a href="/expense/advances/list" class="btn btn-secondary">
+                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                </svg>
+                Back to List
+            </a>
+        </div>
+    </div>
+
+    <!-- Disburse Modal -->
+    {% if can_disburse %}
+    <div id="disburse-modal" class="hidden fixed inset-0 z-50 overflow-y-auto">
+        <div class="flex min-h-screen items-center justify-center p-4">
+            <div class="fixed inset-0 bg-black/50" onclick="this.parentElement.parentElement.classList.add('hidden')"></div>
+            <div class="relative bg-white dark:bg-slate-800 rounded-xl shadow-xl max-w-md w-full p-6">
+                <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Disburse Cash Advance</h3>
+                <p class="text-sm text-slate-500 dark:text-slate-400 mb-4">
+                    This will post a GL entry debiting the employee advance account and crediting the selected bank account.
+                </p>
+                <form method="post" action="/expense/advances/{{ advance.advance_id }}/disburse">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <div class="space-y-4">
+                        <div>
+                            <label class="form-label">Bank Account</label>
+                            <select name="bank_account_id" required class="form-input form-select w-full">
+                                {% for account in bank_accounts %}
+                                <option value="{{ account.bank_account_id }}">{{ account.account_name }} ({{ account.account_number[-4:] if account.account_number else 'N/A' }})</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div>
+                            <label class="form-label">Payment Mode</label>
+                            <select name="payment_mode" class="form-input form-select w-full">
+                                <option value="BANK_TRANSFER">Bank Transfer</option>
+                                <option value="CASH">Cash</option>
+                                <option value="CHEQUE">Cheque</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="form-label">Payment Reference</label>
+                            <input type="text" name="payment_reference" class="form-input w-full" placeholder="Transaction ID or cheque number">
+                        </div>
+                    </div>
+                    <div class="flex justify-end gap-3 mt-6">
+                        <button type="button" class="btn btn-secondary" onclick="this.closest('.fixed').classList.add('hidden')">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Disburse & Post GL</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Settle Modal -->
+    {% if can_settle %}
+    <div id="settle-modal" class="hidden fixed inset-0 z-50 overflow-y-auto">
+        <div class="flex min-h-screen items-center justify-center p-4">
+            <div class="fixed inset-0 bg-black/50" onclick="this.parentElement.parentElement.classList.add('hidden')"></div>
+            <div class="relative bg-white dark:bg-slate-800 rounded-xl shadow-xl max-w-md w-full p-6">
+                <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Settle Cash Advance</h3>
+                <p class="text-sm text-slate-500 dark:text-slate-400 mb-4">
+                    Link an approved expense claim to settle this advance. The claim amount will be applied against the outstanding balance.
+                </p>
+                <form method="post" action="/expense/advances/{{ advance.advance_id }}/settle">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <div class="space-y-4">
+                        <div>
+                            <label class="form-label">Expense Claim ID</label>
+                            <input type="text" name="claim_id" required class="form-input w-full font-mono" placeholder="Enter claim UUID">
+                            <p class="text-xs text-slate-400 mt-1">Enter the UUID of an approved expense claim for this employee</p>
+                        </div>
+                        <div>
+                            <label class="form-label">Settlement Amount (Optional)</label>
+                            <input type="number" name="settlement_amount" step="0.01" class="form-input w-full font-mono" placeholder="Auto-calculate from claim">
+                            <p class="text-xs text-slate-400 mt-1">Leave empty to use full claim amount</p>
+                        </div>
+                        <div class="p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                            <p class="text-sm text-amber-700 dark:text-amber-400">
+                                <strong>Outstanding Balance:</strong> {{ "{:,.2f}".format(advance.outstanding_balance) }} {{ advance.currency_code }}
+                            </p>
+                        </div>
+                    </div>
+                    <div class="flex justify-end gap-3 mt-6">
+                        <button type="button" class="btn btn-secondary" onclick="this.closest('.fixed').classList.add('hidden')">Cancel</button>
+                        <button type="submit" class="btn btn-success">Settle Advance</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    {% endif %}
+</div>
+{% endblock %}

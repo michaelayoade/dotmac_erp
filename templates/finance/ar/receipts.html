@@ -1,0 +1,200 @@
+{% extends "finance/base_finance.html" %}
+{% from "components/macros.html" import pagination, status_badge, empty_state, stats_card, bulk_select_header, bulk_select_cell, bulk_action_bar, bulk_icon_delete, bulk_icon_export %}
+
+{% block page_title %}AR Receipts{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="font-medium text-slate-900 dark:text-white">AR Receipts</span>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<a href="/finance/ar/receipts/new" class="btn btn-primary">
+    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+    </svg>
+    New Receipt
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    {# Stats Summary #}
+    <div class="grid gap-4 sm:grid-cols-4">
+        {{ stats_card("Total Receipts", total_count | default(receipts | length if receipts else 0), icon="document", color="slate") }}
+        {{ stats_card("This Month", this_month_total | default("₦0.00"), icon="calendar", color="teal") }}
+        {{ stats_card("Posted", posted_count | default(0), icon="check-circle", color="emerald") }}
+        {{ stats_card("Unallocated", unallocated_total | default("₦0.00"), icon="warning", color="amber") }}
+    </div>
+
+    {# Search and Filters #}
+    <div class="card p-4">
+        <form method="get" action="/finance/ar/receipts" class="flex flex-wrap items-center gap-4">
+            {# Search Input #}
+            <div class="relative flex-1 min-w-[200px]">
+                <svg class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                </svg>
+                <input type="text" name="search" value="{{ search | default('') }}"
+                       placeholder="Search receipts by number or reference..."
+                       class="form-input pl-10 w-full">
+            </div>
+
+            {# Customer Filter #}
+            <select name="customer_id" class="form-select">
+                <option value="">All Customers</option>
+                {% for c in customers_list %}
+                <option value="{{ c.customer_id }}" {{ 'selected' if customer_id == c.customer_id else '' }}>{{ c.customer_name }}</option>
+                {% endfor %}
+            </select>
+
+            {# Status Filter #}
+            <select name="status" class="form-select">
+                <option value="">All Status</option>
+                <option value="DRAFT" {{ 'selected' if status == 'DRAFT' else '' }}>Draft</option>
+                <option value="POSTED" {{ 'selected' if status == 'POSTED' else '' }}>Posted</option>
+                <option value="VOIDED" {{ 'selected' if status == 'VOIDED' else '' }}>Voided</option>
+            </select>
+
+            {# Date Range #}
+            <input type="date" name="start_date" value="{{ start_date | default('') }}"
+                   class="form-input" placeholder="Start Date">
+            <input type="date" name="end_date" value="{{ end_date | default('') }}"
+                   class="form-input" placeholder="End Date">
+
+            {# Actions #}
+            <button type="submit" class="btn btn-primary">
+                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                </svg>
+                Search
+            </button>
+
+            {% if search or status or customer_id or start_date or end_date %}
+            <a href="/finance/ar/receipts" class="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300 transition-colors">
+                Clear
+            </a>
+            {% endif %}
+        </form>
+    </div>
+
+    {# Receipts Table with Bulk Selection #}
+    <div x-data="bulkActions({ entityName: 'receipts' })">
+        <div class="card">
+            <div class="table-container">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            {{ bulk_select_header() }}
+                            <th>Receipt #</th>
+                        <th>Customer</th>
+                        <th>Receipt Date</th>
+                        <th>Method</th>
+                        <th>Reference</th>
+                        <th class="text-right">Amount</th>
+                        <th class="text-center">Status</th>
+                        <th class="text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                        {% for receipt in receipts %}
+                        <tr class="group">
+                            {{ bulk_select_cell(receipt.receipt_id) }}
+                            <td>
+                                <a href="/finance/ar/receipts/{{ receipt.receipt_id }}" class="font-mono text-sm font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300 transition-colors">
+                                    {{ receipt.receipt_number }}
+                                </a>
+                            </td>
+                        <td>
+                            <p class="text-sm font-medium text-slate-900 dark:text-white">{{ receipt.customer_name }}</p>
+                        </td>
+                        <td class="text-slate-600 dark:text-slate-400">{{ receipt.receipt_date }}</td>
+                        <td>
+                            <span class="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300">
+                                {{ receipt.payment_method | replace('_', ' ') | title }}
+                            </span>
+                        </td>
+                        <td class="text-slate-600 dark:text-slate-400">{{ receipt.reference_number | default("—") }}</td>
+                        <td class="text-right font-mono font-medium text-slate-900 dark:text-white">{{ receipt.amount | default("₦0.00") }}</td>
+                        <td class="text-center">
+                            {{ status_badge(receipt.status | lower | default('draft'), 'sm') }}
+                        </td>
+                        <td>
+                            <div class="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <a href="/finance/ar/receipts/{{ receipt.receipt_id }}"
+                                   class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300 transition-colors"
+                                   title="View">
+                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                                    </svg>
+                                </a>
+                                {% if receipt.status == 'DRAFT' %}
+                                <a href="/finance/ar/receipts/{{ receipt.receipt_id }}/edit"
+                                   class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300 transition-colors"
+                                   title="Edit">
+                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                                    </svg>
+                                </a>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="9" class="py-12">
+                                {{ empty_state(
+                                    'No receipts found',
+                                    'Record your first customer receipt' if not (search or status or customer_id or start_date or end_date) else 'Try adjusting your search or filter criteria',
+                                    'currency',
+                                    'New Receipt' if not (search or status or customer_id or start_date or end_date) else none,
+                                    '/ar/receipts/new' if not (search or status or customer_id or start_date or end_date) else none
+                                ) }}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+            {# Pagination #}
+            {{ pagination(
+                page=page | default(1),
+                total_pages=total_pages | default(1),
+                total_count=total_count | default(receipts | length if receipts else 0),
+                limit=limit | default(50),
+                search=search,
+                filters={"status": status, "customer_id": customer_id, "start_date": start_date, "end_date": end_date}
+            ) }}
+        </div>
+
+        {# Bulk Action Bar #}
+        {{ bulk_action_bar(
+            actions=[
+                {
+                    "name": "export",
+                    "label": "Export",
+                    "endpoint": "/ar/receipts/bulk-export",
+                    "icon": bulk_icon_export(),
+                    "class": "btn-secondary"
+                },
+                {
+                    "name": "delete",
+                    "label": "Delete",
+                    "endpoint": "/ar/receipts/bulk-delete",
+                    "icon": bulk_icon_delete(),
+                    "class": "btn-bulk-danger",
+                    "confirm": "Delete selected receipts? Only PENDING receipts without allocations can be deleted."
+                }
+            ],
+            entity_name="receipts"
+        ) }}
+    </div>
+</div>
+{% endblock %}

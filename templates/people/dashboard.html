@@ -1,0 +1,657 @@
+{% extends "people/base_people.html" %}
+{% from "components/macros.html" import stats_card, empty_state, section_card, status_badge %}
+
+{% block page_title %}People Dashboard{% endblock %}
+
+{% block content %}
+<div class="space-y-8 dashboard-people">
+    <div class="flex flex-wrap items-center justify-between gap-4">
+        <div>
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display">People Dashboard</h2>
+            <p class="text-sm text-slate-500 dark:text-slate-400">Workforce analytics and insights</p>
+        </div>
+        <div class="flex items-center gap-3">
+            <a href="/people/hr/employees/new" class="btn btn-primary" style="background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                </svg>
+                Add Employee
+            </a>
+        </div>
+    </div>
+
+    <!-- Hero Stats with gradient background -->
+    <div class="stagger-in card overflow-hidden" style="animation-delay: 0ms;" data-testid="dashboard-stats">
+        <div class="people-stat-grid">
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-12">
+                <!-- Total Employees -->
+                <div class="stat-hero" data-testid="dashboard-stat-total-employees">
+                    <div class="stat-hero-icon stat-hero-icon-people">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+                        </svg>
+                    </div>
+                    <span class="stat-hero-label">Total Employees</span>
+                    <span class="stat-hero-value">{{ stats.total_employees | default(0) }}</span>
+                    {% if stats.new_hires_this_month %}
+                    <span class="stat-hero-trend stat-hero-trend-up">
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/>
+                        </svg>
+                        +{{ stats.new_hires_this_month }} this month
+                    </span>
+                    {% endif %}
+                </div>
+
+                <!-- Active Employees -->
+                <div class="stat-hero" data-testid="dashboard-stat-active-employees">
+                    <div class="stat-hero-icon" style="background: linear-gradient(135deg, #dcfce7 0%, rgba(16, 185, 129, 0.2) 100%); color: #059669;">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </div>
+                    <span class="stat-hero-label">Active</span>
+                    <span class="stat-hero-value">{{ stats.active_employees | default(0) }}</span>
+                    <span class="stat-hero-trend text-emerald-600 dark:text-emerald-400">
+                        {{ stats.active_percentage | default(0) }}% of workforce
+                    </span>
+                </div>
+
+                <!-- On Leave Today -->
+                <div class="stat-hero" data-testid="dashboard-stat-on-leave">
+                    <div class="stat-hero-icon" style="background: linear-gradient(135deg, #fef3c7 0%, rgba(251, 191, 36, 0.2) 100%); color: #d97706;">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                        </svg>
+                    </div>
+                    <span class="stat-hero-label">On Leave Today</span>
+                    <span class="stat-hero-value">{{ stats.on_leave_today | default(0) }}</span>
+                    <span class="stat-hero-trend text-amber-600 dark:text-amber-400">
+                        {{ stats.pending_leave_requests | default(0) }} pending requests
+                    </span>
+                </div>
+
+                <!-- Open Positions -->
+                <div class="stat-hero" data-testid="dashboard-stat-open-positions">
+                    <div class="stat-hero-icon stat-hero-icon-people">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                        </svg>
+                    </div>
+                    <span class="stat-hero-label">Open Positions</span>
+                    <span class="stat-hero-value">{{ stats.open_positions | default(0) }}</span>
+                    <span class="stat-hero-trend text-violet-600 dark:text-violet-400">
+                        {{ stats.active_applicants | default(0) }} applicants
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Alerts Banner -->
+    {% if alerts %}
+    <div class="stagger-in space-y-3" style="animation-delay: 25ms;">
+        {% for alert in alerts %}
+        <a href="{{ alert.url }}" class="flex items-center gap-4 rounded-xl border px-4 py-3 transition-all hover:shadow-md
+            {% if alert.type == 'warning' %}
+            border-amber-200 bg-amber-50 dark:border-amber-800/50 dark:bg-amber-900/20
+            {% elif alert.type == 'error' %}
+            border-red-200 bg-red-50 dark:border-red-800/50 dark:bg-red-900/20
+            {% else %}
+            border-blue-200 bg-blue-50 dark:border-blue-800/50 dark:bg-blue-900/20
+            {% endif %}">
+            <div class="flex h-10 w-10 items-center justify-center rounded-lg
+                {% if alert.type == 'warning' %}
+                bg-amber-100 text-amber-600 dark:bg-amber-900/50 dark:text-amber-400
+                {% elif alert.type == 'error' %}
+                bg-red-100 text-red-600 dark:bg-red-900/50 dark:text-red-400
+                {% else %}
+                bg-blue-100 text-blue-600 dark:bg-blue-900/50 dark:text-blue-400
+                {% endif %}">
+                {% if alert.icon == 'clock' %}
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                {% elif alert.icon == 'document' %}
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                </svg>
+                {% else %}
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                {% endif %}
+            </div>
+            <div class="flex-1">
+                <p class="text-sm font-medium
+                    {% if alert.type == 'warning' %}text-amber-800 dark:text-amber-200
+                    {% elif alert.type == 'error' %}text-red-800 dark:text-red-200
+                    {% else %}text-blue-800 dark:text-blue-200{% endif %}">
+                    {{ alert.title }}
+                </p>
+                <p class="text-sm
+                    {% if alert.type == 'warning' %}text-amber-600 dark:text-amber-400
+                    {% elif alert.type == 'error' %}text-red-600 dark:text-red-400
+                    {% else %}text-blue-600 dark:text-blue-400{% endif %}">
+                    {{ alert.message }}
+                </p>
+            </div>
+            <svg class="h-5 w-5
+                {% if alert.type == 'warning' %}text-amber-400 dark:text-amber-500
+                {% elif alert.type == 'error' %}text-red-400 dark:text-red-500
+                {% else %}text-blue-400 dark:text-blue-500{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+            </svg>
+        </a>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Divider -->
+    <div class="divider-people"></div>
+
+    <!-- Charts Row 1: Headcount Trend & Department Distribution -->
+    <div class="grid gap-6 lg:grid-cols-2">
+        <!-- Headcount Trend Chart -->
+        <div class="stagger-in card p-6" style="animation-delay: 50ms;">
+            <div class="flex items-center justify-between mb-6">
+                <div>
+                    <h3 class="text-base font-semibold text-slate-900 dark:text-white font-display">Headcount Trend</h3>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">12-month employee count</p>
+                </div>
+                <div class="flex items-center gap-4 text-xs">
+                    <span class="flex items-center gap-1.5">
+                        <span class="w-3 h-3 rounded-full bg-violet-500"></span>
+                        <span class="text-slate-600 dark:text-slate-400">Headcount</span>
+                    </span>
+                    <span class="flex items-center gap-1.5">
+                        <span class="w-3 h-3 rounded-full bg-emerald-500"></span>
+                        <span class="text-slate-600 dark:text-slate-400">Hires</span>
+                    </span>
+                    <span class="flex items-center gap-1.5">
+                        <span class="w-3 h-3 rounded-full bg-rose-500"></span>
+                        <span class="text-slate-600 dark:text-slate-400">Exits</span>
+                    </span>
+                </div>
+            </div>
+            {% if chart_data.headcount_trend %}
+            <div class="h-64">
+                <canvas data-chart="trendLine" data-chart-config='{{ {
+                    "labels": chart_data.headcount_trend | map(attribute="month") | list,
+                    "datasets": [
+                        {"label": "Headcount", "data": chart_data.headcount_trend | map(attribute="count") | list, "color": "rgba(139, 92, 246, 1)", "fill": "rgba(139, 92, 246, 0.1)"},
+                        {"label": "Hires", "data": chart_data.headcount_trend | map(attribute="hires") | list, "color": "rgba(16, 185, 129, 1)", "fill": "rgba(16, 185, 129, 0.1)"},
+                        {"label": "Exits", "data": chart_data.headcount_trend | map(attribute="exits") | list, "color": "rgba(244, 63, 94, 1)", "fill": "rgba(244, 63, 94, 0.1)"}
+                    ]
+                } | tojson }}'></canvas>
+            </div>
+            {% else %}
+            {{ empty_state("No headcount data", "Add employees to see trends") }}
+            {% endif %}
+        </div>
+
+        <!-- Department Distribution -->
+        <div class="stagger-in card p-6" style="animation-delay: 100ms;">
+            <div class="flex items-center justify-between mb-6">
+                <div>
+                    <h3 class="text-base font-semibold text-slate-900 dark:text-white font-display">Department Distribution</h3>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">Employees by department</p>
+                </div>
+            </div>
+            {% if chart_data.department_distribution %}
+            <div class="h-64 flex items-center justify-center">
+                <canvas data-chart="donut" data-chart-config='{{ {
+                    "labels": chart_data.department_distribution | map(attribute="name") | list,
+                    "data": chart_data.department_distribution | map(attribute="count") | list
+                } | tojson }}'></canvas>
+            </div>
+            {% else %}
+            {{ empty_state("No department data", "Set up departments first") }}
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Charts Row 2: Employee Status & Tenure Distribution -->
+    <div class="grid gap-6 lg:grid-cols-3">
+        <!-- Employee Status Breakdown -->
+        <div class="stagger-in card p-6" style="animation-delay: 150ms;">
+            <div class="mb-6">
+                <h3 class="text-base font-semibold text-slate-900 dark:text-white font-display">Employment Status</h3>
+                <p class="text-sm text-slate-500 dark:text-slate-400">Current workforce status</p>
+            </div>
+            {% if chart_data.status_breakdown %}
+            <div class="h-56 flex items-center justify-center">
+                <canvas data-chart="donut" data-chart-config='{{ {
+                    "labels": chart_data.status_breakdown | map(attribute="status") | list,
+                    "data": chart_data.status_breakdown | map(attribute="count") | list,
+                    "colors": ["rgba(16, 185, 129, 0.85)", "rgba(251, 191, 36, 0.85)", "rgba(239, 68, 68, 0.85)", "rgba(148, 163, 184, 0.85)"]
+                } | tojson }}'></canvas>
+            </div>
+            {% else %}
+            {{ empty_state("No status data", "Add employees to see breakdown") }}
+            {% endif %}
+        </div>
+
+        <!-- Tenure Distribution -->
+        <div class="stagger-in card p-6" style="animation-delay: 200ms;">
+            <div class="mb-6">
+                <h3 class="text-base font-semibold text-slate-900 dark:text-white font-display">Tenure Distribution</h3>
+                <p class="text-sm text-slate-500 dark:text-slate-400">Years of service</p>
+            </div>
+            {% if chart_data.tenure_distribution %}
+            <div class="h-56">
+                <canvas data-chart="horizontalBar" data-chart-config='{{ {
+                    "labels": chart_data.tenure_distribution | map(attribute="range") | list,
+                    "data": chart_data.tenure_distribution | map(attribute="count") | list,
+                    "color": "rgba(139, 92, 246, 0.85)"
+                } | tojson }}'></canvas>
+            </div>
+            {% else %}
+            {{ empty_state("No tenure data", "Employee history will show here") }}
+            {% endif %}
+        </div>
+
+        <!-- Age Distribution -->
+        <div class="stagger-in card p-6" style="animation-delay: 250ms;">
+            <div class="mb-6">
+                <h3 class="text-base font-semibold text-slate-900 dark:text-white font-display">Age Distribution</h3>
+                <p class="text-sm text-slate-500 dark:text-slate-400">Workforce demographics</p>
+            </div>
+            {% if chart_data.age_distribution %}
+            <div class="h-56">
+                <canvas data-chart="horizontalBar" data-chart-config='{{ {
+                    "labels": chart_data.age_distribution | map(attribute="range") | list,
+                    "data": chart_data.age_distribution | map(attribute="count") | list,
+                    "color": "rgba(59, 130, 246, 0.85)"
+                } | tojson }}'></canvas>
+            </div>
+            {% else %}
+            {{ empty_state("No age data", "Add birth dates to employees") }}
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Charts Row 3: Gender & Employment Type -->
+    <div class="grid gap-6 lg:grid-cols-2">
+        <!-- Gender Distribution -->
+        <div class="stagger-in card p-6" style="animation-delay: 275ms;">
+            <div class="mb-6">
+                <h3 class="text-base font-semibold text-slate-900 dark:text-white font-display">Gender Distribution</h3>
+                <p class="text-sm text-slate-500 dark:text-slate-400">Workforce diversity</p>
+            </div>
+            {% if chart_data.gender_distribution %}
+            <div class="h-48 flex items-center justify-center">
+                <canvas data-chart="donut" data-chart-config='{{ {
+                    "labels": chart_data.gender_distribution | map(attribute="gender") | list,
+                    "data": chart_data.gender_distribution | map(attribute="count") | list,
+                    "colors": ["rgba(59, 130, 246, 0.85)", "rgba(236, 72, 153, 0.85)", "rgba(168, 85, 247, 0.85)"]
+                } | tojson }}'></canvas>
+            </div>
+            {% else %}
+            {{ empty_state("No gender data", "Add gender info to employee profiles") }}
+            {% endif %}
+        </div>
+
+        <!-- Employment Type Distribution -->
+        <div class="stagger-in card p-6" style="animation-delay: 285ms;">
+            <div class="mb-6">
+                <h3 class="text-base font-semibold text-slate-900 dark:text-white font-display">Employment Types</h3>
+                <p class="text-sm text-slate-500 dark:text-slate-400">Full-time, contract, etc.</p>
+            </div>
+            {% if chart_data.employment_type_distribution %}
+            <div class="h-48">
+                <canvas data-chart="horizontalBar" data-chart-config='{{ {
+                    "labels": chart_data.employment_type_distribution | map(attribute="type") | list,
+                    "data": chart_data.employment_type_distribution | map(attribute="count") | list,
+                    "color": "rgba(16, 185, 129, 0.85)"
+                } | tojson }}'></canvas>
+            </div>
+            {% else %}
+            {{ empty_state("No employment type data", "Assign employment types to employees") }}
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Main Content Grid -->
+    <div class="grid gap-8 lg:grid-cols-12">
+        <!-- Left Column - Quick Actions & Stats -->
+        <div class="lg:col-span-4 space-y-8">
+            <!-- Pending Approvals -->
+            {% if pending_approvals.total > 0 %}
+            <div class="stagger-in" style="animation-delay: 290ms;">
+                <div class="section-label">
+                    <span class="section-label-text">Pending Approvals</span>
+                </div>
+                <div class="card p-5 border-l-4 border-l-violet-500">
+                    <div class="flex items-center justify-between mb-4">
+                        <span class="text-2xl font-bold text-violet-600 dark:text-violet-400">{{ pending_approvals.total }}</span>
+                        <span class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Items Awaiting</span>
+                    </div>
+                    <div class="space-y-2">
+                        {% if pending_approvals.leave_requests > 0 %}
+                        <a href="/people/leave/applications?status=pending" class="flex justify-between items-center py-2 px-3 -mx-3 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                            <span class="text-sm text-slate-600 dark:text-slate-400">Leave Requests</span>
+                            <span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                                {{ pending_approvals.leave_requests }}
+                            </span>
+                        </a>
+                        {% endif %}
+                        {% if pending_approvals.job_offers > 0 %}
+                        <a href="/people/recruit/offers?status=pending" class="flex justify-between items-center py-2 px-3 -mx-3 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                            <span class="text-sm text-slate-600 dark:text-slate-400">Job Offers</span>
+                            <span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400">
+                                {{ pending_approvals.job_offers }}
+                            </span>
+                        </a>
+                        {% endif %}
+                        {% if pending_approvals.interviews > 0 %}
+                        <a href="/people/recruit/interviews?status=due" class="flex justify-between items-center py-2 px-3 -mx-3 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                            <span class="text-sm text-slate-600 dark:text-slate-400">Interviews Due</span>
+                            <span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                                {{ pending_approvals.interviews }}
+                            </span>
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Quick Actions -->
+            <div class="stagger-in" style="animation-delay: 300ms;">
+                <div class="section-label">
+                    <span class="section-label-text">Quick Actions</span>
+                </div>
+                <div class="space-y-2" data-testid="dashboard-quick-actions">
+                    <a href="/people/hr/employees/new" class="cmd-action">
+                        <span class="cmd-action-key">E</span>
+                        <span class="cmd-action-label">Add Employee</span>
+                        <span class="cmd-action-hint">HR</span>
+                    </a>
+                    <a href="/people/leave/applications/new" class="cmd-action">
+                        <span class="cmd-action-key">L</span>
+                        <span class="cmd-action-label">New Leave Request</span>
+                        <span class="cmd-action-hint">Leave</span>
+                    </a>
+                    <a href="/people/payroll/slips/new" class="cmd-action">
+                        <span class="cmd-action-key">P</span>
+                        <span class="cmd-action-label">Process Payroll</span>
+                        <span class="cmd-action-hint">Payroll</span>
+                    </a>
+                    <a href="/people/recruit/jobs/new" class="cmd-action">
+                        <span class="cmd-action-key">J</span>
+                        <span class="cmd-action-label">Create Job Posting</span>
+                        <span class="cmd-action-hint">Recruit</span>
+                    </a>
+                </div>
+            </div>
+
+            <!-- Leave Summary -->
+            <div class="stagger-in" style="animation-delay: 350ms;">
+                <div class="section-label">
+                    <span class="section-label-text">Leave Overview</span>
+                </div>
+                <div class="card p-5">
+                    <div class="flex items-center justify-between mb-4">
+                        <span class="text-sm font-medium text-slate-700 dark:text-slate-300">This Month</span>
+                    </div>
+                    <div class="space-y-3">
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-slate-500 dark:text-slate-400">Pending Requests</span>
+                            <span class="px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                                {{ stats.pending_leave_requests | default(0) }}
+                            </span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-slate-500 dark:text-slate-400">Approved</span>
+                            <span class="px-2 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+                                {{ stats.approved_leave_this_month | default(0) }}
+                            </span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-slate-500 dark:text-slate-400">On Leave Today</span>
+                            <span class="px-2 py-1 rounded-full text-xs font-medium bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400">
+                                {{ stats.on_leave_today | default(0) }}
+                            </span>
+                        </div>
+                    </div>
+                    <a href="/people/leave/applications" class="block mt-4 text-center text-sm font-medium text-violet-600 hover:text-violet-700 dark:text-violet-400 py-2 rounded-lg hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-colors">
+                        View All Requests &rarr;
+                    </a>
+                </div>
+            </div>
+
+            <!-- Attendance Overview -->
+            <div class="stagger-in" style="animation-delay: 375ms;">
+                <div class="section-label">
+                    <span class="section-label-text">Today's Attendance</span>
+                </div>
+                <div class="card p-5">
+                    <div class="grid grid-cols-3 gap-4 text-center">
+                        <div>
+                            <div class="text-2xl font-semibold text-emerald-600 dark:text-emerald-400">{{ stats.checked_in_today | default(0) }}</div>
+                            <div class="text-xs text-slate-500 dark:text-slate-400 mt-1">Present</div>
+                        </div>
+                        <div>
+                            <div class="text-2xl font-semibold text-amber-600 dark:text-amber-400">{{ stats.late_today | default(0) }}</div>
+                            <div class="text-xs text-slate-500 dark:text-slate-400 mt-1">Late</div>
+                        </div>
+                        <div>
+                            <div class="text-2xl font-semibold text-rose-600 dark:text-rose-400">{{ stats.absent_today | default(0) }}</div>
+                            <div class="text-xs text-slate-500 dark:text-slate-400 mt-1">Absent</div>
+                        </div>
+                    </div>
+                    <!-- Attendance progress bar -->
+                    <div class="mt-4">
+                        <div class="h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden flex">
+                            <div class="bg-emerald-500 h-full" style="width: {{ stats.attendance_rate | default(0) }}%"></div>
+                            <div class="bg-amber-500 h-full" style="width: {{ stats.late_rate | default(0) }}%"></div>
+                        </div>
+                        <div class="mt-2 text-center text-xs text-slate-500 dark:text-slate-400">
+                            {{ stats.attendance_rate | default(0) }}% attendance rate
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recruitment Pipeline -->
+            <div class="stagger-in" style="animation-delay: 400ms;">
+                <div class="section-label">
+                    <span class="section-label-text">Recruitment Pipeline</span>
+                </div>
+                <div class="card p-5">
+                    <div class="space-y-3">
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-slate-500 dark:text-slate-400">Open Positions</span>
+                            <span class="font-medium text-slate-900 dark:text-white">{{ stats.open_positions | default(0) }}</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-slate-500 dark:text-slate-400">Active Applicants</span>
+                            <span class="font-medium text-slate-900 dark:text-white">{{ stats.active_applicants | default(0) }}</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-slate-500 dark:text-slate-400">Interviews Scheduled</span>
+                            <span class="font-medium text-slate-900 dark:text-white">{{ stats.scheduled_interviews | default(0) }}</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-slate-500 dark:text-slate-400">Offers Extended</span>
+                            <span class="font-medium text-slate-900 dark:text-white">{{ stats.pending_offers | default(0) }}</span>
+                        </div>
+                    </div>
+                    <a href="/people/recruit/jobs" class="block mt-4 text-center text-sm font-medium text-violet-600 hover:text-violet-700 dark:text-violet-400 py-2 rounded-lg hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-colors">
+                        View Pipeline &rarr;
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column - Lists & Timeline -->
+        <div class="lg:col-span-8 space-y-8">
+            <!-- Recent Hires -->
+            <div class="stagger-in" style="animation-delay: 300ms;">
+                <div class="section-label">
+                    <span class="section-label-text">Recent Hires</span>
+                </div>
+                <div class="card" data-testid="dashboard-recent-hires">
+                    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-700/60">
+                        <span class="text-sm font-medium text-slate-500 dark:text-slate-400">
+                            Latest {{ recent_hires | length | default(0) }} employees
+                        </span>
+                        <a href="/people/hr/employees" class="text-sm font-medium text-violet-600 hover:text-violet-700 dark:text-violet-400 transition-colors">
+                            View all &rarr;
+                        </a>
+                    </div>
+                    <div class="divide-y divide-slate-100 dark:divide-slate-700/60">
+                        {% for employee in recent_hires %}
+                        <a href="/people/hr/employees/{{ employee.id }}" class="flex items-center gap-4 px-6 py-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                            <div class="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-violet-400 to-purple-500 text-white text-sm font-semibold">
+                                {{ employee.initials | default("?") }}
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <p class="text-sm font-medium text-slate-900 dark:text-white truncate">{{ employee.full_name }}</p>
+                                <p class="text-xs text-slate-500 dark:text-slate-400">{{ employee.designation }} &bull; {{ employee.department }}</p>
+                            </div>
+                            <div class="text-right">
+                                <p class="text-xs text-slate-500 dark:text-slate-400">Joined</p>
+                                <p class="text-sm font-medium text-slate-700 dark:text-slate-300">{{ employee.date_of_joining }}</p>
+                            </div>
+                        </a>
+                        {% else %}
+                        <div class="py-12">
+                            {{ empty_state("No recent hires", "New employees will appear here") }}
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Upcoming Events -->
+            <div class="stagger-in" style="animation-delay: 350ms;">
+                <div class="section-label">
+                    <span class="section-label-text">Upcoming Events</span>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Birthdays -->
+                    <div class="card p-5">
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="h-10 w-10 rounded-lg bg-pink-100 dark:bg-pink-900/30 flex items-center justify-center">
+                                <svg class="h-5 w-5 text-pink-600 dark:text-pink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 15.546c-.523 0-1.046.151-1.5.454a2.704 2.704 0 01-3 0 2.704 2.704 0 00-3 0 2.704 2.704 0 01-3 0 2.704 2.704 0 00-3 0 2.704 2.704 0 01-3 0 2.701 2.701 0 00-1.5-.454M9 6v2m3-2v2m3-2v2M9 3h.01M12 3h.01M15 3h.01M21 21v-7a2 2 0 00-2-2H5a2 2 0 00-2 2v7h18z"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <h4 class="text-sm font-semibold text-slate-900 dark:text-white">Upcoming Birthdays</h4>
+                                <p class="text-xs text-slate-500 dark:text-slate-400">This week</p>
+                            </div>
+                        </div>
+                        <div class="space-y-2">
+                            {% for birthday in upcoming_birthdays[:5] %}
+                            <div class="flex items-center justify-between text-sm">
+                                <span class="text-slate-700 dark:text-slate-300">{{ birthday.name }}</span>
+                                <span class="text-slate-500 dark:text-slate-400">{{ birthday.date }}</span>
+                            </div>
+                            {% else %}
+                            <p class="text-sm text-slate-500 dark:text-slate-400 text-center py-4">No birthdays this week</p>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <!-- Work Anniversaries -->
+                    <div class="card p-5">
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="h-10 w-10 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+                                <svg class="h-5 w-5 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <h4 class="text-sm font-semibold text-slate-900 dark:text-white">Work Anniversaries</h4>
+                                <p class="text-xs text-slate-500 dark:text-slate-400">This month</p>
+                            </div>
+                        </div>
+                        <div class="space-y-2">
+                            {% for anniversary in upcoming_anniversaries[:5] %}
+                            <div class="flex items-center justify-between text-sm">
+                                <span class="text-slate-700 dark:text-slate-300">{{ anniversary.name }}</span>
+                                <span class="text-slate-500 dark:text-slate-400">{{ anniversary.years }} years</span>
+                            </div>
+                            {% else %}
+                            <p class="text-sm text-slate-500 dark:text-slate-400 text-center py-4">No anniversaries this month</p>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Payroll Summary -->
+            <div class="stagger-in" style="animation-delay: 400ms;">
+                <div class="section-label">
+                    <span class="section-label-text">Payroll Summary</span>
+                </div>
+                <div class="card p-6">
+                    <div class="flex items-center justify-between mb-6">
+                        <div>
+                            <h3 class="text-base font-semibold text-slate-900 dark:text-white font-display">Monthly Payroll Trend</h3>
+                            <p class="text-sm text-slate-500 dark:text-slate-400">Last 6 months</p>
+                        </div>
+                        <a href="/people/payroll/slips" class="text-sm font-medium text-violet-600 hover:text-violet-700 dark:text-violet-400">
+                            View Details &rarr;
+                        </a>
+                    </div>
+                    {% if chart_data.payroll_trend %}
+                    <div class="h-48">
+                        <canvas data-chart="groupedBar" data-chart-config='{{ {
+                            "labels": chart_data.payroll_trend | map(attribute="month") | list,
+                            "datasets": [
+                                {"label": "Gross Pay", "data": chart_data.payroll_trend | map(attribute="gross") | list, "color": "rgba(139, 92, 246, 0.85)"},
+                                {"label": "Net Pay", "data": chart_data.payroll_trend | map(attribute="net") | list, "color": "rgba(16, 185, 129, 0.85)"}
+                            ]
+                        } | tojson }}'></canvas>
+                    </div>
+                    {% else %}
+                    {{ empty_state("No payroll data", "Process payroll to see trends") }}
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Quick Links -->
+            <div class="stagger-in" style="animation-delay: 450ms;">
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <a href="/people/hr/employees" class="card card-hover p-4 text-center">
+                        <div class="text-slate-400 dark:text-slate-500 mb-2">
+                            <svg class="h-6 w-6 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+                            </svg>
+                        </div>
+                        <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Employees</span>
+                    </a>
+                    <a href="/people/leave/applications" class="card card-hover p-4 text-center">
+                        <div class="text-slate-400 dark:text-slate-500 mb-2">
+                            <svg class="h-6 w-6 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                            </svg>
+                        </div>
+                        <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Leave</span>
+                    </a>
+                    <a href="/people/attendance" class="card card-hover p-4 text-center">
+                        <div class="text-slate-400 dark:text-slate-500 mb-2">
+                            <svg class="h-6 w-6 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                        </div>
+                        <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Attendance</span>
+                    </a>
+                    <a href="/people/hr/employees/org-chart" class="card card-hover p-4 text-center">
+                        <div class="text-slate-400 dark:text-slate-500 mb-2">
+                            <svg class="h-6 w-6 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
+                            </svg>
+                        </div>
+                        <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Org Chart</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

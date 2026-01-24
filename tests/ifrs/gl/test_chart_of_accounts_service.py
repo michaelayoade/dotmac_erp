@@ -9,7 +9,7 @@ from uuid import uuid4
 
 import pytest
 
-from app.services.ifrs.gl.chart_of_accounts import (
+from app.services.finance.gl.chart_of_accounts import (
     ChartOfAccountsService,
     AccountInput,
 )

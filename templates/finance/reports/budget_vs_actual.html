@@ -1,0 +1,105 @@
+{% extends "finance/base_finance.html" %}
+
+{% block page_title %}Budget vs actual{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 mt-1">
+    <a href="/dashboard" class="hover:text-slate-700 dark:hover:text-slate-300">Dashboard</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <a href="/finance/reports" class="hover:text-slate-700 dark:hover:text-slate-300">Reports</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="text-slate-700 dark:text-slate-300">Budget vs actual</span>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<button onclick="window.print()" class="btn btn-secondary h-9 px-3">
+    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
+    </svg>
+    Print
+</button>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto space-y-6">
+    <div class="card p-4">
+        <form method="get" class="grid gap-4 md:grid-cols-4">
+            <div>
+                <label class="form-label">Start date</label>
+                <input type="date" name="start_date" value="{{ start_date }}" class="form-input">
+            </div>
+            <div>
+                <label class="form-label">End date</label>
+                <input type="date" name="end_date" value="{{ end_date }}" class="form-input">
+            </div>
+            <div>
+                <label class="form-label">Budget ID</label>
+                <input type="text" name="budget_id" value="{{ budget_id }}" class="form-input" placeholder="Optional UUID">
+            </div>
+            <div>
+                <label class="form-label">Budget code</label>
+                <input type="text" name="budget_code" value="{{ budget_code }}" class="form-input" placeholder="Optional code">
+            </div>
+            <div class="md:col-span-4">
+                <button type="submit" class="btn btn-primary">
+                    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                    </svg>
+                    Refresh
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <div class="card p-6 print:shadow-none print:border-0">
+        <div class="text-center mb-8 print:mb-4">
+            <h1 class="text-2xl font-semibold text-slate-900 dark:text-white font-display">Budget vs actual</h1>
+            <p class="text-slate-500 dark:text-slate-400 mt-1">{{ start_date }} to {{ end_date }}</p>
+        </div>
+
+        {% if budget_lines %}
+        <table class="w-full text-sm">
+            <thead class="border-b border-slate-200 dark:border-slate-700">
+                <tr class="text-left text-slate-500 dark:text-slate-400">
+                    <th class="py-2 px-2">Account</th>
+                    <th class="py-2 px-2 text-right">Budget</th>
+                    <th class="py-2 px-2 text-right">Actual</th>
+                    <th class="py-2 px-2 text-right">Variance</th>
+                    <th class="py-2 px-2 text-right">Variance %</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in budget_lines %}
+                <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/30">
+                    <td class="py-2 px-2">
+                        <span class="font-mono text-xs text-slate-500">{{ item.account_code }}</span>
+                        <span class="ml-2 text-slate-700 dark:text-slate-300">{{ item.account_name }}</span>
+                    </td>
+                    <td class="py-2 px-2 text-right font-mono text-slate-900 dark:text-white">{{ item.budget }}</td>
+                    <td class="py-2 px-2 text-right font-mono text-slate-900 dark:text-white">{{ item.actual }}</td>
+                    <td class="py-2 px-2 text-right font-mono text-slate-900 dark:text-white">{{ item.variance }}</td>
+                    <td class="py-2 px-2 text-right font-mono text-slate-500">{{ item.variance_percent }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr class="border-t border-slate-200 dark:border-slate-700">
+                    <td class="py-2 px-2 font-semibold text-slate-700 dark:text-slate-300">Totals</td>
+                    <td class="py-2 px-2 text-right font-mono font-semibold">{{ total_budget }}</td>
+                    <td class="py-2 px-2 text-right font-mono font-semibold">{{ total_actual }}</td>
+                    <td class="py-2 px-2 text-right font-mono font-semibold">{{ total_variance }}</td>
+                    <td class="py-2 px-2"></td>
+                </tr>
+            </tfoot>
+        </table>
+        {% else %}
+        <p class="text-sm text-slate-500 dark:text-slate-400">No budget data available for this period.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -10,10 +10,11 @@ from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, Header, HTTPException
 from fastapi.testclient import TestClient
 
-from app.api.ifrs.gl import router, get_db
+from app.api.finance.gl import router, get_db
+from app.api.deps import require_tenant_auth
 from tests.api.ifrs.conftest import (
     MockAccount,
     MockFiscalPeriod,
@@ -40,10 +41,18 @@ def mock_db():
 
 
 @pytest.fixture
-def client(app, mock_db):
+def client(app, mock_db, mock_auth_dict, auth_headers):
     """Create test client with mocked dependencies."""
     app.dependency_overrides[get_db] = lambda: mock_db
-    return TestClient(app)
+    def _require_tenant_auth_override(authorization: str | None = Header(default=None)):
+        if not authorization:
+            raise HTTPException(status_code=401, detail="Unauthorized")
+        return mock_auth_dict
+
+    app.dependency_overrides[require_tenant_auth] = _require_tenant_auth_override
+    test_client = TestClient(app)
+    test_client.headers.update(auth_headers)
+    return test_client
 
 
 class TestAccountsAPI:
@@ -58,7 +67,7 @@ class TestAccountsAPI:
             mock_create.return_value = mock_account
 
             response = client.post(
-                f"/gl/accounts?organization_id={org_id}&category_id={category_id}",
+                f"/gl/accounts?category_id={category_id}",
                 json={
                     "account_code": "1000",
                     "account_name": "Cash",
@@ -89,7 +98,7 @@ class TestAccountsAPI:
         with patch("app.api.ifrs.gl.chart_of_accounts_service.list") as mock_list:
             mock_list.return_value = mock_accounts
 
-            response = client.get(f"/gl/accounts?organization_id={org_id}")
+            response = client.get(f"/gl/accounts")
 
         assert response.status_code == 200
         data = response.json()
@@ -103,7 +112,7 @@ class TestAccountsAPI:
             mock_list.return_value = mock_accounts
 
             response = client.get(
-                f"/gl/accounts?organization_id={org_id}&is_active=true&account_type=POSTING"
+                f"/gl/accounts?is_active=true&account_type=POSTING"
             )
 
         assert response.status_code == 200
@@ -122,7 +131,7 @@ class TestAccountsAPI:
             mock_update.return_value = updated_account
 
             response = client.patch(
-                f"/gl/accounts/{mock_account.account_id}?organization_id={org_id}",
+                f"/gl/accounts/{mock_account.account_id}",
                 json={"account_name": "Updated Cash"},
             )
 
@@ -141,7 +150,7 @@ class TestAccountsAPI:
             mock_deactivate.return_value = deactivated
 
             response = client.post(
-                f"/gl/accounts/{mock_account.account_id}/deactivate?organization_id={org_id}"
+                f"/gl/accounts/{mock_account.account_id}/deactivate"
             )
 
         assert response.status_code == 200
@@ -158,7 +167,7 @@ class TestFiscalPeriodsAPI:
             mock_create.return_value = mock_period
 
             response = client.post(
-                f"/gl/fiscal-periods?organization_id={org_id}",
+                f"/gl/fiscal-periods",
                 json={
                     "period_name": "January 2024",
                     "period_type": "MONTHLY",
@@ -188,7 +197,7 @@ class TestFiscalPeriodsAPI:
         with patch("app.api.ifrs.gl.fiscal_period_service.list") as mock_list:
             mock_list.return_value = mock_periods
 
-            response = client.get(f"/gl/fiscal-periods?organization_id={org_id}")
+            response = client.get(f"/gl/fiscal-periods")
 
         assert response.status_code == 200
         data = response.json()
@@ -202,7 +211,7 @@ class TestFiscalPeriodsAPI:
             mock_list.return_value = mock_periods
 
             response = client.get(
-                f"/gl/fiscal-periods?organization_id={org_id}&fiscal_year=2024&status=OPEN"
+                f"/gl/fiscal-periods?fiscal_year=2024&status=OPEN"
             )
 
         assert response.status_code == 200
@@ -220,7 +229,7 @@ class TestFiscalPeriodsAPI:
             mock_open.return_value = opened_period
 
             response = client.post(
-                f"/gl/fiscal-periods/{mock_period.fiscal_period_id}/open?organization_id={org_id}"
+                f"/gl/fiscal-periods/{mock_period.fiscal_period_id}/open"
             )
 
         assert response.status_code == 200
@@ -239,7 +248,7 @@ class TestFiscalPeriodsAPI:
 
             response = client.post(
                 f"/gl/fiscal-periods/{mock_period.fiscal_period_id}/close"
-                f"?organization_id={org_id}&closed_by_user_id={user_id}"
+                f"?closed_by_user_id={user_id}"
             )
 
         assert response.status_code == 200
@@ -256,7 +265,7 @@ class TestJournalEntriesAPI:
             mock_create.return_value = mock_entry
 
             response = client.post(
-                f"/gl/journal-entries?organization_id={org_id}&created_by_user_id={user_id}",
+                f"/gl/journal-entries?created_by_user_id={user_id}",
                 json={
                     "fiscal_period_id": str(uuid.uuid4()),
                     "journal_date": str(date.today()),
@@ -299,7 +308,7 @@ class TestJournalEntriesAPI:
         with patch("app.api.ifrs.gl.journal_service.list") as mock_list:
             mock_list.return_value = mock_entries
 
-            response = client.get(f"/gl/journal-entries?organization_id={org_id}")
+            response = client.get(f"/gl/journal-entries")
 
         assert response.status_code == 200
         data = response.json()
@@ -313,7 +322,7 @@ class TestJournalEntriesAPI:
             mock_list.return_value = mock_entries
 
             response = client.get(
-                f"/gl/journal-entries?organization_id={org_id}"
+                f"/gl/journal-entries"
                 f"&status=POSTED&start_date=2024-01-01&end_date=2024-01-31"
             )
 
@@ -333,7 +342,7 @@ class TestJournalEntriesAPI:
 
             response = client.post(
                 f"/gl/journal-entries/{uuid.uuid4()}/post"
-                f"?organization_id={org_id}&posted_by_user_id={user_id}"
+                f"?posted_by_user_id={user_id}"
             )
 
         assert response.status_code == 200
@@ -354,7 +363,7 @@ class TestJournalEntriesAPI:
 
             response = client.post(
                 f"/gl/journal-entries/{mock_entry.journal_entry_id}/reverse"
-                f"?reversal_date={date.today()}&organization_id={org_id}&reversed_by_user_id={user_id}"
+                f"?reversal_date={date.today()}&reversed_by_user_id={user_id}"
             )
 
         assert response.status_code == 200
@@ -385,7 +394,7 @@ class TestAccountBalancesAPI:
 
             response = client.get(
                 f"/gl/balances/{mock_account.account_id}"
-                f"?fiscal_period_id={mock_balance.fiscal_period_id}&organization_id={org_id}"
+                f"?fiscal_period_id={mock_balance.fiscal_period_id}"
             )
 
         assert response.status_code == 200
@@ -397,7 +406,7 @@ class TestAccountBalancesAPI:
 
             response = client.get(
                 f"/gl/balances/{uuid.uuid4()}"
-                f"?fiscal_period_id={uuid.uuid4()}&organization_id={org_id}"
+                f"?fiscal_period_id={uuid.uuid4()}"
             )
 
         assert response.status_code == 404
@@ -419,7 +428,7 @@ class TestAccountBalancesAPI:
             mock_get.return_value = mock_trial_balance
 
             response = client.get(
-                f"/gl/trial-balance?organization_id={org_id}&fiscal_period_id={fiscal_period_id}"
+                f"/gl/trial-balance?fiscal_period_id={fiscal_period_id}"
             )
 
         assert response.status_code == 200

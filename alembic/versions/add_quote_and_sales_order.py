@@ -6,6 +6,7 @@ Create Date: 2025-02-04
 """
 
 from alembic import op
+from app.alembic_utils import ensure_enum
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.dialects.postgresql import UUID
@@ -64,39 +65,40 @@ def upgrade() -> None:
         return False
 
     # Create enum types
-    op.execute("""
-        DO $$
-        BEGIN
-            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'quote_status') THEN
-                CREATE TYPE quote_status AS ENUM (
-                    'DRAFT', 'SENT', 'VIEWED', 'ACCEPTED', 'REJECTED', 'EXPIRED', 'CONVERTED', 'VOID'
-                );
-            END IF;
-        END$$;
-    """)
-
-    op.execute("""
-        DO $$
-        BEGIN
-            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'so_status') THEN
-                CREATE TYPE so_status AS ENUM (
-                    'DRAFT', 'SUBMITTED', 'APPROVED', 'CONFIRMED', 'IN_PROGRESS',
-                    'SHIPPED', 'COMPLETED', 'CANCELLED', 'ON_HOLD'
-                );
-            END IF;
-        END$$;
-    """)
-
-    op.execute("""
-        DO $$
-        BEGIN
-            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'so_fulfillment_status') THEN
-                CREATE TYPE so_fulfillment_status AS ENUM (
-                    'PENDING', 'PARTIAL', 'FULFILLED', 'BACKORDERED', 'CANCELLED'
-                );
-            END IF;
-        END$$;
-    """)
+    ensure_enum(
+        bind,
+        "quote_status",
+        "DRAFT",
+        "SENT",
+        "VIEWED",
+        "ACCEPTED",
+        "REJECTED",
+        "EXPIRED",
+        "CONVERTED",
+        "VOID",
+    )
+    ensure_enum(
+        bind,
+        "so_status",
+        "DRAFT",
+        "SUBMITTED",
+        "APPROVED",
+        "CONFIRMED",
+        "IN_PROGRESS",
+        "SHIPPED",
+        "COMPLETED",
+        "CANCELLED",
+        "ON_HOLD",
+    )
+    ensure_enum(
+        bind,
+        "so_fulfillment_status",
+        "PENDING",
+        "PARTIAL",
+        "FULFILLED",
+        "BACKORDERED",
+        "CANCELLED",
+    )
 
     # Create quote table
     if not table_exists("quote", "ar"):

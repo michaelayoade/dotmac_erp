@@ -1,0 +1,160 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}Salary Assignments{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a>
+    <span class="mx-2">/</span>
+    <a href="/people/payroll/structures" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Payroll</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">Assignments</span>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<a href="/people/payroll/assignments/new" class="btn btn-primary">
+    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+    </svg>
+    New Assignment
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    {# Header & Search #}
+    <div class="flex flex-wrap items-center justify-between gap-4">
+        <div>
+            <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">Salary Structure Assignments</h1>
+            <p class="text-sm text-slate-500 dark:text-slate-400">Link employees to salary structures for payroll processing</p>
+        </div>
+        <form method="get" class="flex items-center gap-2">
+            <input type="text" name="search" value="{{ search or '' }}"
+                   placeholder="Search employee or structure..."
+                   class="form-input w-64">
+            <button type="submit" class="btn btn-secondary">Search</button>
+        </form>
+    </div>
+
+    {# Assignments Table #}
+    <div class="card overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+                <thead class="bg-slate-50 dark:bg-slate-800/50">
+                    <tr>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Employee</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Salary Structure</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Period</th>
+                        <th class="px-4 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Base Pay</th>
+                        <th class="px-4 py-3 text-center text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
+                        <th class="px-4 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white dark:bg-slate-900 divide-y divide-slate-200 dark:divide-slate-700">
+                    {% for assignment in assignments %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                        <td class="px-4 py-3">
+                            <a href="/people/hr/employees/{{ assignment.employee_id }}"
+                               class="text-slate-900 dark:text-white hover:text-teal-600 dark:hover:text-teal-400 font-medium">
+                                {{ assignment.employee.full_name }}
+                            </a>
+                            <div class="text-xs text-slate-500 dark:text-slate-400">
+                                {{ assignment.employee.employee_code }}
+                            </div>
+                        </td>
+                        <td class="px-4 py-3">
+                            <a href="/people/payroll/structures/{{ assignment.structure_id }}"
+                               class="text-slate-700 dark:text-slate-300 hover:text-teal-600 dark:hover:text-teal-400">
+                                {{ assignment.salary_structure.structure_name }}
+                            </a>
+                            <div class="text-xs text-slate-500 dark:text-slate-400">
+                                {{ assignment.salary_structure.payroll_frequency.value }}
+                            </div>
+                        </td>
+                        <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">
+                            {{ assignment.from_date.strftime('%Y-%m-%d') }}
+                            {% if assignment.to_date %}
+                            <span class="mx-1">to</span>
+                            {{ assignment.to_date.strftime('%Y-%m-%d') }}
+                            {% else %}
+                            <span class="text-slate-400 dark:text-slate-500"> - Present</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-right font-mono text-sm text-slate-900 dark:text-white">
+                            {{ "{:,.2f}".format(assignment.base) }}
+                        </td>
+                        <td class="px-4 py-3 text-center">
+                            {% if not assignment.to_date %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-teal-100 text-teal-700 dark:bg-teal-900 dark:text-teal-300">
+                                Active
+                            </span>
+                            {% else %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400">
+                                Ended
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-right">
+                            <div class="flex items-center justify-end gap-2">
+                                <a href="/people/payroll/assignments/{{ assignment.assignment_id }}/edit"
+                                   class="text-slate-400 hover:text-teal-600 dark:hover:text-teal-400" title="Edit">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                                    </svg>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6" class="px-4 py-12 text-center">
+                            <svg class="mx-auto h-12 w-12 text-slate-300 dark:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            <h3 class="mt-4 text-lg font-medium text-slate-900 dark:text-white">No assignments found</h3>
+                            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                                {% if search %}
+                                No results for "{{ search }}". Try a different search.
+                                {% else %}
+                                Get started by assigning salary structures to employees.
+                                {% endif %}
+                            </p>
+                            <div class="mt-4">
+                                <a href="/people/payroll/assignments/new" class="btn btn-primary">
+                                    Create First Assignment
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {# Pagination #}
+        {% if total_pages > 1 %}
+        <div class="px-4 py-3 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+            <div class="flex items-center justify-between">
+                <p class="text-sm text-slate-500 dark:text-slate-400">
+                    Showing {{ (page - 1) * 20 + 1 }} to {{ [page * 20, total] | min }} of {{ total }} assignments
+                </p>
+                <div class="flex items-center gap-2">
+                    {% if has_prev %}
+                    <a href="?page={{ page - 1 }}{% if search %}&search={{ search }}{% endif %}"
+                       class="btn btn-secondary btn-sm">Previous</a>
+                    {% endif %}
+                    <span class="text-sm text-slate-600 dark:text-slate-400">Page {{ page }} of {{ total_pages }}</span>
+                    {% if has_next %}
+                    <a href="?page={{ page + 1 }}{% if search %}&search={{ search }}{% endif %}"
+                       class="btn btn-secondary btn-sm">Next</a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -12,8 +12,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi import HTTPException
 
-from app.models.ifrs.inv.bom import BOMType
-from app.services.ifrs.inv.bom import (
+from app.models.finance.inv.bom import BOMType
+from app.services.finance.inv.bom import (
     BOMService,
     BOMInput,
     BOMComponentInput,
@@ -819,7 +819,7 @@ class TestModuleInstance:
 
     def test_singleton_instance_exists(self):
         """Should have module-level bom_service instance."""
-        from app.services.ifrs.inv.bom import bom_service
+        from app.services.finance.inv.bom import bom_service
 
         assert bom_service is not None
         assert isinstance(bom_service, BOMService)

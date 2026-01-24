@@ -1,0 +1,170 @@
+{% extends "finance/base_finance.html" %}
+{% from "components/macros.html" import pagination, status_badge, empty_state, stats_card %}
+
+{% block page_title %}AR Credit Notes{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="font-medium text-slate-900 dark:text-white">AR Credit Notes</span>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<a href="/finance/ar/credit-notes/new" class="btn btn-primary">
+    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+    </svg>
+    New Credit Note
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    {# Stats Summary #}
+    <div class="grid gap-4 sm:grid-cols-4">
+        {{ stats_card("Total Credit Notes", stats.total_credit_notes | default("₦0.00"), icon="document", color="slate") }}
+        {{ stats_card("Draft", stats.draft_total | default("₦0.00"), icon="edit", color="amber") }}
+        {{ stats_card("Posted", stats.posted_total | default("₦0.00"), icon="check", color="teal") }}
+        {{ stats_card("Applied", stats.applied_total | default("₦0.00"), icon="check-circle", color="emerald") }}
+    </div>
+
+    {# Search and Filters #}
+    <div class="card p-4">
+        <form method="get" action="/finance/ar/credit-notes" class="flex flex-wrap items-center gap-4">
+            {# Search Input #}
+            <div class="relative flex-1 min-w-[200px]">
+                <svg class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                </svg>
+                <input type="text" name="search" value="{{ search | default('') }}"
+                       placeholder="Search credit notes..."
+                       class="form-input pl-10 w-full">
+            </div>
+
+            {# Customer Filter #}
+            <select name="customer_id" class="form-select">
+                <option value="">All Customers</option>
+                {% for c in customers_list %}
+                <option value="{{ c.customer_id }}" {{ 'selected' if customer_id == c.customer_id else '' }}>{{ c.customer_name }}</option>
+                {% endfor %}
+            </select>
+
+            {# Status Filter #}
+            <select name="status" class="form-select">
+                <option value="">All Status</option>
+                <option value="DRAFT" {{ 'selected' if status == 'DRAFT' else '' }}>Draft</option>
+                <option value="POSTED" {{ 'selected' if status == 'POSTED' else '' }}>Posted</option>
+                <option value="PAID" {{ 'selected' if status == 'PAID' else '' }}>Applied</option>
+            </select>
+
+            {# Date Range #}
+            <input type="date" name="start_date" value="{{ start_date | default('') }}"
+                   class="form-input" placeholder="Start Date">
+            <input type="date" name="end_date" value="{{ end_date | default('') }}"
+                   class="form-input" placeholder="End Date">
+
+            {# Actions #}
+            <button type="submit" class="btn btn-primary">
+                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                </svg>
+                Search
+            </button>
+
+            {% if search or status or customer_id or start_date or end_date %}
+            <a href="/finance/ar/credit-notes" class="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300 transition-colors">
+                Clear
+            </a>
+            {% endif %}
+        </form>
+    </div>
+
+    {# Credit Notes Table #}
+    <div class="card">
+        <div class="table-container">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Credit Note #</th>
+                        <th>Customer</th>
+                        <th>Date</th>
+                        <th class="text-right">Amount</th>
+                        <th class="text-right">Applied</th>
+                        <th class="text-right">Balance</th>
+                        <th class="text-center">Status</th>
+                        <th class="text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for cn in credit_notes %}
+                    <tr class="group">
+                        <td>
+                            <a href="/finance/ar/credit-notes/{{ cn.credit_note_id }}" class="font-mono text-sm font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300 transition-colors">
+                                {{ cn.credit_note_number }}
+                            </a>
+                        </td>
+                        <td>
+                            <p class="text-sm font-medium text-slate-900 dark:text-white">{{ cn.customer_name }}</p>
+                        </td>
+                        <td class="text-slate-600 dark:text-slate-400">{{ cn.credit_note_date }}</td>
+                        <td class="text-right font-mono font-medium text-slate-900 dark:text-white">{{ cn.total_amount | default("₦0.00") }}</td>
+                        <td class="text-right font-mono text-slate-600 dark:text-slate-400">{{ cn.amount_applied | default("₦0.00") }}</td>
+                        <td class="text-right font-mono font-medium text-slate-900 dark:text-white">{{ cn.balance | default("₦0.00") }}</td>
+                        <td class="text-center">
+                            {{ status_badge(cn.status | lower | default('draft'), 'sm') }}
+                        </td>
+                        <td>
+                            <div class="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <a href="/finance/ar/credit-notes/{{ cn.credit_note_id }}"
+                                   class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300 transition-colors"
+                                   title="View">
+                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                                    </svg>
+                                </a>
+                                {% if cn.status == 'DRAFT' %}
+                                <a href="/finance/ar/credit-notes/{{ cn.credit_note_id }}/edit"
+                                   class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300 transition-colors"
+                                   title="Edit">
+                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                                    </svg>
+                                </a>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="8" class="py-12">
+                            {{ empty_state(
+                                'No credit notes found',
+                                'Create your first credit note' if not (search or status or customer_id or start_date or end_date) else 'Try adjusting your search or filter criteria',
+                                'document',
+                                'New Credit Note' if not (search or status or customer_id or start_date or end_date) else none,
+                                '/ar/credit-notes/new' if not (search or status or customer_id or start_date or end_date) else none
+                            ) }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {# Pagination #}
+        {{ pagination(
+            page=page | default(1),
+            total_pages=total_pages | default(1),
+            total_count=total_count | default(credit_notes | length if credit_notes else 0),
+            limit=limit | default(50),
+            search=search,
+            filters={"status": status, "customer_id": customer_id, "start_date": start_date, "end_date": end_date}
+        ) }}
+    </div>
+</div>
+{% endblock %}

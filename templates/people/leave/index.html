@@ -1,0 +1,96 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}Leave{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">Leave</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+            <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">Leave</h1>
+            <p class="text-sm text-slate-500 dark:text-slate-400">Track leave policies, allocations, and applications.</p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+            <a href="/people/leave/types" class="btn btn-secondary">Leave Types</a>
+            <a href="/people/leave/applications" class="btn btn-secondary">Applications</a>
+            <a href="/people/leave/allocations" class="btn btn-secondary">Allocations</a>
+            <a href="/people/leave/holidays" class="btn btn-secondary">Holiday Lists</a>
+        </div>
+    </div>
+
+    <div class="grid gap-4 sm:grid-cols-3">
+        <div class="card p-5">
+            <p class="text-sm text-slate-500 dark:text-slate-400">Pending Applications</p>
+            <p class="mt-2 text-2xl font-semibold text-slate-900 dark:text-white">{{ stats.pending_applications }}</p>
+        </div>
+        <div class="card p-5">
+            <p class="text-sm text-slate-500 dark:text-slate-400">On Leave Today</p>
+            <p class="mt-2 text-2xl font-semibold text-slate-900 dark:text-white">{{ stats.on_leave_today }}</p>
+        </div>
+        <div class="card p-5">
+            <p class="text-sm text-slate-500 dark:text-slate-400">Applications This Month</p>
+            <p class="mt-2 text-2xl font-semibold text-slate-900 dark:text-white">{{ stats.applications_this_month }}</p>
+        </div>
+    </div>
+
+    <div class="card p-6">
+        <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Quick links</h2>
+        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Jump into the most-used leave workflows.</p>
+        <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <a href="/people/leave/types" class="rounded-lg border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800/60">Manage Leave Types</a>
+            <a href="/people/leave/allocations" class="rounded-lg border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800/60">Allocate Leave</a>
+            <a href="/people/leave/applications" class="rounded-lg border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800/60">Review Applications</a>
+            <a href="/people/leave/holidays" class="rounded-lg border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800/60">Holiday Lists</a>
+        </div>
+    </div>
+
+    <div class="card p-6">
+        <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Reports</h2>
+        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Analyze leave data with detailed reports.</p>
+        <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <a href="/people/leave/reports/balance" class="rounded-lg border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800/60">
+                <div class="flex items-center gap-2">
+                    <svg class="h-5 w-5 text-teal-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                    </svg>
+                    Balance Report
+                </div>
+            </a>
+            <a href="/people/leave/reports/usage" class="rounded-lg border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800/60">
+                <div class="flex items-center gap-2">
+                    <svg class="h-5 w-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z"/>
+                    </svg>
+                    Usage Analysis
+                </div>
+            </a>
+            <a href="/people/leave/reports/calendar" class="rounded-lg border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800/60">
+                <div class="flex items-center gap-2">
+                    <svg class="h-5 w-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                    </svg>
+                    Leave Calendar
+                </div>
+            </a>
+            <a href="/people/leave/reports/trends" class="rounded-lg border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800/60">
+                <div class="flex items-center gap-2">
+                    <svg class="h-5 w-5 text-violet-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+                    </svg>
+                    Trends Report
+                </div>
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

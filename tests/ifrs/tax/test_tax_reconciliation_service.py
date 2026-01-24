@@ -10,7 +10,7 @@ from decimal import Decimal
 from unittest.mock import MagicMock
 from uuid import uuid4
 
-from app.services.ifrs.tax.tax_reconciliation import (
+from app.services.finance.tax.tax_reconciliation import (
     TaxReconciliationService,
     TaxReconciliationInput,
     ReconciliationLine,

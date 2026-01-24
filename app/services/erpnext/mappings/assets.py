@@ -1,5 +1,5 @@
 """
-Asset mapping from ERPNext to DotMac Books.
+Asset mapping from ERPNext to DotMac ERP.
 """
 from typing import Any, Optional
 
@@ -15,7 +15,7 @@ from .base import (
 )
 
 
-# ERPNext depreciation_method to DotMac Books
+# ERPNext depreciation_method to DotMac ERP
 DEPRECIATION_METHOD_MAP = {
     "Straight Line": "STRAIGHT_LINE",
     "Written Down Value": "DECLINING_BALANCE",
@@ -23,7 +23,7 @@ DEPRECIATION_METHOD_MAP = {
     "Manual": "STRAIGHT_LINE",  # Default for manual
 }
 
-# ERPNext status to DotMac Books status
+# ERPNext status to DotMac ERP status
 ASSET_STATUS_MAP = {
     "Draft": "DRAFT",
     "Submitted": "ACTIVE",
@@ -68,7 +68,7 @@ def calculate_useful_life_months(record: dict[str, Any]) -> int:
 
 
 class AssetMapping(DocTypeMapping):
-    """Map ERPNext Asset to DotMac Books fa.asset."""
+    """Map ERPNext Asset to DotMac ERP fa.asset."""
 
     def __init__(self):
         super().__init__(
@@ -195,7 +195,7 @@ class AssetMapping(DocTypeMapping):
 
 
 class AssetCategoryMapping(DocTypeMapping):
-    """Map ERPNext Asset Category to DotMac Books fa.asset_category."""
+    """Map ERPNext Asset Category to DotMac ERP fa.asset_category."""
 
     def __init__(self):
         super().__init__(

@@ -9,7 +9,7 @@ from uuid import uuid4
 
 import pytest
 
-from app.services.ifrs.banking.bank_statement import (
+from app.services.finance.banking.bank_statement import (
     BankStatementService,
     StatementLineInput,
 )
@@ -43,7 +43,7 @@ def user_id():
 @pytest.fixture
 def sample_statement_lines():
     """Create sample statement line inputs."""
-    from app.models.ifrs.banking.bank_statement import StatementLineType
+    from app.models.finance.banking.bank_statement import StatementLineType
 
     return [
         StatementLineInput(
@@ -368,7 +368,7 @@ class TestUpdateStatus:
 
     def test_update_status_success(self, service, mock_db):
         """Test updating statement status."""
-        from app.models.ifrs.banking.bank_statement import BankStatementStatus
+        from app.models.finance.banking.bank_statement import BankStatementStatus
 
         statement = MockBankStatement(status="imported")
         mock_db.get.return_value = statement
@@ -382,7 +382,7 @@ class TestUpdateStatus:
     def test_update_status_nonexistent_fails(self, service, mock_db):
         """Test updating status of non-existent statement fails."""
         from fastapi import HTTPException
-        from app.models.ifrs.banking.bank_statement import BankStatementStatus
+        from app.models.finance.banking.bank_statement import BankStatementStatus
 
         mock_db.get.return_value = None
 
@@ -416,7 +416,7 @@ class TestDeleteStatement:
     def test_delete_reconciled_statement_fails(self, service, mock_db):
         """Test deleting reconciled statement fails."""
         from fastapi import HTTPException
-        from app.models.ifrs.banking.bank_statement import BankStatementStatus
+        from app.models.finance.banking.bank_statement import BankStatementStatus
 
         statement = MockBankStatement(status=BankStatementStatus.reconciled)
         mock_db.get.return_value = statement

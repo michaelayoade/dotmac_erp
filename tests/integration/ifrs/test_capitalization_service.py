@@ -11,10 +11,10 @@ from decimal import Decimal
 import pytest
 from sqlalchemy.orm import Session
 
-from app.models.ifrs.ap.supplier_invoice import SupplierInvoiceStatus
-from app.models.ifrs.ap.supplier_invoice_line import SupplierInvoiceLine
-from app.models.ifrs.fa.asset import Asset, AssetStatus
-from app.services.ifrs.fa.capitalization import CapitalizationService
+from app.models.finance.ap.supplier_invoice import SupplierInvoiceStatus
+from app.models.finance.ap.supplier_invoice_line import SupplierInvoiceLine
+from app.models.finance.fa.asset import Asset, AssetStatus
+from app.services.finance.fa.capitalization import CapitalizationService
 
 
 class TestValidateCapitalizationThreshold:

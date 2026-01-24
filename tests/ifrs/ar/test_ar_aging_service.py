@@ -11,10 +11,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.models.ifrs.ar.customer import Customer
-from app.models.ifrs.ar.invoice import Invoice, InvoiceStatus
-from app.models.ifrs.ar.ar_aging_snapshot import ARAgingSnapshot
-from app.services.ifrs.ar.ar_aging import (
+from app.models.finance.ar.customer import Customer
+from app.models.finance.ar.invoice import Invoice, InvoiceStatus
+from app.models.finance.ar.ar_aging_snapshot import ARAgingSnapshot
+from app.services.finance.ar.ar_aging import (
     ARAgingService,
     CustomerAgingSummary,
     OrganizationARAgingSummary,

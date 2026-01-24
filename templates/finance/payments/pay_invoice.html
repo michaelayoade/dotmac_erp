@@ -1,0 +1,178 @@
+{% extends "finance/base_finance.html" %}
+
+{% block page_title %}Pay Invoice{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400">
+    <a href="/finance/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/finance/ar/invoices" class="hover:text-primary-600 dark:hover:text-primary-400">AR Invoices</a>
+    <span class="mx-2">/</span>
+    <a href="/finance/ar/invoices/{{ invoice.invoice_id }}" class="hover:text-primary-600 dark:hover:text-primary-400">{{ invoice.invoice_number }}</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white">Pay</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-lg">
+    <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-800/50">
+        <div class="mb-6 text-center">
+            <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-teal-500 to-emerald-600 text-white shadow-lg shadow-teal-500/25">
+                <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
+                </svg>
+            </div>
+            <h2 class="text-xl font-semibold text-slate-900 dark:text-white">Pay Invoice</h2>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Complete payment securely via Paystack</p>
+        </div>
+
+        <!-- Invoice Summary -->
+        <div class="mb-6 space-y-4 rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900/50">
+            <div class="flex items-center justify-between">
+                <span class="text-sm text-slate-500 dark:text-slate-400">Invoice Number</span>
+                <span class="font-mono text-sm font-medium text-slate-900 dark:text-white">{{ invoice.invoice_number }}</span>
+            </div>
+            <div class="flex items-center justify-between">
+                <span class="text-sm text-slate-500 dark:text-slate-400">Customer</span>
+                <span class="text-sm font-medium text-slate-900 dark:text-white">{{ customer.legal_name if customer else '-' }}</span>
+            </div>
+            <div class="flex items-center justify-between">
+                <span class="text-sm text-slate-500 dark:text-slate-400">Invoice Date</span>
+                <span class="text-sm font-medium text-slate-900 dark:text-white">{{ invoice.invoice_date }}</span>
+            </div>
+            <div class="flex items-center justify-between">
+                <span class="text-sm text-slate-500 dark:text-slate-400">Due Date</span>
+                <span class="text-sm font-medium text-slate-900 dark:text-white">{{ invoice.due_date }}</span>
+            </div>
+            <div class="border-t border-slate-200 pt-4 dark:border-slate-700">
+                <div class="flex items-center justify-between">
+                    <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Amount Due</span>
+                    <span class="text-xl font-bold text-slate-900 dark:text-white">
+                        {{ invoice.currency_code }} {{ invoice.balance_due | format_currency }}
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Payment Status Messages -->
+        {% if not is_payable %}
+        <div class="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-900/20">
+            <div class="flex items-center gap-3">
+                <svg class="h-5 w-5 flex-shrink-0 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                </svg>
+                <div>
+                    <p class="text-sm font-medium text-amber-700 dark:text-amber-400">Invoice cannot be paid online</p>
+                    <p class="mt-1 text-xs text-amber-600 dark:text-amber-500">
+                        {% if invoice.balance_due <= 0 %}
+                        This invoice is already fully paid.
+                        {% else %}
+                        Invoice status ({{ invoice.status.value }}) does not allow online payment.
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+        </div>
+        {% elif not paystack_enabled %}
+        <div class="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-900/20">
+            <div class="flex items-center gap-3">
+                <svg class="h-5 w-5 flex-shrink-0 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                </svg>
+                <div>
+                    <p class="text-sm font-medium text-amber-700 dark:text-amber-400">Online payments not enabled</p>
+                    <p class="mt-1 text-xs text-amber-600 dark:text-amber-500">Please contact support to enable online payments.</p>
+                </div>
+            </div>
+        </div>
+        {% elif not has_email %}
+        <div class="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-900/20">
+            <div class="flex items-center gap-3">
+                <svg class="h-5 w-5 flex-shrink-0 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                </svg>
+                <div>
+                    <p class="text-sm font-medium text-amber-700 dark:text-amber-400">Customer email required</p>
+                    <p class="mt-1 text-xs text-amber-600 dark:text-amber-500">Please add an email address to the customer record to enable online payment.</p>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <!-- Payment Button -->
+        <button
+            id="payButton"
+            onclick="initializePayment()"
+            class="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 px-6 py-3 text-sm font-medium text-white shadow-lg shadow-emerald-500/25 transition-all hover:from-emerald-700 hover:to-teal-700 hover:shadow-xl hover:shadow-emerald-500/30 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/>
+            </svg>
+            <span id="payButtonText">Pay with Paystack</span>
+        </button>
+
+        <p class="mt-4 text-center text-xs text-slate-500 dark:text-slate-400">
+            Secured by
+            <svg class="inline-block h-4 w-auto ml-1" viewBox="0 0 80 24" fill="currentColor">
+                <text x="0" y="18" font-family="Arial, sans-serif" font-size="14" font-weight="bold">Paystack</text>
+            </svg>
+        </p>
+        {% endif %}
+
+        <!-- Back Link -->
+        <div class="mt-6 text-center">
+            <a href="/finance/ar/invoices/{{ invoice.invoice_id }}"
+               class="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300">
+                &larr; Back to Invoice
+            </a>
+        </div>
+    </div>
+</div>
+
+{% if is_payable and paystack_enabled and has_email %}
+<script src="https://js.paystack.co/v1/inline.js"></script>
+<script>
+async function initializePayment() {
+    const btn = document.getElementById('payButton');
+    const btnText = document.getElementById('payButtonText');
+
+    btn.disabled = true;
+    btnText.textContent = 'Initializing...';
+
+    try {
+        const response = await fetch('/api/v1/payments/initialize/invoice', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({
+                invoice_id: '{{ invoice.invoice_id }}'
+            })
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Failed to initialize payment');
+        }
+
+        const data = await response.json();
+
+        if (data.authorization_url) {
+            // Redirect to Paystack checkout
+            btnText.textContent = 'Redirecting to Paystack...';
+            window.location.href = data.authorization_url;
+        } else {
+            throw new Error('No authorization URL received');
+        }
+    } catch (error) {
+        console.error('Payment initialization error:', error);
+        alert('Payment initialization failed: ' + error.message);
+        btn.disabled = false;
+        btnText.textContent = 'Pay with Paystack';
+    }
+}
+</script>
+{% endif %}
+{% endblock %}

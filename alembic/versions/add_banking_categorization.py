@@ -6,6 +6,7 @@ Create Date: 2025-02-04
 """
 
 from alembic import op
+from app.alembic_utils import ensure_enum
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.dialects.postgresql import UUID, JSONB
@@ -22,41 +23,42 @@ def upgrade() -> None:
     inspector = sa.inspect(bind)
 
     # Create payee_type enum
-    op.execute("""
-        DO $$
-        BEGIN
-            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'payee_type') THEN
-                CREATE TYPE payee_type AS ENUM (
-                    'VENDOR', 'CUSTOMER', 'EMPLOYEE', 'BANK', 'TAX', 'UTILITY', 'OTHER'
-                );
-            END IF;
-        END$$;
-    """)
+    ensure_enum(
+        bind,
+        "payee_type",
+        "VENDOR",
+        "CUSTOMER",
+        "EMPLOYEE",
+        "BANK",
+        "TAX",
+        "UTILITY",
+        "OTHER",
+        schema="banking",
+    )
 
     # Create rule_type enum
-    op.execute("""
-        DO $$
-        BEGIN
-            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'rule_type') THEN
-                CREATE TYPE rule_type AS ENUM (
-                    'PAYEE_MATCH', 'DESCRIPTION_CONTAINS', 'DESCRIPTION_REGEX',
-                    'AMOUNT_RANGE', 'REFERENCE_MATCH', 'COMBINED'
-                );
-            END IF;
-        END$$;
-    """)
+    ensure_enum(
+        bind,
+        "rule_type",
+        "PAYEE_MATCH",
+        "DESCRIPTION_CONTAINS",
+        "DESCRIPTION_REGEX",
+        "AMOUNT_RANGE",
+        "REFERENCE_MATCH",
+        "COMBINED",
+        schema="banking",
+    )
 
     # Create rule_action enum
-    op.execute("""
-        DO $$
-        BEGIN
-            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'rule_action') THEN
-                CREATE TYPE rule_action AS ENUM (
-                    'CATEGORIZE', 'FLAG_REVIEW', 'SPLIT', 'IGNORE'
-                );
-            END IF;
-        END$$;
-    """)
+    ensure_enum(
+        bind,
+        "rule_action",
+        "CATEGORIZE",
+        "FLAG_REVIEW",
+        "SPLIT",
+        "IGNORE",
+        schema="banking",
+    )
 
     # Create payee table
     if not inspector.has_table("payee", schema="banking"):

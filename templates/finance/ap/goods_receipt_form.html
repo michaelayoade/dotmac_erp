@@ -1,0 +1,337 @@
+{% extends "finance/base_finance.html" %}
+
+{% block page_title %}New Goods Receipt{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <a href="/finance/ap/goods-receipts" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Goods Receipts</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="font-medium text-slate-900 dark:text-white">New</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto pb-12" x-data="goodsReceiptForm()">
+    <!-- Page Header -->
+    <div class="mb-10 stagger-in" style="animation-delay: 0ms;">
+        <h1 class="text-3xl font-bold text-slate-900 dark:text-white font-display tracking-tight">
+            New Goods Receipt
+        </h1>
+        <p class="mt-2 text-lg text-slate-600 dark:text-slate-400">
+            Record goods received against a purchase order
+        </p>
+    </div>
+
+    {% if error %}
+    <div class="mb-6 p-4 rounded-xl bg-rose-50 border border-rose-200 dark:bg-rose-900/20 dark:border-rose-800 stagger-in" style="animation-delay: 25ms;">
+        <div class="flex items-start gap-3">
+            <svg class="w-5 h-5 text-rose-600 dark:text-rose-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <div>
+                <h3 class="font-semibold text-rose-800 dark:text-rose-300">Error</h3>
+                <p class="mt-1 text-sm text-rose-700 dark:text-rose-400">{{ error }}</p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <form @submit.prevent="submitForm" class="space-y-8">
+        <!-- Purchase Order Selection -->
+        <div class="card stagger-in" style="animation-delay: 50ms;">
+            <div class="card-header border-b border-slate-100 dark:border-slate-700">
+                <div class="flex items-center gap-4">
+                    <div class="card-icon bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display">Purchase Order</h2>
+                        <p class="text-sm text-slate-500 dark:text-slate-400">Select the purchase order for this receipt</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-6 grid gap-6 sm:grid-cols-2">
+                <div class="sm:col-span-2">
+                    <label class="form-label">
+                        Purchase Order <span class="text-rose-500">*</span>
+                    </label>
+                    <select x-model="formData.po_id" required class="form-select" @change="onPOChange">
+                        <option value="">Select purchase order</option>
+                        {% for po in po_list %}
+                        <option value="{{ po.po_id }}"
+                                data-supplier-id="{{ po.supplier_id }}"
+                                data-supplier-name="{{ po.supplier_name }}"
+                                data-currency="{{ po.currency_code }}">
+                            {{ po.po_number }} - {{ po.supplier_name }} ({{ po.po_date }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label class="form-label">
+                        Receipt Date <span class="text-rose-500">*</span>
+                    </label>
+                    <input type="date" x-model="formData.receipt_date" required class="form-input">
+                </div>
+
+                <div>
+                    <label class="form-label">
+                        Warehouse <span class="text-rose-500">*</span>
+                    </label>
+                    <select x-model="formData.warehouse_id" class="form-select" required>
+                        <option value="">Select warehouse</option>
+                        {% for w in warehouse_list %}
+                        <option value="{{ w.warehouse_id }}">{{ w.warehouse_code }} - {{ w.warehouse_name }}</option>
+                        {% endfor %}
+                    </select>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Required for inventory tracking</p>
+                </div>
+
+                <div class="sm:col-span-2">
+                    <label class="form-label">Notes</label>
+                    <textarea x-model="formData.notes" rows="2" class="form-input resize-none" placeholder="Receiving notes, delivery details, etc."></textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- Receipt Lines -->
+        <div class="card stagger-in" style="animation-delay: 100ms;" x-show="lines.length > 0" x-transition>
+            <div class="card-header border-b border-slate-100 dark:border-slate-700">
+                <div class="flex items-center gap-4">
+                    <div class="card-icon bg-teal-50 text-teal-600 dark:bg-teal-900/30 dark:text-teal-400">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display">Receipt Lines</h2>
+                        <p class="text-sm text-slate-500 dark:text-slate-400">Enter quantities received for each line</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead>
+                        <tr class="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+                            <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">#</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Description</th>
+                            <th class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 w-28">Ordered</th>
+                            <th class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 w-28">Previously Received</th>
+                            <th class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 w-28">Remaining</th>
+                            <th class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 w-32">Receive Now</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 w-32">Lot Number</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                        <template x-for="(line, index) in lines" :key="index">
+                            <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                                <td class="px-4 py-3 text-sm text-slate-500 dark:text-slate-400" x-text="line.line_number"></td>
+                                <td class="px-4 py-3">
+                                    <p class="text-sm font-medium text-slate-900 dark:text-white" x-text="line.description"></p>
+                                </td>
+                                <td class="px-4 py-3 text-right text-sm text-slate-600 dark:text-slate-400" x-text="line.quantity_ordered"></td>
+                                <td class="px-4 py-3 text-right text-sm text-slate-600 dark:text-slate-400" x-text="line.quantity_received"></td>
+                                <td class="px-4 py-3 text-right text-sm font-medium text-blue-600 dark:text-blue-400" x-text="line.quantity_remaining"></td>
+                                <td class="px-4 py-3">
+                                    <input type="number"
+                                           x-model.number="line.quantity_to_receive"
+                                           :max="line.quantity_remaining"
+                                           min="0"
+                                           step="0.01"
+                                           class="w-full rounded border border-slate-300 bg-white px-2 py-1.5 text-sm text-right focus:border-primary-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                                </td>
+                                <td class="px-4 py-3">
+                                    <input type="text"
+                                           x-model="line.lot_number"
+                                           placeholder="Optional"
+                                           class="w-full rounded border border-slate-300 bg-white px-2 py-1.5 text-sm focus:border-primary-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                    <tfoot class="border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+                        <tr>
+                            <td colspan="5" class="px-4 py-3 text-right text-sm font-bold text-slate-900 dark:text-white">Total to Receive</td>
+                            <td class="px-4 py-3 text-right text-sm font-bold text-teal-600 dark:text-teal-400" x-text="calculateTotalToReceive()"></td>
+                            <td></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+
+        <!-- No PO Selected -->
+        <div class="card stagger-in" style="animation-delay: 100ms;" x-show="lines.length === 0 && !formData.po_id" x-transition>
+            <div class="p-12 text-center">
+                <svg class="mx-auto h-12 w-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                </svg>
+                <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">Select a purchase order to view receivable lines</p>
+            </div>
+        </div>
+
+        <!-- Loading -->
+        <div class="card stagger-in" style="animation-delay: 100ms;" x-show="loading" x-transition>
+            <div class="p-12 text-center">
+                <svg class="animate-spin mx-auto h-8 w-8 text-primary-600" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">Loading PO lines...</p>
+            </div>
+        </div>
+
+        <!-- Form Actions -->
+        <div class="flex items-center justify-between pt-4 stagger-in" style="animation-delay: 150ms;">
+            <p class="text-sm text-slate-500 dark:text-slate-400">
+                <span class="text-rose-500">*</span> Required fields
+            </p>
+            <div class="flex items-center gap-4">
+                <a href="/finance/ap/goods-receipts" class="btn btn-ghost">
+                    Cancel
+                </a>
+                <button type="submit" class="btn btn-primary" :disabled="submitting || lines.length === 0">
+                    <svg x-show="submitting" class="animate-spin h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <svg x-show="!submitting" class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                    </svg>
+                    <span x-text="submitting ? 'Recording...' : 'Record Receipt'"></span>
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<script>
+function goodsReceiptForm() {
+    const today = new Date().toISOString().split('T')[0];
+
+    // Pre-selected data from server
+    const selectedPO = {{ selected_po | tojson | safe if selected_po else 'null' }};
+    const poLines = {{ po_lines | tojson | safe if po_lines else '[]' }};
+
+    return {
+        submitting: false,
+        loading: false,
+        formData: {
+            po_id: selectedPO?.po_id || '',
+            receipt_date: today,
+            warehouse_id: '',
+            notes: '',
+        },
+        lines: poLines.map(line => ({
+            ...line,
+            quantity_to_receive: line.quantity_remaining,
+            lot_number: '',
+        })),
+
+        async onPOChange(event) {
+            const poId = event.target.value;
+            if (!poId) {
+                this.lines = [];
+                return;
+            }
+
+            this.loading = true;
+            try {
+                // Fetch PO lines via the form context endpoint
+                const response = await fetch(`/finance/ap/goods-receipts/new?po_id=${poId}`, {
+                    headers: { 'Accept': 'application/json' }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.po_lines) {
+                        this.lines = data.po_lines.map(line => ({
+                            ...line,
+                            quantity_to_receive: line.quantity_remaining,
+                            lot_number: '',
+                        }));
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to fetch PO lines:', error);
+            }
+            this.loading = false;
+        },
+
+        calculateTotalToReceive() {
+            return this.lines.reduce((sum, line) => sum + (line.quantity_to_receive || 0), 0);
+        },
+
+        async submitForm() {
+            // Validate
+            if (!this.formData.po_id) {
+                alert('Please select a purchase order');
+                return;
+            }
+
+            const linesToReceive = this.lines.filter(l => l.quantity_to_receive > 0);
+            if (linesToReceive.length === 0) {
+                alert('Please enter quantities to receive');
+                return;
+            }
+
+            // Validate warehouse is selected for inventory tracking
+            if (!this.formData.warehouse_id) {
+                alert('Please select a warehouse. This is required for inventory tracking.');
+                return;
+            }
+
+            this.submitting = true;
+
+            const payload = {
+                po_id: this.formData.po_id,
+                receipt_date: this.formData.receipt_date,
+                warehouse_id: this.formData.warehouse_id || null,
+                notes: this.formData.notes || null,
+                lines: linesToReceive.map(line => ({
+                    po_line_id: line.line_id,
+                    quantity_received: line.quantity_to_receive,
+                    lot_number: line.lot_number || null,
+                })),
+            };
+
+            try {
+                const response = await fetch('/finance/ap/goods-receipts/new', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success && data.receipt_id) {
+                        window.location.href = '/finance/ap/goods-receipts/' + data.receipt_id;
+                    } else {
+                        window.location.href = '/finance/ap/goods-receipts';
+                    }
+                } else {
+                    const errorData = await response.json();
+                    alert(errorData.detail || 'Failed to record goods receipt');
+                    this.submitting = false;
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('An error occurred while saving');
+                this.submitting = false;
+            }
+        }
+    };
+}
+</script>
+{% endblock %}

@@ -14,7 +14,7 @@ from unittest.mock import MagicMock
 import pytest
 from fastapi import HTTPException
 
-from app.services.ifrs.common.helpers import (
+from app.services.finance.common.helpers import (
     get_org_scoped_entity,
     toggle_entity_status,
     activate_entity,

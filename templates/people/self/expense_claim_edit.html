@@ -1,0 +1,166 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}Edit Expense Claim{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/self/attendance" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Self Service</a>
+    <span class="mx-2">/</span>
+    <a href="/people/self/expenses" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">My Expenses</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">Edit Claim</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+            <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">Edit Expense Claim</h1>
+            <p class="text-sm text-slate-500 dark:text-slate-400">Update items for draft claims only.</p>
+        </div>
+        <a href="/people/self/expenses" class="btn btn-secondary">Back to My Expenses</a>
+    </div>
+
+    <div class="card p-6">
+        <div class="grid gap-4 sm:grid-cols-2">
+            <div>
+                <p class="text-xs uppercase tracking-wider text-slate-400 dark:text-slate-500">Claim</p>
+                <p class="text-sm font-medium text-slate-900 dark:text-white">{{ claim.claim_number }}</p>
+            </div>
+            <div>
+                <p class="text-xs uppercase tracking-wider text-slate-400 dark:text-slate-500">Status</p>
+                <p class="text-sm font-medium text-slate-900 dark:text-white">{{ claim.status.value }}</p>
+            </div>
+            <div>
+                <p class="text-xs uppercase tracking-wider text-slate-400 dark:text-slate-500">Claim Date</p>
+                <p class="text-sm font-medium text-slate-900 dark:text-white">{{ claim.claim_date }}</p>
+            </div>
+            <div>
+                <p class="text-xs uppercase tracking-wider text-slate-400 dark:text-slate-500">Purpose</p>
+                <p class="text-sm font-medium text-slate-900 dark:text-white">{{ claim.purpose }}</p>
+            </div>
+        </div>
+    </div>
+
+    {% if not can_edit %}
+    <div class="card p-4 border border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-400">
+        This claim is not in DRAFT status, so it is read-only.
+    </div>
+    {% endif %}
+
+    <form method="post" action="/people/self/expenses/claims/{{ claim.claim_id }}/edit" class="card p-6 space-y-4">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <div class="grid gap-4 sm:grid-cols-2">
+            <div>
+                <label for="recipient_bank_code" class="form-label">Bank Code</label>
+                <input type="text"
+                       name="recipient_bank_code"
+                       id="recipient_bank_code"
+                       class="form-input w-full"
+                       required
+                       placeholder="e.g. 058"
+                       value="{{ claim.recipient_bank_code or '' }}"
+                       {% if not can_edit %}disabled{% endif %}>
+            </div>
+            <div>
+                <label for="recipient_account_number" class="form-label">Account Number</label>
+                <input type="text"
+                       name="recipient_account_number"
+                       id="recipient_account_number"
+                       class="form-input w-full"
+                       required
+                       maxlength="10"
+                       pattern="[0-9]{10}"
+                       value="{{ claim.recipient_account_number or '' }}"
+                       {% if not can_edit %}disabled{% endif %}>
+            </div>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+                <thead>
+                    <tr class="bg-slate-50 dark:bg-slate-800/50">
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Expense Date</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Category</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Description</th>
+                        <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Amount</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Receipt</th>
+                        <th class="px-4 py-3 text-center text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Remove</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                    {% for item in claim.items %}
+                    <tr>
+                        <td class="px-4 py-3">
+                            <input type="hidden" name="item_id" value="{{ item.item_id }}">
+                            <input type="date"
+                                   name="expense_date_{{ item.item_id }}"
+                                   value="{{ item.expense_date }}"
+                                   class="form-input w-full"
+                                   required
+                                   {% if not can_edit %}disabled{% endif %}>
+                        </td>
+                        <td class="px-4 py-3">
+                            <select name="category_id_{{ item.item_id }}" class="form-select w-full" required {% if not can_edit %}disabled{% endif %}>
+                                {% for cat in categories %}
+                                <option value="{{ cat.category_id }}" {% if cat.category_id == item.category_id %}selected{% endif %}>
+                                    {{ cat.category_name }}{% if cat.requires_receipt %} *{% endif %}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </td>
+                        <td class="px-4 py-3">
+                            <input type="text"
+                                   name="description_{{ item.item_id }}"
+                                   value="{{ item.description }}"
+                                   class="form-input w-full"
+                                   required
+                                   {% if not can_edit %}disabled{% endif %}>
+                        </td>
+                        <td class="px-4 py-3 text-right">
+                            <input type="number"
+                                   step="0.01"
+                                   name="claimed_amount_{{ item.item_id }}"
+                                   value="{{ item.claimed_amount }}"
+                                   class="form-input w-full text-right"
+                                   required
+                                   {% if not can_edit %}disabled{% endif %}>
+                        </td>
+                        <td class="px-4 py-3">
+                            <input type="text"
+                                   name="receipt_number_{{ item.item_id }}"
+                                   value="{{ item.receipt_number or '' }}"
+                                   class="form-input w-full mb-2"
+                                   placeholder="Receipt #"
+                                   {% if not can_edit %}disabled{% endif %}>
+                            <input type="text"
+                                   name="receipt_url_{{ item.item_id }}"
+                                   value="{{ item.receipt_url or '' }}"
+                                   class="form-input w-full"
+                                   placeholder="Receipt URL"
+                                   {% if not can_edit %}disabled{% endif %}>
+                        </td>
+                        <td class="px-4 py-3 text-center">
+                            {% if can_edit %}
+                            <input type="checkbox"
+                                   name="remove_item_{{ item.item_id }}"
+                                   class="rounded border-slate-300 text-rose-600 focus:ring-rose-500">
+                            {% else %}
+                            <span class="text-slate-400">-</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if can_edit %}
+        <div class="flex items-center justify-end gap-3">
+            <button type="submit" class="btn btn-primary">Save Changes</button>
+        </div>
+        {% endif %}
+    </form>
+</div>
+{% endblock %}

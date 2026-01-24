@@ -9,11 +9,11 @@ from uuid import uuid4
 
 import pytest
 
-from app.services.ifrs.gl.gl_posting_adapter import (
+from app.services.finance.gl.gl_posting_adapter import (
     GLPostingAdapter,
     GLPostingResult,
 )
-from app.services.ifrs.gl.journal import JournalInput, JournalLineInput
+from app.services.finance.gl.journal import JournalInput, JournalLineInput
 from tests.ifrs.gl.conftest import (
     MockJournalEntry,
     MockJournalStatus,
@@ -29,7 +29,7 @@ def adapter():
 @pytest.fixture
 def sample_journal_input():
     """Create sample journal input."""
-    from app.models.ifrs.gl.journal_entry import JournalType
+    from app.models.finance.gl.journal_entry import JournalType
 
     return JournalInput(
         journal_type=JournalType.STANDARD,

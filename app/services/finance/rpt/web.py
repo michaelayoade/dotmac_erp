@@ -1,0 +1,1841 @@
+"""
+Reports web view service.
+
+Provides view-focused data for reports web routes.
+"""
+
+from __future__ import annotations
+
+from datetime import date, datetime
+from decimal import Decimal
+from typing import Optional
+from uuid import UUID
+
+from fastapi import Request
+from fastapi.responses import HTMLResponse
+from sqlalchemy import func
+from sqlalchemy.orm import Session
+
+from app.models.finance.gl.account import Account
+from app.models.finance.gl.account_category import AccountCategory, IFRSCategory
+from app.models.finance.gl.journal_entry import JournalEntry, JournalStatus
+from app.models.finance.gl.journal_entry_line import JournalEntryLine
+from app.models.finance.gl.fiscal_period import FiscalPeriod
+from app.models.finance.ap.supplier_invoice import SupplierInvoice, SupplierInvoiceStatus
+from app.models.finance.ap.supplier import Supplier
+from app.models.finance.ar.invoice import Invoice as ARInvoice
+from app.models.finance.ar.customer import Customer
+from app.models.finance.rpt.report_definition import ReportDefinition, ReportType
+from app.models.finance.rpt.report_instance import ReportInstance, ReportStatus
+from app.config import settings
+from app.services.common import coerce_uuid
+from app.services.finance.platform.org_context import org_context_service
+from app.templates import templates
+from app.web.deps import base_context, WebAuthContext
+
+
+def _parse_date(value: Optional[str]) -> Optional[date]:
+    if not value:
+        return None
+    try:
+        return datetime.strptime(value, "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+def _format_date(value: Optional[date]) -> str:
+    return value.strftime("%Y-%m-%d") if value else ""
+
+
+def _format_currency(
+    amount: Optional[Decimal],
+    currency: str = settings.default_presentation_currency_code,
+) -> str:
+    if amount is None:
+        return f"{currency} 0.00"
+    value = Decimal(str(amount))
+    return f"{currency} {value:,.2f}"
+
+
+def _ifrs_label(category: IFRSCategory) -> str:
+    label_map = {
+        IFRSCategory.ASSETS: "Assets",
+        IFRSCategory.LIABILITIES: "Liabilities",
+        IFRSCategory.EQUITY: "Equity",
+        IFRSCategory.REVENUE: "Revenue",
+        IFRSCategory.EXPENSES: "Expenses",
+        IFRSCategory.OTHER_COMPREHENSIVE_INCOME: "Other Comprehensive Income",
+    }
+    return label_map.get(category, category.value)
+
+
+def _report_type_label(report_type: ReportType) -> str:
+    labels = {
+        ReportType.BALANCE_SHEET: "Statement of Financial Position",
+        ReportType.INCOME_STATEMENT: "Statement of Profit or Loss",
+        ReportType.CASH_FLOW: "Cash Flow Statement",
+        ReportType.CHANGES_IN_EQUITY: "Changes in Equity",
+        ReportType.TRIAL_BALANCE: "Trial Balance",
+        ReportType.GENERAL_LEDGER: "General Ledger",
+        ReportType.SUBLEDGER: "Subledger",
+        ReportType.AGING: "Aging Report",
+        ReportType.BUDGET_VS_ACTUAL: "Budget vs Actual",
+        ReportType.TAX: "Tax Report",
+        ReportType.REGULATORY: "Regulatory Report",
+        ReportType.CUSTOM: "Custom Report",
+    }
+    return labels.get(report_type, report_type.value)
+
+
+class ReportsWebService:
+    """View service for reports web routes."""
+
+    @staticmethod
+    def _amount_from_category(
+        ifrs_category: IFRSCategory,
+        debit: Decimal,
+        credit: Decimal,
+    ) -> Decimal:
+        if ifrs_category in {IFRSCategory.ASSETS, IFRSCategory.EXPENSES}:
+            return debit - credit
+        return credit - debit
+
+    @staticmethod
+    def _category_balances(
+        db: Session,
+        organization_id: str,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+        as_of_date: Optional[date] = None,
+    ) -> dict:
+        org_id = coerce_uuid(organization_id)
+
+        query = (
+            db.query(
+                AccountCategory.category_code,
+                AccountCategory.ifrs_category,
+                func.coalesce(func.sum(JournalEntryLine.debit_amount_functional), 0).label("debit"),
+                func.coalesce(func.sum(JournalEntryLine.credit_amount_functional), 0).label("credit"),
+            )
+            .join(Account, Account.category_id == AccountCategory.category_id)
+            .join(JournalEntryLine, JournalEntryLine.account_id == Account.account_id)
+            .join(JournalEntry, JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id)
+            .filter(
+                JournalEntry.organization_id == org_id,
+                JournalEntry.status == JournalStatus.POSTED,
+            )
+        )
+
+        if as_of_date:
+            query = query.filter(JournalEntry.posting_date <= as_of_date)
+        else:
+            if start_date:
+                query = query.filter(JournalEntry.posting_date >= start_date)
+            if end_date:
+                query = query.filter(JournalEntry.posting_date <= end_date)
+
+        rows = query.group_by(
+            AccountCategory.category_code,
+            AccountCategory.ifrs_category,
+        ).all()
+
+        balances = {}
+        for code, ifrs_category, debit, credit in rows:
+            debit = Decimal(str(debit or 0))
+            credit = Decimal(str(credit or 0))
+            balances[code] = {
+                "ifrs_category": ifrs_category,
+                "amount": ReportsWebService._amount_from_category(ifrs_category, debit, credit),
+            }
+
+        return balances
+
+    @staticmethod
+    def _tax_totals_from_gl(
+        db: Session,
+        organization_id: str,
+        start_date: date,
+        end_date: date,
+    ) -> dict:
+        org_id = coerce_uuid(organization_id)
+
+        rows = (
+            db.query(
+                AccountCategory.category_code,
+                func.coalesce(func.sum(JournalEntryLine.debit_amount_functional), 0).label("debit"),
+                func.coalesce(func.sum(JournalEntryLine.credit_amount_functional), 0).label("credit"),
+            )
+            .join(Account, Account.category_id == AccountCategory.category_id)
+            .join(JournalEntryLine, JournalEntryLine.account_id == Account.account_id)
+            .join(JournalEntry, JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id)
+            .filter(
+                JournalEntry.organization_id == org_id,
+                JournalEntry.status == JournalStatus.POSTED,
+                JournalEntry.posting_date >= start_date,
+                JournalEntry.posting_date <= end_date,
+                AccountCategory.category_code.in_(["CAT016", "CAT017", "CAT019"]),
+            )
+            .group_by(AccountCategory.category_code)
+            .all()
+        )
+
+        totals = {"CAT016": Decimal("0"), "CAT017": Decimal("0"), "CAT019": Decimal("0")}
+        for code, debit, credit in rows:
+            debit = Decimal(str(debit or 0))
+            credit = Decimal(str(credit or 0))
+            if code == "CAT016":
+                totals[code] = credit - debit
+            else:
+                totals[code] = debit - credit
+
+        output_tax = totals["CAT016"]
+        input_tax = totals["CAT017"]
+        withholding = totals["CAT019"]
+        net_tax = output_tax - input_tax - withholding
+
+        return {
+            "output_tax": output_tax,
+            "input_tax": input_tax,
+            "withholding": withholding,
+            "net_tax": net_tax,
+        }
+
+    @staticmethod
+    def dashboard_context(
+        db: Session,
+        organization_id: str,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+    ) -> dict:
+        """Get context for reports dashboard with key summaries."""
+        from app.models.finance.tax.tax_period import TaxPeriod, TaxPeriodStatus
+
+        org_id = coerce_uuid(organization_id)
+        today = date.today()
+
+        # Parse date filters (default to current month)
+        from_date = _parse_date(start_date) or today.replace(day=1)
+        to_date = _parse_date(end_date) or today
+
+        # ========== Financial Position Summary ==========
+        period = (
+            db.query(FiscalPeriod)
+            .filter(
+                FiscalPeriod.organization_id == org_id,
+                FiscalPeriod.start_date <= to_date,
+                FiscalPeriod.end_date >= to_date,
+            )
+            .order_by(FiscalPeriod.start_date.desc())
+            .first()
+        )
+
+        total_assets = Decimal("0")
+        total_liabilities = Decimal("0")
+        total_equity = Decimal("0")
+        total_revenue = Decimal("0")
+        total_expenses = Decimal("0")
+
+        bs_rows = (
+            db.query(
+                AccountCategory.ifrs_category,
+                func.coalesce(func.sum(JournalEntryLine.debit_amount_functional), 0).label("debit"),
+                func.coalesce(func.sum(JournalEntryLine.credit_amount_functional), 0).label("credit"),
+            )
+            .join(JournalEntry, JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id)
+            .join(Account, Account.account_id == JournalEntryLine.account_id)
+            .join(AccountCategory, Account.category_id == AccountCategory.category_id)
+            .filter(
+                JournalEntry.organization_id == org_id,
+                JournalEntry.status == JournalStatus.POSTED,
+                JournalEntry.posting_date <= to_date,
+                AccountCategory.ifrs_category.in_([
+                    IFRSCategory.ASSETS,
+                    IFRSCategory.LIABILITIES,
+                    IFRSCategory.EQUITY,
+                ]),
+            )
+            .group_by(AccountCategory.ifrs_category)
+            .all()
+        )
+
+        for ifrs_category, debit, credit in bs_rows:
+            debit = Decimal(str(debit or 0))
+            credit = Decimal(str(credit or 0))
+
+            if ifrs_category == IFRSCategory.ASSETS:
+                total_assets += debit - credit
+            elif ifrs_category == IFRSCategory.LIABILITIES:
+                total_liabilities += credit - debit
+            elif ifrs_category == IFRSCategory.EQUITY:
+                total_equity += credit - debit
+
+        # ========== AP/AR Control Balances (GL Source of Truth) ==========
+        ar_control_query = (
+            db.query(
+                func.coalesce(
+                    func.sum(
+                        JournalEntryLine.debit_amount_functional
+                        - JournalEntryLine.credit_amount_functional
+                    ),
+                    0,
+                )
+            )
+            .join(JournalEntry, JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id)
+            .join(Account, Account.account_id == JournalEntryLine.account_id)
+            .filter(
+                JournalEntry.organization_id == org_id,
+                JournalEntry.status == JournalStatus.POSTED,
+                Account.subledger_type == "AR",
+                Account.is_active.is_(True),
+            )
+        )
+        ar_control_query = ar_control_query.filter(JournalEntry.posting_date <= to_date)
+        ar_total = Decimal(str(ar_control_query.scalar() or 0))
+
+        ap_control_query = (
+            db.query(
+                func.coalesce(
+                    func.sum(
+                        JournalEntryLine.credit_amount_functional
+                        - JournalEntryLine.debit_amount_functional
+                    ),
+                    0,
+                )
+            )
+            .join(JournalEntry, JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id)
+            .join(Account, Account.account_id == JournalEntryLine.account_id)
+            .filter(
+                JournalEntry.organization_id == org_id,
+                JournalEntry.status == JournalStatus.POSTED,
+                Account.subledger_type == "AP",
+                Account.is_active.is_(True),
+            )
+        )
+        ap_control_query = ap_control_query.filter(JournalEntry.posting_date <= to_date)
+        ap_total = Decimal(str(ap_control_query.scalar() or 0))
+
+        # ========== Tax Summary (GL Source of Truth) ==========
+        tax_totals = ReportsWebService._tax_totals_from_gl(
+            db=db,
+            organization_id=organization_id,
+            start_date=from_date,
+            end_date=to_date,
+        )
+        output_tax = tax_totals["output_tax"]
+        input_tax = tax_totals["input_tax"]
+        net_tax = tax_totals["net_tax"]
+
+        # Get overdue tax periods
+        overdue_tax_periods = (
+            db.query(TaxPeriod)
+            .filter(
+                TaxPeriod.organization_id == org_id,
+                TaxPeriod.status == TaxPeriodStatus.OPEN,
+                TaxPeriod.due_date < today,
+            )
+            .count()
+        )
+
+        pl_rows = (
+            db.query(
+                AccountCategory.ifrs_category,
+                func.coalesce(func.sum(JournalEntryLine.debit_amount_functional), 0).label("debit"),
+                func.coalesce(func.sum(JournalEntryLine.credit_amount_functional), 0).label("credit"),
+            )
+            .join(JournalEntry, JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id)
+            .join(Account, Account.account_id == JournalEntryLine.account_id)
+            .join(AccountCategory, Account.category_id == AccountCategory.category_id)
+            .filter(
+                JournalEntry.organization_id == org_id,
+                JournalEntry.status == JournalStatus.POSTED,
+                JournalEntry.posting_date >= from_date,
+                JournalEntry.posting_date <= to_date,
+                AccountCategory.ifrs_category.in_([
+                    IFRSCategory.REVENUE,
+                    IFRSCategory.EXPENSES,
+                ]),
+            )
+            .group_by(AccountCategory.ifrs_category)
+            .all()
+        )
+
+        total_revenue = Decimal("0")
+        total_expenses = Decimal("0")
+        for ifrs_category, debit, credit in pl_rows:
+            debit = Decimal(str(debit or 0))
+            credit = Decimal(str(credit or 0))
+            if ifrs_category == IFRSCategory.REVENUE:
+                total_revenue = credit - debit
+            elif ifrs_category == IFRSCategory.EXPENSES:
+                total_expenses = debit - credit
+
+        net_income = total_revenue - total_expenses
+
+        # Key metrics summary
+        key_metrics = {
+            "start_date": start_date or _format_date(from_date),
+            "end_date": end_date or _format_date(to_date),
+            "total_assets": _format_currency(total_assets),
+            "total_assets_raw": float(total_assets),
+            "total_liabilities": _format_currency(total_liabilities),
+            "total_liabilities_raw": float(total_liabilities),
+            "total_equity": _format_currency(total_equity),
+            "total_equity_raw": float(total_equity),
+            "total_revenue": _format_currency(total_revenue),
+            "total_revenue_raw": float(total_revenue),
+            "total_expenses": _format_currency(total_expenses),
+            "total_expenses_raw": float(total_expenses),
+            "net_income": _format_currency(net_income),
+            "net_income_raw": float(net_income),
+            "is_profit": net_income >= 0,
+            "ap_total": _format_currency(ap_total),
+            "ap_total_raw": float(ap_total),
+            "ar_total": _format_currency(ar_total),
+            "ar_total_raw": float(ar_total),
+            "output_tax": _format_currency(output_tax),
+            "output_tax_raw": float(output_tax),
+            "input_tax": _format_currency(input_tax),
+            "input_tax_raw": float(input_tax),
+            "net_tax": _format_currency(net_tax),
+            "net_tax_raw": float(net_tax),
+            "is_tax_payable": net_tax > 0,
+            "overdue_tax_periods": overdue_tax_periods,
+            "period_name": period.period_name if period else "No Active Period",
+            "as_of_date": _format_date(to_date),
+        }
+
+        # Get report definitions
+        definitions = (
+            db.query(ReportDefinition)
+            .filter(
+                ReportDefinition.organization_id == org_id,
+                ReportDefinition.is_active.is_(True),
+            )
+            .order_by(ReportDefinition.report_name)
+            .all()
+        )
+
+        # Recent report instances
+        recent_instances = (
+            db.query(ReportInstance, ReportDefinition)
+            .join(ReportDefinition, ReportInstance.report_def_id == ReportDefinition.report_def_id)
+            .filter(ReportInstance.organization_id == org_id)
+            .order_by(ReportInstance.queued_at.desc())
+            .limit(10)
+            .all()
+        )
+
+        # Group reports by category
+        financial_statements = []
+        operational_reports = []
+        compliance_reports = []
+
+        for defn in definitions:
+            report_view = {
+                "report_def_id": str(defn.report_def_id),
+                "report_code": defn.report_code,
+                "report_name": defn.report_name,
+                "description": defn.description or "",
+                "report_type": defn.report_type.value,
+                "report_type_label": _report_type_label(defn.report_type),
+                "category": defn.category or "general",
+            }
+
+            if defn.report_type in [
+                ReportType.BALANCE_SHEET,
+                ReportType.INCOME_STATEMENT,
+                ReportType.CASH_FLOW,
+                ReportType.CHANGES_IN_EQUITY,
+                ReportType.TRIAL_BALANCE,
+            ]:
+                financial_statements.append(report_view)
+            elif defn.report_type in [ReportType.TAX, ReportType.REGULATORY]:
+                compliance_reports.append(report_view)
+            else:
+                operational_reports.append(report_view)
+
+        recent_view = []
+        for instance, defn in recent_instances:
+            recent_view.append({
+                "instance_id": str(instance.instance_id),
+                "report_name": defn.report_name,
+                "report_type": defn.report_type.value,
+                "status": instance.status.value,
+                "queued_at": instance.queued_at.strftime("%Y-%m-%d %H:%M") if instance.queued_at else "",
+                "output_format": instance.output_format,
+            })
+
+        # Standard reports always available (using IFRS terminology)
+        standard_reports = [
+            {
+                "name": "Trial Balance",
+                "description": "View account balances as of a specific date",
+                "url": "/finance/reports/trial-balance",
+                "icon": "scale",
+            },
+            {
+                "name": "Statement of Profit or Loss",
+                "description": "Revenue and expenses for a period",
+                "url": "/finance/reports/income-statement",
+                "icon": "trending-up",
+            },
+            {
+                "name": "Statement of Financial Position",
+                "description": "Assets, liabilities, and equity",
+                "url": "/finance/reports/balance-sheet",
+                "icon": "layers",
+            },
+            {
+                "name": "AP Aging",
+                "description": "Accounts payable aging analysis",
+                "url": "/finance/reports/ap-aging",
+                "icon": "clock",
+            },
+            {
+                "name": "AR Aging",
+                "description": "Accounts receivable aging analysis",
+                "url": "/finance/reports/ar-aging",
+                "icon": "users",
+            },
+            {
+                "name": "General Ledger",
+                "description": "Detailed account transactions",
+                "url": "/finance/reports/general-ledger",
+                "icon": "book-open",
+            },
+            {
+                "name": "Tax Summary",
+                "description": "Tax collected, paid, and net position",
+                "url": "/finance/reports/tax-summary",
+                "icon": "receipt",
+            },
+            {
+                "name": "Expense Summary",
+                "description": "Expense breakdown by category",
+                "url": "/finance/reports/expense-summary",
+                "icon": "credit-card",
+            },
+            {
+                "name": "Cash Flow Statement",
+                "description": "Cash inflows, outflows, and net movement",
+                "url": "/finance/reports/cash-flow",
+                "icon": "activity",
+            },
+            {
+                "name": "Changes in Equity",
+                "description": "Equity roll-forward for the period",
+                "url": "/finance/reports/changes-in-equity",
+                "icon": "trending-up",
+            },
+            {
+                "name": "Budget vs Actual",
+                "description": "Budget performance against actuals",
+                "url": "/finance/reports/budget-vs-actual",
+                "icon": "bar-chart-2",
+            },
+        ]
+
+        return {
+            "key_metrics": key_metrics,
+            "standard_reports": standard_reports,
+            "financial_statements": financial_statements,
+            "operational_reports": operational_reports,
+            "compliance_reports": compliance_reports,
+            "recent_reports": recent_view,
+        }
+
+    @staticmethod
+    def trial_balance_context(
+        db: Session,
+        organization_id: str,
+        as_of_date: Optional[str] = None,
+    ) -> dict:
+        """Get context for trial balance report."""
+        org_id = coerce_uuid(organization_id)
+        ref_date = _parse_date(as_of_date) or date.today()
+
+        # Find the fiscal period for the date
+        period = (
+            db.query(FiscalPeriod)
+            .filter(
+                FiscalPeriod.organization_id == org_id,
+                FiscalPeriod.start_date <= ref_date,
+                FiscalPeriod.end_date >= ref_date,
+            )
+            .order_by(FiscalPeriod.start_date.desc())
+            .first()
+        )
+
+        if not period:
+            period = (
+                db.query(FiscalPeriod)
+                .filter(FiscalPeriod.organization_id == org_id)
+                .order_by(FiscalPeriod.end_date.desc())
+                .first()
+            )
+
+        balances = []
+        total_debit = Decimal("0")
+        total_credit = Decimal("0")
+
+        # Group by IFRS category
+        assets = []
+        liabilities = []
+        equity = []
+        revenue = []
+        expenses = []
+
+        rows = (
+            db.query(
+                Account.account_code,
+                Account.account_name,
+                AccountCategory.ifrs_category,
+                func.coalesce(func.sum(JournalEntryLine.debit_amount_functional), 0).label("debit"),
+                func.coalesce(func.sum(JournalEntryLine.credit_amount_functional), 0).label("credit"),
+            )
+            .join(JournalEntry, JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id)
+            .join(Account, Account.account_id == JournalEntryLine.account_id)
+            .join(AccountCategory, Account.category_id == AccountCategory.category_id)
+            .filter(
+                JournalEntry.organization_id == org_id,
+                JournalEntry.status == JournalStatus.POSTED,
+                JournalEntry.posting_date <= ref_date,
+            )
+            .group_by(
+                Account.account_code,
+                Account.account_name,
+                AccountCategory.ifrs_category,
+            )
+            .order_by(Account.account_code)
+            .all()
+        )
+
+        for account_code, account_name, ifrs_category, debit, credit in rows:
+            debit = Decimal(str(debit or 0))
+            credit = Decimal(str(credit or 0))
+            total_debit += debit
+            total_credit += credit
+
+            entry = {
+                "account_code": account_code,
+                "account_name": account_name,
+                "debit": _format_currency(debit) if debit else "",
+                "credit": _format_currency(credit) if credit else "",
+                "debit_raw": float(debit),
+                "credit_raw": float(credit),
+            }
+
+            if ifrs_category == IFRSCategory.ASSETS:
+                assets.append(entry)
+            elif ifrs_category == IFRSCategory.LIABILITIES:
+                liabilities.append(entry)
+            elif ifrs_category == IFRSCategory.EQUITY:
+                equity.append(entry)
+            elif ifrs_category == IFRSCategory.REVENUE:
+                revenue.append(entry)
+            elif ifrs_category == IFRSCategory.EXPENSES:
+                expenses.append(entry)
+            else:
+                balances.append(entry)
+
+        return {
+            "as_of_date": as_of_date or _format_date(ref_date),
+            "period_name": period.period_name if period else "No Period",
+            "assets": assets,
+            "liabilities": liabilities,
+            "equity": equity,
+            "revenue": revenue,
+            "expenses": expenses,
+            "other_balances": balances,
+            "total_debit": _format_currency(total_debit),
+            "total_credit": _format_currency(total_credit),
+            "is_balanced": total_debit == total_credit,
+        }
+
+    @staticmethod
+    def income_statement_context(
+        db: Session,
+        organization_id: str,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+    ) -> dict:
+        """Get context for income statement report."""
+        org_id = coerce_uuid(organization_id)
+
+        # Default to current month
+        today = date.today()
+        from_date = _parse_date(start_date) or today.replace(day=1)
+        to_date = _parse_date(end_date) or today
+
+        # Find fiscal period
+        period = (
+            db.query(FiscalPeriod)
+            .filter(
+                FiscalPeriod.organization_id == org_id,
+                FiscalPeriod.start_date <= to_date,
+                FiscalPeriod.end_date >= from_date,
+            )
+            .order_by(FiscalPeriod.start_date.desc())
+            .first()
+        )
+
+        balances = ReportsWebService._category_balances(
+            db=db,
+            organization_id=organization_id,
+            start_date=from_date,
+            end_date=to_date,
+        )
+
+        def cat_amount(code: str) -> Decimal:
+            return balances.get(code, {}).get("amount", Decimal("0"))
+
+        revenue = cat_amount("REV") + cat_amount("CAT001")
+        other_income = cat_amount("CAT015")
+        cogs = cat_amount("CAT011")
+        operating_expenses = cat_amount("CAT002") + cat_amount("CAT008")
+        profit_for_period = revenue + other_income - cogs - operating_expenses
+        oci = cat_amount("OCI")
+        total_comprehensive_income = profit_for_period + oci
+
+        income_statement_lines = [
+            {"name": "Revenue", "amount": _format_currency(revenue), "amount_raw": float(revenue)},
+            {"name": "Other Income", "amount": _format_currency(other_income), "amount_raw": float(other_income)},
+            {"name": "Cost of Sales", "amount": _format_currency(cogs), "amount_raw": float(cogs)},
+            {"name": "Operating Expenses", "amount": _format_currency(operating_expenses), "amount_raw": float(operating_expenses)},
+            {"name": "Profit for the Period", "amount": _format_currency(profit_for_period), "amount_raw": float(profit_for_period)},
+            {"name": "Other Comprehensive Income", "amount": _format_currency(oci), "amount_raw": float(oci)},
+            {"name": "Total Comprehensive Income", "amount": _format_currency(total_comprehensive_income), "amount_raw": float(total_comprehensive_income)},
+        ]
+
+        return {
+            "start_date": start_date or _format_date(from_date),
+            "end_date": end_date or _format_date(to_date),
+            "period_name": period.period_name if period else "No Period",
+            "income_statement_lines": income_statement_lines,
+            "total_revenue": _format_currency(revenue + other_income),
+            "total_expenses": _format_currency(cogs + operating_expenses),
+            "net_income": _format_currency(profit_for_period),
+            "net_income_raw": float(profit_for_period),
+            "is_profit": profit_for_period >= 0,
+        }
+
+    @staticmethod
+    def balance_sheet_context(
+        db: Session,
+        organization_id: str,
+        as_of_date: Optional[str] = None,
+    ) -> dict:
+        """Get context for balance sheet report."""
+        org_id = coerce_uuid(organization_id)
+        ref_date = _parse_date(as_of_date) or date.today()
+
+        # Find fiscal period
+        period = (
+            db.query(FiscalPeriod)
+            .filter(
+                FiscalPeriod.organization_id == org_id,
+                FiscalPeriod.start_date <= ref_date,
+                FiscalPeriod.end_date >= ref_date,
+            )
+            .order_by(FiscalPeriod.start_date.desc())
+            .first()
+        )
+
+        if not period:
+            period = (
+                db.query(FiscalPeriod)
+                .filter(FiscalPeriod.organization_id == org_id)
+                .order_by(FiscalPeriod.end_date.desc())
+                .first()
+            )
+
+        balances = ReportsWebService._category_balances(
+            db=db,
+            organization_id=organization_id,
+            as_of_date=ref_date,
+        )
+
+        def cat_amount(code: str) -> Decimal:
+            return balances.get(code, {}).get("amount", Decimal("0"))
+
+        current_assets = [
+            ("Cash and Cash Equivalents", cat_amount("CAT003") + cat_amount("CAT012")),
+            ("Accounts Receivable", cat_amount("CAT004")),
+            ("Inventory", cat_amount("CAT010")),
+            ("Input Tax", cat_amount("CAT017")),
+            ("Withholding Tax", cat_amount("CAT019")),
+            ("Other Current Assets", cat_amount("CAT005") + cat_amount("CAT018")),
+        ]
+        non_current_assets = [
+            ("Property, Plant and Equipment", cat_amount("CAT013")),
+        ]
+        current_liabilities = [
+            ("Accounts Payable", cat_amount("CAT006")),
+            ("Output Tax", cat_amount("CAT016")),
+            ("Other Current Liabilities", cat_amount("CAT007")),
+        ]
+        non_current_liabilities = [
+            ("Other Liabilities", cat_amount("CAT009")),
+            ("Long-term Liabilities", cat_amount("CAT014")),
+        ]
+        equity_lines = [
+            ("Equity", cat_amount("EQT")),
+        ]
+
+        total_assets = sum((amount for _, amount in current_assets), Decimal("0")) + sum(
+            (amount for _, amount in non_current_assets), Decimal("0")
+        )
+        total_liabilities = sum((amount for _, amount in current_liabilities), Decimal("0")) + sum(
+            (amount for _, amount in non_current_liabilities), Decimal("0")
+        )
+        total_equity = sum((amount for _, amount in equity_lines), Decimal("0"))
+        total_liabilities_equity = total_liabilities + total_equity
+
+        balance_sheet_lines = {
+            "current_assets": [
+                {"name": name, "amount": _format_currency(amount), "amount_raw": float(amount)}
+                for name, amount in current_assets
+            ],
+            "non_current_assets": [
+                {"name": name, "amount": _format_currency(amount), "amount_raw": float(amount)}
+                for name, amount in non_current_assets
+            ],
+            "current_liabilities": [
+                {"name": name, "amount": _format_currency(amount), "amount_raw": float(amount)}
+                for name, amount in current_liabilities
+            ],
+            "non_current_liabilities": [
+                {"name": name, "amount": _format_currency(amount), "amount_raw": float(amount)}
+                for name, amount in non_current_liabilities
+            ],
+            "equity": [
+                {"name": name, "amount": _format_currency(amount), "amount_raw": float(amount)}
+                for name, amount in equity_lines
+            ],
+        }
+
+        return {
+            "as_of_date": as_of_date or _format_date(ref_date),
+            "period_name": period.period_name if period else "No Period",
+            "balance_sheet_lines": balance_sheet_lines,
+            "total_assets": _format_currency(total_assets),
+            "total_liabilities": _format_currency(total_liabilities),
+            "total_equity": _format_currency(total_equity),
+            "total_liabilities_equity": _format_currency(total_liabilities_equity),
+            "is_balanced": total_assets == total_liabilities_equity,
+        }
+
+    @staticmethod
+    def ap_aging_context(
+        db: Session,
+        organization_id: str,
+        as_of_date: Optional[str] = None,
+    ) -> dict:
+        """Get context for AP aging report."""
+        org_id = coerce_uuid(organization_id)
+        ref_date = _parse_date(as_of_date) or date.today()
+
+        # Get open invoices
+        invoices = (
+            db.query(SupplierInvoice, Supplier)
+            .join(Supplier, SupplierInvoice.supplier_id == Supplier.supplier_id)
+            .filter(
+                SupplierInvoice.organization_id == org_id,
+                SupplierInvoice.status.in_([
+                    SupplierInvoiceStatus.POSTED,
+                    SupplierInvoiceStatus.PARTIALLY_PAID,
+                ]),
+                SupplierInvoice.invoice_date <= ref_date,
+            )
+            .order_by(SupplierInvoice.due_date)
+            .all()
+        )
+
+        # Aging buckets
+        current = []
+        days_1_30 = []
+        days_31_60 = []
+        days_61_90 = []
+        over_90 = []
+
+        total_current = Decimal("0")
+        total_1_30 = Decimal("0")
+        total_31_60 = Decimal("0")
+        total_61_90 = Decimal("0")
+        total_over_90 = Decimal("0")
+
+        for invoice, supplier in invoices:
+            due_date = invoice.due_date
+            balance = invoice.balance_due or Decimal("0")
+
+            if not due_date:
+                continue
+
+            days_overdue = (ref_date - due_date).days
+
+            entry = {
+                "invoice_number": invoice.invoice_number,
+                "supplier_name": supplier.trading_name or supplier.legal_name,
+                "invoice_date": _format_date(invoice.invoice_date),
+                "due_date": _format_date(due_date),
+                "amount": _format_currency(balance, invoice.currency_code),
+                "amount_raw": float(balance),
+                "days_overdue": max(0, days_overdue),
+            }
+
+            if days_overdue <= 0:
+                current.append(entry)
+                total_current += balance
+            elif days_overdue <= 30:
+                days_1_30.append(entry)
+                total_1_30 += balance
+            elif days_overdue <= 60:
+                days_31_60.append(entry)
+                total_31_60 += balance
+            elif days_overdue <= 90:
+                days_61_90.append(entry)
+                total_61_90 += balance
+            else:
+                over_90.append(entry)
+                total_over_90 += balance
+
+        grand_total = total_current + total_1_30 + total_31_60 + total_61_90 + total_over_90
+
+        return {
+            "as_of_date": as_of_date or _format_date(ref_date),
+            "current": current,
+            "days_1_30": days_1_30,
+            "days_31_60": days_31_60,
+            "days_61_90": days_61_90,
+            "over_90": over_90,
+            "total_current": _format_currency(total_current),
+            "total_1_30": _format_currency(total_1_30),
+            "total_31_60": _format_currency(total_31_60),
+            "total_61_90": _format_currency(total_61_90),
+            "total_over_90": _format_currency(total_over_90),
+            "grand_total": _format_currency(grand_total),
+            "summary": [
+                {"bucket": "Current", "amount": _format_currency(total_current), "amount_raw": float(total_current)},
+                {"bucket": "1-30 Days", "amount": _format_currency(total_1_30), "amount_raw": float(total_1_30)},
+                {"bucket": "31-60 Days", "amount": _format_currency(total_31_60), "amount_raw": float(total_31_60)},
+                {"bucket": "61-90 Days", "amount": _format_currency(total_61_90), "amount_raw": float(total_61_90)},
+                {"bucket": "Over 90 Days", "amount": _format_currency(total_over_90), "amount_raw": float(total_over_90)},
+            ],
+        }
+
+    @staticmethod
+    def ar_aging_context(
+        db: Session,
+        organization_id: str,
+        as_of_date: Optional[str] = None,
+    ) -> dict:
+        """Get context for AR aging report."""
+        org_id = coerce_uuid(organization_id)
+        ref_date = _parse_date(as_of_date) or date.today()
+
+        # Get open invoices
+        from app.models.finance.ar.invoice import InvoiceStatus as ARInvoiceStatus
+
+        invoices = (
+            db.query(ARInvoice, Customer)
+            .join(Customer, ARInvoice.customer_id == Customer.customer_id)
+            .filter(
+                ARInvoice.organization_id == org_id,
+                ARInvoice.status.in_([
+                    ARInvoiceStatus.POSTED,
+                    ARInvoiceStatus.PARTIALLY_PAID,
+                ]),
+                ARInvoice.invoice_date <= ref_date,
+            )
+            .order_by(ARInvoice.due_date)
+            .all()
+        )
+
+        # Aging buckets
+        current = []
+        days_1_30 = []
+        days_31_60 = []
+        days_61_90 = []
+        over_90 = []
+
+        total_current = Decimal("0")
+        total_1_30 = Decimal("0")
+        total_31_60 = Decimal("0")
+        total_61_90 = Decimal("0")
+        total_over_90 = Decimal("0")
+
+        for invoice, customer in invoices:
+            due_date = invoice.due_date
+            balance = invoice.balance_due or Decimal("0")
+
+            if not due_date:
+                continue
+
+            days_overdue = (ref_date - due_date).days
+
+            entry = {
+                "invoice_number": invoice.invoice_number,
+                "customer_name": customer.customer_name,
+                "invoice_date": _format_date(invoice.invoice_date),
+                "due_date": _format_date(due_date),
+                "amount": _format_currency(balance, invoice.currency_code),
+                "amount_raw": float(balance),
+                "days_overdue": max(0, days_overdue),
+            }
+
+            if days_overdue <= 0:
+                current.append(entry)
+                total_current += balance
+            elif days_overdue <= 30:
+                days_1_30.append(entry)
+                total_1_30 += balance
+            elif days_overdue <= 60:
+                days_31_60.append(entry)
+                total_31_60 += balance
+            elif days_overdue <= 90:
+                days_61_90.append(entry)
+                total_61_90 += balance
+            else:
+                over_90.append(entry)
+                total_over_90 += balance
+
+        grand_total = total_current + total_1_30 + total_31_60 + total_61_90 + total_over_90
+
+        return {
+            "as_of_date": as_of_date or _format_date(ref_date),
+            "current": current,
+            "days_1_30": days_1_30,
+            "days_31_60": days_31_60,
+            "days_61_90": days_61_90,
+            "over_90": over_90,
+            "total_current": _format_currency(total_current),
+            "total_1_30": _format_currency(total_1_30),
+            "total_31_60": _format_currency(total_31_60),
+            "total_61_90": _format_currency(total_61_90),
+            "total_over_90": _format_currency(total_over_90),
+            "grand_total": _format_currency(grand_total),
+            "summary": [
+                {"bucket": "Current", "amount": _format_currency(total_current), "amount_raw": float(total_current)},
+                {"bucket": "1-30 Days", "amount": _format_currency(total_1_30), "amount_raw": float(total_1_30)},
+                {"bucket": "31-60 Days", "amount": _format_currency(total_31_60), "amount_raw": float(total_31_60)},
+                {"bucket": "61-90 Days", "amount": _format_currency(total_61_90), "amount_raw": float(total_61_90)},
+                {"bucket": "Over 90 Days", "amount": _format_currency(total_over_90), "amount_raw": float(total_over_90)},
+            ],
+        }
+
+    @staticmethod
+    def general_ledger_context(
+        db: Session,
+        organization_id: str,
+        account_id: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+    ) -> dict:
+        """Get context for general ledger detail report."""
+        from app.models.finance.gl.journal_entry import JournalEntry
+
+        org_id = coerce_uuid(organization_id)
+
+        # Default to current month
+        today = date.today()
+        from_date = _parse_date(start_date) or today.replace(day=1)
+        to_date = _parse_date(end_date) or today
+
+        # Get accounts for dropdown
+        accounts = (
+            db.query(Account)
+            .filter(
+                Account.organization_id == org_id,
+                Account.is_active.is_(True),
+            )
+            .order_by(Account.account_code)
+            .all()
+        )
+
+        account_options = [
+            {
+                "account_id": str(acct.account_id),
+                "account_code": acct.account_code,
+                "account_name": acct.account_name,
+            }
+            for acct in accounts
+        ]
+
+        transactions = []
+        selected_account = None
+        running_balance = Decimal("0")
+
+        if account_id:
+            acct_id = coerce_uuid(account_id)
+            selected_account = db.get(Account, acct_id)
+
+            if selected_account and selected_account.organization_id == org_id:
+                # Get journal lines for this account
+                lines = (
+                    db.query(JournalEntryLine, JournalEntry)
+                    .join(JournalEntry, JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id)
+                    .filter(
+                        JournalEntryLine.account_id == acct_id,
+                        JournalEntry.organization_id == org_id,
+                        JournalEntry.status == JournalStatus.POSTED,
+                        JournalEntry.posting_date >= from_date,
+                        JournalEntry.posting_date <= to_date,
+                    )
+                    .order_by(JournalEntry.posting_date, JournalEntry.journal_entry_id)
+                    .all()
+                )
+
+                for line, entry in lines:
+                    debit = line.debit_amount_functional or Decimal("0")
+                    credit = line.credit_amount_functional or Decimal("0")
+
+                    # Calculate running balance based on normal balance
+                    if selected_account.normal_balance.value == "DEBIT":
+                        running_balance += debit - credit
+                    else:
+                        running_balance += credit - debit
+
+                    transactions.append({
+                        "date": _format_date(entry.posting_date),
+                        "journal_number": entry.journal_number,
+                        "description": line.description or entry.description,
+                        "reference": entry.reference or "",
+                        "debit": _format_currency(debit) if debit else "",
+                        "credit": _format_currency(credit) if credit else "",
+                        "balance": _format_currency(running_balance),
+                    })
+
+        return {
+            "start_date": start_date or _format_date(from_date),
+            "end_date": end_date or _format_date(to_date),
+            "account_id": account_id,
+            "accounts": account_options,
+            "selected_account": {
+                "account_code": selected_account.account_code,
+                "account_name": selected_account.account_name,
+            } if selected_account else None,
+            "transactions": transactions,
+            "ending_balance": _format_currency(running_balance),
+        }
+
+
+    @staticmethod
+    def tax_summary_context(
+        db: Session,
+        organization_id: str,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+    ) -> dict:
+        """Get context for tax summary report."""
+        today = date.today()
+        from_date = _parse_date(start_date) or today.replace(day=1)
+        to_date = _parse_date(end_date) or today
+
+        tax_totals = ReportsWebService._tax_totals_from_gl(
+            db=db,
+            organization_id=organization_id,
+            start_date=from_date,
+            end_date=to_date,
+        )
+
+        output_tax = tax_totals["output_tax"]
+        input_tax = tax_totals["input_tax"]
+        withholding = tax_totals["withholding"]
+        net_tax = tax_totals["net_tax"]
+        payments = Decimal("0")
+
+        tax_breakdown = [
+            {
+                "tax_type": "Output Tax",
+                "output": _format_currency(output_tax),
+                "input": _format_currency(Decimal("0")),
+                "net": _format_currency(output_tax),
+                "net_raw": float(output_tax),
+            },
+            {
+                "tax_type": "Input Tax",
+                "output": _format_currency(Decimal("0")),
+                "input": _format_currency(input_tax),
+                "net": _format_currency(-input_tax),
+                "net_raw": float(-input_tax),
+            },
+            {
+                "tax_type": "Withholding Tax",
+                "output": _format_currency(Decimal("0")),
+                "input": _format_currency(withholding),
+                "net": _format_currency(-withholding),
+                "net_raw": float(-withholding),
+            },
+        ]
+
+        upcoming_deadlines = []
+
+        return {
+            "start_date": start_date or _format_date(from_date),
+            "end_date": end_date or _format_date(to_date),
+            "output_tax": _format_currency(output_tax),
+            "output_tax_raw": float(output_tax),
+            "input_tax": _format_currency(input_tax),
+            "input_tax_raw": float(input_tax),
+            "net_tax": _format_currency(net_tax),
+            "net_tax_raw": float(net_tax),
+            "is_payable": net_tax > 0,
+            "withholding": _format_currency(withholding),
+            "payments": _format_currency(payments),
+            "tax_breakdown": tax_breakdown,
+            "upcoming_deadlines": upcoming_deadlines,
+        }
+
+    @staticmethod
+    def expense_summary_context(
+        db: Session,
+        organization_id: str,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+    ) -> dict:
+        """Get context for expense summary report."""
+        org_id = coerce_uuid(organization_id)
+        presentation_currency_code = org_context_service.get_presentation_currency(
+            db,
+            org_id,
+        )
+        today = date.today()
+        from_date = _parse_date(start_date) or today.replace(day=1)
+        to_date = _parse_date(end_date) or today
+
+        expense_items = []
+        total_expenses = Decimal("0")
+
+        # Aggregate posted ledger lines within the date range for expense accounts.
+        expense_rows = (
+            db.query(
+                Account.account_code,
+                Account.account_name,
+                AccountCategory.category_name,
+                func.coalesce(func.sum(JournalEntryLine.debit_amount_functional), 0).label("debit"),
+                func.coalesce(func.sum(JournalEntryLine.credit_amount_functional), 0).label("credit"),
+            )
+            .join(JournalEntry, JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id)
+            .join(Account, JournalEntryLine.account_id == Account.account_id)
+            .join(AccountCategory, Account.category_id == AccountCategory.category_id)
+            .filter(
+                JournalEntry.organization_id == org_id,
+                JournalEntry.status == JournalStatus.POSTED,
+                JournalEntry.posting_date >= from_date,
+                JournalEntry.posting_date <= to_date,
+                AccountCategory.ifrs_category == IFRSCategory.EXPENSES,
+            )
+            .group_by(
+                Account.account_code,
+                Account.account_name,
+                AccountCategory.category_name,
+            )
+            .order_by(Account.account_code)
+            .all()
+        )
+
+        for account_code, account_name, category_name, debit, credit in expense_rows:
+            debit = Decimal(str(debit or 0))
+            credit = Decimal(str(credit or 0))
+            amount = debit - credit
+            total_expenses += amount
+            expense_items.append({
+                "account_code": account_code,
+                "account_name": account_name,
+                "category": category_name,
+                "amount": _format_currency(amount),
+                "amount_raw": float(amount),
+            })
+
+        # Sort by amount descending
+        expense_items.sort(key=lambda x: x["amount_raw"], reverse=True)
+
+        # Top 5 expense categories
+        top_expenses = expense_items[:5]
+
+        return {
+            "start_date": start_date or _format_date(from_date),
+            "end_date": end_date or _format_date(to_date),
+            "expense_items": expense_items,
+            "top_expenses": top_expenses,
+            "total_expenses": _format_currency(total_expenses),
+            "total_expenses_raw": float(total_expenses),
+            "presentation_currency_code": presentation_currency_code,
+        }
+
+    @staticmethod
+    def cash_flow_context(
+        db: Session,
+        organization_id: str,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+    ) -> dict:
+        """Get context for cash flow summary report."""
+        org_id = coerce_uuid(organization_id)
+        today = date.today()
+        from_date = _parse_date(start_date) or today.replace(day=1)
+        to_date = _parse_date(end_date) or today
+
+        cash_category_codes = {"CAT003", "CAT012"}
+        cash_categories = (
+            db.query(AccountCategory.category_id)
+            .filter(
+                AccountCategory.organization_id == org_id,
+                AccountCategory.category_code.in_(cash_category_codes),
+            )
+            .all()
+        )
+        cash_category_ids = [row.category_id for row in cash_categories]
+
+        cash_accounts = (
+            db.query(Account.account_id, Account.account_code, Account.account_name)
+            .filter(
+                Account.organization_id == org_id,
+                Account.category_id.in_(cash_category_ids),
+                Account.is_active.is_(True),
+            )
+            .order_by(Account.account_code)
+            .all()
+        )
+        account_ids = [row.account_id for row in cash_accounts]
+
+        movements = []
+        total_inflow = Decimal("0")
+        total_outflow = Decimal("0")
+
+        if account_ids:
+            rows = (
+                db.query(
+                    Account.account_id,
+                    func.coalesce(func.sum(JournalEntryLine.debit_amount_functional), 0).label("debit"),
+                    func.coalesce(func.sum(JournalEntryLine.credit_amount_functional), 0).label("credit"),
+                )
+                .join(JournalEntry, JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id)
+                .join(Account, Account.account_id == JournalEntryLine.account_id)
+                .filter(
+                    JournalEntry.organization_id == org_id,
+                    JournalEntry.status == JournalStatus.POSTED,
+                    JournalEntry.posting_date >= from_date,
+                    JournalEntry.posting_date <= to_date,
+                    JournalEntryLine.account_id.in_(account_ids),
+                )
+                .group_by(Account.account_id)
+                .all()
+            )
+
+            acct_map = {row.account_id: row for row in cash_accounts}
+            for account_id, debit, credit in rows:
+                debit = Decimal(str(debit or 0))
+                credit = Decimal(str(credit or 0))
+                inflow = debit
+                outflow = credit
+                total_inflow += inflow
+                total_outflow += outflow
+
+                account = acct_map.get(account_id)
+                movements.append({
+                    "account_code": account.account_code if account else "",
+                    "account_name": account.account_name if account else "",
+                    "inflow": _format_currency(inflow),
+                    "outflow": _format_currency(outflow),
+                    "net": _format_currency(inflow - outflow),
+                    "net_raw": float(inflow - outflow),
+                })
+
+        net_cash = total_inflow - total_outflow
+
+        return {
+            "start_date": start_date or _format_date(from_date),
+            "end_date": end_date or _format_date(to_date),
+            "cash_movements": movements,
+            "total_inflow": _format_currency(total_inflow),
+            "total_outflow": _format_currency(total_outflow),
+            "net_cash_flow": _format_currency(net_cash),
+            "net_cash_flow_raw": float(net_cash),
+        }
+
+    @staticmethod
+    def changes_in_equity_context(
+        db: Session,
+        organization_id: str,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+    ) -> dict:
+        """Get context for statement of changes in equity."""
+        org_id = coerce_uuid(organization_id)
+        today = date.today()
+        from_date = _parse_date(start_date) or today.replace(day=1)
+        to_date = _parse_date(end_date) or today
+
+        equity_rows = (
+            db.query(
+                Account.account_id,
+                Account.account_code,
+                Account.account_name,
+                func.coalesce(func.sum(JournalEntryLine.debit_amount_functional), 0).label("debit"),
+                func.coalesce(func.sum(JournalEntryLine.credit_amount_functional), 0).label("credit"),
+            )
+            .join(JournalEntry, JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id)
+            .join(Account, Account.account_id == JournalEntryLine.account_id)
+            .join(AccountCategory, Account.category_id == AccountCategory.category_id)
+            .filter(
+                JournalEntry.organization_id == org_id,
+                JournalEntry.status == JournalStatus.POSTED,
+                JournalEntry.posting_date >= from_date,
+                JournalEntry.posting_date <= to_date,
+                AccountCategory.ifrs_category == IFRSCategory.EQUITY,
+            )
+            .group_by(Account.account_id, Account.account_code, Account.account_name)
+            .order_by(Account.account_code)
+            .all()
+        )
+
+        opening_rows = (
+            db.query(
+                Account.account_id,
+                func.coalesce(func.sum(JournalEntryLine.debit_amount_functional), 0).label("debit"),
+                func.coalesce(func.sum(JournalEntryLine.credit_amount_functional), 0).label("credit"),
+            )
+            .join(JournalEntry, JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id)
+            .join(Account, Account.account_id == JournalEntryLine.account_id)
+            .join(AccountCategory, Account.category_id == AccountCategory.category_id)
+            .filter(
+                JournalEntry.organization_id == org_id,
+                JournalEntry.status == JournalStatus.POSTED,
+                JournalEntry.posting_date < from_date,
+                AccountCategory.ifrs_category == IFRSCategory.EQUITY,
+            )
+            .group_by(Account.account_id)
+            .all()
+        )
+        opening_map = {row.account_id: (row.debit, row.credit) for row in opening_rows}
+
+        line_items = []
+        total_opening = Decimal("0")
+        total_change = Decimal("0")
+        total_closing = Decimal("0")
+
+        for account_id, code, name, debit, credit in equity_rows:
+            debit = Decimal(str(debit or 0))
+            credit = Decimal(str(credit or 0))
+            opening_debit, opening_credit = opening_map.get(account_id, (0, 0))
+            opening = Decimal(str(opening_credit or 0)) - Decimal(str(opening_debit or 0))
+            change = credit - debit
+            closing = opening + change
+
+            total_opening += opening
+            total_change += change
+            total_closing += closing
+
+            line_items.append({
+                "account_code": code,
+                "account_name": name,
+                "opening_balance": _format_currency(opening),
+                "change": _format_currency(change),
+                "closing_balance": _format_currency(closing),
+                "closing_balance_raw": float(closing),
+            })
+
+        # Net income for the period
+        revenue_expense = (
+            db.query(
+                AccountCategory.ifrs_category,
+                func.coalesce(func.sum(JournalEntryLine.debit_amount_functional), 0).label("debit"),
+                func.coalesce(func.sum(JournalEntryLine.credit_amount_functional), 0).label("credit"),
+            )
+            .join(JournalEntry, JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id)
+            .join(Account, Account.account_id == JournalEntryLine.account_id)
+            .join(AccountCategory, Account.category_id == AccountCategory.category_id)
+            .filter(
+                JournalEntry.organization_id == org_id,
+                JournalEntry.status == JournalStatus.POSTED,
+                JournalEntry.posting_date >= from_date,
+                JournalEntry.posting_date <= to_date,
+                AccountCategory.ifrs_category.in_([
+                    IFRSCategory.REVENUE,
+                    IFRSCategory.EXPENSES,
+                ]),
+            )
+            .group_by(AccountCategory.ifrs_category)
+            .all()
+        )
+        total_revenue = Decimal("0")
+        total_expenses = Decimal("0")
+        for ifrs_category, debit, credit in revenue_expense:
+            debit = Decimal(str(debit or 0))
+            credit = Decimal(str(credit or 0))
+            if ifrs_category == IFRSCategory.REVENUE:
+                total_revenue += credit - debit
+            elif ifrs_category == IFRSCategory.EXPENSES:
+                total_expenses += debit - credit
+
+        net_income = total_revenue - total_expenses
+
+        return {
+            "start_date": start_date or _format_date(from_date),
+            "end_date": end_date or _format_date(to_date),
+            "equity_lines": line_items,
+            "opening_equity": _format_currency(total_opening),
+            "change_in_equity": _format_currency(total_change),
+            "closing_equity": _format_currency(total_closing),
+            "net_income": _format_currency(net_income),
+            "net_income_raw": float(net_income),
+        }
+
+    @staticmethod
+    def budget_vs_actual_context(
+        db: Session,
+        organization_id: str,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        budget_id: Optional[str] = None,
+        budget_code: Optional[str] = None,
+    ) -> dict:
+        """Get context for budget vs actual report."""
+        from app.models.finance.gl.budget import Budget, BudgetStatus
+        from app.models.finance.gl.budget_line import BudgetLine
+
+        org_id = coerce_uuid(organization_id)
+        today = date.today()
+        from_date = _parse_date(start_date) or today.replace(day=1)
+        to_date = _parse_date(end_date) or today
+
+        periods = (
+            db.query(FiscalPeriod)
+            .filter(
+                FiscalPeriod.organization_id == org_id,
+                FiscalPeriod.start_date <= to_date,
+                FiscalPeriod.end_date >= from_date,
+            )
+            .all()
+        )
+        period_ids = [p.fiscal_period_id for p in periods]
+
+        budget_query = (
+            db.query(BudgetLine, Budget, Account)
+            .join(Budget, BudgetLine.budget_id == Budget.budget_id)
+            .join(Account, BudgetLine.account_id == Account.account_id)
+            .filter(
+                Budget.organization_id == org_id,
+                Budget.status.in_([BudgetStatus.APPROVED, BudgetStatus.ACTIVE]),
+                BudgetLine.fiscal_period_id.in_(period_ids),
+            )
+        )
+
+        if budget_id:
+            budget_query = budget_query.filter(Budget.budget_id == coerce_uuid(budget_id))
+        if budget_code:
+            budget_query = budget_query.filter(Budget.budget_code == budget_code)
+
+        budget_lines = budget_query.all()
+
+        budget_totals = {}
+        for line, budget, account in budget_lines:
+            budget_totals.setdefault(account.account_id, {
+                "account_code": account.account_code,
+                "account_name": account.account_name,
+                "budget": Decimal("0"),
+                "normal_balance": account.normal_balance.value,
+            })
+            budget_totals[account.account_id]["budget"] += Decimal(str(line.budget_amount or 0))
+
+        account_ids = list(budget_totals.keys())
+        actual_rows = []
+        if account_ids:
+            actual_rows = (
+                db.query(
+                    JournalEntryLine.account_id,
+                    func.coalesce(func.sum(JournalEntryLine.debit_amount_functional), 0).label("debit"),
+                    func.coalesce(func.sum(JournalEntryLine.credit_amount_functional), 0).label("credit"),
+                )
+                .join(JournalEntry, JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id)
+                .filter(
+                    JournalEntry.organization_id == org_id,
+                    JournalEntry.status == JournalStatus.POSTED,
+                    JournalEntry.posting_date >= from_date,
+                    JournalEntry.posting_date <= to_date,
+                    JournalEntryLine.account_id.in_(account_ids),
+                )
+                .group_by(JournalEntryLine.account_id)
+                .all()
+            )
+
+        actual_map = {row.account_id: row for row in actual_rows}
+
+        rows = []
+        total_budget = Decimal("0")
+        total_actual = Decimal("0")
+
+        for account_id, data in budget_totals.items():
+            actual_row = actual_map.get(account_id)
+            debit = Decimal(str(actual_row.debit or 0)) if actual_row else Decimal("0")
+            credit = Decimal(str(actual_row.credit or 0)) if actual_row else Decimal("0")
+            if data["normal_balance"] == "DEBIT":
+                actual = debit - credit
+            else:
+                actual = credit - debit
+
+            budget = data["budget"]
+            variance = actual - budget
+            variance_pct = (variance / budget * Decimal("100")) if budget else Decimal("0")
+
+            total_budget += budget
+            total_actual += actual
+
+            rows.append({
+                "account_code": data["account_code"],
+                "account_name": data["account_name"],
+                "budget": _format_currency(budget),
+                "actual": _format_currency(actual),
+                "variance": _format_currency(variance),
+                "variance_percent": f"{variance_pct:.2f}%",
+                "variance_raw": float(variance),
+            })
+
+        rows.sort(key=lambda x: x["account_code"])
+        total_variance = total_actual - total_budget
+
+        return {
+            "start_date": start_date or _format_date(from_date),
+            "end_date": end_date or _format_date(to_date),
+            "budget_id": budget_id or "",
+            "budget_code": budget_code or "",
+            "budget_lines": rows,
+            "total_budget": _format_currency(total_budget),
+            "total_actual": _format_currency(total_actual),
+            "total_variance": _format_currency(total_variance),
+            "total_variance_raw": float(total_variance),
+        }
+
+    def dashboard_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        start_date: Optional[str],
+        end_date: Optional[str],
+        db: Session,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "Reports", "reports")
+        context.update(
+            self.dashboard_context(
+                db,
+                str(auth.organization_id),
+                start_date=start_date,
+                end_date=end_date,
+            )
+        )
+        return templates.TemplateResponse(request, "finance/reports/dashboard.html", context)
+
+    def trial_balance_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        as_of_date: Optional[str],
+        db: Session,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "Trial Balance", "reports")
+        context.update(
+            self.trial_balance_context(
+                db,
+                str(auth.organization_id),
+                as_of_date=as_of_date,
+            )
+        )
+        return templates.TemplateResponse(request, "finance/reports/trial_balance.html", context)
+
+    def income_statement_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        start_date: Optional[str],
+        end_date: Optional[str],
+        db: Session,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "Statement of Profit or Loss", "reports")
+        context.update(
+            self.income_statement_context(
+                db,
+                str(auth.organization_id),
+                start_date=start_date,
+                end_date=end_date,
+            )
+        )
+        return templates.TemplateResponse(request, "finance/reports/income_statement.html", context)
+
+    def balance_sheet_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        as_of_date: Optional[str],
+        db: Session,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "Statement of Financial Position", "reports")
+        context.update(
+            self.balance_sheet_context(
+                db,
+                str(auth.organization_id),
+                as_of_date=as_of_date,
+            )
+        )
+        return templates.TemplateResponse(request, "finance/reports/balance_sheet.html", context)
+
+    def ap_aging_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        as_of_date: Optional[str],
+        db: Session,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "AP Aging Report", "reports")
+        context.update(
+            self.ap_aging_context(
+                db,
+                str(auth.organization_id),
+                as_of_date=as_of_date,
+            )
+        )
+        return templates.TemplateResponse(request, "finance/reports/ap_aging.html", context)
+
+    def ar_aging_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        as_of_date: Optional[str],
+        db: Session,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "AR Aging Report", "reports")
+        context.update(
+            self.ar_aging_context(
+                db,
+                str(auth.organization_id),
+                as_of_date=as_of_date,
+            )
+        )
+        return templates.TemplateResponse(request, "finance/reports/ar_aging.html", context)
+
+    def general_ledger_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        account_id: Optional[str],
+        start_date: Optional[str],
+        end_date: Optional[str],
+        db: Session,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "General Ledger", "reports")
+        context.update(
+            self.general_ledger_context(
+                db,
+                str(auth.organization_id),
+                account_id=account_id,
+                start_date=start_date,
+                end_date=end_date,
+            )
+        )
+        return templates.TemplateResponse(request, "finance/reports/general_ledger.html", context)
+
+    def tax_summary_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        start_date: Optional[str],
+        end_date: Optional[str],
+        db: Session,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "Tax Summary", "reports")
+        context.update(
+            self.tax_summary_context(
+                db,
+                str(auth.organization_id),
+                start_date=start_date,
+                end_date=end_date,
+            )
+        )
+        return templates.TemplateResponse(request, "finance/reports/tax_summary.html", context)
+
+    def expense_summary_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        start_date: Optional[str],
+        end_date: Optional[str],
+        db: Session,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "Expense Summary", "reports")
+        context.update(
+            self.expense_summary_context(
+                db,
+                str(auth.organization_id),
+                start_date=start_date,
+                end_date=end_date,
+            )
+        )
+        return templates.TemplateResponse(request, "finance/reports/expense_summary.html", context)
+
+    def cash_flow_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        start_date: Optional[str],
+        end_date: Optional[str],
+        db: Session,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "Cash Flow Statement", "reports")
+        context.update(
+            self.cash_flow_context(
+                db,
+                str(auth.organization_id),
+                start_date=start_date,
+                end_date=end_date,
+            )
+        )
+        return templates.TemplateResponse(request, "finance/reports/cash_flow.html", context)
+
+    def changes_in_equity_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        start_date: Optional[str],
+        end_date: Optional[str],
+        db: Session,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "Changes in Equity", "reports")
+        context.update(
+            self.changes_in_equity_context(
+                db,
+                str(auth.organization_id),
+                start_date=start_date,
+                end_date=end_date,
+            )
+        )
+        return templates.TemplateResponse(
+            request, "finance/reports/changes_in_equity.html", context
+        )
+
+    def budget_vs_actual_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        start_date: Optional[str],
+        end_date: Optional[str],
+        budget_id: Optional[str],
+        budget_code: Optional[str],
+        db: Session,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "Budget vs Actual", "reports")
+        context.update(
+            self.budget_vs_actual_context(
+                db,
+                str(auth.organization_id),
+                start_date=start_date,
+                end_date=end_date,
+                budget_id=budget_id,
+                budget_code=budget_code,
+            )
+        )
+        return templates.TemplateResponse(
+            request, "finance/reports/budget_vs_actual.html", context
+        )
+
+
+reports_web_service = ReportsWebService()

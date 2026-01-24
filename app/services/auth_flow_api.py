@@ -199,7 +199,12 @@ class AuthFlowApiService:
 
         return PasswordChangeResponse(changed_at=now)
 
-    def forgot_password(self, payload, db: Session) -> ForgotPasswordResponse:
+    def forgot_password(
+        self,
+        payload,
+        db: Session,
+        app_url: str | None = None,
+    ) -> ForgotPasswordResponse:
         result = request_password_reset(db, payload.email)
 
         if result:
@@ -208,6 +213,7 @@ class AuthFlowApiService:
                 to_email=result["email"],
                 reset_token=result["token"],
                 person_name=result["person_name"],
+                app_url=app_url,
             )
 
         return ForgotPasswordResponse()

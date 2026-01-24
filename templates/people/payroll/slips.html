@@ -1,0 +1,243 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}Salary Slips{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">Salary Slips</span>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<div class="flex items-center gap-2">
+    <a href="/people/payroll/runs" class="btn btn-secondary">
+        <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/>
+        </svg>
+        Batch Runs
+    </a>
+    <a href="/people/payroll/slips/new" class="btn btn-primary group">
+        <svg class="h-4 w-4 mr-1.5 transition-transform group-hover:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+        </svg>
+        New Salary Slip
+    </a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    {# Stats Cards #}
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="card p-4">
+            <div class="flex items-center gap-3">
+                <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-800">
+                    <svg class="h-5 w-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-2xl font-bold text-slate-900 dark:text-white">{{ status_counts.get('DRAFT', 0) }}</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Draft</p>
+                </div>
+            </div>
+        </div>
+        <div class="card p-4">
+            <div class="flex items-center gap-3">
+                <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-50 dark:bg-amber-900/30">
+                    <svg class="h-5 w-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-2xl font-bold text-slate-900 dark:text-white">{{ status_counts.get('SUBMITTED', 0) + status_counts.get('APPROVED', 0) }}</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Pending</p>
+                </div>
+            </div>
+        </div>
+        <div class="card p-4">
+            <div class="flex items-center gap-3">
+                <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50 dark:bg-emerald-900/30">
+                    <svg class="h-5 w-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-2xl font-bold text-slate-900 dark:text-white">{{ status_counts.get('POSTED', 0) }}</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Posted</p>
+                </div>
+            </div>
+        </div>
+        <div class="card p-4">
+            <div class="flex items-center gap-3">
+                <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-teal-50 dark:bg-teal-900/30">
+                    <svg class="h-5 w-5 text-teal-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-2xl font-bold text-slate-900 dark:text-white">{{ status_counts.get('PAID', 0) }}</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Paid</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# Search and Filters #}
+    <div class="card">
+        <form method="get" class="p-4">
+            <div class="flex flex-wrap gap-4 items-end">
+                <div class="flex-1 min-w-[200px] max-w-md">
+                    <label for="search" class="form-label">Search</label>
+                    <div class="relative">
+                        <svg class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                        </svg>
+                        <input type="text" name="search" id="search" value="{{ search | default('') }}"
+                            placeholder="Search by slip number or employee..."
+                            class="form-input w-full pl-10">
+                    </div>
+                </div>
+                <div class="w-40">
+                    <label for="status" class="form-label">Status</label>
+                    <select name="status" id="status" class="form-select w-full">
+                        <option value="">All Statuses</option>
+                        {% for s in statuses %}
+                        <option value="{{ s }}" {% if status == s %}selected{% endif %}>{{ s | title }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-secondary h-10">Filter</button>
+            </div>
+        </form>
+    </div>
+
+    {# Salary Slips Table #}
+    {% if slips %}
+    <div class="card overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+                <thead>
+                    <tr class="bg-slate-50 dark:bg-slate-800/50">
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Slip #</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Employee</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Period</th>
+                        <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Gross</th>
+                        <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Deductions</th>
+                        <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Net Pay</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Status</th>
+                        <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                    {% for slip in slips %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                        <td class="px-4 py-3">
+                            <a href="/people/payroll/slips/{{ slip.slip_id }}" class="font-mono text-sm text-teal-600 hover:text-teal-700 dark:text-teal-400">
+                                {{ slip.slip_number }}
+                            </a>
+                        </td>
+                        <td class="px-4 py-3">
+                            <div class="flex items-center gap-3">
+                                <div class="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-white text-xs font-semibold shadow-sm">
+                                    {{ slip.employee_name[:2] | upper if slip.employee_name else 'NA' }}
+                                </div>
+                                <span class="text-sm text-slate-900 dark:text-white">{{ slip.employee_name }}</span>
+                            </div>
+                        </td>
+                        <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">
+                            {{ slip.start_date.strftime('%b %d') }} - {{ slip.end_date.strftime('%b %d, %Y') }}
+                        </td>
+                        <td class="px-4 py-3 text-right font-mono text-sm text-slate-900 dark:text-white">
+                            {{ "{:,.2f}".format(slip.gross_pay) }}
+                        </td>
+                        <td class="px-4 py-3 text-right font-mono text-sm text-red-600 dark:text-red-400">
+                            ({{ "{:,.2f}".format(slip.total_deduction) }})
+                        </td>
+                        <td class="px-4 py-3 text-right font-mono text-sm font-semibold text-slate-900 dark:text-white">
+                            {{ "{:,.2f}".format(slip.net_pay) }}
+                        </td>
+                        <td class="px-4 py-3">
+                            {% set status_colors = {
+                                'DRAFT': 'bg-slate-100 text-slate-700 ring-slate-500/20 dark:bg-slate-800 dark:text-slate-300',
+                                'SUBMITTED': 'bg-amber-50 text-amber-700 ring-amber-600/20 dark:bg-amber-900/30 dark:text-amber-400',
+                                'APPROVED': 'bg-blue-50 text-blue-700 ring-blue-600/20 dark:bg-blue-900/30 dark:text-blue-400',
+                                'POSTED': 'bg-emerald-50 text-emerald-700 ring-emerald-600/20 dark:bg-emerald-900/30 dark:text-emerald-400',
+                                'PAID': 'bg-teal-50 text-teal-700 ring-teal-600/20 dark:bg-teal-900/30 dark:text-teal-400',
+                                'CANCELLED': 'bg-red-50 text-red-700 ring-red-600/20 dark:bg-red-900/30 dark:text-red-400'
+                            } %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ring-1 ring-inset {{ status_colors.get(slip.status.value, status_colors.DRAFT) }}">
+                                {{ slip.status.value | title }}
+                            </span>
+                        </td>
+                        <td class="px-4 py-3 text-right">
+                            <a href="/people/payroll/slips/{{ slip.slip_id }}"
+                               class="p-1.5 rounded text-slate-400 hover:text-teal-600 hover:bg-teal-50 dark:hover:text-teal-400 dark:hover:bg-teal-900/30 transition-colors"
+                               title="View Details">
+                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                                </svg>
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {# Pagination #}
+    {% if total_pages > 1 %}
+    <div class="flex items-center justify-between">
+        <div class="text-sm text-slate-500 dark:text-slate-400">
+            Showing page <span class="font-medium text-slate-700 dark:text-slate-300">{{ page }}</span> of <span class="font-medium text-slate-700 dark:text-slate-300">{{ total_pages }}</span>
+            <span class="hidden sm:inline">({{ total }} total slips)</span>
+        </div>
+        <div class="flex gap-2">
+            {% if has_prev %}
+            <a href="?page={{ page - 1 }}&search={{ search | default('') }}&status={{ status | default('') }}" class="btn btn-secondary btn-sm">
+                <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                </svg>
+                Previous
+            </a>
+            {% endif %}
+            {% if has_next %}
+            <a href="?page={{ page + 1 }}&search={{ search | default('') }}&status={{ status | default('') }}" class="btn btn-secondary btn-sm">
+                Next
+                <svg class="h-4 w-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                </svg>
+            </a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    {% else %}
+    {# Empty State #}
+    <div class="card px-6 py-16 text-center">
+        <div class="mx-auto w-24 h-24 rounded-full bg-gradient-to-br from-teal-100 to-emerald-50 dark:from-teal-900/30 dark:to-emerald-900/10 flex items-center justify-center mb-6">
+            <svg class="h-12 w-12 text-teal-500 dark:text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+            </svg>
+        </div>
+        <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-2">No salary slips yet</h3>
+        <p class="text-sm text-slate-500 dark:text-slate-400 mb-6 max-w-sm mx-auto">
+            Salary slips are generated from employee salary structures. Create one to get started with payroll.
+        </p>
+        <a href="/people/payroll/slips/new" class="btn btn-primary">
+            <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+            </svg>
+            Create Salary Slip
+        </a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

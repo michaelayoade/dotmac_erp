@@ -1,0 +1,140 @@
+{% extends "finance/base_finance.html" %}
+
+{% block page_title %}Tax Liability Summary{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400">
+    <a href="/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/finance/tax" class="hover:text-primary-600 dark:hover:text-primary-400">Tax</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white">Tax Liability Summary</span>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<a href="/finance/tax/vat-register" data-testid="vat-register-link"
+   class="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700">
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+    </svg>
+    VAT Register
+</a>
+{% endblock %}
+
+{% block content %}
+<!-- Filters -->
+<div class="mb-6 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-800/50">
+    <form method="GET" class="flex flex-wrap items-end gap-4">
+        <div class="flex-1 min-w-[150px]">
+            <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Start Date</label>
+            <input type="date" name="start_date" value="{{ start_date }}"
+                   class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-white">
+        </div>
+        <div class="flex-1 min-w-[150px]">
+            <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">End Date</label>
+            <input type="date" name="end_date" value="{{ end_date }}"
+                   class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-white">
+        </div>
+        <div class="flex-1 min-w-[150px]">
+            <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Group By</label>
+            <select name="group_by"
+                    class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-white">
+                {% for opt in group_options %}
+                <option value="{{ opt.value }}" {% if group_by == opt.value %}selected{% endif %}>{{ opt.label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <button type="submit"
+                    class="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
+                </svg>
+                Apply
+            </button>
+        </div>
+    </form>
+</div>
+
+<!-- Grand Totals -->
+<div class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+    <div class="rounded-xl border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
+        <div class="text-xs font-medium uppercase tracking-wider text-blue-600 dark:text-blue-400">Total Output Tax</div>
+        <div class="mt-1 text-2xl font-semibold text-blue-900 dark:text-blue-100">{{ grand_totals.output_tax }}</div>
+        <div class="mt-1 text-xs text-blue-600 dark:text-blue-400">Collected on sales</div>
+    </div>
+    <div class="rounded-xl border border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-900/20">
+        <div class="text-xs font-medium uppercase tracking-wider text-green-600 dark:text-green-400">Total Input Tax</div>
+        <div class="mt-1 text-2xl font-semibold text-green-900 dark:text-green-100">{{ grand_totals.input_tax }}</div>
+        <div class="mt-1 text-xs text-green-600 dark:text-green-400">Paid on purchases</div>
+    </div>
+    <div class="rounded-xl border {% if grand_totals.net_payable_raw >= 0 %}border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20{% else %}border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-900/20{% endif %} p-4">
+        <div class="text-xs font-medium uppercase tracking-wider {% if grand_totals.net_payable_raw >= 0 %}text-red-600 dark:text-red-400{% else %}text-emerald-600 dark:text-emerald-400{% endif %}">
+            {% if grand_totals.net_payable_raw >= 0 %}Net Tax Payable{% else %}Net Tax Refundable{% endif %}
+        </div>
+        <div class="mt-1 text-2xl font-semibold {% if grand_totals.net_payable_raw >= 0 %}text-red-900 dark:text-red-100{% else %}text-emerald-900 dark:text-emerald-100{% endif %}">{{ grand_totals.net_payable }}</div>
+        <div class="mt-1 text-xs {% if grand_totals.net_payable_raw >= 0 %}text-red-600 dark:text-red-400{% else %}text-emerald-600 dark:text-emerald-400{% endif %}">
+            {% if grand_totals.net_payable_raw >= 0 %}Due to tax authority{% else %}Claimable from tax authority{% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Summary Table -->
+<div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50">
+    <div class="overflow-x-auto">
+        <table class="w-full" data-testid="liability-summary-table">
+            <thead>
+                <tr class="border-b border-slate-200 dark:border-slate-700">
+                    <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
+                        {% if group_by == 'month' %}Month{% elif group_by == 'tax_code' %}Tax Code{% else %}Period{% endif %}
+                    </th>
+                    <th class="px-6 py-4 text-right text-xs font-medium uppercase tracking-wider text-slate-500">Output Tax</th>
+                    <th class="px-6 py-4 text-right text-xs font-medium uppercase tracking-wider text-slate-500">Input Tax</th>
+                    <th class="px-6 py-4 text-right text-xs font-medium uppercase tracking-wider text-slate-500">Net Payable</th>
+                    <th class="px-6 py-4 text-center text-xs font-medium uppercase tracking-wider text-slate-500">Transactions</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                {% for row in summary_data %}
+                <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                    <td class="px-6 py-4 text-sm font-medium text-slate-900 dark:text-white">{{ row.group_key }}</td>
+                    <td class="px-6 py-4 text-right text-sm text-blue-600 dark:text-blue-400">{{ row.output_tax }}</td>
+                    <td class="px-6 py-4 text-right text-sm text-green-600 dark:text-green-400">{{ row.input_tax }}</td>
+                    <td class="px-6 py-4 text-right text-sm font-medium {% if row.net_payable_raw >= 0 %}text-red-600 dark:text-red-400{% else %}text-emerald-600 dark:text-emerald-400{% endif %}">
+                        {{ row.net_payable }}
+                    </td>
+                    <td class="px-6 py-4 text-center text-sm text-slate-600 dark:text-slate-400">{{ row.transaction_count }}</td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="5" class="px-6 py-12 text-center text-sm text-slate-500">No tax data found for the selected period</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            {% if summary_data %}
+            <tfoot class="bg-slate-50 dark:bg-slate-900/50">
+                <tr class="border-t-2 border-slate-300 dark:border-slate-600">
+                    <td class="px-6 py-4 text-sm font-bold text-slate-900 dark:text-white">TOTAL</td>
+                    <td class="px-6 py-4 text-right text-sm font-bold text-blue-600 dark:text-blue-400">{{ grand_totals.output_tax }}</td>
+                    <td class="px-6 py-4 text-right text-sm font-bold text-green-600 dark:text-green-400">{{ grand_totals.input_tax }}</td>
+                    <td class="px-6 py-4 text-right text-sm font-bold {% if grand_totals.net_payable_raw >= 0 %}text-red-600 dark:text-red-400{% else %}text-emerald-600 dark:text-emerald-400{% endif %}">{{ grand_totals.net_payable }}</td>
+                    <td class="px-6 py-4"></td>
+                </tr>
+            </tfoot>
+            {% endif %}
+        </table>
+    </div>
+</div>
+
+<!-- Actions -->
+<div class="mt-6 flex gap-4">
+    <a href="/finance/tax/returns/new"
+       class="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-primary-600 to-primary-500 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-primary-500/25 hover:from-primary-700 hover:to-primary-600">
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+        </svg>
+        Prepare VAT Return
+    </a>
+</div>
+{% endblock %}

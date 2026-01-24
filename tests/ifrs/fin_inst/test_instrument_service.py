@@ -9,7 +9,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from app.models.ifrs.fin_inst.financial_instrument import (
+from app.models.finance.fin_inst.financial_instrument import (
     InstrumentType,
     InstrumentClassification,
     InstrumentStatus,
@@ -22,7 +22,7 @@ class TestFinancialInstrumentService:
 
     def test_calculate_premium_discount_premium(self):
         """Test premium calculation when paying above face value."""
-        from app.services.ifrs.fin_inst.instrument import FinancialInstrumentService
+        from app.services.finance.fin_inst.instrument import FinancialInstrumentService
 
         result = FinancialInstrumentService.calculate_premium_discount(
             face_value=Decimal("100000.00"),
@@ -35,7 +35,7 @@ class TestFinancialInstrumentService:
 
     def test_calculate_premium_discount_discount(self):
         """Test discount calculation when paying below face value."""
-        from app.services.ifrs.fin_inst.instrument import FinancialInstrumentService
+        from app.services.finance.fin_inst.instrument import FinancialInstrumentService
 
         result = FinancialInstrumentService.calculate_premium_discount(
             face_value=Decimal("100000.00"),
@@ -48,7 +48,7 @@ class TestFinancialInstrumentService:
 
     def test_calculate_premium_discount_at_par(self):
         """Test when buying at par value."""
-        from app.services.ifrs.fin_inst.instrument import FinancialInstrumentService
+        from app.services.finance.fin_inst.instrument import FinancialInstrumentService
 
         result = FinancialInstrumentService.calculate_premium_discount(
             face_value=Decimal("100000.00"),
@@ -60,7 +60,7 @@ class TestFinancialInstrumentService:
 
     def test_determine_initial_carrying_amount_fvpl(self):
         """Test initial carrying for FVPL uses fair value."""
-        from app.services.ifrs.fin_inst.instrument import FinancialInstrumentService
+        from app.services.finance.fin_inst.instrument import FinancialInstrumentService
 
         result = FinancialInstrumentService.determine_initial_carrying_amount(
             classification=InstrumentClassification.FVPL,
@@ -74,7 +74,7 @@ class TestFinancialInstrumentService:
 
     def test_determine_initial_carrying_amount_amortized_cost(self):
         """Test initial carrying for amortized cost includes transaction costs."""
-        from app.services.ifrs.fin_inst.instrument import FinancialInstrumentService
+        from app.services.finance.fin_inst.instrument import FinancialInstrumentService
 
         result = FinancialInstrumentService.determine_initial_carrying_amount(
             classification=InstrumentClassification.AMORTIZED_COST,
@@ -87,7 +87,7 @@ class TestFinancialInstrumentService:
 
     def test_determine_initial_carrying_amount_fvoci_debt(self):
         """Test initial carrying for FVOCI debt includes transaction costs."""
-        from app.services.ifrs.fin_inst.instrument import FinancialInstrumentService
+        from app.services.finance.fin_inst.instrument import FinancialInstrumentService
 
         result = FinancialInstrumentService.determine_initial_carrying_amount(
             classification=InstrumentClassification.FVOCI_DEBT,
@@ -100,7 +100,7 @@ class TestFinancialInstrumentService:
 
     def test_create_instrument_duplicate(self, mock_db, org_id, user_id):
         """Test creating duplicate instrument code fails."""
-        from app.services.ifrs.fin_inst.instrument import (
+        from app.services.finance.fin_inst.instrument import (
             FinancialInstrumentService,
             InstrumentInput,
         )
@@ -134,7 +134,7 @@ class TestFinancialInstrumentService:
 
     def test_create_instrument_success(self, mock_db, org_id, user_id):
         """Test successful instrument creation."""
-        from app.services.ifrs.fin_inst.instrument import (
+        from app.services.finance.fin_inst.instrument import (
             FinancialInstrumentService,
             InstrumentInput,
         )
@@ -165,7 +165,7 @@ class TestFinancialInstrumentService:
 
     def test_update_fair_value_not_found(self, mock_db, org_id):
         """Test fair value update fails when instrument not found."""
-        from app.services.ifrs.fin_inst.instrument import FinancialInstrumentService
+        from app.services.finance.fin_inst.instrument import FinancialInstrumentService
         from fastapi import HTTPException
 
         mock_db.get.return_value = None
@@ -183,7 +183,7 @@ class TestFinancialInstrumentService:
 
     def test_update_fair_value_fvpl(self, mock_db, org_id, mock_fvpl_instrument):
         """Test fair value update for FVPL instrument goes to P&L."""
-        from app.services.ifrs.fin_inst.instrument import FinancialInstrumentService
+        from app.services.finance.fin_inst.instrument import FinancialInstrumentService
 
         mock_fvpl_instrument.fair_value = Decimal("98000.00")
         mock_fvpl_instrument.carrying_amount = Decimal("98000.00")
@@ -202,7 +202,7 @@ class TestFinancialInstrumentService:
 
     def test_update_fair_value_fvoci_debt(self, mock_db, org_id, mock_fvoci_instrument):
         """Test fair value update for FVOCI debt goes to OCI."""
-        from app.services.ifrs.fin_inst.instrument import FinancialInstrumentService
+        from app.services.finance.fin_inst.instrument import FinancialInstrumentService
 
         mock_fvoci_instrument.fair_value = Decimal("98000.00")
         mock_fvoci_instrument.carrying_amount = Decimal("98000.00")
@@ -222,7 +222,7 @@ class TestFinancialInstrumentService:
 
     def test_assess_ecl_staging_not_found(self, mock_db, org_id):
         """Test ECL staging fails when instrument not found."""
-        from app.services.ifrs.fin_inst.instrument import FinancialInstrumentService
+        from app.services.finance.fin_inst.instrument import FinancialInstrumentService
         from fastapi import HTTPException
 
         mock_db.get.return_value = None
@@ -238,7 +238,7 @@ class TestFinancialInstrumentService:
 
     def test_assess_ecl_staging_stage_1(self, mock_db, org_id, mock_instrument):
         """Test ECL staging stays at Stage 1 with no impairment indicators."""
-        from app.services.ifrs.fin_inst.instrument import FinancialInstrumentService
+        from app.services.finance.fin_inst.instrument import FinancialInstrumentService
 
         mock_instrument.ecl_stage = 1
         mock_instrument.loss_allowance = Decimal("0")
@@ -257,7 +257,7 @@ class TestFinancialInstrumentService:
 
     def test_assess_ecl_staging_move_to_stage_2(self, mock_db, org_id, mock_instrument):
         """Test ECL staging moves to Stage 2 with significant increase in credit risk."""
-        from app.services.ifrs.fin_inst.instrument import FinancialInstrumentService
+        from app.services.finance.fin_inst.instrument import FinancialInstrumentService
 
         mock_instrument.ecl_stage = 1
         mock_instrument.loss_allowance = Decimal("0")
@@ -277,7 +277,7 @@ class TestFinancialInstrumentService:
 
     def test_assess_ecl_staging_30_days_past_due(self, mock_db, org_id, mock_instrument):
         """Test ECL staging moves to Stage 2 when 30 days past due."""
-        from app.services.ifrs.fin_inst.instrument import FinancialInstrumentService
+        from app.services.finance.fin_inst.instrument import FinancialInstrumentService
 
         mock_instrument.ecl_stage = 1
         mock_instrument.loss_allowance = Decimal("0")
@@ -296,7 +296,7 @@ class TestFinancialInstrumentService:
 
     def test_assess_ecl_staging_move_to_stage_3(self, mock_db, org_id, mock_instrument):
         """Test ECL staging moves to Stage 3 when credit impaired."""
-        from app.services.ifrs.fin_inst.instrument import FinancialInstrumentService
+        from app.services.finance.fin_inst.instrument import FinancialInstrumentService
 
         mock_instrument.ecl_stage = 1
         mock_instrument.loss_allowance = Decimal("0")
@@ -316,7 +316,7 @@ class TestFinancialInstrumentService:
 
     def test_assess_ecl_staging_90_days_past_due(self, mock_db, org_id, mock_instrument):
         """Test ECL staging moves to Stage 3 when 90 days past due."""
-        from app.services.ifrs.fin_inst.instrument import FinancialInstrumentService
+        from app.services.finance.fin_inst.instrument import FinancialInstrumentService
 
         mock_instrument.ecl_stage = 1
         mock_instrument.loss_allowance = Decimal("0")
@@ -335,7 +335,7 @@ class TestFinancialInstrumentService:
 
     def test_record_principal_repayment_not_found(self, mock_db, org_id):
         """Test principal repayment fails when instrument not found."""
-        from app.services.ifrs.fin_inst.instrument import FinancialInstrumentService
+        from app.services.finance.fin_inst.instrument import FinancialInstrumentService
         from fastapi import HTTPException
 
         mock_db.get.return_value = None
@@ -355,7 +355,7 @@ class TestFinancialInstrumentService:
         self, mock_db, org_id, mock_instrument
     ):
         """Test repayment exceeding principal fails."""
-        from app.services.ifrs.fin_inst.instrument import FinancialInstrumentService
+        from app.services.finance.fin_inst.instrument import FinancialInstrumentService
         from fastapi import HTTPException
 
         mock_instrument.current_principal = Decimal("10000.00")
@@ -375,7 +375,7 @@ class TestFinancialInstrumentService:
 
     def test_record_principal_repayment_success(self, mock_db, org_id, mock_instrument):
         """Test successful principal repayment."""
-        from app.services.ifrs.fin_inst.instrument import FinancialInstrumentService
+        from app.services.finance.fin_inst.instrument import FinancialInstrumentService
 
         mock_instrument.current_principal = Decimal("100000.00")
         mock_instrument.amortized_cost = Decimal("98500.00")
@@ -394,7 +394,7 @@ class TestFinancialInstrumentService:
 
     def test_record_principal_repayment_full_payoff(self, mock_db, org_id, mock_instrument):
         """Test full principal repayment sets status to MATURED."""
-        from app.services.ifrs.fin_inst.instrument import FinancialInstrumentService
+        from app.services.finance.fin_inst.instrument import FinancialInstrumentService
 
         mock_instrument.current_principal = Decimal("10000.00")
         mock_instrument.amortized_cost = Decimal("10000.00")
@@ -414,7 +414,7 @@ class TestFinancialInstrumentService:
 
     def test_dispose_instrument_not_found(self, mock_db, org_id):
         """Test disposal fails when instrument not found."""
-        from app.services.ifrs.fin_inst.instrument import FinancialInstrumentService
+        from app.services.finance.fin_inst.instrument import FinancialInstrumentService
         from fastapi import HTTPException
 
         mock_db.get.return_value = None
@@ -432,7 +432,7 @@ class TestFinancialInstrumentService:
 
     def test_dispose_instrument_wrong_status(self, mock_db, org_id, mock_instrument):
         """Test disposal fails for non-active instrument."""
-        from app.services.ifrs.fin_inst.instrument import FinancialInstrumentService
+        from app.services.finance.fin_inst.instrument import FinancialInstrumentService
         from fastapi import HTTPException
 
         mock_instrument.status = InstrumentStatus.MATURED
@@ -451,7 +451,7 @@ class TestFinancialInstrumentService:
 
     def test_dispose_instrument_success(self, mock_db, org_id, mock_instrument):
         """Test successful instrument disposal with gain."""
-        from app.services.ifrs.fin_inst.instrument import FinancialInstrumentService
+        from app.services.finance.fin_inst.instrument import FinancialInstrumentService
 
         mock_instrument.carrying_amount = Decimal("98500.00")
         mock_instrument.accumulated_oci = Decimal("0")
@@ -470,7 +470,7 @@ class TestFinancialInstrumentService:
 
     def test_dispose_fvoci_debt_recycles_oci(self, mock_db, org_id, mock_fvoci_instrument):
         """Test FVOCI debt disposal recycles OCI to P&L."""
-        from app.services.ifrs.fin_inst.instrument import FinancialInstrumentService
+        from app.services.finance.fin_inst.instrument import FinancialInstrumentService
 
         mock_fvoci_instrument.carrying_amount = Decimal("99000.00")
         mock_fvoci_instrument.accumulated_oci = Decimal("500.00")  # Gain in OCI
@@ -489,7 +489,7 @@ class TestFinancialInstrumentService:
 
     def test_write_off_instrument_not_found(self, mock_db, org_id):
         """Test write-off fails when instrument not found."""
-        from app.services.ifrs.fin_inst.instrument import FinancialInstrumentService
+        from app.services.finance.fin_inst.instrument import FinancialInstrumentService
         from fastapi import HTTPException
 
         mock_db.get.return_value = None
@@ -506,7 +506,7 @@ class TestFinancialInstrumentService:
 
     def test_write_off_instrument_not_stage_3(self, mock_db, org_id, mock_instrument):
         """Test write-off fails for non-Stage 3 instrument."""
-        from app.services.ifrs.fin_inst.instrument import FinancialInstrumentService
+        from app.services.finance.fin_inst.instrument import FinancialInstrumentService
         from fastapi import HTTPException
 
         mock_instrument.ecl_stage = 1  # Not Stage 3
@@ -525,7 +525,7 @@ class TestFinancialInstrumentService:
 
     def test_write_off_instrument_success(self, mock_db, org_id, mock_instrument):
         """Test successful instrument write-off."""
-        from app.services.ifrs.fin_inst.instrument import FinancialInstrumentService
+        from app.services.finance.fin_inst.instrument import FinancialInstrumentService
 
         mock_instrument.ecl_stage = 3  # Credit impaired
         mock_db.get.return_value = mock_instrument
@@ -542,7 +542,7 @@ class TestFinancialInstrumentService:
 
     def test_get_instrument_success(self, mock_db, mock_instrument):
         """Test getting an instrument by ID."""
-        from app.services.ifrs.fin_inst.instrument import FinancialInstrumentService
+        from app.services.finance.fin_inst.instrument import FinancialInstrumentService
 
         mock_db.get.return_value = mock_instrument
 
@@ -553,7 +553,7 @@ class TestFinancialInstrumentService:
 
     def test_get_instrument_not_found(self, mock_db):
         """Test getting non-existent instrument raises HTTPException."""
-        from app.services.ifrs.fin_inst.instrument import FinancialInstrumentService
+        from app.services.finance.fin_inst.instrument import FinancialInstrumentService
         from fastapi import HTTPException
 
         mock_db.get.return_value = None
@@ -565,7 +565,7 @@ class TestFinancialInstrumentService:
 
     def test_list_instruments(self, mock_db, org_id):
         """Test listing instruments."""
-        from app.services.ifrs.fin_inst.instrument import FinancialInstrumentService
+        from app.services.finance.fin_inst.instrument import FinancialInstrumentService
 
         mock_instruments = [MockFinancialInstrument(organization_id=org_id) for _ in range(5)]
         mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = mock_instruments
@@ -576,7 +576,7 @@ class TestFinancialInstrumentService:
 
     def test_list_instruments_with_type_filter(self, mock_db, org_id):
         """Test listing instruments with type filter."""
-        from app.services.ifrs.fin_inst.instrument import FinancialInstrumentService
+        from app.services.finance.fin_inst.instrument import FinancialInstrumentService
 
         mock_instruments = [
             MockFinancialInstrument(

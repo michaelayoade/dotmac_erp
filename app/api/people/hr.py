@@ -1,0 +1,950 @@
+"""
+HR API Router.
+
+Thin API wrapper for HR Core endpoints. All business logic is in services.
+"""
+from typing import Optional
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.orm import Session
+
+from app.api.deps import require_organization_id, require_tenant_auth
+from app.db import SessionLocal
+from app.models.finance.core_org.location import Location, LocationType
+from app.models.people.hr.checklist_template import ChecklistTemplateType
+from app.schemas.auth import UserCredentialRead
+from app.schemas.people.hr import (
+    # Department
+    DepartmentCreate,
+    DepartmentUpdate,
+    DepartmentRead,
+    DepartmentListResponse,
+    # Designation
+    DesignationCreate,
+    DesignationUpdate,
+    DesignationRead,
+    # Employment Type
+    EmploymentTypeCreate,
+    EmploymentTypeUpdate,
+    EmploymentTypeRead,
+    # Employee Grade
+    EmployeeGradeCreate,
+    EmployeeGradeUpdate,
+    EmployeeGradeRead,
+    # Employee
+    EmployeeCreate,
+    EmployeeUpdate,
+    EmployeeRead,
+    EmployeeListResponse,
+    EmployeeStatsRead,
+    EmployeeUserCredentialCreate,
+    EmployeeUserLink,
+    TerminationRequest,
+    ResignationRequest,
+    BulkUpdateRequest,
+    BulkDeleteRequest,
+    BulkOperationResponse,
+    LocationCreate,
+    LocationUpdate,
+    LocationRead,
+    LocationListResponse,
+)
+from app.schemas.people.checklist import (
+    ChecklistTemplateCreate,
+    ChecklistTemplateUpdate,
+    ChecklistTemplateRead,
+    ChecklistTemplateListResponse,
+)
+from app.services.people.hr import (
+    EmployeeService,
+    OrganizationService,
+    DepartmentCreateData,
+    DepartmentUpdateData,
+    DepartmentFilters,
+    DesignationCreateData,
+    DesignationUpdateData,
+    DesignationFilters,
+    EmploymentTypeCreateData,
+    EmploymentTypeUpdateData,
+    EmploymentTypeFilters,
+    EmployeeGradeCreateData,
+    EmployeeGradeUpdateData,
+    EmployeeGradeFilters,
+    EmployeeCreateData,
+    EmployeeUpdateData,
+    EmployeeFilters,
+    TerminationData,
+    BulkUpdateData,
+)
+from app.services.common import PaginationParams
+from app.services.people.hr.checklist_templates import ChecklistTemplateService
+
+router = APIRouter(
+    prefix="/hr",
+    tags=["hr"],
+    dependencies=[Depends(require_tenant_auth)],
+)
+
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+def parse_enum(value: Optional[str], enum_type, field_name: str):
+    if value is None:
+        return None
+    try:
+        return enum_type(value)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid {field_name}: {value}") from exc
+
+
+# =============================================================================
+# Departments
+# =============================================================================
+
+
+@router.get("/departments", response_model=DepartmentListResponse)
+def list_departments(
+    organization_id: UUID = Depends(require_organization_id),
+    search: Optional[str] = None,
+    is_active: Optional[bool] = None,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    """List departments."""
+    svc = OrganizationService(db, organization_id)
+    filters = DepartmentFilters(search=search, is_active=is_active)
+    result = svc.list_departments(filters, PaginationParams(offset=offset, limit=limit))
+    return DepartmentListResponse(
+        items=[DepartmentRead.model_validate(d) for d in result.items],
+        total=result.total,
+        offset=offset,
+        limit=limit,
+    )
+
+
+@router.post("/departments", response_model=DepartmentRead, status_code=status.HTTP_201_CREATED)
+def create_department(
+    payload: DepartmentCreate,
+    organization_id: UUID = Depends(require_organization_id),
+    db: Session = Depends(get_db),
+):
+    """Create a department."""
+    svc = OrganizationService(db, organization_id)
+    data = DepartmentCreateData(
+        department_code=payload.department_code,
+        department_name=payload.department_name,
+        description=payload.description,
+        parent_department_id=payload.parent_department_id,
+        cost_center_id=payload.cost_center_id,
+        is_active=payload.is_active,
+    )
+    dept = svc.create_department(data)
+    db.commit()
+    return DepartmentRead.model_validate(dept)
+
+
+@router.get("/departments/{department_id}", response_model=DepartmentRead)
+def get_department(
+    department_id: UUID,
+    organization_id: UUID = Depends(require_organization_id),
+    db: Session = Depends(get_db),
+):
+    """Get a department by ID."""
+    svc = OrganizationService(db, organization_id)
+    return DepartmentRead.model_validate(svc.get_department(department_id))
+
+
+@router.patch("/departments/{department_id}", response_model=DepartmentRead)
+def update_department(
+    department_id: UUID,
+    payload: DepartmentUpdate,
+    organization_id: UUID = Depends(require_organization_id),
+    db: Session = Depends(get_db),
+):
+    """Update a department."""
+    svc = OrganizationService(db, organization_id)
+    data = DepartmentUpdateData(
+        department_code=payload.department_code,
+        department_name=payload.department_name,
+        description=payload.description,
+        parent_department_id=payload.parent_department_id,
+        cost_center_id=payload.cost_center_id,
+        is_active=payload.is_active,
+    )
+    dept = svc.update_department(department_id, data)
+    db.commit()
+    return DepartmentRead.model_validate(dept)
+
+
+@router.delete("/departments/{department_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_department(
+    department_id: UUID,
+    organization_id: UUID = Depends(require_organization_id),
+    db: Session = Depends(get_db),
+):
+    """Delete a department."""
+    svc = OrganizationService(db, organization_id)
+    svc.delete_department(department_id)
+    db.commit()
+
+
+# =============================================================================
+# Designations
+# =============================================================================
+
+
+@router.get("/designations")
+def list_designations(
+    organization_id: UUID = Depends(require_organization_id),
+    search: Optional[str] = None,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    """List designations."""
+    svc = OrganizationService(db, organization_id)
+    filters = DesignationFilters(search=search)
+    result = svc.list_designations(filters, PaginationParams(offset=offset, limit=limit))
+    return {
+        "items": [DesignationRead.model_validate(d) for d in result.items],
+        "total": result.total,
+        "offset": offset,
+        "limit": limit,
+    }
+
+
+# =============================================================================
+# Office Locations
+# =============================================================================
+
+
+@router.get("/locations", response_model=LocationListResponse)
+def list_locations(
+    organization_id: UUID = Depends(require_organization_id),
+    search: Optional[str] = None,
+    is_active: Optional[bool] = None,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    query = db.query(Location).filter(Location.organization_id == organization_id)
+    if search:
+        search_term = f"%{search}%"
+        query = query.filter(
+            Location.location_code.ilike(search_term)
+            | Location.location_name.ilike(search_term)
+        )
+    if is_active is not None:
+        query = query.filter(Location.is_active == is_active)
+    total = query.count()
+    items = query.offset(offset).limit(limit).all()
+    return LocationListResponse(
+        items=[LocationRead.model_validate(i) for i in items],
+        total=total,
+        offset=offset,
+        limit=limit,
+    )
+
+
+@router.post("/locations", response_model=LocationRead, status_code=status.HTTP_201_CREATED)
+def create_location(
+    payload: LocationCreate,
+    organization_id: UUID = Depends(require_organization_id),
+    db: Session = Depends(get_db),
+):
+    location_type = parse_enum(payload.location_type, LocationType, "location_type")
+    location = Location(
+        organization_id=organization_id,
+        location_code=payload.location_code,
+        location_name=payload.location_name,
+        location_type=location_type,
+        address_line_1=payload.address_line_1,
+        address_line_2=payload.address_line_2,
+        city=payload.city,
+        state_province=payload.state_province,
+        postal_code=payload.postal_code,
+        country_code=payload.country_code,
+        latitude=payload.latitude,
+        longitude=payload.longitude,
+        geofence_radius_m=payload.geofence_radius_m,
+        geofence_enabled=payload.geofence_enabled,
+        is_active=payload.is_active,
+    )
+    db.add(location)
+    db.commit()
+    db.refresh(location)
+    return LocationRead.model_validate(location)
+
+
+@router.get("/locations/{location_id}", response_model=LocationRead)
+def get_location(
+    location_id: UUID,
+    organization_id: UUID = Depends(require_organization_id),
+    db: Session = Depends(get_db),
+):
+    location = db.get(Location, location_id)
+    if not location or location.organization_id != organization_id:
+        raise HTTPException(status_code=404, detail="Location not found")
+    return LocationRead.model_validate(location)
+
+
+@router.patch("/locations/{location_id}", response_model=LocationRead)
+def update_location(
+    location_id: UUID,
+    payload: LocationUpdate,
+    organization_id: UUID = Depends(require_organization_id),
+    db: Session = Depends(get_db),
+):
+    location = db.get(Location, location_id)
+    if not location or location.organization_id != organization_id:
+        raise HTTPException(status_code=404, detail="Location not found")
+    update_data = payload.model_dump(exclude_unset=True)
+    if "location_type" in update_data:
+        update_data["location_type"] = parse_enum(
+            update_data["location_type"],
+            LocationType,
+            "location_type",
+        )
+    for key, value in update_data.items():
+        if hasattr(location, key):
+            setattr(location, key, value)
+    db.commit()
+    db.refresh(location)
+    return LocationRead.model_validate(location)
+
+
+@router.delete("/locations/{location_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_location(
+    location_id: UUID,
+    organization_id: UUID = Depends(require_organization_id),
+    db: Session = Depends(get_db),
+):
+    location = db.get(Location, location_id)
+    if not location or location.organization_id != organization_id:
+        raise HTTPException(status_code=404, detail="Location not found")
+    db.delete(location)
+    db.commit()
+
+
+# =============================================================================
+# Checklist Templates
+# =============================================================================
+
+
+@router.get("/checklist-templates", response_model=ChecklistTemplateListResponse)
+def list_checklist_templates(
+    organization_id: UUID = Depends(require_organization_id),
+    template_type: Optional[str] = None,
+    is_active: Optional[bool] = None,
+    search: Optional[str] = None,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    svc = ChecklistTemplateService(db)
+    template_enum = parse_enum(template_type, ChecklistTemplateType, "template_type")
+    result = svc.list_templates(
+        org_id=organization_id,
+        template_type=template_enum,
+        is_active=is_active,
+        search=search,
+        pagination=PaginationParams(offset=offset, limit=limit),
+    )
+    return ChecklistTemplateListResponse(
+        items=[ChecklistTemplateRead.model_validate(t) for t in result.items],
+        total=result.total,
+        offset=offset,
+        limit=limit,
+    )
+
+
+@router.post("/checklist-templates", response_model=ChecklistTemplateRead, status_code=status.HTTP_201_CREATED)
+def create_checklist_template(
+    payload: ChecklistTemplateCreate,
+    organization_id: UUID = Depends(require_organization_id),
+    db: Session = Depends(get_db),
+):
+    svc = ChecklistTemplateService(db)
+    template = svc.create_template(
+        org_id=organization_id,
+        template_code=payload.template_code,
+        template_name=payload.template_name,
+        description=payload.description,
+        template_type=payload.template_type,
+        is_active=payload.is_active,
+        items=[item.model_dump() for item in payload.items],
+    )
+    db.commit()
+    return ChecklistTemplateRead.model_validate(template)
+
+
+@router.get("/checklist-templates/{template_id}", response_model=ChecklistTemplateRead)
+def get_checklist_template(
+    template_id: UUID,
+    organization_id: UUID = Depends(require_organization_id),
+    db: Session = Depends(get_db),
+):
+    svc = ChecklistTemplateService(db)
+    return ChecklistTemplateRead.model_validate(svc.get_template(organization_id, template_id))
+
+
+@router.patch("/checklist-templates/{template_id}", response_model=ChecklistTemplateRead)
+def update_checklist_template(
+    template_id: UUID,
+    payload: ChecklistTemplateUpdate,
+    organization_id: UUID = Depends(require_organization_id),
+    db: Session = Depends(get_db),
+):
+    svc = ChecklistTemplateService(db)
+    update_data = payload.model_dump(exclude_unset=True)
+    if "items" in update_data and update_data["items"] is not None:
+        update_data["items"] = [item.model_dump() for item in update_data["items"]]
+    template = svc.update_template(organization_id, template_id, **update_data)
+    db.commit()
+    return ChecklistTemplateRead.model_validate(template)
+
+
+@router.delete("/checklist-templates/{template_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_checklist_template(
+    template_id: UUID,
+    organization_id: UUID = Depends(require_organization_id),
+    db: Session = Depends(get_db),
+):
+    svc = ChecklistTemplateService(db)
+    svc.delete_template(organization_id, template_id)
+    db.commit()
+
+
+@router.post("/designations", response_model=DesignationRead, status_code=status.HTTP_201_CREATED)
+def create_designation(
+    payload: DesignationCreate,
+    organization_id: UUID = Depends(require_organization_id),
+    db: Session = Depends(get_db),
+):
+    """Create a designation."""
+    svc = OrganizationService(db, organization_id)
+    data = DesignationCreateData(
+        designation_code=payload.designation_code,
+        designation_name=payload.designation_name,
+        description=payload.description,
+        is_active=payload.is_active,
+    )
+    desig = svc.create_designation(data)
+    db.commit()
+    return DesignationRead.model_validate(desig)
+
+
+@router.get("/designations/{designation_id}", response_model=DesignationRead)
+def get_designation(
+    designation_id: UUID,
+    organization_id: UUID = Depends(require_organization_id),
+    db: Session = Depends(get_db),
+):
+    """Get a designation by ID."""
+    svc = OrganizationService(db, organization_id)
+    return DesignationRead.model_validate(svc.get_designation(designation_id))
+
+
+@router.patch("/designations/{designation_id}", response_model=DesignationRead)
+def update_designation(
+    designation_id: UUID,
+    payload: DesignationUpdate,
+    organization_id: UUID = Depends(require_organization_id),
+    db: Session = Depends(get_db),
+):
+    """Update a designation."""
+    svc = OrganizationService(db, organization_id)
+    data = DesignationUpdateData(
+        designation_code=payload.designation_code,
+        designation_name=payload.designation_name,
+        description=payload.description,
+        is_active=payload.is_active,
+    )
+    desig = svc.update_designation(designation_id, data)
+    db.commit()
+    return DesignationRead.model_validate(desig)
+
+
+@router.delete("/designations/{designation_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_designation(
+    designation_id: UUID,
+    organization_id: UUID = Depends(require_organization_id),
+    db: Session = Depends(get_db),
+):
+    """Delete a designation."""
+    svc = OrganizationService(db, organization_id)
+    svc.delete_designation(designation_id)
+    db.commit()
+
+
+# =============================================================================
+# Employment Types
+# =============================================================================
+
+
+@router.get("/employment-types")
+def list_employment_types(
+    organization_id: UUID = Depends(require_organization_id),
+    search: Optional[str] = None,
+    is_active: Optional[bool] = None,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    """List employment types."""
+    svc = OrganizationService(db, organization_id)
+    filters = EmploymentTypeFilters(search=search, is_active=is_active)
+    result = svc.list_employment_types(filters, PaginationParams(offset=offset, limit=limit))
+    return {
+        "items": [EmploymentTypeRead.model_validate(t) for t in result.items],
+        "total": result.total,
+        "offset": offset,
+        "limit": limit,
+    }
+
+
+@router.post("/employment-types", response_model=EmploymentTypeRead, status_code=status.HTTP_201_CREATED)
+def create_employment_type(
+    payload: EmploymentTypeCreate,
+    organization_id: UUID = Depends(require_organization_id),
+    db: Session = Depends(get_db),
+):
+    """Create an employment type."""
+    svc = OrganizationService(db, organization_id)
+    data = EmploymentTypeCreateData(
+        type_code=payload.type_code,
+        type_name=payload.type_name,
+        description=payload.description,
+        is_active=payload.is_active,
+    )
+    emp_type = svc.create_employment_type(data)
+    db.commit()
+    return EmploymentTypeRead.model_validate(emp_type)
+
+
+@router.get("/employment-types/{employment_type_id}", response_model=EmploymentTypeRead)
+def get_employment_type(
+    employment_type_id: UUID,
+    organization_id: UUID = Depends(require_organization_id),
+    db: Session = Depends(get_db),
+):
+    """Get an employment type by ID."""
+    svc = OrganizationService(db, organization_id)
+    return EmploymentTypeRead.model_validate(svc.get_employment_type(employment_type_id))
+
+
+@router.patch("/employment-types/{employment_type_id}", response_model=EmploymentTypeRead)
+def update_employment_type(
+    employment_type_id: UUID,
+    payload: EmploymentTypeUpdate,
+    organization_id: UUID = Depends(require_organization_id),
+    db: Session = Depends(get_db),
+):
+    """Update an employment type."""
+    svc = OrganizationService(db, organization_id)
+    data = EmploymentTypeUpdateData(
+        type_code=payload.type_code,
+        type_name=payload.type_name,
+        description=payload.description,
+        is_active=payload.is_active,
+    )
+    emp_type = svc.update_employment_type(employment_type_id, data)
+    db.commit()
+    return EmploymentTypeRead.model_validate(emp_type)
+
+
+@router.delete("/employment-types/{employment_type_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_employment_type(
+    employment_type_id: UUID,
+    organization_id: UUID = Depends(require_organization_id),
+    db: Session = Depends(get_db),
+):
+    """Delete an employment type."""
+    svc = OrganizationService(db, organization_id)
+    svc.delete_employment_type(employment_type_id)
+    db.commit()
+
+
+# =============================================================================
+# Employee Grades
+# =============================================================================
+
+
+@router.get("/grades")
+def list_employee_grades(
+    organization_id: UUID = Depends(require_organization_id),
+    search: Optional[str] = None,
+    is_active: Optional[bool] = None,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    """List employee grades."""
+    svc = OrganizationService(db, organization_id)
+    filters = EmployeeGradeFilters(search=search, is_active=is_active)
+    result = svc.list_employee_grades(filters, PaginationParams(offset=offset, limit=limit))
+    return {
+        "items": [EmployeeGradeRead.model_validate(g) for g in result.items],
+        "total": result.total,
+        "offset": offset,
+        "limit": limit,
+    }
+
+
+@router.post("/grades", response_model=EmployeeGradeRead, status_code=status.HTTP_201_CREATED)
+def create_employee_grade(
+    payload: EmployeeGradeCreate,
+    organization_id: UUID = Depends(require_organization_id),
+    db: Session = Depends(get_db),
+):
+    """Create an employee grade."""
+    svc = OrganizationService(db, organization_id)
+    data = EmployeeGradeCreateData(
+        grade_code=payload.grade_code,
+        grade_name=payload.grade_name,
+        description=payload.description,
+        rank=payload.rank,
+        min_salary=payload.min_salary,
+        max_salary=payload.max_salary,
+        is_active=payload.is_active,
+    )
+    grade = svc.create_employee_grade(data)
+    db.commit()
+    return EmployeeGradeRead.model_validate(grade)
+
+
+@router.get("/grades/{grade_id}", response_model=EmployeeGradeRead)
+def get_employee_grade(
+    grade_id: UUID,
+    organization_id: UUID = Depends(require_organization_id),
+    db: Session = Depends(get_db),
+):
+    """Get an employee grade by ID."""
+    svc = OrganizationService(db, organization_id)
+    return EmployeeGradeRead.model_validate(svc.get_employee_grade(grade_id))
+
+
+@router.patch("/grades/{grade_id}", response_model=EmployeeGradeRead)
+def update_employee_grade(
+    grade_id: UUID,
+    payload: EmployeeGradeUpdate,
+    organization_id: UUID = Depends(require_organization_id),
+    db: Session = Depends(get_db),
+):
+    """Update an employee grade."""
+    svc = OrganizationService(db, organization_id)
+    data = EmployeeGradeUpdateData(
+        grade_code=payload.grade_code,
+        grade_name=payload.grade_name,
+        description=payload.description,
+        rank=payload.rank,
+        min_salary=payload.min_salary,
+        max_salary=payload.max_salary,
+        is_active=payload.is_active,
+    )
+    grade = svc.update_employee_grade(grade_id, data)
+    db.commit()
+    return EmployeeGradeRead.model_validate(grade)
+
+
+@router.delete("/grades/{grade_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_employee_grade(
+    grade_id: UUID,
+    organization_id: UUID = Depends(require_organization_id),
+    db: Session = Depends(get_db),
+):
+    """Delete an employee grade."""
+    svc = OrganizationService(db, organization_id)
+    svc.delete_employee_grade(grade_id)
+    db.commit()
+
+
+# =============================================================================
+# Employees
+# =============================================================================
+
+
+@router.get("/employees", response_model=EmployeeListResponse)
+def list_employees(
+    organization_id: UUID = Depends(require_organization_id),
+    search: Optional[str] = None,
+    status: Optional[str] = None,
+    department_id: Optional[UUID] = None,
+    designation_id: Optional[UUID] = None,
+    reports_to_id: Optional[UUID] = None,
+    include_deleted: bool = False,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    """List employees."""
+    svc = EmployeeService(db, organization_id)
+    filters = EmployeeFilters(
+        search=search,
+        status=status,
+        department_id=department_id,
+        designation_id=designation_id,
+        reports_to_id=reports_to_id,
+        include_deleted=include_deleted,
+    )
+    result = svc.list_employees(filters, PaginationParams(offset=offset, limit=limit))
+    return EmployeeListResponse(
+        items=[EmployeeRead.model_validate(e) for e in result.items],
+        total=result.total,
+        offset=offset,
+        limit=limit,
+    )
+
+
+@router.get("/employees/stats", response_model=EmployeeStatsRead)
+def get_employee_stats(
+    organization_id: UUID = Depends(require_organization_id),
+    db: Session = Depends(get_db),
+):
+    """Get employee statistics."""
+    svc = EmployeeService(db, organization_id)
+    return svc.get_employee_stats()
+
+
+@router.post("/employees", response_model=EmployeeRead, status_code=status.HTTP_201_CREATED)
+def create_employee(
+    payload: EmployeeCreate,
+    organization_id: UUID = Depends(require_organization_id),
+    db: Session = Depends(get_db),
+):
+    """Create an employee."""
+    svc = EmployeeService(db, organization_id)
+    data = EmployeeCreateData(
+        employee_number=payload.employee_code,
+        department_id=payload.department_id,
+        designation_id=payload.designation_id,
+        employment_type_id=payload.employment_type_id,
+        grade_id=payload.grade_id,
+        reports_to_id=payload.reports_to_id,
+        assigned_location_id=payload.assigned_location_id,
+        default_shift_type_id=payload.default_shift_type_id,
+        date_of_joining=payload.date_of_joining,
+        status=payload.status,
+        cost_center_id=payload.cost_center_id,
+        bank_name=payload.bank_name,
+        bank_account_number=payload.bank_account_number,
+        bank_sort_code=payload.bank_branch_code,
+        bank_account_name=payload.bank_account_name,
+        notes=payload.notes,
+    )
+    emp = svc.create_employee(payload.person_id, data)
+    db.commit()
+    return EmployeeRead.model_validate(emp)
+
+
+@router.get("/employees/{employee_id}", response_model=EmployeeRead)
+def get_employee(
+    employee_id: UUID,
+    organization_id: UUID = Depends(require_organization_id),
+    db: Session = Depends(get_db),
+):
+    """Get an employee by ID."""
+    svc = EmployeeService(db, organization_id)
+    return EmployeeRead.model_validate(svc.get_employee(employee_id))
+
+
+@router.patch("/employees/{employee_id}", response_model=EmployeeRead)
+def update_employee(
+    employee_id: UUID,
+    payload: EmployeeUpdate,
+    organization_id: UUID = Depends(require_organization_id),
+    db: Session = Depends(get_db),
+):
+    """Update an employee."""
+    svc = EmployeeService(db, organization_id)
+    data = EmployeeUpdateData(
+        employee_number=payload.employee_code,
+        department_id=payload.department_id,
+        designation_id=payload.designation_id,
+        employment_type_id=payload.employment_type_id,
+        grade_id=payload.grade_id,
+        reports_to_id=payload.reports_to_id,
+        assigned_location_id=payload.assigned_location_id,
+        default_shift_type_id=payload.default_shift_type_id,
+        date_of_joining=payload.date_of_joining,
+        date_of_leaving=payload.date_of_leaving,
+        status=payload.status,
+        cost_center_id=payload.cost_center_id,
+        bank_name=payload.bank_name,
+        bank_account_number=payload.bank_account_number,
+        bank_sort_code=payload.bank_branch_code,
+        bank_account_name=payload.bank_account_name,
+        notes=payload.notes,
+    )
+    emp = svc.update_employee(employee_id, data)
+    db.commit()
+    return EmployeeRead.model_validate(emp)
+
+
+@router.post(
+    "/employees/{employee_id}/user-credentials",
+    response_model=UserCredentialRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_employee_user_credentials(
+    employee_id: UUID,
+    payload: EmployeeUserCredentialCreate,
+    organization_id: UUID = Depends(require_organization_id),
+    db: Session = Depends(get_db),
+):
+    """Create user credentials for an employee's linked Person."""
+    svc = EmployeeService(db, organization_id)
+    credential = svc.create_user_credentials_for_employee(
+        employee_id,
+        username=payload.username,
+        password=payload.password,
+        provider=payload.provider,
+        must_change_password=payload.must_change_password,
+    )
+    db.commit()
+    db.refresh(credential)
+    return UserCredentialRead.model_validate(credential)
+
+
+@router.patch("/employees/{employee_id}/link-user", response_model=EmployeeRead)
+def link_employee_user(
+    employee_id: UUID,
+    payload: EmployeeUserLink,
+    organization_id: UUID = Depends(require_organization_id),
+    db: Session = Depends(get_db),
+):
+    """Link an employee to an existing user (Person)."""
+    svc = EmployeeService(db, organization_id)
+    emp = svc.link_employee_to_person(employee_id, payload.person_id)
+    db.commit()
+    return EmployeeRead.model_validate(emp)
+
+
+@router.delete("/employees/{employee_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_employee(
+    employee_id: UUID,
+    organization_id: UUID = Depends(require_organization_id),
+    db: Session = Depends(get_db),
+):
+    """Delete an employee (soft delete)."""
+    svc = EmployeeService(db, organization_id)
+    svc.delete_employee(employee_id)
+    db.commit()
+
+
+# =============================================================================
+# Employee Status Actions
+# =============================================================================
+
+
+@router.post("/employees/{employee_id}/activate", response_model=EmployeeRead)
+def activate_employee(
+    employee_id: UUID,
+    organization_id: UUID = Depends(require_organization_id),
+    db: Session = Depends(get_db),
+):
+    """Activate an employee."""
+    svc = EmployeeService(db, organization_id)
+    emp = svc.activate_employee(employee_id)
+    db.commit()
+    return EmployeeRead.model_validate(emp)
+
+
+@router.post("/employees/{employee_id}/suspend", response_model=EmployeeRead)
+def suspend_employee(
+    employee_id: UUID,
+    organization_id: UUID = Depends(require_organization_id),
+    db: Session = Depends(get_db),
+):
+    """Suspend an employee."""
+    svc = EmployeeService(db, organization_id)
+    emp = svc.suspend_employee(employee_id)
+    db.commit()
+    return EmployeeRead.model_validate(emp)
+
+
+@router.post("/employees/{employee_id}/terminate", response_model=EmployeeRead)
+def terminate_employee(
+    employee_id: UUID,
+    payload: TerminationRequest,
+    organization_id: UUID = Depends(require_organization_id),
+    db: Session = Depends(get_db),
+):
+    """Terminate an employee."""
+    svc = EmployeeService(db, organization_id)
+    data = TerminationData(
+        date_of_leaving=payload.date_of_leaving,
+        reason=payload.reason,
+        exit_interview_notes=payload.exit_interview_notes,
+    )
+    emp = svc.terminate_employee(employee_id, data)
+    db.commit()
+    return EmployeeRead.model_validate(emp)
+
+
+@router.post("/employees/{employee_id}/resign", response_model=EmployeeRead)
+def resign_employee(
+    employee_id: UUID,
+    payload: ResignationRequest,
+    organization_id: UUID = Depends(require_organization_id),
+    db: Session = Depends(get_db),
+):
+    """Record employee resignation."""
+    svc = EmployeeService(db, organization_id)
+    emp = svc.resign_employee(employee_id, payload.date_of_leaving)
+    db.commit()
+    return EmployeeRead.model_validate(emp)
+
+
+# =============================================================================
+# Bulk Operations
+# =============================================================================
+
+
+@router.post("/employees/bulk-update", response_model=BulkOperationResponse)
+def bulk_update_employees(
+    payload: BulkUpdateRequest,
+    organization_id: UUID = Depends(require_organization_id),
+    db: Session = Depends(get_db),
+):
+    """Bulk update employees."""
+    svc = EmployeeService(db, organization_id)
+    data = BulkUpdateData(
+        ids=payload.ids,
+        department_id=payload.department_id,
+        designation_id=payload.designation_id,
+        status=payload.status,
+        reports_to_id=payload.reports_to_id,
+    )
+    result = svc.bulk_update(data)
+    db.commit()
+    return BulkOperationResponse(
+        updated_count=result.updated_count,
+        failed_ids=result.failed_ids,
+        errors=result.errors,
+    )
+
+
+@router.post("/employees/bulk-delete", response_model=BulkOperationResponse)
+def bulk_delete_employees(
+    payload: BulkDeleteRequest,
+    organization_id: UUID = Depends(require_organization_id),
+    db: Session = Depends(get_db),
+):
+    """Bulk delete employees."""
+    svc = EmployeeService(db, organization_id)
+    result = svc.bulk_delete(payload.ids)
+    db.commit()
+    return BulkOperationResponse(
+        deleted_count=result.deleted_count,
+        failed_ids=result.failed_ids,
+        errors=result.errors,
+    )

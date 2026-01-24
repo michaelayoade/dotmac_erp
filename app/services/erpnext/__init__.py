@@ -1,7 +1,7 @@
 """
 ERPNext Integration Services.
 
-Single-direction sync from ERPNext to DotMac Books.
+Single-direction sync from ERPNext to DotMac ERP.
 """
 from .client import ERPNextClient, ERPNextError
 

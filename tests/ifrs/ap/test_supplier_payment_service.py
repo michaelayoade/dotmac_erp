@@ -43,13 +43,13 @@ class TestCreateSupplierPayment:
 
     def test_create_payment_success(self, mock_db, org_id, user_id):
         """Test successful payment creation."""
-        from app.services.ifrs.ap.supplier_payment import (
+        from app.services.finance.ap.supplier_payment import (
             SupplierPaymentService,
             SupplierPaymentInput,
             PaymentAllocationInput,
         )
-        from app.models.ifrs.ap.supplier_payment import APPaymentMethod
-        from app.models.ifrs.ap.supplier_invoice import SupplierInvoiceStatus
+        from app.models.finance.ap.supplier_payment import APPaymentMethod
+        from app.models.finance.ap.supplier_invoice import SupplierInvoiceStatus
 
         supplier = MockSupplier(organization_id=org_id)
 
@@ -110,11 +110,11 @@ class TestCreateSupplierPayment:
     def test_create_payment_invalid_supplier_fails(self, mock_db, org_id, user_id):
         """Test that invalid supplier fails validation."""
         from fastapi import HTTPException
-        from app.services.ifrs.ap.supplier_payment import (
+        from app.services.finance.ap.supplier_payment import (
             SupplierPaymentService,
             SupplierPaymentInput,
         )
-        from app.models.ifrs.ap.supplier_payment import APPaymentMethod
+        from app.models.finance.ap.supplier_payment import APPaymentMethod
 
         mock_db.get.return_value = None  # Supplier not found
 
@@ -142,8 +142,8 @@ class TestApproveSupplierPayment:
 
     def test_approve_pending_payment(self, mock_db, org_id, user_id):
         """Test approving a pending payment."""
-        from app.services.ifrs.ap.supplier_payment import SupplierPaymentService
-        from app.models.ifrs.ap.supplier_payment import APPaymentStatus
+        from app.services.finance.ap.supplier_payment import SupplierPaymentService
+        from app.models.finance.ap.supplier_payment import APPaymentStatus
 
         creator_id = uuid4()
         payment = MockSupplierPayment(
@@ -164,8 +164,8 @@ class TestApproveSupplierPayment:
     def test_self_approval_fails_sod(self, mock_db, org_id):
         """Test that self-approval fails segregation of duties."""
         from fastapi import HTTPException
-        from app.services.ifrs.ap.supplier_payment import SupplierPaymentService
-        from app.models.ifrs.ap.supplier_payment import APPaymentStatus
+        from app.services.finance.ap.supplier_payment import SupplierPaymentService
+        from app.models.finance.ap.supplier_payment import APPaymentStatus
 
         creator_id = uuid4()
         payment = MockSupplierPayment(
@@ -190,8 +190,8 @@ class TestPostSupplierPayment:
 
     def test_post_approved_payment(self, mock_db, org_id, user_id):
         """Test posting an approved payment."""
-        from app.services.ifrs.ap.supplier_payment import SupplierPaymentService
-        from app.models.ifrs.ap.supplier_payment import APPaymentStatus
+        from app.services.finance.ap.supplier_payment import SupplierPaymentService
+        from app.models.finance.ap.supplier_payment import APPaymentStatus
 
         payment = MockSupplierPayment(
             organization_id=org_id,
@@ -217,8 +217,8 @@ class TestVoidSupplierPayment:
 
     def test_void_draft_payment(self, mock_db, org_id, user_id):
         """Test voiding a draft payment."""
-        from app.services.ifrs.ap.supplier_payment import SupplierPaymentService
-        from app.models.ifrs.ap.supplier_payment import APPaymentStatus
+        from app.services.finance.ap.supplier_payment import SupplierPaymentService
+        from app.models.finance.ap.supplier_payment import APPaymentStatus
 
         payment = MockSupplierPayment(
             organization_id=org_id,
@@ -237,8 +237,8 @@ class TestVoidSupplierPayment:
     def test_void_cleared_payment_fails(self, mock_db, org_id, user_id):
         """Test that voiding cleared payment fails."""
         from fastapi import HTTPException
-        from app.services.ifrs.ap.supplier_payment import SupplierPaymentService
-        from app.models.ifrs.ap.supplier_payment import APPaymentStatus
+        from app.services.finance.ap.supplier_payment import SupplierPaymentService
+        from app.models.finance.ap.supplier_payment import APPaymentStatus
 
         payment = MockSupplierPayment(
             organization_id=org_id,
@@ -260,7 +260,7 @@ class TestGetSupplierPayment:
 
     def test_get_existing_payment(self, mock_db, org_id):
         """Test getting existing payment."""
-        from app.services.ifrs.ap.supplier_payment import SupplierPaymentService
+        from app.services.finance.ap.supplier_payment import SupplierPaymentService
 
         payment = MockSupplierPayment(organization_id=org_id)
         mock_db.get.return_value = payment
@@ -273,7 +273,7 @@ class TestGetSupplierPayment:
     def test_get_nonexistent_raises(self, mock_db):
         """Test getting non-existent payment raises exception."""
         from fastapi import HTTPException
-        from app.services.ifrs.ap.supplier_payment import SupplierPaymentService
+        from app.services.finance.ap.supplier_payment import SupplierPaymentService
 
         mock_db.get.return_value = None
 
@@ -289,8 +289,8 @@ class TestListSupplierPayments:
 
     def test_list_with_filters(self, mock_db, org_id):
         """Test listing payments with filters."""
-        from app.services.ifrs.ap.supplier_payment import SupplierPaymentService
-        from app.models.ifrs.ap.supplier_payment import APPaymentStatus
+        from app.services.finance.ap.supplier_payment import SupplierPaymentService
+        from app.models.finance.ap.supplier_payment import APPaymentStatus
 
         payments = [MockSupplierPayment(organization_id=org_id)]
         mock_query = MagicMock()
@@ -316,7 +316,7 @@ class TestGetPaymentAllocations:
 
     def test_get_allocations(self, mock_db, org_id):
         """Test getting allocations for a payment."""
-        from app.services.ifrs.ap.supplier_payment import SupplierPaymentService
+        from app.services.finance.ap.supplier_payment import SupplierPaymentService
 
         payment_id = uuid4()
         payment = MockSupplierPayment(

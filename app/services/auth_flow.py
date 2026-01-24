@@ -101,8 +101,35 @@ def _jwt_secret(db: Session | None) -> str:
     return secret
 
 
+# Whitelist of allowed JWT algorithms - never allow "none" or weak algorithms
+_ALLOWED_JWT_ALGORITHMS = frozenset({"HS256", "HS384", "HS512", "RS256", "RS384", "RS512"})
+
+
 def _jwt_algorithm(db: Session | None) -> str:
-    return _env_value("JWT_ALGORITHM") or _setting_value(db, "jwt_algorithm") or "HS256"
+    """Get the configured JWT algorithm with safety validation.
+
+    Only allows algorithms from the whitelist. The "none" algorithm and other
+    weak/deprecated algorithms are explicitly rejected to prevent signature
+    bypass attacks.
+    """
+    algorithm = _env_value("JWT_ALGORITHM") or _setting_value(db, "jwt_algorithm") or "HS256"
+
+    # Normalize and validate
+    algorithm = algorithm.upper().strip()
+
+    if algorithm.lower() == "none":
+        raise HTTPException(
+            status_code=500,
+            detail="JWT algorithm 'none' is not allowed for security reasons",
+        )
+
+    if algorithm not in _ALLOWED_JWT_ALGORITHMS:
+        raise HTTPException(
+            status_code=500,
+            detail=f"JWT algorithm '{algorithm}' is not in the allowed list: {sorted(_ALLOWED_JWT_ALGORITHMS)}",
+        )
+
+    return algorithm
 
 
 def _access_ttl_minutes(db: Session | None) -> int:
@@ -137,7 +164,7 @@ def _refresh_ttl_days(db: Session | None) -> int:
 
 
 def _totp_issuer(db: Session | None) -> str:
-    return _env_value("TOTP_ISSUER") or _setting_value(db, "totp_issuer") or "dotmac_books"
+    return _env_value("TOTP_ISSUER") or _setting_value(db, "totp_issuer") or "dotmac_erp"
 
 
 def _refresh_cookie_name(db: Session | None) -> str:
@@ -277,15 +304,43 @@ def _decode_password_reset_token(db: Session | None, token: str) -> dict[str, An
 
 
 def _decode_jwt(db: Session | None, token: str, expected_type: str) -> dict[str, Any]:
+    """Decode and validate a JWT token with strict algorithm checking.
+
+    Only accepts tokens signed with the configured algorithm from the whitelist.
+    Explicitly rejects tokens with 'none' algorithm or any algorithm not in
+    the allowed list to prevent algorithm confusion attacks.
+    """
+    algorithm = _jwt_algorithm(db)
+
+    # Double-check algorithm is safe (defense in depth)
+    if algorithm.lower() == "none" or algorithm not in _ALLOWED_JWT_ALGORITHMS:
+        raise HTTPException(
+            status_code=500,
+            detail="Invalid JWT algorithm configuration",
+        )
+
     try:
+        # Only allow the exact configured algorithm - prevents algorithm switching attacks
         payload = cast(
             dict[str, Any],
-            jwt.decode(token, _jwt_secret(db), algorithms=[_jwt_algorithm(db)]),
+            jwt.decode(
+                token,
+                _jwt_secret(db),
+                algorithms=[algorithm],  # Strict: only allow configured algorithm
+                options={
+                    "require_exp": True,  # Require expiration claim
+                    "require_iat": True,  # Require issued-at claim
+                    "verify_exp": True,
+                    "verify_iat": True,
+                },
+            ),
         )
     except JWTError as exc:
         raise HTTPException(status_code=401, detail="Invalid token") from exc
+
     if payload.get("typ") != expected_type:
         raise HTTPException(status_code=401, detail="Invalid token type")
+
     return payload
 
 
@@ -301,6 +356,12 @@ def _person_or_404(db: Session, person_id: str) -> Person:
 
 
 def _load_rbac_claims(db: Session, person_id: str):
+    """Load RBAC claims for JWT token.
+
+    Only includes module-access scopes in the token to keep it small enough
+    for browser cookies (~4KB limit). Full permission checks should be done
+    via database lookup or by checking the 'admin' role.
+    """
     if db is None:
         return [], []
     person_uuid = coerce_uuid(person_id)
@@ -311,6 +372,15 @@ def _load_rbac_claims(db: Session, person_id: str):
         .filter(Role.is_active.is_(True))
         .all()
     )
+    # Only include module-level access scopes to keep token size under 4KB
+    # Full permissions are checked via 'admin' role or DB lookup
+    module_access_scopes = {
+        "finance:access", "finance:dashboard",
+        "hr:access", "hr:dashboard",
+        "operations:access", "operations:dashboard",
+        "expense:access", "expense:dashboard",
+        "self:access",
+    }
     permissions = (
         db.query(Permission)
         .join(RolePermission, RolePermission.permission_id == Permission.id)
@@ -319,6 +389,7 @@ def _load_rbac_claims(db: Session, person_id: str):
         .filter(PersonRole.person_id == person_uuid)
         .filter(Role.is_active.is_(True))
         .filter(Permission.is_active.is_(True))
+        .filter(Permission.key.in_(module_access_scopes))
         .all()
     )
     role_names = [role.name for role in roles]
@@ -347,6 +418,97 @@ def _decrypt_secret(db: Session | None, secret: str) -> str:
         return _fernet(db).decrypt(secret.encode("utf-8")).decode("utf-8")
     except InvalidToken as exc:
         raise HTTPException(status_code=500, detail="Invalid MFA secret") from exc
+
+
+# Password policy configuration
+MIN_PASSWORD_LENGTH = 12
+MAX_PASSWORD_LENGTH = 128
+REQUIRE_UPPERCASE = True
+REQUIRE_LOWERCASE = True
+REQUIRE_DIGIT = True
+REQUIRE_SPECIAL = True
+SPECIAL_CHARS = r"""!@#$%^&*()_+-=[]{}|;':",.<>/?`~"""
+
+# Common weak passwords to reject (basic list - can be extended)
+COMMON_PASSWORDS = frozenset([
+    "password123456",
+    "123456789012",
+    "qwerty123456",
+    "admin1234567",
+    "letmein12345",
+    "welcome12345",
+    "monkey123456",
+    "dragon123456",
+    "master123456",
+    "login1234567",
+])
+
+
+def validate_password_strength(password: str) -> tuple[bool, str | None]:
+    """Validate password meets security requirements.
+
+    Requirements:
+    - Minimum 12 characters
+    - Maximum 128 characters
+    - At least one uppercase letter
+    - At least one lowercase letter
+    - At least one digit
+    - At least one special character
+    - Not in common passwords list
+
+    Args:
+        password: The password to validate
+
+    Returns:
+        Tuple of (is_valid, error_message)
+        If valid, error_message is None
+    """
+    if not password:
+        return False, "Password is required"
+
+    if len(password) < MIN_PASSWORD_LENGTH:
+        return False, f"Password must be at least {MIN_PASSWORD_LENGTH} characters"
+
+    if len(password) > MAX_PASSWORD_LENGTH:
+        return False, f"Password must be at most {MAX_PASSWORD_LENGTH} characters"
+
+    if REQUIRE_UPPERCASE and not any(c.isupper() for c in password):
+        return False, "Password must contain at least one uppercase letter"
+
+    if REQUIRE_LOWERCASE and not any(c.islower() for c in password):
+        return False, "Password must contain at least one lowercase letter"
+
+    if REQUIRE_DIGIT and not any(c.isdigit() for c in password):
+        return False, "Password must contain at least one digit"
+
+    if REQUIRE_SPECIAL and not any(c in SPECIAL_CHARS for c in password):
+        return False, f"Password must contain at least one special character ({SPECIAL_CHARS[:10]}...)"
+
+    # Check against common passwords
+    if password.lower() in COMMON_PASSWORDS:
+        return False, "Password is too common. Please choose a more unique password."
+
+    return True, None
+
+
+def require_strong_password(password: str) -> None:
+    """Validate password strength and raise HTTPException if weak.
+
+    Args:
+        password: The password to validate
+
+    Raises:
+        HTTPException: With 400 status if password doesn't meet requirements
+    """
+    is_valid, error_message = validate_password_strength(password)
+    if not is_valid:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "WEAK_PASSWORD",
+                "message": error_message,
+            },
+        )
 
 
 def hash_password(password: str) -> str:
@@ -763,7 +925,12 @@ def reset_password(db: Session, token: str, new_password: str) -> datetime:
     """
     Reset password using a valid reset token.
     Returns the timestamp when password was reset.
+
+    Validates password strength before allowing reset.
     """
+    # Validate password strength first
+    require_strong_password(new_password)
+
     payload = _decode_password_reset_token(db, token)
     person_id = payload.get("sub")
     email = payload.get("email")

@@ -1,0 +1,153 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}{{ "Edit Interview" if interview else "Schedule Interview" }}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/recruit/interviews" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Interviews</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">{{ "Edit" if interview else "Schedule" }}</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto space-y-6">
+    <div>
+        <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">{{ "Edit Interview" if interview else "Schedule Interview" }}</h1>
+        <p class="text-sm text-slate-500 dark:text-slate-400">{{ "Update interview details" if interview else "Schedule a new interview with an applicant" }}</p>
+    </div>
+
+    {% if error %}
+    <div class="rounded-lg bg-rose-50 dark:bg-rose-900/30 border border-rose-200 dark:border-rose-800 p-4">
+        <div class="flex">
+            <svg class="h-5 w-5 text-rose-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clip-rule="evenodd" />
+            </svg>
+            <div class="ml-3">
+                <p class="text-sm font-medium text-rose-800 dark:text-rose-200">{{ error }}</p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <form method="post" class="card">
+        {{ request.state.csrf_form | safe }}
+
+        <!-- Applicant Selection -->
+        {% if not interview %}
+        <div class="p-6 border-b border-slate-200 dark:border-slate-700">
+            <h2 class="text-lg font-medium text-slate-900 dark:text-white mb-4">Applicant</h2>
+            <div>
+                <label for="applicant_id" class="form-label">Select Applicant <span class="text-rose-500">*</span></label>
+                <select name="applicant_id" id="applicant_id" required class="form-select w-full max-w-md">
+                    <option value="">Choose applicant</option>
+                    {% for applicant in applicants %}
+                    <option value="{{ applicant.applicant_id }}" {% if form_data.get('applicant_id') == applicant.applicant_id|string %}selected{% endif %}>
+                        {{ applicant.full_name }} - {{ applicant.job_opening.job_title if applicant.job_opening else 'No Position' }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Interview Details -->
+        <div class="p-6 border-b border-slate-200 dark:border-slate-700">
+            <h2 class="text-lg font-medium text-slate-900 dark:text-white mb-4">Interview Details</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <label for="round" class="form-label">Interview Round <span class="text-rose-500">*</span></label>
+                    <select name="round" id="round" required class="form-select w-full">
+                        <option value="">Select round</option>
+                        {% for r in rounds %}
+                        <option value="{{ r }}" {% if (form_data.get('round') or (interview.round.value if interview else '')) == r %}selected{% endif %}>
+                            {{ r | replace('_', ' ') | title }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label for="interview_type" class="form-label">Interview Type <span class="text-rose-500">*</span></label>
+                    <select name="interview_type" id="interview_type" required class="form-select w-full">
+                        {% for t in interview_types %}
+                        <option value="{{ t }}" {% if (form_data.get('interview_type') or (interview.interview_type if interview else 'IN_PERSON')) == t %}selected{% endif %}>
+                            {{ t | replace('_', ' ') | title }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label for="interviewer_id" class="form-label">Interviewer <span class="text-rose-500">*</span></label>
+                    <select name="interviewer_id" id="interviewer_id" required class="form-select w-full">
+                        <option value="">Select interviewer</option>
+                        {% for emp in employees %}
+                        <option value="{{ emp.employee_id }}" {% if (form_data.get('interviewer_id') or (interview.interviewer_id|string if interview else '')) == emp.employee_id|string %}selected{% endif %}>
+                            {{ emp.first_name }} {{ emp.last_name }} {% if emp.designation %}({{ emp.designation.title }}){% endif %}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Schedule -->
+        <div class="p-6 border-b border-slate-200 dark:border-slate-700">
+            <h2 class="text-lg font-medium text-slate-900 dark:text-white mb-4">Schedule</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div>
+                    <label for="scheduled_date" class="form-label">Date <span class="text-rose-500">*</span></label>
+                    <input type="date" name="scheduled_date" id="scheduled_date" required
+                        value="{{ form_data.get('scheduled_date', interview.scheduled_from.strftime('%Y-%m-%d') if interview else '') }}"
+                        class="form-input w-full">
+                </div>
+                <div>
+                    <label for="scheduled_time_from" class="form-label">Start Time <span class="text-rose-500">*</span></label>
+                    <input type="time" name="scheduled_time_from" id="scheduled_time_from" required
+                        value="{{ form_data.get('scheduled_time_from', interview.scheduled_from.strftime('%H:%M') if interview else '') }}"
+                        class="form-input w-full">
+                </div>
+                <div>
+                    <label for="scheduled_time_to" class="form-label">End Time <span class="text-rose-500">*</span></label>
+                    <input type="time" name="scheduled_time_to" id="scheduled_time_to" required
+                        value="{{ form_data.get('scheduled_time_to', interview.scheduled_to.strftime('%H:%M') if interview else '') }}"
+                        class="form-input w-full">
+                </div>
+            </div>
+        </div>
+
+        <!-- Location/Meeting Details -->
+        <div class="p-6 border-b border-slate-200 dark:border-slate-700">
+            <h2 class="text-lg font-medium text-slate-900 dark:text-white mb-4">Location / Meeting</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <label for="location" class="form-label">Location</label>
+                    <input type="text" name="location" id="location"
+                        value="{{ form_data.get('location', interview.location if interview else '') }}"
+                        class="form-input w-full"
+                        placeholder="e.g., Conference Room A, Building 2">
+                </div>
+                <div>
+                    <label for="meeting_link" class="form-label">Video Meeting Link</label>
+                    <input type="url" name="meeting_link" id="meeting_link"
+                        value="{{ form_data.get('meeting_link', interview.meeting_link if interview else '') }}"
+                        class="form-input w-full"
+                        placeholder="https://meet.google.com/...">
+                </div>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="p-6 flex items-center justify-end gap-3">
+            <a href="{{ '/people/recruit/interviews/' ~ interview.interview_id if interview else '/people/recruit/interviews' }}" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">
+                <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                </svg>
+                {{ "Update Interview" if interview else "Schedule Interview" }}
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

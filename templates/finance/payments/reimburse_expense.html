@@ -1,0 +1,349 @@
+{% extends "finance/base_finance.html" %}
+
+{% block page_title %}Reimburse Expense{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400">
+    <a href="/finance/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/expense/claims" class="hover:text-primary-600 dark:hover:text-primary-400">Expense Claims</a>
+    <span class="mx-2">/</span>
+    <a href="/expense/claims/{{ expense_claim.expense_claim_id }}" class="hover:text-primary-600 dark:hover:text-primary-400">{{ expense_claim.claim_number }}</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white">Reimburse</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-lg">
+    <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-800/50">
+        <div class="mb-6 text-center">
+            <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-purple-600 text-white shadow-lg shadow-violet-500/25">
+                <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+            </div>
+            <h2 class="text-xl font-semibold text-slate-900 dark:text-white">Reimburse Expense Claim</h2>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Transfer funds via Paystack</p>
+        </div>
+
+        <!-- Expense Claim Summary -->
+        <div class="mb-6 space-y-4 rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900/50">
+            <div class="flex items-center justify-between">
+                <span class="text-sm text-slate-500 dark:text-slate-400">Claim Number</span>
+                <span class="font-mono text-sm font-medium text-slate-900 dark:text-white">{{ expense_claim.claim_number }}</span>
+            </div>
+            <div class="flex items-center justify-between">
+                <span class="text-sm text-slate-500 dark:text-slate-400">Employee</span>
+                <span class="text-sm font-medium text-slate-900 dark:text-white">{{ employee.full_name if employee else '-' }}</span>
+            </div>
+            <div class="flex items-center justify-between">
+                <span class="text-sm text-slate-500 dark:text-slate-400">Status</span>
+                <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium
+                    {% if expense_claim.status.value == 'APPROVED' %}bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400
+                    {% elif expense_claim.status.value == 'PAID' %}bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400
+                    {% else %}bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300{% endif %}">
+                    {{ expense_claim.status.value }}
+                </span>
+            </div>
+            <div class="flex items-center justify-between">
+                <span class="text-sm text-slate-500 dark:text-slate-400">Submission Date</span>
+                <span class="text-sm font-medium text-slate-900 dark:text-white">{{ expense_claim.submission_date }}</span>
+            </div>
+            <div class="border-t border-slate-200 pt-4 dark:border-slate-700">
+                <div class="flex items-center justify-between">
+                    <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Total Amount</span>
+                    <span class="text-xl font-bold text-slate-900 dark:text-white">
+                        {{ expense_claim.currency_code or 'NGN' }} {{ expense_claim.total_amount | format_currency }}
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Status Messages -->
+        {% if not can_reimburse %}
+        <div class="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-900/20">
+            <div class="flex items-center gap-3">
+                <svg class="h-5 w-5 flex-shrink-0 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                </svg>
+                <div>
+                    <p class="text-sm font-medium text-amber-700 dark:text-amber-400">Cannot reimburse this claim</p>
+                    <p class="mt-1 text-xs text-amber-600 dark:text-amber-500">
+                        Claim status must be APPROVED for reimbursement. Current status: {{ expense_claim.status.value }}
+                    </p>
+                </div>
+            </div>
+        </div>
+        {% elif not paystack_enabled %}
+        <div class="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-900/20">
+            <div class="flex items-center gap-3">
+                <svg class="h-5 w-5 flex-shrink-0 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                </svg>
+                <div>
+                    <p class="text-sm font-medium text-amber-700 dark:text-amber-400">Paystack not enabled</p>
+                    <p class="mt-1 text-xs text-amber-600 dark:text-amber-500">Please contact support to enable Paystack payments.</p>
+                </div>
+            </div>
+        </div>
+        {% elif not transfers_enabled %}
+        <div class="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-900/20">
+            <div class="flex items-center gap-3">
+                <svg class="h-5 w-5 flex-shrink-0 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                </svg>
+                <div>
+                    <p class="text-sm font-medium text-amber-700 dark:text-amber-400">Transfers not enabled</p>
+                    <p class="mt-1 text-xs text-amber-600 dark:text-amber-500">Paystack transfers must be enabled for expense reimbursements.</p>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <!-- Bank Account Form -->
+        <form id="reimbursementForm" class="space-y-4">
+            <div>
+                <label for="bank_code" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Bank</label>
+                <select id="bank_code" name="bank_code" required
+                        class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 shadow-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                    <option value="">Loading banks...</option>
+                </select>
+            </div>
+
+            <div>
+                <label for="account_number" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Account Number</label>
+                <input type="text" id="account_number" name="account_number" required
+                       maxlength="10" pattern="[0-9]{10}" placeholder="Enter 10-digit account number"
+                       class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 shadow-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+            </div>
+
+            <div id="accountNameContainer" class="hidden">
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Account Name</label>
+                <div class="mt-1 flex items-center gap-2 rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-2.5 dark:border-emerald-700 dark:bg-emerald-900/20">
+                    <svg class="h-5 w-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                    </svg>
+                    <span id="accountName" class="text-sm font-medium text-emerald-700 dark:text-emerald-400"></span>
+                </div>
+            </div>
+
+            <div id="resolveError" class="hidden rounded-lg border border-rose-200 bg-rose-50 p-3 dark:border-rose-800 dark:bg-rose-900/20">
+                <p class="text-sm text-rose-700 dark:text-rose-400" id="resolveErrorText"></p>
+            </div>
+
+            <button type="button" id="resolveBtn" onclick="resolveAccount()"
+                    class="w-full inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                </svg>
+                <span id="resolveBtnText">Verify Account</span>
+            </button>
+
+            <button type="button" id="initiateBtn" onclick="initiateTransfer()" disabled
+                    class="w-full hidden items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-violet-600 to-purple-600 px-6 py-3 text-sm font-medium text-white shadow-lg shadow-violet-500/25 transition-all hover:from-violet-700 hover:to-purple-700 hover:shadow-xl hover:shadow-violet-500/30 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <span id="initiateBtnText">Initiate Transfer</span>
+            </button>
+        </form>
+
+        <p class="mt-4 text-center text-xs text-slate-500 dark:text-slate-400">
+            Transfers are processed via
+            <svg class="inline-block h-4 w-auto ml-1" viewBox="0 0 80 24" fill="currentColor">
+                <text x="0" y="18" font-family="Arial, sans-serif" font-size="14" font-weight="bold">Paystack</text>
+            </svg>
+        </p>
+        {% endif %}
+
+        <!-- Back Link -->
+        <div class="mt-6 text-center">
+            <a href="/expense/claims/{{ expense_claim.expense_claim_id }}"
+               class="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300">
+                &larr; Back to Expense Claim
+            </a>
+        </div>
+    </div>
+</div>
+
+{% if can_reimburse and paystack_enabled and transfers_enabled %}
+<script>
+let accountVerified = false;
+let verifiedBankCode = null;
+let verifiedAccountNumber = null;
+let verifiedAccountName = null;
+
+// Load banks on page load
+document.addEventListener('DOMContentLoaded', loadBanks);
+
+async function loadBanks() {
+    const select = document.getElementById('bank_code');
+    try {
+        const response = await fetch('/api/v1/payments/banks', {
+            headers: {
+                'X-CSRF-Token': '{{ csrf_token }}'
+            }
+        });
+        if (!response.ok) throw new Error('Failed to load banks');
+
+        const banks = await response.json();
+        select.innerHTML = '<option value="">Select a bank...</option>';
+        banks.forEach(bank => {
+            const opt = document.createElement('option');
+            opt.value = bank.code;
+            opt.textContent = bank.name;
+            select.appendChild(opt);
+        });
+    } catch (error) {
+        console.error('Error loading banks:', error);
+        select.innerHTML = '<option value="">Failed to load banks</option>';
+    }
+}
+
+async function resolveAccount() {
+    const bankCode = document.getElementById('bank_code').value;
+    const accountNumber = document.getElementById('account_number').value;
+    const btn = document.getElementById('resolveBtn');
+    const btnText = document.getElementById('resolveBtnText');
+    const errorDiv = document.getElementById('resolveError');
+    const accountContainer = document.getElementById('accountNameContainer');
+    const initiateBtn = document.getElementById('initiateBtn');
+
+    if (!bankCode || !accountNumber || accountNumber.length !== 10) {
+        errorDiv.classList.remove('hidden');
+        document.getElementById('resolveErrorText').textContent = 'Please select a bank and enter a 10-digit account number';
+        return;
+    }
+
+    btn.disabled = true;
+    btnText.textContent = 'Verifying...';
+    errorDiv.classList.add('hidden');
+    accountContainer.classList.add('hidden');
+    initiateBtn.classList.add('hidden');
+    accountVerified = false;
+
+    try {
+        const response = await fetch('/api/v1/payments/resolve-account', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({
+                bank_code: bankCode,
+                account_number: accountNumber
+            })
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Account verification failed');
+        }
+
+        const data = await response.json();
+
+        // Show account name
+        document.getElementById('accountName').textContent = data.account_name;
+        accountContainer.classList.remove('hidden');
+
+        // Store verified details
+        verifiedBankCode = bankCode;
+        verifiedAccountNumber = accountNumber;
+        verifiedAccountName = data.account_name;
+        accountVerified = true;
+
+        // Show initiate button
+        initiateBtn.classList.remove('hidden');
+        initiateBtn.classList.add('inline-flex');
+        initiateBtn.disabled = false;
+        btn.classList.add('hidden');
+
+    } catch (error) {
+        console.error('Account resolution error:', error);
+        errorDiv.classList.remove('hidden');
+        document.getElementById('resolveErrorText').textContent = error.message;
+    } finally {
+        btn.disabled = false;
+        btnText.textContent = 'Verify Account';
+    }
+}
+
+async function initiateTransfer() {
+    if (!accountVerified) {
+        alert('Please verify the account first');
+        return;
+    }
+
+    const btn = document.getElementById('initiateBtn');
+    const btnText = document.getElementById('initiateBtnText');
+
+    btn.disabled = true;
+    btnText.textContent = 'Creating transfer...';
+
+    try {
+        // Step 1: Initialize payment intent
+        const initResponse = await fetch('/api/v1/payments/initialize/expense', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({
+                expense_claim_id: '{{ expense_claim.expense_claim_id }}',
+                bank_code: verifiedBankCode,
+                account_number: verifiedAccountNumber
+            })
+        });
+
+        if (!initResponse.ok) {
+            const error = await initResponse.json();
+            throw new Error(error.detail || 'Failed to initialize transfer');
+        }
+
+        const intent = await initResponse.json();
+        btnText.textContent = 'Initiating transfer...';
+
+        // Step 2: Initiate the actual transfer
+        const transferResponse = await fetch(`/api/v1/payments/transfers/${intent.intent_id}/initiate`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': '{{ csrf_token }}'
+            }
+        });
+
+        if (!transferResponse.ok) {
+            const error = await transferResponse.json();
+            throw new Error(error.detail || 'Failed to initiate transfer');
+        }
+
+        const result = await transferResponse.json();
+
+        // Success - redirect to transfers page
+        alert(`Transfer initiated successfully!\nReference: ${result.transfer_code}\nStatus: ${result.status}`);
+        window.location.href = '/finance/payments/transfers';
+
+    } catch (error) {
+        console.error('Transfer error:', error);
+        alert('Transfer failed: ' + error.message);
+        btn.disabled = false;
+        btnText.textContent = 'Initiate Transfer';
+    }
+}
+
+// Reset verification when bank or account changes
+document.getElementById('bank_code').addEventListener('change', resetVerification);
+document.getElementById('account_number').addEventListener('input', resetVerification);
+
+function resetVerification() {
+    accountVerified = false;
+    document.getElementById('accountNameContainer').classList.add('hidden');
+    document.getElementById('initiateBtn').classList.add('hidden');
+    document.getElementById('resolveBtn').classList.remove('hidden');
+    document.getElementById('resolveError').classList.add('hidden');
+}
+</script>
+{% endif %}
+{% endblock %}

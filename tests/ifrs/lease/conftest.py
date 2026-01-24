@@ -11,9 +11,9 @@ from unittest.mock import MagicMock
 import pytest
 
 # Import actual enums from models
-from app.models.ifrs.lease.lease_contract import LeaseClassification, LeaseStatus
-from app.models.ifrs.lease.lease_modification import ModificationType
-from app.models.ifrs.lease.lease_payment_schedule import PaymentStatus
+from app.models.finance.lease.lease_contract import LeaseClassification, LeaseStatus
+from app.models.finance.lease.lease_modification import ModificationType
+from app.models.finance.lease.lease_payment_schedule import PaymentStatus
 
 
 # ============ Mock Models ============

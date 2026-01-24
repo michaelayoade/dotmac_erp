@@ -47,10 +47,41 @@ def get_db():
     "/login",
     response_model=LoginResponse,
     status_code=status.HTTP_200_OK,
+    summary="Authenticate user",
+    description="""
+Authenticate a user with username and password.
+
+## Authentication Flow
+
+1. Validate credentials against the configured auth provider
+2. If MFA is enabled, return `mfa_required: true` with an MFA token
+3. If MFA is not enabled, return access and refresh tokens
+4. On success, a refresh token cookie is set (HttpOnly, Secure)
+
+## Rate Limiting
+
+This endpoint is rate-limited to 5 requests per minute per IP address
+to prevent brute force attacks.
+
+## Account Lockout
+
+After 5 failed login attempts, the account is locked for 15 minutes.
+""",
     responses={
+        200: {
+            "description": "Login successful. Returns access token or MFA challenge.",
+        },
+        401: {
+            "model": ErrorResponse,
+            "description": "Invalid credentials",
+        },
+        403: {
+            "model": ErrorResponse,
+            "description": "Account locked due to too many failed attempts",
+        },
         428: {
             "model": ErrorResponse,
-            "description": "Password reset required",
+            "description": "Password reset required before login",
             "content": {
                 "application/json": {
                     "example": {
@@ -61,7 +92,11 @@ def get_db():
                     }
                 }
             },
-        }
+        },
+        429: {
+            "model": ErrorResponse,
+            "description": "Rate limit exceeded. Check Retry-After header.",
+        },
     },
 )
 def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)):
@@ -289,13 +324,23 @@ def change_password(
 )
 def forgot_password(
     payload: ForgotPasswordRequest,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     """
     Request a password reset email.
     Always returns success to prevent email enumeration.
     """
-    return auth_flow_api_service.forgot_password(payload, db)
+    return auth_flow_api_service.forgot_password(payload, db, app_url=_resolve_app_url(request))
+
+
+def _resolve_app_url(request: Request) -> str:
+    forwarded_proto = (request.headers.get("x-forwarded-proto") or "").strip()
+    forwarded_host = (request.headers.get("x-forwarded-host") or "").strip()
+    if forwarded_host:
+        scheme = forwarded_proto or request.url.scheme
+        return f"{scheme}://{forwarded_host}".rstrip("/")
+    return str(request.base_url).rstrip("/")
 
 
 @router.post(

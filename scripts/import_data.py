@@ -34,7 +34,7 @@ project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 from app.db import get_db_session
-from app.services.ifrs.import_export import (
+from app.services.finance.import_export import (
     AccountImporter,
     CustomerImporter,
     SupplierImporter,
@@ -129,7 +129,7 @@ def import_items(args, db, config: ImportConfig) -> ImportResult:
     print(f"Importing items from: {args.file}")
 
     from sqlalchemy import select
-    from app.models.ifrs.gl.account import Account
+    from app.models.finance.gl.account import Account
 
     # Find required accounts
     def find_account(subledger_type: str) -> Optional[UUID]:
@@ -173,7 +173,7 @@ def import_assets(args, db, config: ImportConfig) -> ImportResult:
     print(f"Importing fixed assets from: {args.file}")
 
     from sqlalchemy import select
-    from app.models.ifrs.gl.account import Account
+    from app.models.finance.gl.account import Account
 
     # Find asset account
     result = db.execute(
@@ -213,7 +213,7 @@ def import_banking(args, db, config: ImportConfig) -> ImportResult:
     print(f"Importing bank accounts from: {args.file}")
 
     from sqlalchemy import select
-    from app.models.ifrs.gl.account import Account
+    from app.models.finance.gl.account import Account
 
     # Find bank GL account
     result = db.execute(
@@ -234,7 +234,7 @@ def import_invoices(args, db, config: ImportConfig) -> ImportResult:
     print(f"Importing invoices from: {args.file}")
 
     from sqlalchemy import select
-    from app.models.ifrs.gl.account import Account
+    from app.models.finance.gl.account import Account
 
     ar_control_id = get_ar_control_account(db, config.organization_id)
     if not ar_control_id:
@@ -260,7 +260,7 @@ def import_expenses(args, db, config: ImportConfig) -> ImportResult:
     print(f"Importing expenses from: {args.file}")
 
     from sqlalchemy import select
-    from app.models.ifrs.gl.account import Account
+    from app.models.finance.gl.account import Account
 
     # Find expense account
     result = db.execute(
@@ -295,7 +295,7 @@ def import_payments(args, db, config: ImportConfig) -> ImportResult:
     print(f"Importing payments from: {args.file}")
 
     from sqlalchemy import select
-    from app.models.ifrs.banking.bank_account import BankAccount
+    from app.models.finance.banking.bank_account import BankAccount
 
     # Find bank account
     result = db.execute(

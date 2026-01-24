@@ -3,19 +3,29 @@ Expense Web Routes.
 
 HTML template routes for expense management.
 """
+from datetime import date as date_type
 from decimal import Decimal
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy.orm import Session
+from sqlalchemy import func
+from sqlalchemy.orm import Session, joinedload
 
 from app.services.expense.dashboard_web import expense_dashboard_service
 from app.services.finance.exp.expense import expense_service
-from app.services.expense.expense_service import ExpenseService, ExpenseServiceError
+from app.services.expense.expense_service import (
+    ExpenseService,
+    ExpenseServiceError,
+    ExpenseClaimStatusError,
+)
 from app.services.common import PaginationParams, coerce_uuid
 from app.services.finance.exp.web import expense_web_service
+from app.models.expense.expense_claim import ExpenseClaim, ExpenseClaimItem, ExpenseClaimStatus
+from app.models.people.hr.employee import Employee
 from app.templates import templates
+from app.models.domain_settings import SettingDomain
+from app.services.settings_spec import resolve_value
 from app.web.deps import get_db, require_expense_access, WebAuthContext, base_context
 from app.web.finance.exp_limits import router as limits_router
 
@@ -99,17 +109,192 @@ def expense_claims_list(
     db: Session = Depends(get_db),
 ):
     """Expense claims list page."""
+    org_id = coerce_uuid(auth.organization_id)
+    status_value = None
+    if status:
+        try:
+            status_value = ExpenseClaimStatus(status)
+        except ValueError:
+            status_value = None
+
+    start = date_type.fromisoformat(start_date) if start_date else None
+    end = date_type.fromisoformat(end_date) if end_date else None
+
+    query = (
+        db.query(ExpenseClaim)
+        .options(joinedload(ExpenseClaim.employee))
+        .filter(ExpenseClaim.organization_id == org_id)
+    )
+    if status_value:
+        query = query.filter(ExpenseClaim.status == status_value)
+    if start:
+        query = query.filter(ExpenseClaim.claim_date >= start)
+    if end:
+        query = query.filter(ExpenseClaim.claim_date <= end)
+
+    claims = query.order_by(ExpenseClaim.claim_date.desc()).limit(100).all()
+
+    status_counts = dict(
+        db.query(ExpenseClaim.status, func.count())
+        .filter(ExpenseClaim.organization_id == org_id)
+        .group_by(ExpenseClaim.status)
+        .all()
+    )
+    counts = {s.value if s else "UNKNOWN": c for s, c in status_counts.items()}
+
     context = base_context(request, auth, "Expense Claims", "claims")
     context.update(
-        expense_web_service.list_context(
-            db,
-            str(auth.organization_id),
-            status=status,
-            start_date=start_date,
-            end_date=end_date,
-        )
+        {
+            "claims": claims,
+            "statuses": [s.value for s in ExpenseClaimStatus],
+            "status_counts": counts,
+            "filter_status": status or "",
+            "filter_start_date": start_date or "",
+            "filter_end_date": end_date or "",
+        }
     )
-    return templates.TemplateResponse(request, "expense/list.html", context)
+    return templates.TemplateResponse(request, "expense/claims_list.html", context)
+
+
+@router.get("/claims/{claim_id}", response_class=HTMLResponse)
+def expense_claim_detail(
+    request: Request,
+    claim_id: str,
+    auth: WebAuthContext = Depends(require_expense_access),
+    db: Session = Depends(get_db),
+):
+    """Expense claim detail page."""
+    org_id = coerce_uuid(auth.organization_id)
+    claim_uuid = coerce_uuid(claim_id)
+    claim = (
+        db.query(ExpenseClaim)
+        .options(
+            joinedload(ExpenseClaim.items).joinedload(ExpenseClaimItem.category),
+            joinedload(ExpenseClaim.employee),
+        )
+        .filter(ExpenseClaim.organization_id == org_id)
+        .filter(ExpenseClaim.claim_id == claim_uuid)
+        .first()
+    )
+    if not claim:
+        return RedirectResponse("/expense/claims/list", status_code=302)
+
+    can_approve = auth.has_any_permission(
+        [
+            "expense:claims:approve:tier1",
+            "expense:claims:approve:tier2",
+            "expense:claims:approve:tier3",
+        ]
+    )
+    can_act = can_approve and claim.status in {
+        ExpenseClaimStatus.SUBMITTED,
+        ExpenseClaimStatus.PENDING_APPROVAL,
+    }
+    paystack_enabled = resolve_value(db, SettingDomain.payments, "paystack_enabled")
+    transfers_enabled = resolve_value(db, SettingDomain.payments, "paystack_transfers_enabled")
+    can_paystack = (
+        (auth.is_admin or auth.has_module_access("finance"))
+        and bool(paystack_enabled)
+        and bool(transfers_enabled)
+        and claim.status == ExpenseClaimStatus.APPROVED
+    )
+
+    context = base_context(request, auth, f"Claim {claim.claim_number}", "claims")
+    context.update(
+        {
+            "claim": claim,
+            "can_act": can_act,
+            "can_paystack": can_paystack,
+            "action": request.query_params.get("action"),
+            "error": request.query_params.get("error"),
+        }
+    )
+    return templates.TemplateResponse(request, "expense/claim_detail.html", context)
+
+
+@router.post("/claims/{claim_id}/approve")
+def approve_expense_claim(
+    claim_id: str,
+    auth: WebAuthContext = Depends(require_expense_access),
+    db: Session = Depends(get_db),
+):
+    """Approve an expense claim."""
+    if not auth.has_any_permission(
+        [
+            "expense:claims:approve:tier1",
+            "expense:claims:approve:tier2",
+            "expense:claims:approve:tier3",
+        ]
+    ):
+        return RedirectResponse("/expense/claims/list?error=permission", status_code=302)
+
+    org_id = coerce_uuid(auth.organization_id)
+    claim_uuid = coerce_uuid(claim_id)
+    approver = (
+        db.query(Employee)
+        .filter(Employee.organization_id == org_id)
+        .filter(Employee.person_id == auth.person_id)
+        .first()
+    )
+    approver_id = approver.employee_id if approver else None
+
+    svc = ExpenseService(db)
+    try:
+        svc.approve_claim(org_id, claim_uuid, approver_id=approver_id)
+        db.commit()
+    except ExpenseClaimStatusError:
+        db.rollback()
+        return RedirectResponse(f"/expense/claims/{claim_id}?error=invalid_status", status_code=303)
+    except Exception:
+        db.rollback()
+        import logging
+        logging.getLogger(__name__).exception("Expense claim approval failed", extra={"claim_id": claim_id})
+        return RedirectResponse(f"/expense/claims/{claim_id}?error=approve_failed", status_code=303)
+
+    return RedirectResponse(f"/expense/claims/{claim_id}?action=approved", status_code=303)
+
+
+@router.post("/claims/{claim_id}/reject")
+def reject_expense_claim(
+    claim_id: str,
+    reason: str = Form(...),
+    auth: WebAuthContext = Depends(require_expense_access),
+    db: Session = Depends(get_db),
+):
+    """Reject an expense claim."""
+    if not auth.has_any_permission(
+        [
+            "expense:claims:approve:tier1",
+            "expense:claims:approve:tier2",
+            "expense:claims:approve:tier3",
+        ]
+    ):
+        return RedirectResponse("/expense/claims/list?error=permission", status_code=302)
+
+    org_id = coerce_uuid(auth.organization_id)
+    claim_uuid = coerce_uuid(claim_id)
+    approver = (
+        db.query(Employee)
+        .filter(Employee.organization_id == org_id)
+        .filter(Employee.person_id == auth.person_id)
+        .first()
+    )
+    approver_id = approver.employee_id if approver else None
+
+    svc = ExpenseService(db)
+    try:
+        svc.reject_claim(org_id, claim_uuid, approver_id=approver_id, reason=reason)
+        db.commit()
+    except ExpenseClaimStatusError:
+        db.rollback()
+        return RedirectResponse(f"/expense/claims/{claim_id}?error=invalid_status", status_code=303)
+    except Exception:
+        db.rollback()
+        import logging
+        logging.getLogger(__name__).exception("Expense claim rejection failed", extra={"claim_id": claim_id})
+        return RedirectResponse(f"/expense/claims/{claim_id}?error=reject_failed", status_code=303)
+
+    return RedirectResponse(f"/expense/claims/{claim_id}?action=rejected", status_code=303)
 
 
 @router.get("/advances", response_class=HTMLResponse)
@@ -822,3 +1007,170 @@ def expense_trends_report(
         "months": months,
     })
     return templates.TemplateResponse(request, "expense/reports/trends.html", context)
+
+
+# =============================================================================
+# Cash Advance Management
+# =============================================================================
+
+@router.get("/advances/list", response_class=HTMLResponse)
+def cash_advances_list(
+    request: Request,
+    status: Optional[str] = None,
+    page: int = Query(default=1, ge=1),
+    auth: WebAuthContext = Depends(require_expense_access),
+    db: Session = Depends(get_db),
+):
+    """Cash advances list page."""
+    from app.models.expense.cash_advance import CashAdvanceStatus
+
+    org_id = coerce_uuid(auth.organization_id)
+    svc = ExpenseService(db)
+
+    pagination = PaginationParams.from_page(page, 20)
+    status_filter = None
+    if status:
+        try:
+            status_filter = CashAdvanceStatus(status)
+        except ValueError:
+            pass
+
+    result = svc.list_advances(
+        org_id,
+        status=status_filter,
+        pagination=pagination,
+    )
+
+    context = base_context(request, auth, "Cash Advances", "advances")
+    context.update({
+        "advances": result.items,
+        "status": status,
+        "statuses": [s.value for s in CashAdvanceStatus],
+        "page": page,
+        "total_pages": result.total_pages,
+        "total": result.total,
+        "has_prev": result.has_prev,
+        "has_next": result.has_next,
+    })
+    return templates.TemplateResponse(request, "expense/advances/list.html", context)
+
+
+@router.get("/advances/{advance_id}", response_class=HTMLResponse)
+def cash_advance_detail(
+    request: Request,
+    advance_id: str,
+    auth: WebAuthContext = Depends(require_expense_access),
+    db: Session = Depends(get_db),
+):
+    """Cash advance detail page with disburse/settle actions."""
+    from app.models.expense.cash_advance import CashAdvanceStatus
+    from app.models.finance.banking.bank_account import BankAccount
+
+    org_id = coerce_uuid(auth.organization_id)
+    svc = ExpenseService(db)
+
+    try:
+        advance = svc.get_advance(org_id, coerce_uuid(advance_id))
+    except Exception:
+        context = base_context(request, auth, "Cash Advance", "advances")
+        context["advance"] = None
+        context["error"] = "Advance not found"
+        return templates.TemplateResponse(request, "expense/advances/detail.html", context)
+
+    # Get bank accounts for disbursement
+    bank_accounts = db.query(BankAccount).filter(
+        BankAccount.organization_id == org_id,
+        BankAccount.is_active == True,
+    ).order_by(BankAccount.account_name).all()
+
+    # Get linked expense claims if any
+    linked_claims = []
+    if advance.status in [CashAdvanceStatus.DISBURSED, CashAdvanceStatus.PARTIALLY_SETTLED]:
+        claims = svc.list_claims(
+            org_id,
+            employee_id=advance.employee_id,
+            pagination=PaginationParams(offset=0, limit=20),
+        )
+        linked_claims = [c for c in claims.items if c.cash_advance_id == advance.advance_id]
+
+    context = base_context(request, auth, f"Advance {advance.advance_number}", "advances")
+    context.update({
+        "advance": advance,
+        "bank_accounts": bank_accounts,
+        "linked_claims": linked_claims,
+        "can_disburse": advance.status == CashAdvanceStatus.APPROVED,
+        "can_settle": advance.status in [CashAdvanceStatus.DISBURSED, CashAdvanceStatus.PARTIALLY_SETTLED],
+    })
+    return templates.TemplateResponse(request, "expense/advances/detail.html", context)
+
+
+@router.post("/advances/{advance_id}/disburse", response_class=HTMLResponse)
+def disburse_cash_advance(
+    request: Request,
+    advance_id: str,
+    bank_account_id: str = Form(...),
+    payment_mode: str = Form("BANK_TRANSFER"),
+    payment_reference: Optional[str] = Form(None),
+    auth: WebAuthContext = Depends(require_expense_access),
+    db: Session = Depends(get_db),
+):
+    """Disburse cash advance with GL posting."""
+    from app.tasks.expense import post_cash_advance_disbursement
+
+    org_id = coerce_uuid(auth.organization_id)
+    svc = ExpenseService(db)
+
+    try:
+        advance = svc.disburse_advance(
+            org_id,
+            coerce_uuid(advance_id),
+            payment_mode=payment_mode,
+            payment_reference=payment_reference,
+        )
+        db.commit()
+
+        # Queue GL posting task
+        post_cash_advance_disbursement.delay(
+            organization_id=str(org_id),
+            advance_id=str(advance.advance_id),
+            user_id=str(auth.user_id),
+            bank_account_id=bank_account_id,
+        )
+
+    except ExpenseServiceError as e:
+        db.rollback()
+        # Flash error message and redirect back
+        pass
+
+    return RedirectResponse(f"/expense/advances/{advance_id}", status_code=303)
+
+
+@router.post("/advances/{advance_id}/settle", response_class=HTMLResponse)
+def settle_cash_advance(
+    request: Request,
+    advance_id: str,
+    claim_id: str = Form(...),
+    settlement_amount: Optional[str] = Form(None),
+    auth: WebAuthContext = Depends(require_expense_access),
+    db: Session = Depends(get_db),
+):
+    """Settle cash advance against expense claim."""
+    from app.tasks.expense import settle_cash_advance_with_claim
+
+    org_id = coerce_uuid(auth.organization_id)
+
+    try:
+        # Queue settlement task
+        settle_cash_advance_with_claim.delay(
+            organization_id=str(org_id),
+            advance_id=advance_id,
+            claim_id=claim_id,
+            user_id=str(auth.user_id),
+            settlement_amount=settlement_amount,
+        )
+        db.commit()
+
+    except Exception as e:
+        db.rollback()
+
+    return RedirectResponse(f"/expense/advances/{advance_id}", status_code=303)

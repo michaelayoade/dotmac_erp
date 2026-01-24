@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-OUTPUT_DIR = Path("/root/projects/dotmac_books/books_backup")
+OUTPUT_DIR = Path("/root/projects/dotmac_erp/books_backup")
 
 # Audited 2022 account balances from financial statements (Notes to FS)
 AUDITED_2022_BALANCES = {

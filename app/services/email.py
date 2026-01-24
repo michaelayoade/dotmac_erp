@@ -1,6 +1,8 @@
 import logging
 import os
 import smtplib
+import socket
+import ssl
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
@@ -79,6 +81,73 @@ def _get_smtp_config(db: Session | None = None) -> dict:
     }
 
 
+def validate_smtp_config(config: dict, timeout_seconds: int = 10) -> tuple[bool, str | None]:
+    """Validate SMTP settings by attempting a connection and (optional) auth."""
+    host = str(config.get("host") or "").strip()
+    if not host:
+        return False, "SMTP host is required."
+
+    try:
+        port = int(config.get("port") or 0)
+    except (TypeError, ValueError):
+        return False, "SMTP port must be a valid integer."
+    if port <= 0:
+        return False, "SMTP port must be a positive integer."
+
+    use_tls = bool(config.get("use_tls"))
+    use_ssl = bool(config.get("use_ssl"))
+    if use_tls and use_ssl:
+        return False, "SMTP TLS and SSL cannot both be enabled."
+
+    username = config.get("username")
+    password = config.get("password")
+    if (username and not password) or (password and not username):
+        return False, "SMTP username and password must both be set."
+
+    server: smtplib.SMTP | smtplib.SMTP_SSL | None = None
+    try:
+        if use_ssl:
+            server = smtplib.SMTP_SSL(host, port, timeout=timeout_seconds)
+        else:
+            server = smtplib.SMTP(host, port, timeout=timeout_seconds)
+
+        server.ehlo()
+        if use_tls and not use_ssl:
+            server.starttls()
+            server.ehlo()
+
+        if username and password:
+            server.login(username, password)
+
+        # NOOP ensures server accepts commands after connect/auth
+        server.noop()
+        return True, None
+    except smtplib.SMTPAuthenticationError:
+        logger.error("SMTP validation failed for host %s:%s: authentication failed", host, port)
+        return False, "SMTP authentication failed. Check username and password."
+    except smtplib.SMTPConnectError as exc:
+        logger.error("SMTP validation failed for host %s:%s: %s", host, port, exc)
+        return False, "SMTP connection failed. Check host/port and firewall."
+    except (socket.gaierror, ssl.SSLError, OSError) as exc:
+        logger.error("SMTP validation failed for host %s:%s: %s", host, port, exc)
+        if isinstance(exc, OSError) and getattr(exc, "errno", None) == 111:
+            return False, "SMTP connection refused. Check host/port and firewall."
+        return False, "Unable to connect to the SMTP server with the provided settings."
+    except Exception as exc:
+        logger.error("SMTP validation failed for host %s:%s: %s", host, port, exc)
+        return False, "Unable to connect to the SMTP server with the provided settings."
+    finally:
+        if server:
+            try:
+                server.quit()
+            except (smtplib.SMTPException, OSError) as quit_exc:
+                logger.debug("SMTP quit failed during validation: %s", quit_exc)
+                try:
+                    server.close()
+                except (smtplib.SMTPException, OSError) as close_exc:
+                    logger.debug("SMTP close also failed during validation: %s", close_exc)
+
+
 def send_email(
     db: Session | None,
     to_email: str,
@@ -139,10 +208,12 @@ def send_password_reset_email(
     to_email: str,
     reset_token: str,
     person_name: str | None = None,
+    app_url: str | None = None,
 ) -> bool:
     name = person_name or "there"
-    app_url = _env_value("APP_URL") or "http://localhost:8000"
-    reset_link = f"{app_url.rstrip('/')}/auth/reset-password?token={reset_token}"
+    env_app_url = _env_value("APP_URL")
+    resolved_app_url = env_app_url or app_url or "http://localhost:8000"
+    reset_link = f"{resolved_app_url.rstrip('/')}/reset-password?token={reset_token}"
     subject = "Reset your password"
     body_html = (
         f"<p>Hi {name},</p>"

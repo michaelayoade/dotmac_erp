@@ -690,3 +690,9 @@ def mock_auth_dict(org_id, user_id):
         "roles": ["admin"],
         "scopes": ["*"],
     }
+
+
+@pytest.fixture
+def auth_headers():
+    """Return authorization headers for API tests."""
+    return {"Authorization": "Bearer test-token"}

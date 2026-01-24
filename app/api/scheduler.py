@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
+from app.api.deps import require_tenant_auth
 from app.db import SessionLocal
 from app.schemas.common import ListResponse
 from app.schemas.scheduler import (
@@ -10,7 +11,11 @@ from app.schemas.scheduler import (
 )
 from app.services import scheduler as scheduler_service
 
-router = APIRouter(prefix="/scheduler", tags=["scheduler"])
+router = APIRouter(
+    prefix="/scheduler",
+    tags=["scheduler"],
+    dependencies=[Depends(require_tenant_auth)],
+)
 
 
 def get_db():

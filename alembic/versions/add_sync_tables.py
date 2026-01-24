@@ -11,6 +11,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 from alembic import op
+from app.alembic_utils import ensure_enum
 
 # revision identifiers, used by Alembic.
 revision: str = "add_sync_tables"
@@ -24,29 +25,28 @@ def upgrade() -> None:
     op.execute("CREATE SCHEMA IF NOT EXISTS sync")
 
     # Create enum types
-    op.execute("""
-        DO $$ BEGIN
-            CREATE TYPE sync.sync_status AS ENUM ('PENDING', 'SYNCED', 'FAILED', 'SKIPPED');
-        EXCEPTION
-            WHEN duplicate_object THEN null;
-        END $$;
-    """)
-    op.execute("""
-        DO $$ BEGIN
-            CREATE TYPE sync.sync_type AS ENUM ('FULL', 'INCREMENTAL');
-        EXCEPTION
-            WHEN duplicate_object THEN null;
-        END $$;
-    """)
-    op.execute("""
-        DO $$ BEGIN
-            CREATE TYPE sync.sync_job_status AS ENUM (
-                'PENDING', 'RUNNING', 'COMPLETED', 'COMPLETED_WITH_ERRORS', 'FAILED', 'CANCELLED'
-            );
-        EXCEPTION
-            WHEN duplicate_object THEN null;
-        END $$;
-    """)
+    bind = op.get_bind()
+    ensure_enum(
+        bind,
+        "sync_status",
+        "PENDING",
+        "SYNCED",
+        "FAILED",
+        "SKIPPED",
+        schema="sync",
+    )
+    ensure_enum(bind, "sync_type", "FULL", "INCREMENTAL", schema="sync")
+    ensure_enum(
+        bind,
+        "sync_job_status",
+        "PENDING",
+        "RUNNING",
+        "COMPLETED",
+        "COMPLETED_WITH_ERRORS",
+        "FAILED",
+        "CANCELLED",
+        schema="sync",
+    )
 
     # Create sync_entity table
     op.create_table(

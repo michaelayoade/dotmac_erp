@@ -17,7 +17,7 @@ from uuid import uuid4
 
 from fastapi import HTTPException
 
-from app.services.ifrs.ap.purchase_order import (
+from app.services.finance.ap.purchase_order import (
     PurchaseOrderService,
     PurchaseOrderInput,
     POLineInput,

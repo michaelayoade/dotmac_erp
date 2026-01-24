@@ -1,0 +1,174 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}{% if assignment %}Edit{% else %}Assign{% endif %} Salary Structure{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a>
+    <span class="mx-2">/</span>
+    <a href="/people/payroll/structures" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Payroll</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">{% if assignment %}Edit{% else %}Assign{% endif %} Structure</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+    <div class="card">
+        <div class="card-header">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white">
+                {% if assignment %}
+                Edit Salary Structure Assignment
+                {% else %}
+                Assign Salary Structure to Employee
+                {% endif %}
+            </h2>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                {% if assignment %}
+                Modify the salary structure assignment details.
+                {% else %}
+                Link an employee to a salary structure for payroll processing.
+                {% endif %}
+            </p>
+        </div>
+
+        <form method="post" class="card-body space-y-6">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+            {# Employee Selection #}
+            <div>
+                <label for="employee_id" class="form-label">Employee <span class="text-red-500">*</span></label>
+                {% if assignment %}
+                {# Employee cannot be changed on edit #}
+                <input type="hidden" name="employee_id" value="{{ assignment.employee_id }}">
+                <div class="form-input bg-slate-50 dark:bg-slate-800 cursor-not-allowed">
+                    {{ assignment.employee.full_name }} ({{ assignment.employee.employee_code }})
+                </div>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Employee cannot be changed. Create a new assignment instead.</p>
+                {% elif selected_employee %}
+                <input type="hidden" name="employee_id" value="{{ selected_employee.employee_id }}">
+                <div class="form-input bg-slate-50 dark:bg-slate-800">
+                    {{ selected_employee.full_name }} ({{ selected_employee.employee_code }})
+                </div>
+                {% else %}
+                <select name="employee_id" id="employee_id" required class="form-select">
+                    <option value="">Select an employee</option>
+                    {% for emp in employees %}
+                    <option value="{{ emp.employee_id }}"
+                            {% if selected_employee_id == emp.employee_id | string %}selected{% endif %}>
+                        {{ emp.full_name }} ({{ emp.employee_code }})
+                    </option>
+                    {% endfor %}
+                </select>
+                {% endif %}
+            </div>
+
+            {# Salary Structure Selection #}
+            <div>
+                <label for="structure_id" class="form-label">Salary Structure <span class="text-red-500">*</span></label>
+                <select name="structure_id" id="structure_id" required class="form-select">
+                    <option value="">Select a salary structure</option>
+                    {% for structure in structures %}
+                    <option value="{{ structure.structure_id }}"
+                            {% if assignment and assignment.structure_id == structure.structure_id %}selected{% endif %}>
+                        {{ structure.structure_name }} ({{ structure.payroll_frequency.value }})
+                    </option>
+                    {% endfor %}
+                </select>
+                {% if structures | length == 0 %}
+                <p class="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                    No salary structures available.
+                    <a href="/people/payroll/structures/new" class="underline hover:text-amber-700">Create one first</a>.
+                </p>
+                {% endif %}
+            </div>
+
+            {# Dates #}
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label for="from_date" class="form-label">From Date <span class="text-red-500">*</span></label>
+                    <input type="date" name="from_date" id="from_date" required
+                           value="{{ assignment.from_date.strftime('%Y-%m-%d') if assignment else default_from_date }}"
+                           class="form-input">
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">When this assignment becomes effective</p>
+                </div>
+                <div>
+                    <label for="to_date" class="form-label">To Date</label>
+                    <input type="date" name="to_date" id="to_date"
+                           value="{{ assignment.to_date.strftime('%Y-%m-%d') if assignment and assignment.to_date else '' }}"
+                           class="form-input">
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Leave blank for current assignment</p>
+                </div>
+            </div>
+
+            {# Pay Amounts #}
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label for="base" class="form-label">Base Pay</label>
+                    <div class="relative">
+                        <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 text-sm">NGN</span>
+                        <input type="number" name="base" id="base" step="0.01" min="0"
+                               value="{{ assignment.base if assignment else '0' }}"
+                               class="form-input pl-12 font-mono">
+                    </div>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Monthly base salary amount</p>
+                </div>
+                <div>
+                    <label for="variable" class="form-label">Variable Pay</label>
+                    <div class="relative">
+                        <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 text-sm">NGN</span>
+                        <input type="number" name="variable" id="variable" step="0.01" min="0"
+                               value="{{ assignment.variable if assignment else '0' }}"
+                               class="form-input pl-12 font-mono">
+                    </div>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Variable component (bonuses, etc.)</p>
+                </div>
+            </div>
+
+            {# Tax Slab (Optional) #}
+            <div>
+                <label for="income_tax_slab" class="form-label">Income Tax Slab</label>
+                <input type="text" name="income_tax_slab" id="income_tax_slab"
+                       value="{{ assignment.income_tax_slab if assignment else '' }}"
+                       placeholder="e.g., NTA 2025 Band 3"
+                       class="form-input">
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Optional: Override for PAYE calculation (leave blank to auto-calculate)</p>
+            </div>
+
+            {# Info Box #}
+            <div class="rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-4">
+                <div class="flex gap-3">
+                    <svg class="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <div class="text-sm text-blue-700 dark:text-blue-300">
+                        <p class="font-medium">About Salary Structure Assignments</p>
+                        <ul class="mt-1 space-y-1 text-blue-600 dark:text-blue-400 text-xs">
+                            <li>The salary structure defines the earning and deduction components</li>
+                            <li>Base and variable amounts are used as variables in formulas</li>
+                            <li>Only one assignment can be active (no to_date) at a time per employee</li>
+                            <li>Creating a new assignment will automatically end the current one</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            {# Actions #}
+            <div class="flex items-center justify-between pt-4 border-t border-slate-200 dark:border-slate-700">
+                {% if assignment %}
+                <a href="/people/hr/employees/{{ assignment.employee_id }}" class="btn btn-secondary">Cancel</a>
+                {% elif selected_employee %}
+                <a href="/people/hr/employees/{{ selected_employee.employee_id }}" class="btn btn-secondary">Cancel</a>
+                {% else %}
+                <a href="/people/payroll/structures" class="btn btn-secondary">Cancel</a>
+                {% endif %}
+                <button type="submit" class="btn btn-primary">
+                    {% if assignment %}Save Changes{% else %}Assign Structure{% endif %}
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

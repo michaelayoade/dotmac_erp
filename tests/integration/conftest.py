@@ -50,7 +50,7 @@ def get_test_database_url() -> str:
         return main_url
 
     # Default to localhost
-    return "postgresql+psycopg://postgres:postgres@localhost:5434/dotmac_books"
+    return "postgresql+psycopg://postgres:postgres@localhost:5434/dotmac_erp"
 
 
 # Create engine for tests
@@ -104,7 +104,7 @@ def db(engine) -> Generator[Session, None, None]:
 @pytest.fixture(scope="function")
 def organization(db: Session) -> "Organization":
     """Create an organization for testing."""
-    from app.models.ifrs.core_org.organization import Organization
+    from app.models.finance.core_org.organization import Organization
 
     org = Organization(
         organization_code=f"TEST-{uuid.uuid4().hex[:8].upper()}",
@@ -139,7 +139,7 @@ def user_id() -> uuid.UUID:
 @pytest.fixture
 def fiscal_year(db: Session, org_id: uuid.UUID):
     """Create a fiscal year for testing."""
-    from app.models.ifrs.gl.fiscal_year import FiscalYear
+    from app.models.finance.gl.fiscal_year import FiscalYear
 
     fy = FiscalYear(
         organization_id=org_id,
@@ -157,7 +157,7 @@ def fiscal_year(db: Session, org_id: uuid.UUID):
 @pytest.fixture
 def fiscal_period(db: Session, org_id: uuid.UUID, fiscal_year):
     """Create an open fiscal period for testing."""
-    from app.models.ifrs.gl.fiscal_period import FiscalPeriod, PeriodStatus
+    from app.models.finance.gl.fiscal_period import FiscalPeriod, PeriodStatus
 
     period = FiscalPeriod(
         organization_id=org_id,
@@ -176,7 +176,7 @@ def fiscal_period(db: Session, org_id: uuid.UUID, fiscal_year):
 @pytest.fixture
 def account_category(db: Session, org_id: uuid.UUID):
     """Create an account category for testing."""
-    from app.models.ifrs.gl.account_category import AccountCategory, IFRSCategory
+    from app.models.finance.gl.account_category import AccountCategory, IFRSCategory
 
     category = AccountCategory(
         organization_id=org_id,
@@ -194,7 +194,7 @@ def account_category(db: Session, org_id: uuid.UUID):
 @pytest.fixture
 def gl_account(db: Session, org_id: uuid.UUID, account_category):
     """Create a GL account for testing."""
-    from app.models.ifrs.gl.account import Account, AccountType, NormalBalance
+    from app.models.finance.gl.account import Account, AccountType, NormalBalance
 
     account = Account(
         organization_id=org_id,
@@ -213,7 +213,7 @@ def gl_account(db: Session, org_id: uuid.UUID, account_category):
 @pytest.fixture
 def expense_account(db: Session, org_id: uuid.UUID, account_category):
     """Create an expense account for testing."""
-    from app.models.ifrs.gl.account import Account, AccountType, NormalBalance
+    from app.models.finance.gl.account import Account, AccountType, NormalBalance
 
     account = Account(
         organization_id=org_id,
@@ -232,7 +232,7 @@ def expense_account(db: Session, org_id: uuid.UUID, account_category):
 @pytest.fixture
 def inventory_account(db: Session, org_id: uuid.UUID, account_category):
     """Create an inventory account for testing."""
-    from app.models.ifrs.gl.account import Account, AccountType, NormalBalance
+    from app.models.finance.gl.account import Account, AccountType, NormalBalance
 
     account = Account(
         organization_id=org_id,
@@ -251,7 +251,7 @@ def inventory_account(db: Session, org_id: uuid.UUID, account_category):
 @pytest.fixture
 def cogs_account(db: Session, org_id: uuid.UUID, account_category):
     """Create a COGS account for testing."""
-    from app.models.ifrs.gl.account import Account, AccountType, NormalBalance
+    from app.models.finance.gl.account import Account, AccountType, NormalBalance
 
     account = Account(
         organization_id=org_id,
@@ -270,7 +270,7 @@ def cogs_account(db: Session, org_id: uuid.UUID, account_category):
 @pytest.fixture
 def ap_control_account(db: Session, org_id: uuid.UUID, account_category):
     """Create an AP control account for testing."""
-    from app.models.ifrs.gl.account import Account, AccountType, NormalBalance
+    from app.models.finance.gl.account import Account, AccountType, NormalBalance
 
     account = Account(
         organization_id=org_id,
@@ -290,7 +290,7 @@ def ap_control_account(db: Session, org_id: uuid.UUID, account_category):
 @pytest.fixture
 def ar_control_account(db: Session, org_id: uuid.UUID, account_category):
     """Create an AR control account for testing."""
-    from app.models.ifrs.gl.account import Account, AccountType, NormalBalance
+    from app.models.finance.gl.account import Account, AccountType, NormalBalance
 
     account = Account(
         organization_id=org_id,
@@ -310,7 +310,7 @@ def ar_control_account(db: Session, org_id: uuid.UUID, account_category):
 @pytest.fixture
 def revenue_account(db: Session, org_id: uuid.UUID, account_category):
     """Create a revenue account for testing."""
-    from app.models.ifrs.gl.account import Account, AccountType, NormalBalance
+    from app.models.finance.gl.account import Account, AccountType, NormalBalance
 
     account = Account(
         organization_id=org_id,
@@ -333,7 +333,7 @@ def revenue_account(db: Session, org_id: uuid.UUID, account_category):
 @pytest.fixture
 def fa_asset_account(db: Session, org_id: uuid.UUID, account_category):
     """Create a fixed asset account for testing."""
-    from app.models.ifrs.gl.account import Account, AccountType, NormalBalance
+    from app.models.finance.gl.account import Account, AccountType, NormalBalance
 
     account = Account(
         organization_id=org_id,
@@ -352,7 +352,7 @@ def fa_asset_account(db: Session, org_id: uuid.UUID, account_category):
 @pytest.fixture
 def fa_accum_depr_account(db: Session, org_id: uuid.UUID, account_category):
     """Create accumulated depreciation account for testing."""
-    from app.models.ifrs.gl.account import Account, AccountType, NormalBalance
+    from app.models.finance.gl.account import Account, AccountType, NormalBalance
 
     account = Account(
         organization_id=org_id,
@@ -371,7 +371,7 @@ def fa_accum_depr_account(db: Session, org_id: uuid.UUID, account_category):
 @pytest.fixture
 def fa_depr_expense_account(db: Session, org_id: uuid.UUID, account_category):
     """Create depreciation expense account for testing."""
-    from app.models.ifrs.gl.account import Account, AccountType, NormalBalance
+    from app.models.finance.gl.account import Account, AccountType, NormalBalance
 
     account = Account(
         organization_id=org_id,
@@ -390,7 +390,7 @@ def fa_depr_expense_account(db: Session, org_id: uuid.UUID, account_category):
 @pytest.fixture
 def fa_gain_loss_account(db: Session, org_id: uuid.UUID, account_category):
     """Create gain/loss on disposal account for testing."""
-    from app.models.ifrs.gl.account import Account, AccountType, NormalBalance
+    from app.models.finance.gl.account import Account, AccountType, NormalBalance
 
     account = Account(
         organization_id=org_id,
@@ -416,7 +416,7 @@ def asset_category(
     fa_gain_loss_account,
 ):
     """Create an asset category for testing."""
-    from app.models.ifrs.fa.asset_category import AssetCategory, DepreciationMethod
+    from app.models.finance.fa.asset_category import AssetCategory, DepreciationMethod
 
     category = AssetCategory(
         organization_id=org_id,
@@ -444,7 +444,7 @@ def asset_category(
 @pytest.fixture
 def supplier(db: Session, org_id: uuid.UUID, ap_control_account):
     """Create a supplier for testing."""
-    from app.models.ifrs.ap.supplier import Supplier, SupplierType
+    from app.models.finance.ap.supplier import Supplier, SupplierType
 
     supplier = Supplier(
         organization_id=org_id,
@@ -465,7 +465,7 @@ def supplier(db: Session, org_id: uuid.UUID, ap_control_account):
 @pytest.fixture
 def supplier_invoice(db: Session, org_id: uuid.UUID, supplier, user_id: uuid.UUID):
     """Create a supplier invoice for testing."""
-    from app.models.ifrs.ap.supplier_invoice import (
+    from app.models.finance.ap.supplier_invoice import (
         SupplierInvoice,
         SupplierInvoiceStatus,
         SupplierInvoiceType,
@@ -502,7 +502,7 @@ def supplier_invoice(db: Session, org_id: uuid.UUID, supplier, user_id: uuid.UUI
 @pytest.fixture
 def customer(db: Session, org_id: uuid.UUID, ar_control_account):
     """Create a customer for testing."""
-    from app.models.ifrs.ar.customer import Customer, CustomerType
+    from app.models.finance.ar.customer import Customer, CustomerType
 
     customer = Customer(
         organization_id=org_id,
@@ -527,7 +527,7 @@ def customer(db: Session, org_id: uuid.UUID, ar_control_account):
 @pytest.fixture
 def warehouse(db: Session, org_id: uuid.UUID):
     """Create a warehouse for testing."""
-    from app.models.ifrs.inv.warehouse import Warehouse
+    from app.models.finance.inv.warehouse import Warehouse
 
     warehouse = Warehouse(
         organization_id=org_id,
@@ -543,7 +543,7 @@ def warehouse(db: Session, org_id: uuid.UUID):
 @pytest.fixture
 def inventory_adjustment_account(db: Session, org_id: uuid.UUID, account_category):
     """Create an inventory adjustment account for testing."""
-    from app.models.ifrs.gl.account import Account, AccountType, NormalBalance
+    from app.models.finance.gl.account import Account, AccountType, NormalBalance
 
     account = Account(
         organization_id=org_id,
@@ -562,7 +562,7 @@ def inventory_adjustment_account(db: Session, org_id: uuid.UUID, account_categor
 @pytest.fixture
 def item_category(db: Session, org_id: uuid.UUID, inventory_account, cogs_account, revenue_account, inventory_adjustment_account):
     """Create an item category for testing."""
-    from app.models.ifrs.inv.item_category import ItemCategory
+    from app.models.finance.inv.item_category import ItemCategory
 
     category = ItemCategory(
         organization_id=org_id,
@@ -582,7 +582,7 @@ def item_category(db: Session, org_id: uuid.UUID, inventory_account, cogs_accoun
 @pytest.fixture
 def inventory_item(db: Session, org_id: uuid.UUID, item_category, inventory_account, cogs_account, revenue_account):
     """Create an inventory item for testing."""
-    from app.models.ifrs.inv.item import Item, CostingMethod
+    from app.models.finance.inv.item import Item, CostingMethod
 
     item = Item(
         organization_id=org_id,
@@ -617,7 +617,7 @@ def initial_inventory_transaction(
     fiscal_period,
 ):
     """Create initial inventory through a receipt transaction."""
-    from app.models.ifrs.inv.inventory_transaction import InventoryTransaction, TransactionType
+    from app.models.finance.inv.inventory_transaction import InventoryTransaction, TransactionType
 
     txn = InventoryTransaction(
         organization_id=org_id,
@@ -669,7 +669,7 @@ def inventory_with_balance(
 @pytest.fixture
 def ar_invoice(db: Session, org_id: uuid.UUID, customer, user_id: uuid.UUID):
     """Create an AR invoice for testing."""
-    from app.models.ifrs.ar.invoice import Invoice, InvoiceStatus, InvoiceType
+    from app.models.finance.ar.invoice import Invoice, InvoiceStatus, InvoiceType
 
     invoice = Invoice(
         organization_id=org_id,
@@ -700,7 +700,7 @@ def ar_invoice(db: Session, org_id: uuid.UUID, customer, user_id: uuid.UUID):
 @pytest.fixture
 def inventory_lot(db: Session, org_id: uuid.UUID, inventory_item, warehouse):
     """Create an inventory lot for testing."""
-    from app.models.ifrs.inv.inventory_lot import InventoryLot
+    from app.models.finance.inv.inventory_lot import InventoryLot
 
     lot = InventoryLot(
         organization_id=org_id,
@@ -727,7 +727,7 @@ def inventory_lot(db: Session, org_id: uuid.UUID, inventory_item, warehouse):
 @pytest.fixture
 def inv_transaction_sequence(db: Session, org_id: uuid.UUID):
     """Create numbering sequence for inventory transactions."""
-    from app.models.ifrs.core_config.numbering_sequence import (
+    from app.models.finance.core_config.numbering_sequence import (
         NumberingSequence,
         SequenceType,
     )
@@ -747,7 +747,7 @@ def inv_transaction_sequence(db: Session, org_id: uuid.UUID):
 @pytest.fixture
 def fa_asset_sequence(db: Session, org_id: uuid.UUID):
     """Create numbering sequence for fixed assets."""
-    from app.models.ifrs.core_config.numbering_sequence import (
+    from app.models.finance.core_config.numbering_sequence import (
         NumberingSequence,
         SequenceType,
     )

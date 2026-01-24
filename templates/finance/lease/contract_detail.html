@@ -1,0 +1,128 @@
+{% extends "finance/base_finance.html" %}
+
+{% block page_title %}Lease Details{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400">
+    <a href="/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/finance/lease/contracts" class="hover:text-primary-600 dark:hover:text-primary-400">Lease Contracts</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white">{{ contract.lease_number if contract else "Contract" }}</span>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+{% if contract %}
+<a href="/finance/lease/contracts/{{ contract.lease_id }}/schedule"
+   class="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800">
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10m-11 4h12m-12 4h8"/>
+    </svg>
+    View Schedule
+</a>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+{% if contract %}
+<div class="space-y-6">
+    <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800/50">
+        <div class="flex flex-wrap items-start justify-between gap-4">
+            <div>
+                <h2 class="text-xl font-semibold text-slate-900 dark:text-white">{{ contract.lease_number }} - {{ contract.lease_name }}</h2>
+                <p class="text-sm text-slate-500">{{ contract.lessor_name }}</p>
+            </div>
+            <div class="flex items-center gap-3">
+                <span class="inline-flex rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-400">{{ contract.status }}</span>
+                <div class="text-right">
+                    <p class="text-xs uppercase tracking-wide text-slate-500">Base Payment</p>
+                    <p class="text-lg font-semibold text-slate-900 dark:text-white">{{ contract.base_payment_amount }}</p>
+                </div>
+            </div>
+        </div>
+        {% if contract.description %}
+        <p class="mt-4 text-sm text-slate-600 dark:text-slate-400">{{ contract.description }}</p>
+        {% endif %}
+        <div class="mt-4 grid gap-4 sm:grid-cols-3">
+            <div>
+                <p class="text-xs uppercase tracking-wide text-slate-500">Classification</p>
+                <p class="text-sm font-medium text-slate-900 dark:text-white">{{ contract.classification }}</p>
+            </div>
+            <div>
+                <p class="text-xs uppercase tracking-wide text-slate-500">Term</p>
+                <p class="text-sm font-medium text-slate-900 dark:text-white">{{ contract.commencement_date }} - {{ contract.end_date }}</p>
+            </div>
+            <div>
+                <p class="text-xs uppercase tracking-wide text-slate-500">Currency</p>
+                <p class="text-sm font-medium text-slate-900 dark:text-white">{{ contract.currency_code }}</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid gap-6 lg:grid-cols-2">
+        <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800/50">
+            <h3 class="mb-4 text-lg font-medium text-slate-900 dark:text-white">Lease Liability</h3>
+            {% if liability %}
+            <dl class="space-y-3">
+                <div class="flex justify-between">
+                    <dt class="text-sm text-slate-500">Initial Amount</dt>
+                    <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ liability.initial_liability_amount }}</dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-sm text-slate-500">Current Balance</dt>
+                    <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ liability.current_liability_balance }}</dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-sm text-slate-500">Current Portion</dt>
+                    <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ liability.current_portion }}</dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-sm text-slate-500">Non-Current Portion</dt>
+                    <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ liability.non_current_portion }}</dd>
+                </div>
+            </dl>
+            {% else %}
+            <p class="text-sm text-slate-500">No liability record found.</p>
+            {% endif %}
+        </div>
+
+        <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800/50">
+            <h3 class="mb-4 text-lg font-medium text-slate-900 dark:text-white">ROU Asset</h3>
+            {% if asset %}
+            <dl class="space-y-3">
+                <div class="flex justify-between">
+                    <dt class="text-sm text-slate-500">Initial Value</dt>
+                    <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ asset.initial_rou_asset_value }}</dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-sm text-slate-500">Carrying Amount</dt>
+                    <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ asset.carrying_amount }}</dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-sm text-slate-500">Accumulated Depreciation</dt>
+                    <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ asset.accumulated_depreciation }}</dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-sm text-slate-500">Depreciation Method</dt>
+                    <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ asset.depreciation_method }}</dd>
+                </div>
+            </dl>
+            {% else %}
+            <p class="text-sm text-slate-500">No asset record found.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="py-12 text-center">
+    <svg class="mx-auto h-12 w-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+    </svg>
+    <p class="mt-2 text-sm text-slate-500">Lease contract not found</p>
+    <a href="/finance/lease/contracts" class="mt-4 inline-flex items-center text-sm font-medium text-primary-600 hover:text-primary-700">
+        Back to Lease Contracts
+    </a>
+</div>
+{% endif %}
+{% endblock %}

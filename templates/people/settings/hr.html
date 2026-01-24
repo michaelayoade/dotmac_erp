@@ -1,0 +1,163 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}HR Settings{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+    <a href="/people/hr/employees" class="hover:text-violet-600 dark:hover:text-violet-400 transition-colors">People</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <a href="/people/settings" class="hover:text-violet-600 dark:hover:text-violet-400 transition-colors">Settings</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="font-medium text-slate-900 dark:text-white">HR Settings</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-6 stagger-in">
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-2xl font-bold text-slate-900 dark:text-white">HR Settings</h1>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                Configure employee ID format, probation period, and attendance mode.
+            </p>
+        </div>
+    </div>
+
+    <!-- Success Message -->
+    {% if request.query_params.get('saved') %}
+    <div class="rounded-lg bg-green-50 border border-green-200 p-4 dark:bg-green-900/20 dark:border-green-800">
+        <div class="flex items-center gap-3">
+            <svg class="h-5 w-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+            </svg>
+            <p class="text-sm text-green-700 dark:text-green-300">HR settings updated successfully.</p>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Error Message -->
+    {% if error %}
+    <div class="rounded-lg bg-red-50 border border-red-200 p-4 dark:bg-red-900/20 dark:border-red-800">
+        <div class="flex items-center gap-3">
+            <svg class="h-5 w-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <p class="text-sm text-red-700 dark:text-red-300">{{ error }}</p>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if organization %}
+    <form method="POST" action="/people/settings/hr" class="space-y-6">
+        <!-- Employee ID Configuration -->
+        <div class="card p-6">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Employee ID Configuration</h2>
+            <div class="grid gap-6 sm:grid-cols-2">
+                <div>
+                    <label for="hr_employee_id_prefix" class="form-label">Employee ID Prefix</label>
+                    <input type="text" id="hr_employee_id_prefix" name="hr_employee_id_prefix"
+                           value="{{ organization.hr_employee_id_prefix or '' }}"
+                           placeholder="EMP"
+                           maxlength="10"
+                           class="form-input uppercase">
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Prefix for employee IDs (e.g., EMP, STF)</p>
+                </div>
+                <div>
+                    <label for="hr_employee_id_format" class="form-label">Employee ID Format</label>
+                    <input type="text" id="hr_employee_id_format" name="hr_employee_id_format"
+                           value="{{ organization.hr_employee_id_format or '' }}"
+                           placeholder="{PREFIX}-{YYYY}-{SEQ:4}"
+                           class="form-input">
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Format template for auto-generated IDs</p>
+                </div>
+            </div>
+            <!-- Format placeholders help -->
+            <div class="mt-4 p-4 bg-slate-50 dark:bg-slate-800 rounded-lg">
+                <p class="text-xs font-medium text-slate-700 dark:text-slate-300 mb-2">Available placeholders:</p>
+                <div class="grid gap-2 sm:grid-cols-2 text-xs text-slate-600 dark:text-slate-400">
+                    {% for placeholder, description in employee_id_placeholders %}
+                    <div class="flex items-center gap-2">
+                        <code class="px-1.5 py-0.5 bg-slate-200 dark:bg-slate-700 rounded">{{ placeholder }}</code>
+                        <span>{{ description }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+                <p class="mt-3 text-xs text-slate-500 dark:text-slate-400">
+                    Example: <code class="px-1.5 py-0.5 bg-slate-200 dark:bg-slate-700 rounded">EMP-2025-0001</code>
+                </p>
+            </div>
+        </div>
+
+        <!-- Probation Settings -->
+        <div class="card p-6">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Probation Settings</h2>
+            <div class="grid gap-6 sm:grid-cols-2">
+                <div>
+                    <label for="hr_probation_days" class="form-label">Default Probation Period (days)</label>
+                    <input type="number" id="hr_probation_days" name="hr_probation_days"
+                           value="{{ organization.hr_probation_days or '' }}"
+                           placeholder="90"
+                           min="0" max="365"
+                           class="form-input">
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Standard probation period for new employees</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Attendance Settings -->
+        <div class="card p-6">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Attendance Settings</h2>
+            <div class="grid gap-6 sm:grid-cols-2">
+                <div>
+                    <label for="hr_attendance_mode" class="form-label">Attendance Mode</label>
+                    <select id="hr_attendance_mode" name="hr_attendance_mode" class="form-input form-select">
+                        <option value="">-- Select Mode --</option>
+                        {% for mode_value, mode_label in attendance_modes %}
+                        <option value="{{ mode_value }}" {{ 'selected' if organization.hr_attendance_mode == mode_value else '' }}>{{ mode_label }}</option>
+                        {% endfor %}
+                    </select>
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">How employees record attendance</p>
+                </div>
+                <div>
+                    <label for="timezone" class="form-label">Timezone</label>
+                    <select id="timezone" name="timezone" class="form-input form-select">
+                        <option value="">-- Select Timezone --</option>
+                        {% for tz_value, tz_label in timezones %}
+                        <option value="{{ tz_value }}" {{ 'selected' if organization.timezone == tz_value else '' }}>{{ tz_label }}</option>
+                        {% endfor %}
+                    </select>
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Timezone for attendance tracking</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex items-center justify-end gap-4 py-4">
+            <a href="/people/settings" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">
+                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                </svg>
+                Save changes
+            </button>
+        </div>
+    </form>
+    {% else %}
+    <div class="card p-12 text-center">
+        <svg class="mx-auto h-12 w-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        <h3 class="mt-4 text-lg font-medium text-slate-900 dark:text-white">Organization not found</h3>
+        <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">Unable to load HR settings.</p>
+        <a href="/people/settings" class="mt-4 inline-block text-violet-600 hover:text-violet-700 dark:text-violet-400">
+            &larr; Back to settings
+        </a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

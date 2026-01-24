@@ -10,10 +10,11 @@ from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, Header, HTTPException
 from fastapi.testclient import TestClient
 
-from app.api.ifrs.inv import router, get_db
+from app.api.finance.inv import router, get_db
+from app.api.deps import require_tenant_auth
 from tests.api.ifrs.conftest import (
     MockInventoryItem,
     MockInventoryTransaction,
@@ -36,10 +37,18 @@ def mock_db():
 
 
 @pytest.fixture
-def client(app, mock_db):
+def client(app, mock_db, mock_auth_dict, auth_headers):
     """Create test client with mocked dependencies."""
     app.dependency_overrides[get_db] = lambda: mock_db
-    return TestClient(app)
+    def _require_tenant_auth_override(authorization: str | None = Header(default=None)):
+        if not authorization:
+            raise HTTPException(status_code=401, detail="Unauthorized")
+        return mock_auth_dict
+
+    app.dependency_overrides[require_tenant_auth] = _require_tenant_auth_override
+    test_client = TestClient(app)
+    test_client.headers.update(auth_headers)
+    return test_client
 
 
 class TestInventoryItemsAPI:
@@ -54,7 +63,7 @@ class TestInventoryItemsAPI:
             mock_create.return_value = mock_item
 
             response = client.post(
-                f"/inv/items?organization_id={org_id}&category_id={category_id}",
+                f"/inv/items?category_id={category_id}",
                 json={
                     "item_code": "ITEM-001",
                     "item_name": "Test Item",
@@ -85,7 +94,7 @@ class TestInventoryItemsAPI:
         with patch("app.api.ifrs.inv.item_service.list") as mock_list:
             mock_list.return_value = mock_items
 
-            response = client.get(f"/inv/items?organization_id={org_id}")
+            response = client.get(f"/inv/items")
 
         assert response.status_code == 200
         data = response.json()
@@ -99,7 +108,7 @@ class TestInventoryItemsAPI:
             mock_list.return_value = mock_items
 
             response = client.get(
-                f"/inv/items?organization_id={org_id}&costing_method=FIFO&is_active=true"
+                f"/inv/items?costing_method=FIFO&is_active=true"
             )
 
         assert response.status_code == 200
@@ -117,7 +126,7 @@ class TestInventoryTransactionsAPI:
             mock_create.return_value = mock_txn
 
             response = client.post(
-                f"/inv/transactions?organization_id={org_id}&created_by_user_id={user_id}&fiscal_period_id={fiscal_period_id}",
+                f"/inv/transactions?created_by_user_id={user_id}&fiscal_period_id={fiscal_period_id}",
                 json={
                     "item_id": str(uuid.uuid4()),
                     "warehouse_id": str(uuid.uuid4()),
@@ -148,7 +157,7 @@ class TestInventoryTransactionsAPI:
         with patch("app.api.ifrs.inv.inventory_transaction_service.list") as mock_list:
             mock_list.return_value = mock_txns
 
-            response = client.get(f"/inv/transactions?organization_id={org_id}")
+            response = client.get(f"/inv/transactions")
 
         assert response.status_code == 200
         data = response.json()
@@ -162,7 +171,7 @@ class TestInventoryTransactionsAPI:
             mock_list.return_value = mock_txns
 
             response = client.get(
-                f"/inv/transactions?organization_id={org_id}"
+                f"/inv/transactions"
                 f"&transaction_type=RECEIPT&start_date=2024-01-01&end_date=2024-01-31"
             )
 
@@ -181,7 +190,7 @@ class TestInventoryTransactionsAPI:
 
             response = client.post(
                 f"/inv/transactions/{uuid.uuid4()}/post"
-                f"?posting_date={date.today()}&organization_id={org_id}&posted_by_user_id={user_id}"
+                f"?posting_date={date.today()}&posted_by_user_id={user_id}"
             )
 
         assert response.status_code == 200
@@ -200,7 +209,7 @@ class TestFIFOValuationAPI:
             mock_add.return_value = mock_result
 
             response = client.post(
-                f"/inv/fifo/add-layer?organization_id={org_id}",
+                f"/inv/fifo/add-layer",
                 json={
                     "item_id": str(uuid.uuid4()),
                     "warehouse_id": str(uuid.uuid4()),
@@ -224,7 +233,7 @@ class TestFIFOValuationAPI:
             mock_consume.return_value = mock_result
 
             response = client.post(
-                f"/inv/fifo/consume?item_id={uuid.uuid4()}&quantity=50&organization_id={org_id}"
+                f"/inv/fifo/consume?item_id={uuid.uuid4()}&quantity=50"
             )
 
         assert response.status_code == 200
@@ -242,7 +251,7 @@ class TestFIFOValuationAPI:
             mock_get.return_value = mock_result
 
             response = client.get(
-                f"/inv/fifo/{uuid.uuid4()}?organization_id={org_id}"
+                f"/inv/fifo/{uuid.uuid4()}"
             )
 
         assert response.status_code == 200
@@ -266,7 +275,7 @@ class TestFIFOValuationAPI:
                 f"/inv/fifo/calculate-nrv"
                 f"?item_id={uuid.uuid4()}&warehouse_id={uuid.uuid4()}"
                 f"&fiscal_period_id={uuid.uuid4()}&valuation_date={date.today()}"
-                f"&estimated_selling_price=800&organization_id={org_id}"
+                f"&estimated_selling_price=800"
             )
 
         assert response.status_code == 200
@@ -283,7 +292,7 @@ class TestFIFOValuationAPI:
             mock_get.return_value = mock_result
 
             response = client.get(
-                f"/inv/fifo/valuation-summary?organization_id={org_id}&fiscal_period_id={uuid.uuid4()}"
+                f"/inv/fifo/valuation-summary?fiscal_period_id={uuid.uuid4()}"
             )
 
         assert response.status_code == 200
@@ -300,7 +309,7 @@ class TestLotTrackingAPI:
             mock_create.return_value = mock_lot
 
             response = client.post(
-                f"/inv/lots?organization_id={org_id}",
+                f"/inv/lots",
                 json={
                     "item_id": str(uuid.uuid4()),
                     "lot_number": "LOT-001",
@@ -330,7 +339,7 @@ class TestLotTrackingAPI:
         with patch("app.api.ifrs.inv.lot_serial_service.list") as mock_list:
             mock_list.return_value = mock_lots
 
-            response = client.get(f"/inv/lots?organization_id={org_id}")
+            response = client.get(f"/inv/lots")
 
         assert response.status_code == 200
         data = response.json()
@@ -344,7 +353,7 @@ class TestLotTrackingAPI:
             mock_list.return_value = mock_lots
 
             response = client.get(
-                f"/inv/lots?organization_id={org_id}&is_quarantined=false&has_expiry=true"
+                f"/inv/lots?is_quarantined=false&has_expiry=true"
             )
 
         assert response.status_code == 200
@@ -443,7 +452,7 @@ class TestLotTrackingAPI:
             mock_get.return_value = mock_lots
 
             response = client.get(
-                f"/inv/lots/expiring?organization_id={org_id}&days_ahead=30"
+                f"/inv/lots/expiring?days_ahead=30"
             )
 
         assert response.status_code == 200
@@ -457,7 +466,7 @@ class TestLotTrackingAPI:
         with patch("app.api.ifrs.inv.lot_serial_service.get_expired_lots") as mock_get:
             mock_get.return_value = mock_lots
 
-            response = client.get(f"/inv/lots/expired?organization_id={org_id}")
+            response = client.get(f"/inv/lots/expired")
 
         assert response.status_code == 200
         data = response.json()

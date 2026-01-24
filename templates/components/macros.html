@@ -7,39 +7,41 @@
    STATUS BADGE
    Usage: {{ status_badge("PAID") }}
           {{ status_badge("OVERDUE", size="sm") }}
+   Uses enhanced gradient badge classes from input.css
    ============================================ #}
 {% macro status_badge(status, size="md") %}
 {% set status_upper = status|upper %}
-{% set configs = {
-  'DRAFT': {'bg': 'bg-amber-100 dark:bg-amber-900/30', 'text': 'text-amber-700 dark:text-amber-400', 'dot': 'bg-amber-500'},
-  'PENDING': {'bg': 'bg-amber-100 dark:bg-amber-900/30', 'text': 'text-amber-700 dark:text-amber-400', 'dot': 'bg-amber-500'},
-  'POSTED': {'bg': 'bg-blue-100 dark:bg-blue-900/30', 'text': 'text-blue-700 dark:text-blue-400', 'dot': 'bg-blue-500'},
-  'APPROVED': {'bg': 'bg-blue-100 dark:bg-blue-900/30', 'text': 'text-blue-700 dark:text-blue-400', 'dot': 'bg-blue-500'},
-  'PAID': {'bg': 'bg-emerald-100 dark:bg-emerald-900/30', 'text': 'text-emerald-700 dark:text-emerald-400', 'dot': 'bg-emerald-500'},
-  'COMPLETED': {'bg': 'bg-emerald-100 dark:bg-emerald-900/30', 'text': 'text-emerald-700 dark:text-emerald-400', 'dot': 'bg-emerald-500'},
-  'ACTIVE': {'bg': 'bg-emerald-100 dark:bg-emerald-900/30', 'text': 'text-emerald-700 dark:text-emerald-400', 'dot': 'bg-emerald-500'},
-  'PARTIAL': {'bg': 'bg-sky-100 dark:bg-sky-900/30', 'text': 'text-sky-700 dark:text-sky-400', 'dot': 'bg-sky-500'},
-  'OVERDUE': {'bg': 'bg-rose-100 dark:bg-rose-900/30', 'text': 'text-rose-700 dark:text-rose-400', 'dot': 'bg-rose-500'},
-  'PAST DUE': {'bg': 'bg-rose-100 dark:bg-rose-900/30', 'text': 'text-rose-700 dark:text-rose-400', 'dot': 'bg-rose-500'},
-  'CANCELLED': {'bg': 'bg-rose-100 dark:bg-rose-900/30', 'text': 'text-rose-700 dark:text-rose-400', 'dot': 'bg-rose-500'},
-  'VOIDED': {'bg': 'bg-slate-100 dark:bg-slate-800', 'text': 'text-slate-600 dark:text-slate-400', 'dot': 'bg-slate-400'},
-  'INACTIVE': {'bg': 'bg-slate-100 dark:bg-slate-800', 'text': 'text-slate-600 dark:text-slate-400', 'dot': 'bg-slate-400'},
-  'CLOSED': {'bg': 'bg-slate-100 dark:bg-slate-800', 'text': 'text-slate-600 dark:text-slate-400', 'dot': 'bg-slate-400'}
+{% set badge_classes = {
+  'DRAFT': 'badge-draft',
+  'PENDING': 'badge-pending',
+  'POSTED': 'badge-posted',
+  'APPROVED': 'badge-approved',
+  'PAID': 'badge-paid',
+  'COMPLETED': 'badge-paid',
+  'ACTIVE': 'badge-approved',
+  'PARTIAL': 'badge-pending',
+  'PARTIALLY_PAID': 'badge-pending',
+  'OVERDUE': 'badge-overdue',
+  'PAST DUE': 'badge-overdue',
+  'CANCELLED': 'badge-rejected',
+  'REJECTED': 'badge-rejected',
+  'REVERSED': 'badge-rejected',
+  'VOIDED': 'badge-draft',
+  'INACTIVE': 'badge-draft',
+  'CLOSED': 'badge-draft'
 } %}
-{% set cfg = configs.get(status_upper, {'bg': 'bg-slate-100 dark:bg-slate-800', 'text': 'text-slate-600 dark:text-slate-400', 'dot': 'bg-slate-400'}) %}
-{% set sizes = {'sm': 'px-1.5 py-0.5 text-xs', 'md': 'px-2 py-1 text-xs', 'lg': 'px-2.5 py-1 text-sm'} %}
-<span class="inline-flex items-center gap-1 rounded-full font-medium {{ cfg.bg }} {{ cfg.text }} {{ sizes[size] }}">
-  <span class="h-1.5 w-1.5 rounded-full {{ cfg.dot }}"></span>
-  {{ status|title }}
-</span>
+{% set badge_class = badge_classes.get(status_upper, 'badge-draft') %}
+<span class="{{ badge_class }}">{{ status|title }}</span>
 {% endmacro %}
 
 
 {# ============================================
    STATS CARD
    Usage: {{ stats_card("Total Revenue", "$125,000", icon="trending-up", color="emerald", href="/reports") }}
+          {{ stats_card("Revenue", "$125,000", variant="revenue", sparkline=true) }}
+   Supports variants: revenue, expenses, receivables, payables (adds top border accent)
    ============================================ #}
-{% macro stats_card(label, value, icon="chart", color="slate", href=none, subtitle=none, trend=none) %}
+{% macro stats_card(label, value, icon="chart", color="slate", href=none, subtitle=none, trend=none, variant=none, sparkline=false) %}
 {% set colors = {
   'emerald': {'bg': 'bg-emerald-100 dark:bg-emerald-900/30', 'text': 'text-emerald-600 dark:text-emerald-400'},
   'rose': {'bg': 'bg-rose-100 dark:bg-rose-900/30', 'text': 'text-rose-600 dark:text-rose-400'},
@@ -49,9 +51,18 @@
   'violet': {'bg': 'bg-violet-100 dark:bg-violet-900/30', 'text': 'text-violet-600 dark:text-violet-400'},
   'slate': {'bg': 'bg-slate-100 dark:bg-slate-800', 'text': 'text-slate-600 dark:text-slate-400'}
 } %}
+{% set variant_classes = {
+  'revenue': 'stat-card-revenue',
+  'expenses': 'stat-card-expenses',
+  'receivables': 'stat-card-receivables',
+  'payables': 'stat-card-payables'
+} %}
 {% set c = colors.get(color, colors.slate) %}
 {% set tag = 'a' if href else 'div' %}
-<{{ tag }} {% if href %}href="{{ href }}"{% endif %} class="card p-5 {{ 'card-hover group' if href else '' }}">
+{% set card_class = 'stat-card' if variant else 'card' %}
+{% set variant_class = variant_classes.get(variant, '') %}
+{% set sparkline_class = 'stat-card-sparkline' if sparkline else '' %}
+<{{ tag }} {% if href %}href="{{ href }}"{% endif %} class="{{ card_class }} {{ variant_class }} {{ sparkline_class }} p-5 {{ 'card-hover group hover-lift' if href else '' }}">
   <div class="flex items-center justify-between mb-3">
     <span class="text-sm font-medium text-slate-500 dark:text-slate-400">{{ label }}</span>
     <div class="flex h-9 w-9 items-center justify-center rounded-lg {{ c.bg }} {{ c.text }}">
@@ -81,20 +92,26 @@
 {# ============================================
    EMPTY STATE
    Usage: {{ empty_state("No invoices", "Create your first invoice to get started", icon="document", cta_text="New Invoice", cta_href="/invoices/new") }}
+   Uses enhanced empty state styling with floating animation
    ============================================ #}
 {% macro empty_state(title, description=none, icon="document", cta_text=none, cta_href=none) %}
-<div class="empty-state py-12 text-center">
-  <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 mb-4">
-    <svg class="h-8 w-8 text-slate-400 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<div class="empty-state">
+  <div class="empty-state-icon">
+    <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       {{ icon_path(icon) }}
     </svg>
   </div>
-  <h3 class="text-lg font-semibold text-slate-700 dark:text-slate-300 mb-1">{{ title }}</h3>
+  <p class="empty-state-title">{{ title }}</p>
   {% if description %}
-  <p class="text-sm text-slate-500 dark:text-slate-400 max-w-sm mx-auto">{{ description }}</p>
+  <p class="empty-state-description">{{ description }}</p>
   {% endif %}
   {% if cta_text and cta_href %}
-  <a href="{{ cta_href }}" class="btn btn-primary mt-4">{{ cta_text }}</a>
+  <a href="{{ cta_href }}" class="btn btn-teal">
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+    </svg>
+    {{ cta_text }}
+  </a>
   {% endif %}
 </div>
 {% endmacro %}

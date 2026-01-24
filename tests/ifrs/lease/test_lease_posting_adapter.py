@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.models.ifrs.lease.lease_contract import LeaseStatus
+from app.models.finance.lease.lease_contract import LeaseStatus
 from tests.ifrs.lease.conftest import (
     MockLeaseContract,
     MockLeaseLiability,
@@ -22,7 +22,7 @@ class TestLeasePostingAdapterInitialRecognition:
 
     def test_post_initial_recognition_not_found(self, mock_db, org_id, user_id):
         """Test posting non-existent lease fails."""
-        from app.services.ifrs.lease.lease_posting_adapter import LeasePostingAdapter
+        from app.services.finance.lease.lease_posting_adapter import LeasePostingAdapter
 
         mock_db.get.return_value = None
 
@@ -41,7 +41,7 @@ class TestLeasePostingAdapterInitialRecognition:
         self, mock_db, org_id, user_id, mock_contract
     ):
         """Test posting with wrong status fails."""
-        from app.services.ifrs.lease.lease_posting_adapter import LeasePostingAdapter
+        from app.services.finance.lease.lease_posting_adapter import LeasePostingAdapter
 
         mock_contract.status = LeaseStatus.DRAFT
         mock_db.get.return_value = mock_contract
@@ -61,7 +61,7 @@ class TestLeasePostingAdapterInitialRecognition:
         self, mock_db, org_id, user_id, mock_active_contract
     ):
         """Test posting without liability fails."""
-        from app.services.ifrs.lease.lease_posting_adapter import LeasePostingAdapter
+        from app.services.finance.lease.lease_posting_adapter import LeasePostingAdapter
 
         mock_db.get.return_value = mock_active_contract
         mock_db.query.return_value.filter.return_value.first.return_value = None
@@ -83,7 +83,7 @@ class TestLeasePostingAdapterInterestAccrual:
 
     def test_post_interest_accrual_not_found(self, mock_db, org_id, user_id):
         """Test posting interest on non-existent lease fails."""
-        from app.services.ifrs.lease.lease_posting_adapter import LeasePostingAdapter
+        from app.services.finance.lease.lease_posting_adapter import LeasePostingAdapter
 
         mock_db.get.return_value = None
 
@@ -103,7 +103,7 @@ class TestLeasePostingAdapterInterestAccrual:
         self, mock_db, org_id, user_id, mock_active_contract
     ):
         """Test posting interest without liability fails."""
-        from app.services.ifrs.lease.lease_posting_adapter import LeasePostingAdapter
+        from app.services.finance.lease.lease_posting_adapter import LeasePostingAdapter
 
         mock_db.get.return_value = mock_active_contract
         mock_db.query.return_value.filter.return_value.first.return_value = None
@@ -124,7 +124,7 @@ class TestLeasePostingAdapterInterestAccrual:
         self, mock_db, org_id, user_id, mock_active_contract, mock_liability
     ):
         """Test posting zero interest fails."""
-        from app.services.ifrs.lease.lease_posting_adapter import LeasePostingAdapter
+        from app.services.finance.lease.lease_posting_adapter import LeasePostingAdapter
 
         mock_db.get.return_value = mock_active_contract
         mock_db.query.return_value.filter.return_value.first.return_value = mock_liability
@@ -145,7 +145,7 @@ class TestLeasePostingAdapterInterestAccrual:
         self, mock_db, org_id, user_id, mock_active_contract, mock_liability
     ):
         """Test posting negative interest fails."""
-        from app.services.ifrs.lease.lease_posting_adapter import LeasePostingAdapter
+        from app.services.finance.lease.lease_posting_adapter import LeasePostingAdapter
 
         mock_db.get.return_value = mock_active_contract
         mock_db.query.return_value.filter.return_value.first.return_value = mock_liability
@@ -168,7 +168,7 @@ class TestLeasePostingAdapterPayment:
 
     def test_post_lease_payment_not_found(self, mock_db, org_id, user_id):
         """Test posting payment on non-existent lease fails."""
-        from app.services.ifrs.lease.lease_posting_adapter import LeasePostingAdapter
+        from app.services.finance.lease.lease_posting_adapter import LeasePostingAdapter
 
         mock_db.get.return_value = None
 
@@ -189,7 +189,7 @@ class TestLeasePostingAdapterPayment:
         self, mock_db, org_id, user_id, mock_active_contract
     ):
         """Test posting payment without liability fails."""
-        from app.services.ifrs.lease.lease_posting_adapter import LeasePostingAdapter
+        from app.services.finance.lease.lease_posting_adapter import LeasePostingAdapter
 
         mock_db.get.return_value = mock_active_contract
         mock_db.query.return_value.filter.return_value.first.return_value = None
@@ -211,7 +211,7 @@ class TestLeasePostingAdapterPayment:
         self, mock_db, org_id, user_id, mock_active_contract, mock_liability
     ):
         """Test posting zero payment fails."""
-        from app.services.ifrs.lease.lease_posting_adapter import LeasePostingAdapter
+        from app.services.finance.lease.lease_posting_adapter import LeasePostingAdapter
 
         mock_db.get.return_value = mock_active_contract
         mock_db.query.return_value.filter.return_value.first.return_value = mock_liability
@@ -235,7 +235,7 @@ class TestLeasePostingAdapterDepreciation:
 
     def test_post_rou_depreciation_not_found(self, mock_db, org_id, user_id):
         """Test posting depreciation on non-existent lease fails."""
-        from app.services.ifrs.lease.lease_posting_adapter import LeasePostingAdapter
+        from app.services.finance.lease.lease_posting_adapter import LeasePostingAdapter
 
         mock_db.get.return_value = None
 
@@ -255,7 +255,7 @@ class TestLeasePostingAdapterDepreciation:
         self, mock_db, org_id, user_id, mock_active_contract
     ):
         """Test posting depreciation without asset fails."""
-        from app.services.ifrs.lease.lease_posting_adapter import LeasePostingAdapter
+        from app.services.finance.lease.lease_posting_adapter import LeasePostingAdapter
 
         mock_db.get.return_value = mock_active_contract
         mock_db.query.return_value.filter.return_value.first.return_value = None
@@ -276,7 +276,7 @@ class TestLeasePostingAdapterDepreciation:
         self, mock_db, org_id, user_id, mock_active_contract, mock_asset
     ):
         """Test posting zero depreciation fails."""
-        from app.services.ifrs.lease.lease_posting_adapter import LeasePostingAdapter
+        from app.services.finance.lease.lease_posting_adapter import LeasePostingAdapter
 
         mock_db.get.return_value = mock_active_contract
         mock_db.query.return_value.filter.return_value.first.return_value = mock_asset
@@ -299,7 +299,7 @@ class TestLeasePostingAdapterTermination:
 
     def test_post_lease_termination_not_found(self, mock_db, org_id, user_id):
         """Test posting termination on non-existent lease fails."""
-        from app.services.ifrs.lease.lease_posting_adapter import LeasePostingAdapter
+        from app.services.finance.lease.lease_posting_adapter import LeasePostingAdapter
 
         mock_db.get.return_value = None
 
@@ -318,7 +318,7 @@ class TestLeasePostingAdapterTermination:
         self, mock_db, org_id, user_id, mock_active_contract
     ):
         """Test posting termination on non-terminated lease fails."""
-        from app.services.ifrs.lease.lease_posting_adapter import LeasePostingAdapter
+        from app.services.finance.lease.lease_posting_adapter import LeasePostingAdapter
 
         mock_active_contract.status = LeaseStatus.ACTIVE  # Not TERMINATED
         mock_db.get.return_value = mock_active_contract
@@ -338,7 +338,7 @@ class TestLeasePostingAdapterTermination:
         self, mock_db, org_id, user_id, mock_contract
     ):
         """Test posting termination without liability fails."""
-        from app.services.ifrs.lease.lease_posting_adapter import LeasePostingAdapter
+        from app.services.finance.lease.lease_posting_adapter import LeasePostingAdapter
 
         mock_contract.status = LeaseStatus.TERMINATED
         mock_db.get.return_value = mock_contract
@@ -363,7 +363,7 @@ class TestLeasePostingAdapterSuccessCases:
         self, mock_db, org_id, user_id, mock_active_contract, mock_liability, mock_asset
     ):
         """Test successful initial recognition posting."""
-        from app.services.ifrs.lease.lease_posting_adapter import LeasePostingAdapter
+        from app.services.finance.lease.lease_posting_adapter import LeasePostingAdapter
 
         mock_db.get.return_value = mock_active_contract
         mock_db.query.return_value.filter.return_value.first.side_effect = [
@@ -401,7 +401,7 @@ class TestLeasePostingAdapterSuccessCases:
         self, mock_db, org_id, user_id, mock_active_contract, mock_liability, mock_asset
     ):
         """Test initial recognition with restoration obligation."""
-        from app.services.ifrs.lease.lease_posting_adapter import LeasePostingAdapter
+        from app.services.finance.lease.lease_posting_adapter import LeasePostingAdapter
 
         mock_active_contract.restoration_obligation = Decimal("5000.00")
         mock_db.get.return_value = mock_active_contract
@@ -438,7 +438,7 @@ class TestLeasePostingAdapterSuccessCases:
         self, mock_db, org_id, user_id, mock_active_contract, mock_liability
     ):
         """Test successful interest accrual posting."""
-        from app.services.ifrs.lease.lease_posting_adapter import LeasePostingAdapter
+        from app.services.finance.lease.lease_posting_adapter import LeasePostingAdapter
 
         mock_db.get.return_value = mock_active_contract
         mock_db.query.return_value.filter.return_value.first.return_value = mock_liability
@@ -473,7 +473,7 @@ class TestLeasePostingAdapterSuccessCases:
         self, mock_db, org_id, user_id, mock_active_contract, mock_liability
     ):
         """Test successful lease payment posting."""
-        from app.services.ifrs.lease.lease_posting_adapter import LeasePostingAdapter
+        from app.services.finance.lease.lease_posting_adapter import LeasePostingAdapter
 
         mock_db.get.return_value = mock_active_contract
         mock_db.query.return_value.filter.return_value.first.return_value = mock_liability
@@ -509,7 +509,7 @@ class TestLeasePostingAdapterSuccessCases:
         self, mock_db, org_id, user_id, mock_active_contract, mock_asset
     ):
         """Test successful ROU depreciation posting."""
-        from app.services.ifrs.lease.lease_posting_adapter import LeasePostingAdapter
+        from app.services.finance.lease.lease_posting_adapter import LeasePostingAdapter
 
         mock_db.get.return_value = mock_active_contract
         mock_db.query.return_value.filter.return_value.first.return_value = mock_asset
@@ -544,7 +544,7 @@ class TestLeasePostingAdapterSuccessCases:
         self, mock_db, org_id, user_id, mock_contract, mock_liability, mock_asset
     ):
         """Test successful lease termination with gain."""
-        from app.services.ifrs.lease.lease_posting_adapter import LeasePostingAdapter
+        from app.services.finance.lease.lease_posting_adapter import LeasePostingAdapter
 
         mock_contract.status = LeaseStatus.TERMINATED
         mock_liability.current_liability_balance = Decimal("30000.00")
@@ -587,7 +587,7 @@ class TestLeasePostingAdapterSuccessCases:
         self, mock_db, org_id, user_id, mock_contract, mock_liability, mock_asset
     ):
         """Test successful lease termination with loss."""
-        from app.services.ifrs.lease.lease_posting_adapter import LeasePostingAdapter
+        from app.services.finance.lease.lease_posting_adapter import LeasePostingAdapter
 
         mock_contract.status = LeaseStatus.TERMINATED
         mock_liability.current_liability_balance = Decimal("20000.00")
@@ -631,7 +631,7 @@ class TestLeasePostingResult:
 
     def test_create_success_result(self):
         """Test creating successful result."""
-        from app.services.ifrs.lease.lease_posting_adapter import LeasePostingResult
+        from app.services.finance.lease.lease_posting_adapter import LeasePostingResult
 
         journal_id = uuid.uuid4()
         batch_id = uuid.uuid4()
@@ -649,7 +649,7 @@ class TestLeasePostingResult:
 
     def test_create_failure_result(self):
         """Test creating failure result."""
-        from app.services.ifrs.lease.lease_posting_adapter import LeasePostingResult
+        from app.services.finance.lease.lease_posting_adapter import LeasePostingResult
 
         result = LeasePostingResult(success=False, message="Posting failed")
 

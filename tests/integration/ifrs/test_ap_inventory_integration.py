@@ -12,13 +12,13 @@ from decimal import Decimal
 import pytest
 from sqlalchemy.orm import Session
 
-from app.models.ifrs.ap.supplier_invoice import SupplierInvoiceStatus
-from app.models.ifrs.ap.supplier_invoice_line import SupplierInvoiceLine
-from app.models.ifrs.ap.purchase_order import PurchaseOrder, POStatus
-from app.models.ifrs.ap.purchase_order_line import PurchaseOrderLine
-from app.models.ifrs.ap.goods_receipt import GoodsReceipt, ReceiptStatus
-from app.models.ifrs.ap.goods_receipt_line import GoodsReceiptLine
-from app.models.ifrs.inv.item import CostingMethod
+from app.models.finance.ap.supplier_invoice import SupplierInvoiceStatus
+from app.models.finance.ap.supplier_invoice_line import SupplierInvoiceLine
+from app.models.finance.ap.purchase_order import PurchaseOrder, POStatus
+from app.models.finance.ap.purchase_order_line import PurchaseOrderLine
+from app.models.finance.ap.goods_receipt import GoodsReceipt, ReceiptStatus
+from app.models.finance.ap.goods_receipt_line import GoodsReceiptLine
+from app.models.finance.inv.item import CostingMethod
 
 
 class TestGoodsReceiptInventoryIntegration:
@@ -130,7 +130,7 @@ class TestGoodsReceiptInventoryIntegration:
         inv_transaction_sequence,
     ):
         """Accepting goods receipt should create inventory receipt transaction."""
-        from app.services.ifrs.ap.goods_receipt import GoodsReceiptService
+        from app.services.finance.ap.goods_receipt import GoodsReceiptService
 
         # Accept all lines
         result = GoodsReceiptService.accept_all(
@@ -147,7 +147,7 @@ class TestGoodsReceiptInventoryIntegration:
         assert gr_line.quantity_accepted == Decimal("50")
 
         # Check inventory transaction was created
-        from app.models.ifrs.inv.inventory_transaction import InventoryTransaction
+        from app.models.finance.inv.inventory_transaction import InventoryTransaction
 
         txn = db.query(InventoryTransaction).filter(
             InventoryTransaction.source_document_type == "GOODS_RECEIPT",
@@ -202,7 +202,7 @@ class TestSupplierInvoiceCostUpdates:
         initial_cost = inventory_item.last_purchase_cost
 
         # Post the invoice
-        from app.services.ifrs.ap.supplier_invoice import SupplierInvoiceService
+        from app.services.finance.ap.supplier_invoice import SupplierInvoiceService
 
         try:
             SupplierInvoiceService.post_invoice(
@@ -262,7 +262,7 @@ class TestSupplierInvoiceCostUpdates:
         db.flush()
 
         # Post the invoice
-        from app.services.ifrs.ap.supplier_invoice import SupplierInvoiceService
+        from app.services.finance.ap.supplier_invoice import SupplierInvoiceService
 
         try:
             SupplierInvoiceService.post_invoice(
@@ -295,7 +295,7 @@ class TestAPPostingAdapterAccountRouting:
         expense_account,
     ):
         """Should route to inventory account when line has item_id."""
-        from app.services.ifrs.ap.ap_posting_adapter import APPostingAdapter
+        from app.services.finance.ap.ap_posting_adapter import APPostingAdapter
 
         # Create line with inventory item
         line = SupplierInvoiceLine(
@@ -329,7 +329,7 @@ class TestAPPostingAdapterAccountRouting:
         expense_account,
     ):
         """Should route to expense account for non-inventory lines."""
-        from app.services.ifrs.ap.ap_posting_adapter import APPostingAdapter
+        from app.services.finance.ap.ap_posting_adapter import APPostingAdapter
 
         # Create line without inventory item
         line = SupplierInvoiceLine(
@@ -364,7 +364,7 @@ class TestAPPostingAdapterAccountRouting:
         fa_asset_account,
     ):
         """Should route to asset account for capitalizable lines."""
-        from app.services.ifrs.ap.ap_posting_adapter import APPostingAdapter
+        from app.services.finance.ap.ap_posting_adapter import APPostingAdapter
 
         # Create capitalizable line
         line = SupplierInvoiceLine(

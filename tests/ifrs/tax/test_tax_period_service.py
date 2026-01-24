@@ -9,7 +9,7 @@ from uuid import uuid4
 import pytest
 from fastapi import HTTPException
 
-from app.services.ifrs.tax.tax_period import (
+from app.services.finance.tax.tax_period import (
     TaxPeriodService,
     TaxPeriodInput,
 )
@@ -34,7 +34,7 @@ class MockTaxPeriod:
     """Mock TaxPeriod model."""
 
     def __init__(self, **kwargs):
-        from app.models.ifrs.tax.tax_period import TaxPeriodStatus
+        from app.models.finance.tax.tax_period import TaxPeriodStatus
 
         self.period_id = kwargs.get("period_id", uuid4())
         self.organization_id = kwargs.get("organization_id", uuid4())
@@ -64,7 +64,7 @@ class TestTaxPeriodServiceCreatePeriod:
 
     def test_create_period_success(self, mock_db):
         """Test successful period creation."""
-        from app.models.ifrs.tax.tax_period import TaxPeriodFrequency
+        from app.models.finance.tax.tax_period import TaxPeriodFrequency
 
         org_id = uuid4()
         jur_id = uuid4()
@@ -94,7 +94,7 @@ class TestTaxPeriodServiceCreatePeriod:
 
     def test_create_period_jurisdiction_not_found(self, mock_db):
         """Test period creation with missing jurisdiction."""
-        from app.models.ifrs.tax.tax_period import TaxPeriodFrequency
+        from app.models.finance.tax.tax_period import TaxPeriodFrequency
 
         mock_query = MagicMock()
         mock_query.filter.return_value = mock_query
@@ -118,7 +118,7 @@ class TestTaxPeriodServiceCreatePeriod:
 
     def test_create_period_invalid_dates(self, mock_db):
         """Test period creation with end date before start date."""
-        from app.models.ifrs.tax.tax_period import TaxPeriodFrequency
+        from app.models.finance.tax.tax_period import TaxPeriodFrequency
 
         org_id = uuid4()
         jur_id = uuid4()
@@ -149,7 +149,7 @@ class TestTaxPeriodServiceCreatePeriod:
 
     def test_create_period_overlapping(self, mock_db):
         """Test period creation with overlapping dates."""
-        from app.models.ifrs.tax.tax_period import TaxPeriodFrequency
+        from app.models.finance.tax.tax_period import TaxPeriodFrequency
 
         org_id = uuid4()
         jur_id = uuid4()
@@ -185,7 +185,7 @@ class TestTaxPeriodServiceGeneratePeriods:
 
     def test_generate_monthly_periods(self, mock_db):
         """Test generating monthly periods for a year."""
-        from app.models.ifrs.tax.tax_period import TaxPeriodFrequency
+        from app.models.finance.tax.tax_period import TaxPeriodFrequency
 
         org_id = uuid4()
         jur_id = uuid4()
@@ -213,7 +213,7 @@ class TestTaxPeriodServiceGeneratePeriods:
 
     def test_generate_quarterly_periods(self, mock_db):
         """Test generating quarterly periods for a year."""
-        from app.models.ifrs.tax.tax_period import TaxPeriodFrequency
+        from app.models.finance.tax.tax_period import TaxPeriodFrequency
 
         org_id = uuid4()
         jur_id = uuid4()
@@ -240,7 +240,7 @@ class TestTaxPeriodServiceGeneratePeriods:
 
     def test_generate_annual_period(self, mock_db):
         """Test generating annual period."""
-        from app.models.ifrs.tax.tax_period import TaxPeriodFrequency
+        from app.models.finance.tax.tax_period import TaxPeriodFrequency
 
         org_id = uuid4()
         jur_id = uuid4()
@@ -271,7 +271,7 @@ class TestTaxPeriodServiceFileExtension:
 
     def test_file_extension_success(self, mock_db):
         """Test filing extension successfully."""
-        from app.models.ifrs.tax.tax_period import TaxPeriodStatus
+        from app.models.finance.tax.tax_period import TaxPeriodStatus
 
         org_id = uuid4()
         period_id = uuid4()
@@ -318,7 +318,7 @@ class TestTaxPeriodServiceFileExtension:
 
     def test_file_extension_period_not_open(self, mock_db):
         """Test filing extension for non-open period."""
-        from app.models.ifrs.tax.tax_period import TaxPeriodStatus
+        from app.models.finance.tax.tax_period import TaxPeriodStatus
 
         org_id = uuid4()
         mock_period = MockTaxPeriod(
@@ -343,7 +343,7 @@ class TestTaxPeriodServiceFileExtension:
 
     def test_file_extension_invalid_date(self, mock_db):
         """Test filing extension with date before original due date."""
-        from app.models.ifrs.tax.tax_period import TaxPeriodStatus
+        from app.models.finance.tax.tax_period import TaxPeriodStatus
 
         org_id = uuid4()
         mock_period = MockTaxPeriod(
@@ -374,7 +374,7 @@ class TestTaxPeriodServiceStatusTransitions:
 
     def test_mark_filed_success(self, mock_db):
         """Test marking period as filed."""
-        from app.models.ifrs.tax.tax_period import TaxPeriodStatus
+        from app.models.finance.tax.tax_period import TaxPeriodStatus
 
         org_id = uuid4()
         mock_period = MockTaxPeriod(
@@ -393,7 +393,7 @@ class TestTaxPeriodServiceStatusTransitions:
 
     def test_mark_filed_already_filed(self, mock_db):
         """Test marking already filed period."""
-        from app.models.ifrs.tax.tax_period import TaxPeriodStatus
+        from app.models.finance.tax.tax_period import TaxPeriodStatus
 
         org_id = uuid4()
         mock_period = MockTaxPeriod(
@@ -412,7 +412,7 @@ class TestTaxPeriodServiceStatusTransitions:
 
     def test_mark_paid_success(self, mock_db):
         """Test marking period as paid."""
-        from app.models.ifrs.tax.tax_period import TaxPeriodStatus
+        from app.models.finance.tax.tax_period import TaxPeriodStatus
 
         org_id = uuid4()
         mock_period = MockTaxPeriod(
@@ -430,7 +430,7 @@ class TestTaxPeriodServiceStatusTransitions:
 
     def test_close_period_success(self, mock_db):
         """Test closing a period."""
-        from app.models.ifrs.tax.tax_period import TaxPeriodStatus
+        from app.models.finance.tax.tax_period import TaxPeriodStatus
 
         org_id = uuid4()
         mock_period = MockTaxPeriod(
@@ -482,7 +482,7 @@ class TestTaxPeriodServiceQueries:
 
     def test_get_overdue_periods(self, mock_db):
         """Test getting overdue periods."""
-        from app.models.ifrs.tax.tax_period import TaxPeriodStatus
+        from app.models.finance.tax.tax_period import TaxPeriodStatus
 
         org_id = uuid4()
         overdue_periods = [
@@ -519,7 +519,7 @@ class TestTaxPeriodServiceQueries:
 
     def test_list_periods_with_filters(self, mock_db):
         """Test listing periods with filters."""
-        from app.models.ifrs.tax.tax_period import TaxPeriodStatus, TaxPeriodFrequency
+        from app.models.finance.tax.tax_period import TaxPeriodStatus, TaxPeriodFrequency
 
         periods = [MockTaxPeriod(), MockTaxPeriod()]
 

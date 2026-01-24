@@ -1,0 +1,152 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}{% if component %}Edit Component{% else %}New Salary Component{% endif %}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/payroll/components" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Salary Components</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">{% if component %}Edit{% else %}New{% endif %}</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+    <form action="/people/payroll/components/new" method="post" class="card">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <div class="p-6 border-b border-slate-200 dark:border-slate-700">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white">
+                {% if component %}Edit Salary Component{% else %}Create Salary Component{% endif %}
+            </h2>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                Define earnings (like Basic Salary, Allowances) or deductions (like PAYE Tax, Pension).
+            </p>
+        </div>
+
+        <div class="p-6 space-y-6">
+            {# Basic Information #}
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label for="component_code" class="form-label">Code <span class="text-red-500">*</span></label>
+                    <input type="text" name="component_code" id="component_code" required
+                        value="{{ component.component_code if component else '' }}"
+                        placeholder="BASIC"
+                        class="form-input w-full font-mono uppercase">
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Unique identifier (e.g., BASIC, HRA, PAYE)</p>
+                </div>
+                <div>
+                    <label for="component_type" class="form-label">Type <span class="text-red-500">*</span></label>
+                    <select name="component_type" id="component_type" required class="form-select w-full">
+                        {% for t in component_types %}
+                        <option value="{{ t }}" {% if component and component.component_type.value == t %}selected{% endif %}>{{ t | title }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label for="component_name" class="form-label">Name <span class="text-red-500">*</span></label>
+                    <input type="text" name="component_name" id="component_name" required
+                        value="{{ component.component_name if component else '' }}"
+                        placeholder="Basic Salary"
+                        class="form-input w-full">
+                </div>
+                <div>
+                    <label for="abbr" class="form-label">Abbreviation</label>
+                    <input type="text" name="abbr" id="abbr"
+                        value="{{ component.abbr if component else '' }}"
+                        placeholder="BS"
+                        class="form-input w-full">
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Short form for payslips</p>
+                </div>
+            </div>
+
+            <div>
+                <label for="description" class="form-label">Description</label>
+                <textarea name="description" id="description" rows="2" class="form-input w-full"
+                    placeholder="Optional description...">{{ component.description if component else '' }}</textarea>
+            </div>
+
+            {# GL Account Mapping #}
+            <div class="p-4 rounded-lg bg-slate-50 dark:bg-slate-800/50">
+                <h3 class="text-sm font-medium text-slate-900 dark:text-white mb-3 flex items-center gap-2">
+                    <svg class="h-4 w-4 text-teal-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+                    </svg>
+                    GL Account Mapping
+                </h3>
+                <div class="grid grid-cols-1 gap-4">
+                    <div>
+                        <label for="expense_account_id" class="form-label text-xs">Expense Account (for Earnings)</label>
+                        <select name="expense_account_id" id="expense_account_id" class="form-select w-full">
+                            <option value="">Select expense account...</option>
+                            {% for acc in expense_accounts %}
+                            <option value="{{ acc.account_id }}" {% if component and component.expense_account_id == acc.account_id %}selected{% endif %}>
+                                {{ acc.account_code }} - {{ acc.account_name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Debit this account when posting earnings</p>
+                    </div>
+                    <div>
+                        <label for="liability_account_id" class="form-label text-xs">Liability Account (for Deductions)</label>
+                        <select name="liability_account_id" id="liability_account_id" class="form-select w-full">
+                            <option value="">Select liability account...</option>
+                            {% for acc in liability_accounts %}
+                            <option value="{{ acc.account_id }}" {% if component and component.liability_account_id == acc.account_id %}selected{% endif %}>
+                                {{ acc.account_code }} - {{ acc.account_name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Credit this account when posting deductions (e.g., PAYE Payable)</p>
+                    </div>
+                </div>
+            </div>
+
+            {# Settings #}
+            <div class="space-y-4">
+                <h3 class="text-sm font-medium text-slate-900 dark:text-white">Settings</h3>
+
+                <div class="space-y-3">
+                    <label class="flex items-center gap-3">
+                        <input type="checkbox" name="is_tax_applicable" value="true"
+                            {% if component and component.is_tax_applicable %}checked{% endif %}
+                            class="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500">
+                        <span class="text-sm text-slate-700 dark:text-slate-300">Tax Applicable</span>
+                        <span class="text-xs text-slate-500 dark:text-slate-400">Include in taxable income calculation</span>
+                    </label>
+
+                    <label class="flex items-center gap-3">
+                        <input type="checkbox" name="is_statutory" value="true"
+                            {% if component and component.is_statutory %}checked{% endif %}
+                            class="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500">
+                        <span class="text-sm text-slate-700 dark:text-slate-300">Statutory Deduction</span>
+                        <span class="text-xs text-slate-500 dark:text-slate-400">Government-mandated (PAYE, Pension, etc.)</span>
+                    </label>
+
+                    <label class="flex items-center gap-3">
+                        <input type="checkbox" name="depends_on_payment_days" value="true"
+                            {% if (not component) or (component and component.depends_on_payment_days) %}checked{% endif %}
+                            class="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500">
+                        <span class="text-sm text-slate-700 dark:text-slate-300">Pro-rate on Payment Days</span>
+                        <span class="text-xs text-slate-500 dark:text-slate-400">Adjust based on actual working days</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <div class="px-6 py-4 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-700 flex items-center justify-end gap-3">
+            <a href="/people/payroll/components" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">
+                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                </svg>
+                {% if component %}Update{% else %}Create{% endif %} Component
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

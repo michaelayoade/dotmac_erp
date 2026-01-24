@@ -1,0 +1,135 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}Payroll Settings{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+    <a href="/people/hr/employees" class="hover:text-violet-600 dark:hover:text-violet-400 transition-colors">People</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <a href="/people/settings" class="hover:text-violet-600 dark:hover:text-violet-400 transition-colors">Settings</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="font-medium text-slate-900 dark:text-white">Payroll Settings</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-6 stagger-in">
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Payroll Settings</h1>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                Configure payroll frequency and payment settings.
+            </p>
+        </div>
+    </div>
+
+    <!-- Success Message -->
+    {% if request.query_params.get('saved') %}
+    <div class="rounded-lg bg-green-50 border border-green-200 p-4 dark:bg-green-900/20 dark:border-green-800">
+        <div class="flex items-center gap-3">
+            <svg class="h-5 w-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+            </svg>
+            <p class="text-sm text-green-700 dark:text-green-300">Payroll settings updated successfully.</p>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Error Message -->
+    {% if error %}
+    <div class="rounded-lg bg-red-50 border border-red-200 p-4 dark:bg-red-900/20 dark:border-red-800">
+        <div class="flex items-center gap-3">
+            <svg class="h-5 w-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <p class="text-sm text-red-700 dark:text-red-300">{{ error }}</p>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if organization %}
+    <form method="POST" action="/people/settings/payroll" class="space-y-6">
+        <!-- Payroll Frequency -->
+        <div class="card p-6">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Payroll Frequency</h2>
+            <div class="grid gap-6 sm:grid-cols-2">
+                <div>
+                    <label for="hr_payroll_frequency" class="form-label">Pay Period</label>
+                    <select id="hr_payroll_frequency" name="hr_payroll_frequency" class="form-input form-select">
+                        <option value="">-- Select Frequency --</option>
+                        {% for freq_value, freq_label in payroll_frequencies %}
+                        <option value="{{ freq_value }}" {{ 'selected' if organization.hr_payroll_frequency == freq_value else '' }}>{{ freq_label }}</option>
+                        {% endfor %}
+                    </select>
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">How often employees are paid</p>
+                </div>
+            </div>
+
+            <!-- Frequency explanation -->
+            <div class="mt-4 p-4 bg-slate-50 dark:bg-slate-800 rounded-lg">
+                <p class="text-xs font-medium text-slate-700 dark:text-slate-300 mb-2">Pay period options:</p>
+                <ul class="space-y-1 text-xs text-slate-600 dark:text-slate-400">
+                    <li><strong>Monthly:</strong> Pay once per month (e.g., last day of month)</li>
+                    <li><strong>Bi-weekly:</strong> Pay every two weeks (26 pay periods per year)</li>
+                    <li><strong>Weekly:</strong> Pay every week (52 pay periods per year)</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Current Configuration Summary -->
+        <div class="card p-6 bg-violet-50 dark:bg-violet-900/20 border-violet-200 dark:border-violet-800">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Current Configuration</h2>
+            <div class="grid gap-4 sm:grid-cols-3">
+                <div>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Pay Frequency</p>
+                    <p class="text-sm font-medium text-slate-900 dark:text-white">
+                        {% if organization.hr_payroll_frequency %}
+                            {% for freq_value, freq_label in payroll_frequencies %}
+                                {% if organization.hr_payroll_frequency == freq_value %}{{ freq_label }}{% endif %}
+                            {% endfor %}
+                        {% else %}
+                            Not configured
+                        {% endif %}
+                    </p>
+                </div>
+                <div>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Currency</p>
+                    <p class="text-sm font-medium text-slate-900 dark:text-white">{{ organization.functional_currency_code or 'Not set' }}</p>
+                </div>
+                <div>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Timezone</p>
+                    <p class="text-sm font-medium text-slate-900 dark:text-white">{{ organization.timezone or 'Not set' }}</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex items-center justify-end gap-4 py-4">
+            <a href="/people/settings" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">
+                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                </svg>
+                Save changes
+            </button>
+        </div>
+    </form>
+    {% else %}
+    <div class="card p-12 text-center">
+        <svg class="mx-auto h-12 w-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        <h3 class="mt-4 text-lg font-medium text-slate-900 dark:text-white">Organization not found</h3>
+        <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">Unable to load payroll settings.</p>
+        <a href="/people/settings" class="mt-4 inline-block text-violet-600 hover:text-violet-700 dark:text-violet-400">
+            &larr; Back to settings
+        </a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

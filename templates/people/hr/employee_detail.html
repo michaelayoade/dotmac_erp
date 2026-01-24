@@ -1,0 +1,515 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}{{ person.first_name }} {{ person.last_name }}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400">Employees</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">{{ employee.employee_code }}</span>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<a href="/people/hr/employees/{{ employee.employee_id }}/edit" class="btn btn-secondary">
+    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+    </svg>
+    Edit
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    {% if error %}
+    <div class="p-4 rounded-lg bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-800">
+        <div class="flex items-center gap-2 text-red-700 dark:text-red-400">
+            <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span>{{ error }}</span>
+        </div>
+    </div>
+    {% endif %}
+
+    {# Employee Header Card #}
+    <div class="card p-6">
+        <div class="flex items-start gap-6">
+            <div class="w-20 h-20 rounded-full bg-teal-100 dark:bg-teal-900 flex items-center justify-center">
+                <span class="text-2xl font-bold text-teal-600 dark:text-teal-400">
+                    {{ (person.first_name or '?')[0] }}{{ (person.last_name or '?')[0] }}
+                </span>
+            </div>
+            <div class="flex-1">
+                <h2 class="text-xl font-semibold text-slate-900 dark:text-white">
+                    {{ person.first_name }} {{ person.last_name }}
+                </h2>
+                <p class="text-slate-500 dark:text-slate-400">{{ designation.designation_name if designation else 'No designation' }}</p>
+                <p class="text-sm text-slate-400 dark:text-slate-500">{{ employee.employee_code }}</p>
+            </div>
+            <div>
+                {% set status_colors = {
+                    'DRAFT': 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300',
+                    'ACTIVE': 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
+                    'ON_LEAVE': 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300',
+                    'SUSPENDED': 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300',
+                    'RESIGNED': 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
+                    'TERMINATED': 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
+                    'RETIRED': 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300'
+                } %}
+                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium {{ status_colors.get(employee.status.value, 'bg-slate-100 text-slate-700') }}">
+                    {{ employee.status.value }}
+                </span>
+            </div>
+        </div>
+    </div>
+
+    {# Status Actions #}
+    <div class="card">
+        <div class="card-header">
+            <h3 class="font-medium text-slate-900 dark:text-white">Status Actions</h3>
+        </div>
+        <div class="card-body space-y-4">
+            <div class="flex flex-wrap gap-3">
+                {% if employee.status.value != 'ACTIVE' %}
+                <form method="post" action="/people/hr/employees/{{ employee.employee_id }}/activate">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <button type="submit" class="btn btn-primary">Activate</button>
+                </form>
+                {% endif %}
+                {% if employee.status.value != 'ON_LEAVE' and employee.status.value != 'TERMINATED' %}
+                <form method="post" action="/people/hr/employees/{{ employee.employee_id }}/on-leave">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <button type="submit" class="btn btn-secondary">Set On Leave</button>
+                </form>
+                {% endif %}
+                {% if employee.status.value not in ['SUSPENDED', 'TERMINATED'] %}
+                <form method="post" action="/people/hr/employees/{{ employee.employee_id }}/suspend" class="flex items-center gap-2">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <input type="text" name="reason" placeholder="Reason (optional)" class="form-input w-56">
+                    <button type="submit" class="btn btn-secondary">Suspend</button>
+                </form>
+                {% endif %}
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {% if employee.status.value != 'RESIGNED' and employee.status.value != 'TERMINATED' %}
+                <form method="post" action="/people/hr/employees/{{ employee.employee_id }}/resign" class="space-y-2">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <label for="resign_date" class="form-label">Resignation Date</label>
+                    <div class="flex items-center gap-3">
+                        <input type="date" id="resign_date" name="date_of_leaving" class="form-input w-full">
+                        <button type="submit" class="btn btn-secondary">Resign</button>
+                    </div>
+                </form>
+                {% endif %}
+
+                {% if employee.status.value != 'TERMINATED' %}
+                <form method="post" action="/people/hr/employees/{{ employee.employee_id }}/terminate" class="space-y-2">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <label for="terminate_date" class="form-label">Termination Date</label>
+                    <div class="flex flex-col gap-2">
+                        <input type="date" id="terminate_date" name="date_of_leaving" class="form-input w-full">
+                        <input type="text" name="reason" placeholder="Reason (optional)" class="form-input w-full">
+                        <button type="submit" class="btn btn-danger">Terminate</button>
+                    </div>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    {# User Access #}
+    <div class="card">
+        <div class="card-header">
+            <h3 class="font-medium text-slate-900 dark:text-white">User Access</h3>
+        </div>
+        <div class="card-body space-y-4">
+            {% if user_access_error %}
+            <div class="p-3 rounded-lg bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-800">
+                <div class="text-sm text-red-700 dark:text-red-400">{{ user_access_error }}</div>
+            </div>
+            {% endif %}
+
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">Linked Person ID</p>
+                    <p class="text-sm font-mono text-slate-900 dark:text-white">{{ person.id }}</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    {% if credentials %}
+                    <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300">
+                        Credentials Active
+                    </span>
+                    {% else %}
+                    <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300">
+                        No Credentials
+                    </span>
+                    {% endif %}
+                </div>
+            </div>
+
+            {% if credentials %}
+            <div class="text-sm text-slate-600 dark:text-slate-400">
+                {% for cred in credentials %}
+                <div class="flex flex-wrap items-center gap-2">
+                    <span class="font-medium text-slate-900 dark:text-white">{{ cred.provider.value }}</span>
+                    <span class="text-slate-500 dark:text-slate-400">{{ cred.username or '-' }}</span>
+                    <span class="text-xs text-slate-400 dark:text-slate-500">{{ 'active' if cred.is_active else 'inactive' }}</span>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <form method="post" action="/people/hr/employees/{{ employee.employee_id }}/user-credentials" class="space-y-2">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <label class="form-label">Create Local Login</label>
+                    <input type="text" name="username" placeholder="Username or email" class="form-input w-full">
+                    <input type="password" name="password" placeholder="Temporary password" class="form-input w-full">
+                    <label class="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                        <input type="checkbox" name="must_change_password" checked>
+                        Require password change on first login
+                    </label>
+                    <button type="submit" class="btn btn-secondary" {% if credentials %}disabled{% endif %}>Create Credentials</button>
+                </form>
+
+                <form method="post" action="/people/hr/employees/{{ employee.employee_id }}/link-user" class="space-y-2" x-data="{ open: false, results: [], selectedId: '' }">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <input type="hidden" name="person_id" x-model="selectedId">
+                    <label class="form-label">Link Existing User</label>
+                    <div class="relative">
+                        <input type="text"
+                               placeholder="Search by name or email"
+                               class="form-input w-full"
+                               x-ref="searchInput"
+                               @input.debounce.300ms="
+                                   selectedId = '';
+                                   if ($event.target.value.trim().length < 2) { results = []; open = false; return; }
+                                   fetch(`/people/hr/people/search?query=${encodeURIComponent($event.target.value)}`)
+                                       .then(r => r.json())
+                                       .then(data => { results = data; open = true; })
+                                       .catch(() => { results = []; open = false; });
+                               "
+                               @focus="open = results.length > 0">
+                        <div x-show="open" @click.outside="open = false" class="absolute z-10 mt-1 w-full rounded-lg border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-900">
+                            <template x-if="results.length === 0">
+                                <div class="px-3 py-2 text-sm text-slate-500 dark:text-slate-400">No results</div>
+                            </template>
+                            <template x-for="item in results" :key="item.id">
+                                <button type="button"
+                                        class="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-800"
+                                        @click="
+                                            selectedId = item.id;
+                                            $refs.searchInput.value = `${item.name} • ${item.email}`;
+                                            open = false;
+                                        ">
+                                    <div class="text-slate-900 dark:text-white" x-text="item.name"></div>
+                                    <div class="text-xs text-slate-500 dark:text-slate-400" x-text="item.email"></div>
+                                </button>
+                            </template>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-secondary">Link User</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    {# Details Grid #}
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {# Personal Information #}
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Personal Information</h3>
+            </div>
+            <div class="card-body">
+                <dl class="space-y-3">
+                    <div class="flex justify-between">
+                        <dt class="text-slate-500 dark:text-slate-400">Email</dt>
+                        <dd class="text-slate-900 dark:text-white">{{ person.email or '-' }}</dd>
+                    </div>
+                    <div class="flex justify-between">
+                        <dt class="text-slate-500 dark:text-slate-400">Phone</dt>
+                        <dd class="text-slate-900 dark:text-white">{{ person.phone or '-' }}</dd>
+                    </div>
+                </dl>
+            </div>
+        </div>
+
+        {# Employment Information #}
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Employment Information</h3>
+            </div>
+            <div class="card-body">
+                <dl class="space-y-3">
+                    <div class="flex justify-between">
+                        <dt class="text-slate-500 dark:text-slate-400">Department</dt>
+                        <dd class="text-slate-900 dark:text-white">{{ department.department_name if department else '-' }}</dd>
+                    </div>
+                    <div class="flex justify-between">
+                        <dt class="text-slate-500 dark:text-slate-400">Designation</dt>
+                        <dd class="text-slate-900 dark:text-white">{{ designation.designation_name if designation else '-' }}</dd>
+                    </div>
+                    <div class="flex justify-between">
+                        <dt class="text-slate-500 dark:text-slate-400">Employment Type</dt>
+                        <dd class="text-slate-900 dark:text-white">{{ employment_type.type_name if employment_type else '-' }}</dd>
+                    </div>
+                    <div class="flex justify-between">
+                        <dt class="text-slate-500 dark:text-slate-400">Grade</dt>
+                        <dd class="text-slate-900 dark:text-white">{{ grade.grade_name if grade else '-' }}</dd>
+                    </div>
+                    <div class="flex justify-between">
+                        <dt class="text-slate-500 dark:text-slate-400">Reports To</dt>
+                        <dd class="text-slate-900 dark:text-white">
+                            {% if manager %}
+                            <a href="/people/hr/employees/{{ manager.employee_id }}" class="text-teal-600 hover:text-teal-700">
+                                {{ manager.name }}
+                            </a>
+                            {% else %}
+                            -
+                            {% endif %}
+                        </dd>
+                    </div>
+                </dl>
+            </div>
+        </div>
+
+        {# Dates #}
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Important Dates</h3>
+            </div>
+            <div class="card-body">
+                <dl class="space-y-3">
+                    <div class="flex justify-between">
+                        <dt class="text-slate-500 dark:text-slate-400">Date of Joining</dt>
+                        <dd class="text-slate-900 dark:text-white">{{ employee.date_of_joining.strftime('%Y-%m-%d') if employee.date_of_joining else '-' }}</dd>
+                    </div>
+                    <div class="flex justify-between">
+                        <dt class="text-slate-500 dark:text-slate-400">Probation End Date</dt>
+                        <dd class="text-slate-900 dark:text-white">{{ employee.probation_end_date.strftime('%Y-%m-%d') if employee.probation_end_date else '-' }}</dd>
+                    </div>
+                    <div class="flex justify-between">
+                        <dt class="text-slate-500 dark:text-slate-400">Confirmation Date</dt>
+                        <dd class="text-slate-900 dark:text-white">{{ employee.confirmation_date.strftime('%Y-%m-%d') if employee.confirmation_date else '-' }}</dd>
+                    </div>
+                    {% if employee.date_of_leaving %}
+                    <div class="flex justify-between">
+                        <dt class="text-slate-500 dark:text-slate-400">Date of Leaving</dt>
+                        <dd class="text-slate-900 dark:text-white">{{ employee.date_of_leaving.strftime('%Y-%m-%d') }}</dd>
+                    </div>
+                    {% endif %}
+                </dl>
+            </div>
+        </div>
+
+        {# Bank Details (Sensitive - masked by default) #}
+        {% if employee.bank_name or employee.bank_account_number %}
+        <div class="card" x-data="{ showSensitive: false }">
+            <div class="card-header flex items-center justify-between">
+                <h3 class="font-medium text-slate-900 dark:text-white">Bank Details</h3>
+                <button type="button" @click="showSensitive = !showSensitive"
+                    class="text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 flex items-center gap-1">
+                    <svg x-show="!showSensitive" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                    </svg>
+                    <svg x-show="showSensitive" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>
+                    </svg>
+                    <span x-text="showSensitive ? 'Hide' : 'Show'"></span>
+                </button>
+            </div>
+            <div class="card-body">
+                <dl class="space-y-3">
+                    <div class="flex justify-between">
+                        <dt class="text-slate-500 dark:text-slate-400">Bank Name</dt>
+                        <dd class="text-slate-900 dark:text-white">{{ employee.bank_name or '-' }}</dd>
+                    </div>
+                    <div class="flex justify-between">
+                        <dt class="text-slate-500 dark:text-slate-400">Account Name</dt>
+                        <dd class="text-slate-900 dark:text-white">{{ employee.bank_account_name or '-' }}</dd>
+                    </div>
+                    <div class="flex justify-between">
+                        <dt class="text-slate-500 dark:text-slate-400">Account Number</dt>
+                        <dd class="text-slate-900 dark:text-white font-mono">
+                            {% if employee.bank_account_number %}
+                            <span x-show="!showSensitive">{{ '•' * (employee.bank_account_number | length - 4) }}{{ employee.bank_account_number[-4:] }}</span>
+                            <span x-show="showSensitive" x-cloak>{{ employee.bank_account_number }}</span>
+                            {% else %}
+                            -
+                            {% endif %}
+                        </dd>
+                    </div>
+                    <div class="flex justify-between">
+                        <dt class="text-slate-500 dark:text-slate-400">Branch Code</dt>
+                        <dd class="text-slate-900 dark:text-white font-mono">{{ employee.bank_branch_code or '-' }}</dd>
+                    </div>
+                </dl>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    {# Salary Structure Assignment #}
+    <div class="card">
+        <div class="card-header flex items-center justify-between">
+            <h3 class="font-medium text-slate-900 dark:text-white">Salary Structure</h3>
+            <a href="/people/payroll/assignments/new?employee_id={{ employee.employee_id }}"
+               class="btn btn-secondary btn-sm">
+                <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                </svg>
+                Assign Structure
+            </a>
+        </div>
+        <div class="card-body">
+            {% if salary_assignments %}
+            <div class="space-y-3">
+                {% for assignment in salary_assignments %}
+                <div class="flex items-center justify-between p-3 rounded-lg border border-slate-200 dark:border-slate-700
+                            {% if not assignment.to_date %}bg-teal-50 dark:bg-teal-900/20 border-teal-200 dark:border-teal-800{% endif %}">
+                    <div class="flex-1">
+                        <div class="flex items-center gap-2">
+                            <span class="font-medium text-slate-900 dark:text-white">
+                                {{ assignment.salary_structure.structure_name }}
+                            </span>
+                            {% if not assignment.to_date %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-teal-100 text-teal-700 dark:bg-teal-800 dark:text-teal-300">
+                                Current
+                            </span>
+                            {% endif %}
+                        </div>
+                        <div class="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                            <span>{{ assignment.from_date.strftime('%Y-%m-%d') }}</span>
+                            {% if assignment.to_date %}
+                            <span> to {{ assignment.to_date.strftime('%Y-%m-%d') }}</span>
+                            {% else %}
+                            <span> - Present</span>
+                            {% endif %}
+                        </div>
+                        <div class="flex gap-4 mt-1 text-sm">
+                            <span class="text-slate-600 dark:text-slate-400">
+                                Base: <span class="font-mono text-slate-900 dark:text-white">{{ "{:,.2f}".format(assignment.base) }}</span>
+                            </span>
+                            {% if assignment.variable > 0 %}
+                            <span class="text-slate-600 dark:text-slate-400">
+                                Variable: <span class="font-mono text-slate-900 dark:text-white">{{ "{:,.2f}".format(assignment.variable) }}</span>
+                            </span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <a href="/people/payroll/assignments/{{ assignment.assignment_id }}/edit"
+                           class="text-slate-400 hover:text-teal-600 dark:hover:text-teal-400" title="Edit">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                            </svg>
+                        </a>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="text-center py-6">
+                <svg class="mx-auto h-10 w-10 text-slate-300 dark:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">No salary structure assigned</p>
+                <p class="text-xs text-slate-400 dark:text-slate-500">Assign a structure to enable payroll processing</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    {# Tax Profile #}
+    <div class="card">
+        <div class="card-header flex items-center justify-between">
+            <h3 class="font-medium text-slate-900 dark:text-white">Tax Profile (PAYE)</h3>
+            {% if tax_profile %}
+            <a href="/people/payroll/tax/profiles/{{ employee.employee_id }}/edit"
+               class="btn btn-secondary btn-sm">
+                <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                </svg>
+                Edit
+            </a>
+            {% else %}
+            <a href="/people/payroll/tax/profiles/new?employee_id={{ employee.employee_id }}"
+               class="btn btn-secondary btn-sm">
+                <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                </svg>
+                Set Up Tax Profile
+            </a>
+            {% endif %}
+        </div>
+        <div class="card-body">
+            {% if tax_profile %}
+            <dl class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <div>
+                    <dt class="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wide">TIN</dt>
+                    <dd class="mt-1 text-sm font-mono text-slate-900 dark:text-white">{{ tax_profile.tin or '-' }}</dd>
+                </div>
+                <div>
+                    <dt class="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wide">Tax State</dt>
+                    <dd class="mt-1 text-sm text-slate-900 dark:text-white">{{ tax_profile.tax_state or '-' }}</dd>
+                </div>
+                <div>
+                    <dt class="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wide">Pension Rate</dt>
+                    <dd class="mt-1 text-sm font-mono text-slate-900 dark:text-white">{{ "{:.1f}".format(tax_profile.pension_rate * 100) }}%</dd>
+                </div>
+                <div>
+                    <dt class="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wide">NHF Rate</dt>
+                    <dd class="mt-1 text-sm font-mono text-slate-900 dark:text-white">{{ "{:.1f}".format(tax_profile.nhf_rate * 100) }}%</dd>
+                </div>
+                {% if tax_profile.annual_rent > 0 %}
+                <div>
+                    <dt class="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wide">Annual Rent</dt>
+                    <dd class="mt-1 text-sm font-mono text-slate-900 dark:text-white">{{ "{:,.0f}".format(tax_profile.annual_rent) }}</dd>
+                </div>
+                <div>
+                    <dt class="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wide">Rent Relief</dt>
+                    <dd class="mt-1 text-sm font-mono text-teal-600 dark:text-teal-400">{{ "{:,.0f}".format(tax_profile.rent_relief_amount) }}</dd>
+                </div>
+                {% endif %}
+                {% if tax_profile.is_tax_exempt %}
+                <div class="col-span-2">
+                    <dt class="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wide">Tax Status</dt>
+                    <dd class="mt-1">
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300">
+                            Exempt: {{ tax_profile.exemption_reason or 'No reason specified' }}
+                        </span>
+                    </dd>
+                </div>
+                {% endif %}
+            </dl>
+            {% else %}
+            <div class="text-center py-6">
+                <svg class="mx-auto h-10 w-10 text-slate-300 dark:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2zM10 8.5a.5.5 0 11-1 0 .5.5 0 011 0zm5 5a.5.5 0 11-1 0 .5.5 0 011 0z"/>
+                </svg>
+                <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">No tax profile configured</p>
+                <p class="text-xs text-slate-400 dark:text-slate-500">Set up a tax profile for PAYE calculation</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    {# Notes #}
+    {% if employee.notes %}
+    <div class="card">
+        <div class="card-header">
+            <h3 class="font-medium text-slate-900 dark:text-white">Notes</h3>
+        </div>
+        <div class="card-body">
+            <p class="text-slate-700 dark:text-slate-300 whitespace-pre-wrap">{{ employee.notes }}</p>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

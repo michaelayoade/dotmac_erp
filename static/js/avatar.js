@@ -14,7 +14,7 @@
         if (!element) {
             return;
         }
-        var allClasses = [
+        const allClasses = [
             "text-slate-500",
             "text-emerald-600",
             "text-red-600",
@@ -27,13 +27,13 @@
         allClasses.forEach(function (cls) {
             element.classList.remove(cls);
         });
-        var statusClasses = {
+        const statusClasses = {
             success: ["text-emerald-600", "dark:text-emerald-400"],
             error: ["text-red-600", "dark:text-red-400"],
             warning: ["text-amber-600", "dark:text-amber-400"],
             info: ["text-slate-500", "dark:text-slate-400"],
         };
-        var classes = statusClasses[type] || statusClasses.info;
+        const classes = statusClasses[type] || statusClasses.info;
         classes.forEach(function (cls) {
             element.classList.add(cls);
         });
@@ -58,14 +58,14 @@
     }
 
     function initAvatarUploader(container) {
-        var tokenInput = container.querySelector("[data-avatar-token]");
-        var fileInput = container.querySelector("[data-avatar-file]");
-        var uploadButton = container.querySelector("[data-avatar-upload]");
-        var deleteButton = container.querySelector("[data-avatar-delete]");
-        var preview = container.querySelector("[data-avatar-preview]");
-        var placeholder = container.querySelector("[data-avatar-placeholder]");
-        var status = container.querySelector("[data-avatar-status]");
-        var endpoint = container.getAttribute("data-avatar-endpoint") || "/auth/me/avatar";
+        const tokenInput = container.querySelector("[data-avatar-token]");
+        const fileInput = container.querySelector("[data-avatar-file]");
+        const uploadButton = container.querySelector("[data-avatar-upload]");
+        const deleteButton = container.querySelector("[data-avatar-delete]");
+        const preview = container.querySelector("[data-avatar-preview]");
+        const placeholder = container.querySelector("[data-avatar-placeholder]");
+        const status = container.querySelector("[data-avatar-status]");
+        const endpoint = container.getAttribute("data-avatar-endpoint") || "/auth/me/avatar";
 
         function setPreview(source) {
             if (!preview || !placeholder) {
@@ -86,7 +86,7 @@
         }
 
         function requireToken() {
-            var token = tokenInput ? tokenInput.value.trim() : "";
+            const token = tokenInput ? tokenInput.value.trim() : "";
             if (!token) {
                 setStatus(status, "Access token required.", "error");
                 sendToast("Access token required.", "error");
@@ -97,12 +97,12 @@
 
         if (fileInput) {
             fileInput.addEventListener("change", function () {
-                var file = fileInput.files && fileInput.files[0];
+                const file = fileInput.files && fileInput.files[0];
                 if (!file) {
                     clearPreview();
                     return;
                 }
-                var reader = new FileReader();
+                const reader = new FileReader();
                 reader.onload = function () {
                     setPreview(reader.result);
                 };
@@ -112,17 +112,17 @@
 
         if (uploadButton) {
             uploadButton.addEventListener("click", function () {
-                var token = requireToken();
+                const token = requireToken();
                 if (!token) {
                     return;
                 }
-                var file = fileInput && fileInput.files && fileInput.files[0];
+                const file = fileInput && fileInput.files && fileInput.files[0];
                 if (!file) {
                     setStatus(status, "Select an image to upload.", "warning");
                     sendToast("Select an image to upload.", "warning");
                     return;
                 }
-                var payload = new FormData();
+                const payload = new FormData();
                 payload.append("file", file);
                 setStatus(status, "Uploading avatar...", "info");
                 fetch(endpoint, {
@@ -152,7 +152,7 @@
                         }
                     })
                     .catch(function (error) {
-                        var message = error && error.message ? error.message : "Upload failed.";
+                        const message = error && error.message ? error.message : "Upload failed.";
                         setStatus(status, message, "error");
                         sendToast(message, "error");
                     });
@@ -161,7 +161,7 @@
 
         if (deleteButton) {
             deleteButton.addEventListener("click", function () {
-                var token = requireToken();
+                const token = requireToken();
                 if (!token) {
                     return;
                 }
@@ -190,7 +190,7 @@
                         sendToast("Avatar removed.", "success");
                     })
                     .catch(function (error) {
-                        var message = error && error.message ? error.message : "Remove failed.";
+                        const message = error && error.message ? error.message : "Remove failed.";
                         setStatus(status, message, "error");
                         sendToast(message, "error");
                     });
@@ -199,7 +199,7 @@
     }
 
     function initAll() {
-        var containers = document.querySelectorAll("[data-avatar-uploader]");
+        const containers = document.querySelectorAll("[data-avatar-uploader]");
         containers.forEach(function (container) {
             initAvatarUploader(container);
         });

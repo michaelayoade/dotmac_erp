@@ -9,13 +9,13 @@ from uuid import uuid4
 
 import pytest
 
-from app.services.ifrs.gl.reversal import (
+from app.services.finance.gl.reversal import (
     ReversalService,
     ReversalResult,
 )
 
 
-from app.models.ifrs.gl.journal_entry import JournalStatus, JournalType
+from app.models.finance.gl.journal_entry import JournalStatus, JournalType
 
 MockJournalStatus = JournalStatus
 MockJournalType = JournalType

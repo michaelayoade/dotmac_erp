@@ -80,7 +80,7 @@ class TestAuthorizationService:
         with patch.dict('sys.modules', {
             'app.models.rbac': MagicMock(),
         }):
-            from app.services.ifrs.platform.authorization import AuthorizationService
+            from app.services.finance.platform.authorization import AuthorizationService
             return AuthorizationService
 
     @pytest.mark.skip(reason="Complex mock chain for in_() + and_() - functionality tested via integration tests")

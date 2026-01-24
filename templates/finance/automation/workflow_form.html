@@ -1,0 +1,143 @@
+{% extends "finance/base_finance.html" %}
+
+{% block page_title %}{% if is_edit %}Edit{% else %}New{% endif %} Workflow Rule{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/automation" class="hover:text-teal-600 dark:hover:text-teal-400">Automation</a>
+    <span class="mx-2">/</span>
+    <a href="/automation/workflows" class="hover:text-teal-600 dark:hover:text-teal-400">Workflows</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white">{% if is_edit %}Edit{% else %}New{% endif %}</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-3xl">
+    <form method="post" action="/automation/workflows/{% if is_edit %}{{ rule.rule_id }}/edit{% else %}new{% endif %}" class="space-y-6">
+        <!-- Basic Info -->
+        <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50">
+            <div class="border-b border-slate-200 px-6 py-4 dark:border-slate-700">
+                <h3 class="font-semibold text-slate-900 dark:text-white">Basic Information</h3>
+            </div>
+            <div class="p-6 space-y-4">
+                <div>
+                    <label for="rule_name" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Rule Name *</label>
+                    <input type="text" id="rule_name" name="rule_name" required
+                           value="{{ rule.rule_name if rule else form_data.rule_name | default('') }}"
+                           class="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                </div>
+                <div>
+                    <label for="description" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Description</label>
+                    <textarea id="description" name="description" rows="2"
+                              class="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">{{ rule.description if rule else form_data.description | default('') }}</textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- Trigger -->
+        <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50">
+            <div class="border-b border-slate-200 px-6 py-4 dark:border-slate-700">
+                <h3 class="font-semibold text-slate-900 dark:text-white">Trigger</h3>
+                <p class="text-sm text-slate-500 dark:text-slate-400">When should this rule be evaluated?</p>
+            </div>
+            <div class="p-6 space-y-4">
+                <div class="grid gap-4 sm:grid-cols-2">
+                    <div>
+                        <label for="entity_type" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Entity Type *</label>
+                        <select id="entity_type" name="entity_type" required {% if is_edit %}disabled{% endif %}
+                                class="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                            <option value="">Select entity...</option>
+                            {% for et in entity_types %}
+                            <option value="{{ et.value }}" {{ 'selected' if (rule.entity_type_raw if rule else form_data.entity_type) == et.value else '' }}>{{ et.label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label for="trigger_event" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Trigger Event *</label>
+                        <select id="trigger_event" name="trigger_event" required {% if is_edit %}disabled{% endif %}
+                                class="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                            <option value="">Select trigger...</option>
+                            {% for te in trigger_events %}
+                            <option value="{{ te.value }}" {{ 'selected' if (rule.trigger_event_raw if rule else form_data.trigger_event) == te.value else '' }}>{{ te.label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Action -->
+        <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50">
+            <div class="border-b border-slate-200 px-6 py-4 dark:border-slate-700">
+                <h3 class="font-semibold text-slate-900 dark:text-white">Action</h3>
+                <p class="text-sm text-slate-500 dark:text-slate-400">What should happen when the rule triggers?</p>
+            </div>
+            <div class="p-6 space-y-4">
+                <div>
+                    <label for="action_type" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Action Type *</label>
+                    <select id="action_type" name="action_type" required {% if is_edit %}disabled{% endif %}
+                            class="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                        <option value="">Select action...</option>
+                        {% for at in action_types %}
+                        <option value="{{ at.value }}" {{ 'selected' if (rule.action_type_raw if rule else form_data.action_type) == at.value else '' }}>{{ at.label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label for="priority" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Priority</label>
+                    <input type="number" id="priority" name="priority" min="1" max="1000"
+                           value="{{ rule.priority if rule else form_data.priority | default('100') }}"
+                           class="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Lower numbers run first (default: 100)</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Options -->
+        <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50">
+            <div class="border-b border-slate-200 px-6 py-4 dark:border-slate-700">
+                <h3 class="font-semibold text-slate-900 dark:text-white">Options</h3>
+            </div>
+            <div class="p-6 space-y-4">
+                <label class="flex items-center gap-3">
+                    <input type="checkbox" name="stop_on_match" {{ 'checked' if (rule.stop_on_match if rule else form_data.stop_on_match) else '' }}
+                           class="h-4 w-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500">
+                    <span class="text-sm text-slate-700 dark:text-slate-300">Stop processing other rules if this one matches</span>
+                </label>
+                <label class="flex items-center gap-3">
+                    <input type="checkbox" name="execute_async" {{ 'checked' if (rule.execute_async if rule else True) else '' }}
+                           class="h-4 w-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500">
+                    <span class="text-sm text-slate-700 dark:text-slate-300">Execute asynchronously (recommended)</span>
+                </label>
+                {% if is_edit %}
+                <label class="flex items-center gap-3">
+                    <input type="checkbox" name="is_active" {{ 'checked' if rule.is_active else '' }}
+                           class="h-4 w-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500">
+                    <span class="text-sm text-slate-700 dark:text-slate-300">Rule is active</span>
+                </label>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Error Message -->
+        {% if error %}
+        <div class="rounded-lg bg-rose-50 p-4 dark:bg-rose-900/20">
+            <p class="text-sm text-rose-700 dark:text-rose-400">{{ error }}</p>
+        </div>
+        {% endif %}
+
+        <!-- Actions -->
+        <div class="flex items-center justify-end gap-3">
+            <a href="/automation/workflows" class="rounded-lg px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800">
+                Cancel
+            </a>
+            <button type="submit" class="rounded-lg bg-gradient-to-r from-violet-600 to-violet-500 px-6 py-2 text-sm font-medium text-white shadow-lg shadow-violet-500/25 hover:from-violet-700 hover:to-violet-600">
+                {% if is_edit %}Update Rule{% else %}Create Rule{% endif %}
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

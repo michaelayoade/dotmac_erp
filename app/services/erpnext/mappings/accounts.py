@@ -1,5 +1,5 @@
 """
-Account mapping from ERPNext to DotMac Books.
+Account mapping from ERPNext to DotMac ERP.
 """
 from typing import Any, Optional
 
@@ -13,7 +13,7 @@ from .base import (
 )
 
 
-# ERPNext root_type to DotMac Books category mapping
+# ERPNext root_type to DotMac ERP category mapping
 ROOT_TYPE_MAP = {
     "Asset": "ASSETS",
     "Liability": "LIABILITIES",
@@ -22,7 +22,7 @@ ROOT_TYPE_MAP = {
     "Expense": "EXPENSES",
 }
 
-# ERPNext account_type to DotMac Books subledger type
+# ERPNext account_type to DotMac ERP subledger type
 ACCOUNT_TYPE_TO_SUBLEDGER = {
     "Receivable": "AR",
     "Payable": "AP",
@@ -45,14 +45,14 @@ ROOT_TYPE_NORMAL_BALANCE = {
 
 
 def map_root_type_to_category(root_type: Any) -> str:
-    """Map ERPNext root_type to DotMac Books category."""
+    """Map ERPNext root_type to DotMac ERP category."""
     if not root_type:
         return "ASSETS"
     return ROOT_TYPE_MAP.get(str(root_type), "ASSETS")
 
 
 def map_account_type_to_subledger(account_type: Any) -> Optional[str]:
-    """Map ERPNext account_type to DotMac Books subledger_type."""
+    """Map ERPNext account_type to DotMac ERP subledger_type."""
     if not account_type:
         return None
     return ACCOUNT_TYPE_TO_SUBLEDGER.get(str(account_type))
@@ -66,7 +66,7 @@ def map_root_type_to_normal_balance(root_type: Any) -> str:
 
 
 class AccountMapping(DocTypeMapping):
-    """Map ERPNext Account to DotMac Books gl.account."""
+    """Map ERPNext Account to DotMac ERP gl.account."""
 
     def __init__(self):
         super().__init__(
@@ -145,7 +145,7 @@ class AccountMapping(DocTypeMapping):
 
 class AccountCategoryMapping(DocTypeMapping):
     """
-    Map ERPNext account root_type to DotMac Books gl.account_category.
+    Map ERPNext account root_type to DotMac ERP gl.account_category.
 
     ERPNext doesn't have explicit account categories, so we derive them
     from the root_type and account_type fields.

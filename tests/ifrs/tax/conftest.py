@@ -11,7 +11,7 @@ from unittest.mock import MagicMock
 import pytest
 
 # Import actual enums
-from app.models.ifrs.tax.tax_code import TaxType
+from app.models.finance.tax.tax_code import TaxType
 
 
 class MockTaxJurisdiction:

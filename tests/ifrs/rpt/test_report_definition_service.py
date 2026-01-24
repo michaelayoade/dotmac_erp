@@ -18,11 +18,11 @@ class TestReportDefinitionServiceCreate:
 
     def test_create_definition_success(self, mock_db, org_id, user_id):
         """Test successful report definition creation."""
-        from app.services.ifrs.rpt.report_definition import (
+        from app.services.finance.rpt.report_definition import (
             ReportDefinitionService,
             ReportDefinitionInput,
         )
-        from app.models.ifrs.rpt.report_definition import ReportType
+        from app.models.finance.rpt.report_definition import ReportType
 
         mock_db.query.return_value.filter.return_value.first.return_value = None
 
@@ -42,11 +42,11 @@ class TestReportDefinitionServiceCreate:
 
     def test_create_definition_duplicate_code(self, mock_db, org_id, user_id):
         """Test creation with duplicate report code."""
-        from app.services.ifrs.rpt.report_definition import (
+        from app.services.finance.rpt.report_definition import (
             ReportDefinitionService,
             ReportDefinitionInput,
         )
-        from app.models.ifrs.rpt.report_definition import ReportType
+        from app.models.finance.rpt.report_definition import ReportType
 
         existing = MockReportDefinition(report_code="RPT-001")
         mock_db.query.return_value.filter.return_value.first.return_value = existing
@@ -74,7 +74,7 @@ class TestReportDefinitionServiceUpdate:
         self, mock_db, org_id, mock_report_definition
     ):
         """Test successful report definition update."""
-        from app.services.ifrs.rpt.report_definition import ReportDefinitionService
+        from app.services.finance.rpt.report_definition import ReportDefinitionService
 
         mock_db.get.return_value = mock_report_definition
 
@@ -92,7 +92,7 @@ class TestReportDefinitionServiceUpdate:
 
     def test_update_definition_not_found(self, mock_db, org_id):
         """Test update of non-existent definition."""
-        from app.services.ifrs.rpt.report_definition import ReportDefinitionService
+        from app.services.finance.rpt.report_definition import ReportDefinitionService
 
         mock_db.get.return_value = None
 
@@ -108,7 +108,7 @@ class TestReportDefinitionServiceUpdate:
 
     def test_update_system_report_fails(self, mock_db, org_id, mock_system_report):
         """Test update of system report fails."""
-        from app.services.ifrs.rpt.report_definition import ReportDefinitionService
+        from app.services.finance.rpt.report_definition import ReportDefinitionService
 
         mock_db.get.return_value = mock_system_report
 
@@ -129,7 +129,7 @@ class TestReportDefinitionServiceUpdateStructure:
 
     def test_update_structure_success(self, mock_db, org_id, mock_report_definition):
         """Test successful structure update."""
-        from app.services.ifrs.rpt.report_definition import ReportDefinitionService
+        from app.services.finance.rpt.report_definition import ReportDefinitionService
 
         mock_db.get.return_value = mock_report_definition
         original_version = mock_report_definition.template_version
@@ -149,7 +149,7 @@ class TestReportDefinitionServiceUpdateStructure:
 
     def test_update_structure_not_found(self, mock_db, org_id):
         """Test structure update of non-existent definition."""
-        from app.services.ifrs.rpt.report_definition import ReportDefinitionService
+        from app.services.finance.rpt.report_definition import ReportDefinitionService
 
         mock_db.get.return_value = None
 
@@ -169,7 +169,7 @@ class TestReportDefinitionServiceUpdateDataSource:
 
     def test_update_data_source_success(self, mock_db, org_id, mock_report_definition):
         """Test successful data source update."""
-        from app.services.ifrs.rpt.report_definition import ReportDefinitionService
+        from app.services.finance.rpt.report_definition import ReportDefinitionService
 
         mock_db.get.return_value = mock_report_definition
 
@@ -193,7 +193,7 @@ class TestReportDefinitionServiceDeactivate:
 
     def test_deactivate_success(self, mock_db, org_id, mock_report_definition):
         """Test successful deactivation."""
-        from app.services.ifrs.rpt.report_definition import ReportDefinitionService
+        from app.services.finance.rpt.report_definition import ReportDefinitionService
 
         mock_db.get.return_value = mock_report_definition
 
@@ -206,7 +206,7 @@ class TestReportDefinitionServiceDeactivate:
 
     def test_deactivate_system_report_fails(self, mock_db, org_id, mock_system_report):
         """Test deactivation of system report fails."""
-        from app.services.ifrs.rpt.report_definition import ReportDefinitionService
+        from app.services.finance.rpt.report_definition import ReportDefinitionService
 
         mock_db.get.return_value = mock_system_report
 
@@ -226,7 +226,7 @@ class TestReportDefinitionServiceClone:
         self, mock_db, org_id, user_id, mock_report_definition
     ):
         """Test successful definition cloning."""
-        from app.services.ifrs.rpt.report_definition import ReportDefinitionService
+        from app.services.finance.rpt.report_definition import ReportDefinitionService
 
         mock_db.get.return_value = mock_report_definition
         mock_db.query.return_value.filter.return_value.first.return_value = None
@@ -245,7 +245,7 @@ class TestReportDefinitionServiceClone:
 
     def test_clone_definition_source_not_found(self, mock_db, org_id, user_id):
         """Test cloning non-existent source definition."""
-        from app.services.ifrs.rpt.report_definition import ReportDefinitionService
+        from app.services.finance.rpt.report_definition import ReportDefinitionService
 
         mock_db.get.return_value = None
 
@@ -265,7 +265,7 @@ class TestReportDefinitionServiceClone:
         self, mock_db, org_id, user_id, mock_report_definition
     ):
         """Test cloning with duplicate code."""
-        from app.services.ifrs.rpt.report_definition import ReportDefinitionService
+        from app.services.finance.rpt.report_definition import ReportDefinitionService
 
         mock_db.get.return_value = mock_report_definition
         existing = MockReportDefinition(report_code="RPT-CLONE")
@@ -290,7 +290,7 @@ class TestReportDefinitionServiceQueries:
 
     def test_get_by_code(self, mock_db, org_id, mock_report_definition):
         """Test getting definition by code."""
-        from app.services.ifrs.rpt.report_definition import ReportDefinitionService
+        from app.services.finance.rpt.report_definition import ReportDefinitionService
 
         mock_db.query.return_value.filter.return_value.first.return_value = (
             mock_report_definition
@@ -304,7 +304,7 @@ class TestReportDefinitionServiceQueries:
 
     def test_get_by_code_not_found(self, mock_db, org_id):
         """Test getting non-existent code."""
-        from app.services.ifrs.rpt.report_definition import ReportDefinitionService
+        from app.services.finance.rpt.report_definition import ReportDefinitionService
 
         mock_db.query.return_value.filter.return_value.first.return_value = None
 
@@ -316,8 +316,8 @@ class TestReportDefinitionServiceQueries:
 
     def test_get_by_type(self, mock_db, org_id, mock_report_definition):
         """Test getting definitions by type."""
-        from app.services.ifrs.rpt.report_definition import ReportDefinitionService
-        from app.models.ifrs.rpt.report_definition import ReportType
+        from app.services.finance.rpt.report_definition import ReportDefinitionService
+        from app.models.finance.rpt.report_definition import ReportType
 
         mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [
             mock_report_definition
@@ -331,7 +331,7 @@ class TestReportDefinitionServiceQueries:
 
     def test_get_definition_by_id(self, mock_db, mock_report_definition):
         """Test getting definition by ID."""
-        from app.services.ifrs.rpt.report_definition import ReportDefinitionService
+        from app.services.finance.rpt.report_definition import ReportDefinitionService
 
         mock_db.get.return_value = mock_report_definition
 
@@ -343,7 +343,7 @@ class TestReportDefinitionServiceQueries:
 
     def test_get_definition_not_found(self, mock_db):
         """Test getting non-existent definition."""
-        from app.services.ifrs.rpt.report_definition import ReportDefinitionService
+        from app.services.finance.rpt.report_definition import ReportDefinitionService
 
         mock_db.get.return_value = None
 
@@ -354,8 +354,8 @@ class TestReportDefinitionServiceQueries:
 
     def test_list_definitions(self, mock_db, org_id, mock_report_definition):
         """Test listing definitions."""
-        from app.services.ifrs.rpt.report_definition import ReportDefinitionService
-        from app.models.ifrs.rpt.report_definition import ReportType
+        from app.services.finance.rpt.report_definition import ReportDefinitionService
+        from app.models.finance.rpt.report_definition import ReportType
 
         mock_query = MagicMock()
         mock_query.filter.return_value = mock_query
@@ -377,7 +377,7 @@ class TestReportDefinitionServiceQueries:
 
     def test_list_definitions_no_filters(self, mock_db, mock_report_definition):
         """Test listing definitions without filters."""
-        from app.services.ifrs.rpt.report_definition import ReportDefinitionService
+        from app.services.finance.rpt.report_definition import ReportDefinitionService
 
         mock_query = MagicMock()
         mock_query.filter.return_value = mock_query

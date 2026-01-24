@@ -1,0 +1,226 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}{% if event %}Edit Training Event{% else %}New Training Event{% endif %}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a>
+    <span class="mx-2">/</span>
+    <a href="/people/training/events" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Training Events</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">{% if event %}Edit{% else %}New{% endif %}</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl">
+    {% if error %}
+    <div class="mb-6 p-4 rounded-lg bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-800">
+        <div class="flex items-center gap-2 text-red-700 dark:text-red-400">
+            <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span>{{ error }}</span>
+        </div>
+    </div>
+    {% endif %}
+
+    <form method="post" action="/people/training/events/{% if event %}{{ event.event_id }}/edit{% else %}new{% endif %}" class="space-y-6">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+        {# Basic Information #}
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Basic Information</h3>
+            </div>
+            <div class="card-body space-y-4">
+                <div>
+                    <label for="program_id" class="form-label required">Training Program</label>
+                    <select name="program_id" id="program_id" required class="form-input w-full">
+                        <option value="">Select Program</option>
+                        {% for program in programs %}
+                        <option value="{{ program.program_id }}"
+                            {{ 'selected' if (event and event.program_id == program.program_id) or (form_data and form_data.program_id == program.program_id | string) or (preselected_program_id and preselected_program_id | string == program.program_id | string) }}>
+                            {{ program.program_code }} - {{ program.program_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label for="event_name" class="form-label required">Event Name</label>
+                    <input type="text" name="event_name" id="event_name"
+                        value="{{ event.event_name if event else form_data.event_name | default('', true) }}"
+                        required class="form-input w-full"
+                        placeholder="Q1 Leadership Training Session">
+                </div>
+
+                <div>
+                    <label for="event_type" class="form-label required">Event Type</label>
+                    <select name="event_type" id="event_type" required class="form-input w-full">
+                        {% set current_type = event.event_type if event else form_data.event_type | default('IN_PERSON', true) %}
+                        <option value="IN_PERSON" {{ 'selected' if current_type == 'IN_PERSON' }}>In Person</option>
+                        <option value="ONLINE" {{ 'selected' if current_type == 'ONLINE' }}>Online</option>
+                        <option value="HYBRID" {{ 'selected' if current_type == 'HYBRID' }}>Hybrid</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label for="description" class="form-label">Description</label>
+                    <textarea name="description" id="description" rows="3" class="form-input w-full"
+                        placeholder="Additional details about this training event">{{ event.description if event else form_data.description | default('', true) }}</textarea>
+                </div>
+            </div>
+        </div>
+
+        {# Schedule #}
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Schedule</h3>
+            </div>
+            <div class="card-body space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="start_date" class="form-label required">Start Date</label>
+                        <input type="date" name="start_date" id="start_date"
+                            value="{{ event.start_date.isoformat() if event and event.start_date else form_data.start_date | default('', true) }}"
+                            required class="form-input w-full">
+                    </div>
+                    <div>
+                        <label for="end_date" class="form-label required">End Date</label>
+                        <input type="date" name="end_date" id="end_date"
+                            value="{{ event.end_date.isoformat() if event and event.end_date else form_data.end_date | default('', true) }}"
+                            required class="form-input w-full">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="start_time" class="form-label">Start Time</label>
+                        <input type="time" name="start_time" id="start_time"
+                            value="{{ event.start_time.strftime('%H:%M') if event and event.start_time else form_data.start_time | default('', true) }}"
+                            class="form-input w-full">
+                    </div>
+                    <div>
+                        <label for="end_time" class="form-label">End Time</label>
+                        <input type="time" name="end_time" id="end_time"
+                            value="{{ event.end_time.strftime('%H:%M') if event and event.end_time else form_data.end_time | default('', true) }}"
+                            class="form-input w-full">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {# Location #}
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Location</h3>
+            </div>
+            <div class="card-body space-y-4">
+                <div>
+                    <label for="location" class="form-label">Physical Location</label>
+                    <input type="text" name="location" id="location"
+                        value="{{ event.location if event else form_data.location | default('', true) }}"
+                        class="form-input w-full"
+                        placeholder="Conference Room A, Head Office">
+                </div>
+
+                <div>
+                    <label for="meeting_link" class="form-label">Meeting Link</label>
+                    <input type="url" name="meeting_link" id="meeting_link"
+                        value="{{ event.meeting_link if event else form_data.meeting_link | default('', true) }}"
+                        class="form-input w-full"
+                        placeholder="https://zoom.us/j/...">
+                    <p class="text-xs text-slate-500 mt-1">For online or hybrid events</p>
+                </div>
+            </div>
+        </div>
+
+        {# Trainer #}
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Trainer</h3>
+            </div>
+            <div class="card-body space-y-4">
+                <div>
+                    <label for="trainer_employee_id" class="form-label">Internal Trainer</label>
+                    <select name="trainer_employee_id" id="trainer_employee_id" class="form-input w-full">
+                        <option value="">Select Employee (if internal)</option>
+                        {% for emp in employees %}
+                        <option value="{{ emp.employee_id }}"
+                            {{ 'selected' if (event and event.trainer_employee_id == emp.employee_id) or (form_data and form_data.trainer_employee_id == emp.employee_id | string) }}>
+                            {{ emp.employee_code }} - {{ emp.full_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="trainer_name" class="form-label">External Trainer Name</label>
+                        <input type="text" name="trainer_name" id="trainer_name"
+                            value="{{ event.trainer_name if event else form_data.trainer_name | default('', true) }}"
+                            class="form-input w-full"
+                            placeholder="John Smith">
+                    </div>
+                    <div>
+                        <label for="trainer_email" class="form-label">Trainer Email</label>
+                        <input type="email" name="trainer_email" id="trainer_email"
+                            value="{{ event.trainer_email if event else form_data.trainer_email | default('', true) }}"
+                            class="form-input w-full"
+                            placeholder="trainer@example.com">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {# Capacity & Cost #}
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Capacity & Cost</h3>
+            </div>
+            <div class="card-body space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label for="max_attendees" class="form-label">Max Attendees</label>
+                        <input type="number" name="max_attendees" id="max_attendees" min="1"
+                            value="{{ event.max_attendees if event else form_data.max_attendees | default('', true) }}"
+                            class="form-input w-full"
+                            placeholder="20">
+                        <p class="text-xs text-slate-500 mt-1">Leave blank for unlimited</p>
+                    </div>
+                    <div>
+                        <label for="currency_code" class="form-label">Currency</label>
+                        <select name="currency_code" id="currency_code" class="form-input w-full">
+                            {% set current_currency = event.currency_code if event else form_data.currency_code | default('NGN', true) %}
+                            <option value="NGN" {{ 'selected' if current_currency == 'NGN' }}>NGN</option>
+                            <option value="USD" {{ 'selected' if current_currency == 'USD' }}>USD</option>
+                            <option value="GBP" {{ 'selected' if current_currency == 'GBP' }}>GBP</option>
+                            <option value="EUR" {{ 'selected' if current_currency == 'EUR' }}>EUR</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="total_cost" class="form-label">Total Cost</label>
+                        <input type="number" name="total_cost" id="total_cost" step="0.01" min="0"
+                            value="{{ event.total_cost if event else form_data.total_cost | default('', true) }}"
+                            class="form-input w-full"
+                            placeholder="0.00">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {# Form Actions #}
+        <div class="flex justify-end gap-3">
+            <a href="/people/training/events{% if event %}/{{ event.event_id }}{% endif %}" class="btn btn-secondary">
+                Cancel
+            </a>
+            <button type="submit" class="btn btn-primary">
+                {% if event %}Update{% else %}Create{% endif %} Event
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

@@ -9,7 +9,7 @@ from uuid import uuid4
 
 import pytest
 
-from app.services.ifrs.banking.bank_reconciliation import (
+from app.services.finance.banking.bank_reconciliation import (
     BankReconciliationService,
     ReconciliationInput,
     ReconciliationMatchInput,
@@ -64,7 +64,7 @@ class TestCreateReconciliation:
         self, service, mock_db, org_id, user_id, sample_recon_input
     ):
         """Test successful reconciliation creation."""
-        from app.models.ifrs.banking.bank_reconciliation import BankReconciliation
+        from app.models.finance.banking.bank_reconciliation import BankReconciliation
 
         bank_account = MockBankAccount(organization_id=org_id)
         mock_db.get.return_value = bank_account
@@ -165,7 +165,7 @@ class TestListReconciliations:
 
     def test_list_with_status_filter(self, service, mock_db, org_id):
         """Test listing reconciliations with status filter."""
-        from app.models.ifrs.banking.bank_reconciliation import ReconciliationStatus
+        from app.models.finance.banking.bank_reconciliation import ReconciliationStatus
 
         recons = [MockBankReconciliation(organization_id=org_id, status="draft")]
 
@@ -232,7 +232,7 @@ class TestAddMatch:
     def test_add_match_approved_reconciliation_fails(self, service, mock_db):
         """Test adding match to approved reconciliation fails."""
         from fastapi import HTTPException
-        from app.models.ifrs.banking.bank_reconciliation import ReconciliationStatus
+        from app.models.finance.banking.bank_reconciliation import ReconciliationStatus
 
         recon = MockBankReconciliation(status=ReconciliationStatus.approved)
         mock_db.get.return_value = recon
@@ -268,7 +268,7 @@ class TestSubmitForReview:
 
     def test_submit_for_review_success(self, service, mock_db):
         """Test successful submission for review."""
-        from app.models.ifrs.banking.bank_reconciliation import ReconciliationStatus
+        from app.models.finance.banking.bank_reconciliation import ReconciliationStatus
 
         recon = MockBankReconciliation(status=ReconciliationStatus.draft)
         mock_db.get.return_value = recon
@@ -281,7 +281,7 @@ class TestSubmitForReview:
     def test_submit_non_draft_fails(self, service, mock_db):
         """Test submitting non-draft reconciliation fails."""
         from fastapi import HTTPException
-        from app.models.ifrs.banking.bank_reconciliation import ReconciliationStatus
+        from app.models.finance.banking.bank_reconciliation import ReconciliationStatus
 
         recon = MockBankReconciliation(status=ReconciliationStatus.approved)
         mock_db.get.return_value = recon
@@ -308,7 +308,7 @@ class TestApproveReconciliation:
 
     def test_approve_success(self, service, mock_db, user_id):
         """Test successful approval."""
-        from app.models.ifrs.banking.bank_reconciliation import ReconciliationStatus
+        from app.models.finance.banking.bank_reconciliation import ReconciliationStatus
 
         bank_account = MockBankAccount()
         recon = MockBankReconciliation(
@@ -327,7 +327,7 @@ class TestApproveReconciliation:
     def test_approve_non_pending_fails(self, service, mock_db, user_id):
         """Test approving non-pending reconciliation fails."""
         from fastapi import HTTPException
-        from app.models.ifrs.banking.bank_reconciliation import ReconciliationStatus
+        from app.models.finance.banking.bank_reconciliation import ReconciliationStatus
 
         recon = MockBankReconciliation(status=ReconciliationStatus.draft)
         mock_db.get.return_value = recon
@@ -340,7 +340,7 @@ class TestApproveReconciliation:
     def test_approve_with_difference_fails(self, service, mock_db, user_id):
         """Test approving reconciliation with difference fails."""
         from fastapi import HTTPException
-        from app.models.ifrs.banking.bank_reconciliation import ReconciliationStatus
+        from app.models.finance.banking.bank_reconciliation import ReconciliationStatus
 
         recon = MockBankReconciliation(
             status=ReconciliationStatus.pending_review,
@@ -371,7 +371,7 @@ class TestRejectReconciliation:
 
     def test_reject_success(self, service, mock_db, user_id):
         """Test successful rejection."""
-        from app.models.ifrs.banking.bank_reconciliation import ReconciliationStatus
+        from app.models.finance.banking.bank_reconciliation import ReconciliationStatus
 
         recon = MockBankReconciliation(status=ReconciliationStatus.pending_review)
         mock_db.get.return_value = recon
@@ -387,7 +387,7 @@ class TestRejectReconciliation:
     def test_reject_non_pending_fails(self, service, mock_db, user_id):
         """Test rejecting non-pending reconciliation fails."""
         from fastapi import HTTPException
-        from app.models.ifrs.banking.bank_reconciliation import ReconciliationStatus
+        from app.models.finance.banking.bank_reconciliation import ReconciliationStatus
 
         recon = MockBankReconciliation(status=ReconciliationStatus.draft)
         mock_db.get.return_value = recon
@@ -668,7 +668,7 @@ class TestCreateReconciliationWithPrior:
         self, service, mock_db, org_id, user_id, sample_recon_input
     ):
         """Test creating reconciliation with prior outstanding items."""
-        from app.models.ifrs.banking.bank_reconciliation import BankReconciliation
+        from app.models.finance.banking.bank_reconciliation import BankReconciliation
 
         bank_account = MockBankAccount(organization_id=org_id)
         mock_db.get.return_value = bank_account
@@ -700,7 +700,7 @@ class TestApproveWithNotes:
 
     def test_approve_with_review_notes(self, service, mock_db, user_id):
         """Test approval with review notes."""
-        from app.models.ifrs.banking.bank_reconciliation import ReconciliationStatus
+        from app.models.finance.banking.bank_reconciliation import ReconciliationStatus
 
         bank_account = MockBankAccount()
         recon = MockBankReconciliation(

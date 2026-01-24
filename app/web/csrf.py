@@ -22,22 +22,11 @@ def _default_port(scheme: str | None) -> int | None:
 
 
 def _request_host_parts(request: Request) -> tuple[str | None, int | None]:
-    forwarded_host = request.headers.get("x-forwarded-host")
-    forwarded_proto = request.headers.get("x-forwarded-proto")
-    host = (
-        forwarded_host.split(",")[0].strip()
-        if forwarded_host
-        else request.headers.get("host", "")
-    )
-    scheme = (
-        forwarded_proto.split(",")[0].strip()
-        if forwarded_proto
-        else request.url.scheme
-    )
+    host = request.url.hostname
+    scheme = request.url.scheme
     if not host:
         return None, None
-    parsed = urlsplit(f"{scheme}://{host}")
-    return parsed.hostname, parsed.port or _default_port(scheme)
+    return host, request.url.port or _default_port(scheme)
 
 
 def _origin_parts(value: str) -> tuple[str | None, int | None]:
@@ -58,19 +47,45 @@ def _origin_matches_request(request: Request, origin_value: str) -> bool:
 
 
 def _is_secure_request(request: Request) -> bool:
-    forwarded_proto = request.headers.get("x-forwarded-proto")
-    scheme = (
-        forwarded_proto.split(",")[0].strip()
-        if forwarded_proto
-        else request.url.scheme
-    )
-    return scheme == "https"
+    return request.url.scheme == "https"
 
 
 def _should_enforce_csrf(request: Request) -> bool:
+    """Determine if CSRF protection should be enforced for this request.
+
+    CSRF protection is required when:
+    1. The request uses a non-safe HTTP method (POST, PUT, DELETE, PATCH)
+    2. The request uses cookie-based authentication
+
+    CSRF protection is NOT required when:
+    1. The request uses safe HTTP methods (GET, HEAD, OPTIONS, TRACE)
+    2. The request uses pure Bearer token authentication (inherently CSRF-safe)
+
+    The key insight is that CSRF attacks exploit the browser's automatic cookie
+    sending behavior. Bearer tokens must be explicitly added via JavaScript,
+    which cross-origin scripts cannot do due to same-origin policy.
+    """
     if request.method in _SAFE_METHODS:
         return False
-    return bool(request.cookies.get("access_token"))
+
+    # Check if this is a pure Bearer token request (no cookies involved)
+    # Bearer token requests are inherently CSRF-safe
+    auth_header = request.headers.get("authorization", "")
+    has_bearer_token = auth_header.lower().startswith("bearer ")
+
+    # Check for any authentication-related cookies
+    # These cookies indicate cookie-based auth which needs CSRF protection
+    has_auth_cookies = bool(
+        request.cookies.get("access_token") or request.cookies.get("refresh_token")
+    )
+
+    # If using pure Bearer auth with no auth cookies, skip CSRF
+    # (API clients using Bearer tokens don't need CSRF protection)
+    if has_bearer_token and not has_auth_cookies:
+        return False
+
+    # Enforce CSRF for any request with authentication cookies
+    return has_auth_cookies
 
 
 async def _extract_csrf_token(request: Request) -> str | None:
@@ -81,7 +96,10 @@ async def _extract_csrf_token(request: Request) -> str | None:
     if content_type.startswith("application/x-www-form-urlencoded") or content_type.startswith(
         "multipart/form-data"
     ):
-        form = await request.form()
+        form = getattr(request.state, "csrf_form", None)
+        if form is None:
+            form = await request.form()
+            request.state.csrf_form = form
         token = form.get(CSRF_FORM_FIELD)
         if token:
             return str(token)

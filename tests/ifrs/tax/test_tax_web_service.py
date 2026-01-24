@@ -14,7 +14,7 @@ class MockTaxReturn:
     """Mock TaxReturn model for testing."""
 
     def __init__(self, **kwargs):
-        from app.models.ifrs.tax.tax_return import TaxReturnStatus, TaxReturnType
+        from app.models.finance.tax.tax_return import TaxReturnStatus, TaxReturnType
 
         self.return_id = kwargs.get("return_id", uuid.uuid4())
         self.tax_period_id = kwargs.get("tax_period_id", uuid.uuid4())
@@ -55,35 +55,35 @@ class TestTaxWebServiceHelpers:
 
     def test_format_date_with_value(self):
         """Test date formatting with valid date."""
-        from app.services.ifrs.tax.web import _format_date
+        from app.services.finance.tax.web import _format_date
 
         result = _format_date(date(2024, 1, 15))
         assert result == "2024-01-15"
 
     def test_format_date_none(self):
         """Test date formatting with None."""
-        from app.services.ifrs.tax.web import _format_date
+        from app.services.finance.tax.web import _format_date
 
         result = _format_date(None)
         assert result == ""
 
     def test_format_currency_usd(self):
         """Test currency formatting for USD."""
-        from app.services.ifrs.tax.web import _format_currency
+        from app.services.finance.tax.web import _format_currency
 
         result = _format_currency(Decimal("1234.56"), "USD")
         assert result == "$1,234.56"
 
     def test_format_currency_other(self):
         """Test currency formatting for other currencies."""
-        from app.services.ifrs.tax.web import _format_currency
+        from app.services.finance.tax.web import _format_currency
 
         result = _format_currency(Decimal("1234.56"), "EUR")
         assert result == "EUR 1,234.56"
 
     def test_format_currency_none(self):
         """Test currency formatting with None."""
-        from app.services.ifrs.tax.web import _format_currency
+        from app.services.finance.tax.web import _format_currency
 
         result = _format_currency(None)
         assert result == ""
@@ -95,7 +95,7 @@ class TestTaxWebServiceReturnDetail:
     @patch("app.services.ifrs.tax.web.tax_return_service")
     def test_return_detail_context_success(self, mock_service):
         """Test successful return detail context."""
-        from app.services.ifrs.tax.web import TaxWebService
+        from app.services.finance.tax.web import TaxWebService
 
         org_id = uuid.uuid4()
         return_id = uuid.uuid4()
@@ -127,7 +127,7 @@ class TestTaxWebServiceReturnDetail:
     @patch("app.services.ifrs.tax.web.tax_return_service")
     def test_return_detail_context_not_found(self, mock_service):
         """Test return detail context with missing return."""
-        from app.services.ifrs.tax.web import TaxWebService
+        from app.services.finance.tax.web import TaxWebService
 
         org_id = uuid.uuid4()
         return_id = uuid.uuid4()
@@ -146,7 +146,7 @@ class TestTaxWebServiceReturnDetail:
     @patch("app.services.ifrs.tax.web.tax_return_service")
     def test_return_detail_context_wrong_org(self, mock_service):
         """Test return detail context with wrong organization."""
-        from app.services.ifrs.tax.web import TaxWebService
+        from app.services.finance.tax.web import TaxWebService
 
         org_id = uuid.uuid4()
         other_org_id = uuid.uuid4()
@@ -174,7 +174,7 @@ class TestTaxReturnView:
 
     def test_tax_return_view_complete(self):
         """Test tax return view with all fields."""
-        from app.services.ifrs.tax.web import _tax_return_view
+        from app.services.finance.tax.web import _tax_return_view
 
         mock_return = MockTaxReturn(
             filed_date=date(2024, 1, 20),
@@ -198,7 +198,7 @@ class TestTaxReturnView:
 
     def test_tax_return_view_minimal(self):
         """Test tax return view with minimal fields."""
-        from app.services.ifrs.tax.web import _tax_return_view
+        from app.services.finance.tax.web import _tax_return_view
 
         mock_return = MockTaxReturn()
 
@@ -214,7 +214,7 @@ class TestBoxValueView:
 
     def test_box_value_view(self):
         """Test box value view."""
-        from app.services.ifrs.tax.web import _box_value_view
+        from app.services.finance.tax.web import _box_value_view
 
         mock_box = MockBoxValue(
             box_number="1",

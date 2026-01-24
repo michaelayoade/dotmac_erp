@@ -10,7 +10,7 @@ from uuid import uuid4
 import pytest
 from fastapi import HTTPException
 
-from app.services.ifrs.tax.tax_posting_adapter import (
+from app.services.finance.tax.tax_posting_adapter import (
     TAXPostingAdapter,
     TAXPostingResult,
 )
@@ -31,7 +31,7 @@ class MockTaxTransaction:
     """Mock TaxTransaction model."""
 
     def __init__(self, **kwargs):
-        from app.models.ifrs.tax.tax_transaction import TaxTransactionType
+        from app.models.finance.tax.tax_transaction import TaxTransactionType
 
         self.transaction_id = kwargs.get("transaction_id", uuid4())
         self.organization_id = kwargs.get("organization_id", uuid4())
@@ -124,7 +124,7 @@ class TestTAXPostingAdapterPostTaxTransaction:
 
     def test_post_input_tax_success(self, mock_db):
         """Test posting input tax transaction."""
-        from app.models.ifrs.tax.tax_transaction import TaxTransactionType
+        from app.models.finance.tax.tax_transaction import TaxTransactionType
 
         org_id = uuid4()
         txn_id = uuid4()
@@ -165,7 +165,7 @@ class TestTAXPostingAdapterPostTaxTransaction:
 
     def test_post_output_tax_success(self, mock_db):
         """Test posting output tax transaction."""
-        from app.models.ifrs.tax.tax_transaction import TaxTransactionType
+        from app.models.finance.tax.tax_transaction import TaxTransactionType
 
         org_id = uuid4()
         txn_id = uuid4()
@@ -203,7 +203,7 @@ class TestTAXPostingAdapterPostTaxTransaction:
 
     def test_post_withholding_tax_success(self, mock_db):
         """Test posting withholding tax transaction."""
-        from app.models.ifrs.tax.tax_transaction import TaxTransactionType
+        from app.models.finance.tax.tax_transaction import TaxTransactionType
 
         org_id = uuid4()
         txn_id = uuid4()
@@ -274,7 +274,7 @@ class TestTAXPostingAdapterPostTaxTransaction:
 
     def test_post_journal_creation_fails(self, mock_db):
         """Test handling journal creation failure."""
-        from app.models.ifrs.tax.tax_transaction import TaxTransactionType
+        from app.models.finance.tax.tax_transaction import TaxTransactionType
 
         org_id = uuid4()
         mock_txn = MockTaxTransaction(
@@ -305,7 +305,7 @@ class TestTAXPostingAdapterPostTaxTransaction:
 
     def test_post_ledger_posting_fails(self, mock_db):
         """Test handling ledger posting failure."""
-        from app.models.ifrs.tax.tax_transaction import TaxTransactionType
+        from app.models.finance.tax.tax_transaction import TaxTransactionType
 
         org_id = uuid4()
         mock_txn = MockTaxTransaction(

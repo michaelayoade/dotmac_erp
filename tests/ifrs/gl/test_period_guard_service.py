@@ -9,12 +9,12 @@ from uuid import uuid4
 
 import pytest
 
-from app.services.ifrs.gl.period_guard import (
+from app.services.finance.gl.period_guard import (
     PeriodGuardService,
     PeriodGuardResult,
 )
 
-from app.models.ifrs.gl.fiscal_period import PeriodStatus
+from app.models.finance.gl.fiscal_period import PeriodStatus
 
 MockPeriodStatus = PeriodStatus
 

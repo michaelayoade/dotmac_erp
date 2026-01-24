@@ -1,0 +1,111 @@
+{% extends "expense/base_expense.html" %}
+{% from "components/macros.html" import pagination, empty_state %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+            <h1 class="text-2xl font-semibold text-slate-900 dark:text-white font-display">Expense Categories</h1>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Configure expense types, limits, and GL mappings</p>
+        </div>
+        <a href="/expense/categories/new" class="btn btn-primary">
+            <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+            </svg>
+            New Category
+        </a>
+    </div>
+
+    <div class="card p-4">
+        <form method="get" class="flex flex-wrap items-end gap-4">
+            <div class="min-w-[220px]">
+                <label class="form-label">Search</label>
+                <input type="text" name="search" value="{{ search }}" class="form-input" placeholder="Code or name">
+            </div>
+            <div class="min-w-[160px]">
+                <label class="form-label">Status</label>
+                <select name="is_active" class="form-input form-select">
+                    <option value="">All Status</option>
+                    <option value="true" {{ 'selected' if is_active == True else '' }}>Active</option>
+                    <option value="false" {{ 'selected' if is_active == False else '' }}>Inactive</option>
+                </select>
+            </div>
+            <button type="submit" class="btn btn-secondary">
+                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
+                </svg>
+                Filter
+            </button>
+            {% if search or is_active is not none %}
+            <a href="/expense/categories" class="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300">Clear filters</a>
+            {% endif %}
+        </form>
+    </div>
+
+    <div class="card overflow-hidden">
+        {% if categories %}
+        <div class="table-container">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Code</th>
+                        <th>Name</th>
+                        <th>Expense Account</th>
+                        <th class="text-right">Max per Claim</th>
+                        <th>Receipt Required</th>
+                        <th>Status</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for category in categories %}
+                    <tr>
+                        <td class="font-mono text-slate-900 dark:text-white">{{ category.category_code }}</td>
+                        <td class="text-slate-700 dark:text-slate-300">{{ category.category_name }}</td>
+                        <td class="text-slate-500">
+                            {{ category.expense_account_id if category.expense_account_id else '—' }}
+                        </td>
+                        <td class="text-right font-mono text-slate-700 dark:text-slate-300">
+                            {{ category.max_amount_per_claim if category.max_amount_per_claim is not none else '—' }}
+                        </td>
+                        <td>
+                            {% if category.requires_receipt %}
+                            <span class="badge badge-info">Yes</span>
+                            {% else %}
+                            <span class="badge badge-neutral">No</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if category.is_active %}
+                            <span class="badge badge-success">Active</span>
+                            {% else %}
+                            <span class="badge badge-neutral">Inactive</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="table-actions">
+                                <a href="/expense/categories/{{ category.category_id }}/edit" class="table-action-btn" title="Edit">
+                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 4H6a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2v-5M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                                    </svg>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {{ pagination(page=page, total_pages=total_pages, total_count=total, limit=limit, search=search, filters={"is_active": is_active}, show_size_selector=false) }}
+        {% else %}
+        {{ empty_state(
+            "No expense categories",
+            "Create your first category to classify and control expense claims.",
+            icon="document",
+            cta_text="New Category",
+            cta_href="/expense/categories/new"
+        ) }}
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

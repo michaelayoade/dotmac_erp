@@ -1,5 +1,5 @@
 """
-Item mapping from ERPNext to DotMac Books.
+Item mapping from ERPNext to DotMac ERP.
 """
 from typing import Any, Optional
 
@@ -14,7 +14,7 @@ from .base import (
 )
 
 
-# ERPNext valuation_method to DotMac Books costing_method
+# ERPNext valuation_method to DotMac ERP costing_method
 VALUATION_METHOD_MAP = {
     "FIFO": "FIFO",
     "Moving Average": "WEIGHTED_AVERAGE",
@@ -23,7 +23,7 @@ VALUATION_METHOD_MAP = {
 
 
 def map_valuation_method(value: Any) -> str:
-    """Map ERPNext valuation method to DotMac Books costing method."""
+    """Map ERPNext valuation method to DotMac ERP costing method."""
     if not value:
         return "WEIGHTED_AVERAGE"
     return VALUATION_METHOD_MAP.get(str(value), "WEIGHTED_AVERAGE")
@@ -39,7 +39,7 @@ def map_item_type(record: dict[str, Any]) -> str:
 
 
 class ItemMapping(DocTypeMapping):
-    """Map ERPNext Item to DotMac Books inv.item."""
+    """Map ERPNext Item to DotMac ERP inv.item."""
 
     def __init__(self):
         super().__init__(
@@ -161,7 +161,7 @@ class ItemMapping(DocTypeMapping):
 
 
 class ItemCategoryMapping(DocTypeMapping):
-    """Map ERPNext Item Group to DotMac Books inv.item_category."""
+    """Map ERPNext Item Group to DotMac ERP inv.item_category."""
 
     def __init__(self):
         super().__init__(

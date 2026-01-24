@@ -9,14 +9,14 @@ from uuid import uuid4
 
 import pytest
 
-from app.services.ifrs.gl.journal import (
+from app.services.finance.gl.journal import (
     JournalService,
     JournalInput,
     JournalLineInput,
 )
 
 
-from app.models.ifrs.gl.journal_entry import JournalStatus, JournalType
+from app.models.finance.gl.journal_entry import JournalStatus, JournalType
 
 MockJournalStatus = JournalStatus
 MockJournalType = JournalType
@@ -165,7 +165,7 @@ class TestCreateJournal:
     def test_unbalanced_journal_fails(self, mock_db, org_id, user_id):
         """Test that unbalanced journal fails validation."""
         from fastapi import HTTPException
-        from app.models.ifrs.gl.journal_entry import JournalType
+        from app.models.finance.gl.journal_entry import JournalType
 
         unbalanced_lines = [
             JournalLineInput(
@@ -206,7 +206,7 @@ class TestCreateJournal:
     def test_no_fiscal_period_fails(self, mock_db, org_id, user_id, sample_lines):
         """Test that missing fiscal period fails."""
         from fastapi import HTTPException
-        from app.models.ifrs.gl.journal_entry import JournalType
+        from app.models.finance.gl.journal_entry import JournalType
 
         journal_input = JournalInput(
             journal_type=JournalType.STANDARD,
@@ -231,7 +231,7 @@ class TestCreateJournal:
     def test_empty_lines_fails(self, mock_db, org_id, user_id):
         """Test that journal with no lines fails."""
         from fastapi import HTTPException
-        from app.models.ifrs.gl.journal_entry import JournalType
+        from app.models.finance.gl.journal_entry import JournalType
 
         empty_journal = JournalInput(
             journal_type=JournalType.STANDARD,
@@ -459,7 +459,7 @@ class TestCreateJournalSuccess:
 
     def test_create_journal_success(self, mock_db, org_id, user_id, sample_lines):
         """Test successful journal creation."""
-        from app.models.ifrs.gl.journal_entry import JournalType, JournalEntry
+        from app.models.finance.gl.journal_entry import JournalType, JournalEntry
 
         journal_input = JournalInput(
             journal_type=JournalType.STANDARD,
@@ -498,7 +498,7 @@ class TestCreateJournalSuccess:
 
     def test_create_journal_with_dimensions(self, mock_db, org_id, user_id):
         """Test creating journal with analytical dimensions."""
-        from app.models.ifrs.gl.journal_entry import JournalType
+        from app.models.finance.gl.journal_entry import JournalType
 
         business_unit = uuid4()
         cost_center = uuid4()
@@ -559,7 +559,7 @@ class TestCreateJournalSuccess:
 
     def test_create_journal_with_exchange_rate(self, mock_db, org_id, user_id):
         """Test creating journal with foreign currency exchange rate."""
-        from app.models.ifrs.gl.journal_entry import JournalType
+        from app.models.finance.gl.journal_entry import JournalType
 
         lines = [
             JournalLineInput(
@@ -615,7 +615,7 @@ class TestUpdateJournal:
 
     def test_update_draft_journal_success(self, mock_db, org_id, user_id, sample_lines):
         """Test updating a draft journal successfully."""
-        from app.models.ifrs.gl.journal_entry import JournalType
+        from app.models.finance.gl.journal_entry import JournalType
 
         journal = MockJournalEntry(
             organization_id=org_id,
@@ -652,7 +652,7 @@ class TestUpdateJournal:
     def test_update_non_draft_fails(self, mock_db, org_id, user_id, sample_lines):
         """Test updating a non-draft journal fails."""
         from fastapi import HTTPException
-        from app.models.ifrs.gl.journal_entry import JournalType
+        from app.models.finance.gl.journal_entry import JournalType
 
         journal = MockJournalEntry(
             organization_id=org_id,
@@ -682,7 +682,7 @@ class TestUpdateJournal:
     def test_update_journal_not_found(self, mock_db, org_id, user_id, sample_lines):
         """Test updating non-existent journal fails."""
         from fastapi import HTTPException
-        from app.models.ifrs.gl.journal_entry import JournalType
+        from app.models.finance.gl.journal_entry import JournalType
 
         mock_db.get.return_value = None
 
@@ -706,7 +706,7 @@ class TestUpdateJournal:
     def test_update_journal_unbalanced_fails(self, mock_db, org_id, user_id):
         """Test updating journal with unbalanced lines fails."""
         from fastapi import HTTPException
-        from app.models.ifrs.gl.journal_entry import JournalType
+        from app.models.finance.gl.journal_entry import JournalType
 
         journal = MockJournalEntry(
             organization_id=org_id,
@@ -751,7 +751,7 @@ class TestUpdateJournal:
     def test_update_journal_empty_lines_fails(self, mock_db, org_id, user_id):
         """Test updating journal with no lines fails."""
         from fastapi import HTTPException
-        from app.models.ifrs.gl.journal_entry import JournalType
+        from app.models.finance.gl.journal_entry import JournalType
 
         journal = MockJournalEntry(
             organization_id=org_id,
@@ -780,7 +780,7 @@ class TestUpdateJournal:
     def test_update_journal_no_fiscal_period_fails(self, mock_db, org_id, user_id, sample_lines):
         """Test updating journal when fiscal period not found fails."""
         from fastapi import HTTPException
-        from app.models.ifrs.gl.journal_entry import JournalType
+        from app.models.finance.gl.journal_entry import JournalType
 
         journal = MockJournalEntry(
             organization_id=org_id,
@@ -956,7 +956,7 @@ class TestReverseEntry:
 
     def test_reverse_posted_journal_success(self, mock_db, org_id, user_id):
         """Test reversing a posted journal successfully."""
-        from app.models.ifrs.gl.journal_entry import JournalType, JournalStatus
+        from app.models.finance.gl.journal_entry import JournalType, JournalStatus
 
         mock_line = MagicMock()
         mock_line.account_id = uuid4()
@@ -1113,7 +1113,7 @@ class TestListJournalsWithFilters:
 
     def test_list_by_journal_type(self, mock_db, org_id):
         """Test listing journals filtered by journal type."""
-        from app.models.ifrs.gl.journal_entry import JournalType
+        from app.models.finance.gl.journal_entry import JournalType
 
         journals = [MockJournalEntry(organization_id=org_id)]
         mock_query = MagicMock()
@@ -1251,7 +1251,7 @@ class TestCreateEntry:
 
     def test_create_entry_is_alias(self, mock_db, org_id, user_id, sample_lines):
         """Test that create_entry is alias for create_journal."""
-        from app.models.ifrs.gl.journal_entry import JournalType
+        from app.models.finance.gl.journal_entry import JournalType
 
         journal_input = JournalInput(
             journal_type=JournalType.STANDARD,
@@ -1449,7 +1449,7 @@ class TestJournalWrongOrganization:
     def test_update_journal_wrong_organization(self, mock_db, org_id, user_id, sample_lines):
         """Test updating journal from wrong organization fails."""
         from fastapi import HTTPException
-        from app.models.ifrs.gl.journal_entry import JournalType
+        from app.models.finance.gl.journal_entry import JournalType
 
         other_org_id = uuid4()
         journal = MockJournalEntry(
@@ -1574,7 +1574,7 @@ class TestJournalInputDefaults:
 
     def test_journal_input_default_values(self):
         """Test default values for journal input."""
-        from app.models.ifrs.gl.journal_entry import JournalType
+        from app.models.finance.gl.journal_entry import JournalType
 
         journal_input = JournalInput(
             journal_type=JournalType.STANDARD,
@@ -1596,7 +1596,7 @@ class TestJournalInputDefaults:
 
     def test_journal_input_with_source_document(self):
         """Test journal input with source document reference."""
-        from app.models.ifrs.gl.journal_entry import JournalType
+        from app.models.finance.gl.journal_entry import JournalType
 
         source_doc_id = uuid4()
         journal_input = JournalInput(
@@ -1615,7 +1615,7 @@ class TestJournalInputDefaults:
 
     def test_journal_input_with_auto_reverse(self):
         """Test journal input with auto reverse date."""
-        from app.models.ifrs.gl.journal_entry import JournalType
+        from app.models.finance.gl.journal_entry import JournalType
         from datetime import timedelta
 
         reversal_date = date.today() + timedelta(days=30)

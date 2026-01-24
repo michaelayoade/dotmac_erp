@@ -12,13 +12,13 @@ from unittest.mock import MagicMock, patch, PropertyMock
 import pytest
 from fastapi import HTTPException
 
-from app.services.ifrs.inv.transaction import (
+from app.services.finance.inv.transaction import (
     InventoryTransactionService,
     TransactionInput,
     CostingResult,
 )
-from app.models.ifrs.inv.item import CostingMethod
-from app.models.ifrs.inv.inventory_transaction import TransactionType
+from app.models.finance.inv.item import CostingMethod
+from app.models.finance.inv.inventory_transaction import TransactionType
 
 
 class MockItem:
@@ -311,8 +311,8 @@ class TestCreateReceipt:
         )
 
         def mock_get(model_class, id_val):
-            from app.models.ifrs.inv.item import Item
-            from app.models.ifrs.inv.warehouse import Warehouse
+            from app.models.finance.inv.item import Item
+            from app.models.finance.inv.warehouse import Warehouse
 
             if model_class == Item or str(model_class) == "<class 'app.models.ifrs.inv.item.Item'>":
                 return mock_item
@@ -421,7 +421,7 @@ class TestCreateReceipt:
         mock_item = MockItem(item_id=item_id, organization_id=org_id)
 
         def mock_get(model_class, id_val):
-            from app.models.ifrs.inv.item import Item
+            from app.models.finance.inv.item import Item
 
             if model_class == Item or str(model_class) == "<class 'app.models.ifrs.inv.item.Item'>":
                 return mock_item
@@ -462,8 +462,8 @@ class TestCreateReceipt:
         )
 
         def mock_get(model_class, id_val):
-            from app.models.ifrs.inv.item import Item
-            from app.models.ifrs.inv.warehouse import Warehouse
+            from app.models.finance.inv.item import Item
+            from app.models.finance.inv.warehouse import Warehouse
 
             if model_class == Item or str(model_class) == "<class 'app.models.ifrs.inv.item.Item'>":
                 return mock_item
@@ -511,8 +511,8 @@ class TestCreateReceipt:
         )
 
         def mock_get(model_class, id_val):
-            from app.models.ifrs.inv.item import Item
-            from app.models.ifrs.inv.warehouse import Warehouse
+            from app.models.finance.inv.item import Item
+            from app.models.finance.inv.warehouse import Warehouse
 
             if model_class == Item or str(model_class) == "<class 'app.models.ifrs.inv.item.Item'>":
                 return mock_item
@@ -572,8 +572,8 @@ class TestCreateIssue:
         )
 
         def mock_get(model_class, id_val):
-            from app.models.ifrs.inv.item import Item
-            from app.models.ifrs.inv.warehouse import Warehouse
+            from app.models.finance.inv.item import Item
+            from app.models.finance.inv.warehouse import Warehouse
 
             if model_class == Item or str(model_class) == "<class 'app.models.ifrs.inv.item.Item'>":
                 return mock_item
@@ -617,8 +617,8 @@ class TestCreateIssue:
         mock_warehouse = MockWarehouse(warehouse_id=wh_id, organization_id=org_id)
 
         def mock_get(model_class, id_val):
-            from app.models.ifrs.inv.item import Item
-            from app.models.ifrs.inv.warehouse import Warehouse
+            from app.models.finance.inv.item import Item
+            from app.models.finance.inv.warehouse import Warehouse
 
             if model_class == Item or str(model_class) == "<class 'app.models.ifrs.inv.item.Item'>":
                 return mock_item
@@ -667,8 +667,8 @@ class TestCreateIssue:
         mock_warehouse = MockWarehouse(warehouse_id=wh_id, organization_id=org_id)
 
         def mock_get(model_class, id_val):
-            from app.models.ifrs.inv.item import Item
-            from app.models.ifrs.inv.warehouse import Warehouse
+            from app.models.finance.inv.item import Item
+            from app.models.finance.inv.warehouse import Warehouse
 
             if model_class == Item or str(model_class) == "<class 'app.models.ifrs.inv.item.Item'>":
                 return mock_item
@@ -724,9 +724,9 @@ class TestCreateIssue:
         )
 
         def mock_get(model_class, id_val):
-            from app.models.ifrs.inv.item import Item
-            from app.models.ifrs.inv.warehouse import Warehouse
-            from app.models.ifrs.inv.inventory_lot import InventoryLot
+            from app.models.finance.inv.item import Item
+            from app.models.finance.inv.warehouse import Warehouse
+            from app.models.finance.inv.inventory_lot import InventoryLot
 
             if model_class == Item or str(model_class) == "<class 'app.models.ifrs.inv.item.Item'>":
                 return mock_item
@@ -784,9 +784,9 @@ class TestCreateIssue:
         )
 
         def mock_get(model_class, id_val):
-            from app.models.ifrs.inv.item import Item
-            from app.models.ifrs.inv.warehouse import Warehouse
-            from app.models.ifrs.inv.inventory_lot import InventoryLot
+            from app.models.finance.inv.item import Item
+            from app.models.finance.inv.warehouse import Warehouse
+            from app.models.finance.inv.inventory_lot import InventoryLot
 
             if model_class == Item or str(model_class) == "<class 'app.models.ifrs.inv.item.Item'>":
                 return mock_item
@@ -839,8 +839,8 @@ class TestCreateIssue:
         mock_warehouse = MockWarehouse(warehouse_id=wh_id, organization_id=org_id)
 
         def mock_get(model_class, id_val):
-            from app.models.ifrs.inv.item import Item
-            from app.models.ifrs.inv.warehouse import Warehouse
+            from app.models.finance.inv.item import Item
+            from app.models.finance.inv.warehouse import Warehouse
 
             if model_class == Item or str(model_class) == "<class 'app.models.ifrs.inv.item.Item'>":
                 return mock_item
@@ -1010,8 +1010,8 @@ class TestCreateAdjustment:
         mock_warehouse = MockWarehouse(warehouse_id=wh_id, organization_id=org_id)
 
         def mock_get(model_class, id_val):
-            from app.models.ifrs.inv.item import Item
-            from app.models.ifrs.inv.warehouse import Warehouse
+            from app.models.finance.inv.item import Item
+            from app.models.finance.inv.warehouse import Warehouse
 
             if model_class == Item or str(model_class) == "<class 'app.models.ifrs.inv.item.Item'>":
                 return mock_item
@@ -1059,8 +1059,8 @@ class TestCreateAdjustment:
         mock_warehouse = MockWarehouse(warehouse_id=wh_id, organization_id=org_id)
 
         def mock_get(model_class, id_val):
-            from app.models.ifrs.inv.item import Item
-            from app.models.ifrs.inv.warehouse import Warehouse
+            from app.models.finance.inv.item import Item
+            from app.models.finance.inv.warehouse import Warehouse
 
             if model_class == Item or str(model_class) == "<class 'app.models.ifrs.inv.item.Item'>":
                 return mock_item
@@ -1104,8 +1104,8 @@ class TestCreateAdjustment:
         mock_warehouse = MockWarehouse(warehouse_id=wh_id, organization_id=org_id)
 
         def mock_get(model_class, id_val):
-            from app.models.ifrs.inv.item import Item
-            from app.models.ifrs.inv.warehouse import Warehouse
+            from app.models.finance.inv.item import Item
+            from app.models.finance.inv.warehouse import Warehouse
 
             if model_class == Item or str(model_class) == "<class 'app.models.ifrs.inv.item.Item'>":
                 return mock_item
@@ -1162,8 +1162,8 @@ class TestCreateTransfer:
         call_count = [0]
 
         def mock_get(model_class, id_val):
-            from app.models.ifrs.inv.item import Item
-            from app.models.ifrs.inv.warehouse import Warehouse
+            from app.models.finance.inv.item import Item
+            from app.models.finance.inv.warehouse import Warehouse
 
             if model_class == Item or str(model_class) == "<class 'app.models.ifrs.inv.item.Item'>":
                 return mock_item
@@ -1240,8 +1240,8 @@ class TestCreateTransfer:
         call_count = [0]
 
         def mock_get(model_class, id_val):
-            from app.models.ifrs.inv.item import Item
-            from app.models.ifrs.inv.warehouse import Warehouse
+            from app.models.finance.inv.item import Item
+            from app.models.finance.inv.warehouse import Warehouse
 
             if model_class == Item or str(model_class) == "<class 'app.models.ifrs.inv.item.Item'>":
                 return mock_item

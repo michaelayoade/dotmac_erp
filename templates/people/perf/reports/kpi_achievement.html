@@ -1,0 +1,226 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}KPI Achievement{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/perf/goals" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Goals</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">KPI Achievement</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">KPI Achievement Report</h1>
+            <p class="text-sm text-slate-500 dark:text-slate-400">Track goal achievement rates and progress</p>
+        </div>
+        <a href="/people/perf/goals" class="btn btn-secondary">
+            <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+            </svg>
+            Back
+        </a>
+    </div>
+
+    <!-- Filters -->
+    <div class="card">
+        <form method="get" class="p-4">
+            <div class="flex flex-wrap gap-4 items-end">
+                <div class="w-64">
+                    <label for="department_id" class="form-label">Department</label>
+                    <select name="department_id" id="department_id" class="form-select w-full">
+                        <option value="">All Departments</option>
+                        {% for d in departments %}
+                        <option value="{{ d.department_id }}" {% if department_id == d.department_id|string %}selected{% endif %}>{{ d.department_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-secondary h-10">Apply Filter</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div class="card p-5">
+            <div class="flex items-center gap-4">
+                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-violet-100 dark:bg-violet-900/30">
+                    <svg class="h-6 w-6 text-violet-600 dark:text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">Total KPIs</p>
+                    <p class="text-2xl font-semibold text-slate-900 dark:text-white">{{ report.total_kpis }}</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="card p-5">
+            <div class="flex items-center gap-4">
+                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-green-100 dark:bg-green-900/30">
+                    <svg class="h-6 w-6 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">Achievement Rate</p>
+                    <p class="text-2xl font-semibold text-green-600 dark:text-green-400">{{ report.achievement_stats.achievement_rate }}%</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="card p-5">
+            <div class="flex items-center gap-4">
+                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-teal-100 dark:bg-teal-900/30">
+                    <svg class="h-6 w-6 text-teal-600 dark:text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">Exceeded Target</p>
+                    <p class="text-2xl font-semibold text-teal-600 dark:text-teal-400">{{ report.achievement_stats.exceeded }}</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="card p-5">
+            <div class="flex items-center gap-4">
+                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-100 dark:bg-blue-900/30">
+                    <svg class="h-6 w-6 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">Completed</p>
+                    <p class="text-2xl font-semibold text-slate-900 dark:text-white">{{ report.achievement_stats.total_completed }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Status Breakdown -->
+    <div class="card">
+        <div class="border-b border-slate-200 dark:border-slate-700 px-5 py-4">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white">KPI Status Breakdown</h2>
+        </div>
+        {% if report.status_breakdown %}
+        <div class="p-5">
+            <div class="flex h-8 rounded-lg overflow-hidden">
+                {% for s in report.status_breakdown %}
+                {% if s.status == 'COMPLETED' %}
+                <div class="bg-green-500 transition-all" style="width: {{ s.percentage }}%" title="{{ s.status }}: {{ s.percentage }}%"></div>
+                {% elif s.status == 'IN_PROGRESS' %}
+                <div class="bg-blue-500 transition-all" style="width: {{ s.percentage }}%" title="{{ s.status }}: {{ s.percentage }}%"></div>
+                {% elif s.status == 'DRAFT' %}
+                <div class="bg-slate-400 transition-all" style="width: {{ s.percentage }}%" title="{{ s.status }}: {{ s.percentage }}%"></div>
+                {% elif s.status == 'CANCELLED' %}
+                <div class="bg-rose-500 transition-all" style="width: {{ s.percentage }}%" title="{{ s.status }}: {{ s.percentage }}%"></div>
+                {% else %}
+                <div class="bg-amber-500 transition-all" style="width: {{ s.percentage }}%" title="{{ s.status }}: {{ s.percentage }}%"></div>
+                {% endif %}
+                {% endfor %}
+            </div>
+            <div class="flex flex-wrap items-center justify-center gap-4 mt-4">
+                {% for s in report.status_breakdown %}
+                <div class="flex items-center gap-2">
+                    <div class="w-3 h-3 rounded
+                        {% if s.status == 'COMPLETED' %}bg-green-500
+                        {% elif s.status == 'IN_PROGRESS' %}bg-blue-500
+                        {% elif s.status == 'DRAFT' %}bg-slate-400
+                        {% elif s.status == 'CANCELLED' %}bg-rose-500
+                        {% else %}bg-amber-500{% endif %}"></div>
+                    <span class="text-sm text-slate-600 dark:text-slate-400">{{ s.status | replace('_', ' ') | title }} ({{ s.count }})</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% else %}
+        <div class="p-8 text-center">
+            <p class="text-slate-500 dark:text-slate-400">No KPIs found.</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Achievement Stats -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Achieved -->
+        <div class="card p-5 text-center">
+            <div class="mx-auto w-20 h-20 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center mb-4">
+                <span class="text-3xl font-bold text-green-600 dark:text-green-400">{{ report.achievement_stats.achieved }}</span>
+            </div>
+            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Met Target</h3>
+            <p class="text-sm text-slate-500 dark:text-slate-400">100% of target achieved</p>
+        </div>
+
+        <!-- Exceeded -->
+        <div class="card p-5 text-center">
+            <div class="mx-auto w-20 h-20 rounded-full bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center mb-4">
+                <span class="text-3xl font-bold text-teal-600 dark:text-teal-400">{{ report.achievement_stats.exceeded }}</span>
+            </div>
+            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Exceeded Target</h3>
+            <p class="text-sm text-slate-500 dark:text-slate-400">&gt;100% of target achieved</p>
+        </div>
+
+        <!-- Partial -->
+        <div class="card p-5 text-center">
+            <div class="mx-auto w-20 h-20 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center mb-4">
+                <span class="text-3xl font-bold text-amber-600 dark:text-amber-400">{{ report.achievement_stats.partial }}</span>
+            </div>
+            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Partial Achievement</h3>
+            <p class="text-sm text-slate-500 dark:text-slate-400">&lt;100% of target achieved</p>
+        </div>
+    </div>
+
+    <!-- Top Performers -->
+    {% if report.top_kpis %}
+    <div class="card">
+        <div class="border-b border-slate-200 dark:border-slate-700 px-5 py-4">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Top Performing KPIs</h2>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+                <thead>
+                    <tr class="bg-slate-50 dark:bg-slate-800/50">
+                        <th class="px-5 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">KPI</th>
+                        <th class="px-5 py-3 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Achievement</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                    {% for kpi in report.top_kpis %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                        <td class="px-5 py-3">
+                            <a href="/people/perf/goals/{{ kpi.kpi_id }}" class="font-medium text-slate-900 dark:text-white hover:text-violet-600">
+                                {{ kpi.kpi_title }}
+                            </a>
+                        </td>
+                        <td class="px-5 py-3 text-right">
+                            <span class="inline-flex items-center gap-1 text-sm font-semibold text-teal-600 dark:text-teal-400">
+                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                                </svg>
+                                {{ kpi.achievement_percentage }}%
+                            </span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Quick Links -->
+    <div class="flex gap-4">
+        <a href="/people/perf/reports/ratings" class="btn btn-secondary">Ratings Distribution</a>
+        <a href="/people/perf/reports/by-department" class="btn btn-secondary">By Department</a>
+        <a href="/people/perf/reports/trends" class="btn btn-secondary">Trends</a>
+    </div>
+</div>
+{% endblock %}

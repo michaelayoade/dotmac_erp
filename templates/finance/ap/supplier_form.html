@@ -1,0 +1,322 @@
+{% extends "finance/base_finance.html" %}
+
+{% block page_title %}{{ "Edit Supplier" if supplier else "New Supplier" }}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <a href="/finance/ap/suppliers" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Suppliers</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="font-medium text-slate-900 dark:text-white">{{ "Edit" if supplier else "New" }}</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto pb-12">
+    <!-- Page Header -->
+    <div class="mb-10 stagger-in" style="animation-delay: 0ms;">
+        <h1 class="text-3xl font-bold text-slate-900 dark:text-white font-display tracking-tight">
+            {{ "Edit Supplier" if supplier else "New Supplier" }}
+        </h1>
+        <p class="mt-2 text-lg text-slate-600 dark:text-slate-400">
+            {{ "Update supplier information and settings" if supplier else "Add a new supplier to your accounts payable" }}
+        </p>
+    </div>
+
+    <form method="post"
+          action="{{ '/finance/ap/suppliers/' ~ supplier.supplier_id ~ '/edit' if supplier else '/finance/ap/suppliers/new' }}"
+          class="space-y-8">
+
+        <div id="form-result">
+            {% if error %}
+            <div class="mb-6 p-4 rounded-xl bg-rose-50 border border-rose-200 dark:bg-rose-900/20 dark:border-rose-800">
+                <div class="flex items-start gap-3">
+                    <svg class="w-5 h-5 text-rose-600 dark:text-rose-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <div>
+                        <h3 class="font-semibold text-rose-800 dark:text-rose-300">Error</h3>
+                        <p class="mt-1 text-sm text-rose-700 dark:text-rose-400">{{ error }}</p>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Basic Information -->
+        <div class="card stagger-in" style="animation-delay: 50ms;">
+            <div class="card-header border-b border-slate-100 dark:border-slate-700">
+                <div class="flex items-center gap-4">
+                    <div class="card-icon bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display">Company Details</h2>
+                        <p class="text-sm text-slate-500 dark:text-slate-400">Basic supplier identification</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-6 grid gap-6 sm:grid-cols-2">
+                <div>
+                    <label class="form-label">
+                        Supplier Code <span class="text-rose-500">*</span>
+                    </label>
+                    <input type="text"
+                           name="supplier_code"
+                           value="{{ supplier.supplier_code if supplier else '' }}"
+                           required
+                           maxlength="30"
+                           placeholder="SUP-001"
+                           class="form-input">
+                    <p class="form-hint">Unique identifier for this supplier</p>
+                </div>
+
+                <div>
+                    <label class="form-label">
+                        Supplier Name <span class="text-rose-500">*</span>
+                    </label>
+                    <input type="text"
+                           name="supplier_name"
+                           value="{{ supplier.supplier_name if supplier else '' }}"
+                           required
+                           maxlength="200"
+                           placeholder="Acme Corporation"
+                           class="form-input">
+                </div>
+
+                <div>
+                    <label class="form-label">Tax ID</label>
+                    <input type="text"
+                           name="tax_id"
+                           value="{{ supplier.tax_id if supplier else '' }}"
+                           maxlength="50"
+                           placeholder="12-3456789"
+                           class="form-input">
+                </div>
+
+                <div>
+                    <label class="form-label">
+                        Currency <span class="text-rose-500">*</span>
+                    </label>
+                    <select name="currency_code" required class="form-select">
+                        <option value="">Select currency</option>
+                        {% set selected_currency = supplier.currency_code if supplier else default_currency_code %}
+                        {% for currency in currencies %}
+                        <option value="{{ currency.code }}" {{ 'selected' if currency.code == selected_currency else '' }}>
+                            {{ currency.code }} - {{ currency.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Payment Terms -->
+        <div class="card stagger-in" style="animation-delay: 100ms;">
+            <div class="card-header border-b border-slate-100 dark:border-slate-700">
+                <div class="flex items-center gap-4">
+                    <div class="card-icon bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display">Payment Terms</h2>
+                        <p class="text-sm text-slate-500 dark:text-slate-400">Configure payment schedule</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-6 grid gap-6 sm:grid-cols-2">
+                <div>
+                    <label class="form-label">Payment Terms (Days)</label>
+                    <input type="number"
+                           name="payment_terms_days"
+                           value="{{ supplier.payment_terms_days if supplier else 30 }}"
+                           min="0"
+                           max="365"
+                           class="form-input">
+                    <p class="form-hint">Net days until payment is due</p>
+                </div>
+
+                <div>
+                    <label class="form-label">Preferred Payment Method</label>
+                    <select name="payment_method" class="form-select">
+                        <option value="">Select method</option>
+                        <option value="BANK_TRANSFER" {{ 'selected' if supplier and supplier.payment_method == 'BANK_TRANSFER' else '' }}>Bank Transfer</option>
+                        <option value="CHECK" {{ 'selected' if supplier and supplier.payment_method == 'CHECK' else '' }}>Check</option>
+                        <option value="WIRE" {{ 'selected' if supplier and supplier.payment_method == 'WIRE' else '' }}>Wire Transfer</option>
+                        <option value="CASH" {{ 'selected' if supplier and supplier.payment_method == 'CASH' else '' }}>Cash</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- GL Accounts -->
+        <div class="card stagger-in" style="animation-delay: 150ms;">
+            <div class="card-header border-b border-slate-100 dark:border-slate-700">
+                <div class="flex items-center gap-4">
+                    <div class="card-icon bg-teal-50 text-teal-600 dark:bg-teal-900/30 dark:text-teal-400">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display">GL Accounts</h2>
+                        <p class="text-sm text-slate-500 dark:text-slate-400">Default posting accounts</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-6 grid gap-6 sm:grid-cols-2">
+                <div>
+                    <label class="form-label">Default Expense Account</label>
+                    <select name="default_expense_account_id" class="form-select">
+                        <option value="">Select account</option>
+                        {% for account in expense_accounts %}
+                        <option value="{{ account.account_id }}" {{ 'selected' if supplier and supplier.default_expense_account_id == account.account_id else '' }}>
+                            {{ account.account_code }} - {{ account.account_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label class="form-label">Default Payable Account</label>
+                    <select name="default_payable_account_id" class="form-select">
+                        <option value="">Select account</option>
+                        {% for account in payable_accounts %}
+                        <option value="{{ account.account_id }}" {{ 'selected' if supplier and supplier.default_payable_account_id == account.account_id else '' }}>
+                            {{ account.account_code }} - {{ account.account_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Contact Information -->
+        <div class="card stagger-in" style="animation-delay: 200ms;">
+            <div class="card-header border-b border-slate-100 dark:border-slate-700">
+                <div class="flex items-center gap-4">
+                    <div class="card-icon bg-violet-50 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display">Contact Details</h2>
+                        <p class="text-sm text-slate-500 dark:text-slate-400">Communication information</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-6 grid gap-6 sm:grid-cols-2">
+                <div>
+                    <label class="form-label">Email Address</label>
+                    <input type="email"
+                           name="email"
+                           value="{{ supplier.email if supplier else '' }}"
+                           placeholder="accounts@supplier.com"
+                           class="form-input">
+                </div>
+
+                <div>
+                    <label class="form-label">Phone Number</label>
+                    <input type="tel"
+                           name="phone"
+                           value="{{ supplier.phone if supplier else '' }}"
+                           placeholder="+1 (555) 123-4567"
+                           class="form-input">
+                </div>
+
+                <div class="sm:col-span-2">
+                    <label class="form-label">Business Address</label>
+                    <textarea name="address"
+                              rows="3"
+                              placeholder="Enter complete business address"
+                              class="form-input resize-none">{{ supplier.address if supplier else '' }}</textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- Status Toggle (Edit only) -->
+        {% if supplier %}
+        <div class="card stagger-in" style="animation-delay: 250ms;">
+            <div class="card-header border-b border-slate-100 dark:border-slate-700">
+                <div class="flex items-center gap-4">
+                    <div class="card-icon bg-cyan-50 text-cyan-600 dark:bg-cyan-900/30 dark:text-cyan-400">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display">Status</h2>
+                        <p class="text-sm text-slate-500 dark:text-slate-400">Supplier availability</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-6" x-data="{ active: {{ 'true' if supplier.is_active else 'false' }} }">
+                <div class="flex items-center gap-4">
+                    <button type="button"
+                            @click="active = !active"
+                            :class="active ? 'bg-teal-500' : 'bg-slate-200 dark:bg-slate-700'"
+                            class="relative inline-flex h-7 w-12 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900">
+                        <span :class="active ? 'translate-x-5' : 'translate-x-0'"
+                              class="pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"></span>
+                    </button>
+                    <input type="hidden" name="is_active" :value="active">
+                    <span class="text-sm font-medium text-slate-900 dark:text-white" x-text="active ? 'Active' : 'Inactive'"></span>
+                </div>
+                <p class="form-hint mt-3">Inactive suppliers cannot be used in new transactions</p>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Form Actions -->
+        <div class="flex items-center justify-between pt-4 stagger-in" style="animation-delay: 300ms;">
+            <p class="text-sm text-slate-500 dark:text-slate-400">
+                <span class="text-rose-500">*</span> Required fields
+            </p>
+            <div class="flex items-center gap-4">
+                <a href="/finance/ap/suppliers" class="btn btn-ghost">
+                    Cancel
+                </a>
+                <button type="submit" class="btn btn-primary">
+                    <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                    </svg>
+                    {{ "Update Supplier" if supplier else "Create Supplier" }}
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('htmx:afterRequest', function(evt) {
+        if (evt.detail.successful) {
+            window.dispatchEvent(new CustomEvent('show-toast', {
+                detail: { message: 'Supplier saved successfully', type: 'success' }
+            }));
+            setTimeout(() => window.location.href = '/finance/ap/suppliers', 1000);
+        } else {
+            const response = JSON.parse(evt.detail.xhr.responseText);
+            window.dispatchEvent(new CustomEvent('show-toast', {
+                detail: { message: response.detail || 'Error saving supplier', type: 'error' }
+            }));
+        }
+    });
+</script>
+{% endblock %}

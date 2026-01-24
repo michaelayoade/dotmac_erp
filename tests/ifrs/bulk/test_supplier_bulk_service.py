@@ -23,7 +23,7 @@ class TestCanDelete:
         mock_db.query.return_value.filter.return_value.count.return_value = 0
 
         with patch("app.services.ifrs.ap.bulk.Supplier", MagicMock()):
-            from app.services.ifrs.ap.bulk import SupplierBulkService
+            from app.services.finance.ap.bulk import SupplierBulkService
 
             service = SupplierBulkService(mock_db, organization_id)
             can_delete, reason = service.can_delete(mock_supplier)
@@ -36,7 +36,7 @@ class TestCanDelete:
         mock_db.query.return_value.filter.return_value.count.return_value = 5
 
         with patch("app.services.ifrs.ap.bulk.Supplier", MagicMock()):
-            from app.services.ifrs.ap.bulk import SupplierBulkService
+            from app.services.finance.ap.bulk import SupplierBulkService
 
             service = SupplierBulkService(mock_db, organization_id)
             can_delete, reason = service.can_delete(mock_supplier)
@@ -50,7 +50,7 @@ class TestCanDelete:
         mock_db.query.return_value.filter.return_value.count.return_value = 10
 
         with patch("app.services.ifrs.ap.bulk.Supplier", MagicMock()):
-            from app.services.ifrs.ap.bulk import SupplierBulkService
+            from app.services.finance.ap.bulk import SupplierBulkService
 
             service = SupplierBulkService(mock_db, organization_id)
             can_delete, reason = service.can_delete(supplier)
@@ -63,7 +63,7 @@ class TestCanDelete:
         mock_db.query.return_value.filter.return_value.count.return_value = 3
 
         with patch("app.services.ifrs.ap.bulk.Supplier", MagicMock()):
-            from app.services.ifrs.ap.bulk import SupplierBulkService
+            from app.services.finance.ap.bulk import SupplierBulkService
 
             service = SupplierBulkService(mock_db, organization_id)
             can_delete, reason = service.can_delete(supplier)
@@ -75,7 +75,7 @@ class TestCanDelete:
         mock_db.query.return_value.filter.return_value.count.return_value = 0
 
         with patch("app.services.ifrs.ap.bulk.Supplier", MagicMock()):
-            from app.services.ifrs.ap.bulk import SupplierBulkService
+            from app.services.finance.ap.bulk import SupplierBulkService
 
             service = SupplierBulkService(mock_db, organization_id)
             result = service.can_delete(mock_supplier)
@@ -96,7 +96,7 @@ class TestGetExportValue:
         supplier = MockSupplier(supplier_type=MockSupplierType.vendor)
 
         with patch("app.services.ifrs.ap.bulk.Supplier", MagicMock()):
-            from app.services.ifrs.ap.bulk import SupplierBulkService
+            from app.services.finance.ap.bulk import SupplierBulkService
 
             service = SupplierBulkService(mock_db, organization_id)
             value = service._get_export_value(supplier, "supplier_type")
@@ -108,7 +108,7 @@ class TestGetExportValue:
         supplier = MockSupplier(supplier_type=MockSupplierType.contractor)
 
         with patch("app.services.ifrs.ap.bulk.Supplier", MagicMock()):
-            from app.services.ifrs.ap.bulk import SupplierBulkService
+            from app.services.finance.ap.bulk import SupplierBulkService
 
             service = SupplierBulkService(mock_db, organization_id)
             value = service._get_export_value(supplier, "supplier_type")
@@ -120,7 +120,7 @@ class TestGetExportValue:
         supplier = MockSupplier(supplier_type=None)
 
         with patch("app.services.ifrs.ap.bulk.Supplier", MagicMock()):
-            from app.services.ifrs.ap.bulk import SupplierBulkService
+            from app.services.finance.ap.bulk import SupplierBulkService
 
             service = SupplierBulkService(mock_db, organization_id)
             value = service._get_export_value(supplier, "supplier_type")
@@ -134,7 +134,7 @@ class TestGetExportValue:
         )
 
         with patch("app.services.ifrs.ap.bulk.Supplier", MagicMock()):
-            from app.services.ifrs.ap.bulk import SupplierBulkService
+            from app.services.finance.ap.bulk import SupplierBulkService
 
             service = SupplierBulkService(mock_db, organization_id)
             value = service._get_export_value(supplier, "primary_contact.name")
@@ -148,7 +148,7 @@ class TestGetExportValue:
         )
 
         with patch("app.services.ifrs.ap.bulk.Supplier", MagicMock()):
-            from app.services.ifrs.ap.bulk import SupplierBulkService
+            from app.services.finance.ap.bulk import SupplierBulkService
 
             service = SupplierBulkService(mock_db, organization_id)
             value = service._get_export_value(supplier, "primary_contact.email")
@@ -162,7 +162,7 @@ class TestGetExportValue:
         )
 
         with patch("app.services.ifrs.ap.bulk.Supplier", MagicMock()):
-            from app.services.ifrs.ap.bulk import SupplierBulkService
+            from app.services.finance.ap.bulk import SupplierBulkService
 
             service = SupplierBulkService(mock_db, organization_id)
             value = service._get_export_value(supplier, "primary_contact.phone")
@@ -174,7 +174,7 @@ class TestGetExportValue:
         supplier = MockSupplier(primary_contact=None)
 
         with patch("app.services.ifrs.ap.bulk.Supplier", MagicMock()):
-            from app.services.ifrs.ap.bulk import SupplierBulkService
+            from app.services.finance.ap.bulk import SupplierBulkService
 
             service = SupplierBulkService(mock_db, organization_id)
             value = service._get_export_value(supplier, "primary_contact.name")
@@ -186,7 +186,7 @@ class TestGetExportValue:
         supplier = MockSupplier(primary_contact={"name": "John"})
 
         with patch("app.services.ifrs.ap.bulk.Supplier", MagicMock()):
-            from app.services.ifrs.ap.bulk import SupplierBulkService
+            from app.services.finance.ap.bulk import SupplierBulkService
 
             service = SupplierBulkService(mock_db, organization_id)
             value = service._get_export_value(supplier, "primary_contact.email")
@@ -198,7 +198,7 @@ class TestGetExportValue:
         supplier = MockSupplier(is_active=True, is_related_party=False)
 
         with patch("app.services.ifrs.ap.bulk.Supplier", MagicMock()):
-            from app.services.ifrs.ap.bulk import SupplierBulkService
+            from app.services.finance.ap.bulk import SupplierBulkService
 
             service = SupplierBulkService(mock_db, organization_id)
             active_value = service._get_export_value(supplier, "is_active")
@@ -212,7 +212,7 @@ class TestGetExportValue:
         supplier = MockSupplier(legal_name="Test Supplier", currency_code="EUR")
 
         with patch("app.services.ifrs.ap.bulk.Supplier", MagicMock()):
-            from app.services.ifrs.ap.bulk import SupplierBulkService
+            from app.services.finance.ap.bulk import SupplierBulkService
 
             service = SupplierBulkService(mock_db, organization_id)
             name_value = service._get_export_value(supplier, "legal_name")
@@ -230,7 +230,7 @@ class TestGetExportFilename:
     def test_filename_includes_suppliers(self, mock_db, organization_id):
         """Filename should include 'suppliers'."""
         with patch("app.services.ifrs.ap.bulk.Supplier", MagicMock()):
-            from app.services.ifrs.ap.bulk import SupplierBulkService
+            from app.services.finance.ap.bulk import SupplierBulkService
 
             service = SupplierBulkService(mock_db, organization_id)
             filename = service._get_export_filename()
@@ -240,7 +240,7 @@ class TestGetExportFilename:
     def test_filename_includes_timestamp(self, mock_db, organization_id):
         """Filename should include a timestamp."""
         with patch("app.services.ifrs.ap.bulk.Supplier", MagicMock()):
-            from app.services.ifrs.ap.bulk import SupplierBulkService
+            from app.services.finance.ap.bulk import SupplierBulkService
 
             service = SupplierBulkService(mock_db, organization_id)
             filename = service._get_export_filename()
@@ -252,7 +252,7 @@ class TestGetExportFilename:
     def test_filename_ends_csv(self, mock_db, organization_id):
         """Filename should end with .csv."""
         with patch("app.services.ifrs.ap.bulk.Supplier", MagicMock()):
-            from app.services.ifrs.ap.bulk import SupplierBulkService
+            from app.services.finance.ap.bulk import SupplierBulkService
 
             service = SupplierBulkService(mock_db, organization_id)
             filename = service._get_export_filename()
@@ -278,7 +278,7 @@ class TestBulkDelete:
         mock_db.query.return_value.filter.return_value.count.return_value = 0
 
         with patch("app.services.ifrs.ap.bulk.Supplier", MagicMock()):
-            from app.services.ifrs.ap.bulk import SupplierBulkService
+            from app.services.finance.ap.bulk import SupplierBulkService
 
             service = SupplierBulkService(mock_db, organization_id)
             result = await service.bulk_delete([supplier1.supplier_id, supplier2.supplier_id])
@@ -307,7 +307,7 @@ class TestBulkDelete:
         mock_db.query.return_value.filter.return_value.count = mock_count
 
         with patch("app.services.ifrs.ap.bulk.Supplier", MagicMock()):
-            from app.services.ifrs.ap.bulk import SupplierBulkService
+            from app.services.finance.ap.bulk import SupplierBulkService
 
             service = SupplierBulkService(mock_db, organization_id)
             result = await service.bulk_delete([supplier1.supplier_id, supplier2.supplier_id])
@@ -329,7 +329,7 @@ class TestBulkDelete:
         mock_db.query.return_value.filter.return_value.count.return_value = 10
 
         with patch("app.services.ifrs.ap.bulk.Supplier", MagicMock()):
-            from app.services.ifrs.ap.bulk import SupplierBulkService
+            from app.services.finance.ap.bulk import SupplierBulkService
 
             service = SupplierBulkService(mock_db, organization_id)
             result = await service.bulk_delete([supplier1.supplier_id, supplier2.supplier_id])
@@ -341,7 +341,7 @@ class TestBulkDelete:
     async def test_bulk_delete_empty_ids(self, mock_db, organization_id):
         """Empty IDs list should return failure."""
         with patch("app.services.ifrs.ap.bulk.Supplier", MagicMock()):
-            from app.services.ifrs.ap.bulk import SupplierBulkService
+            from app.services.finance.ap.bulk import SupplierBulkService
 
             service = SupplierBulkService(mock_db, organization_id)
             result = await service.bulk_delete([])
@@ -357,7 +357,7 @@ class TestBulkDelete:
         mock_db.query.return_value.filter.return_value.count.return_value = 0
 
         with patch("app.services.ifrs.ap.bulk.Supplier", MagicMock()):
-            from app.services.ifrs.ap.bulk import SupplierBulkService
+            from app.services.finance.ap.bulk import SupplierBulkService
 
             service = SupplierBulkService(mock_db, organization_id)
             await service.bulk_delete([supplier.supplier_id])
@@ -376,7 +376,7 @@ class TestBulkExport:
         mock_db.query.return_value.filter.return_value.all.return_value = [mock_supplier]
 
         with patch("app.services.ifrs.ap.bulk.Supplier", MagicMock()):
-            from app.services.ifrs.ap.bulk import SupplierBulkService
+            from app.services.finance.ap.bulk import SupplierBulkService
 
             service = SupplierBulkService(mock_db, organization_id)
             response = await service.bulk_export([mock_supplier.supplier_id])
@@ -396,7 +396,7 @@ class TestBulkExport:
         mock_db.query.return_value.filter.return_value.all.return_value = [mock_supplier]
 
         with patch("app.services.ifrs.ap.bulk.Supplier", MagicMock()):
-            from app.services.ifrs.ap.bulk import SupplierBulkService
+            from app.services.finance.ap.bulk import SupplierBulkService
 
             service = SupplierBulkService(mock_db, organization_id)
             response = await service.bulk_export([mock_supplier.supplier_id])
@@ -416,7 +416,7 @@ class TestBulkExport:
         mock_db.query.return_value.filter.return_value.all.return_value = []
 
         with patch("app.services.ifrs.ap.bulk.Supplier", MagicMock()):
-            from app.services.ifrs.ap.bulk import SupplierBulkService
+            from app.services.finance.ap.bulk import SupplierBulkService
 
             service = SupplierBulkService(mock_db, organization_id)
 
@@ -433,7 +433,7 @@ class TestBulkExport:
         mock_db.query.return_value.filter.return_value.all.return_value = [mock_supplier]
 
         with patch("app.services.ifrs.ap.bulk.Supplier", MagicMock()):
-            from app.services.ifrs.ap.bulk import SupplierBulkService
+            from app.services.finance.ap.bulk import SupplierBulkService
 
             service = SupplierBulkService(mock_db, organization_id)
             response = await service.bulk_export([mock_supplier.supplier_id])
@@ -450,7 +450,7 @@ class TestFactoryFunction:
     def test_factory_creates_service(self, mock_db, organization_id, user_id):
         """Factory should create SupplierBulkService instance."""
         with patch("app.services.ifrs.ap.bulk.Supplier", MagicMock()):
-            from app.services.ifrs.ap.bulk import get_supplier_bulk_service
+            from app.services.finance.ap.bulk import get_supplier_bulk_service
 
             service = get_supplier_bulk_service(mock_db, organization_id, user_id)
 
@@ -461,7 +461,7 @@ class TestFactoryFunction:
     def test_factory_user_id_optional(self, mock_db, organization_id):
         """Factory should work without user_id."""
         with patch("app.services.ifrs.ap.bulk.Supplier", MagicMock()):
-            from app.services.ifrs.ap.bulk import get_supplier_bulk_service
+            from app.services.finance.ap.bulk import get_supplier_bulk_service
 
             service = get_supplier_bulk_service(mock_db, organization_id)
 

@@ -16,9 +16,9 @@ import pytest
 
 # ============ Mock Enums ============
 
-from app.models.ifrs.ar.customer import CustomerType, RiskCategory
-from app.models.ifrs.ar.customer_payment import PaymentMethod, PaymentStatus
-from app.models.ifrs.ar.invoice import InvoiceStatus, InvoiceType
+from app.models.finance.ar.customer import CustomerType, RiskCategory
+from app.models.finance.ar.customer_payment import PaymentMethod, PaymentStatus
+from app.models.finance.ar.invoice import InvoiceStatus, InvoiceType
 
 MockCustomerType = CustomerType
 MockRiskCategory = RiskCategory

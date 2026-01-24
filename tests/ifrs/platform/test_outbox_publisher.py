@@ -35,7 +35,7 @@ class TestOutboxPublisher:
         with patch.dict('sys.modules', {
             'app.models.ifrs.platform.event_outbox': MagicMock(),
         }):
-            from app.services.ifrs.platform.outbox_publisher import OutboxPublisher
+            from app.services.finance.platform.outbox_publisher import OutboxPublisher
             return OutboxPublisher
 
     @pytest.fixture

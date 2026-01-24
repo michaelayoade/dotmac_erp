@@ -10,8 +10,8 @@ from decimal import Decimal
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
-from app.models.ifrs.exp.expense_entry import ExpenseStatus, PaymentMethod
-from app.services.ifrs.exp.expense import ExpenseService
+from app.models.finance.exp.expense_entry import ExpenseStatus, PaymentMethod
+from app.services.finance.exp.expense import ExpenseService
 
 
 class MockExpenseEntry:

@@ -10,7 +10,7 @@ from enum import Enum
 
 import pytest
 
-from app.services.ifrs.common.formatters import (
+from app.services.finance.common.formatters import (
     parse_date,
     format_date,
     format_date_display,

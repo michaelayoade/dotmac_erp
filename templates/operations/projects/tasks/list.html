@@ -1,0 +1,153 @@
+{% extends "operations/base_operations.html" %}
+
+{% block title %}Tasks - {{ project.project_name }}{% endblock %}
+
+{% block page_title %}Tasks{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 mt-1">
+    <a href="/operations/dashboard" class="hover:text-amber-600 dark:hover:text-amber-400">Operations</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+    <a href="/operations/projects" class="hover:text-amber-600 dark:hover:text-amber-400">Projects</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+    <a href="/operations/projects/{{ project.project_code }}" class="hover:text-amber-600 dark:hover:text-amber-400">{{ project.project_code }}</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+    <span class="text-slate-700 dark:text-slate-300">Tasks</span>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<a href="/operations/projects/{{ project.project_code }}/tasks/new"
+   class="inline-flex items-center gap-2 rounded-lg bg-amber-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-amber-700 transition-colors">
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+    </svg>
+    New Task
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+    <!-- Filters -->
+    <form method="get" class="flex flex-wrap items-center gap-4">
+        <select name="status"
+                class="rounded-lg border-slate-300 text-sm focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
+            <option value="">All Statuses</option>
+            {% for s in statuses %}
+            <option value="{{ s }}" {{ 'selected' if status_filter == s else '' }}>{{ s }}</option>
+            {% endfor %}
+        </select>
+        <select name="priority"
+                class="rounded-lg border-slate-300 text-sm focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
+            <option value="">All Priorities</option>
+            {% for p in priorities %}
+            <option value="{{ p }}" {{ 'selected' if priority_filter == p else '' }}>{{ p }}</option>
+            {% endfor %}
+        </select>
+        <button type="submit" class="rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600 transition-colors">Filter</button>
+    </form>
+
+    <!-- Tasks Table -->
+    <div class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
+        <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+            <thead class="bg-slate-50 dark:bg-slate-800/50">
+                <tr>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Task</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Status</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Priority</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Assigned To</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Due Date</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Progress</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                {% for task in tasks %}
+                <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                    <td class="px-6 py-4">
+                        <a href="/operations/projects/{{ project.project_code }}/tasks/{{ task.task_id }}"
+                           class="text-sm font-medium text-slate-900 hover:text-amber-600 dark:text-white dark:hover:text-amber-400">
+                            {{ task.task_name }}
+                        </a>
+                        <div class="text-xs text-slate-500 dark:text-slate-400">{{ task.task_code }}</div>
+                    </td>
+                    <td class="px-6 py-4">
+                        {% set status_colors = {
+                            'OPEN': 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
+                            'IN_PROGRESS': 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
+                            'PENDING_REVIEW': 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300',
+                            'COMPLETED': 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
+                            'CANCELLED': 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300',
+                            'ON_HOLD': 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300'
+                        } %}
+                        <span class="inline-flex rounded-full px-2 py-1 text-xs font-medium {{ status_colors.get(task.status.value, 'bg-slate-100') }}">
+                            {{ task.status.value }}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4">
+                        {% set priority_colors = {
+                            'LOW': 'text-slate-500',
+                            'MEDIUM': 'text-blue-600',
+                            'HIGH': 'text-amber-600',
+                            'URGENT': 'text-red-600'
+                        } %}
+                        <span class="text-sm font-medium {{ priority_colors.get(task.priority.value, 'text-slate-500') }}">
+                            {{ task.priority.value }}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4">
+                        {% if task.assigned_to %}
+                        <span class="text-sm text-slate-600 dark:text-slate-400">{{ task.assigned_to.full_name if task.assigned_to.full_name else 'Assigned' }}</span>
+                        {% else %}
+                        <span class="text-sm text-slate-400 dark:text-slate-500">Unassigned</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-6 py-4">
+                        {% if task.due_date %}
+                        <span class="text-sm {{ 'text-red-600 dark:text-red-400' if task.is_overdue else 'text-slate-600 dark:text-slate-400' }}">
+                            {{ task.due_date.strftime('%d %b %Y') }}
+                        </span>
+                        {% else %}
+                        <span class="text-sm text-slate-400">-</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-6 py-4">
+                        <div class="flex items-center gap-2">
+                            <div class="h-2 w-16 rounded-full bg-slate-200 dark:bg-slate-700">
+                                <div class="h-2 rounded-full bg-amber-500" style="width: {{ task.progress_percent }}%"></div>
+                            </div>
+                            <span class="text-xs text-slate-500">{{ task.progress_percent }}%</span>
+                        </div>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="6" class="px-6 py-12 text-center">
+                        <p class="text-sm text-slate-500 dark:text-slate-400">No tasks found</p>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Pagination -->
+    {% if total_pages > 1 %}
+    <div class="flex items-center justify-between">
+        <div class="text-sm text-slate-500 dark:text-slate-400">
+            Showing {{ (page - 1) * per_page + 1 }} to {{ [(page * per_page), total] | min }} of {{ total }} tasks
+        </div>
+        <nav class="flex items-center gap-1">
+            {% if page > 1 %}
+            <a href="?page={{ page - 1 }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if priority_filter %}&priority={{ priority_filter }}{% endif %}"
+               class="rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-700">Previous</a>
+            {% endif %}
+            {% if page < total_pages %}
+            <a href="?page={{ page + 1 }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if priority_filter %}&priority={{ priority_filter }}{% endif %}"
+               class="rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-700">Next</a>
+            {% endif %}
+        </nav>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
