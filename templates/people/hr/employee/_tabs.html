@@ -1,0 +1,61 @@
+{# Employee detail sub-navigation tabs #}
+<div class="card mb-6">
+    <div class="flex items-center gap-4 p-4 border-b border-slate-200 dark:border-slate-700">
+        <div class="w-12 h-12 rounded-full bg-teal-100 dark:bg-teal-900 flex items-center justify-center flex-shrink-0">
+            <span class="text-lg font-bold text-teal-600 dark:text-teal-400">
+                {{ (employee.full_name or '?')[0] }}
+            </span>
+        </div>
+        <div>
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white">{{ employee.full_name }}</h2>
+            <p class="text-sm text-slate-500 dark:text-slate-400">{{ employee.employee_code }}</p>
+        </div>
+        <a href="/people/hr/employees/{{ employee.employee_id }}" class="ml-auto text-sm text-teal-600 hover:text-teal-700 dark:text-teal-400">
+            View Profile
+        </a>
+    </div>
+    <nav class="flex overflow-x-auto">
+        {% set current_path = request.url.path %}
+        {% set tabs = [
+            {'url': '/people/hr/employees/' ~ employee.employee_id ~ '/documents', 'label': 'Documents', 'icon': 'document'},
+            {'url': '/people/hr/employees/' ~ employee.employee_id ~ '/qualifications', 'label': 'Qualifications', 'icon': 'academic'},
+            {'url': '/people/hr/employees/' ~ employee.employee_id ~ '/certifications', 'label': 'Certifications', 'icon': 'badge'},
+            {'url': '/people/hr/employees/' ~ employee.employee_id ~ '/dependents', 'label': 'Dependents', 'icon': 'users'},
+            {'url': '/people/hr/employees/' ~ employee.employee_id ~ '/skills', 'label': 'Skills', 'icon': 'star'},
+        ] %}
+        {% for tab in tabs %}
+        <a href="{{ tab.url }}"
+           class="flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 whitespace-nowrap
+                  {% if current_path.startswith(tab.url) %}
+                  text-teal-600 border-teal-600 dark:text-teal-400 dark:border-teal-400
+                  {% else %}
+                  text-slate-600 border-transparent hover:text-slate-900 hover:border-slate-300 dark:text-slate-400 dark:hover:text-white
+                  {% endif %}">
+            {% if tab.icon == 'document' %}
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+            </svg>
+            {% elif tab.icon == 'academic' %}
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path d="M12 14l9-5-9-5-9 5 9 5z"/>
+                <path d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z"/>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l9-5-9-5-9 5 9 5zm0 0l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14zm-4 6v-7.5l4-2.222"/>
+            </svg>
+            {% elif tab.icon == 'badge' %}
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"/>
+            </svg>
+            {% elif tab.icon == 'users' %}
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
+            </svg>
+            {% elif tab.icon == 'star' %}
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/>
+            </svg>
+            {% endif %}
+            {{ tab.label }}
+        </a>
+        {% endfor %}
+    </nav>
+</div>

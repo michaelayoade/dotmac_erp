@@ -58,6 +58,7 @@ class DepartmentCreateData:
     description: Optional[str] = None
     parent_department_id: Optional[uuid.UUID] = None
     cost_center_id: Optional[uuid.UUID] = None
+    head_id: Optional[uuid.UUID] = None
     is_active: bool = True
 
 
@@ -70,6 +71,7 @@ class DepartmentUpdateData:
     description: Optional[str] = None
     parent_department_id: Optional[uuid.UUID] = None
     cost_center_id: Optional[uuid.UUID] = None
+    head_id: Optional[uuid.UUID] = None
     is_active: Optional[bool] = None
 
 
@@ -82,6 +84,8 @@ class DepartmentNode:
     department_name: str
     parent_department_id: Optional[uuid.UUID]
     cost_center_id: Optional[uuid.UUID]
+    head_id: Optional[uuid.UUID]
+    head_name: Optional[str]
     is_active: bool
     children: List["DepartmentNode"] = field(default_factory=list)
 

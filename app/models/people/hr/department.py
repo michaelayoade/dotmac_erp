@@ -66,6 +66,14 @@ class Department(Base, AuditMixin, SoftDeleteMixin, ERPNextSyncMixin):
         nullable=True,
     )
 
+    # Department Head
+    head_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("hr.employee.employee_id"),
+        nullable=True,
+        comment="Employee who heads this department",
+    )
+
     # GL Integration
     cost_center_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
@@ -113,4 +121,9 @@ class Department(Base, AuditMixin, SoftDeleteMixin, ERPNextSyncMixin):
         "Employee",
         back_populates="department",
         foreign_keys="Employee.department_id",
+    )
+    head: Mapped[Optional["Employee"]] = relationship(
+        "Employee",
+        foreign_keys=[head_id],
+        post_update=True,  # Break circular dependency
     )

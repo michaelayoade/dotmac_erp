@@ -1,0 +1,276 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}New Scorecard{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/perf/scorecards" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Scorecards</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">New</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl" x-data="scorecardForm()">
+    {% if error %}
+    <div class="mb-6 p-4 rounded-lg bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-800">
+        <div class="flex items-center gap-2 text-red-700 dark:text-red-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span>{{ error }}</span>
+        </div>
+    </div>
+    {% endif %}
+
+    <form method="post" action="/people/perf/scorecards/new" @submit="prepareSubmit" class="space-y-6">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="items_json" x-model="itemsJson">
+
+        <!-- Basic Info Card -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Scorecard Details</h3>
+            </div>
+            <div class="card-body space-y-4">
+                <div>
+                    <label for="employee_id" class="form-label required">Employee</label>
+                    <select name="employee_id" id="employee_id" required class="form-select w-full">
+                        <option value="">Select Employee...</option>
+                        {% for emp in employees %}
+                        <option value="{{ emp.employee_id }}" {% if form_data.employee_id == emp.employee_id | string %}selected{% endif %}>
+                            {{ emp.full_name }}{% if emp.department %} - {{ emp.department.department_name }}{% endif %}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label for="period_start" class="form-label required">Period Start</label>
+                        <input type="date" name="period_start" id="period_start" required
+                               class="form-input w-full"
+                               value="{{ form_data.period_start or '' }}">
+                    </div>
+                    <div>
+                        <label for="period_end" class="form-label required">Period End</label>
+                        <input type="date" name="period_end" id="period_end" required
+                               class="form-input w-full"
+                               value="{{ form_data.period_end or '' }}">
+                    </div>
+                    <div>
+                        <label for="period_label" class="form-label">Period Label</label>
+                        <input type="text" name="period_label" id="period_label"
+                               class="form-input w-full"
+                               placeholder="e.g., Q1 2024, FY 2024"
+                               value="{{ form_data.period_label or '' }}">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Metrics Card -->
+        <div class="card">
+            <div class="card-header flex items-center justify-between">
+                <h3 class="font-medium text-slate-900 dark:text-white">Performance Metrics</h3>
+                <span class="text-sm text-slate-500 dark:text-slate-400">
+                    Total Weight: <span class="font-semibold" :class="totalWeight === 100 ? 'text-green-600' : 'text-amber-600'" x-text="totalWeight + '%'"></span>
+                </span>
+            </div>
+            <div class="card-body">
+                <!-- Perspective Tabs -->
+                <div class="border-b border-slate-200 dark:border-slate-700 mb-4">
+                    <nav class="flex gap-4">
+                        <template x-for="(label, key) in perspectiveLabels" :key="key">
+                            <button type="button"
+                                    @click="activePerspective = key"
+                                    :class="activePerspective === key ? 'border-teal-500 text-teal-600 dark:text-teal-400' : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400'"
+                                    class="pb-2 border-b-2 text-sm font-medium transition-colors">
+                                <span x-text="label"></span>
+                                <span class="ml-1 text-xs text-slate-400" x-text="'(' + getItemCount(key) + ')'"></span>
+                            </button>
+                        </template>
+                    </nav>
+                </div>
+
+                <!-- Items for Active Perspective -->
+                <div class="space-y-3">
+                    <template x-for="(item, index) in getItemsForPerspective(activePerspective)" :key="item.id">
+                        <div class="p-3 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                            <div class="flex items-start gap-4">
+                                <div class="flex-1 grid grid-cols-1 md:grid-cols-4 gap-3">
+                                    <div class="md:col-span-2">
+                                        <label class="text-xs text-slate-500 dark:text-slate-400">Metric Name</label>
+                                        <input type="text" x-model="item.metric_name" required
+                                               class="form-input w-full text-sm"
+                                               placeholder="e.g., Revenue Growth">
+                                    </div>
+                                    <div>
+                                        <label class="text-xs text-slate-500 dark:text-slate-400">Target Value</label>
+                                        <input type="number" step="0.01" x-model="item.target_value"
+                                               class="form-input w-full text-sm"
+                                               placeholder="100">
+                                    </div>
+                                    <div>
+                                        <label class="text-xs text-slate-500 dark:text-slate-400">Weight (%)</label>
+                                        <input type="number" min="0" max="100" x-model="item.weightage"
+                                               @input="recalculateTotal()"
+                                               class="form-input w-full text-sm"
+                                               placeholder="10">
+                                    </div>
+                                </div>
+                                <button type="button" @click="removeItem(item.id)"
+                                        class="mt-4 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                    </svg>
+                                </button>
+                            </div>
+                            <div class="mt-2 grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div>
+                                    <label class="text-xs text-slate-500 dark:text-slate-400">Unit of Measure</label>
+                                    <input type="text" x-model="item.unit_of_measure"
+                                           class="form-input w-full text-sm"
+                                           placeholder="e.g., %, USD, units">
+                                </div>
+                                <div>
+                                    <label class="text-xs text-slate-500 dark:text-slate-400">Description</label>
+                                    <input type="text" x-model="item.description"
+                                           class="form-input w-full text-sm"
+                                           placeholder="Brief description...">
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+
+                    <template x-if="getItemsForPerspective(activePerspective).length === 0">
+                        <p class="text-center text-sm text-slate-500 dark:text-slate-400 py-4">
+                            No metrics added for this perspective yet.
+                        </p>
+                    </template>
+                </div>
+
+                <button type="button" @click="addItem(activePerspective)"
+                        class="mt-4 btn btn-secondary w-full">
+                    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                    </svg>
+                    Add <span x-text="perspectiveLabels[activePerspective]"></span> Metric
+                </button>
+            </div>
+        </div>
+
+        <!-- Perspective Summary -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Weight Distribution</h3>
+            </div>
+            <div class="card-body">
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <template x-for="(label, key) in perspectiveLabels" :key="key">
+                        <div class="text-center p-3 rounded-lg bg-slate-50 dark:bg-slate-800">
+                            <p class="text-xs text-slate-500 dark:text-slate-400 mb-1" x-text="label"></p>
+                            <p class="text-lg font-bold text-slate-900 dark:text-white" x-text="getPerspectiveWeight(key) + '%'"></p>
+                            <p class="text-xs text-slate-400" x-text="getItemCount(key) + ' metrics'"></p>
+                        </div>
+                    </template>
+                </div>
+                <div class="mt-4 p-3 rounded-lg" :class="totalWeight === 100 ? 'bg-green-50 dark:bg-green-900/20' : 'bg-amber-50 dark:bg-amber-900/20'">
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm font-medium" :class="totalWeight === 100 ? 'text-green-700 dark:text-green-300' : 'text-amber-700 dark:text-amber-300'">
+                            Total Weight
+                        </span>
+                        <span class="text-lg font-bold" :class="totalWeight === 100 ? 'text-green-700 dark:text-green-300' : 'text-amber-700 dark:text-amber-300'" x-text="totalWeight + '%'"></span>
+                    </div>
+                    <template x-if="totalWeight !== 100">
+                        <p class="text-xs text-amber-600 dark:text-amber-400 mt-1">Weights should total 100% for accurate scoring.</p>
+                    </template>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex justify-end gap-3">
+            <a href="/people/perf/scorecards" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">
+                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                </svg>
+                Create Scorecard
+            </button>
+        </div>
+    </form>
+</div>
+
+<script>
+function scorecardForm() {
+    return {
+        activePerspective: 'FINANCIAL',
+        perspectiveLabels: {
+            'FINANCIAL': 'Financial',
+            'CUSTOMER': 'Customer',
+            'PROCESS': 'Process',
+            'LEARNING': 'Learning'
+        },
+        items: [],
+        itemsJson: '[]',
+        totalWeight: 0,
+        nextId: 1,
+
+        init() {
+            this.recalculateTotal();
+        },
+
+        addItem(perspective) {
+            this.items.push({
+                id: this.nextId++,
+                perspective: perspective,
+                metric_name: '',
+                target_value: null,
+                weightage: 0,
+                unit_of_measure: '',
+                description: ''
+            });
+            this.recalculateTotal();
+        },
+
+        removeItem(id) {
+            this.items = this.items.filter(i => i.id !== id);
+            this.recalculateTotal();
+        },
+
+        getItemsForPerspective(perspective) {
+            return this.items.filter(i => i.perspective === perspective);
+        },
+
+        getItemCount(perspective) {
+            return this.items.filter(i => i.perspective === perspective).length;
+        },
+
+        getPerspectiveWeight(perspective) {
+            return this.items
+                .filter(i => i.perspective === perspective)
+                .reduce((sum, i) => sum + (parseFloat(i.weightage) || 0), 0);
+        },
+
+        recalculateTotal() {
+            this.totalWeight = this.items.reduce((sum, i) => sum + (parseFloat(i.weightage) || 0), 0);
+        },
+
+        prepareSubmit() {
+            // Filter out empty items and prepare JSON
+            const validItems = this.items.filter(i => i.metric_name.trim());
+            this.itemsJson = JSON.stringify(validItems.map(i => ({
+                perspective: i.perspective,
+                metric_name: i.metric_name,
+                target_value: i.target_value ? parseFloat(i.target_value) : null,
+                weightage: parseFloat(i.weightage) || 0,
+                unit_of_measure: i.unit_of_measure || null,
+                description: i.description || null
+            })));
+        }
+    };
+}
+</script>
+{% endblock %}

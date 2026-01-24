@@ -76,6 +76,20 @@
                     </select>
                 </div>
 
+                <div>
+                    <label for="head_id" class="form-label">Department Head</label>
+                    <select name="head_id" id="head_id" class="form-input w-full">
+                        <option value="">None</option>
+                        {% for emp in employee_options %}
+                        <option value="{{ emp.employee_id }}"
+                            {{ 'selected' if department and department.head_id == emp.employee_id }}>
+                            {{ emp.full_name }} ({{ emp.employee_number }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <p class="text-xs text-slate-500 mt-1">Employee responsible for this department</p>
+                </div>
+
                 <div class="flex items-center">
                     <input type="checkbox" name="is_active" id="is_active" value="true"
                         {{ 'checked' if not department or department.is_active }}

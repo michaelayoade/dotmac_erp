@@ -7,15 +7,20 @@ body {
   font-family: var(--font-primary);
 }
 
+/* Override display and body fonts only - NOT font-mono
+   font-mono should use JetBrains Mono for tabular numbers */
 .font-display,
-.font-body,
-.font-mono {
+.font-body {
   font-family: var(--font-primary) !important;
 }
 
+/* Monospace elements use JetBrains Mono for proper tabular figures */
 code,
 kbd,
 pre,
-samp {
-  font-family: var(--font-primary) !important;
+samp,
+.font-mono,
+.tabular-nums {
+  font-family: 'JetBrains Mono', ui-monospace, monospace !important;
+  font-variant-numeric: tabular-nums lining-nums;
 }

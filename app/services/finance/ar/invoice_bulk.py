@@ -12,7 +12,9 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.models.finance.ar.invoice import Invoice, InvoiceStatus
+from app.schemas.bulk_actions import BulkActionResult
 from app.services.bulk_actions import BulkActionService
+from app.services.finance.ar.invoice import ARInvoiceService
 
 
 class ARInvoiceBulkService(BulkActionService[Invoice]):
@@ -97,6 +99,84 @@ class ARInvoiceBulkService(BulkActionService[Invoice]):
         """Get invoice export filename."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         return f"ar_invoices_export_{timestamp}.csv"
+
+    async def bulk_approve(self, ids: list[UUID]) -> BulkActionResult:
+        """
+        Approve multiple invoices.
+
+        Only invoices in SUBMITTED status can be approved.
+        Respects segregation of duties - approver cannot be submitter.
+        """
+        if not ids:
+            return BulkActionResult.failure("No IDs provided")
+
+        entities = self._get_entities(ids)
+        if not entities:
+            return BulkActionResult.failure("No invoices found with provided IDs")
+
+        success_count = 0
+        failed_count = 0
+        errors: list[str] = []
+
+        for invoice in entities:
+            try:
+                ARInvoiceService.approve_invoice(
+                    self.db,
+                    self.organization_id,
+                    invoice.invoice_id,
+                    self.user_id,
+                )
+                success_count += 1
+            except Exception as e:
+                failed_count += 1
+                errors.append(f"{invoice.invoice_number}: {str(e)}")
+
+        if success_count > 0:
+            self.db.commit()
+
+        if failed_count > 0:
+            return BulkActionResult.partial(success_count, failed_count, errors)
+
+        return BulkActionResult.success(success_count, f"Approved {success_count} invoices")
+
+    async def bulk_post(self, ids: list[UUID]) -> BulkActionResult:
+        """
+        Post multiple invoices to the General Ledger.
+
+        Only invoices in APPROVED status can be posted.
+        Creates journal entries for each invoice.
+        """
+        if not ids:
+            return BulkActionResult.failure("No IDs provided")
+
+        entities = self._get_entities(ids)
+        if not entities:
+            return BulkActionResult.failure("No invoices found with provided IDs")
+
+        success_count = 0
+        failed_count = 0
+        errors: list[str] = []
+
+        for invoice in entities:
+            try:
+                ARInvoiceService.post_invoice(
+                    self.db,
+                    self.organization_id,
+                    invoice.invoice_id,
+                    self.user_id,
+                )
+                success_count += 1
+            except Exception as e:
+                failed_count += 1
+                errors.append(f"{invoice.invoice_number}: {str(e)}")
+
+        if success_count > 0:
+            self.db.commit()
+
+        if failed_count > 0:
+            return BulkActionResult.partial(success_count, failed_count, errors)
+
+        return BulkActionResult.success(success_count, f"Posted {success_count} invoices to ledger")
 
 
 def get_ar_invoice_bulk_service(

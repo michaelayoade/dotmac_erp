@@ -1,0 +1,313 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}Attendance Requests{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/attendance" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Attendance</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">Requests</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6" x-data="requestsBulkActions()">
+    {# Success/Error Messages #}
+    {% if success %}
+    <div class="p-4 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800">
+        <div class="flex items-center gap-3">
+            <svg class="h-5 w-5 text-emerald-600 dark:text-emerald-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <p class="text-sm text-emerald-700 dark:text-emerald-300">{{ success }}</p>
+        </div>
+    </div>
+    {% endif %}
+    {% if error %}
+    <div class="p-4 rounded-lg bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800">
+        <div class="flex items-center gap-3">
+            <svg class="h-5 w-5 text-rose-600 dark:text-rose-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+            </svg>
+            <p class="text-sm text-rose-700 dark:text-rose-300">{{ error }}</p>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+            <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">Attendance Requests</h1>
+            <p class="text-sm text-slate-500 dark:text-slate-400">Review and approve attendance correction requests.</p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+            <a href="/people/attendance" class="btn btn-secondary">
+                <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                </svg>
+                Back to Attendance
+            </a>
+            <a href="/people/attendance/requests/new" class="btn btn-primary">
+                <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                </svg>
+                New Request
+            </a>
+        </div>
+    </div>
+
+    {# Filters #}
+    <div class="card">
+        <form method="get" class="p-4">
+            <div class="flex flex-wrap gap-4 items-end">
+                <div class="w-44">
+                    <label for="status" class="form-label">Status</label>
+                    <select name="status" id="status" class="form-select w-full">
+                        <option value="">All Statuses</option>
+                        {% for s in statuses %}
+                        <option value="{{ s }}" {% if status == s %}selected{% endif %}>{{ s | replace("_", " ") | title }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="w-44">
+                    <label for="start_date" class="form-label">From Date</label>
+                    <input type="date" name="start_date" id="start_date" value="{{ start_date | default('') }}" class="form-input w-full">
+                </div>
+                <div class="w-44">
+                    <label for="end_date" class="form-label">To Date</label>
+                    <input type="date" name="end_date" id="end_date" value="{{ end_date | default('') }}" class="form-input w-full">
+                </div>
+                <button type="submit" class="btn btn-secondary h-10">Filter</button>
+            </div>
+        </form>
+    </div>
+
+    {# Pending Requests Summary #}
+    {% if pending_count > 0 %}
+    <div class="card p-4 bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800">
+        <div class="flex items-center gap-3">
+            <div class="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/40">
+                <svg class="h-5 w-5 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+            </div>
+            <div>
+                <p class="text-sm font-medium text-amber-800 dark:text-amber-200">{{ pending_count }} pending request{{ 's' if pending_count != 1 else '' }} awaiting review</p>
+                <p class="text-xs text-amber-600 dark:text-amber-400">Select requests below to approve or reject in bulk</p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if requests %}
+    <div class="card overflow-hidden">
+        <form method="post" id="bulkForm">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+            {# Floating Bulk Action Toolbar #}
+            <div x-show="selectedCount > 0"
+                 x-transition:enter="transition ease-out duration-200"
+                 x-transition:enter-start="opacity-0 translate-y-2"
+                 x-transition:enter-end="opacity-100 translate-y-0"
+                 x-transition:leave="transition ease-in duration-150"
+                 x-transition:leave-start="opacity-100 translate-y-0"
+                 x-transition:leave-end="opacity-0 translate-y-2"
+                 class="sticky top-0 z-20 bg-teal-600 dark:bg-teal-700 text-white p-4 shadow-lg">
+                <div class="flex flex-wrap items-center justify-between gap-4">
+                    <div class="flex items-center gap-3">
+                        <span class="inline-flex items-center justify-center h-8 w-8 rounded-full bg-white/20 text-sm font-bold" x-text="selectedCount"></span>
+                        <span class="text-sm font-medium">request<span x-show="selectedCount !== 1">s</span> selected</span>
+                        <button type="button" @click="clearSelection()" class="text-sm text-teal-100 hover:text-white underline">Clear selection</button>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-3">
+                        <button type="submit" formaction="/people/attendance/requests/bulk-approve" class="btn btn-sm bg-emerald-500 hover:bg-emerald-600 text-white">
+                            <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                            </svg>
+                            Approve
+                        </button>
+                        <button type="submit" formaction="/people/attendance/requests/bulk-reject" class="btn btn-sm bg-rose-500 hover:bg-rose-600 text-white">
+                            <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                            Reject
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+                    <thead>
+                        <tr class="bg-slate-50 dark:bg-slate-800/50">
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider w-10">
+                                <input type="checkbox" id="selectAll" @change="toggleAll($event)" :checked="allSelected"
+                                       class="rounded border-slate-300 text-teal-600 focus:ring-teal-500 dark:border-slate-600 dark:bg-slate-700">
+                            </th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Employee</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Date Range</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Reason</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Status</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Requested</th>
+                            <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                        {% for req in requests %}
+                        <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                            <td class="px-4 py-3">
+                                {% if req.status == "PENDING" %}
+                                <input type="checkbox" name="request_ids" value="{{ req.attendance_request_id }}"
+                                       @change="updateSelection($event)"
+                                       class="request-checkbox rounded border-slate-300 text-teal-600 focus:ring-teal-500 dark:border-slate-600 dark:bg-slate-700">
+                                {% else %}
+                                <span class="w-4 h-4 inline-block"></span>
+                                {% endif %}
+                            </td>
+                            <td class="px-4 py-3">
+                                <div class="flex items-center gap-3">
+                                    <div class="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-teal-400 to-teal-600 text-white text-sm font-semibold">
+                                        {{ req.employee.full_name[:2] | upper if req.employee else '?' }}
+                                    </div>
+                                    <div>
+                                        <div class="text-sm font-medium text-slate-900 dark:text-white">{{ req.employee.full_name if req.employee else '-' }}</div>
+                                        <div class="text-xs text-slate-500 dark:text-slate-400">{{ req.employee.employee_code if req.employee else '' }}</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">
+                                {{ req.from_date.strftime('%d %b') }} - {{ req.to_date.strftime('%d %b %Y') }}
+                                {% if req.half_day %}
+                                <span class="ml-1 text-xs text-amber-600 dark:text-amber-400">(Half day)</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400 max-w-xs truncate">
+                                {{ req.reason or '-' }}
+                            </td>
+                            <td class="px-4 py-3">
+                                {% if req.status == "APPROVED" %}
+                                <span class="inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">Approved</span>
+                                {% elif req.status == "PENDING" %}
+                                <span class="inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">Pending</span>
+                                {% elif req.status == "REJECTED" %}
+                                <span class="inline-flex rounded-full bg-rose-50 px-2.5 py-1 text-xs font-medium text-rose-700 dark:bg-rose-900/30 dark:text-rose-300">Rejected</span>
+                                {% elif req.status == "DRAFT" %}
+                                <span class="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-300">Draft</span>
+                                {% else %}
+                                <span class="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-300">{{ req.status }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-4 py-3 text-sm text-slate-500 dark:text-slate-400">
+                                {{ req.created_at.strftime('%d %b %Y') if req.created_at else '-' }}
+                            </td>
+                            <td class="px-4 py-3 text-right">
+                                <div class="flex items-center justify-end gap-2">
+                                    {% if req.status == "PENDING" %}
+                                    <form method="post" action="/people/attendance/requests/{{ req.attendance_request_id }}/approve" class="inline">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                        <button type="submit" class="text-xs font-medium text-emerald-600 hover:text-emerald-700 dark:text-emerald-400">Approve</button>
+                                    </form>
+                                    <span class="text-slate-300 dark:text-slate-600">|</span>
+                                    <form method="post" action="/people/attendance/requests/{{ req.attendance_request_id }}/reject" class="inline">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                        <button type="submit" class="text-xs font-medium text-rose-600 hover:text-rose-700 dark:text-rose-400">Reject</button>
+                                    </form>
+                                    {% else %}
+                                    <span class="text-xs text-slate-400">-</span>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </form>
+    </div>
+    {% else %}
+    <div class="card p-8 text-center">
+        <div class="mx-auto w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-4">
+            <svg class="h-8 w-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+            </svg>
+        </div>
+        <p class="text-slate-500 dark:text-slate-400">No attendance requests found.</p>
+        <a href="/people/attendance/requests/new" class="btn btn-primary mt-4">Create First Request</a>
+    </div>
+    {% endif %}
+
+    {# Pagination #}
+    {% if total_pages > 1 %}
+    <div class="flex items-center justify-between">
+        <p class="text-sm text-slate-500 dark:text-slate-400">
+            Page <span class="font-medium text-slate-700 dark:text-slate-300">{{ page }}</span> of
+            <span class="font-medium text-slate-700 dark:text-slate-300">{{ total_pages }}</span>
+        </p>
+        <div class="flex gap-2">
+            {% if has_prev %}
+            <a href="?page={{ page - 1 }}&status={{ status | default('') }}&start_date={{ start_date | default('') }}&end_date={{ end_date | default('') }}" class="btn btn-secondary btn-sm">Previous</a>
+            {% endif %}
+            {% if has_next %}
+            <a href="?page={{ page + 1 }}&status={{ status | default('') }}&start_date={{ start_date | default('') }}&end_date={{ end_date | default('') }}" class="btn btn-secondary btn-sm">Next</a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+function requestsBulkActions() {
+    return {
+        selectedCount: 0,
+        allSelected: false,
+
+        init() {
+            this.updateSelectAllState();
+        },
+
+        toggleAll(event) {
+            const checkboxes = document.querySelectorAll('.request-checkbox');
+            checkboxes.forEach(cb => cb.checked = event.target.checked);
+            this.selectedCount = event.target.checked ? checkboxes.length : 0;
+            this.allSelected = event.target.checked;
+        },
+
+        updateSelection(event) {
+            const checkboxes = document.querySelectorAll('.request-checkbox');
+            const checked = document.querySelectorAll('.request-checkbox:checked');
+            this.selectedCount = checked.length;
+            this.allSelected = checked.length === checkboxes.length && checkboxes.length > 0;
+            this.updateSelectAllState();
+        },
+
+        updateSelectAllState() {
+            const selectAllCb = document.getElementById('selectAll');
+            if (!selectAllCb) return;
+
+            const checkboxes = document.querySelectorAll('.request-checkbox');
+            const checked = document.querySelectorAll('.request-checkbox:checked');
+            this.selectedCount = checked.length;
+
+            if (checked.length === 0) {
+                selectAllCb.checked = false;
+                selectAllCb.indeterminate = false;
+            } else if (checked.length === checkboxes.length) {
+                selectAllCb.checked = true;
+                selectAllCb.indeterminate = false;
+            } else {
+                selectAllCb.checked = false;
+                selectAllCb.indeterminate = true;
+            }
+        },
+
+        clearSelection() {
+            document.querySelectorAll('.request-checkbox').forEach(cb => cb.checked = false);
+            this.selectedCount = 0;
+            this.allSelected = false;
+            this.updateSelectAllState();
+        }
+    };
+}
+</script>
+{% endblock %}

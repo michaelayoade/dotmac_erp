@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, List, Optional
 
 from sqlalchemy import func, or_, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.models.finance.core_org.cost_center import CostCenter
 from app.models.people.hr import (
@@ -180,9 +180,13 @@ class OrganizationService:
         if pagination is None:
             pagination = PaginationParams()
 
-        stmt = select(Department).where(
-            Department.organization_id == self.organization_id,
-            Department.is_deleted == False,
+        stmt = (
+            select(Department)
+            .options(joinedload(Department.head))
+            .where(
+                Department.organization_id == self.organization_id,
+                Department.is_deleted == False,
+            )
         )
 
         if filters.is_active is not None:
@@ -222,10 +226,14 @@ class OrganizationService:
         Raises:
             DepartmentNotFoundError: If department not found.
         """
-        stmt = select(Department).where(
-            Department.department_id == department_id,
-            Department.organization_id == self.organization_id,
-            Department.is_deleted == False,
+        stmt = (
+            select(Department)
+            .options(joinedload(Department.head))
+            .where(
+                Department.department_id == department_id,
+                Department.organization_id == self.organization_id,
+                Department.is_deleted == False,
+            )
         )
         department = self.db.scalar(stmt)
 
@@ -272,6 +280,7 @@ class OrganizationService:
 
         self._validate_org_reference(Department, data.parent_department_id, "Parent department")
         self._validate_org_reference(CostCenter, data.cost_center_id, "Cost center")
+        self._validate_org_reference(Employee, data.head_id, "Department head")
 
         department = Department(
             organization_id=self.organization_id,
@@ -280,6 +289,7 @@ class OrganizationService:
             description=data.description,
             parent_department_id=data.parent_department_id,
             cost_center_id=data.cost_center_id,
+            head_id=data.head_id,
             is_active=data.is_active,
             created_by_id=self.principal.id if self.principal else None,
         )
@@ -336,6 +346,10 @@ class OrganizationService:
             self._validate_org_reference(CostCenter, data.cost_center_id, "Cost center")
             department.cost_center_id = data.cost_center_id
 
+        if data.head_id is not None:
+            self._validate_org_reference(Employee, data.head_id, "Department head")
+            department.head_id = data.head_id
+
         if data.is_active is not None:
             department.is_active = data.is_active
 
@@ -390,12 +404,18 @@ class OrganizationService:
         Returns:
             List of root DepartmentNode objects with nested children.
         """
-        stmt = select(Department).where(
-            Department.organization_id == self.organization_id,
-            Department.is_deleted == False,
+        from sqlalchemy.orm import joinedload
+
+        stmt = (
+            select(Department)
+            .options(joinedload(Department.head))
+            .where(
+                Department.organization_id == self.organization_id,
+                Department.is_deleted == False,
+            )
         )
 
-        departments = self.db.scalars(stmt).all()
+        departments = self.db.scalars(stmt).unique().all()
 
         # Build lookup dict by ID
         dept_dict = {d.department_id: d for d in departments}
@@ -403,12 +423,18 @@ class OrganizationService:
 
         # Create nodes
         for dept in departments:
+            head_name = None
+            if dept.head:
+                head_name = getattr(dept.head, "full_name", None)
+
             nodes[dept.department_id] = DepartmentNode(
                 department_id=dept.department_id,
                 department_code=dept.department_code,
                 department_name=dept.department_name,
                 parent_department_id=dept.parent_department_id,
                 cost_center_id=dept.cost_center_id,
+                head_id=dept.head_id,
+                head_name=head_name,
                 is_active=dept.is_active,
                 children=[],
             )

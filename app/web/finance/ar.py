@@ -196,6 +196,72 @@ def view_invoice(
     return ar_web_service.invoice_detail_response(request, auth, db, invoice_id)
 
 
+@router.get("/invoices/{invoice_id}/edit", response_class=HTMLResponse)
+def edit_invoice_form(
+    request: Request,
+    invoice_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Edit AR invoice form page."""
+    return ar_web_service.invoice_edit_form_response(request, auth, db, invoice_id)
+
+
+@router.post("/invoices/{invoice_id}/edit")
+async def update_invoice(
+    request: Request,
+    invoice_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Handle AR invoice update form submission."""
+    return await ar_web_service.update_invoice_response(request, auth, db, invoice_id)
+
+
+@router.post("/invoices/{invoice_id}/submit")
+def submit_invoice(
+    request: Request,
+    invoice_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Submit AR invoice for approval."""
+    return ar_web_service.submit_invoice_response(request, auth, db, invoice_id)
+
+
+@router.post("/invoices/{invoice_id}/approve")
+def approve_invoice(
+    request: Request,
+    invoice_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Approve AR invoice."""
+    return ar_web_service.approve_invoice_response(request, auth, db, invoice_id)
+
+
+@router.post("/invoices/{invoice_id}/post")
+def post_invoice(
+    request: Request,
+    invoice_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Post AR invoice to general ledger."""
+    return ar_web_service.post_invoice_response(request, auth, db, invoice_id)
+
+
+@router.post("/invoices/{invoice_id}/void")
+def void_invoice(
+    request: Request,
+    invoice_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Void an AR invoice."""
+    return ar_web_service.void_invoice_response(request, auth, db, invoice_id)
+
+
 @router.post("/invoices/{invoice_id}/delete")
 def delete_invoice(
     request: Request,
@@ -230,6 +296,26 @@ async def bulk_export_invoices(
 ):
     """Export selected AR invoices to CSV."""
     return await ar_web_service.bulk_export_invoices_response(request, auth, db)
+
+
+@router.post("/invoices/bulk-approve")
+async def bulk_approve_invoices(
+    request: Request,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Bulk approve AR invoices (from SUBMITTED status)."""
+    return await ar_web_service.bulk_approve_invoices_response(request, auth, db)
+
+
+@router.post("/invoices/bulk-post")
+async def bulk_post_invoices(
+    request: Request,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Bulk post AR invoices to General Ledger (from APPROVED status)."""
+    return await ar_web_service.bulk_post_invoices_response(request, auth, db)
 
 
 @router.get("/receipts", response_class=HTMLResponse)
@@ -404,6 +490,72 @@ def view_credit_note(
 ):
     """AR credit note detail page."""
     return ar_web_service.credit_note_detail_response(request, auth, db, credit_note_id)
+
+
+@router.get("/credit-notes/{credit_note_id}/edit", response_class=HTMLResponse)
+def edit_credit_note_form(
+    request: Request,
+    credit_note_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Edit AR credit note form page."""
+    return ar_web_service.credit_note_edit_form_response(request, auth, db, credit_note_id)
+
+
+@router.post("/credit-notes/{credit_note_id}/edit")
+async def update_credit_note(
+    request: Request,
+    credit_note_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Handle AR credit note update form submission."""
+    return await ar_web_service.update_credit_note_response(request, auth, db, credit_note_id)
+
+
+@router.post("/credit-notes/{credit_note_id}/submit")
+def submit_credit_note(
+    request: Request,
+    credit_note_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Submit AR credit note for approval."""
+    return ar_web_service.submit_credit_note_response(request, auth, db, credit_note_id)
+
+
+@router.post("/credit-notes/{credit_note_id}/approve")
+def approve_credit_note(
+    request: Request,
+    credit_note_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Approve AR credit note."""
+    return ar_web_service.approve_credit_note_response(request, auth, db, credit_note_id)
+
+
+@router.post("/credit-notes/{credit_note_id}/post")
+def post_credit_note(
+    request: Request,
+    credit_note_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Post AR credit note to general ledger."""
+    return ar_web_service.post_credit_note_response(request, auth, db, credit_note_id)
+
+
+@router.post("/credit-notes/{credit_note_id}/void")
+def void_credit_note(
+    request: Request,
+    credit_note_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Void an AR credit note."""
+    return ar_web_service.void_credit_note_response(request, auth, db, credit_note_id)
 
 
 @router.post("/credit-notes/{credit_note_id}/delete")

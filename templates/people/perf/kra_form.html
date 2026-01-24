@@ -1,0 +1,154 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}{% if kra %}Edit {{ kra.kra_name }}{% else %}New KRA{% endif %}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a>
+    <span class="mx-2">/</span>
+    <a href="/people/perf/kras" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">KRAs</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">{% if kra %}Edit{% else %}New{% endif %}</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl">
+    {% if error %}
+    <div class="mb-6 p-4 rounded-lg bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-800">
+        <div class="flex items-center gap-2 text-red-700 dark:text-red-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span>{{ error }}</span>
+        </div>
+    </div>
+    {% endif %}
+
+    <form method="post" action="{% if kra %}/people/perf/kras/{{ kra.kra_id }}/edit{% else %}/people/perf/kras/new{% endif %}" class="space-y-6">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+        <!-- Basic Information -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Basic Information</h3>
+            </div>
+            <div class="card-body space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="kra_code" class="form-label required">KRA Code</label>
+                        <input type="text" name="kra_code" id="kra_code" required
+                               class="form-input w-full font-mono"
+                               value="{{ form_data.kra_code or (kra.kra_code if kra else '') }}"
+                               placeholder="e.g., KRA-SALES-01">
+                    </div>
+                    <div>
+                        <label for="category" class="form-label">Category</label>
+                        <select name="category" id="category" class="form-select w-full">
+                            <option value="">Select Category</option>
+                            {% for cat in categories %}
+                            <option value="{{ cat }}" {% if form_data.category == cat or (kra and kra.category == cat) %}selected{% endif %}>
+                                {{ cat | title }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label for="kra_name" class="form-label required">KRA Name</label>
+                    <input type="text" name="kra_name" id="kra_name" required
+                           class="form-input w-full"
+                           value="{{ form_data.kra_name or (kra.kra_name if kra else '') }}"
+                           placeholder="e.g., Sales Revenue Achievement">
+                </div>
+
+                <div>
+                    <label for="description" class="form-label">Description</label>
+                    <textarea name="description" id="description" rows="2"
+                              class="form-input w-full"
+                              placeholder="Brief description of this key result area...">{{ form_data.description or (kra.description if kra else '') }}</textarea>
+                </div>
+
+                <div>
+                    <label for="default_weightage" class="form-label">Default Weight (%)</label>
+                    <input type="number" name="default_weightage" id="default_weightage"
+                           class="form-input w-32" min="0" max="100" step="0.01"
+                           value="{{ form_data.default_weightage or (kra.default_weightage if kra else '0') }}">
+                    <p class="text-xs text-slate-500 mt-1">Default weighting when assigned to employees (0-100%)</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Scope -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Scope</h3>
+                <p class="text-sm text-slate-500 dark:text-slate-400">Define which employees this KRA applies to</p>
+            </div>
+            <div class="card-body space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="department_id" class="form-label">Department</label>
+                        <select name="department_id" id="department_id" class="form-select w-full">
+                            <option value="">Organization-wide</option>
+                            {% for dept in departments %}
+                            <option value="{{ dept.department_id }}" {% if form_data.department_id == dept.department_id | string or (kra and kra.department_id == dept.department_id) %}selected{% endif %}>
+                                {{ dept.department_name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <p class="text-xs text-slate-500 mt-1">Leave blank for organization-wide KRA</p>
+                    </div>
+                    <div>
+                        <label for="designation_id" class="form-label">Designation</label>
+                        <select name="designation_id" id="designation_id" class="form-select w-full">
+                            <option value="">All Designations</option>
+                            {% for desig in designations %}
+                            <option value="{{ desig.designation_id }}" {% if form_data.designation_id == desig.designation_id | string or (kra and kra.designation_id == desig.designation_id) %}selected{% endif %}>
+                                {{ desig.designation_name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <p class="text-xs text-slate-500 mt-1">Leave blank for all designations</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Measurement -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Measurement</h3>
+            </div>
+            <div class="card-body space-y-4">
+                <div>
+                    <label for="measurement_criteria" class="form-label">Measurement Criteria</label>
+                    <textarea name="measurement_criteria" id="measurement_criteria" rows="4"
+                              class="form-input w-full"
+                              placeholder="How will achievement of this KRA be measured? Include metrics, targets, and evaluation methods...">{{ form_data.measurement_criteria or (kra.measurement_criteria if kra else '') }}</textarea>
+                    <p class="text-xs text-slate-500 mt-1">Describe how this KRA will be evaluated (e.g., targets, metrics)</p>
+                </div>
+
+                <div class="flex items-center gap-3 pt-2">
+                    <input type="checkbox" name="is_active" id="is_active" value="true"
+                           class="rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+                           {% if form_data.is_active == 'true' or (kra and kra.is_active) or (not kra and not form_data) %}checked{% endif %}>
+                    <label for="is_active" class="text-sm text-slate-700 dark:text-slate-300">
+                        Active - This KRA is available for assignment
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex justify-end gap-3">
+            <a href="/people/perf/kras{% if kra %}/{{ kra.kra_id }}{% endif %}" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">
+                {% if kra %}Save Changes{% else %}Create KRA{% endif %}
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

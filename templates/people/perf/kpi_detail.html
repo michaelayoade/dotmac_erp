@@ -61,12 +61,13 @@
             </div>
             <div>
                 {% set status_colors = {
-                    'PENDING': 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300',
+                    'DRAFT': 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300',
                     'ACTIVE': 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
-                    'ON_TRACK': 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
+                    'ON_TRACK': 'bg-teal-100 text-teal-700 dark:bg-teal-900 dark:text-teal-300',
                     'AT_RISK': 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
-                    'BEHIND': 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
                     'ACHIEVED': 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300',
+                    'MISSED': 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
+                    'DEFERRED': 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300',
                     'CANCELLED': 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400'
                 } %}
                 <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium {{ status_colors.get(kpi.status.value, 'bg-slate-100 text-slate-700') }}">
@@ -237,7 +238,7 @@
     {% endif %}
 
     {# Delete Action #}
-    {% if kpi.status.value == 'PENDING' %}
+    {% if kpi.status.value == 'DRAFT' %}
     <div class="card border-red-200 dark:border-red-800">
         <div class="card-header">
             <h3 class="font-medium text-red-600 dark:text-red-400">Danger Zone</h3>

@@ -376,6 +376,73 @@ def delete_journal(
     return gl_web_service.delete_journal_response(request, auth, db, entry_id)
 
 
+@router.post("/journals/{entry_id}/post")
+def post_journal(
+    request: Request,
+    entry_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Post a journal entry to the general ledger."""
+    return gl_web_service.post_journal_response(request, auth, db, entry_id)
+
+
+@router.post("/journals/{entry_id}/reverse")
+def reverse_journal(
+    request: Request,
+    entry_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Reverse a posted journal entry."""
+    return gl_web_service.reverse_journal_response(request, auth, db, entry_id)
+
+
+# =============================================================================
+# Bulk Actions - Journals
+# =============================================================================
+
+
+@router.post("/journals/bulk-delete")
+async def bulk_delete_journals(
+    request: Request,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Bulk delete journal entries (only DRAFT status)."""
+    return await gl_web_service.bulk_delete_journals_response(request, auth, db)
+
+
+@router.post("/journals/bulk-export")
+async def bulk_export_journals(
+    request: Request,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Export selected journal entries to CSV."""
+    return await gl_web_service.bulk_export_journals_response(request, auth, db)
+
+
+@router.post("/journals/bulk-approve")
+async def bulk_approve_journals(
+    request: Request,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Bulk approve journal entries (from DRAFT status)."""
+    return await gl_web_service.bulk_approve_journals_response(request, auth, db)
+
+
+@router.post("/journals/bulk-post")
+async def bulk_post_journals(
+    request: Request,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Bulk post journal entries to ledger."""
+    return await gl_web_service.bulk_post_journals_response(request, auth, db)
+
+
 @router.get("/period-close", response_class=HTMLResponse)
 def period_close(
     request: Request,

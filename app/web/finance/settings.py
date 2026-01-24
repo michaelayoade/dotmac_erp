@@ -160,6 +160,12 @@ async def settings_index(
                 "url": "/settings/features",
                 "icon": "flag",
             },
+            {
+                "title": "Payments",
+                "description": "Configure payment gateway integration (Paystack).",
+                "url": "/settings/payments",
+                "icon": "credit-card",
+            },
         ],
     })
     return templates.TemplateResponse(request, "finance/settings/index.html", context)
@@ -394,6 +400,50 @@ async def toggle_feature(
         return templates.TemplateResponse(request, "finance/settings/features.html", context)
 
     return RedirectResponse(url="/settings/features?saved=1", status_code=303)
+
+
+# ========== Payments Settings ==========
+
+
+@router.get("/payments", response_class=HTMLResponse)
+async def payments_settings(
+    request: Request,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Payments configuration page."""
+    result = settings_web_service.get_payments_settings_context(db, auth.organization_id)
+
+    context = base_context(request, auth, "Payments Configuration", "settings", db=db)
+    context.update(result)
+
+    return templates.TemplateResponse(request, "finance/settings/payments.html", context)
+
+
+@router.post("/payments", response_class=HTMLResponse)
+async def update_payments_settings(
+    request: Request,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Update payments settings."""
+    form_data = getattr(request.state, "csrf_form", None)
+    if form_data is None:
+        form_data = await request.form()
+    data = dict(form_data)
+
+    success, error = settings_web_service.update_payments_settings(
+        db, auth.organization_id, data
+    )
+
+    if not success:
+        result = settings_web_service.get_payments_settings_context(db, auth.organization_id)
+        context = base_context(request, auth, "Payments Configuration", "settings", db=db)
+        context.update(result)
+        context["error"] = error
+        return templates.TemplateResponse(request, "finance/settings/payments.html", context)
+
+    return RedirectResponse(url="/settings/payments?saved=1", status_code=303)
 
 
 # ========== Branding Settings ==========

@@ -70,6 +70,8 @@ class HRWebService:
         status: Optional[str] = None,
         department_id: Optional[str] = None,
         page: int = 1,
+        success: Optional[str] = None,
+        error: Optional[str] = None,
     ) -> HTMLResponse:
         """Render employee list page."""
         org_id = coerce_uuid(auth.organization_id)
@@ -161,6 +163,8 @@ class HRWebService:
             "total": result.total,
             "has_prev": result.has_prev,
             "has_next": result.has_next,
+            "success": success,
+            "error": error,
         }
 
         return templates.TemplateResponse(
@@ -234,6 +238,11 @@ class HRWebService:
             .first()
         )
 
+        # Fetch onboarding record for this employee
+        from app.services.people.hr.lifecycle import LifecycleService
+        lifecycle_svc = LifecycleService(db)
+        onboarding = lifecycle_svc.get_onboarding_for_employee(org_id, employee.employee_id)
+
         context = {
             **base_context(request, auth, "Employee Details", "employees"),
             "employee": employee,
@@ -246,6 +255,7 @@ class HRWebService:
             "credentials": credentials,
             "salary_assignments": salary_assignments,
             "tax_profile": tax_profile,
+            "onboarding": onboarding,
         }
 
         return templates.TemplateResponse(
@@ -548,6 +558,7 @@ class HRWebService:
         """Render department form (new or edit)."""
         org_id = coerce_uuid(auth.organization_id)
         svc = OrganizationService(db, org_id)
+        emp_svc = EmployeeService(db, org_id)
 
         department = None
         if department_id:
@@ -560,11 +571,18 @@ class HRWebService:
         ).items
         parent_options = [d for d in all_depts if not department or d.department_id != department.department_id]
 
+        # Get active employees for department head dropdown
+        employee_options = emp_svc.list_employees(
+            EmployeeFilters(status=EmployeeStatus.ACTIVE),
+            PaginationParams(limit=DROPDOWN_LIMIT),
+        ).items
+
         title = "Edit Department" if department else "New Department"
         context = {
             **base_context(request, auth, title, "departments"),
             "department": department,
             "parent_options": parent_options,
+            "employee_options": employee_options,
             "errors": {},
         }
 

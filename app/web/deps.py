@@ -407,7 +407,7 @@ def base_context(
             - url: Link to navigate when clicked
             - time: Relative time string (e.g., "5 min ago")
             - read: bool indicating if notification was read
-        db: Optional database session for loading org branding
+        db: Optional database session for loading org branding and notifications
 
     Returns:
         Dict with common template context values (without request - use new TemplateResponse signature)
@@ -417,11 +417,69 @@ def base_context(
     if db and auth.organization_id:
         org_branding = org_brand_context(db, auth.organization_id)
 
-    can_team_leave = auth.has_any_permission(
+    # Auto-fetch notifications if db session available and user is authenticated
+    if notifications is None and db and auth.is_authenticated and auth.person_id:
+        try:
+            # Import here to avoid circular import
+            from app.services.notification import notification_service
+            from datetime import datetime, timedelta
+
+            def _format_relative_time(dt: datetime) -> str:
+                now = datetime.utcnow()
+                diff = now - dt
+                if diff < timedelta(minutes=1):
+                    return "Just now"
+                elif diff < timedelta(hours=1):
+                    return f"{int(diff.total_seconds() / 60)} min ago"
+                elif diff < timedelta(days=1):
+                    return f"{int(diff.total_seconds() / 3600)}h ago"
+                elif diff < timedelta(days=7):
+                    return f"{diff.days}d ago"
+                else:
+                    return dt.strftime("%b %d")
+
+            def _notification_type_to_display(entity_type, notification_type) -> str:
+                from app.models.notification import NotificationType
+                if notification_type in (NotificationType.MENTION, NotificationType.COMMENT, NotificationType.REPLY):
+                    return "mention"
+                elif notification_type in (NotificationType.APPROVED, NotificationType.COMPLETED, NotificationType.RESOLVED):
+                    return "payment"
+                elif notification_type in (NotificationType.REJECTED, NotificationType.OVERDUE, NotificationType.ALERT):
+                    return "alert"
+                else:
+                    return "info"
+
+            raw_notifications = notification_service.list_notifications(
+                db, recipient_id=auth.person_id, organization_id=auth.organization_id, limit=5
+            )
+            notifications = [
+                {
+                    "id": str(n.notification_id),
+                    "type": _notification_type_to_display(n.entity_type, n.notification_type),
+                    "title": n.title,
+                    "message": n.message,
+                    "url": n.action_url or "#",
+                    "time": _format_relative_time(n.created_at),
+                    "read": n.is_read,
+                }
+                for n in raw_notifications
+            ]
+        except Exception:
+            # Don't fail page load if notifications fail
+            notifications = []
+
+    can_team_leave = "admin" in auth.roles or auth.has_any_permission(
         [
             "leave:applications:approve:tier1",
             "leave:applications:approve:tier2",
             "leave:applications:approve:tier3",
+        ]
+    )
+    can_team_expenses = "admin" in auth.roles or auth.has_any_permission(
+        [
+            "expense:claims:approve:tier1",
+            "expense:claims:approve:tier2",
+            "expense:claims:approve:tier3",
         ]
     )
 
@@ -434,6 +492,7 @@ def base_context(
         "user": auth.user,
         "accessible_modules": auth.accessible_modules,
         "can_team_leave": can_team_leave,
+        "can_team_expenses": can_team_expenses,
         "csrf_token": getattr(request.state, "csrf_token", ""),
         "notifications": notifications or [],
     }
@@ -909,6 +968,8 @@ def require_self_service_leave_approver(
     auth: WebAuthContext = Depends(require_self_service_access),
 ) -> WebAuthContext:
     """Require self-service access plus leave approval permission."""
+    if "admin" in auth.roles:
+        return auth
     permissions = [
         "leave:applications:approve:tier1",
         "leave:applications:approve:tier2",
@@ -918,6 +979,25 @@ def require_self_service_leave_approver(
         raise HTTPException(
             status_code=403,
             detail="Leave approval permission required",
+        )
+    return auth
+
+
+def require_self_service_expense_approver(
+    auth: WebAuthContext = Depends(require_self_service_access),
+) -> WebAuthContext:
+    """Require self-service access plus expense approval permission."""
+    if "admin" in auth.roles:
+        return auth
+    permissions = [
+        "expense:claims:approve:tier1",
+        "expense:claims:approve:tier2",
+        "expense:claims:approve:tier3",
+    ]
+    if not auth.has_any_permission(permissions):
+        raise HTTPException(
+            status_code=403,
+            detail="Expense approval permission required",
         )
     return auth
 

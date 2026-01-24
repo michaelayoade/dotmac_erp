@@ -1,13 +1,159 @@
-from typing import Any, List
+import logging
+from typing import Any, List, Optional
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.models.domain_settings import DomainSetting, SettingDomain
-from app.models.domain_settings import SettingValueType
+from app.models.domain_settings import (
+    DomainSetting,
+    DomainSettingHistory,
+    SettingChangeAction,
+    SettingDomain,
+    SettingValueType,
+)
 from app.schemas.settings import DomainSettingCreate, DomainSettingUpdate
 from app.services.common import coerce_uuid
 from app.services.response import ListResponseMixin
+from app.services.settings_cache import invalidate_setting_cache
+
+# Structured logger for settings audit trail
+settings_audit_logger = logging.getLogger("dotmac.settings.audit")
+
+
+def _log_setting_change(
+    action: str,
+    domain: SettingDomain,
+    key: str,
+    old_value: Optional[Any] = None,
+    new_value: Optional[Any] = None,
+    setting_id: Optional[str] = None,
+    is_secret: bool = False,
+) -> None:
+    """
+    Log a setting change for audit purposes.
+
+    Uses structured logging that can be captured by log aggregators.
+    Masks secret values to prevent credential leakage.
+
+    Args:
+        action: Change type (CREATE, UPDATE, DELETE)
+        domain: Setting domain
+        key: Setting key
+        old_value: Previous value (masked if secret)
+        new_value: New value (masked if secret)
+        setting_id: UUID of the setting
+        is_secret: Whether this is a secret value
+    """
+    # Mask secret values
+    masked_old = "***MASKED***" if is_secret and old_value else old_value
+    masked_new = "***MASKED***" if is_secret and new_value else new_value
+
+    settings_audit_logger.info(
+        "Setting changed",
+        extra={
+            "action": action,
+            "domain": domain.value,
+            "key": key,
+            "setting_id": str(setting_id) if setting_id else None,
+            "old_value": masked_old,
+            "new_value": masked_new,
+            "is_secret": is_secret,
+        },
+    )
+
+
+def _log_setting_attempt_failed(
+    action: str,
+    domain: Optional[SettingDomain],
+    key: Optional[str],
+    reason: str,
+    attempted_value: Optional[Any] = None,
+    is_secret: bool = False,
+) -> None:
+    """
+    Log a failed setting change attempt for security auditing.
+
+    This captures validation failures, permission denials, and other
+    unsuccessful attempts to modify settings.
+
+    Args:
+        action: Attempted action (CREATE, UPDATE, DELETE)
+        domain: Setting domain (if known)
+        key: Setting key (if known)
+        reason: Why the attempt failed
+        attempted_value: The value that was attempted (masked if secret)
+        is_secret: Whether this is a secret value
+    """
+    masked_value = "***MASKED***" if is_secret and attempted_value else attempted_value
+
+    settings_audit_logger.warning(
+        "Setting change attempt failed",
+        extra={
+            "action": action,
+            "domain": domain.value if domain else None,
+            "key": key,
+            "reason": reason,
+            "attempted_value": masked_value,
+            "is_secret": is_secret,
+        },
+    )
+
+
+def _record_setting_history(
+    db: Session,
+    setting: DomainSetting,
+    action: SettingChangeAction,
+    old_value_type: str | None = None,
+    old_value_text: str | None = None,
+    old_value_json: object | None = None,
+    old_is_secret: bool | None = None,
+    old_is_active: bool | None = None,
+    changed_by_id: str | None = None,
+    change_reason: str | None = None,
+    ip_address: str | None = None,
+    user_agent: str | None = None,
+) -> DomainSettingHistory:
+    """
+    Record a setting change in the history table.
+
+    Args:
+        db: Database session
+        setting: The setting being changed
+        action: Type of change (CREATE, UPDATE, DELETE)
+        old_*: Previous values (None for CREATE)
+        changed_by_id: User who made the change
+        change_reason: Optional reason for the change
+        ip_address: Request IP address
+        user_agent: Request user agent
+
+    Returns:
+        The created history record
+    """
+    history = DomainSettingHistory(
+        setting_id=setting.id,
+        domain=setting.domain.value,
+        key=setting.key,
+        action=action,
+        # Old values
+        old_value_type=old_value_type,
+        old_value_text=old_value_text,
+        old_value_json=old_value_json,
+        old_is_secret=old_is_secret,
+        old_is_active=old_is_active,
+        # New values (from current setting state)
+        new_value_type=setting.value_type.value if setting.value_type else None,
+        new_value_text=setting.value_text,
+        new_value_json=setting.value_json,
+        new_is_secret=setting.is_secret,
+        new_is_active=setting.is_active,
+        # Audit metadata
+        changed_by_id=coerce_uuid(changed_by_id) if changed_by_id else None,
+        change_reason=change_reason,
+        ip_address=ip_address,
+        user_agent=user_agent,
+    )
+    db.add(history)
+    return history
 
 
 def _apply_ordering(query, order_by, order_dir, allowed_columns):
@@ -74,7 +220,15 @@ class DomainSettings(ListResponseMixin):
             return payload_domain
         raise HTTPException(status_code=400, detail="Setting domain is required")
 
-    def create(self, db: Session, payload: DomainSettingCreate):
+    def create(
+        self,
+        db: Session,
+        payload: DomainSettingCreate,
+        changed_by_id: str | None = None,
+        change_reason: str | None = None,
+        ip_address: str | None = None,
+        user_agent: str | None = None,
+    ):
         data = payload.model_dump()
         data["domain"] = self._resolve_domain(payload.domain)
         value_type = data.get("value_type") or SettingValueType.string
@@ -94,8 +248,35 @@ class DomainSettings(ListResponseMixin):
             data.pop("value_text", None)
         setting = DomainSetting(**data)
         db.add(setting)
+        db.flush()  # Get the ID before recording history
+
+        # Record history (CREATE has no old values)
+        _record_setting_history(
+            db,
+            setting,
+            SettingChangeAction.CREATE,
+            changed_by_id=changed_by_id,
+            change_reason=change_reason,
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
+
         db.commit()
         db.refresh(setting)
+
+        # Invalidate cache for this setting
+        invalidate_setting_cache(setting.domain, setting.key)
+
+        # Audit log
+        _log_setting_change(
+            action="CREATE",
+            domain=setting.domain,
+            key=setting.key,
+            new_value=setting.value_text or setting.value_json,
+            setting_id=str(setting.id),
+            is_secret=setting.is_secret,
+        )
+
         return setting
 
     def get(self, db: Session, setting_id: str):
@@ -130,10 +311,28 @@ class DomainSettings(ListResponseMixin):
         )
         return _apply_pagination(query, limit, offset).all()
 
-    def update(self, db: Session, setting_id: str, payload: DomainSettingUpdate):
+    def update(
+        self,
+        db: Session,
+        setting_id: str,
+        payload: DomainSettingUpdate,
+        changed_by_id: str | None = None,
+        change_reason: str | None = None,
+        ip_address: str | None = None,
+        user_agent: str | None = None,
+    ):
         setting = db.get(DomainSetting, coerce_uuid(setting_id))
         if not setting or (self.domain and setting.domain != self.domain):
             raise HTTPException(status_code=404, detail="Setting not found")
+
+        # Capture old values for audit/history
+        old_value = setting.value_text or setting.value_json
+        old_value_type = setting.value_type.value if setting.value_type else None
+        old_value_text = setting.value_text
+        old_value_json = setting.value_json
+        old_is_secret = setting.is_secret
+        old_is_active = setting.is_active
+
         data = payload.model_dump(exclude_unset=True)
         if "domain" in data and data["domain"] != setting.domain:
             raise HTTPException(status_code=400, detail="Setting domain mismatch")
@@ -153,8 +352,41 @@ class DomainSettings(ListResponseMixin):
             data["value_json"] = normalized_json
         for key, value in data.items():
             setattr(setting, key, value)
+
+        # Record history before commit
+        _record_setting_history(
+            db,
+            setting,
+            SettingChangeAction.UPDATE,
+            old_value_type=old_value_type,
+            old_value_text=old_value_text,
+            old_value_json=old_value_json,
+            old_is_secret=old_is_secret,
+            old_is_active=old_is_active,
+            changed_by_id=changed_by_id,
+            change_reason=change_reason,
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
+
         db.commit()
         db.refresh(setting)
+
+        # Invalidate cache for this setting
+        invalidate_setting_cache(setting.domain, setting.key)
+
+        # Audit log
+        new_value = setting.value_text or setting.value_json
+        _log_setting_change(
+            action="UPDATE",
+            domain=setting.domain,
+            key=setting.key,
+            old_value=old_value,
+            new_value=new_value,
+            setting_id=str(setting.id),
+            is_secret=setting.is_secret,
+        )
+
         return setting
 
     def get_by_key(self, db: Session, key: str):
@@ -170,7 +402,16 @@ class DomainSettings(ListResponseMixin):
             raise HTTPException(status_code=404, detail="Setting not found")
         return setting
 
-    def upsert_by_key(self, db: Session, key: str, payload: DomainSettingUpdate):
+    def upsert_by_key(
+        self,
+        db: Session,
+        key: str,
+        payload: DomainSettingUpdate,
+        changed_by_id: str | None = None,
+        change_reason: str | None = None,
+        ip_address: str | None = None,
+        user_agent: str | None = None,
+    ):
         if not self.domain:
             raise HTTPException(status_code=400, detail="Setting domain is required")
         setting = (
@@ -180,13 +421,54 @@ class DomainSettings(ListResponseMixin):
             .first()
         )
         if setting:
+            # Capture old values for audit/history
+            old_value = setting.value_text or setting.value_json
+            old_value_type = setting.value_type.value if setting.value_type else None
+            old_value_text = setting.value_text
+            old_value_json = setting.value_json
+            old_is_secret = setting.is_secret
+            old_is_active = setting.is_active
+
             data = payload.model_dump(exclude_unset=True)
             data.pop("domain", None)
             data.pop("key", None)
             for field, value in data.items():
                 setattr(setting, field, value)
+
+            # Record history before commit
+            _record_setting_history(
+                db,
+                setting,
+                SettingChangeAction.UPDATE,
+                old_value_type=old_value_type,
+                old_value_text=old_value_text,
+                old_value_json=old_value_json,
+                old_is_secret=old_is_secret,
+                old_is_active=old_is_active,
+                changed_by_id=changed_by_id,
+                change_reason=change_reason,
+                ip_address=ip_address,
+                user_agent=user_agent,
+            )
+
             db.commit()
             db.refresh(setting)
+
+            # Invalidate cache for this setting
+            invalidate_setting_cache(self.domain, key)
+
+            # Audit log
+            new_value = setting.value_text or setting.value_json
+            _log_setting_change(
+                action="UPDATE",
+                domain=self.domain,
+                key=key,
+                old_value=old_value,
+                new_value=new_value,
+                setting_id=str(setting.id),
+                is_secret=setting.is_secret,
+            )
+
             return setting
         create_payload = DomainSettingCreate(
             domain=self.domain,
@@ -197,7 +479,14 @@ class DomainSettings(ListResponseMixin):
             is_secret=payload.is_secret or False,
             is_active=True if payload.is_active is None else payload.is_active,
         )
-        return self.create(db, create_payload)
+        return self.create(
+            db,
+            create_payload,
+            changed_by_id=changed_by_id,
+            change_reason=change_reason,
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
 
     def ensure_by_key(
         self,
@@ -229,12 +518,61 @@ class DomainSettings(ListResponseMixin):
         )
         return self.create(db, payload)
 
-    def delete(self, db: Session, setting_id: str):
-        setting = db.get(DomainSetting, setting_id)
+    def delete(
+        self,
+        db: Session,
+        setting_id: str,
+        changed_by_id: str | None = None,
+        change_reason: str | None = None,
+        ip_address: str | None = None,
+        user_agent: str | None = None,
+    ):
+        setting = db.get(DomainSetting, coerce_uuid(setting_id))
         if not setting or (self.domain and setting.domain != self.domain):
             raise HTTPException(status_code=404, detail="Setting not found")
+
+        # Capture values for audit/history before soft-delete
+        old_value = setting.value_text or setting.value_json
+        old_value_type = setting.value_type.value if setting.value_type else None
+        old_value_text = setting.value_text
+        old_value_json = setting.value_json
+        old_is_secret = setting.is_secret
+        old_is_active = setting.is_active
+
         setting.is_active = False
+
+        # Record history before commit
+        _record_setting_history(
+            db,
+            setting,
+            SettingChangeAction.DELETE,
+            old_value_type=old_value_type,
+            old_value_text=old_value_text,
+            old_value_json=old_value_json,
+            old_is_secret=old_is_secret,
+            old_is_active=old_is_active,
+            changed_by_id=changed_by_id,
+            change_reason=change_reason,
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
+
         db.commit()
+
+        # Invalidate cache for this setting
+        invalidate_setting_cache(setting.domain, setting.key)
+
+        # Audit log
+        _log_setting_change(
+            action="DELETE",
+            domain=setting.domain,
+            key=setting.key,
+            old_value=old_value,
+            setting_id=str(setting.id),
+            is_secret=setting.is_secret,
+        )
+
+        return setting
 
 
 settings = DomainSettings()
@@ -245,3 +583,214 @@ automation_settings = DomainSettings(SettingDomain.automation)
 email_settings = DomainSettings(SettingDomain.email)
 features_settings = DomainSettings(SettingDomain.features)
 reporting_settings = DomainSettings(SettingDomain.reporting)
+payments_settings = DomainSettings(SettingDomain.payments)
+
+
+# =============================================================================
+# History Service Functions
+# =============================================================================
+
+
+def list_setting_history(
+    db: Session,
+    domain: SettingDomain | None = None,
+    key: str | None = None,
+    setting_id: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> tuple[list[DomainSettingHistory], int]:
+    """
+    List history entries for settings.
+
+    Args:
+        db: Database session
+        domain: Filter by domain
+        key: Filter by key (requires domain)
+        setting_id: Filter by setting ID
+        limit: Max entries to return
+        offset: Offset for pagination
+
+    Returns:
+        Tuple of (history_entries, total_count)
+    """
+    query = db.query(DomainSettingHistory)
+
+    if setting_id:
+        query = query.filter(DomainSettingHistory.setting_id == coerce_uuid(setting_id))
+    elif domain:
+        query = query.filter(DomainSettingHistory.domain == domain.value)
+        if key:
+            query = query.filter(DomainSettingHistory.key == key)
+
+    total = query.count()
+    items = (
+        query.order_by(DomainSettingHistory.changed_at.desc())
+        .limit(limit)
+        .offset(offset)
+        .all()
+    )
+
+    return items, total
+
+
+def get_history_entry(db: Session, history_id: str) -> DomainSettingHistory | None:
+    """
+    Get a specific history entry by ID.
+
+    Args:
+        db: Database session
+        history_id: History entry UUID
+
+    Returns:
+        History entry or None if not found
+    """
+    return db.get(DomainSettingHistory, coerce_uuid(history_id))
+
+
+def restore_from_history(
+    db: Session,
+    history_id: str,
+    changed_by_id: str | None = None,
+    change_reason: str | None = None,
+    ip_address: str | None = None,
+    user_agent: str | None = None,
+) -> DomainSetting:
+    """
+    Restore a setting to a previous state from a history entry.
+
+    Args:
+        db: Database session
+        history_id: History entry to restore from
+        changed_by_id: User performing the restore
+        change_reason: Reason for the restore
+        ip_address: Request IP
+        user_agent: Request user agent
+
+    Returns:
+        The restored setting
+
+    Raises:
+        HTTPException: If history entry not found or setting cannot be restored
+    """
+    history = get_history_entry(db, history_id)
+    if not history:
+        raise HTTPException(status_code=404, detail="History entry not found")
+
+    # Get or create the setting
+    try:
+        domain = SettingDomain(history.domain)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid domain in history: {history.domain}",
+        ) from exc
+
+    # Find existing setting
+    setting = (
+        db.query(DomainSetting)
+        .filter(
+            DomainSetting.domain == domain,
+            DomainSetting.key == history.key,
+        )
+        .first()
+    )
+
+    # Determine what values to restore based on action type
+    if history.action == SettingChangeAction.DELETE:
+        # Restoring from DELETE means we use the old values (before deletion)
+        restore_value_type = history.old_value_type
+        restore_value_text = history.old_value_text
+        restore_value_json = history.old_value_json
+        restore_is_secret = history.old_is_secret
+        restore_is_active = history.old_is_active if history.old_is_active is not None else True
+    elif history.action == SettingChangeAction.UPDATE:
+        # Restoring from UPDATE means we use the old values (before update)
+        restore_value_type = history.old_value_type
+        restore_value_text = history.old_value_text
+        restore_value_json = history.old_value_json
+        restore_is_secret = history.old_is_secret
+        restore_is_active = history.old_is_active if history.old_is_active is not None else True
+    else:  # CREATE
+        # Restoring from CREATE would mean deleting (not typically wanted)
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot restore from CREATE action. Use delete instead.",
+        )
+
+    reason = change_reason or f"Restored from history entry {history_id}"
+
+    if setting:
+        # Update existing setting
+        old_value_type = setting.value_type.value if setting.value_type else None
+        old_value_text = setting.value_text
+        old_value_json = setting.value_json
+        old_is_secret = setting.is_secret
+        old_is_active = setting.is_active
+
+        # Apply restored values
+        setting.value_type = SettingValueType(restore_value_type) if restore_value_type else SettingValueType.string
+        setting.value_text = restore_value_text
+        setting.value_json = restore_value_json
+        setting.is_secret = restore_is_secret if restore_is_secret is not None else False
+        setting.is_active = restore_is_active
+
+        # Record this restore as an UPDATE in history
+        _record_setting_history(
+            db,
+            setting,
+            SettingChangeAction.UPDATE,
+            old_value_type=old_value_type,
+            old_value_text=old_value_text,
+            old_value_json=old_value_json,
+            old_is_secret=old_is_secret,
+            old_is_active=old_is_active,
+            changed_by_id=changed_by_id,
+            change_reason=reason,
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
+
+        db.commit()
+        db.refresh(setting)
+    else:
+        # Create new setting (re-creating after deletion)
+        setting = DomainSetting(
+            domain=domain,
+            key=history.key,
+            value_type=SettingValueType(restore_value_type) if restore_value_type else SettingValueType.string,
+            value_text=restore_value_text,
+            value_json=restore_value_json,
+            is_secret=restore_is_secret if restore_is_secret is not None else False,
+            is_active=restore_is_active,
+        )
+        db.add(setting)
+        db.flush()
+
+        # Record this restore as a CREATE in history
+        _record_setting_history(
+            db,
+            setting,
+            SettingChangeAction.CREATE,
+            changed_by_id=changed_by_id,
+            change_reason=reason,
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
+
+        db.commit()
+        db.refresh(setting)
+
+    # Invalidate cache
+    invalidate_setting_cache(domain, setting.key)
+
+    # Audit log
+    _log_setting_change(
+        action="RESTORE",
+        domain=setting.domain,
+        key=setting.key,
+        new_value=setting.value_text or setting.value_json,
+        setting_id=str(setting.id),
+        is_secret=setting.is_secret,
+    )
+
+    return setting

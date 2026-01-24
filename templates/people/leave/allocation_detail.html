@@ -29,6 +29,27 @@
 
 {% block content %}
 <div class="max-w-4xl space-y-6">
+    {% if success %}
+    <div class="p-4 rounded-lg bg-emerald-50 border border-emerald-200 dark:bg-emerald-900/20 dark:border-emerald-800">
+        <div class="flex items-center gap-2 text-emerald-700 dark:text-emerald-400">
+            <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span>{{ success }}</span>
+        </div>
+    </div>
+    {% endif %}
+    {% if error %}
+    <div class="p-4 rounded-lg bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-800">
+        <div class="flex items-center gap-2 text-red-700 dark:text-red-400">
+            <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span>{{ error }}</span>
+        </div>
+    </div>
+    {% endif %}
+
     <!-- Header Card -->
     <div class="card">
         <div class="p-6">
@@ -179,6 +200,98 @@
                     {% endfor %}
                 </tbody>
             </table>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Encashment Section -->
+    {% if leave_type and leave_type.allow_encashment %}
+    {% set available_balance = allocation.total_leaves_allocated - allocation.leaves_used - allocation.leaves_encashed %}
+    {% set threshold = leave_type.encashment_threshold_days or 0 %}
+    <div class="card" x-data="{ showEncashDialog: false }">
+        <div class="card-header border-b border-slate-200 dark:border-slate-700 p-4">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h3 class="font-semibold text-slate-900 dark:text-white">Leave Encashment</h3>
+                    <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                        {% if threshold > 0 %}
+                        Minimum balance required: {{ threshold }} days
+                        {% else %}
+                        No minimum balance required
+                        {% endif %}
+                    </p>
+                </div>
+                {% if available_balance > threshold %}
+                <button @click="showEncashDialog = true" class="btn btn-secondary">
+                    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    Encash Leave
+                </button>
+                {% else %}
+                <span class="text-sm text-slate-500 dark:text-slate-400">
+                    Insufficient balance for encashment
+                </span>
+                {% endif %}
+            </div>
+        </div>
+        <div class="p-4">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div>
+                    <span class="text-slate-500 dark:text-slate-400">Available Balance</span>
+                    <p class="font-medium text-slate-900 dark:text-white">{{ available_balance }} days</p>
+                </div>
+                <div>
+                    <span class="text-slate-500 dark:text-slate-400">Already Encashed</span>
+                    <p class="font-medium text-violet-600 dark:text-violet-400">{{ allocation.leaves_encashed }} days</p>
+                </div>
+                <div>
+                    <span class="text-slate-500 dark:text-slate-400">Encashable</span>
+                    <p class="font-medium text-emerald-600 dark:text-emerald-400">
+                        {% if available_balance > threshold %}
+                        {{ available_balance - threshold }} days
+                        {% else %}
+                        0 days
+                        {% endif %}
+                    </p>
+                </div>
+                <div>
+                    <span class="text-slate-500 dark:text-slate-400">Threshold</span>
+                    <p class="font-medium text-slate-900 dark:text-white">{{ threshold }} days</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Encashment Dialog -->
+        <div x-show="showEncashDialog" x-cloak class="fixed inset-0 z-50 overflow-y-auto" aria-modal="true">
+            <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:p-0">
+                <div x-show="showEncashDialog" x-transition:enter="ease-out duration-300" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="ease-in duration-200" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" class="fixed inset-0 transition-opacity bg-slate-900/50 backdrop-blur-sm" @click="showEncashDialog = false"></div>
+                <div x-show="showEncashDialog" x-transition:enter="ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95" x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100" x-transition:leave="ease-in duration-200" x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100" x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95" class="relative inline-block w-full max-w-md p-6 my-8 overflow-hidden text-left align-middle transition-all transform bg-white dark:bg-slate-800 shadow-xl rounded-lg">
+                    <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Encash Leave</h3>
+                    <form method="post" action="/people/leave/allocations/{{ allocation.allocation_id }}/encash">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                        <div class="space-y-4">
+                            <div>
+                                <label for="days_to_encash" class="form-label">Days to Encash</label>
+                                <input type="number" name="days_to_encash" id="days_to_encash"
+                                    class="form-input w-full"
+                                    step="0.5" min="0.5" max="{{ available_balance - threshold }}"
+                                    value="{{ available_balance - threshold }}"
+                                    required>
+                                <p class="text-sm text-slate-500 mt-1">Maximum: {{ available_balance - threshold }} days</p>
+                            </div>
+                            <div>
+                                <label for="encash_notes" class="form-label">Notes (Optional)</label>
+                                <textarea name="encash_notes" id="encash_notes" rows="2" class="form-input w-full" placeholder="Reason for encashment..."></textarea>
+                            </div>
+                        </div>
+                        <div class="flex justify-end gap-3 mt-6">
+                            <button type="button" @click="showEncashDialog = false" class="btn btn-secondary">Cancel</button>
+                            <button type="submit" class="btn btn-primary">Process Encashment</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
         </div>
     </div>
     {% endif %}

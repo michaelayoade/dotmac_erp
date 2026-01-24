@@ -1,0 +1,90 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}Add Certification - {{ employee.full_name }}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400">Employees</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr/employees/{{ employee.employee_id }}/certifications" class="hover:text-teal-600 dark:hover:text-teal-400">{{ employee.employee_code }}</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">Add Certification</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl">
+    <form method="post" action="/people/hr/employees/{{ employee.employee_id }}/certifications/new" class="space-y-6">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Certification Details</h3>
+            </div>
+            <div class="card-body space-y-4">
+                <div>
+                    <label for="certification_name" class="form-label required">Certification Name</label>
+                    <input type="text" name="certification_name" id="certification_name" required
+                           class="form-input w-full" value="{{ form_data.certification_name or '' }}"
+                           placeholder="e.g., AWS Solutions Architect">
+                </div>
+
+                <div>
+                    <label for="issuing_authority" class="form-label required">Issuing Authority</label>
+                    <input type="text" name="issuing_authority" id="issuing_authority" required
+                           class="form-input w-full" value="{{ form_data.issuing_authority or '' }}"
+                           placeholder="e.g., Amazon Web Services">
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="issue_date" class="form-label required">Issue Date</label>
+                        <input type="date" name="issue_date" id="issue_date" required
+                               class="form-input w-full" value="{{ form_data.issue_date or '' }}">
+                    </div>
+                    <div>
+                        <label for="expiry_date" class="form-label">Expiry Date</label>
+                        <input type="date" name="expiry_date" id="expiry_date"
+                               class="form-input w-full" value="{{ form_data.expiry_date or '' }}">
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-2">
+                    <input type="checkbox" name="does_not_expire" id="does_not_expire" value="true"
+                           class="rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+                           {{ 'checked' if form_data.does_not_expire }}>
+                    <label for="does_not_expire" class="text-sm text-slate-700 dark:text-slate-300">This certification does not expire</label>
+                </div>
+
+                <div>
+                    <label for="credential_id" class="form-label">Credential ID</label>
+                    <input type="text" name="credential_id" id="credential_id"
+                           class="form-input w-full" value="{{ form_data.credential_id or '' }}"
+                           placeholder="Certificate or license number">
+                </div>
+
+                <div>
+                    <label for="credential_url" class="form-label">Verification URL</label>
+                    <input type="url" name="credential_url" id="credential_url"
+                           class="form-input w-full" value="{{ form_data.credential_url or '' }}"
+                           placeholder="https://...">
+                    <p class="text-xs text-slate-500 mt-1">URL where this credential can be verified online.</p>
+                </div>
+
+                <div>
+                    <label for="notes" class="form-label">Notes</label>
+                    <textarea name="notes" id="notes" rows="2"
+                              class="form-input w-full">{{ form_data.notes or '' }}</textarea>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex justify-end gap-3">
+            <a href="/people/hr/employees/{{ employee.employee_id }}/certifications" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">Add Certification</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

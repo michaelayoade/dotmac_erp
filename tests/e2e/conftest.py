@@ -616,34 +616,6 @@ def stock_levels_page(authenticated_page, base_url):
 
 
 # =============================================================================
-# Financial Instruments Module Fixtures
-# =============================================================================
-
-@pytest.fixture
-def financial_instruments_page(authenticated_page, base_url):
-    """Navigate to financial instruments list and return the page."""
-    authenticated_page.goto(f"{base_url}/fin-inst/instruments")
-    authenticated_page.wait_for_load_state("networkidle")
-    return authenticated_page
-
-
-@pytest.fixture
-def hedge_accounting_page(authenticated_page, base_url):
-    """Navigate to hedge accounting page and return the page."""
-    authenticated_page.goto(f"{base_url}/fin-inst/hedges")
-    authenticated_page.wait_for_load_state("networkidle")
-    return authenticated_page
-
-
-@pytest.fixture
-def valuations_page(authenticated_page, base_url):
-    """Navigate to valuations page and return the page."""
-    authenticated_page.goto(f"{base_url}/fin-inst/valuations")
-    authenticated_page.wait_for_load_state("networkidle")
-    return authenticated_page
-
-
-# =============================================================================
 # Banking Module Fixtures
 # =============================================================================
 

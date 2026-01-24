@@ -10,7 +10,6 @@ from app.api.finance.ar import router as ar_router
 from app.api.finance.fa import router as fa_router
 from app.api.finance.inv import router as inv_router
 from app.api.finance.lease import router as lease_router
-from app.api.finance.fin_inst import router as fin_inst_router
 from app.api.finance.tax import router as tax_router
 from app.api.finance.cons import router as cons_router
 from app.api.finance.rpt import router as rpt_router
@@ -28,7 +27,6 @@ __all__ = [
     "fa_router",
     "inv_router",
     "lease_router",
-    "fin_inst_router",
     "tax_router",
     "cons_router",
     "rpt_router",

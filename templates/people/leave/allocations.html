@@ -15,7 +15,29 @@
 {% endblock %}
 
 {% block content %}
-<div class="space-y-6">
+<div class="space-y-6" x-data="bulkAllocationManager()">
+    {# Success/Error Messages #}
+    {% if success %}
+    <div class="p-4 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800">
+        <div class="flex items-center gap-3">
+            <svg class="h-5 w-5 text-emerald-600 dark:text-emerald-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <p class="text-sm text-emerald-700 dark:text-emerald-300">{{ success }}</p>
+        </div>
+    </div>
+    {% endif %}
+    {% if error %}
+    <div class="p-4 rounded-lg bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800">
+        <div class="flex items-center gap-3">
+            <svg class="h-5 w-5 text-rose-600 dark:text-rose-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+            </svg>
+            <p class="text-sm text-rose-700 dark:text-rose-300">{{ error }}</p>
+        </div>
+    </div>
+    {% endif %}
+
     <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
             <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">Leave Allocations</h1>
@@ -24,12 +46,123 @@
         <div class="flex flex-wrap items-center gap-2">
             <a href="/people/leave/types" class="btn btn-secondary">Leave Types</a>
             <a href="/people/leave/applications" class="btn btn-secondary">Applications</a>
+            <button type="button" @click="showBulkDialog = true" class="btn btn-secondary">
+                <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+                </svg>
+                Bulk Allocate
+            </button>
             <a href="/people/leave/allocations/new" class="btn btn-primary">
                 <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
                 </svg>
                 New Allocation
             </a>
+        </div>
+    </div>
+
+    {# Bulk Allocation Modal #}
+    <div x-show="showBulkDialog"
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm"
+         @keydown.escape.window="showBulkDialog = false">
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto" @click.away="showBulkDialog = false">
+            <div class="flex items-center justify-between mb-6">
+                <div>
+                    <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Bulk Leave Allocation</h3>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">Allocate leave to multiple employees at once</p>
+                </div>
+                <button type="button" @click="showBulkDialog = false" class="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+
+            <form method="post" action="/people/leave/allocations/bulk-create">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+                <div class="space-y-5">
+                    {# Employee Selection #}
+                    <div>
+                        <label class="form-label required">Select Employees</label>
+                        <div class="border border-slate-200 dark:border-slate-700 rounded-lg max-h-48 overflow-y-auto p-3 space-y-2">
+                            <div class="flex items-center gap-2 pb-2 border-b border-slate-200 dark:border-slate-700">
+                                <input type="checkbox" id="selectAllEmployees" @change="toggleAllEmployees($event)"
+                                       class="rounded border-slate-300 text-violet-600 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-700">
+                                <label for="selectAllEmployees" class="text-sm font-medium text-slate-700 dark:text-slate-300">Select All</label>
+                                <span class="text-xs text-slate-400 ml-auto" x-text="selectedEmployeeCount + ' selected'"></span>
+                            </div>
+                            {% for emp in employees %}
+                            <div class="flex items-center gap-2">
+                                <input type="checkbox" name="employee_ids" value="{{ emp.employee_id }}" id="emp_{{ emp.employee_id }}"
+                                       @change="updateEmployeeCount()"
+                                       class="employee-select rounded border-slate-300 text-violet-600 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-700">
+                                <label for="emp_{{ emp.employee_id }}" class="text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
+                                    {{ emp.full_name }} <span class="text-slate-400">({{ emp.employee_code }})</span>
+                                </label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    {# Leave Type #}
+                    <div>
+                        <label for="bulk_leave_type_id" class="form-label required">Leave Type</label>
+                        <select name="leave_type_id" id="bulk_leave_type_id" required class="form-input w-full">
+                            <option value="">Select leave type...</option>
+                            {% for lt in leave_types %}
+                            <option value="{{ lt.leave_type_id }}">{{ lt.leave_type_name }} ({{ lt.leave_type_code }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    {# Period #}
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label for="bulk_from_date" class="form-label required">From Date</label>
+                            <input type="date" name="from_date" id="bulk_from_date" required class="form-input w-full" value="{{ today.replace(month=1, day=1).isoformat() }}">
+                        </div>
+                        <div>
+                            <label for="bulk_to_date" class="form-label required">To Date</label>
+                            <input type="date" name="to_date" id="bulk_to_date" required class="form-input w-full" value="{{ today.replace(month=12, day=31).isoformat() }}">
+                        </div>
+                    </div>
+
+                    {# Allocation Days #}
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label for="bulk_new_leaves" class="form-label required">New Leaves (days)</label>
+                            <input type="number" name="new_leaves_allocated" id="bulk_new_leaves" required min="0" step="0.5" class="form-input w-full" value="20">
+                        </div>
+                        <div>
+                            <label for="bulk_carry_forward" class="form-label">Carry Forward (days)</label>
+                            <input type="number" name="carry_forward_leaves" id="bulk_carry_forward" min="0" step="0.5" class="form-input w-full" value="0">
+                        </div>
+                    </div>
+
+                    {# Notes #}
+                    <div>
+                        <label for="bulk_notes" class="form-label">Notes</label>
+                        <textarea name="notes" id="bulk_notes" rows="2" class="form-input w-full" placeholder="Optional notes for this allocation..."></textarea>
+                    </div>
+                </div>
+
+                <div class="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-200 dark:border-slate-700">
+                    <button type="button" @click="showBulkDialog = false" class="btn btn-secondary">Cancel</button>
+                    <button type="submit" class="btn btn-primary" :disabled="selectedEmployeeCount === 0">
+                        <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        Create Allocations
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 
@@ -122,4 +255,24 @@
     </div>
     {% endif %}
 </div>
+
+<script>
+function bulkAllocationManager() {
+    return {
+        showBulkDialog: false,
+        selectedEmployeeCount: 0,
+
+        toggleAllEmployees(event) {
+            const checkboxes = document.querySelectorAll('.employee-select');
+            checkboxes.forEach(cb => cb.checked = event.target.checked);
+            this.selectedEmployeeCount = event.target.checked ? checkboxes.length : 0;
+        },
+
+        updateEmployeeCount() {
+            const checked = document.querySelectorAll('.employee-select:checked');
+            this.selectedEmployeeCount = checked.length;
+        }
+    };
+}
+</script>
 {% endblock %}

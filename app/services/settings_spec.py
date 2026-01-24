@@ -261,7 +261,7 @@ SETTINGS_SPECS: list[SettingSpec] = [
         key="smtp_from_name",
         env_var="SMTP_FROM_NAME",
         value_type=SettingValueType.string,
-        default="IFRS Ledger",
+        default="Dotmac ERP",
     ),
     SettingSpec(
         domain=SettingDomain.email,
@@ -529,6 +529,14 @@ SETTINGS_SPECS: list[SettingSpec] = [
         value_type=SettingValueType.boolean,
         default=False,
     ),
+    # GL Account for posting transfer fees (bank charges)
+    SettingSpec(
+        domain=SettingDomain.payments,
+        key="paystack_transfer_fee_account_id",
+        env_var=None,
+        value_type=SettingValueType.string,
+        default=None,
+    ),
 ]
 
 DOMAIN_SETTINGS_SERVICE = {
@@ -539,6 +547,7 @@ DOMAIN_SETTINGS_SERVICE = {
     SettingDomain.email: settings_service.email_settings,
     SettingDomain.features: settings_service.features_settings,
     SettingDomain.reporting: settings_service.reporting_settings,
+    SettingDomain.payments: settings_service.payments_settings,
 }
 
 
@@ -553,36 +562,99 @@ def list_specs(domain: SettingDomain) -> list[SettingSpec]:
     return [spec for spec in SETTINGS_SPECS if spec.domain == domain]
 
 
-def resolve_value(db, domain: SettingDomain, key: str) -> object | None:
+def resolve_value(
+    db, domain: SettingDomain, key: str, strict: bool = False
+) -> object | None:
+    """
+    Resolve a setting value from database, falling back to spec defaults.
+
+    Args:
+        db: Database session
+        domain: Setting domain
+        key: Setting key
+        strict: If True, raise ValueError for required settings that are missing
+                or have no default. Use strict=True during startup validation.
+
+    Returns:
+        Resolved setting value, or None if not found and no default
+
+    Raises:
+        ValueError: If strict=True and a required setting is missing/invalid
+    """
     spec = get_spec(domain, key)
     if not spec:
+        if strict:
+            raise ValueError(f"Unknown setting: {domain.value}/{key}")
         return None
+
     service = DOMAIN_SETTINGS_SERVICE.get(domain)
     setting = None
+    db_error = None
     if service:
         try:
             setting = service.get_by_key(db, key)
-        except HTTPException:
+        except HTTPException as e:
+            db_error = e
             setting = None
+
     raw = extract_db_value(setting)
+
+    # For required settings with no value and no default, fail in strict mode
+    if raw is None and spec.required and spec.default is None:
+        if strict:
+            raise ValueError(
+                f"Required setting '{domain.value}/{key}' is not configured "
+                f"and has no default value"
+            )
+        # In non-strict mode, log a warning but continue
+        import logging
+        logging.getLogger(__name__).warning(
+            "Required setting %s/%s is missing (no DB value, no default)",
+            domain.value, key
+        )
+
     if raw is None:
         raw = spec.default
+
     value, error = coerce_value(spec, raw)
     if error:
+        if strict:
+            raise ValueError(f"Invalid value for {domain.value}/{key}: {error}")
         value = spec.default
+
     if spec.allowed and value is not None and value not in spec.allowed:
+        if strict:
+            allowed_str = ", ".join(str(v) for v in spec.allowed)
+            raise ValueError(
+                f"Invalid value '{value}' for {domain.value}/{key}. "
+                f"Allowed: {allowed_str}"
+            )
         value = spec.default
+
     if spec.value_type == SettingValueType.integer and value is not None:
         parsed: int | None
         try:
             parsed = int(str(value))
         except (TypeError, ValueError):
+            if strict:
+                raise ValueError(
+                    f"Setting {domain.value}/{key} must be an integer, got: {value}"
+                )
             parsed = spec.default if isinstance(spec.default, int) else None
         if spec.min_value is not None and parsed is not None and parsed < spec.min_value:
+            if strict:
+                raise ValueError(
+                    f"Setting {domain.value}/{key} must be >= {spec.min_value}, got: {parsed}"
+                )
             parsed = spec.default if isinstance(spec.default, int) else None
         if spec.max_value is not None and parsed is not None and parsed > spec.max_value:
+            if strict:
+                raise ValueError(
+                    f"Setting {domain.value}/{key} must be <= {spec.max_value}, got: {parsed}"
+                )
             parsed = spec.default if isinstance(spec.default, int) else None
         value = parsed
+
     return value
 
 
@@ -634,3 +706,32 @@ def normalize_for_db(spec: SettingSpec, value: object) -> tuple[str | None, obje
     if spec.value_type == SettingValueType.string:
         return str(value), None
     return None, value
+
+
+def validate_required_settings(db) -> list[str]:
+    """
+    Validate all required settings are configured.
+
+    Call this during application startup to catch missing configuration early.
+
+    Args:
+        db: Database session
+
+    Returns:
+        List of error messages for missing/invalid required settings.
+        Empty list if all required settings are valid.
+    """
+    errors = []
+    required_specs = [spec for spec in SETTINGS_SPECS if spec.required]
+
+    for spec in required_specs:
+        try:
+            value = resolve_value(db, spec.domain, spec.key, strict=True)
+            if value is None and spec.default is None:
+                errors.append(
+                    f"Required setting '{spec.domain.value}/{spec.key}' is not configured"
+                )
+        except ValueError as e:
+            errors.append(str(e))
+
+    return errors

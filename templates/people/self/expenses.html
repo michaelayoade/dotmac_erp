@@ -90,7 +90,9 @@
                 <select name="project_id" id="project_id" class="form-select w-full">
                     <option value="">No project</option>
                     {% for proj in projects %}
-                    <option value="{{ proj.project_id }}">{{ proj.project_code }} - {{ proj.project_name }}</option>
+                    <option value="{{ proj.project_id }}" {{ 'selected' if selected_project_id and selected_project_id == proj.project_id|string else '' }}>
+                        {{ proj.project_code }} - {{ proj.project_name }}
+                    </option>
                     {% endfor %}
                 </select>
                 <p class="mt-1 text-xs text-slate-400">Link expense to a project from ERPNext</p>
@@ -106,6 +108,18 @@
                     {% endfor %}
                 </select>
                 <p class="mt-1 text-xs text-slate-400">Link expense to a support ticket from ERPNext</p>
+            </div>
+            <div>
+                <label for="task_id" class="form-label">Task (Optional)</label>
+                <select name="task_id" id="task_id" class="form-select w-full">
+                    <option value="">No task</option>
+                    {% for task in tasks %}
+                    <option value="{{ task.task_id }}" {{ 'selected' if selected_task_id and selected_task_id == task.task_id|string else '' }}>
+                        {{ task.task_code }} - {{ task.task_name }}
+                    </option>
+                    {% endfor %}
+                </select>
+                <p class="mt-1 text-xs text-slate-400">Link expense to a specific project task</p>
             </div>
             <div class="sm:col-span-2 flex items-center justify-between">
                 <label class="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">

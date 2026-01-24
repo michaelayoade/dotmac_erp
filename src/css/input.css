@@ -1473,6 +1473,377 @@ code {
     }
     .badge-paid .badge-dot { background: #2563eb; }
     .dark .badge-paid { background: rgba(37, 99, 235, 0.2); color: #60a5fa; }
+
+    /* --------------------------------------------------------------------
+       Workflow Stepper - Visual progress indicator for document workflows
+       Usage: <div class="workflow-stepper">
+                <div class="workflow-step workflow-step-complete">...</div>
+                <div class="workflow-step workflow-step-current">...</div>
+                <div class="workflow-step">...</div>
+              </div>
+       -------------------------------------------------------------------- */
+    .workflow-stepper {
+        display: flex;
+        align-items: center;
+        padding: var(--spacing-lg) 0;
+        margin-bottom: var(--spacing-xl);
+    }
+
+    .workflow-step {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-sm);
+        flex: 1;
+    }
+    .workflow-step:last-child { flex: none; }
+
+    .workflow-step-number {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 13px;
+        font-weight: 600;
+        background: var(--parchment-dark);
+        color: var(--ink-faint);
+        border: 2px solid var(--card-border);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        flex-shrink: 0;
+    }
+
+    .workflow-step-label {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--ink-muted);
+        white-space: nowrap;
+        transition: all 0.2s ease;
+    }
+
+    .workflow-step-connector {
+        flex: 1;
+        height: 2px;
+        background: var(--card-border);
+        margin: 0 var(--spacing-md);
+        position: relative;
+        overflow: hidden;
+    }
+    .workflow-step-connector::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        height: 100%;
+        width: 0;
+        background: var(--teal);
+        transition: width 0.5s ease;
+    }
+
+    /* Completed step */
+    .workflow-step-complete .workflow-step-number {
+        background: linear-gradient(135deg, var(--teal) 0%, var(--teal-dark) 100%);
+        color: white;
+        border-color: var(--teal);
+        box-shadow: 0 2px 8px rgba(13, 148, 136, 0.3);
+    }
+    .workflow-step-complete .workflow-step-label {
+        color: var(--teal-dark);
+        font-weight: 600;
+    }
+    .dark .workflow-step-complete .workflow-step-label { color: var(--teal); }
+    .workflow-step-complete .workflow-step-connector::after { width: 100%; }
+
+    /* Current step */
+    .workflow-step-current .workflow-step-number {
+        background: var(--parchment);
+        color: var(--teal);
+        border-color: var(--teal);
+        box-shadow: 0 0 0 4px rgba(13, 148, 136, 0.15);
+        animation: currentStepPulse 2s ease-in-out infinite;
+    }
+    @keyframes currentStepPulse {
+        0%, 100% { box-shadow: 0 0 0 4px rgba(13, 148, 136, 0.15); }
+        50% { box-shadow: 0 0 0 8px rgba(13, 148, 136, 0.08); }
+    }
+    .workflow-step-current .workflow-step-label {
+        color: var(--ink);
+        font-weight: 600;
+    }
+
+    /* Compact variant for tight spaces */
+    .workflow-stepper-compact .workflow-step-number {
+        width: 24px;
+        height: 24px;
+        font-size: 11px;
+    }
+    .workflow-stepper-compact .workflow-step-label { font-size: 12px; }
+
+    /* Vertical variant */
+    .workflow-stepper-vertical {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0;
+    }
+    .workflow-stepper-vertical .workflow-step {
+        flex-direction: row;
+        flex: none;
+        width: 100%;
+        padding: var(--spacing-md) 0;
+    }
+    .workflow-stepper-vertical .workflow-step-connector {
+        position: absolute;
+        left: 15px;
+        top: 44px;
+        width: 2px;
+        height: calc(100% - 32px);
+        margin: 0;
+    }
+
+    /* --------------------------------------------------------------------
+       Loading Button States - HTMX integration for form submissions
+       -------------------------------------------------------------------- */
+    .btn-loading {
+        pointer-events: none;
+        position: relative;
+    }
+    .btn-loading .btn-text { opacity: 0; }
+    .btn-loading::after {
+        content: '';
+        position: absolute;
+        width: 18px;
+        height: 18px;
+        border: 2px solid transparent;
+        border-top-color: currentColor;
+        border-right-color: currentColor;
+        border-radius: 50%;
+        animation: btnSpin 0.6s linear infinite;
+    }
+    @keyframes btnSpin {
+        to { transform: rotate(360deg); }
+    }
+
+    /* HTMX automatic loading states */
+    .htmx-request.btn,
+    form.htmx-request .btn[type="submit"],
+    .htmx-request .btn-submit {
+        pointer-events: none;
+        position: relative;
+    }
+    .htmx-request.btn .btn-text,
+    form.htmx-request .btn[type="submit"] .btn-text,
+    .htmx-request .btn-submit .btn-text {
+        opacity: 0;
+    }
+    .htmx-request.btn::after,
+    form.htmx-request .btn[type="submit"]::after,
+    .htmx-request .btn-submit::after {
+        content: '';
+        position: absolute;
+        width: 18px;
+        height: 18px;
+        border: 2px solid transparent;
+        border-top-color: currentColor;
+        border-right-color: currentColor;
+        border-radius: 50%;
+        animation: btnSpin 0.6s linear infinite;
+    }
+
+    /* Loading indicator element (alternative approach) */
+    .btn .btn-spinner {
+        display: none;
+        width: 18px;
+        height: 18px;
+        border: 2px solid transparent;
+        border-top-color: currentColor;
+        border-right-color: currentColor;
+        border-radius: 50%;
+        animation: btnSpin 0.6s linear infinite;
+    }
+    .htmx-request .btn-spinner,
+    .btn-loading .btn-spinner {
+        display: block;
+    }
+    .htmx-request .btn-hide-on-load,
+    .btn-loading .btn-hide-on-load {
+        display: none;
+    }
+
+    /* --------------------------------------------------------------------
+       Document Card - Premium styling for official documents
+       (Payslips, Invoices, Receipts, Certificates)
+       -------------------------------------------------------------------- */
+    .document-card {
+        background: linear-gradient(180deg, #ffffff 0%, var(--parchment) 100%);
+        border: 1px solid var(--card-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--card-shadow);
+        position: relative;
+        overflow: hidden;
+    }
+    .dark .document-card {
+        background: linear-gradient(180deg, var(--card-bg) 0%, var(--parchment) 100%);
+    }
+
+    /* Gradient accent bar at top */
+    .document-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+        background: linear-gradient(90deg, var(--teal) 0%, var(--gold) 50%, var(--teal) 100%);
+    }
+
+    /* Subtle watermark pattern */
+    .document-card::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-image: repeating-linear-gradient(
+            45deg,
+            transparent,
+            transparent 10px,
+            rgba(13, 148, 136, 0.01) 10px,
+            rgba(13, 148, 136, 0.01) 20px
+        );
+        pointer-events: none;
+    }
+
+    .document-header {
+        position: relative;
+        padding: var(--spacing-card);
+        border-bottom: 1px dashed var(--card-border);
+        background: linear-gradient(180deg, var(--parchment) 0%, transparent 100%);
+    }
+
+    .document-title {
+        font-family: 'Fraunces', Georgia, serif;
+        font-size: 1.5rem;
+        font-weight: 600;
+        color: var(--ink);
+        margin-bottom: var(--spacing-xs);
+    }
+
+    .document-subtitle {
+        font-size: 14px;
+        color: var(--ink-muted);
+    }
+
+    .document-number {
+        font-family: 'JetBrains Mono', ui-monospace, monospace;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--teal);
+        letter-spacing: 0.05em;
+    }
+
+    .document-body {
+        position: relative;
+        padding: var(--spacing-card);
+    }
+
+    .document-section {
+        margin-bottom: var(--spacing-xl);
+    }
+    .document-section:last-child { margin-bottom: 0; }
+
+    .document-section-title {
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: var(--ink-faint);
+        margin-bottom: var(--spacing-md);
+        padding-bottom: var(--spacing-sm);
+        border-bottom: 1px solid var(--card-border);
+    }
+
+    /* Two-column layout for line items */
+    .document-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        padding: var(--spacing-sm) 0;
+        border-bottom: 1px dotted var(--card-border);
+    }
+    .document-row:last-child { border-bottom: none; }
+
+    .document-row-label {
+        font-size: 14px;
+        color: var(--ink-light);
+    }
+
+    .document-row-value {
+        font-family: 'JetBrains Mono', ui-monospace, monospace;
+        font-size: 14px;
+        font-weight: 500;
+        font-variant-numeric: tabular-nums lining-nums;
+        color: var(--ink);
+    }
+    .document-row-value-positive { color: #059669; }
+    .document-row-value-negative { color: #dc2626; }
+
+    /* Footer with totals */
+    .document-footer {
+        position: relative;
+        padding: var(--spacing-lg) var(--spacing-card);
+        background: var(--parchment);
+        border-top: 2px solid var(--ink);
+    }
+
+    .document-total-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        margin-bottom: var(--spacing-sm);
+    }
+    .document-total-row:last-child { margin-bottom: 0; }
+
+    .document-total-label {
+        font-size: 13px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--ink-muted);
+    }
+
+    .document-total-value {
+        font-family: 'Fraunces', Georgia, serif;
+        font-size: 1.75rem;
+        font-weight: 600;
+        color: var(--ink);
+    }
+    .document-total-value-large {
+        font-size: 2.25rem;
+        background: linear-gradient(135deg, var(--ink) 0%, var(--teal) 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+
+    /* Print-optimized variant */
+    @media print {
+        .document-card {
+            box-shadow: none;
+            border: 1px solid #000;
+        }
+        .document-card::before { background: #000; }
+        .document-card::after { display: none; }
+    }
+
+    /* Compact variant for lists */
+    .document-card-compact .document-header,
+    .document-card-compact .document-body,
+    .document-card-compact .document-footer {
+        padding: var(--spacing-card-sm);
+    }
+    .document-card-compact .document-title { font-size: 1.25rem; }
+    .document-card-compact .document-total-value { font-size: 1.5rem; }
 }
 
 /* ============================================================================

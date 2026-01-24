@@ -1,0 +1,103 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}Certifications - {{ employee.full_name }}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400">Employees</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr/employees/{{ employee.employee_id }}" class="hover:text-teal-600 dark:hover:text-teal-400">{{ employee.employee_code }}</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">Certifications</span>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<a href="/people/hr/employees/{{ employee.employee_id }}/certifications/new" class="btn btn-primary">
+    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+    </svg>
+    Add Certification
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    {% include "people/hr/employee/_tabs.html" %}
+
+    {% if success %}
+    <div class="p-4 rounded-lg bg-green-50 border border-green-200 dark:bg-green-900/20 dark:border-green-800">
+        <div class="flex items-center gap-2 text-green-700 dark:text-green-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+            </svg>
+            <span>{{ success }}</span>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if certifications %}
+    <div class="space-y-4">
+        {% for cert in certifications %}
+        <div class="card p-4 {% if cert.is_expired %}border-l-4 border-l-red-500{% elif cert.needs_renewal_reminder %}border-l-4 border-l-amber-500{% endif %}">
+            <div class="flex items-start justify-between">
+                <div class="flex items-start gap-4">
+                    <div class="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0
+                                {% if cert.is_expired %}bg-red-100 dark:bg-red-900{% elif cert.needs_renewal_reminder %}bg-amber-100 dark:bg-amber-900{% else %}bg-teal-100 dark:bg-teal-900{% endif %}">
+                        <svg class="w-5 h-5 {% if cert.is_expired %}text-red-600 dark:text-red-400{% elif cert.needs_renewal_reminder %}text-amber-600 dark:text-amber-400{% else %}text-teal-600 dark:text-teal-400{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h4 class="font-medium text-slate-900 dark:text-white">{{ cert.certification_name }}</h4>
+                        <p class="text-sm text-slate-600 dark:text-slate-400">{{ cert.issuing_authority }}</p>
+                        <div class="flex flex-wrap items-center gap-3 mt-2 text-xs">
+                            <span class="text-slate-500">Issued: {{ cert.issue_date }}</span>
+                            {% if cert.does_not_expire %}
+                            <span class="text-green-600 dark:text-green-400">No Expiry</span>
+                            {% elif cert.expiry_date %}
+                                {% if cert.is_expired %}
+                                <span class="text-red-600 dark:text-red-400 font-medium">Expired: {{ cert.expiry_date }}</span>
+                                {% elif cert.needs_renewal_reminder %}
+                                <span class="text-amber-600 dark:text-amber-400 font-medium">Expires: {{ cert.expiry_date }} ({{ cert.days_until_expiry }}d)</span>
+                                {% else %}
+                                <span class="text-slate-500">Expires: {{ cert.expiry_date }}</span>
+                                {% endif %}
+                            {% endif %}
+                            {% if cert.credential_id %}
+                            <span class="text-slate-500">ID: {{ cert.credential_id }}</span>
+                            {% endif %}
+                        </div>
+                        {% if cert.credential_url %}
+                        <a href="{{ cert.credential_url }}" target="_blank" class="text-xs text-teal-600 hover:text-teal-700 dark:text-teal-400 mt-1 inline-block">
+                            Verify credential
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+                <form method="post" action="/people/hr/employees/{{ employee.employee_id }}/certifications/{{ cert.certification_id }}/delete"
+                      onsubmit="return confirm('Delete this certification?')">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <button type="submit" class="text-red-600 hover:text-red-700 dark:text-red-400 p-1">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                        </svg>
+                    </button>
+                </form>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="card p-8 text-center">
+        <svg class="w-12 h-12 mx-auto text-slate-300 dark:text-slate-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"/>
+        </svg>
+        <p class="text-slate-500 dark:text-slate-400 mb-4">No certifications recorded yet.</p>
+        <a href="/people/hr/employees/{{ employee.employee_id }}/certifications/new" class="btn btn-primary">Add Certification</a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -3,7 +3,16 @@ import os
 from sqlalchemy.orm import Session
 
 from app.models.domain_settings import SettingValueType
-from app.services.domain_settings import auth_settings, audit_settings, scheduler_settings
+from app.services.domain_settings import (
+    auth_settings,
+    audit_settings,
+    scheduler_settings,
+    email_settings,
+    automation_settings,
+    features_settings,
+    reporting_settings,
+    payments_settings,
+)
 from app.services.secrets import is_openbao_ref
 
 
@@ -187,3 +196,288 @@ def seed_scheduler_settings(db: Session) -> None:
         value_type=SettingValueType.integer,
         value_text=os.getenv("CELERY_BEAT_REFRESH_SECONDS", "30"),
     )
+
+
+def seed_email_settings(db: Session) -> None:
+    """Seed email/SMTP settings from environment variables."""
+    email_settings.ensure_by_key(
+        db,
+        key="smtp_host",
+        value_type=SettingValueType.string,
+        value_text=os.getenv("SMTP_HOST", "localhost"),
+    )
+    email_settings.ensure_by_key(
+        db,
+        key="smtp_port",
+        value_type=SettingValueType.integer,
+        value_text=os.getenv("SMTP_PORT", "587"),
+    )
+    smtp_user = os.getenv("SMTP_USERNAME")
+    if smtp_user:
+        email_settings.ensure_by_key(
+            db,
+            key="smtp_username",
+            value_type=SettingValueType.string,
+            value_text=smtp_user,
+        )
+    smtp_pass = os.getenv("SMTP_PASSWORD")
+    if smtp_pass:
+        email_settings.ensure_by_key(
+            db,
+            key="smtp_password",
+            value_type=SettingValueType.string,
+            value_text=smtp_pass,
+            is_secret=True,
+        )
+    email_settings.ensure_by_key(
+        db,
+        key="smtp_use_tls",
+        value_type=SettingValueType.boolean,
+        value_text=os.getenv("SMTP_USE_TLS", "true"),
+    )
+    email_settings.ensure_by_key(
+        db,
+        key="smtp_use_ssl",
+        value_type=SettingValueType.boolean,
+        value_text=os.getenv("SMTP_USE_SSL", "false"),
+    )
+    email_settings.ensure_by_key(
+        db,
+        key="smtp_from_email",
+        value_type=SettingValueType.string,
+        value_text=os.getenv("SMTP_FROM_EMAIL", "noreply@example.com"),
+    )
+    email_settings.ensure_by_key(
+        db,
+        key="smtp_from_name",
+        value_type=SettingValueType.string,
+        value_text=os.getenv("SMTP_FROM_NAME", "Dotmac ERP"),
+    )
+    reply_to = os.getenv("EMAIL_REPLY_TO")
+    if reply_to:
+        email_settings.ensure_by_key(
+            db,
+            key="email_reply_to",
+            value_type=SettingValueType.string,
+            value_text=reply_to,
+        )
+
+
+def seed_automation_settings(db: Session) -> None:
+    """Seed automation settings with sensible defaults."""
+    automation_settings.ensure_by_key(
+        db,
+        key="recurring_default_frequency",
+        value_type=SettingValueType.string,
+        value_text="MONTHLY",
+    )
+    automation_settings.ensure_by_key(
+        db,
+        key="recurring_max_occurrences",
+        value_type=SettingValueType.integer,
+        value_text="999",
+    )
+    automation_settings.ensure_by_key(
+        db,
+        key="recurring_lookback_days",
+        value_type=SettingValueType.integer,
+        value_text="7",
+    )
+    automation_settings.ensure_by_key(
+        db,
+        key="workflow_max_actions_per_event",
+        value_type=SettingValueType.integer,
+        value_text="10",
+    )
+    automation_settings.ensure_by_key(
+        db,
+        key="workflow_async_timeout_seconds",
+        value_type=SettingValueType.integer,
+        value_text="300",
+    )
+    automation_settings.ensure_by_key(
+        db,
+        key="custom_fields_max_per_entity",
+        value_type=SettingValueType.integer,
+        value_text="20",
+    )
+    # Webhook security settings
+    automation_settings.ensure_by_key(
+        db,
+        key="webhook_allowed_hosts",
+        value_type=SettingValueType.string,
+        value_text=os.getenv("WEBHOOK_ALLOWED_HOSTS", ""),
+    )
+    automation_settings.ensure_by_key(
+        db,
+        key="webhook_allowed_domains",
+        value_type=SettingValueType.string,
+        value_text=os.getenv("WEBHOOK_ALLOWED_DOMAINS", ""),
+    )
+    automation_settings.ensure_by_key(
+        db,
+        key="webhook_allow_insecure",
+        value_type=SettingValueType.boolean,
+        value_text=os.getenv("WEBHOOK_ALLOW_INSECURE", "false"),
+    )
+    automation_settings.ensure_by_key(
+        db,
+        key="webhook_allow_localhost",
+        value_type=SettingValueType.boolean,
+        value_text=os.getenv("WEBHOOK_ALLOW_LOCALHOST", "false"),
+    )
+    automation_settings.ensure_by_key(
+        db,
+        key="webhook_timeout_seconds",
+        value_type=SettingValueType.integer,
+        value_text=os.getenv("WEBHOOK_TIMEOUT_SECONDS", "10"),
+    )
+    automation_settings.ensure_by_key(
+        db,
+        key="openbao_allow_insecure",
+        value_type=SettingValueType.boolean,
+        value_text=os.getenv("OPENBAO_ALLOW_INSECURE", "false"),
+    )
+
+
+def seed_features_settings(db: Session) -> None:
+    """Seed feature flags with default values."""
+    features_settings.ensure_by_key(
+        db,
+        key="enable_multi_currency",
+        value_type=SettingValueType.boolean,
+        value_json=True,
+    )
+    features_settings.ensure_by_key(
+        db,
+        key="enable_budgeting",
+        value_type=SettingValueType.boolean,
+        value_json=False,
+    )
+    features_settings.ensure_by_key(
+        db,
+        key="enable_project_accounting",
+        value_type=SettingValueType.boolean,
+        value_json=False,
+    )
+    features_settings.ensure_by_key(
+        db,
+        key="enable_bank_reconciliation",
+        value_type=SettingValueType.boolean,
+        value_json=True,
+    )
+    features_settings.ensure_by_key(
+        db,
+        key="enable_recurring_transactions",
+        value_type=SettingValueType.boolean,
+        value_json=True,
+    )
+    features_settings.ensure_by_key(
+        db,
+        key="enable_inventory",
+        value_type=SettingValueType.boolean,
+        value_json=True,
+    )
+    features_settings.ensure_by_key(
+        db,
+        key="enable_fixed_assets",
+        value_type=SettingValueType.boolean,
+        value_json=True,
+    )
+    features_settings.ensure_by_key(
+        db,
+        key="enable_leases",
+        value_type=SettingValueType.boolean,
+        value_json=False,
+    )
+
+
+def seed_reporting_settings(db: Session) -> None:
+    """Seed reporting settings with defaults."""
+    reporting_settings.ensure_by_key(
+        db,
+        key="default_export_format",
+        value_type=SettingValueType.string,
+        value_text="PDF",
+    )
+    reporting_settings.ensure_by_key(
+        db,
+        key="report_page_size",
+        value_type=SettingValueType.string,
+        value_text="A4",
+    )
+    reporting_settings.ensure_by_key(
+        db,
+        key="report_orientation",
+        value_type=SettingValueType.string,
+        value_text="PORTRAIT",
+    )
+    reporting_settings.ensure_by_key(
+        db,
+        key="include_logo_in_reports",
+        value_type=SettingValueType.boolean,
+        value_json=True,
+    )
+    # watermark_text is optional, no default
+
+
+def seed_payments_settings(db: Session) -> None:
+    """Seed payments/Paystack settings from environment variables."""
+    payments_settings.ensure_by_key(
+        db,
+        key="paystack_enabled",
+        value_type=SettingValueType.boolean,
+        value_text=os.getenv("PAYSTACK_ENABLED", "false"),
+    )
+    public_key = os.getenv("PAYSTACK_PUBLIC_KEY")
+    if public_key:
+        payments_settings.ensure_by_key(
+            db,
+            key="paystack_public_key",
+            value_type=SettingValueType.string,
+            value_text=public_key,
+        )
+    secret_key = os.getenv("PAYSTACK_SECRET_KEY")
+    if secret_key:
+        payments_settings.ensure_by_key(
+            db,
+            key="paystack_secret_key",
+            value_type=SettingValueType.string,
+            value_text=secret_key,
+            is_secret=True,
+        )
+    webhook_secret = os.getenv("PAYSTACK_WEBHOOK_SECRET")
+    if webhook_secret:
+        payments_settings.ensure_by_key(
+            db,
+            key="paystack_webhook_secret",
+            value_type=SettingValueType.string,
+            value_text=webhook_secret,
+            is_secret=True,
+        )
+    callback_url = os.getenv("PAYSTACK_CALLBACK_BASE_URL")
+    if callback_url:
+        payments_settings.ensure_by_key(
+            db,
+            key="paystack_callback_base_url",
+            value_type=SettingValueType.string,
+            value_text=callback_url,
+        )
+    payments_settings.ensure_by_key(
+        db,
+        key="paystack_transfers_enabled",
+        value_type=SettingValueType.boolean,
+        value_text=os.getenv("PAYSTACK_TRANSFERS_ENABLED", "false"),
+    )
+
+
+def seed_all_settings(db: Session) -> None:
+    """Seed all domain settings."""
+    seed_auth_settings(db)
+    seed_audit_settings(db)
+    seed_scheduler_settings(db)
+    seed_email_settings(db)
+    seed_automation_settings(db)
+    seed_features_settings(db)
+    seed_reporting_settings(db)
+    seed_payments_settings(db)

@@ -42,6 +42,8 @@ class AttachmentCategory(str, enum.Enum):
     TAX_DOCUMENT = "TAX_DOCUMENT"
     SUPPLIER = "SUPPLIER"
     CUSTOMER = "CUSTOMER"
+    PROJECT = "PROJECT"
+    TASK = "TASK"
     OTHER = "OTHER"
 
 

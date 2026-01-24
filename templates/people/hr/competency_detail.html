@@ -1,0 +1,127 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}{{ competency.competency_name }}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr" class="hover:text-teal-600 dark:hover:text-teal-400">HR</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr/competencies" class="hover:text-teal-600 dark:hover:text-teal-400">Competencies</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">{{ competency.competency_code }}</span>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<a href="/people/hr/competencies/{{ competency.competency_id }}/edit" class="btn btn-secondary">
+    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+    </svg>
+    Edit
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="card">
+        <div class="card-header flex items-center justify-between">
+            <div>
+                <h3 class="font-medium text-slate-900 dark:text-white">{{ competency.competency_name }}</h3>
+                <p class="text-sm text-slate-500 dark:text-slate-400 font-mono">{{ competency.competency_code }}</p>
+            </div>
+            <div class="flex items-center gap-2">
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                             {% if competency.category.value == 'core' %}bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-400
+                             {% elif competency.category.value == 'functional' %}bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-400
+                             {% elif competency.category.value == 'leadership' %}bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-400
+                             {% else %}bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-400{% endif %}">
+                    {{ competency.category.value | replace('_', ' ') | title }}
+                </span>
+                {% if competency.is_active %}
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-400">
+                    Active
+                </span>
+                {% else %}
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300">
+                    Inactive
+                </span>
+                {% endif %}
+            </div>
+        </div>
+        {% if competency.description %}
+        <div class="card-body">
+            <p class="text-slate-700 dark:text-slate-300">{{ competency.description }}</p>
+        </div>
+        {% endif %}
+    </div>
+
+    {% if competency.level_1_description or competency.level_2_description or competency.level_3_description or competency.level_4_description or competency.level_5_description %}
+    <div class="card">
+        <div class="card-header">
+            <h3 class="font-medium text-slate-900 dark:text-white">Proficiency Levels</h3>
+        </div>
+        <div class="card-body">
+            <div class="space-y-4">
+                {% if competency.level_1_description %}
+                <div class="flex gap-4">
+                    <div class="flex-shrink-0 w-8 h-8 rounded-full bg-red-100 dark:bg-red-900/50 flex items-center justify-center">
+                        <span class="text-sm font-bold text-red-700 dark:text-red-400">1</span>
+                    </div>
+                    <div>
+                        <h4 class="font-medium text-slate-900 dark:text-white">Awareness</h4>
+                        <p class="text-sm text-slate-600 dark:text-slate-400">{{ competency.level_1_description }}</p>
+                    </div>
+                </div>
+                {% endif %}
+                {% if competency.level_2_description %}
+                <div class="flex gap-4">
+                    <div class="flex-shrink-0 w-8 h-8 rounded-full bg-orange-100 dark:bg-orange-900/50 flex items-center justify-center">
+                        <span class="text-sm font-bold text-orange-700 dark:text-orange-400">2</span>
+                    </div>
+                    <div>
+                        <h4 class="font-medium text-slate-900 dark:text-white">Basic</h4>
+                        <p class="text-sm text-slate-600 dark:text-slate-400">{{ competency.level_2_description }}</p>
+                    </div>
+                </div>
+                {% endif %}
+                {% if competency.level_3_description %}
+                <div class="flex gap-4">
+                    <div class="flex-shrink-0 w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center">
+                        <span class="text-sm font-bold text-amber-700 dark:text-amber-400">3</span>
+                    </div>
+                    <div>
+                        <h4 class="font-medium text-slate-900 dark:text-white">Intermediate</h4>
+                        <p class="text-sm text-slate-600 dark:text-slate-400">{{ competency.level_3_description }}</p>
+                    </div>
+                </div>
+                {% endif %}
+                {% if competency.level_4_description %}
+                <div class="flex gap-4">
+                    <div class="flex-shrink-0 w-8 h-8 rounded-full bg-teal-100 dark:bg-teal-900/50 flex items-center justify-center">
+                        <span class="text-sm font-bold text-teal-700 dark:text-teal-400">4</span>
+                    </div>
+                    <div>
+                        <h4 class="font-medium text-slate-900 dark:text-white">Advanced</h4>
+                        <p class="text-sm text-slate-600 dark:text-slate-400">{{ competency.level_4_description }}</p>
+                    </div>
+                </div>
+                {% endif %}
+                {% if competency.level_5_description %}
+                <div class="flex gap-4">
+                    <div class="flex-shrink-0 w-8 h-8 rounded-full bg-green-100 dark:bg-green-900/50 flex items-center justify-center">
+                        <span class="text-sm font-bold text-green-700 dark:text-green-400">5</span>
+                    </div>
+                    <div>
+                        <h4 class="font-medium text-slate-900 dark:text-white">Expert</h4>
+                        <p class="text-sm text-slate-600 dark:text-slate-400">{{ competency.level_5_description }}</p>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

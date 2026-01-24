@@ -177,6 +177,23 @@ class Ticket(Base, AuditMixin, ERPNextSyncMixin):
         comment="Customer linked to this ticket (synced from ERPNext)",
     )
 
+    # Contact info (can be auto-populated from customer or manually entered)
+    contact_email: Mapped[Optional[str]] = mapped_column(
+        String(255),
+        nullable=True,
+        comment="Contact email for this ticket (may differ from customer record)",
+    )
+    contact_phone: Mapped[Optional[str]] = mapped_column(
+        String(50),
+        nullable=True,
+        comment="Contact phone for this ticket",
+    )
+    contact_address: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+        comment="Contact address for this ticket",
+    )
+
     # Category (optional)
     category_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),

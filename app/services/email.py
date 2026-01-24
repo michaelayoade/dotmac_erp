@@ -65,7 +65,7 @@ def _get_smtp_config(db: Session | None = None) -> dict:
     use_ssl = use_ssl_db if use_ssl_db is not None else _env_bool("SMTP_USE_SSL", False)
 
     from_email = _get_db_setting(db, "smtp_from_email") or _env_value("SMTP_FROM_EMAIL") or "noreply@example.com"
-    from_name = _get_db_setting(db, "smtp_from_name") or _env_value("SMTP_FROM_NAME") or "IFRS Ledger"
+    from_name = _get_db_setting(db, "smtp_from_name") or _env_value("SMTP_FROM_NAME") or "Dotmac ERP"
     reply_to = _get_db_setting(db, "email_reply_to") or _env_value("EMAIL_REPLY_TO")
 
     return {

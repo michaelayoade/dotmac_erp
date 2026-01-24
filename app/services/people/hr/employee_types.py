@@ -170,8 +170,15 @@ class EmployeeCreateData:
     # Employment dates
     date_of_joining: Optional[date] = None
     probation_end_date: Optional[date] = None
+    confirmation_date: Optional[date] = None
     # Status
     status: Optional[EmploymentStatus] = None
+    # Personal contact (separate from Person's work email/phone)
+    personal_email: Optional[str] = None
+    personal_phone: Optional[str] = None
+    # Emergency contact
+    emergency_contact_name: Optional[str] = None
+    emergency_contact_phone: Optional[str] = None
     # Bank Details (for payroll)
     bank_name: Optional[str] = None
     bank_account_number: Optional[str] = None
@@ -201,6 +208,12 @@ class EmployeeUpdateData:
     probation_end_date: Optional[date] = None
     confirmation_date: Optional[date] = None
     status: Optional[EmploymentStatus] = None
+    # Personal contact (separate from Person's work email/phone)
+    personal_email: Optional[str] = None
+    personal_phone: Optional[str] = None
+    # Emergency contact
+    emergency_contact_name: Optional[str] = None
+    emergency_contact_phone: Optional[str] = None
     # Bank Details
     bank_name: Optional[str] = None
     bank_account_number: Optional[str] = None

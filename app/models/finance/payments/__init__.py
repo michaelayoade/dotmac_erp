@@ -13,6 +13,12 @@ from app.models.finance.payments.payment_webhook import (
     PaymentWebhook,
     WebhookStatus,
 )
+from app.models.finance.payments.transfer_batch import (
+    TransferBatch,
+    TransferBatchItem,
+    TransferBatchStatus,
+    TransferBatchItemStatus,
+)
 
 __all__ = [
     "PaymentDirection",
@@ -20,4 +26,8 @@ __all__ = [
     "PaymentIntentStatus",
     "PaymentWebhook",
     "WebhookStatus",
+    "TransferBatch",
+    "TransferBatchItem",
+    "TransferBatchStatus",
+    "TransferBatchItemStatus",
 ]

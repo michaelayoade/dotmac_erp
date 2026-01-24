@@ -40,13 +40,6 @@ from app.services.finance.ar.contract import (
     PerformanceObligationInput,
     ProgressUpdateInput,
 )
-from app.services.finance.ar.ecl import (
-    ECLService,
-    ecl_service,
-    ECLCalculationInput,
-    GeneralApproachInput,
-    ECLResult,
-)
 
 __all__ = [
     # Customer
@@ -78,10 +71,4 @@ __all__ = [
     "ContractInput",
     "PerformanceObligationInput",
     "ProgressUpdateInput",
-    # IFRS 9 ECL
-    "ECLService",
-    "ecl_service",
-    "ECLCalculationInput",
-    "GeneralApproachInput",
-    "ECLResult",
 ]

@@ -175,16 +175,24 @@ class ExpenseClaimSyncService(BaseSyncService[ExpenseClaim]):
             item_data.pop("_source_modified", None)
             item_data.pop("_source_name", None)
 
-            # Resolve expense category
+            # Resolve expense category - required field
             category_id = self._resolve_entity_id(
                 expense_type_source, "Expense Claim Type"
             )
+
+            if not category_id:
+                logger.warning(
+                    "Skipping expense item: category '%s' not found for claim %s",
+                    expense_type_source,
+                    claim.claim_number,
+                )
+                continue
 
             item = ExpenseClaimItem(
                 claim_id=claim.claim_id,
                 expense_date=item_data["expense_date"],
                 category_id=category_id,
-                description=item_data.get("description"),
+                description=item_data.get("description") or f"Expense: {expense_type_source}",
                 claimed_amount=item_data.get("claimed_amount", Decimal("0")),
                 approved_amount=item_data.get("approved_amount"),
                 sequence=seq,

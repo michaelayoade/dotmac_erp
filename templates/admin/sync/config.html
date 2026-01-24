@@ -1,0 +1,271 @@
+{% extends "admin/base_admin.html" %}
+
+{% block page_title %}ERPNext Integration{% endblock %}
+{% block page_subtitle %}Configure ERPNext sync credentials{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Breadcrumb -->
+    <nav class="flex items-center gap-2 text-sm">
+        <a href="/admin/sync" class="text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200">Sync Management</a>
+        <svg class="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+        </svg>
+        <span class="text-slate-900 dark:text-white font-medium">Configuration</span>
+    </nav>
+
+    <!-- Flash Messages -->
+    {% if request.query_params.get('success') %}
+    <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900 dark:bg-emerald-900/20">
+        <div class="flex items-center gap-3">
+            <svg class="h-5 w-5 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <p class="text-sm font-medium text-emerald-800 dark:text-emerald-200">{{ request.query_params.get('success') | urldecode }}</p>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if request.query_params.get('error') %}
+    <div class="rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-900 dark:bg-red-900/20">
+        <div class="flex items-center gap-3">
+            <svg class="h-5 w-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <p class="text-sm font-medium text-red-800 dark:text-red-200">{{ request.query_params.get('error') | urldecode }}</p>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="grid gap-6 lg:grid-cols-3">
+        <!-- Configuration Form -->
+        <div class="lg:col-span-2 admin-card p-6">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display mb-6">ERPNext Connection Settings</h2>
+
+            <form action="/admin/sync/config" method="post" class="space-y-6">
+                <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+
+                <div class="space-y-4">
+                    <div>
+                        <label for="base_url" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                            ERPNext URL <span class="text-red-500">*</span>
+                        </label>
+                        <input
+                            type="url"
+                            id="base_url"
+                            name="base_url"
+                            value="{{ config.base_url if config else '' }}"
+                            placeholder="https://your-erpnext-instance.com"
+                            required
+                            class="w-full rounded-xl border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:border-primary-500 focus:ring-primary-500"
+                        >
+                        <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">The full URL to your ERPNext instance</p>
+                    </div>
+
+                    <div>
+                        <label for="api_key" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                            API Key <span class="text-red-500">*</span>
+                        </label>
+                        <input
+                            type="text"
+                            id="api_key"
+                            name="api_key"
+                            value=""
+                            placeholder="{{ 'Enter new API key to update' if config and config.api_key else 'Enter API key' }}"
+                            class="w-full rounded-xl border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:border-primary-500 focus:ring-primary-500 font-mono"
+                        >
+                        {% if config and config.api_key %}
+                        <p class="mt-1 text-xs text-emerald-600 dark:text-emerald-400">Existing key configured (leave blank to keep current)</p>
+                        {% else %}
+                        <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Generate from ERPNext: Settings &rarr; My Settings &rarr; API Access</p>
+                        {% endif %}
+                    </div>
+
+                    <div>
+                        <label for="api_secret" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                            API Secret <span class="text-red-500">*</span>
+                        </label>
+                        <input
+                            type="password"
+                            id="api_secret"
+                            name="api_secret"
+                            value=""
+                            placeholder="{{ 'Enter new API secret to update' if config and config.api_secret else 'Enter API secret' }}"
+                            class="w-full rounded-xl border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:border-primary-500 focus:ring-primary-500 font-mono"
+                        >
+                        {% if config and config.api_secret %}
+                        <p class="mt-1 text-xs text-emerald-600 dark:text-emerald-400">Existing secret configured (leave blank to keep current)</p>
+                        {% else %}
+                        <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">The secret key paired with your API key</p>
+                        {% endif %}
+                    </div>
+
+                    <div>
+                        <label for="company" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                            Company Name <span class="text-red-500">*</span>
+                        </label>
+                        <input
+                            type="text"
+                            id="company"
+                            name="company"
+                            value="{{ config.company if config else '' }}"
+                            placeholder="e.g., Dotmac Technologies"
+                            required
+                            class="w-full rounded-xl border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:border-primary-500 focus:ring-primary-500"
+                        >
+                        <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Must match the company name exactly as it appears in ERPNext</p>
+                    </div>
+
+                    <div class="pt-4 border-t border-slate-200 dark:border-slate-700">
+                        <label class="flex items-center gap-3">
+                            <input
+                                type="checkbox"
+                                name="is_active"
+                                {{ 'checked' if config and config.is_active else '' }}
+                                class="rounded border-slate-300 dark:border-slate-600 text-primary-600 focus:ring-primary-500"
+                            >
+                            <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Enable Integration</span>
+                        </label>
+                        <p class="mt-1 ml-7 text-xs text-slate-500 dark:text-slate-400">Sync operations will only work when this is enabled</p>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-4 pt-4">
+                    <button type="submit" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary-600 text-white text-sm font-medium hover:bg-primary-700 transition">
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        Save Configuration
+                    </button>
+                    <a href="/admin/sync" class="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200">
+                        Cancel
+                    </a>
+                </div>
+            </form>
+
+            {% if config and config.is_active %}
+            <!-- Test Connection Button (separate form) -->
+            <div class="mt-6 pt-6 border-t border-slate-200 dark:border-slate-700">
+                <h3 class="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Test Connection</h3>
+                <form action="/admin/sync/config/test" method="post">
+                    <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+                    <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800 transition">
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                        </svg>
+                        Test Connection
+                    </button>
+                </form>
+                {% if config.last_verified_at %}
+                <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">Last verified: {{ config.last_verified_at.strftime('%Y-%m-%d %H:%M') }}</p>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Help Section -->
+        <div class="space-y-6">
+            <div class="admin-card p-6">
+                <h3 class="text-lg font-semibold text-slate-900 dark:text-white font-display mb-4">Setup Guide</h3>
+                <ol class="space-y-4 text-sm text-slate-600 dark:text-slate-300">
+                    <li class="flex gap-3">
+                        <span class="flex h-6 w-6 items-center justify-center rounded-full bg-primary-100 text-primary-600 dark:bg-primary-900/30 dark:text-primary-400 text-xs font-semibold flex-shrink-0">1</span>
+                        <span>Log into ERPNext as Administrator</span>
+                    </li>
+                    <li class="flex gap-3">
+                        <span class="flex h-6 w-6 items-center justify-center rounded-full bg-primary-100 text-primary-600 dark:bg-primary-900/30 dark:text-primary-400 text-xs font-semibold flex-shrink-0">2</span>
+                        <span>Go to Settings &rarr; My Settings</span>
+                    </li>
+                    <li class="flex gap-3">
+                        <span class="flex h-6 w-6 items-center justify-center rounded-full bg-primary-100 text-primary-600 dark:bg-primary-900/30 dark:text-primary-400 text-xs font-semibold flex-shrink-0">3</span>
+                        <span>Under API Access, generate new keys</span>
+                    </li>
+                    <li class="flex gap-3">
+                        <span class="flex h-6 w-6 items-center justify-center rounded-full bg-primary-100 text-primary-600 dark:bg-primary-900/30 dark:text-primary-400 text-xs font-semibold flex-shrink-0">4</span>
+                        <span>Copy the API Key and Secret here</span>
+                    </li>
+                    <li class="flex gap-3">
+                        <span class="flex h-6 w-6 items-center justify-center rounded-full bg-primary-100 text-primary-600 dark:bg-primary-900/30 dark:text-primary-400 text-xs font-semibold flex-shrink-0">5</span>
+                        <span>Enter your company name exactly as shown in ERPNext</span>
+                    </li>
+                </ol>
+            </div>
+
+            <div class="admin-card p-6">
+                <h3 class="text-lg font-semibold text-slate-900 dark:text-white font-display mb-4">Supported Entities</h3>
+                <p class="text-sm text-slate-600 dark:text-slate-300 mb-4">The following data types can be synced from ERPNext:</p>
+                <ul class="space-y-2 text-sm text-slate-600 dark:text-slate-300">
+                    <li class="flex items-center gap-2">
+                        <svg class="h-4 w-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        Chart of Accounts
+                    </li>
+                    <li class="flex items-center gap-2">
+                        <svg class="h-4 w-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        Customers & Suppliers
+                    </li>
+                    <li class="flex items-center gap-2">
+                        <svg class="h-4 w-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        Items & Warehouses
+                    </li>
+                    <li class="flex items-center gap-2">
+                        <svg class="h-4 w-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        Material Requests
+                    </li>
+                    <li class="flex items-center gap-2">
+                        <svg class="h-4 w-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        Fixed Assets
+                    </li>
+                    <li class="flex items-center gap-2">
+                        <svg class="h-4 w-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        Employees & HR Data
+                    </li>
+                    <li class="flex items-center gap-2">
+                        <svg class="h-4 w-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        Projects & Tasks
+                    </li>
+                    <li class="flex items-center gap-2">
+                        <svg class="h-4 w-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        Support Tickets
+                    </li>
+                </ul>
+            </div>
+
+            <!-- Current Status -->
+            {% if config %}
+            <div class="admin-card p-6">
+                <h3 class="text-lg font-semibold text-slate-900 dark:text-white font-display mb-4">Current Status</h3>
+                <div class="space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm text-slate-600 dark:text-slate-300">Integration Status</span>
+                        <span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold {{ 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' if config.is_active else 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400' }}">
+                            {% if config.is_active %}<span class="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>{% endif %}
+                            {{ 'Active' if config.is_active else 'Inactive' }}
+                        </span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm text-slate-600 dark:text-slate-300">Last Updated</span>
+                        <span class="text-sm text-slate-500 dark:text-slate-400">{{ config.updated_at.strftime('%Y-%m-%d %H:%M') if config.updated_at else config.created_at.strftime('%Y-%m-%d %H:%M') if config.created_at else '-' }}</span>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

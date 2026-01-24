@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import require_organization_id, require_tenant_auth
 from app.services.auth_dependencies import require_tenant_permission
+from app.services.feature_flags import require_feature, FEATURE_INVENTORY
 from app.config import settings
 from app.db import SessionLocal
 from app.schemas.finance.common import ListResponse, PostingResultSchema
@@ -33,7 +34,7 @@ from app.services.finance.inv import (
 router = APIRouter(
     prefix="/inv",
     tags=["inventory"],
-    dependencies=[Depends(require_tenant_auth)],
+    dependencies=[Depends(require_tenant_auth), Depends(require_feature(FEATURE_INVENTORY))],
 )
 
 

@@ -10,6 +10,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.finance.core_org import Organization
+from app.models.finance.core_org.location import Location
+from app.rls import tenant_context
 
 
 # Payroll frequency options
@@ -79,14 +81,44 @@ class PeopleSettingsWebService:
         self, db: AsyncSession, organization_id: uuid.UUID
     ) -> dict[str, Any]:
         """Get HR settings for editing."""
-        result = await db.execute(
-            select(Organization).where(
-                Organization.organization_id == organization_id
+        async with tenant_context(db, organization_id):
+            result = await db.execute(
+                select(Organization).where(
+                    Organization.organization_id == organization_id
+                )
             )
-        )
-        org = result.scalar_one_or_none()
+            org = result.scalar_one_or_none()
         if not org:
             return {"organization": None, "error": "Organization not found"}
+
+        # Get locations with geofence status for geofencing configuration
+        async with tenant_context(db, organization_id):
+            locations_result = await db.execute(
+                select(Location)
+                .where(Location.organization_id == organization_id)
+                .where(Location.is_active == True)
+                .order_by(Location.location_name)
+            )
+            locations = locations_result.scalars().all()
+
+        # Build geofence summary
+        geofence_summary = {
+            "total_locations": len(locations),
+            "geofence_enabled": sum(1 for loc in locations if loc.geofence_enabled),
+            "polygon_configured": sum(1 for loc in locations if loc.geofence_polygon),
+            "locations": [
+                {
+                    "location_id": str(loc.location_id),
+                    "location_name": loc.location_name,
+                    "location_code": loc.location_code,
+                    "geofence_enabled": loc.geofence_enabled,
+                    "has_coordinates": loc.latitude is not None and loc.longitude is not None,
+                    "has_polygon": loc.geofence_polygon is not None,
+                    "geofence_radius_m": loc.geofence_radius_m,
+                }
+                for loc in locations
+            ],
+        }
 
         return {
             "organization": org,
@@ -95,6 +127,7 @@ class PeopleSettingsWebService:
             "months": MONTHS,
             "timezones": COMMON_TIMEZONES,
             "employee_id_placeholders": EMPLOYEE_ID_PLACEHOLDERS,
+            "geofence_summary": geofence_summary,
         }
 
     async def update_hr_settings(
@@ -104,12 +137,13 @@ class PeopleSettingsWebService:
         data: dict[str, Any],
     ) -> tuple[bool, Optional[str]]:
         """Update HR settings."""
-        result = await db.execute(
-            select(Organization).where(
-                Organization.organization_id == organization_id
+        async with tenant_context(db, organization_id):
+            result = await db.execute(
+                select(Organization).where(
+                    Organization.organization_id == organization_id
+                )
             )
-        )
-        org = result.scalar_one_or_none()
+            org = result.scalar_one_or_none()
         if not org:
             return False, "Organization not found"
 
@@ -147,12 +181,13 @@ class PeopleSettingsWebService:
         self, db: AsyncSession, organization_id: uuid.UUID
     ) -> dict[str, Any]:
         """Get organization profile (read-only view for HR users)."""
-        result = await db.execute(
-            select(Organization).where(
-                Organization.organization_id == organization_id
+        async with tenant_context(db, organization_id):
+            result = await db.execute(
+                select(Organization).where(
+                    Organization.organization_id == organization_id
+                )
             )
-        )
-        org = result.scalar_one_or_none()
+            org = result.scalar_one_or_none()
         if not org:
             return {"organization": None, "error": "Organization not found"}
 

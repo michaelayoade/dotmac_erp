@@ -23,9 +23,12 @@ from app.web.finance import settings_router as settings_web_router
 from app.web.finance import automation_router as automation_web_router
 from app.web.auth import router as auth_web_router
 from app.web.admin import router as admin_web_router
+from app.web.admin_sync import router as admin_sync_router
 from app.web.profile import router as profile_web_router
 from app.web.people import router as people_web_router
 from app.web.operations import router as operations_web_router
+from app.web.notifications import router as notifications_web_router
+from app.web.workflow_tasks import router as workflow_tasks_web_router
 from app.api.finance import (
     gl_router,
     ap_router,
@@ -33,7 +36,6 @@ from app.api.finance import (
     fa_router,
     inv_router,
     lease_router,
-    fin_inst_router,
     tax_router,
     cons_router,
     rpt_router,
@@ -56,11 +58,7 @@ from app.models.domain_settings import DomainSetting, SettingDomain
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 from starlette.responses import JSONResponse
-from app.services.settings_seed import (
-    seed_audit_settings,
-    seed_auth_settings,
-    seed_scheduler_settings,
-)
+from app.services.settings_seed import seed_all_settings
 from app.logging import configure_logging
 from app.observability import ObservabilityMiddleware
 from app.telemetry import setup_otel
@@ -81,10 +79,8 @@ async def lifespan(app: FastAPI):
         # This will exit(1) if critical config is missing
         validate_startup(db, exit_on_failure=True)
 
-        # Seed default settings
-        seed_auth_settings(db)
-        seed_audit_settings(db)
-        seed_scheduler_settings(db)
+        # Seed default settings for all domains
+        seed_all_settings(db)
     finally:
         db.close()
     yield
@@ -244,6 +240,7 @@ _include_api_router(scheduler_router, dependencies=[Depends(require_tenant_auth)
 app.include_router(web_home_router)
 app.include_router(auth_web_router)
 app.include_router(admin_web_router)
+app.include_router(admin_sync_router)  # Admin sync management UI
 app.include_router(profile_web_router)
 app.include_router(finance_web_router, prefix="/finance")
 app.include_router(expense_web_router, prefix="/expense")
@@ -251,6 +248,8 @@ app.include_router(settings_web_router)  # Has its own /settings prefix
 app.include_router(automation_web_router)  # Has its own /automation prefix
 app.include_router(people_web_router)
 app.include_router(operations_web_router)
+app.include_router(notifications_web_router)
+app.include_router(workflow_tasks_web_router)
 
 # Finance Accounting Routers (authenticated with tenant context)
 _include_api_router(gl_router, dependencies=[Depends(require_tenant_auth)])
@@ -259,7 +258,6 @@ _include_api_router(ar_router, dependencies=[Depends(require_tenant_auth)])
 _include_api_router(fa_router, dependencies=[Depends(require_tenant_auth)])
 _include_api_router(inv_router, dependencies=[Depends(require_tenant_auth)])
 _include_api_router(lease_router, dependencies=[Depends(require_tenant_auth)])
-_include_api_router(fin_inst_router, dependencies=[Depends(require_tenant_auth)])
 _include_api_router(tax_router, dependencies=[Depends(require_tenant_auth)])
 _include_api_router(cons_router, dependencies=[Depends(require_tenant_auth)])
 _include_api_router(rpt_router, dependencies=[Depends(require_tenant_auth)])

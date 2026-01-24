@@ -1,0 +1,237 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}{{ kra.kra_name }}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a>
+    <span class="mx-2">/</span>
+    <a href="/people/perf/kras" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">KRAs</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">{{ kra.kra_code }}</span>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<div class="flex items-center gap-2">
+    <form method="post" action="/people/perf/kras/{{ kra.kra_id }}/toggle-active" class="inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button type="submit" class="btn btn-secondary">
+            {% if kra.is_active %}
+            <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+            </svg>
+            Deactivate
+            {% else %}
+            <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            Activate
+            {% endif %}
+        </button>
+    </form>
+
+    <a href="/people/perf/kras/{{ kra.kra_id }}/edit" class="btn btn-primary">
+        <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+        </svg>
+        Edit
+    </a>
+
+    <div class="relative" x-data="{ open: false }">
+        <button @click="open = !open" type="button" class="btn btn-ghost text-red-600 hover:text-red-700">
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+            </svg>
+        </button>
+        <div x-show="open" @click.away="open = false" x-cloak
+             class="absolute right-0 z-10 mt-2 w-48 rounded-lg bg-white dark:bg-slate-800 shadow-lg ring-1 ring-black/5 dark:ring-white/10">
+            <form method="post" action="/people/perf/kras/{{ kra.kra_id }}/delete"
+                  onsubmit="return confirm('Are you sure you want to delete this KRA?')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <button type="submit" class="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20">
+                    Delete KRA
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    {% if success %}
+    <div class="p-4 rounded-lg bg-green-50 border border-green-200 dark:bg-green-900/20 dark:border-green-800">
+        <div class="flex items-center gap-2 text-green-700 dark:text-green-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+            </svg>
+            <span>{{ success | replace('+', ' ') }}</span>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if error %}
+    <div class="p-4 rounded-lg bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-800">
+        <div class="flex items-center gap-2 text-red-700 dark:text-red-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span>{{ error | replace('+', ' ') }}</span>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="grid gap-6 lg:grid-cols-3">
+        <!-- Main Info -->
+        <div class="lg:col-span-2 space-y-6">
+            <div class="card">
+                <div class="card-header flex items-center justify-between">
+                    <div>
+                        <h3 class="text-lg font-medium text-slate-900 dark:text-white">{{ kra.kra_name }}</h3>
+                        <p class="text-sm text-slate-500 dark:text-slate-400 font-mono">{{ kra.kra_code }}</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        {% if kra.category %}
+                        {% set cat_colors = {
+                            'PERFORMANCE': 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
+                            'BEHAVIOR': 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300',
+                            'SKILL': 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
+                            'LEARNING': 'bg-teal-100 text-teal-700 dark:bg-teal-900 dark:text-teal-300',
+                            'OTHER': 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300'
+                        } %}
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {{ cat_colors.get(kra.category, 'bg-slate-100 text-slate-700') }}">
+                            {{ kra.category | title }}
+                        </span>
+                        {% endif %}
+                        {% if kra.is_active %}
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300">Active</span>
+                        {% else %}
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300">Inactive</span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="card-body">
+                    {% if kra.description %}
+                    <p class="text-slate-600 dark:text-slate-400 mb-4">{{ kra.description }}</p>
+                    {% endif %}
+
+                    <dl class="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                            <dt class="text-slate-500 dark:text-slate-400">Default Weight</dt>
+                            <dd class="font-medium text-slate-900 dark:text-white">{{ kra.default_weightage }}%</dd>
+                        </div>
+                        <div>
+                            <dt class="text-slate-500 dark:text-slate-400">Scope</dt>
+                            <dd class="font-medium text-slate-900 dark:text-white">
+                                {% if kra.department_id %}
+                                Department-specific
+                                {% elif kra.designation_id %}
+                                Role-specific
+                                {% else %}
+                                Organization-wide
+                                {% endif %}
+                            </dd>
+                        </div>
+                    </dl>
+                </div>
+            </div>
+
+            {% if kra.measurement_criteria %}
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="font-medium text-slate-900 dark:text-white">Measurement Criteria</h4>
+                </div>
+                <div class="card-body">
+                    <p class="text-slate-600 dark:text-slate-400 whitespace-pre-line">{{ kra.measurement_criteria }}</p>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Sidebar -->
+        <div class="space-y-6">
+            <!-- Scope Details -->
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="font-medium text-slate-900 dark:text-white">Applicability</h4>
+                </div>
+                <div class="card-body space-y-3 text-sm">
+                    <div class="flex items-start gap-3">
+                        <svg class="w-5 h-5 text-slate-400 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+                        </svg>
+                        <div>
+                            <p class="text-slate-500 dark:text-slate-400">Department</p>
+                            <p class="font-medium text-slate-900 dark:text-white">
+                                {% if kra.department_id %}
+                                Specific department
+                                {% else %}
+                                All departments
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+                    <div class="flex items-start gap-3">
+                        <svg class="w-5 h-5 text-slate-400 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                        </svg>
+                        <div>
+                            <p class="text-slate-500 dark:text-slate-400">Designation</p>
+                            <p class="font-medium text-slate-900 dark:text-white">
+                                {% if kra.designation_id %}
+                                Specific role
+                                {% else %}
+                                All designations
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="font-medium text-slate-900 dark:text-white">Quick Actions</h4>
+                </div>
+                <div class="card-body space-y-2">
+                    <a href="/people/perf/goals/new?kra_id={{ kra.kra_id }}" class="btn btn-secondary w-full justify-start">
+                        <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                        </svg>
+                        Create KPI for this KRA
+                    </a>
+                    <a href="/people/perf/goals?kra_id={{ kra.kra_id }}" class="btn btn-ghost w-full justify-start">
+                        <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                        </svg>
+                        View Related KPIs
+                    </a>
+                </div>
+            </div>
+
+            <!-- Metadata -->
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="font-medium text-slate-900 dark:text-white">Details</h4>
+                </div>
+                <div class="card-body space-y-2 text-sm">
+                    <div class="flex justify-between">
+                        <span class="text-slate-500 dark:text-slate-400">Created</span>
+                        <span class="text-slate-700 dark:text-slate-300">{{ kra.created_at.strftime("%b %d, %Y") if kra.created_at else "-" }}</span>
+                    </div>
+                    {% if kra.updated_at %}
+                    <div class="flex justify-between">
+                        <span class="text-slate-500 dark:text-slate-400">Last Updated</span>
+                        <span class="text-slate-700 dark:text-slate-300">{{ kra.updated_at.strftime("%b %d, %Y") }}</span>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

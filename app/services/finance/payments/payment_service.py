@@ -20,6 +20,11 @@ from app.models.finance.payments.payment_intent import (
     PaymentIntent,
     PaymentIntentStatus,
 )
+from app.models.finance.payments.transfer_batch import (
+    TransferBatchItem,
+    TransferBatchItemStatus,
+    TransferBatchStatus,
+)
 from app.models.domain_settings import SettingDomain
 from app.services.common import coerce_uuid
 from app.services.finance.payments.paystack_client import PaystackClient, PaystackConfig
@@ -260,6 +265,7 @@ class PaymentService:
             payment_method=payment_method,
             currency_code=intent.currency_code,
             amount=intent.amount,
+            bank_account_id=intent.bank_account_id,  # Paystack settlement account
             reference=intent.paystack_reference,
             description=f"Paystack payment for {invoice.invoice_number}",
             correlation_id=str(intent.intent_id),
@@ -279,12 +285,31 @@ class PaymentService:
                 created_by_user_id=system_user_id,
             )
 
-            # Post the payment to clear it
-            # Note: This requires a bank account. For Paystack payments, we might
-            # need a dedicated "Paystack Settlement" bank account configured.
-            # For now, we'll leave it in PENDING status and let it be posted
-            # when the settlement is reconciled.
-            # TODO: Auto-post when Paystack settlement account is configured
+            # Auto-post if bank account is configured
+            if intent.bank_account_id:
+                try:
+                    CustomerPaymentService.post_payment(
+                        db=self.db,
+                        organization_id=self.organization_id,
+                        payment_id=payment.payment_id,
+                        posted_by_user_id=system_user_id,
+                        posting_date=paid_at.date(),
+                    )
+                    logger.info(
+                        f"Auto-posted Paystack payment {payment.payment_id} to GL",
+                        extra={"payment_id": str(payment.payment_id)},
+                    )
+                except Exception as post_error:
+                    # Log but don't fail - payment is still recorded
+                    logger.warning(
+                        f"Failed to auto-post payment {payment.payment_id}: {post_error}",
+                        extra={"payment_id": str(payment.payment_id), "error": str(post_error)},
+                    )
+            else:
+                logger.info(
+                    f"Paystack payment {payment.payment_id} created but not posted - "
+                    "no settlement bank account configured",
+                )
 
             # Update intent
             intent.status = PaymentIntentStatus.COMPLETED
@@ -609,16 +634,18 @@ class PaymentService:
         intent: PaymentIntent,
         completed_at: datetime,
         gateway_response: dict[str, Any],
+        fee_kobo: Optional[int] = None,
     ) -> None:
         """
         Process a successful transfer (expense reimbursement).
 
-        Updates the expense claim status to PAID.
+        Updates the expense claim status to PAID, posts to GL, and records fees.
 
         Args:
             intent: The payment intent
             completed_at: When transfer completed
             gateway_response: Full Paystack response
+            fee_kobo: Transfer fee in kobo (smallest currency unit)
         """
         from app.models.expense.expense_claim import ExpenseClaim, ExpenseClaimStatus
 
@@ -635,12 +662,19 @@ class PaymentService:
             )
 
         # Update expense claim status
+        claim = None
         if intent.source_type == "EXPENSE_CLAIM" and intent.source_id:
             claim = self.db.get(ExpenseClaim, intent.source_id)
             if claim:
                 claim.status = ExpenseClaimStatus.PAID
                 claim.paid_on = completed_at.date()
                 claim.payment_reference = intent.paystack_reference
+
+        # Store fee amount (convert from kobo to Naira)
+        fee_amount = None
+        if fee_kobo and fee_kobo > 0:
+            fee_amount = Decimal(fee_kobo) / Decimal("100")
+            intent.fee_amount = fee_amount
 
         # Update intent
         intent.status = PaymentIntentStatus.COMPLETED
@@ -649,12 +683,221 @@ class PaymentService:
 
         self.db.flush()
 
+        # Update batch item if this transfer is part of a batch
+        self._update_batch_item_status(
+            intent=intent,
+            status=TransferBatchItemStatus.COMPLETED,
+            completed_at=completed_at,
+            fee_amount=fee_amount,
+        )
+
+        # Auto-post reimbursement to GL if bank account is configured
+        system_user_id = None
+        if claim and intent.bank_account_id:
+            try:
+                from app.services.expense.expense_posting_adapter import ExpensePostingAdapter
+
+                # Get a system user ID for posting
+                system_user_id = claim.created_by_user_id
+
+                posting_result = ExpensePostingAdapter.post_expense_reimbursement(
+                    db=self.db,
+                    organization_id=self.organization_id,
+                    claim_id=claim.claim_id,
+                    posting_date=completed_at.date(),
+                    posted_by_user_id=system_user_id,
+                    bank_account_id=intent.bank_account_id,
+                    payment_reference=intent.paystack_reference,
+                    correlation_id=str(intent.intent_id),
+                )
+
+                if posting_result.success:
+                    logger.info(
+                        f"Auto-posted expense reimbursement {claim.claim_number} to GL",
+                        extra={
+                            "claim_id": str(claim.claim_id),
+                            "journal_entry_id": str(posting_result.journal_entry_id),
+                        },
+                    )
+                else:
+                    logger.warning(
+                        f"Failed to auto-post expense reimbursement: {posting_result.message}",
+                        extra={"claim_id": str(claim.claim_id)},
+                    )
+            except Exception as post_error:
+                # Log but don't fail - payment is still recorded
+                logger.warning(
+                    f"Failed to auto-post reimbursement for claim {claim.claim_id}: {post_error}",
+                    extra={"claim_id": str(claim.claim_id), "error": str(post_error)},
+                )
+        elif claim and not intent.bank_account_id:
+            logger.info(
+                f"Expense reimbursement {claim.claim_number} not posted to GL - "
+                "no transfer bank account configured in payment settings",
+            )
+
+        # Post transfer fee to GL if fee account is configured
+        if fee_amount and fee_amount > Decimal("0") and intent.bank_account_id:
+            self._post_transfer_fee(
+                intent=intent,
+                fee_amount=fee_amount,
+                posting_date=completed_at.date(),
+                system_user_id=system_user_id or (claim.created_by_user_id if claim else None),
+            )
+
         logger.info(
             f"Processed successful transfer for intent {intent.intent_id}",
             extra={
                 "intent_id": str(intent.intent_id),
                 "source_type": intent.source_type,
                 "source_id": str(intent.source_id) if intent.source_id else None,
+                "fee_amount": str(fee_amount) if fee_amount else None,
+            },
+        )
+
+    def _post_transfer_fee(
+        self,
+        intent: PaymentIntent,
+        fee_amount: Decimal,
+        posting_date,
+        system_user_id: Optional[UUID],
+    ) -> None:
+        """
+        Post transfer fee to GL if fee account is configured.
+
+        Args:
+            intent: Payment intent with fee details
+            fee_amount: Fee amount in currency units
+            posting_date: Date for posting
+            system_user_id: User ID for audit trail
+        """
+        # Get fee expense account from settings
+        fee_account_id = resolve_value(
+            self.db, SettingDomain.payments, "paystack_transfer_fee_account_id"
+        )
+
+        if not fee_account_id:
+            logger.debug(
+                f"Transfer fee not posted - no fee account configured",
+                extra={"intent_id": str(intent.intent_id), "fee": str(fee_amount)},
+            )
+            return
+
+        if not system_user_id:
+            logger.warning(
+                f"Transfer fee not posted - no user ID available",
+                extra={"intent_id": str(intent.intent_id)},
+            )
+            return
+
+        try:
+            from app.services.expense.expense_posting_adapter import ExpensePostingAdapter
+
+            fee_account_uuid = coerce_uuid(fee_account_id)
+
+            fee_result = ExpensePostingAdapter.post_transfer_fee(
+                db=self.db,
+                organization_id=self.organization_id,
+                posting_date=posting_date,
+                posted_by_user_id=system_user_id,
+                fee_amount=fee_amount,
+                bank_account_id=intent.bank_account_id,
+                fee_expense_account_id=fee_account_uuid,
+                reference=intent.paystack_reference,
+                description=f"Paystack transfer fee: {intent.paystack_reference}",
+                correlation_id=str(intent.intent_id),
+            )
+
+            if fee_result.success:
+                intent.fee_journal_id = fee_result.journal_entry_id
+                logger.info(
+                    f"Posted transfer fee to GL",
+                    extra={
+                        "intent_id": str(intent.intent_id),
+                        "fee": str(fee_amount),
+                        "journal_id": str(fee_result.journal_entry_id),
+                    },
+                )
+            else:
+                logger.warning(
+                    f"Failed to post transfer fee: {fee_result.message}",
+                    extra={"intent_id": str(intent.intent_id), "fee": str(fee_amount)},
+                )
+
+        except Exception as e:
+            logger.warning(
+                f"Error posting transfer fee: {e}",
+                extra={"intent_id": str(intent.intent_id), "error": str(e)},
+            )
+
+    def _update_batch_item_status(
+        self,
+        intent: PaymentIntent,
+        status: TransferBatchItemStatus,
+        completed_at: Optional[datetime] = None,
+        fee_amount: Optional[Decimal] = None,
+        error_message: Optional[str] = None,
+    ) -> None:
+        """
+        Update batch item status if the intent is part of a batch.
+
+        Also updates batch totals when items complete or fail.
+
+        Args:
+            intent: The payment intent
+            status: New status for the batch item
+            completed_at: When the transfer completed (for COMPLETED status)
+            fee_amount: Transfer fee (for COMPLETED status)
+            error_message: Error description (for FAILED status)
+        """
+        # Find batch item by payment intent
+        batch_item = (
+            self.db.query(TransferBatchItem)
+            .filter(TransferBatchItem.payment_intent_id == intent.intent_id)
+            .first()
+        )
+
+        if not batch_item:
+            # Intent is not part of a batch
+            return
+
+        # Update batch item
+        batch_item.status = status
+        if completed_at:
+            batch_item.completed_at = completed_at
+        if fee_amount:
+            batch_item.fee_amount = fee_amount
+        if error_message:
+            batch_item.error_message = error_message[:500] if error_message else None
+
+        # Update batch totals
+        batch = batch_item.batch
+        if batch:
+            batch.update_totals()
+
+            # Update batch status based on item completion
+            all_items = batch.items
+            total = len(all_items)
+            completed = batch.completed_count
+            failed = batch.failed_count
+
+            if completed + failed == total:
+                # All items are finalized
+                if failed == 0:
+                    batch.status = TransferBatchStatus.COMPLETED
+                elif completed == 0:
+                    batch.status = TransferBatchStatus.FAILED
+                else:
+                    batch.status = TransferBatchStatus.PARTIALLY_COMPLETED
+
+        self.db.flush()
+
+        logger.info(
+            f"Updated batch item for intent {intent.intent_id} to {status.value}",
+            extra={
+                "intent_id": str(intent.intent_id),
+                "batch_item_id": str(batch_item.item_id),
+                "batch_id": str(batch_item.batch_id),
             },
         )
 
@@ -667,17 +910,40 @@ class PaymentService:
         """
         Mark a transfer intent as failed.
 
+        Also reverts the expense claim status back to APPROVED if needed.
+
         Args:
             intent: The payment intent
             error_message: Error description
             gateway_response: Optional Paystack response
         """
+        from app.models.expense.expense_claim import ExpenseClaim, ExpenseClaimStatus
+
         intent.status = PaymentIntentStatus.FAILED
         intent.gateway_response = {
             "error": error_message,
             **(gateway_response or {}),
         }
+
+        # Revert expense claim status if it was somehow marked PAID
+        if intent.source_type == "EXPENSE_CLAIM" and intent.source_id:
+            claim = self.db.get(ExpenseClaim, intent.source_id)
+            if claim and claim.status == ExpenseClaimStatus.PAID:
+                claim.status = ExpenseClaimStatus.APPROVED
+                claim.paid_on = None
+                claim.payment_reference = None
+                logger.info(
+                    f"Reverted claim {claim.claim_number} to APPROVED due to failed transfer"
+                )
+
         self.db.flush()
+
+        # Update batch item if this transfer is part of a batch
+        self._update_batch_item_status(
+            intent=intent,
+            status=TransferBatchItemStatus.FAILED,
+            error_message=error_message,
+        )
 
         logger.warning(
             f"Transfer intent {intent.intent_id} failed: {error_message}",
@@ -686,3 +952,215 @@ class PaymentService:
                 "error": error_message,
             },
         )
+
+    def poll_transfer_status(
+        self,
+        intent: PaymentIntent,
+        paystack_config: PaystackConfig,
+    ) -> PaymentIntent:
+        """
+        Poll Paystack for transfer status (fallback for missed webhooks).
+
+        Use this to check status of transfers stuck in PROCESSING state.
+
+        Args:
+            intent: The payment intent with transfer_code
+            paystack_config: Paystack credentials
+
+        Returns:
+            Updated PaymentIntent
+        """
+        if intent.direction != PaymentDirection.OUTBOUND:
+            raise HTTPException(
+                status_code=400,
+                detail="Can only poll transfer status for OUTBOUND payments",
+            )
+
+        if intent.status != PaymentIntentStatus.PROCESSING:
+            logger.debug(f"Intent {intent.intent_id} not in PROCESSING state")
+            return intent
+
+        if not intent.transfer_code:
+            logger.warning(f"Intent {intent.intent_id} has no transfer_code")
+            return intent
+
+        with PaystackClient(paystack_config) as client:
+            result = client.verify_transfer(intent.transfer_code)
+
+        if result.status == "success":
+            self.process_successful_transfer(
+                intent,
+                completed_at=datetime.now(timezone.utc),
+                gateway_response={"polled": True, "transfer_status": result.status},
+                fee_kobo=result.fee,
+            )
+        elif result.status == "failed":
+            self.mark_transfer_failed(
+                intent,
+                error_message=f"Transfer failed: {result.reason or 'Unknown'}",
+                gateway_response={"polled": True, "transfer_status": result.status},
+            )
+        elif result.status == "reversed":
+            self.process_transfer_reversal(
+                intent,
+                reversed_at=datetime.now(timezone.utc),
+                gateway_response={"polled": True, "transfer_status": result.status},
+                reason=result.reason,
+            )
+        else:
+            logger.info(
+                f"Transfer {intent.transfer_code} still pending: {result.status}",
+            )
+
+        return intent
+
+    def process_transfer_reversal(
+        self,
+        intent: PaymentIntent,
+        reversed_at: datetime,
+        gateway_response: dict[str, Any],
+        reason: Optional[str] = None,
+    ) -> None:
+        """
+        Process a transfer reversal (funds returned).
+
+        Updates status, reverts expense claim, and creates reversal journal entries.
+
+        Args:
+            intent: The payment intent
+            reversed_at: When reversal occurred
+            gateway_response: Full Paystack response
+            reason: Reason for reversal
+        """
+        from app.models.expense.expense_claim import ExpenseClaim, ExpenseClaimStatus
+
+        # Check if already processed
+        if intent.status == PaymentIntentStatus.REVERSED:
+            logger.info(f"Transfer intent {intent.intent_id} already reversed")
+            return
+
+        # Can only reverse COMPLETED or PROCESSING transfers
+        if intent.status not in [PaymentIntentStatus.COMPLETED, PaymentIntentStatus.PROCESSING]:
+            logger.warning(
+                f"Cannot reverse intent {intent.intent_id} with status '{intent.status.value}'"
+            )
+            return
+
+        # Update intent status
+        was_completed = intent.status == PaymentIntentStatus.COMPLETED
+        intent.status = PaymentIntentStatus.REVERSED
+        intent.gateway_response = {
+            **(intent.gateway_response or {}),
+            "reversal": gateway_response,
+            "reversal_reason": reason,
+            "reversed_at": reversed_at.isoformat(),
+        }
+
+        # Revert expense claim status back to APPROVED
+        claim = None
+        if intent.source_type == "EXPENSE_CLAIM" and intent.source_id:
+            claim = self.db.get(ExpenseClaim, intent.source_id)
+            if claim and claim.status == ExpenseClaimStatus.PAID:
+                claim.status = ExpenseClaimStatus.APPROVED
+                claim.paid_on = None
+                claim.payment_reference = None
+                # Clear reimbursement journal reference (will create reversal)
+                # Note: We keep the original journal for audit trail
+
+        self.db.flush()
+
+        # Update batch item if this transfer is part of a batch
+        # Reversals count as failures for batch tracking
+        self._update_batch_item_status(
+            intent=intent,
+            status=TransferBatchItemStatus.FAILED,
+            error_message=f"Transfer reversed: {reason or 'No reason provided'}",
+        )
+
+        # Create reversal journal entries if we had posted to GL
+        if was_completed and intent.bank_account_id and claim:
+            self._post_reversal_entries(intent, claim, reversed_at)
+
+        logger.info(
+            f"Processed transfer reversal for intent {intent.intent_id}",
+            extra={
+                "intent_id": str(intent.intent_id),
+                "reason": reason,
+                "was_completed": was_completed,
+            },
+        )
+
+    def _post_reversal_entries(
+        self,
+        intent: PaymentIntent,
+        claim,
+        reversed_at: datetime,
+    ) -> None:
+        """
+        Post reversal journal entries for a reversed transfer.
+
+        Creates entries that reverse both the reimbursement and fee postings.
+        """
+        from app.services.expense.expense_posting_adapter import ExpensePostingAdapter
+
+        system_user_id = claim.created_by_user_id
+        if not system_user_id:
+            logger.warning(f"Cannot post reversal entries - no user ID")
+            return
+
+        # Reverse the reimbursement entry if it was posted
+        if claim.reimbursement_journal_id:
+            try:
+                # Create a reversal entry (opposite of original)
+                # Original was: Dr Employee Payable, Cr Bank
+                # Reversal is: Dr Bank, Cr Employee Payable
+                result = ExpensePostingAdapter.post_expense_reimbursement_reversal(
+                    db=self.db,
+                    organization_id=self.organization_id,
+                    claim_id=claim.claim_id,
+                    original_journal_id=claim.reimbursement_journal_id,
+                    posting_date=reversed_at.date(),
+                    posted_by_user_id=system_user_id,
+                    bank_account_id=intent.bank_account_id,
+                    reason=f"Transfer reversed: {intent.paystack_reference}",
+                    correlation_id=str(intent.intent_id),
+                )
+
+                if result.success:
+                    logger.info(
+                        f"Posted reimbursement reversal for claim {claim.claim_number}",
+                        extra={"journal_id": str(result.journal_entry_id)},
+                    )
+                else:
+                    logger.warning(
+                        f"Failed to post reimbursement reversal: {result.message}"
+                    )
+
+            except Exception as e:
+                logger.warning(f"Error posting reversal: {e}")
+
+        # Reverse the fee entry if it was posted
+        if intent.fee_journal_id and intent.fee_amount:
+            try:
+                result = ExpensePostingAdapter.post_transfer_fee_reversal(
+                    db=self.db,
+                    organization_id=self.organization_id,
+                    original_journal_id=intent.fee_journal_id,
+                    posting_date=reversed_at.date(),
+                    posted_by_user_id=system_user_id,
+                    fee_amount=intent.fee_amount,
+                    bank_account_id=intent.bank_account_id,
+                    reference=intent.paystack_reference,
+                    correlation_id=str(intent.intent_id),
+                )
+
+                if result.success:
+                    logger.info(
+                        f"Posted fee reversal for intent {intent.intent_id}",
+                        extra={"journal_id": str(result.journal_entry_id)},
+                    )
+                else:
+                    logger.warning(f"Failed to post fee reversal: {result.message}")
+
+            except Exception as e:
+                logger.warning(f"Error posting fee reversal: {e}")

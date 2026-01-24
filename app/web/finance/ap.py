@@ -206,6 +206,72 @@ def view_invoice(
     return ap_web_service.invoice_detail_response(request, auth, db, invoice_id)
 
 
+@router.get("/invoices/{invoice_id}/edit", response_class=HTMLResponse)
+def edit_invoice_form(
+    request: Request,
+    invoice_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Edit AP invoice form page."""
+    return ap_web_service.invoice_edit_form_response(request, auth, db, invoice_id)
+
+
+@router.post("/invoices/{invoice_id}/edit")
+async def update_invoice(
+    request: Request,
+    invoice_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Handle AP invoice update form submission."""
+    return await ap_web_service.update_invoice_response(request, auth, db, invoice_id)
+
+
+@router.post("/invoices/{invoice_id}/submit")
+def submit_invoice(
+    request: Request,
+    invoice_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Submit AP invoice for approval."""
+    return ap_web_service.submit_invoice_response(request, auth, db, invoice_id)
+
+
+@router.post("/invoices/{invoice_id}/approve")
+def approve_invoice(
+    request: Request,
+    invoice_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Approve AP invoice."""
+    return ap_web_service.approve_invoice_response(request, auth, db, invoice_id)
+
+
+@router.post("/invoices/{invoice_id}/post")
+def post_invoice(
+    request: Request,
+    invoice_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Post AP invoice to general ledger."""
+    return ap_web_service.post_invoice_response(request, auth, db, invoice_id)
+
+
+@router.post("/invoices/{invoice_id}/void")
+def void_invoice(
+    request: Request,
+    invoice_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Void an AP invoice."""
+    return ap_web_service.void_invoice_response(request, auth, db, invoice_id)
+
+
 @router.post("/invoices/{invoice_id}/delete")
 def delete_invoice(
     request: Request,
@@ -240,6 +306,26 @@ async def bulk_export_invoices(
 ):
     """Export selected AP invoices to CSV."""
     return await ap_web_service.bulk_export_invoices_response(request, auth, db)
+
+
+@router.post("/invoices/bulk-approve")
+async def bulk_approve_invoices(
+    request: Request,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Bulk approve AP invoices (from SUBMITTED status)."""
+    return await ap_web_service.bulk_approve_invoices_response(request, auth, db)
+
+
+@router.post("/invoices/bulk-post")
+async def bulk_post_invoices(
+    request: Request,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Bulk post AP invoices to General Ledger (from APPROVED status)."""
+    return await ap_web_service.bulk_post_invoices_response(request, auth, db)
 
 
 @router.get("/payments", response_class=HTMLResponse)
@@ -297,6 +383,61 @@ async def create_payment(
 ):
     """Handle AP payment form submission."""
     return await ap_web_service.create_payment_response(request, auth, db)
+
+
+@router.get("/payments/{payment_id}/edit", response_class=HTMLResponse)
+def edit_payment_form(
+    request: Request,
+    payment_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Edit AP payment form page."""
+    return ap_web_service.payment_edit_form_response(request, auth, db, payment_id)
+
+
+@router.post("/payments/{payment_id}/edit")
+async def update_payment(
+    request: Request,
+    payment_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Handle AP payment update form submission."""
+    return await ap_web_service.update_payment_response(request, auth, db, payment_id)
+
+
+@router.post("/payments/{payment_id}/approve")
+def approve_payment(
+    request: Request,
+    payment_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Approve AP payment."""
+    return ap_web_service.approve_payment_response(request, auth, db, payment_id)
+
+
+@router.post("/payments/{payment_id}/post")
+def post_payment(
+    request: Request,
+    payment_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Post AP payment to general ledger."""
+    return ap_web_service.post_payment_response(request, auth, db, payment_id)
+
+
+@router.post("/payments/{payment_id}/void")
+def void_payment(
+    request: Request,
+    payment_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Void an AP payment."""
+    return ap_web_service.void_payment_response(request, auth, db, payment_id)
 
 
 @router.post("/payments/{payment_id}/delete")

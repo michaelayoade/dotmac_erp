@@ -27,6 +27,9 @@
     <script src="/static/js/vendor/htmx.js"></script>
     <script src="/static/js/vendor/htmx-loading-states.js"></script>
 
+    <!-- Bulk actions (must load before Alpine initializes components) -->
+    <script defer src="/static/js/bulk-actions.js"></script>
+
     <!-- Alpine.js with Collapse plugin (local) -->
     <script defer src="/static/js/vendor/alpine-collapse.js"></script>
     <script defer src="/static/js/vendor/alpine.js"></script>
@@ -580,6 +583,5 @@
     {% block scripts %}{% endblock %}
     <script defer src="/static/js/typeahead.js"></script>
     <script defer src="/static/js/avatar.js"></script>
-    <script defer src="/static/js/bulk-actions.js"></script>
 </body>
 </html>

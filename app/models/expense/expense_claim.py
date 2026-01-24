@@ -32,6 +32,7 @@ if TYPE_CHECKING:
     from app.models.people.hr.employee import Employee
     from app.models.finance.core_org.project import Project
     from app.models.support.ticket import Ticket
+    from app.models.pm.task import Task
 
 
 class ExpenseClaimStatus(str, enum.Enum):
@@ -132,7 +133,9 @@ class ExpenseClaim(Base, AuditMixin, StatusTrackingMixin, ERPNextSyncMixin):
         Index("idx_expense_claim_status", "organization_id", "status"),
         Index("idx_expense_claim_date", "organization_id", "claim_date"),
         Index("idx_expense_claim_journal", "journal_entry_id"),
+        Index("idx_expense_claim_reimbursement_journal", "reimbursement_journal_id"),
         Index("idx_expense_claim_supplier_invoice", "supplier_invoice_id"),
+        Index("idx_expense_claim_task", "task_id"),
         {"schema": "expense"},
     )
 
@@ -193,6 +196,12 @@ class ExpenseClaim(Base, AuditMixin, StatusTrackingMixin, ERPNextSyncMixin):
         ForeignKey("support.ticket.ticket_id"),
         nullable=True,
         comment="Related support ticket from ERPNext",
+    )
+    task_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("pm.task.task_id"),
+        nullable=True,
+        comment="Related project task",
     )
 
     # Totals
@@ -280,6 +289,12 @@ class ExpenseClaim(Base, AuditMixin, StatusTrackingMixin, ERPNextSyncMixin):
         nullable=True,
         comment="GL entry for expense posting",
     )
+    reimbursement_journal_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("gl.journal_entry.journal_entry_id"),
+        nullable=True,
+        comment="GL entry for reimbursement payment",
+    )
     payment_reference: Mapped[Optional[str]] = mapped_column(
         String(100),
         nullable=True,
@@ -325,6 +340,10 @@ class ExpenseClaim(Base, AuditMixin, StatusTrackingMixin, ERPNextSyncMixin):
     ticket: Mapped[Optional["Ticket"]] = relationship(
         "Ticket",
         foreign_keys=[ticket_id],
+    )
+    task: Mapped[Optional["Task"]] = relationship(
+        "Task",
+        foreign_keys=[task_id],
     )
 
     @property

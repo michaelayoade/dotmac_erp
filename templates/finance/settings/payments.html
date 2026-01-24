@@ -1,0 +1,407 @@
+{% extends "finance/base_finance.html" %}
+
+{% block page_title %}Payments Configuration{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <a href="/settings" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Settings</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="font-medium text-slate-900 dark:text-white">Payments Configuration</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto space-y-6 stagger-in">
+    <!-- Header -->
+    <div>
+        <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Payments Configuration</h1>
+        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+            Configure payment gateway integration for collecting payments and processing transfers.
+        </p>
+    </div>
+
+    <!-- Success Message -->
+    {% if request.query_params.get('saved') %}
+    <div class="rounded-lg bg-green-50 border border-green-200 p-4 dark:bg-green-900/20 dark:border-green-800">
+        <div class="flex items-center gap-3">
+            <svg class="h-5 w-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+            </svg>
+            <p class="text-sm text-green-700 dark:text-green-300">Payments settings updated successfully.</p>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Error Message -->
+    {% if error %}
+    <div class="rounded-lg bg-red-50 border border-red-200 p-4 dark:bg-red-900/20 dark:border-red-800">
+        <div class="flex items-center gap-3">
+            <svg class="h-5 w-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <div class="text-sm text-red-700 dark:text-red-300">
+                <p class="font-medium">Error saving settings</p>
+                <p class="mt-1">{{ error }}</p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Integration Status -->
+    <div class="card p-6">
+        <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Integration Status</h2>
+        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <!-- API Keys -->
+            <div class="flex items-center gap-3 p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50">
+                {% if settings.paystack_secret_key.has_value and settings.paystack_public_key.value %}
+                <div class="flex-shrink-0 h-8 w-8 rounded-full bg-green-100 dark:bg-green-900/50 flex items-center justify-center">
+                    <svg class="h-4 w-4 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-sm font-medium text-slate-900 dark:text-white">API Keys</p>
+                    <p class="text-xs text-green-600 dark:text-green-400">Configured</p>
+                </div>
+                {% else %}
+                <div class="flex-shrink-0 h-8 w-8 rounded-full bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center">
+                    <svg class="h-4 w-4 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-sm font-medium text-slate-900 dark:text-white">API Keys</p>
+                    <p class="text-xs text-amber-600 dark:text-amber-400">Not configured</p>
+                </div>
+                {% endif %}
+            </div>
+            <!-- Collections -->
+            <div class="flex items-center gap-3 p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50">
+                {% if settings.paystack_enabled.value and settings.paystack_collection_bank_account_id.value %}
+                <div class="flex-shrink-0 h-8 w-8 rounded-full bg-green-100 dark:bg-green-900/50 flex items-center justify-center">
+                    <svg class="h-4 w-4 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-sm font-medium text-slate-900 dark:text-white">Collections</p>
+                    <p class="text-xs text-green-600 dark:text-green-400">Ready (auto-post GL)</p>
+                </div>
+                {% elif settings.paystack_enabled.value %}
+                <div class="flex-shrink-0 h-8 w-8 rounded-full bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center">
+                    <svg class="h-4 w-4 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-sm font-medium text-slate-900 dark:text-white">Collections</p>
+                    <p class="text-xs text-amber-600 dark:text-amber-400">No bank account</p>
+                </div>
+                {% else %}
+                <div class="flex-shrink-0 h-8 w-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
+                    <svg class="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-sm font-medium text-slate-900 dark:text-white">Collections</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Disabled</p>
+                </div>
+                {% endif %}
+            </div>
+            <!-- Transfers -->
+            <div class="flex items-center gap-3 p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50">
+                {% if settings.paystack_transfers_enabled.value and settings.paystack_transfer_bank_account_id.value %}
+                <div class="flex-shrink-0 h-8 w-8 rounded-full bg-green-100 dark:bg-green-900/50 flex items-center justify-center">
+                    <svg class="h-4 w-4 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-sm font-medium text-slate-900 dark:text-white">Transfers</p>
+                    <p class="text-xs text-green-600 dark:text-green-400">Ready (auto-post GL)</p>
+                </div>
+                {% elif settings.paystack_transfers_enabled.value %}
+                <div class="flex-shrink-0 h-8 w-8 rounded-full bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center">
+                    <svg class="h-4 w-4 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-sm font-medium text-slate-900 dark:text-white">Transfers</p>
+                    <p class="text-xs text-amber-600 dark:text-amber-400">No bank account</p>
+                </div>
+                {% else %}
+                <div class="flex-shrink-0 h-8 w-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
+                    <svg class="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-sm font-medium text-slate-900 dark:text-white">Transfers</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Disabled</p>
+                </div>
+                {% endif %}
+            </div>
+            <!-- Webhooks -->
+            <div class="flex items-center gap-3 p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50">
+                {% if settings.paystack_webhook_secret.has_value %}
+                <div class="flex-shrink-0 h-8 w-8 rounded-full bg-green-100 dark:bg-green-900/50 flex items-center justify-center">
+                    <svg class="h-4 w-4 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-sm font-medium text-slate-900 dark:text-white">Webhooks</p>
+                    <p class="text-xs text-green-600 dark:text-green-400">Secret configured</p>
+                </div>
+                {% else %}
+                <div class="flex-shrink-0 h-8 w-8 rounded-full bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center">
+                    <svg class="h-4 w-4 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-sm font-medium text-slate-900 dark:text-white">Webhooks</p>
+                    <p class="text-xs text-amber-600 dark:text-amber-400">Not configured</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <form method="POST" action="/settings/payments" class="space-y-6">
+        <!-- Enable Paystack -->
+        <div class="card p-6">
+            <div class="flex items-start gap-4">
+                <div class="flex-shrink-0">
+                    <img src="https://paystack.com/favicon.ico" alt="Paystack" class="h-10 w-10 rounded-lg">
+                </div>
+                <div class="flex-1">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Paystack Integration</h2>
+                            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                                Enable Paystack for collecting payments via cards, bank transfers, and mobile money.
+                            </p>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" name="paystack_enabled" value="true"
+                                   {{ 'checked' if settings.paystack_enabled.value else '' }}
+                                   class="sr-only peer">
+                            <div class="w-11 h-6 bg-slate-200 rounded-full peer peer-focus:ring-4 peer-focus:ring-teal-300 dark:peer-focus:ring-teal-800 dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-teal-600"></div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- API Credentials -->
+        <div class="card p-6">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">API Credentials</h2>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mb-6">
+                Get your API keys from the <a href="https://dashboard.paystack.com/#/settings/developer" target="_blank" class="text-teal-600 hover:text-teal-700 dark:text-teal-400">Paystack Dashboard</a>.
+            </p>
+            <div class="grid gap-6">
+                <div>
+                    <label for="paystack_public_key" class="form-label">Public Key</label>
+                    <input type="text" id="paystack_public_key" name="paystack_public_key"
+                           value="{{ settings.paystack_public_key.value or '' }}"
+                           placeholder="pk_live_xxxxxxxxxxxxxxxxxxxxxxxx"
+                           class="form-input font-mono text-sm">
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Used for client-side payment initialization</p>
+                </div>
+                <div>
+                    <label for="paystack_secret_key" class="form-label">Secret Key</label>
+                    <input type="password" id="paystack_secret_key" name="paystack_secret_key"
+                           placeholder="{{ '••••••••••••••••••••••••' if settings.paystack_secret_key.has_value else 'sk_live_xxxxxxxxxxxxxxxxxxxxxxxx' }}"
+                           class="form-input font-mono text-sm">
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Leave blank to keep existing key</p>
+                </div>
+                <div>
+                    <label for="paystack_webhook_secret" class="form-label">Webhook Secret</label>
+                    <input type="password" id="paystack_webhook_secret" name="paystack_webhook_secret"
+                           placeholder="{{ '••••••••••••••••••••••••' if settings.paystack_webhook_secret.has_value else 'Enter webhook secret' }}"
+                           class="form-input font-mono text-sm">
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Used to verify webhook signatures. Leave blank to keep existing.</p>
+                </div>
+            </div>
+
+            <!-- Webhook URL Helper -->
+            {% if settings.paystack_callback_base_url.value %}
+            <div class="mt-6 pt-6 border-t border-slate-200 dark:border-slate-700">
+                <h3 class="text-sm font-medium text-slate-900 dark:text-white mb-2">Webhook URL</h3>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mb-2">
+                    Configure this URL in your <a href="https://dashboard.paystack.com/#/settings/developer" target="_blank" class="text-teal-600 hover:text-teal-700 dark:text-teal-400">Paystack Dashboard</a> under Webhooks:
+                </p>
+                <div class="flex items-center gap-2">
+                    <code class="flex-1 px-3 py-2 bg-slate-100 dark:bg-slate-800 rounded-lg text-sm font-mono text-slate-700 dark:text-slate-300 break-all">
+                        {{ settings.paystack_callback_base_url.value }}/api/webhooks/paystack
+                    </code>
+                    <button type="button"
+                            onclick="navigator.clipboard.writeText('{{ settings.paystack_callback_base_url.value }}/api/webhooks/paystack')"
+                            class="btn btn-secondary btn-sm">
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Callback URL -->
+        <div class="card p-6">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Callback Configuration</h2>
+            <div>
+                <label for="paystack_callback_base_url" class="form-label">Callback Base URL</label>
+                <input type="url" id="paystack_callback_base_url" name="paystack_callback_base_url"
+                       value="{{ settings.paystack_callback_base_url.value or '' }}"
+                       placeholder="https://your-domain.com"
+                       class="form-input">
+                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Base URL for payment redirects (e.g., https://your-domain.com)</p>
+            </div>
+        </div>
+
+        <!-- Bank Account Linkage -->
+        <div class="card p-6">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Bank Account Linkage</h2>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mb-6">
+                Link Paystack transactions to your bank accounts for automatic GL posting and reconciliation.
+            </p>
+            {% if bank_accounts %}
+            <div class="grid gap-6 sm:grid-cols-2">
+                <div>
+                    <label for="paystack_collection_bank_account_id" class="form-label">Collections Bank Account</label>
+                    <select id="paystack_collection_bank_account_id" name="paystack_collection_bank_account_id"
+                            class="form-select">
+                        <option value="">-- Select Bank Account --</option>
+                        {% for account in bank_accounts %}
+                        <option value="{{ account.bank_account_id }}"
+                                {{ 'selected' if settings.paystack_collection_bank_account_id.value == account.bank_account_id|string else '' }}>
+                            {{ account.account_name }} ({{ account.account_number[-4:] if account.account_number else 'N/A' }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                        Where incoming customer payments are settled. Enables auto-posting to GL.
+                    </p>
+                </div>
+                <div>
+                    <label for="paystack_transfer_bank_account_id" class="form-label">Transfers Bank Account</label>
+                    <select id="paystack_transfer_bank_account_id" name="paystack_transfer_bank_account_id"
+                            class="form-select">
+                        <option value="">-- Select Bank Account --</option>
+                        {% for account in bank_accounts %}
+                        <option value="{{ account.bank_account_id }}"
+                                {{ 'selected' if settings.paystack_transfer_bank_account_id.value == account.bank_account_id|string else '' }}>
+                            {{ account.account_name }} ({{ account.account_number[-4:] if account.account_number else 'N/A' }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                        Source for expense reimbursements and payouts. Enables auto-posting to GL.
+                    </p>
+                </div>
+            </div>
+            {% else %}
+            <div class="rounded-lg bg-slate-50 border border-slate-200 p-4 dark:bg-slate-800/50 dark:border-slate-700">
+                <div class="flex items-center gap-3">
+                    <svg class="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <p class="text-sm text-slate-600 dark:text-slate-300">
+                        No bank accounts found. <a href="/banking/accounts/new" class="text-teal-600 hover:text-teal-700 dark:text-teal-400">Create a bank account</a> first to enable GL integration.
+                    </p>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Transfer Fee Account -->
+        <div class="card p-6">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Transfer Fee Tracking</h2>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mb-6">
+                Paystack charges fees on transfers. Configure an expense account to automatically post these fees to your GL.
+            </p>
+            {% if expense_accounts %}
+            <div>
+                <label for="paystack_transfer_fee_account_id" class="form-label">Bank Charges Expense Account</label>
+                <select id="paystack_transfer_fee_account_id" name="paystack_transfer_fee_account_id"
+                        class="form-select">
+                    <option value="">-- Select Expense Account --</option>
+                    {% for account in expense_accounts %}
+                    <option value="{{ account.account_id }}"
+                            {{ 'selected' if settings.paystack_transfer_fee_account_id.value == account.account_id|string else '' }}>
+                        {{ account.account_code }} - {{ account.account_name }}
+                    </option>
+                    {% endfor %}
+                </select>
+                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    Transfer fees will be automatically debited to this account (e.g., Bank Charges, Payment Processing Fees).
+                </p>
+            </div>
+            {% else %}
+            <div class="rounded-lg bg-slate-50 border border-slate-200 p-4 dark:bg-slate-800/50 dark:border-slate-700">
+                <div class="flex items-center gap-3">
+                    <svg class="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <p class="text-sm text-slate-600 dark:text-slate-300">
+                        No expense accounts found. Set up your Chart of Accounts first.
+                    </p>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Transfers -->
+        <div class="card p-6">
+            <div class="flex items-start justify-between">
+                <div>
+                    <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Enable Transfers</h2>
+                    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                        Allow the system to initiate payouts via Paystack Transfer API (e.g., expense reimbursements).
+                    </p>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer mt-1">
+                    <input type="checkbox" name="paystack_transfers_enabled" value="true"
+                           {{ 'checked' if settings.paystack_transfers_enabled.value else '' }}
+                           class="sr-only peer">
+                    <div class="w-11 h-6 bg-slate-200 rounded-full peer peer-focus:ring-4 peer-focus:ring-teal-300 dark:peer-focus:ring-teal-800 dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-teal-600"></div>
+                </label>
+            </div>
+        </div>
+
+        <!-- Info Box -->
+        <div class="rounded-lg bg-amber-50 border border-amber-200 p-4 dark:bg-amber-900/20 dark:border-amber-800">
+            <div class="flex gap-3">
+                <svg class="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                </svg>
+                <div class="text-sm text-amber-700 dark:text-amber-300">
+                    <p class="font-medium">Security Note</p>
+                    <p class="mt-1">Keep your secret key and webhook secret confidential. Never expose them in client-side code or public repositories.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex items-center justify-end gap-4 py-4">
+            <a href="/settings" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">
+                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                </svg>
+                Save settings
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

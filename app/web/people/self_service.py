@@ -17,6 +17,7 @@ from app.web.deps import (
     WebAuthContext,
     get_db,
     require_self_service_access,
+    require_self_service_expense_approver,
     require_self_service_leave_approver,
     require_hr_access,
 )
@@ -197,6 +198,7 @@ async def create_expense_claim(
     submit_now = form.get("submit_now")
     project_id = (form.get("project_id") or "").strip()
     ticket_id = (form.get("ticket_id") or "").strip()
+    task_id = (form.get("task_id") or "").strip()
 
     if not all([claim_date_str, purpose, expense_date_str, category_id, description, claimed_amount, recipient_bank_code, recipient_account_number]):
         raise HTTPException(status_code=400, detail="Missing required fields")
@@ -224,6 +226,7 @@ async def create_expense_claim(
         submit_now=submit_now,
         project_id=project_id or None,
         ticket_id=ticket_id or None,
+        task_id=task_id or None,
     )
 
 
@@ -366,7 +369,7 @@ def team_expense_requests(
     request: Request,
     status: Optional[str] = None,
     page: int = Query(default=1, ge=1),
-    auth: WebAuthContext = Depends(require_hr_access),
+    auth: WebAuthContext = Depends(require_self_service_expense_approver),
     db: Session = Depends(get_db),
 ):
     """Team expense approvals for direct reports."""
@@ -382,7 +385,7 @@ def team_expense_requests(
 @router.post("/team/expenses/{claim_id}/approve")
 def approve_team_expense(
     claim_id: UUID,
-    auth: WebAuthContext = Depends(require_hr_access),
+    auth: WebAuthContext = Depends(require_self_service_expense_approver),
     db: Session = Depends(get_db),
 ) -> RedirectResponse:
     """Approve a direct report expense claim."""
@@ -396,7 +399,7 @@ def approve_team_expense(
 @router.post("/team/expenses/{claim_id}/reject")
 def reject_team_expense(
     claim_id: UUID,
-    auth: WebAuthContext = Depends(require_hr_access),
+    auth: WebAuthContext = Depends(require_self_service_expense_approver),
     db: Session = Depends(get_db),
     reason: Optional[str] = Form(default=None),
 ) -> RedirectResponse:

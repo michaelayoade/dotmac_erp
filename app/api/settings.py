@@ -7,7 +7,24 @@ from sqlalchemy.orm import Session
 from app.db import SessionLocal
 from app.services.auth_dependencies import require_permission
 from app.schemas.common import ListResponse
-from app.schemas.settings import DomainSettingRead, DomainSettingUpdate
+from app.models.domain_settings import SettingDomain
+from app.schemas.settings import (
+    DomainSettingRead,
+    DomainSettingUpdate,
+    SettingsExportRequest,
+    SettingsExportResponse,
+    SettingsImportRequest,
+    SettingsImportResponse,
+    SettingsImportResultItem,
+    SettingHistoryRead,
+    SettingHistoryListResponse,
+    RestoreSettingRequest,
+)
+from app.services.domain_settings import (
+    list_setting_history,
+    get_history_entry,
+    restore_from_history,
+)
 from app.schemas.finance.branding import (
     BrandingCreate,
     BrandingUpdate,
@@ -359,6 +376,216 @@ def get_reporting_setting(
     db: Session = Depends(get_db),
 ):
     return settings_service.get_reporting_setting(db, key)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Payments Settings Endpoints
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@router.get(
+    "/payments",
+    response_model=ListResponse[DomainSettingRead],
+    tags=["settings-payments"],
+)
+def list_payments_settings(
+    is_active: bool | None = None,
+    order_by: str = Query(default="created_at"),
+    order_dir: str = Query(default="desc", pattern="^(asc|desc)$"),
+    limit: int = Query(default=200, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    auth: dict = Depends(require_permission("settings:manage")),
+    db: Session = Depends(get_db),
+):
+    return settings_service.list_payments_settings_response(
+        db, is_active, order_by, order_dir, limit, offset
+    )
+
+
+@router.put(
+    "/payments/{key}",
+    response_model=DomainSettingRead,
+    status_code=status.HTTP_200_OK,
+    tags=["settings-payments"],
+)
+def upsert_payments_setting(
+    key: str,
+    payload: DomainSettingUpdate,
+    auth: dict = Depends(require_permission("settings:manage")),
+    db: Session = Depends(get_db),
+):
+    return settings_service.upsert_payments_setting(db, key, payload)
+
+
+@router.get(
+    "/payments/{key}",
+    response_model=DomainSettingRead,
+    tags=["settings-payments"],
+)
+def get_payments_setting(
+    key: str,
+    auth: dict = Depends(require_permission("settings:manage")),
+    db: Session = Depends(get_db),
+):
+    return settings_service.get_payments_setting(db, key)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Settings Export/Import Endpoints
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@router.post(
+    "/export",
+    response_model=SettingsExportResponse,
+    tags=["settings-export-import"],
+    summary="Export settings to JSON",
+)
+def export_settings(
+    payload: SettingsExportRequest,
+    auth: dict = Depends(require_permission("settings:manage")),
+    db: Session = Depends(get_db),
+):
+    """
+    Export settings to a portable JSON format.
+
+    Use this to backup settings or migrate between environments.
+
+    **Security Note**: By default, secret values are masked. Set
+    `include_secrets=True` only when needed and handle the export securely.
+    """
+    return settings_service.export_settings(
+        db,
+        domains=payload.domains,
+        include_secrets=payload.include_secrets,
+    )
+
+
+@router.post(
+    "/import",
+    response_model=SettingsImportResponse,
+    tags=["settings-export-import"],
+    summary="Import settings from JSON",
+)
+def import_settings(
+    payload: SettingsImportRequest,
+    auth: dict = Depends(require_permission("settings:manage")),
+    db: Session = Depends(get_db),
+):
+    """
+    Import settings from an exported JSON.
+
+    Use `dry_run=True` to validate the import without making changes.
+
+    **Security Note**: By default, secret values are skipped during import.
+    Set `skip_secrets=False` only when importing from a trusted source.
+    """
+    result = settings_service.import_settings(
+        db,
+        data=payload.data,
+        domains=payload.domains,
+        skip_secrets=payload.skip_secrets,
+        dry_run=payload.dry_run,
+    )
+
+    # Convert to response model
+    return SettingsImportResponse(
+        imported=[SettingsImportResultItem(**item) for item in result["imported"]],
+        skipped=[SettingsImportResultItem(**item) for item in result["skipped"]],
+        errors=[SettingsImportResultItem(**item) for item in result["errors"]],
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Settings History Endpoints
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@router.get(
+    "/history",
+    response_model=SettingHistoryListResponse,
+    tags=["settings-history"],
+    summary="List settings change history",
+)
+def list_history(
+    domain: SettingDomain | None = Query(default=None, description="Filter by domain"),
+    key: str | None = Query(default=None, description="Filter by key (requires domain)"),
+    setting_id: UUID | None = Query(default=None, description="Filter by setting ID"),
+    limit: int = Query(default=50, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    auth: dict = Depends(require_permission("settings:manage")),
+    db: Session = Depends(get_db),
+):
+    """
+    List history of settings changes for audit and rollback.
+
+    Use filters to narrow down:
+    - `domain`: Show history for all settings in a domain
+    - `domain` + `key`: Show history for a specific setting
+    - `setting_id`: Show history for a specific setting by ID
+    """
+    items, total = list_setting_history(
+        db,
+        domain=domain,
+        key=key,
+        setting_id=str(setting_id) if setting_id else None,
+        limit=limit,
+        offset=offset,
+    )
+
+    return SettingHistoryListResponse(
+        items=[SettingHistoryRead.model_validate(item) for item in items],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.get(
+    "/history/{history_id}",
+    response_model=SettingHistoryRead,
+    tags=["settings-history"],
+    summary="Get a specific history entry",
+)
+def get_history(
+    history_id: UUID,
+    auth: dict = Depends(require_permission("settings:manage")),
+    db: Session = Depends(get_db),
+):
+    """Get details of a specific history entry."""
+    entry = get_history_entry(db, str(history_id))
+    if not entry:
+        raise HTTPException(status_code=404, detail="History entry not found")
+    return SettingHistoryRead.model_validate(entry)
+
+
+@router.post(
+    "/history/restore",
+    response_model=DomainSettingRead,
+    tags=["settings-history"],
+    summary="Restore a setting from history",
+)
+def restore_setting(
+    payload: RestoreSettingRequest,
+    auth: dict = Depends(require_permission("settings:manage")),
+    db: Session = Depends(get_db),
+):
+    """
+    Restore a setting to a previous state from a history entry.
+
+    This will:
+    - UPDATE: Revert the setting to its old value before the change
+    - DELETE: Recreate the setting with its value before deletion
+
+    Note: Cannot restore from CREATE actions (use delete instead).
+    """
+    user_id = auth.get("user_id") if auth else None
+    return restore_from_history(
+        db,
+        history_id=str(payload.history_id),
+        changed_by_id=str(user_id) if user_id else None,
+        change_reason=payload.change_reason,
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────

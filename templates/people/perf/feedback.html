@@ -1,6 +1,6 @@
 {% extends "people/base_people.html" %}
 
-{% block page_title %}Feedback{% endblock %}
+{% block page_title %}360° Feedback{% endblock %}
 
 {% block breadcrumbs %}
 <nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
@@ -8,12 +8,168 @@
     <span class="mx-2">/</span>
     <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a>
     <span class="mx-2">/</span>
+    <a href="/people/perf/appraisals" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Performance</a>
+    <span class="mx-2">/</span>
     <span class="text-slate-900 dark:text-white" aria-current="page">Feedback</span>
 </nav>
 {% endblock %}
 
 {% block content %}
-<div class="card p-8 text-center">
-    <p class="text-slate-500 dark:text-slate-400">Feedback workflows will appear here.</p>
+<div class="space-y-6">
+    {% if request.args.get('success') %}
+    <div class="p-4 rounded-lg bg-green-50 border border-green-200 dark:bg-green-900/20 dark:border-green-800">
+        <div class="flex items-center gap-2 text-green-700 dark:text-green-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+            </svg>
+            <span>{{ request.args.get('success') | replace('+', ' ') }}</span>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Info Banner -->
+    <div class="card p-4 bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
+        <div class="flex items-start gap-3">
+            <svg class="w-5 h-5 text-blue-500 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <div class="text-sm text-blue-700 dark:text-blue-300">
+                <p class="font-medium">360° Feedback Collection</p>
+                <p class="text-blue-600 dark:text-blue-400">Request feedback from peers, subordinates, or external parties to enrich performance appraisals.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="card">
+        <form method="get" class="p-4">
+            <div class="flex flex-wrap gap-4 items-end">
+                <div class="w-40">
+                    <label for="feedback_type" class="form-label">Type</label>
+                    <select name="feedback_type" id="feedback_type" class="form-select w-full">
+                        <option value="">All Types</option>
+                        {% for ft in feedback_types %}
+                        <option value="{{ ft }}" {% if feedback_type == ft %}selected{% endif %}>{{ ft | title }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="w-40">
+                    <label for="submitted" class="form-label">Status</label>
+                    <select name="submitted" id="submitted" class="form-select w-full">
+                        <option value="">All</option>
+                        <option value="false" {% if submitted == 'false' %}selected{% endif %}>Pending</option>
+                        <option value="true" {% if submitted == 'true' %}selected{% endif %}>Submitted</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-secondary h-10">Filter</button>
+                {% if feedback_type or submitted or appraisal_id %}
+                <a href="/people/perf/feedback" class="btn btn-ghost h-10">Clear</a>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+
+    {% if feedback_list %}
+    <div class="card overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+                <thead>
+                    <tr class="bg-slate-50 dark:bg-slate-800/50">
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Requested From</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">For Employee</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Type</th>
+                        <th class="px-4 py-3 text-center text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Rating</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Status</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Requested</th>
+                        <th class="px-4 py-3 w-12"></th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                    {% for fb in feedback_list %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer group" onclick="window.location='/people/perf/feedback/{{ fb.feedback_id }}'">
+                        <td class="px-4 py-3">
+                            <div class="text-sm font-medium text-slate-900 dark:text-white">
+                                {% if fb.is_anonymous and fb.submitted_on %}
+                                <span class="italic text-slate-500">Anonymous</span>
+                                {% else %}
+                                {{ fb.feedback_from.full_name if fb.feedback_from else '-' }}
+                                {% endif %}
+                            </div>
+                        </td>
+                        <td class="px-4 py-3">
+                            <div class="text-sm text-slate-600 dark:text-slate-400">
+                                {{ fb.appraisal.employee.full_name if fb.appraisal and fb.appraisal.employee else '-' }}
+                            </div>
+                        </td>
+                        <td class="px-4 py-3 text-sm">
+                            {% set type_colors = {
+                                'PEER': 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
+                                'SUBORDINATE': 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300',
+                                'EXTERNAL': 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300'
+                            } %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium {{ type_colors.get(fb.feedback_type, 'bg-slate-100 text-slate-700') }}">
+                                {{ fb.feedback_type | title }}
+                            </span>
+                        </td>
+                        <td class="px-4 py-3 text-sm text-center">
+                            {% if fb.overall_rating %}
+                            <span class="font-semibold text-slate-900 dark:text-white">{{ fb.overall_rating }}</span>
+                            {% else %}
+                            <span class="text-slate-400">-</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-sm">
+                            {% if fb.submitted_on %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300">
+                                Submitted
+                            </span>
+                            {% else %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300">
+                                Pending
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">
+                            {{ fb.created_at.strftime("%b %d, %Y") if fb.created_at else "-" }}
+                        </td>
+                        <td class="px-4 py-3 text-right">
+                            <a href="/people/perf/feedback/{{ fb.feedback_id }}" class="text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 opacity-0 group-hover:opacity-100 transition-opacity" title="View">
+                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                                </svg>
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% else %}
+    <div class="card p-8 text-center">
+        <svg class="w-12 h-12 mx-auto text-slate-300 dark:text-slate-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+        </svg>
+        <p class="text-slate-500 dark:text-slate-400 mb-4">No feedback requests found.</p>
+        <p class="text-sm text-slate-400 dark:text-slate-500">Request feedback from the appraisal detail page.</p>
+    </div>
+    {% endif %}
+
+    {% if total_pages > 1 %}
+    <div class="flex items-center justify-between">
+        <p class="text-sm text-slate-500 dark:text-slate-400">
+            Showing page <span class="font-medium text-slate-700 dark:text-slate-300">{{ page }}</span> of
+            <span class="font-medium text-slate-700 dark:text-slate-300">{{ total_pages }}</span>
+        </p>
+        <div class="flex gap-2">
+            {% if has_prev %}
+            <a href="?page={{ page - 1 }}&feedback_type={{ feedback_type | default('') }}&submitted={{ submitted | default('') }}" class="btn btn-secondary btn-sm">Previous</a>
+            {% endif %}
+            {% if has_next %}
+            <a href="?page={{ page + 1 }}&feedback_type={{ feedback_type | default('') }}&submitted={{ submitted | default('') }}" class="btn btn-secondary btn-sm">Next</a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
 </div>
 {% endblock %}

@@ -180,6 +180,42 @@ class LifecycleService:
         self.db.flush()
         return onboarding
 
+    def complete_onboarding_activity(
+        self, org_id: UUID, onboarding_id: UUID, activity_id: UUID, completed: bool = True
+    ) -> EmployeeOnboardingActivity:
+        """Mark an onboarding activity as complete or incomplete."""
+        onboarding = self.get_onboarding(org_id, onboarding_id)
+        activity = self.db.scalar(
+            select(EmployeeOnboardingActivity).where(
+                EmployeeOnboardingActivity.activity_id == activity_id,
+                EmployeeOnboardingActivity.onboarding_id == onboarding_id,
+            )
+        )
+        if not activity:
+            raise OnboardingNotFoundError(f"Activity {activity_id} not found")
+
+        if completed:
+            activity.status = "completed"
+            activity.completed_on = date.today()
+        else:
+            activity.status = None
+            activity.completed_on = None
+
+        self.db.flush()
+        return activity
+
+    def get_onboarding_for_employee(self, org_id: UUID, employee_id: UUID) -> EmployeeOnboarding | None:
+        """Get the active onboarding record for an employee (if any)."""
+        return self.db.scalar(
+            select(EmployeeOnboarding)
+            .options(joinedload(EmployeeOnboarding.activities))
+            .where(
+                EmployeeOnboarding.organization_id == org_id,
+                EmployeeOnboarding.employee_id == employee_id,
+            )
+            .order_by(EmployeeOnboarding.created_at.desc())
+        )
+
     # =========================================================================
     # Separation
     # =========================================================================

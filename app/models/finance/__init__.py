@@ -22,7 +22,6 @@ Part 2 - Business Modules (schemas below):
 - fa: Fixed Assets - IAS 16, IAS 36, IAS 38 (9 tables)
 - lease: Leases - IFRS 16 (5 tables)
 - inv: Inventory - IAS 2 (9 tables)
-- fin_inst: Financial Instruments - IFRS 9 (5 tables)
 - tax: Tax - IAS 12 (6 tables)
 - cons: Consolidation - IFRS 10 (6 tables)
 - rpt: Reporting (5 tables)
@@ -129,9 +128,6 @@ from app.models.finance.ar import (
     PaymentMethod,
     PaymentStatus as ARPaymentStatus,
     PaymentAllocation,
-    ExpectedCreditLoss,
-    ECLMethodology,
-    ECLStage,
     ARAgingSnapshot,
 )
 
@@ -219,19 +215,6 @@ from app.models.finance.banking import (
     ReconciliationMatchType,
 )
 
-# Financial Instruments Schema
-from app.models.finance.fin_inst import (
-    FinancialInstrument,
-    InstrumentType,
-    InstrumentClassification,
-    InstrumentStatus,
-    InstrumentValuation,
-    InterestAccrual,
-    HedgeRelationship,
-    HedgeType,
-    HedgeStatus,
-    HedgeEffectiveness,
-)
 
 # Tax Schema
 from app.models.finance.tax import (
@@ -401,9 +384,6 @@ __all__ = [
     "PaymentMethod",
     "ARPaymentStatus",
     "PaymentAllocation",
-    "ExpectedCreditLoss",
-    "ECLMethodology",
-    "ECLStage",
     "ARAgingSnapshot",
     # AP
     "Supplier",
@@ -462,17 +442,6 @@ __all__ = [
     "InventoryCount",
     "CountStatus",
     "InventoryCountLine",
-    # Financial Instruments
-    "FinancialInstrument",
-    "InstrumentType",
-    "InstrumentClassification",
-    "InstrumentStatus",
-    "InstrumentValuation",
-    "InterestAccrual",
-    "HedgeRelationship",
-    "HedgeType",
-    "HedgeStatus",
-    "HedgeEffectiveness",
     # Tax
     "TaxJurisdiction",
     "TaxCode",

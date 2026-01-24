@@ -31,6 +31,25 @@ from app.models.people.hr.checklist_template import (
     ChecklistTemplateItem,
     ChecklistTemplateType,
 )
+from app.models.people.hr.employee_extended import (
+    DocumentType,
+    QualificationType,
+    RelationshipType,
+    SkillCategory,
+    EmployeeDocument,
+    EmployeeQualification,
+    EmployeeCertification,
+    EmployeeDependent,
+    Skill,
+    EmployeeSkill,
+)
+from app.models.people.hr.job_description import (
+    CompetencyCategory,
+    JobDescriptionStatus,
+    Competency,
+    JobDescription,
+    JobDescriptionCompetency,
+)
 
 __all__ = [
     "Department",
@@ -53,4 +72,21 @@ __all__ = [
     "ChecklistTemplate",
     "ChecklistTemplateItem",
     "ChecklistTemplateType",
+    # Employee extended data
+    "DocumentType",
+    "QualificationType",
+    "RelationshipType",
+    "SkillCategory",
+    "EmployeeDocument",
+    "EmployeeQualification",
+    "EmployeeCertification",
+    "EmployeeDependent",
+    "Skill",
+    "EmployeeSkill",
+    # Job descriptions and competencies
+    "CompetencyCategory",
+    "JobDescriptionStatus",
+    "Competency",
+    "JobDescription",
+    "JobDescriptionCompetency",
 ]

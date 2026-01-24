@@ -927,5 +927,631 @@ class ExpensePostingAdapter:
         return supplier
 
 
+    @staticmethod
+    def post_expense_reimbursement(
+        db: Session,
+        organization_id: UUID,
+        claim_id: UUID,
+        posting_date: date,
+        posted_by_user_id: UUID,
+        *,
+        bank_account_id: UUID,
+        employee_payable_account_id: Optional[UUID] = None,
+        payment_reference: Optional[str] = None,
+        idempotency_key: Optional[str] = None,
+        correlation_id: Optional[str] = None,
+    ) -> ExpensePostingResult:
+        """
+        Post expense reimbursement (payment) to the general ledger.
+
+        This is called when an expense claim is paid via Paystack transfer or
+        other payment method. It clears the employee payable.
+
+        GL Entry Structure:
+        - DEBIT: Employee payable account (clear the liability)
+        - CREDIT: Bank account (record the cash outflow)
+
+        Args:
+            db: Database session
+            organization_id: Organization scope
+            claim_id: The expense claim being paid
+            posting_date: Date for the posting
+            posted_by_user_id: User performing the posting
+            bank_account_id: Bank account used for payment (source of funds)
+            employee_payable_account_id: Optional override for payable account
+            payment_reference: Optional payment reference (e.g., Paystack transfer code)
+            idempotency_key: Key for preventing duplicate postings
+            correlation_id: Tracing correlation ID
+
+        Returns:
+            ExpensePostingResult with journal entry details
+        """
+        from app.models.finance.banking.bank_account import BankAccount
+
+        org_id = coerce_uuid(organization_id)
+        c_id = coerce_uuid(claim_id)
+        user_id = coerce_uuid(posted_by_user_id)
+        bank_id = coerce_uuid(bank_account_id)
+
+        # Load expense claim
+        claim = db.get(ExpenseClaim, c_id)
+        if not claim or claim.organization_id != org_id:
+            return ExpensePostingResult(success=False, message="Expense claim not found")
+
+        # Validate claim is in PAID status
+        if claim.status != ExpenseClaimStatus.PAID:
+            return ExpensePostingResult(
+                success=False,
+                message=f"Cannot post reimbursement for claim in '{claim.status.value}' status",
+            )
+
+        # Get bank account and its GL account
+        bank_account = db.get(BankAccount, bank_id)
+        if not bank_account or bank_account.organization_id != org_id:
+            return ExpensePostingResult(success=False, message="Bank account not found")
+
+        if not bank_account.gl_account_id:
+            return ExpensePostingResult(
+                success=False,
+                message="Bank account has no linked GL account",
+            )
+
+        # Get employee payable account
+        payable_account_id = employee_payable_account_id
+        if not payable_account_id:
+            payable_account_id = ExpensePostingAdapter._get_employee_payable_account(
+                db, org_id
+            )
+
+        if not payable_account_id:
+            return ExpensePostingResult(
+                success=False,
+                message="Employee payable account not configured",
+            )
+
+        # Build journal lines
+        reimbursement_amount = claim.net_payable_amount
+        if reimbursement_amount <= Decimal("0"):
+            return ExpensePostingResult(
+                success=False,
+                message="No reimbursement amount to post",
+            )
+
+        journal_lines = [
+            # Debit: Employee Payable (clear liability)
+            JournalLineInput(
+                account_id=payable_account_id,
+                debit_amount=reimbursement_amount,
+                credit_amount=Decimal("0"),
+                debit_amount_functional=reimbursement_amount,
+                credit_amount_functional=Decimal("0"),
+                description=f"Expense reimbursement: {claim.claim_number}",
+            ),
+            # Credit: Bank Account (cash outflow)
+            JournalLineInput(
+                account_id=bank_account.gl_account_id,
+                debit_amount=Decimal("0"),
+                credit_amount=reimbursement_amount,
+                debit_amount_functional=Decimal("0"),
+                credit_amount_functional=reimbursement_amount,
+                description=f"Transfer to employee: {claim.claim_number}",
+            ),
+        ]
+
+        # Create journal entry
+        reference = payment_reference or claim.payment_reference or claim.claim_number
+        journal_input = JournalInput(
+            journal_type=JournalType.STANDARD,
+            entry_date=claim.paid_on or posting_date,
+            posting_date=posting_date,
+            description=f"Expense Reimbursement {claim.claim_number}",
+            reference=reference,
+            currency_code="NGN",
+            exchange_rate=Decimal("1.0"),
+            lines=journal_lines,
+            source_module="EXPENSE",
+            source_document_type="EXPENSE_REIMBURSEMENT",
+            source_document_id=c_id,
+            correlation_id=correlation_id,
+        )
+
+        try:
+            journal = JournalService.create_journal(db, org_id, journal_input, user_id)
+            JournalService.submit_journal(db, org_id, journal.journal_entry_id, user_id)
+            JournalService.approve_journal(db, org_id, journal.journal_entry_id, user_id)
+
+        except HTTPException as e:
+            return ExpensePostingResult(
+                success=False, message=f"Journal creation failed: {e.detail}"
+            )
+
+        # Post to ledger
+        if not idempotency_key:
+            idempotency_key = f"{org_id}:EXP:REIMB:{c_id}:post:v1"
+
+        posting_request = PostingRequest(
+            organization_id=org_id,
+            journal_entry_id=journal.journal_entry_id,
+            posting_date=posting_date,
+            idempotency_key=idempotency_key,
+            source_module="EXPENSE",
+            correlation_id=correlation_id,
+            posted_by_user_id=user_id,
+        )
+
+        try:
+            posting_result = LedgerPostingService.post_journal_entry(db, posting_request)
+
+            if not posting_result.success:
+                return ExpensePostingResult(
+                    success=False,
+                    journal_entry_id=journal.journal_entry_id,
+                    message=f"Ledger posting failed: {posting_result.message}",
+                )
+
+            # Update claim with reimbursement journal reference
+            claim.reimbursement_journal_id = journal.journal_entry_id
+
+            return ExpensePostingResult(
+                success=True,
+                journal_entry_id=journal.journal_entry_id,
+                posting_batch_id=posting_result.batch_id,
+                message="Expense reimbursement posted successfully",
+            )
+
+        except Exception as e:
+            return ExpensePostingResult(
+                success=False,
+                journal_entry_id=journal.journal_entry_id,
+                message=f"Posting error: {str(e)}",
+            )
+
+    @staticmethod
+    def post_transfer_fee(
+        db: Session,
+        organization_id: UUID,
+        posting_date: date,
+        posted_by_user_id: UUID,
+        *,
+        fee_amount: Decimal,
+        bank_account_id: UUID,
+        fee_expense_account_id: UUID,
+        reference: str,
+        description: str,
+        idempotency_key: Optional[str] = None,
+        correlation_id: Optional[str] = None,
+    ) -> ExpensePostingResult:
+        """
+        Post transfer fee (bank charge) to the general ledger.
+
+        GL Entry Structure:
+        - DEBIT: Bank charges expense account (expense)
+        - CREDIT: Bank account (where fee was deducted from)
+
+        Args:
+            db: Database session
+            organization_id: Organization scope
+            posting_date: Date for the posting
+            posted_by_user_id: User performing the posting
+            fee_amount: Fee amount in currency units (not kobo)
+            bank_account_id: Bank account the fee was deducted from
+            fee_expense_account_id: GL expense account for bank charges
+            reference: Payment/transfer reference
+            description: Description for the journal entry
+            idempotency_key: Key for preventing duplicate postings
+            correlation_id: Tracing correlation ID
+
+        Returns:
+            ExpensePostingResult with journal entry details
+        """
+        from app.models.finance.banking.bank_account import BankAccount
+
+        org_id = coerce_uuid(organization_id)
+        user_id = coerce_uuid(posted_by_user_id)
+        bank_id = coerce_uuid(bank_account_id)
+        expense_account_id = coerce_uuid(fee_expense_account_id)
+
+        if fee_amount <= Decimal("0"):
+            return ExpensePostingResult(success=False, message="No fee amount to post")
+
+        # Get bank account and its GL account
+        bank_account = db.get(BankAccount, bank_id)
+        if not bank_account or bank_account.organization_id != org_id:
+            return ExpensePostingResult(success=False, message="Bank account not found")
+
+        if not bank_account.gl_account_id:
+            return ExpensePostingResult(
+                success=False,
+                message="Bank account has no linked GL account",
+            )
+
+        # Build journal lines
+        journal_lines = [
+            # Debit: Bank Charges Expense
+            JournalLineInput(
+                account_id=expense_account_id,
+                debit_amount=fee_amount,
+                credit_amount=Decimal("0"),
+                debit_amount_functional=fee_amount,
+                credit_amount_functional=Decimal("0"),
+                description=f"Transfer fee: {reference}",
+            ),
+            # Credit: Bank Account (fee deducted)
+            JournalLineInput(
+                account_id=bank_account.gl_account_id,
+                debit_amount=Decimal("0"),
+                credit_amount=fee_amount,
+                debit_amount_functional=Decimal("0"),
+                credit_amount_functional=fee_amount,
+                description=f"Transfer fee deducted: {reference}",
+            ),
+        ]
+
+        # Create journal entry
+        journal_input = JournalInput(
+            journal_type=JournalType.STANDARD,
+            entry_date=posting_date,
+            posting_date=posting_date,
+            description=description,
+            reference=f"FEE-{reference}",
+            currency_code="NGN",
+            exchange_rate=Decimal("1.0"),
+            lines=journal_lines,
+            source_module="PAYMENTS",
+            source_document_type="TRANSFER_FEE",
+            correlation_id=correlation_id,
+        )
+
+        try:
+            journal = JournalService.create_journal(db, org_id, journal_input, user_id)
+            JournalService.submit_journal(db, org_id, journal.journal_entry_id, user_id)
+            JournalService.approve_journal(db, org_id, journal.journal_entry_id, user_id)
+
+        except HTTPException as e:
+            return ExpensePostingResult(
+                success=False, message=f"Fee journal creation failed: {e.detail}"
+            )
+
+        # Post to ledger
+        if not idempotency_key:
+            idempotency_key = f"{org_id}:FEE:{reference}:post:v1"
+
+        posting_request = PostingRequest(
+            organization_id=org_id,
+            journal_entry_id=journal.journal_entry_id,
+            posting_date=posting_date,
+            idempotency_key=idempotency_key,
+            source_module="PAYMENTS",
+            correlation_id=correlation_id,
+            posted_by_user_id=user_id,
+        )
+
+        try:
+            posting_result = LedgerPostingService.post_journal_entry(db, posting_request)
+
+            if not posting_result.success:
+                return ExpensePostingResult(
+                    success=False,
+                    journal_entry_id=journal.journal_entry_id,
+                    message=f"Fee ledger posting failed: {posting_result.message}",
+                )
+
+            return ExpensePostingResult(
+                success=True,
+                journal_entry_id=journal.journal_entry_id,
+                posting_batch_id=posting_result.batch_id,
+                message="Transfer fee posted successfully",
+            )
+
+        except Exception as e:
+            return ExpensePostingResult(
+                success=False,
+                journal_entry_id=journal.journal_entry_id,
+                message=f"Fee posting error: {str(e)}",
+            )
+
+    @staticmethod
+    def post_expense_reimbursement_reversal(
+        db: Session,
+        organization_id: UUID,
+        claim_id: UUID,
+        original_journal_id: UUID,
+        posting_date: date,
+        posted_by_user_id: UUID,
+        *,
+        bank_account_id: UUID,
+        reason: Optional[str] = None,
+        correlation_id: Optional[str] = None,
+    ) -> ExpensePostingResult:
+        """
+        Post reversal for expense reimbursement.
+
+        Creates opposite entries to reverse the original reimbursement posting.
+
+        GL Entry Structure (opposite of original):
+        - DEBIT: Bank account (restore the cash)
+        - CREDIT: Employee payable account (restore the liability)
+
+        Args:
+            db: Database session
+            organization_id: Organization scope
+            claim_id: The expense claim
+            original_journal_id: Original journal entry being reversed
+            posting_date: Date for the reversal
+            posted_by_user_id: User performing the reversal
+            bank_account_id: Bank account used in original posting
+            reason: Reason for reversal
+            correlation_id: Tracing correlation ID
+
+        Returns:
+            ExpensePostingResult with reversal journal entry details
+        """
+        from app.models.finance.banking.bank_account import BankAccount
+        from app.models.finance.gl.journal_entry import JournalEntry
+
+        org_id = coerce_uuid(organization_id)
+        c_id = coerce_uuid(claim_id)
+        user_id = coerce_uuid(posted_by_user_id)
+        bank_id = coerce_uuid(bank_account_id)
+        orig_journal_id = coerce_uuid(original_journal_id)
+
+        # Load expense claim
+        claim = db.get(ExpenseClaim, c_id)
+        if not claim or claim.organization_id != org_id:
+            return ExpensePostingResult(success=False, message="Expense claim not found")
+
+        # Get original journal to get the amount
+        original_journal = db.get(JournalEntry, orig_journal_id)
+        if not original_journal:
+            return ExpensePostingResult(success=False, message="Original journal not found")
+
+        # Get the reimbursement amount from original journal
+        reversal_amount = sum(
+            line.debit_amount for line in original_journal.lines if line.debit_amount > 0
+        )
+
+        if reversal_amount <= Decimal("0"):
+            return ExpensePostingResult(success=False, message="No amount to reverse")
+
+        # Get bank account and its GL account
+        bank_account = db.get(BankAccount, bank_id)
+        if not bank_account or not bank_account.gl_account_id:
+            return ExpensePostingResult(success=False, message="Bank account not found or has no GL account")
+
+        # Get employee payable account
+        payable_account_id = ExpensePostingAdapter._get_employee_payable_account(db, org_id)
+        if not payable_account_id:
+            return ExpensePostingResult(success=False, message="Employee payable account not configured")
+
+        # Build reversal journal lines (opposite of original)
+        journal_lines = [
+            # Debit: Bank Account (restore cash)
+            JournalLineInput(
+                account_id=bank_account.gl_account_id,
+                debit_amount=reversal_amount,
+                credit_amount=Decimal("0"),
+                debit_amount_functional=reversal_amount,
+                credit_amount_functional=Decimal("0"),
+                description=f"Reversal: {claim.claim_number}",
+            ),
+            # Credit: Employee Payable (restore liability)
+            JournalLineInput(
+                account_id=payable_account_id,
+                debit_amount=Decimal("0"),
+                credit_amount=reversal_amount,
+                debit_amount_functional=Decimal("0"),
+                credit_amount_functional=reversal_amount,
+                description=f"Reversal: {claim.claim_number}",
+            ),
+        ]
+
+        # Create reversal journal entry
+        journal_input = JournalInput(
+            journal_type=JournalType.STANDARD,
+            entry_date=posting_date,
+            posting_date=posting_date,
+            description=f"Reversal: Expense Reimbursement {claim.claim_number}" + (f" - {reason}" if reason else ""),
+            reference=f"REV-{claim.claim_number}",
+            currency_code="NGN",
+            exchange_rate=Decimal("1.0"),
+            lines=journal_lines,
+            source_module="EXPENSE",
+            source_document_type="EXPENSE_REIMBURSEMENT_REVERSAL",
+            source_document_id=c_id,
+            correlation_id=correlation_id,
+        )
+
+        try:
+            journal = JournalService.create_journal(db, org_id, journal_input, user_id)
+            JournalService.submit_journal(db, org_id, journal.journal_entry_id, user_id)
+            JournalService.approve_journal(db, org_id, journal.journal_entry_id, user_id)
+
+        except HTTPException as e:
+            return ExpensePostingResult(
+                success=False, message=f"Reversal journal creation failed: {e.detail}"
+            )
+
+        # Post to ledger
+        idempotency_key = f"{org_id}:EXP:REIMB:{c_id}:reversal:v1"
+
+        posting_request = PostingRequest(
+            organization_id=org_id,
+            journal_entry_id=journal.journal_entry_id,
+            posting_date=posting_date,
+            idempotency_key=idempotency_key,
+            source_module="EXPENSE",
+            correlation_id=correlation_id,
+            posted_by_user_id=user_id,
+        )
+
+        try:
+            posting_result = LedgerPostingService.post_journal_entry(db, posting_request)
+
+            if not posting_result.success:
+                return ExpensePostingResult(
+                    success=False,
+                    journal_entry_id=journal.journal_entry_id,
+                    message=f"Reversal posting failed: {posting_result.message}",
+                )
+
+            return ExpensePostingResult(
+                success=True,
+                journal_entry_id=journal.journal_entry_id,
+                posting_batch_id=posting_result.batch_id,
+                message="Reimbursement reversal posted successfully",
+            )
+
+        except Exception as e:
+            return ExpensePostingResult(
+                success=False,
+                journal_entry_id=journal.journal_entry_id,
+                message=f"Reversal posting error: {str(e)}",
+            )
+
+    @staticmethod
+    def post_transfer_fee_reversal(
+        db: Session,
+        organization_id: UUID,
+        original_journal_id: UUID,
+        posting_date: date,
+        posted_by_user_id: UUID,
+        *,
+        fee_amount: Decimal,
+        bank_account_id: UUID,
+        reference: str,
+        correlation_id: Optional[str] = None,
+    ) -> ExpensePostingResult:
+        """
+        Post reversal for transfer fee.
+
+        Creates opposite entries to reverse the original fee posting.
+
+        GL Entry Structure (opposite of original):
+        - DEBIT: Bank account (restore the fee amount)
+        - CREDIT: Bank charges expense (reverse the expense)
+
+        Args:
+            db: Database session
+            organization_id: Organization scope
+            original_journal_id: Original fee journal entry
+            posting_date: Date for the reversal
+            posted_by_user_id: User performing the reversal
+            fee_amount: Fee amount to reverse
+            bank_account_id: Bank account used in original posting
+            reference: Payment reference
+            correlation_id: Tracing correlation ID
+
+        Returns:
+            ExpensePostingResult with reversal journal entry details
+        """
+        from app.models.finance.banking.bank_account import BankAccount
+        from app.models.finance.gl.journal_entry import JournalEntry
+        from app.models.domain_settings import SettingDomain
+        from app.services.settings_spec import resolve_value
+
+        org_id = coerce_uuid(organization_id)
+        user_id = coerce_uuid(posted_by_user_id)
+        bank_id = coerce_uuid(bank_account_id)
+
+        if fee_amount <= Decimal("0"):
+            return ExpensePostingResult(success=False, message="No fee amount to reverse")
+
+        # Get bank account and its GL account
+        bank_account = db.get(BankAccount, bank_id)
+        if not bank_account or not bank_account.gl_account_id:
+            return ExpensePostingResult(success=False, message="Bank account not found or has no GL account")
+
+        # Get fee expense account from settings
+        fee_account_id = resolve_value(db, SettingDomain.payments, "paystack_transfer_fee_account_id")
+        if not fee_account_id:
+            return ExpensePostingResult(success=False, message="Fee expense account not configured")
+
+        fee_account_uuid = coerce_uuid(fee_account_id)
+
+        # Build reversal journal lines (opposite of original)
+        journal_lines = [
+            # Debit: Bank Account (restore fee)
+            JournalLineInput(
+                account_id=bank_account.gl_account_id,
+                debit_amount=fee_amount,
+                credit_amount=Decimal("0"),
+                debit_amount_functional=fee_amount,
+                credit_amount_functional=Decimal("0"),
+                description=f"Fee reversal: {reference}",
+            ),
+            # Credit: Bank Charges Expense (reverse expense)
+            JournalLineInput(
+                account_id=fee_account_uuid,
+                debit_amount=Decimal("0"),
+                credit_amount=fee_amount,
+                debit_amount_functional=Decimal("0"),
+                credit_amount_functional=fee_amount,
+                description=f"Fee reversal: {reference}",
+            ),
+        ]
+
+        # Create reversal journal entry
+        journal_input = JournalInput(
+            journal_type=JournalType.STANDARD,
+            entry_date=posting_date,
+            posting_date=posting_date,
+            description=f"Reversal: Transfer fee {reference}",
+            reference=f"REV-FEE-{reference}",
+            currency_code="NGN",
+            exchange_rate=Decimal("1.0"),
+            lines=journal_lines,
+            source_module="PAYMENTS",
+            source_document_type="TRANSFER_FEE_REVERSAL",
+            correlation_id=correlation_id,
+        )
+
+        try:
+            journal = JournalService.create_journal(db, org_id, journal_input, user_id)
+            JournalService.submit_journal(db, org_id, journal.journal_entry_id, user_id)
+            JournalService.approve_journal(db, org_id, journal.journal_entry_id, user_id)
+
+        except HTTPException as e:
+            return ExpensePostingResult(
+                success=False, message=f"Fee reversal journal creation failed: {e.detail}"
+            )
+
+        # Post to ledger
+        idempotency_key = f"{org_id}:FEE:{reference}:reversal:v1"
+
+        posting_request = PostingRequest(
+            organization_id=org_id,
+            journal_entry_id=journal.journal_entry_id,
+            posting_date=posting_date,
+            idempotency_key=idempotency_key,
+            source_module="PAYMENTS",
+            correlation_id=correlation_id,
+            posted_by_user_id=user_id,
+        )
+
+        try:
+            posting_result = LedgerPostingService.post_journal_entry(db, posting_request)
+
+            if not posting_result.success:
+                return ExpensePostingResult(
+                    success=False,
+                    journal_entry_id=journal.journal_entry_id,
+                    message=f"Fee reversal posting failed: {posting_result.message}",
+                )
+
+            return ExpensePostingResult(
+                success=True,
+                journal_entry_id=journal.journal_entry_id,
+                posting_batch_id=posting_result.batch_id,
+                message="Transfer fee reversal posted successfully",
+            )
+
+        except Exception as e:
+            return ExpensePostingResult(
+                success=False,
+                journal_entry_id=journal.journal_entry_id,
+                message=f"Fee reversal posting error: {str(e)}",
+            )
+
+
 # Module-level singleton instance
 expense_posting_adapter = ExpensePostingAdapter()

@@ -110,6 +110,8 @@ def leave_applications(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     page: int = Query(default=1, ge=1),
+    success: Optional[str] = None,
+    error: Optional[str] = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -147,6 +149,8 @@ def leave_applications(
             "total": result.total,
             "has_prev": result.has_prev,
             "has_next": result.has_next,
+            "success": success,
+            "error": error,
         }
     )
     return templates.TemplateResponse(request, "people/leave/applications.html", context)
@@ -160,6 +164,8 @@ def leave_allocations(
     year: Optional[int] = None,
     is_active: Optional[bool] = None,
     page: int = Query(default=1, ge=1),
+    success: Optional[str] = None,
+    error: Optional[str] = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -175,10 +181,18 @@ def leave_allocations(
         is_active=is_active,
         pagination=pagination,
     )
+
+    # Get data for bulk allocation dialog
+    employees = _get_employees(db, org_id)
+    leave_types = svc.list_leave_types(org_id, is_active=True).items
+
     context = base_context(request, auth, "Leave Allocations", "leave", db=db)
     context.update(
         {
             "allocations": result.items,
+            "employees": employees,
+            "leave_types": leave_types,
+            "today": date.today(),
             "employee_id": employee_id,
             "leave_type_id": leave_type_id,
             "year": year,
@@ -188,6 +202,8 @@ def leave_allocations(
             "total": result.total,
             "has_prev": result.has_prev,
             "has_next": result.has_next,
+            "success": success,
+            "error": error,
         }
     )
     return templates.TemplateResponse(request, "people/leave/allocations.html", context)
@@ -483,6 +499,8 @@ async def create_allocation(
 def view_allocation(
     request: Request,
     allocation_id: str,
+    success: Optional[str] = None,
+    error: Optional[str] = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -515,6 +533,8 @@ def view_allocation(
     context["employee"] = employee
     context["leave_type"] = leave_type
     context["applications"] = applications
+    context["success"] = success
+    context["error"] = error
     return templates.TemplateResponse(request, "people/leave/allocation_detail.html", context)
 
 
@@ -601,6 +621,158 @@ async def delete_allocation(
         db.commit()
     except LeaveServiceError:
         pass
+
+
+@router.post("/allocations/{allocation_id}/encash")
+async def encash_allocation(
+    request: Request,
+    allocation_id: str,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Process leave encashment for an allocation."""
+    from urllib.parse import quote
+
+    form = getattr(request.state, "csrf_form", None)
+    if form is None:
+        form = await request.form()
+
+    days_to_encash = (form.get("days_to_encash") or "").strip()
+    notes = (form.get("encash_notes") or "").strip()
+
+    org_id = coerce_uuid(auth.organization_id)
+    alloc_id = coerce_uuid(allocation_id)
+    svc = LeaveService(db, auth)
+
+    try:
+        allocation = svc.get_allocation(org_id, alloc_id)
+        leave_type = svc.get_leave_type(org_id, allocation.leave_type_id)
+
+        if not leave_type.allow_encashment:
+            return RedirectResponse(
+                url=f"/people/leave/allocations/{allocation_id}?error=Encashment+not+allowed+for+this+leave+type",
+                status_code=303
+            )
+
+        encash_days = Decimal(days_to_encash) if days_to_encash else Decimal("0")
+        available = (
+            allocation.total_leaves_allocated
+            - allocation.leaves_used
+            - allocation.leaves_encashed
+        )
+        threshold = leave_type.encashment_threshold_days or Decimal("0")
+        max_encashable = available - threshold
+
+        if encash_days <= 0:
+            return RedirectResponse(
+                url=f"/people/leave/allocations/{allocation_id}?error=Invalid+encashment+amount",
+                status_code=303
+            )
+
+        if encash_days > max_encashable:
+            return RedirectResponse(
+                url=f"/people/leave/allocations/{allocation_id}?error=Encashment+amount+exceeds+available+balance",
+                status_code=303
+            )
+
+        # Update leaves_encashed
+        new_encashed = allocation.leaves_encashed + encash_days
+        new_notes = allocation.notes or ""
+        if notes:
+            encash_note = f"Encashed {encash_days} days on {date.today().isoformat()}: {notes}"
+        else:
+            encash_note = f"Encashed {encash_days} days on {date.today().isoformat()}"
+
+        if new_notes:
+            new_notes = f"{new_notes}\n{encash_note}"
+        else:
+            new_notes = encash_note
+
+        svc.update_allocation(org_id, alloc_id, leaves_encashed=new_encashed, notes=new_notes)
+        db.commit()
+
+        success_msg = quote(f"Successfully encashed {encash_days} days")
+        return RedirectResponse(
+            url=f"/people/leave/allocations/{allocation_id}?success={success_msg}",
+            status_code=303
+        )
+
+    except (LeaveServiceError, LeaveTypeNotFoundError) as e:
+        error_msg = quote(str(e))
+        return RedirectResponse(
+            url=f"/people/leave/allocations/{allocation_id}?error={error_msg}",
+            status_code=303
+        )
+
+
+@router.post("/allocations/bulk-create")
+async def bulk_create_allocations(
+    request: Request,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Bulk create leave allocations for multiple employees."""
+    from urllib.parse import quote
+
+    form = getattr(request.state, "csrf_form", None)
+    if form is None:
+        form = await request.form()
+
+    employee_ids = form.getlist("employee_ids")
+    leave_type_id = (form.get("leave_type_id") or "").strip()
+    from_date_str = (form.get("from_date") or "").strip()
+    to_date_str = (form.get("to_date") or "").strip()
+    new_leaves = (form.get("new_leaves_allocated") or "0").strip()
+    carry_forward = (form.get("carry_forward_leaves") or "0").strip()
+    notes = (form.get("notes") or "").strip() or None
+
+    if not employee_ids:
+        return RedirectResponse(
+            url="/people/leave/allocations?error=No+employees+selected",
+            status_code=303
+        )
+
+    if not leave_type_id or not from_date_str or not to_date_str:
+        return RedirectResponse(
+            url="/people/leave/allocations?error=Leave+type+and+dates+are+required",
+            status_code=303
+        )
+
+    valid_ids = []
+    for emp_id in employee_ids:
+        try:
+            valid_ids.append(coerce_uuid(emp_id))
+        except Exception:
+            pass
+
+    if not valid_ids:
+        return RedirectResponse(
+            url="/people/leave/allocations?error=No+valid+employees+selected",
+            status_code=303
+        )
+
+    try:
+        org_id = coerce_uuid(auth.organization_id)
+        svc = LeaveService(db, auth)
+
+        result = svc.bulk_create_allocations(
+            org_id,
+            employee_ids=valid_ids,
+            leave_type_id=coerce_uuid(leave_type_id),
+            from_date=date.fromisoformat(from_date_str),
+            to_date=date.fromisoformat(to_date_str),
+            new_leaves_allocated=Decimal(new_leaves),
+            carry_forward_leaves=Decimal(carry_forward),
+            notes=notes,
+        )
+        db.commit()
+
+        success_msg = quote(f"Created {result['success_count']} allocation(s). {result['failed_count']} failed.")
+        return RedirectResponse(url=f"/people/leave/allocations?success={success_msg}", status_code=303)
+    except Exception as e:
+        db.rollback()
+        error_msg = quote(str(e))
+        return RedirectResponse(url=f"/people/leave/allocations?error={error_msg}", status_code=303)
     return RedirectResponse("/people/leave/allocations", status_code=303)
 
 
@@ -1202,3 +1374,105 @@ def leave_trends_report(
         "months": months,
     })
     return templates.TemplateResponse(request, "people/leave/reports/trends.html", context)
+
+
+# =============================================================================
+# Bulk Operations
+# =============================================================================
+
+
+@router.post("/applications/bulk-approve")
+async def bulk_approve_applications(
+    request: Request,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Bulk approve leave applications."""
+    from urllib.parse import quote
+
+    form = getattr(request.state, "csrf_form", None)
+    if form is None:
+        form = await request.form()
+
+    application_ids = form.getlist("application_ids")
+    if not application_ids:
+        return RedirectResponse(
+            url="/people/leave/applications?error=No+applications+selected",
+            status_code=303
+        )
+
+    valid_ids = []
+    for app_id in application_ids:
+        try:
+            valid_ids.append(coerce_uuid(app_id))
+        except Exception:
+            pass
+
+    if not valid_ids:
+        return RedirectResponse(
+            url="/people/leave/applications?error=No+valid+applications+selected",
+            status_code=303
+        )
+
+    org_id = coerce_uuid(auth.organization_id)
+    svc = LeaveService(db, auth)
+
+    result = svc.bulk_approve_applications(
+        org_id,
+        application_ids=valid_ids,
+        approver_id=coerce_uuid(auth.user_id) if auth.user_id else None,
+    )
+    db.commit()
+
+    success_msg = quote(f"Successfully approved {result['updated']} of {result['requested']} application(s)")
+    return RedirectResponse(url=f"/people/leave/applications?success={success_msg}", status_code=303)
+
+
+@router.post("/applications/bulk-reject")
+async def bulk_reject_applications(
+    request: Request,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Bulk reject leave applications."""
+    from urllib.parse import quote
+
+    form = getattr(request.state, "csrf_form", None)
+    if form is None:
+        form = await request.form()
+
+    application_ids = form.getlist("application_ids")
+    rejection_reason = (form.get("rejection_reason") or "").strip() or "Rejected"
+
+    if not application_ids:
+        return RedirectResponse(
+            url="/people/leave/applications?error=No+applications+selected",
+            status_code=303
+        )
+
+    valid_ids = []
+    for app_id in application_ids:
+        try:
+            valid_ids.append(coerce_uuid(app_id))
+        except Exception:
+            pass
+
+    if not valid_ids:
+        return RedirectResponse(
+            url="/people/leave/applications?error=No+valid+applications+selected",
+            status_code=303
+        )
+
+    org_id = coerce_uuid(auth.organization_id)
+    svc = LeaveService(db, auth)
+
+    result = svc.bulk_reject_applications(
+        org_id,
+        application_ids=valid_ids,
+        approver_id=coerce_uuid(auth.user_id) if auth.user_id else None,
+        reason=rejection_reason,
+    )
+    db.commit()
+
+    success_msg = quote(f"Rejected {result['updated']} of {result['requested']} application(s)")
+    return RedirectResponse(url=f"/people/leave/applications?success={success_msg}", status_code=303)

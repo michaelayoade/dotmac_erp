@@ -235,6 +235,7 @@ def create_expense_claim(
         expense_period_start=payload.expense_period_start,
         expense_period_end=payload.expense_period_end,
         project_id=payload.project_id,
+        task_id=payload.task_id,
         currency_code=payload.currency_code,
         cost_center_id=payload.cost_center_id,
         notes=payload.notes,

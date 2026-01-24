@@ -31,7 +31,67 @@ DEFAULT_PREFIXES = {
     SequenceType.SALES_ORDER: "SO",
     SequenceType.SHIPMENT: "SHP",
     SequenceType.EXPENSE: "EXP",
+    SequenceType.SUPPORT_TICKET: "",
+    SequenceType.PROJECT: "PROJ",
+    SequenceType.TASK: "TASK-",
 }
+
+DEFAULT_SEQUENCE_CONFIGS = {
+    SequenceType.SUPPORT_TICKET: {
+        "prefix": "",
+        "separator": "-",
+        "min_digits": 4,
+        "include_year": False,
+        "include_month": False,
+        "year_format": 4,
+        "reset_frequency": ResetFrequency.NEVER,
+    },
+    SequenceType.PROJECT: {
+        "prefix": "PROJ",
+        "separator": "-",
+        "min_digits": 4,
+        "include_year": False,
+        "include_month": False,
+        "year_format": 4,
+        "reset_frequency": ResetFrequency.NEVER,
+    },
+    SequenceType.TASK: {
+        "prefix": "TASK-",
+        "separator": "-",
+        "min_digits": 5,
+        "include_year": True,
+        "include_month": False,
+        "year_format": 4,
+        "reset_frequency": ResetFrequency.YEARLY,
+    },
+}
+
+
+def _default_sequence_kwargs(sequence_type: SequenceType) -> dict:
+    defaults = DEFAULT_SEQUENCE_CONFIGS.get(sequence_type)
+    if defaults:
+        return {
+            "prefix": defaults["prefix"],
+            "suffix": "",
+            "separator": defaults["separator"],
+            "min_digits": defaults["min_digits"],
+            "include_year": defaults["include_year"],
+            "include_month": defaults["include_month"],
+            "year_format": defaults["year_format"],
+            "current_number": 0,
+            "reset_frequency": defaults["reset_frequency"],
+        }
+    return {
+        "prefix": DEFAULT_PREFIXES.get(sequence_type, "DOC"),
+        "suffix": "",
+        "separator": "-",
+        "min_digits": 4,
+        "include_year": True,
+        "include_month": True,
+        "year_format": 4,
+        "current_number": 0,
+        "reset_frequency": ResetFrequency.MONTHLY,
+    }
 
 
 class NumberingService:
@@ -68,15 +128,7 @@ class NumberingService:
         sequence = NumberingSequence(
             organization_id=organization_id,
             sequence_type=sequence_type,
-            prefix=DEFAULT_PREFIXES.get(sequence_type, "DOC"),
-            suffix="",
-            separator="-",
-            min_digits=4,
-            include_year=True,
-            include_month=True,
-            year_format=4,
-            current_number=0,
-            reset_frequency=ResetFrequency.MONTHLY,
+            **_default_sequence_kwargs(sequence_type),
         )
         self.db.add(sequence)
         await self.db.flush()
@@ -339,15 +391,7 @@ class SyncNumberingService:
         sequence = NumberingSequence(
             organization_id=organization_id,
             sequence_type=sequence_type,
-            prefix=DEFAULT_PREFIXES.get(sequence_type, "DOC"),
-            suffix="",
-            separator="-",
-            min_digits=4,
-            include_year=True,
-            include_month=True,
-            year_format=4,
-            current_number=0,
-            reset_frequency=ResetFrequency.MONTHLY,
+            **_default_sequence_kwargs(sequence_type),
         )
         self.db.add(sequence)
         self.db.flush()

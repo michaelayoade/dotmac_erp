@@ -1,0 +1,103 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}Request Feedback{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/perf/appraisals" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Appraisals</a>
+    <span class="mx-2">/</span>
+    <a href="/people/perf/appraisals/{{ appraisal.appraisal_id }}" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">{{ appraisal.employee.full_name if appraisal.employee else 'Appraisal' }}</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">Request Feedback</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl">
+    {% if error %}
+    <div class="mb-6 p-4 rounded-lg bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-800">
+        <div class="flex items-center gap-2 text-red-700 dark:text-red-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span>{{ error }}</span>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Appraisal Info -->
+    <div class="card mb-6">
+        <div class="card-header">
+            <h3 class="font-medium text-slate-900 dark:text-white">Requesting Feedback For</h3>
+        </div>
+        <div class="card-body">
+            <dl class="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                    <dt class="text-slate-500 dark:text-slate-400">Employee</dt>
+                    <dd class="font-medium text-slate-900 dark:text-white">{{ appraisal.employee.full_name if appraisal.employee else '-' }}</dd>
+                </div>
+                <div>
+                    <dt class="text-slate-500 dark:text-slate-400">Cycle</dt>
+                    <dd class="font-medium text-slate-900 dark:text-white">{{ appraisal.cycle.cycle_name if appraisal.cycle else '-' }}</dd>
+                </div>
+            </dl>
+        </div>
+    </div>
+
+    <form method="post" action="/people/perf/feedback/request" class="space-y-6">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="appraisal_id" value="{{ appraisal.appraisal_id }}">
+
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Feedback Request Details</h3>
+            </div>
+            <div class="card-body space-y-4">
+                <div>
+                    <label for="feedback_from_id" class="form-label required">Request Feedback From</label>
+                    <select name="feedback_from_id" id="feedback_from_id" required class="form-select w-full">
+                        <option value="">Select Employee...</option>
+                        {% for emp in employees %}
+                        {% if emp.employee_id != appraisal.employee_id %}
+                        <option value="{{ emp.employee_id }}" {% if form_data.feedback_from_id == emp.employee_id | string %}selected{% endif %}>
+                            {{ emp.full_name }}{% if emp.designation %} - {{ emp.designation.designation_name }}{% endif %}
+                        </option>
+                        {% endif %}
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label for="feedback_type" class="form-label required">Feedback Type</label>
+                    <select name="feedback_type" id="feedback_type" required class="form-select w-full">
+                        {% for ft in feedback_types %}
+                        <option value="{{ ft }}" {% if form_data.feedback_type == ft %}selected{% endif %}>{{ ft | title }}</option>
+                        {% endfor %}
+                    </select>
+                    <p class="text-xs text-slate-500 mt-1">
+                        <strong>Peer:</strong> Colleague at same level |
+                        <strong>Subordinate:</strong> Reports to this employee |
+                        <strong>External:</strong> Client, vendor, etc.
+                    </p>
+                </div>
+
+                <div class="flex items-center gap-3 pt-2">
+                    <input type="checkbox" name="is_anonymous" id="is_anonymous" value="true"
+                           class="rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+                           {% if form_data.is_anonymous == 'true' %}checked{% endif %}>
+                    <label for="is_anonymous" class="text-sm text-slate-700 dark:text-slate-300">
+                        Anonymous feedback (identity hidden from employee and manager)
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex justify-end gap-3">
+            <a href="/people/perf/appraisals/{{ appraisal.appraisal_id }}" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">Send Request</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

@@ -110,12 +110,13 @@
         </div>
 
         <!-- Attendance Settings -->
-        <div class="card p-6">
+        <div class="card p-6" x-data="{ attendanceMode: '{{ organization.hr_attendance_mode or '' }}' }">
             <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Attendance Settings</h2>
             <div class="grid gap-6 sm:grid-cols-2">
                 <div>
                     <label for="hr_attendance_mode" class="form-label">Attendance Mode</label>
-                    <select id="hr_attendance_mode" name="hr_attendance_mode" class="form-input form-select">
+                    <select id="hr_attendance_mode" name="hr_attendance_mode" class="form-input form-select"
+                            x-model="attendanceMode">
                         <option value="">-- Select Mode --</option>
                         {% for mode_value, mode_label in attendance_modes %}
                         <option value="{{ mode_value }}" {{ 'selected' if organization.hr_attendance_mode == mode_value else '' }}>{{ mode_label }}</option>
@@ -133,6 +134,129 @@
                     </select>
                     <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Timezone for attendance tracking</p>
                 </div>
+            </div>
+
+            <!-- Geofencing Configuration (shown when GEOFENCED mode selected) -->
+            <div x-show="attendanceMode === 'GEOFENCED'" x-transition class="mt-6 pt-6 border-t border-slate-200 dark:border-slate-700">
+                <div class="flex items-center justify-between mb-4">
+                    <div>
+                        <h3 class="text-sm font-semibold text-slate-900 dark:text-white">Geofencing Configuration</h3>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Configure location boundaries for mobile check-in</p>
+                    </div>
+                    <a href="/people/hr/locations" class="text-sm text-violet-600 hover:text-violet-700 dark:text-violet-400 flex items-center gap-1">
+                        Manage Locations
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                        </svg>
+                    </a>
+                </div>
+
+                {% if geofence_summary %}
+                <!-- Summary Stats -->
+                <div class="grid grid-cols-3 gap-4 mb-4">
+                    <div class="p-3 rounded-lg bg-slate-50 dark:bg-slate-800 text-center">
+                        <div class="text-2xl font-bold text-slate-900 dark:text-white">{{ geofence_summary.total_locations }}</div>
+                        <div class="text-xs text-slate-500 dark:text-slate-400">Total Locations</div>
+                    </div>
+                    <div class="p-3 rounded-lg bg-slate-50 dark:bg-slate-800 text-center">
+                        <div class="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{{ geofence_summary.geofence_enabled }}</div>
+                        <div class="text-xs text-slate-500 dark:text-slate-400">Geofence Enabled</div>
+                    </div>
+                    <div class="p-3 rounded-lg bg-slate-50 dark:bg-slate-800 text-center">
+                        <div class="text-2xl font-bold text-teal-600 dark:text-teal-400">{{ geofence_summary.polygon_configured }}</div>
+                        <div class="text-xs text-slate-500 dark:text-slate-400">Polygon Configured</div>
+                    </div>
+                </div>
+
+                {% if geofence_summary.total_locations == 0 %}
+                <!-- No locations warning -->
+                <div class="p-4 rounded-lg bg-amber-50 border border-amber-200 dark:bg-amber-900/20 dark:border-amber-800">
+                    <div class="flex items-start gap-3">
+                        <svg class="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                        </svg>
+                        <div>
+                            <p class="text-sm font-medium text-amber-800 dark:text-amber-300">No locations configured</p>
+                            <p class="text-xs text-amber-700 dark:text-amber-400 mt-1">
+                                You need to create locations before employees can use geofenced attendance.
+                            </p>
+                            <a href="/people/hr/locations/new" class="mt-2 inline-flex items-center text-xs font-medium text-amber-700 hover:text-amber-800 dark:text-amber-400">
+                                Create a location
+                                <svg class="h-3 w-3 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                                </svg>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                {% elif geofence_summary.geofence_enabled == 0 %}
+                <!-- No geofencing enabled warning -->
+                <div class="p-4 rounded-lg bg-amber-50 border border-amber-200 dark:bg-amber-900/20 dark:border-amber-800">
+                    <div class="flex items-start gap-3">
+                        <svg class="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                        </svg>
+                        <div>
+                            <p class="text-sm font-medium text-amber-800 dark:text-amber-300">No geofencing enabled on any location</p>
+                            <p class="text-xs text-amber-700 dark:text-amber-400 mt-1">
+                                Enable geofencing on at least one location for attendance tracking to work.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <!-- Locations list -->
+                <div class="space-y-2 max-h-64 overflow-y-auto">
+                    {% for loc in geofence_summary.locations %}
+                    <div class="flex items-center justify-between p-3 rounded-lg bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
+                        <div class="flex items-center gap-3">
+                            <div class="flex h-8 w-8 items-center justify-center rounded-lg {{ 'bg-emerald-100 dark:bg-emerald-900/30' if loc.geofence_enabled else 'bg-slate-200 dark:bg-slate-700' }}">
+                                {% if loc.has_polygon %}
+                                <svg class="h-4 w-4 text-teal-600 dark:text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/>
+                                </svg>
+                                {% elif loc.geofence_enabled %}
+                                <svg class="h-4 w-4 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <circle cx="12" cy="12" r="9" stroke-width="2"/>
+                                </svg>
+                                {% else %}
+                                <svg class="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+                                </svg>
+                                {% endif %}
+                            </div>
+                            <div>
+                                <div class="text-sm font-medium text-slate-900 dark:text-white">{{ loc.location_name }}</div>
+                                <div class="text-xs text-slate-500 dark:text-slate-400">
+                                    {{ loc.location_code }}
+                                    {% if loc.geofence_enabled %}
+                                        &middot;
+                                        {% if loc.has_polygon %}
+                                            <span class="text-teal-600 dark:text-teal-400">Polygon</span>
+                                        {% elif loc.has_coordinates %}
+                                            <span class="text-blue-600 dark:text-blue-400">{{ loc.geofence_radius_m }}m radius</span>
+                                        {% else %}
+                                            <span class="text-amber-600 dark:text-amber-400">No coordinates</span>
+                                        {% endif %}
+                                    {% else %}
+                                        &middot; <span class="text-slate-400">Disabled</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        <a href="/people/hr/locations/{{ loc.location_id }}/geofence"
+                           class="p-2 rounded-lg text-slate-400 hover:text-violet-600 hover:bg-violet-50 dark:hover:text-violet-400 dark:hover:bg-violet-900/30 transition-colors"
+                           title="Configure geofence">
+                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                            </svg>
+                        </a>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                {% endif %}
             </div>
         </div>
 

@@ -345,28 +345,6 @@ FINANCE_PERMISSIONS = [
     ("lease:index:adjust", "Adjust lease for index changes"),
 
     # -------------------------------------------------------------------------
-    # Financial Instruments (IFRS 9)
-    # -------------------------------------------------------------------------
-    ("fin_inst:instruments:read", "View financial instruments"),
-    ("fin_inst:instruments:create", "Create financial instruments"),
-    ("fin_inst:instruments:update", "Modify instruments"),
-    ("fin_inst:instruments:assess", "Assess ECL staging for instruments"),
-
-    ("fin_inst:valuation:read", "View valuations"),
-    ("fin_inst:valuation:record", "Record valuations"),
-    ("fin_inst:valuations:read", "View instrument valuations"),
-    ("fin_inst:valuations:create", "Create instrument valuations"),
-
-    ("fin_inst:accruals:create", "Create interest accruals"),
-    ("fin_inst:accruals:post", "Post interest accruals to GL"),
-
-    ("fin_inst:hedges:read", "View hedge relationships"),
-    ("fin_inst:hedges:create", "Designate hedge relationships"),
-    ("fin_inst:hedges:test", "Perform hedge effectiveness tests"),
-    ("fin_inst:hedges:discontinue", "Discontinue hedge relationships"),
-    ("fin_inst:hedges:manage", "Manage hedge accounting"),
-
-    # -------------------------------------------------------------------------
     # Consolidation (IFRS 10)
     # -------------------------------------------------------------------------
     ("cons:entities:read", "View legal entities"),
@@ -929,8 +907,6 @@ ROLE_PERMISSIONS = {
         "tax:deferred:read", "tax:reconciliation:read", "tax:periods:read", "tax:returns:read",
         # Lease - read access
         "lease:contracts:read", "lease:payments:read", "lease:calculations:read", "lease:modifications:read",
-        # Financial Instruments - read access
-        "fin_inst:instruments:read", "fin_inst:valuations:read", "fin_inst:hedges:read",
         # Consolidation - read access
         "cons:entities:read", "cons:ownership:read", "cons:eliminations:read",
         "cons:intercompany:read", "cons:runs:read",
@@ -1024,12 +1000,6 @@ ROLE_PERMISSIONS = {
         "lease:journals:post", "lease:postings:post",
         "lease:modifications:read", "lease:modifications:create", "lease:modifications:approve",
         "lease:index:adjust",
-        # Financial Instruments (IFRS 9) - full control
-        "fin_inst:instruments:read", "fin_inst:instruments:create", "fin_inst:instruments:update", "fin_inst:instruments:assess",
-        "fin_inst:valuation:read", "fin_inst:valuation:record",
-        "fin_inst:valuations:read", "fin_inst:valuations:create",
-        "fin_inst:accruals:create", "fin_inst:accruals:post",
-        "fin_inst:hedges:read", "fin_inst:hedges:create", "fin_inst:hedges:test", "fin_inst:hedges:discontinue", "fin_inst:hedges:manage",
         # Consolidation (IFRS 10) - full control
         "cons:entities:read", "cons:entities:create", "cons:entities:update", "cons:entities:manage",
         "cons:ownership:read", "cons:ownership:create",
@@ -1130,11 +1100,6 @@ ROLE_PERMISSIONS = {
         "lease:calculations:read", "lease:calculations:run", "lease:calculations:calculate",
         "lease:journals:post", "lease:postings:post",
         "lease:modifications:read", "lease:modifications:create",
-        # Financial Instruments (IFRS 9)
-        "fin_inst:instruments:read", "fin_inst:instruments:create", "fin_inst:instruments:assess",
-        "fin_inst:valuations:read", "fin_inst:valuations:create",
-        "fin_inst:accruals:create", "fin_inst:accruals:post",
-        "fin_inst:hedges:read", "fin_inst:hedges:create", "fin_inst:hedges:test",
         # Consolidation (IFRS 10) - read and create
         "cons:entities:read", "cons:entities:create",
         "cons:ownership:read", "cons:ownership:create",
@@ -1230,8 +1195,6 @@ ROLE_PERMISSIONS = {
         "tax:deferred:read", "tax:reconciliation:read", "tax:periods:read", "tax:returns:read",
         # Lease - read access
         "lease:contracts:read", "lease:payments:read", "lease:calculations:read", "lease:modifications:read",
-        # Financial Instruments - read access
-        "fin_inst:instruments:read", "fin_inst:valuations:read", "fin_inst:hedges:read",
         # Consolidation - read access
         "cons:entities:read", "cons:ownership:read", "cons:eliminations:read",
         "cons:intercompany:read", "cons:runs:read",

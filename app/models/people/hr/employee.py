@@ -44,6 +44,13 @@ if TYPE_CHECKING:
     from app.models.people.hr.employee_grade import EmployeeGrade
     from app.models.support.ticket import Ticket
     from app.models.support.team import SupportTeamMember
+    from app.models.people.hr.employee_extended import (
+        EmployeeDocument,
+        EmployeeQualification,
+        EmployeeCertification,
+        EmployeeDependent,
+        EmployeeSkill,
+    )
 
 
 class EmployeeStatus(str, enum.Enum):
@@ -329,6 +336,35 @@ class Employee(Base, AuditMixin, SoftDeleteMixin, ERPNextSyncMixin, VersionMixin
     support_team_memberships: Mapped[list["SupportTeamMember"]] = relationship(
         "SupportTeamMember",
         back_populates="employee",
+    )
+
+    # Extended employee data relationships
+    documents: Mapped[list["EmployeeDocument"]] = relationship(
+        "EmployeeDocument",
+        foreign_keys="[EmployeeDocument.employee_id]",
+        back_populates="employee",
+        cascade="all, delete-orphan",
+    )
+    qualifications: Mapped[list["EmployeeQualification"]] = relationship(
+        "EmployeeQualification",
+        back_populates="employee",
+        cascade="all, delete-orphan",
+    )
+    certifications: Mapped[list["EmployeeCertification"]] = relationship(
+        "EmployeeCertification",
+        back_populates="employee",
+        cascade="all, delete-orphan",
+    )
+    dependents: Mapped[list["EmployeeDependent"]] = relationship(
+        "EmployeeDependent",
+        back_populates="employee",
+        cascade="all, delete-orphan",
+    )
+    skills: Mapped[list["EmployeeSkill"]] = relationship(
+        "EmployeeSkill",
+        foreign_keys="[EmployeeSkill.employee_id]",
+        back_populates="employee",
+        cascade="all, delete-orphan",
     )
 
     @property

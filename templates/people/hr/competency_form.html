@@ -1,0 +1,131 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}{% if competency %}Edit Competency{% else %}Add Competency{% endif %}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr" class="hover:text-teal-600 dark:hover:text-teal-400">HR</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr/competencies" class="hover:text-teal-600 dark:hover:text-teal-400">Competencies</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">{% if competency %}Edit{% else %}Add{% endif %}</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl">
+    {% if error %}
+    <div class="mb-6 p-4 rounded-lg bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-800">
+        <div class="flex items-center gap-2 text-red-700 dark:text-red-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span>{{ error }}</span>
+        </div>
+    </div>
+    {% endif %}
+
+    <form method="post" action="{% if competency %}/people/hr/competencies/{{ competency.competency_id }}/edit{% else %}/people/hr/competencies/new{% endif %}" class="space-y-6">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Competency Details</h3>
+            </div>
+            <div class="card-body space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="competency_code" class="form-label required">Competency Code</label>
+                        <input type="text" name="competency_code" id="competency_code" required
+                               class="form-input w-full font-mono"
+                               value="{{ form_data.competency_code or (competency.competency_code if competency else '') }}"
+                               placeholder="e.g., COMM-001">
+                    </div>
+                    <div>
+                        <label for="category" class="form-label required">Category</label>
+                        <select name="category" id="category" required class="form-select w-full">
+                            <option value="">Select Category</option>
+                            {% for cat in categories %}
+                            <option value="{{ cat.value }}"
+                                    {{ 'selected' if (form_data.category == cat.value) or (competency and competency.category.value == cat.value) }}>
+                                {{ cat.value | replace('_', ' ') | title }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label for="competency_name" class="form-label required">Competency Name</label>
+                    <input type="text" name="competency_name" id="competency_name" required
+                           class="form-input w-full"
+                           value="{{ form_data.competency_name or (competency.competency_name if competency else '') }}"
+                           placeholder="e.g., Written Communication">
+                </div>
+
+                <div>
+                    <label for="description" class="form-label">Description</label>
+                    <textarea name="description" id="description" rows="3"
+                              class="form-input w-full"
+                              placeholder="What does this competency measure?">{{ form_data.description or (competency.description if competency else '') }}</textarea>
+                </div>
+
+                {% if competency %}
+                <div class="flex items-center gap-2">
+                    <input type="checkbox" name="is_active" id="is_active" value="true"
+                           class="rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+                           {{ 'checked' if competency.is_active }}>
+                    <label for="is_active" class="text-sm text-slate-700 dark:text-slate-300">Active</label>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Proficiency Level Descriptions</h3>
+                <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Define what each proficiency level means for this competency.</p>
+            </div>
+            <div class="card-body space-y-4">
+                <div>
+                    <label for="level_1_description" class="form-label">Level 1 - Awareness</label>
+                    <textarea name="level_1_description" id="level_1_description" rows="2"
+                              class="form-input w-full"
+                              placeholder="Basic understanding, requires guidance...">{{ form_data.level_1_description or (competency.level_1_description if competency else '') }}</textarea>
+                </div>
+                <div>
+                    <label for="level_2_description" class="form-label">Level 2 - Basic</label>
+                    <textarea name="level_2_description" id="level_2_description" rows="2"
+                              class="form-input w-full"
+                              placeholder="Can apply with some supervision...">{{ form_data.level_2_description or (competency.level_2_description if competency else '') }}</textarea>
+                </div>
+                <div>
+                    <label for="level_3_description" class="form-label">Level 3 - Intermediate</label>
+                    <textarea name="level_3_description" id="level_3_description" rows="2"
+                              class="form-input w-full"
+                              placeholder="Independent application, standard situations...">{{ form_data.level_3_description or (competency.level_3_description if competency else '') }}</textarea>
+                </div>
+                <div>
+                    <label for="level_4_description" class="form-label">Level 4 - Advanced</label>
+                    <textarea name="level_4_description" id="level_4_description" rows="2"
+                              class="form-input w-full"
+                              placeholder="Can handle complex situations, mentor others...">{{ form_data.level_4_description or (competency.level_4_description if competency else '') }}</textarea>
+                </div>
+                <div>
+                    <label for="level_5_description" class="form-label">Level 5 - Expert</label>
+                    <textarea name="level_5_description" id="level_5_description" rows="2"
+                              class="form-input w-full"
+                              placeholder="Industry expert, strategic application, innovation...">{{ form_data.level_5_description or (competency.level_5_description if competency else '') }}</textarea>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex justify-end gap-3">
+            <a href="/people/hr/competencies" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">{% if competency %}Save Changes{% else %}Create Competency{% endif %}</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

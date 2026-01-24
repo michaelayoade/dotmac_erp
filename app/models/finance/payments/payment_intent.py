@@ -23,6 +23,7 @@ class PaymentIntentStatus(str, enum.Enum):
     PROCESSING = "PROCESSING"  # Payment in progress
     COMPLETED = "COMPLETED"  # Successfully paid
     FAILED = "FAILED"  # Payment failed
+    REVERSED = "REVERSED"  # Completed but later reversed/refunded
     ABANDONED = "ABANDONED"  # User didn't complete
     EXPIRED = "EXPIRED"  # Timed out
 
@@ -181,6 +182,18 @@ class PaymentIntent(Base):
         JSONB,
         nullable=True,
         comment="Full response from Paystack",
+    )
+
+    # Fee tracking
+    fee_amount: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(19, 4),
+        nullable=True,
+        comment="Gateway fee charged (in currency units, not kobo)",
+    )
+    fee_journal_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+        comment="GL journal entry for fee posting",
     )
 
     # Custom data

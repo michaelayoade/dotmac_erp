@@ -849,15 +849,16 @@ def report_completion(
         end_date=_parse_date(end_date),
     )
 
-    return templates.TemplateResponse(
-        "people/training/reports/completion.html",
+    context = base_context(request, auth, "Training Completion Report", "training", db=db)
+    context.update(
         {
-            "request": request,
-            "auth": auth,
             "report": report,
             "start_date": start_date or "",
             "end_date": end_date or "",
-        },
+        }
+    )
+    return templates.TemplateResponse(
+        request, "people/training/reports/completion.html", context
     )
 
 
@@ -879,15 +880,16 @@ def report_by_department(
         end_date=_parse_date(end_date),
     )
 
-    return templates.TemplateResponse(
-        "people/training/reports/by_department.html",
+    context = base_context(request, auth, "Training by Department", "training", db=db)
+    context.update(
         {
-            "request": request,
-            "auth": auth,
             "report": report,
             "start_date": start_date or "",
             "end_date": end_date or "",
-        },
+        }
+    )
+    return templates.TemplateResponse(
+        request, "people/training/reports/by_department.html", context
     )
 
 
@@ -909,15 +911,16 @@ def report_cost_analysis(
         end_date=_parse_date(end_date),
     )
 
-    return templates.TemplateResponse(
-        "people/training/reports/cost_analysis.html",
+    context = base_context(request, auth, "Training Cost Analysis", "training", db=db)
+    context.update(
         {
-            "request": request,
-            "auth": auth,
             "report": report,
             "start_date": start_date or "",
             "end_date": end_date or "",
-        },
+        }
+    )
+    return templates.TemplateResponse(
+        request, "people/training/reports/cost_analysis.html", context
     )
 
 
@@ -939,13 +942,14 @@ def report_effectiveness(
         end_date=_parse_date(end_date),
     )
 
-    return templates.TemplateResponse(
-        "people/training/reports/effectiveness.html",
+    context = base_context(request, auth, "Training Effectiveness", "training", db=db)
+    context.update(
         {
-            "request": request,
-            "auth": auth,
             "report": report,
             "start_date": start_date or "",
             "end_date": end_date or "",
-        },
+        }
+    )
+    return templates.TemplateResponse(
+        request, "people/training/reports/effectiveness.html", context
     )

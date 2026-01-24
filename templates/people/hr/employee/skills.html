@@ -1,0 +1,121 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}Skills - {{ employee.full_name }}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400">Employees</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr/employees/{{ employee.employee_id }}" class="hover:text-teal-600 dark:hover:text-teal-400">{{ employee.employee_code }}</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">Skills</span>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<a href="/people/hr/employees/{{ employee.employee_id }}/skills/new" class="btn btn-primary">
+    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+    </svg>
+    Add Skill
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    {% include "people/hr/employee/_tabs.html" %}
+
+    {% if success %}
+    <div class="p-4 rounded-lg bg-green-50 border border-green-200 dark:bg-green-900/20 dark:border-green-800">
+        <div class="flex items-center gap-2 text-green-700 dark:text-green-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+            </svg>
+            <span>{{ success }}</span>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if employee_skills %}
+    <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {% for es in employee_skills %}
+        <div class="card p-4">
+            <div class="flex items-start justify-between">
+                <div class="flex-1">
+                    <div class="flex items-center gap-2">
+                        <h4 class="font-medium text-slate-900 dark:text-white">{{ es.skill.skill_name }}</h4>
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs
+                                     {% if es.skill.category.value == 'technical' %}bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-400
+                                     {% elif es.skill.category.value == 'soft_skill' %}bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-400
+                                     {% elif es.skill.category.value == 'language' %}bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-400
+                                     {% elif es.skill.category.value == 'domain' %}bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-400
+                                     {% elif es.skill.category.value == 'tool' %}bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300
+                                     {% else %}bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300{% endif %}">
+                            {{ es.skill.category.value | replace('_', ' ') | title }}
+                        </span>
+                    </div>
+                    {% if es.skill.description %}
+                    <p class="text-xs text-slate-500 mt-1">{{ es.skill.description | truncate(60) }}</p>
+                    {% endif %}
+
+                    <div class="mt-3">
+                        <div class="flex items-center justify-between text-xs mb-1">
+                            <span class="text-slate-600 dark:text-slate-400">Proficiency</span>
+                            <span class="font-medium text-slate-900 dark:text-white">{{ es.proficiency_level }}/5</span>
+                        </div>
+                        <div class="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
+                            <div class="h-2 rounded-full
+                                        {% if es.proficiency_level >= 4 %}bg-green-500
+                                        {% elif es.proficiency_level >= 3 %}bg-teal-500
+                                        {% elif es.proficiency_level >= 2 %}bg-amber-500
+                                        {% else %}bg-red-500{% endif %}"
+                                 style="width: {{ (es.proficiency_level / 5) * 100 }}%"></div>
+                        </div>
+                        <div class="flex items-center justify-between text-xs mt-1 text-slate-500">
+                            <span>
+                                {% if es.proficiency_level == 1 %}Beginner
+                                {% elif es.proficiency_level == 2 %}Basic
+                                {% elif es.proficiency_level == 3 %}Intermediate
+                                {% elif es.proficiency_level == 4 %}Advanced
+                                {% else %}Expert{% endif %}
+                            </span>
+                            {% if es.years_of_experience %}
+                            <span>{{ es.years_of_experience }} yrs exp</span>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    {% if es.is_primary %}
+                    <div class="mt-2">
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs bg-teal-100 text-teal-700 dark:bg-teal-900/50 dark:text-teal-400">
+                            Primary Skill
+                        </span>
+                    </div>
+                    {% endif %}
+                </div>
+                <form method="post" action="/people/hr/employees/{{ employee.employee_id }}/skills/{{ es.employee_skill_id }}/delete"
+                      onsubmit="return confirm('Remove this skill?')">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <button type="submit" class="text-red-600 hover:text-red-700 dark:text-red-400 p-1 ml-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </form>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="card p-8 text-center">
+        <svg class="w-12 h-12 mx-auto text-slate-300 dark:text-slate-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+        </svg>
+        <p class="text-slate-500 dark:text-slate-400 mb-4">No skills recorded yet.</p>
+        <a href="/people/hr/employees/{{ employee.employee_id }}/skills/new" class="btn btn-primary">Add Skill</a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

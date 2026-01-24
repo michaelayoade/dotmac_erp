@@ -338,6 +338,11 @@ function apAgingReport() {
             const ctx = document.getElementById('apAgingBarChart');
             if (!ctx) return;
 
+            // Destroy existing chart if present
+            if (this.charts.bar) this.charts.bar.destroy();
+            const existingChart = Chart.getChart(ctx);
+            if (existingChart) existingChart.destroy();
+
             const colors = this.getColors();
             const data = this.chartData;
 
@@ -404,6 +409,11 @@ function apAgingReport() {
         initDonutChart() {
             const ctx = document.getElementById('apAgingDonutChart');
             if (!ctx) return;
+
+            // Destroy existing chart if present
+            if (this.charts.donut) this.charts.donut.destroy();
+            const existingChart = Chart.getChart(ctx);
+            if (existingChart) existingChart.destroy();
 
             const colors = this.getColors();
             const data = this.chartData;

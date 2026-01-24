@@ -134,6 +134,9 @@ def create_ticket(
     category_id: Optional[str] = Form(default=None),
     team_id: Optional[str] = Form(default=None),
     opening_date: Optional[str] = Form(default=None),
+    contact_email: Optional[str] = Form(default=None),
+    contact_phone: Optional[str] = Form(default=None),
+    contact_address: Optional[str] = Form(default=None),
     db: Session = Depends(get_db),
 ):
     """Create a new support ticket."""
@@ -149,6 +152,9 @@ def create_ticket(
         category_id=category_id if category_id else None,
         team_id=team_id if team_id else None,
         opening_date=opening_date if opening_date else None,
+        contact_email=contact_email if contact_email else None,
+        contact_phone=contact_phone if contact_phone else None,
+        contact_address=contact_address if contact_address else None,
     )
 
 
@@ -193,6 +199,9 @@ def update_ticket(
     customer_id: Optional[str] = Form(default=None),
     category_id: Optional[str] = Form(default=None),
     team_id: Optional[str] = Form(default=None),
+    contact_email: Optional[str] = Form(default=None),
+    contact_phone: Optional[str] = Form(default=None),
+    contact_address: Optional[str] = Form(default=None),
     db: Session = Depends(get_db),
 ):
     """Update a ticket."""
@@ -207,6 +216,9 @@ def update_ticket(
         customer_id=customer_id if customer_id else None,
         category_id=category_id if category_id else None,
         team_id=team_id if team_id else None,
+        contact_email=contact_email,
+        contact_phone=contact_phone,
+        contact_address=contact_address,
     )
 
 
@@ -640,4 +652,69 @@ def update_member_weight(
     """Update a team member's assignment weight."""
     return support_web_service.update_member_weight_response(
         request, auth, db, team_id, member_id, weight
+    )
+
+
+# ============================================================================
+# Bulk Operations
+# ============================================================================
+
+
+@router.post("/tickets/bulk/status")
+async def bulk_update_status(
+    request: Request,
+    auth: WebAuthContext = Depends(require_operations_access),
+    db: Session = Depends(get_db),
+):
+    """Bulk update status for selected tickets."""
+    form = await request.form()
+    ticket_ids = form.getlist("ticket_ids")
+    new_status = form.get("status", "")
+    notes = form.get("notes")
+
+    return support_web_service.bulk_update_status_response(
+        request, auth, db,
+        ticket_ids=list(ticket_ids),
+        new_status=new_status,
+        notes=notes if notes else None,
+    )
+
+
+@router.post("/tickets/bulk/assign")
+async def bulk_assign(
+    request: Request,
+    auth: WebAuthContext = Depends(require_operations_access),
+    db: Session = Depends(get_db),
+):
+    """Bulk assign selected tickets to an employee."""
+    form = await request.form()
+    ticket_ids = form.getlist("ticket_ids")
+    assigned_to_id = form.get("assigned_to_id", "")
+
+    if not assigned_to_id:
+        return RedirectResponse(
+            url="/operations/support/tickets?error=no_assignee_selected",
+            status_code=303,
+        )
+
+    return support_web_service.bulk_assign_response(
+        request, auth, db,
+        ticket_ids=list(ticket_ids),
+        assigned_to_id=assigned_to_id,
+    )
+
+
+@router.post("/tickets/bulk/archive")
+async def bulk_archive(
+    request: Request,
+    auth: WebAuthContext = Depends(require_operations_access),
+    db: Session = Depends(get_db),
+):
+    """Bulk archive selected tickets."""
+    form = await request.form()
+    ticket_ids = form.getlist("ticket_ids")
+
+    return support_web_service.bulk_archive_response(
+        request, auth, db,
+        ticket_ids=list(ticket_ids),
     )

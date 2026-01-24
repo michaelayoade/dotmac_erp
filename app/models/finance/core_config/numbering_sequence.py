@@ -40,6 +40,9 @@ class SequenceType(str, enum.Enum):
     SALES_ORDER = "SALES_ORDER"
     SHIPMENT = "SHIPMENT"
     EXPENSE = "EXPENSE"
+    SUPPORT_TICKET = "SUPPORT_TICKET"
+    PROJECT = "PROJECT"
+    TASK = "TASK"
 
 
 class ResetFrequency(str, enum.Enum):

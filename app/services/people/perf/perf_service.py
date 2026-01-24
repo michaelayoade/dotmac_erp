@@ -17,6 +17,7 @@ from app.models.people.perf import (
     Appraisal,
     AppraisalCycle,
     AppraisalCycleStatus,
+    AppraisalFeedback,
     AppraisalKRAScore,
     AppraisalStatus,
     AppraisalTemplate,
@@ -1610,3 +1611,143 @@ class PerformanceService:
             "total_cycles": len(cycles),
             "overall_average_rating": overall_avg,
         }
+
+    # ─────────────────────────────────────────────────────────────────────────────
+    # 360° Feedback
+    # ─────────────────────────────────────────────────────────────────────────────
+
+    def list_feedback(
+        self,
+        org_id: UUID,
+        *,
+        appraisal_id: Optional[UUID] = None,
+        feedback_from_id: Optional[UUID] = None,
+        feedback_type: Optional[str] = None,
+        submitted: Optional[bool] = None,
+        pagination: Optional[PaginationParams] = None,
+    ) -> PaginatedResult[AppraisalFeedback]:
+        """List feedback entries."""
+        query = select(AppraisalFeedback).where(AppraisalFeedback.organization_id == org_id)
+
+        if appraisal_id:
+            query = query.where(AppraisalFeedback.appraisal_id == appraisal_id)
+
+        if feedback_from_id:
+            query = query.where(AppraisalFeedback.feedback_from_id == feedback_from_id)
+
+        if feedback_type:
+            query = query.where(AppraisalFeedback.feedback_type == feedback_type)
+
+        if submitted is not None:
+            if submitted:
+                query = query.where(AppraisalFeedback.submitted_on.isnot(None))
+            else:
+                query = query.where(AppraisalFeedback.submitted_on.is_(None))
+
+        query = query.options(
+            joinedload(AppraisalFeedback.feedback_from),
+            joinedload(AppraisalFeedback.appraisal).joinedload(Appraisal.employee),
+        )
+        query = query.order_by(AppraisalFeedback.created_at.desc())
+
+        count_query = select(func.count()).select_from(query.subquery())
+        total = self.db.scalar(count_query) or 0
+
+        if pagination:
+            query = query.offset(pagination.offset).limit(pagination.limit)
+
+        items = list(self.db.scalars(query).unique().all())
+
+        return PaginatedResult(
+            items=items,
+            total=total,
+            offset=pagination.offset if pagination else 0,
+            limit=pagination.limit if pagination else len(items),
+        )
+
+    def get_feedback(self, org_id: UUID, feedback_id: UUID) -> AppraisalFeedback:
+        """Get feedback by ID."""
+        feedback = self.db.scalar(
+            select(AppraisalFeedback)
+            .options(
+                joinedload(AppraisalFeedback.feedback_from),
+                joinedload(AppraisalFeedback.appraisal).joinedload(Appraisal.employee),
+            )
+            .where(
+                AppraisalFeedback.feedback_id == feedback_id,
+                AppraisalFeedback.organization_id == org_id,
+            )
+        )
+        if not feedback:
+            raise PerformanceServiceError(f"Feedback {feedback_id} not found")
+        return feedback
+
+    def request_feedback(
+        self,
+        org_id: UUID,
+        *,
+        appraisal_id: UUID,
+        feedback_from_id: UUID,
+        feedback_type: str,
+        is_anonymous: bool = False,
+    ) -> AppraisalFeedback:
+        """Request feedback from an employee."""
+        # Verify appraisal exists
+        self.get_appraisal(org_id, appraisal_id)
+
+        feedback = AppraisalFeedback(
+            organization_id=org_id,
+            appraisal_id=appraisal_id,
+            feedback_from_id=feedback_from_id,
+            feedback_type=feedback_type,
+            is_anonymous=is_anonymous,
+        )
+        self.db.add(feedback)
+        self.db.flush()
+        return feedback
+
+    def submit_feedback(
+        self,
+        org_id: UUID,
+        feedback_id: UUID,
+        *,
+        overall_rating: Optional[int] = None,
+        strengths: Optional[str] = None,
+        areas_for_improvement: Optional[str] = None,
+        general_comments: Optional[str] = None,
+    ) -> AppraisalFeedback:
+        """Submit feedback."""
+        feedback = self.get_feedback(org_id, feedback_id)
+
+        feedback.overall_rating = overall_rating
+        feedback.strengths = strengths
+        feedback.areas_for_improvement = areas_for_improvement
+        feedback.general_comments = general_comments
+        feedback.submitted_on = date.today()
+
+        self.db.flush()
+        return feedback
+
+    def delete_feedback(self, org_id: UUID, feedback_id: UUID) -> None:
+        """Delete a feedback request."""
+        feedback = self.get_feedback(org_id, feedback_id)
+        if feedback.submitted_on:
+            raise PerformanceServiceError("Cannot delete submitted feedback")
+        self.db.delete(feedback)
+        self.db.flush()
+
+    def get_pending_feedback_for_employee(self, org_id: UUID, employee_id: UUID) -> list[AppraisalFeedback]:
+        """Get pending feedback requests for an employee."""
+        result = self.db.scalars(
+            select(AppraisalFeedback)
+            .options(
+                joinedload(AppraisalFeedback.appraisal).joinedload(Appraisal.employee),
+            )
+            .where(
+                AppraisalFeedback.organization_id == org_id,
+                AppraisalFeedback.feedback_from_id == employee_id,
+                AppraisalFeedback.submitted_on.is_(None),
+            )
+            .order_by(AppraisalFeedback.created_at.desc())
+        ).unique().all()
+        return list(result)

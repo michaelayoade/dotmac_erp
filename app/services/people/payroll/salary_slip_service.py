@@ -28,6 +28,7 @@ from app.models.people.payroll.salary_component import SalaryComponent, SalaryCo
 from app.models.people.payroll.salary_structure import SalaryStructure
 from app.models.people.payroll.salary_assignment import SalaryStructureAssignment
 from app.models.people.hr.employee import Employee, EmployeeStatus
+from app.models.people.hr.employment_type import EmploymentType
 from app.services.common import coerce_uuid
 from app.services.people.payroll.paye_calculator import PAYECalculator, PAYEBreakdown
 
@@ -67,6 +68,22 @@ class SalarySlipService:
     Handles creation, calculation, submission, approval, and workflow.
     Integrates with PAYECalculator for NTA 2025 tax computation.
     """
+
+    @staticmethod
+    def _is_contract_staff_employee(
+        db: Session,
+        employee: Employee,
+        structure: SalaryStructure,
+    ) -> bool:
+        employment_type = employee.employment_type
+        if employment_type is None and employee.employment_type_id:
+            employment_type = db.get(EmploymentType, employee.employment_type_id)
+
+        type_code = (employment_type.type_code or "").strip().lower() if employment_type else ""
+        type_name = (employment_type.type_name or "").strip().lower() if employment_type else ""
+        is_contract = type_code == "contract" or type_name == "contract"
+        is_contract_structure = (structure.structure_name or "").strip().lower() == "contract staff"
+        return is_contract and is_contract_structure
 
     @staticmethod
     def get_or_create_statutory_component(
@@ -355,12 +372,14 @@ class SalarySlipService:
         if basic_pay == 0:
             basic_pay = base_amount
 
+        skip_deductions = SalarySlipService._is_contract_staff_employee(db, employee, structure)
+
         # Calculate PAYE and statutory deductions
         total_deduction = Decimal("0")
         paye_breakdown: Optional[PAYEBreakdown] = None
 
         # Calculate PAYE tax and statutory deductions using NTA 2025 rules
-        if gross_pay > 0:
+        if not skip_deductions and gross_pay > 0:
             calculator = PAYECalculator(db)
             paye_breakdown = calculator.calculate(
                 organization_id=org_id,
@@ -401,40 +420,41 @@ class SalarySlipService:
                     total_deduction += amount
 
         # Add non-statutory deductions from structure
-        for struct_deduction in structure.deductions:
-            component = struct_deduction.component
+        if not skip_deductions:
+            for struct_deduction in structure.deductions:
+                component = struct_deduction.component
 
-            # Skip statutory components - they're calculated by PAYE
-            if component.is_statutory or component.component_code in STATUTORY_COMPONENT_CODES:
-                continue
+                # Skip statutory components - they're calculated by PAYE
+                if component.is_statutory or component.component_code in STATUTORY_COMPONENT_CODES:
+                    continue
 
-            # Calculate amount
-            if struct_deduction.amount_based_on_formula and struct_deduction.formula:
-                amount = SalarySlipService._evaluate_formula(
-                    struct_deduction.formula,
-                    base=base_amount,
-                    gross=gross_pay,
-                    payment_days=payment_days,
-                    total_days=total_working_days,
+                # Calculate amount
+                if struct_deduction.amount_based_on_formula and struct_deduction.formula:
+                    amount = SalarySlipService._evaluate_formula(
+                        struct_deduction.formula,
+                        base=base_amount,
+                        gross=gross_pay,
+                        payment_days=payment_days,
+                        total_days=total_working_days,
+                    )
+                else:
+                    amount = struct_deduction.amount
+
+                deduction_line = SalarySlipDeduction(
+                    slip_id=slip.slip_id,
+                    component_id=component.component_id,
+                    component_name=component.component_name,
+                    abbr=component.abbr,
+                    amount=amount,
+                    default_amount=struct_deduction.amount,
+                    statistical_component=component.statistical_component,
+                    do_not_include_in_total=component.do_not_include_in_total,
+                    display_order=struct_deduction.display_order,
                 )
-            else:
-                amount = struct_deduction.amount
+                db.add(deduction_line)
 
-            deduction_line = SalarySlipDeduction(
-                slip_id=slip.slip_id,
-                component_id=component.component_id,
-                component_name=component.component_name,
-                abbr=component.abbr,
-                amount=amount,
-                default_amount=struct_deduction.amount,
-                statistical_component=component.statistical_component,
-                do_not_include_in_total=component.do_not_include_in_total,
-                display_order=struct_deduction.display_order,
-            )
-            db.add(deduction_line)
-
-            if not component.statistical_component and not component.do_not_include_in_total:
-                total_deduction += amount
+                if not component.statistical_component and not component.do_not_include_in_total:
+                    total_deduction += amount
 
         # Update slip totals
         net_pay = gross_pay - total_deduction

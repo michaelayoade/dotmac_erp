@@ -1,0 +1,305 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}{{ jd.job_title }}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr" class="hover:text-teal-600 dark:hover:text-teal-400">HR</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr/job-descriptions" class="hover:text-teal-600 dark:hover:text-teal-400">Job Descriptions</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">{{ jd.jd_code }}</span>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<div class="flex items-center gap-2">
+    {% if jd.status.value == 'draft' %}
+    <form method="post" action="/people/hr/job-descriptions/{{ jd.job_description_id }}/activate" class="inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button type="submit" class="btn btn-secondary">Activate</button>
+    </form>
+    {% elif jd.status.value == 'active' %}
+    <form method="post" action="/people/hr/job-descriptions/{{ jd.job_description_id }}/archive" class="inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button type="submit" class="btn btn-secondary">Archive</button>
+    </form>
+    {% endif %}
+    <a href="/people/hr/job-descriptions/{{ jd.job_description_id }}/edit" class="btn btn-primary">
+        <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+        </svg>
+        Edit
+    </a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    {% if success %}
+    <div class="p-4 rounded-lg bg-green-50 border border-green-200 dark:bg-green-900/20 dark:border-green-800">
+        <div class="flex items-center gap-2 text-green-700 dark:text-green-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+            </svg>
+            <span>{{ success }}</span>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="grid gap-6 lg:grid-cols-3">
+        <div class="lg:col-span-2 space-y-6">
+            <!-- Header Card -->
+            <div class="card">
+                <div class="card-header flex items-center justify-between">
+                    <div>
+                        <h3 class="text-lg font-medium text-slate-900 dark:text-white">{{ jd.job_title }}</h3>
+                        <p class="text-sm text-slate-500 dark:text-slate-400 font-mono">{{ jd.jd_code }}</p>
+                    </div>
+                    <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium
+                                 {% if jd.status.value == 'active' %}bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-400
+                                 {% elif jd.status.value == 'draft' %}bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300
+                                 {% elif jd.status.value == 'under_review' %}bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-400
+                                 {% else %}bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-400{% endif %}">
+                        {{ jd.status.value | replace('_', ' ') | title }}
+                    </span>
+                </div>
+                <div class="card-body">
+                    <dl class="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                            <dt class="text-slate-500 dark:text-slate-400">Designation</dt>
+                            <dd class="font-medium text-slate-900 dark:text-white">{{ jd.designation.designation_name if jd.designation else '-' }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-slate-500 dark:text-slate-400">Department</dt>
+                            <dd class="font-medium text-slate-900 dark:text-white">{{ jd.department.department_name if jd.department else 'All Departments' }}</dd>
+                        </div>
+                        {% if jd.reports_to %}
+                        <div>
+                            <dt class="text-slate-500 dark:text-slate-400">Reports To</dt>
+                            <dd class="font-medium text-slate-900 dark:text-white">{{ jd.reports_to }}</dd>
+                        </div>
+                        {% endif %}
+                        {% if jd.work_location %}
+                        <div>
+                            <dt class="text-slate-500 dark:text-slate-400">Work Location</dt>
+                            <dd class="font-medium text-slate-900 dark:text-white">{{ jd.work_location }}</dd>
+                        </div>
+                        {% endif %}
+                    </dl>
+                </div>
+            </div>
+
+            {% if jd.summary or jd.purpose %}
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="font-medium text-slate-900 dark:text-white">Overview</h4>
+                </div>
+                <div class="card-body space-y-4">
+                    {% if jd.summary %}
+                    <div>
+                        <h5 class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Summary</h5>
+                        <p class="text-slate-600 dark:text-slate-400">{{ jd.summary }}</p>
+                    </div>
+                    {% endif %}
+                    {% if jd.purpose %}
+                    <div>
+                        <h5 class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Purpose</h5>
+                        <p class="text-slate-600 dark:text-slate-400">{{ jd.purpose }}</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+
+            {% if jd.key_responsibilities %}
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="font-medium text-slate-900 dark:text-white">Key Responsibilities</h4>
+                </div>
+                <div class="card-body">
+                    <div class="prose prose-sm dark:prose-invert max-w-none">
+                        {{ jd.key_responsibilities | replace('\n', '<br>') | safe }}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            {% if jd.education_requirements or jd.experience_requirements or jd.technical_skills %}
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="font-medium text-slate-900 dark:text-white">Requirements</h4>
+                </div>
+                <div class="card-body space-y-4">
+                    {% if jd.education_requirements %}
+                    <div>
+                        <h5 class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Education</h5>
+                        <p class="text-slate-600 dark:text-slate-400">{{ jd.education_requirements }}</p>
+                    </div>
+                    {% endif %}
+                    {% if jd.experience_requirements %}
+                    <div>
+                        <h5 class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Experience</h5>
+                        <p class="text-slate-600 dark:text-slate-400">{{ jd.experience_requirements }}</p>
+                        {% if jd.min_years_experience or jd.max_years_experience %}
+                        <p class="text-sm text-slate-500 mt-1">
+                            {% if jd.min_years_experience and jd.max_years_experience %}
+                            {{ jd.min_years_experience }}-{{ jd.max_years_experience }} years
+                            {% elif jd.min_years_experience %}
+                            {{ jd.min_years_experience }}+ years
+                            {% elif jd.max_years_experience %}
+                            Up to {{ jd.max_years_experience }} years
+                            {% endif %}
+                        </p>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                    {% if jd.technical_skills %}
+                    <div>
+                        <h5 class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Technical Skills</h5>
+                        <p class="text-slate-600 dark:text-slate-400">{{ jd.technical_skills }}</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="space-y-6">
+            <!-- Required Competencies -->
+            <div class="card">
+                <div class="card-header flex items-center justify-between">
+                    <h4 class="font-medium text-slate-900 dark:text-white">Required Competencies</h4>
+                </div>
+                <div class="card-body">
+                    {% if jd.competencies %}
+                    <div class="space-y-3">
+                        {% for jdc in jd.competencies %}
+                        <div class="flex items-center justify-between p-2 rounded-lg bg-slate-50 dark:bg-slate-800">
+                            <div>
+                                <p class="font-medium text-sm text-slate-900 dark:text-white">{{ jdc.competency.competency_name }}</p>
+                                <div class="flex items-center gap-2 mt-1">
+                                    <span class="text-xs px-1.5 py-0.5 rounded
+                                                 {% if jdc.competency.category.value == 'core' %}bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-400
+                                                 {% elif jdc.competency.category.value == 'functional' %}bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-400
+                                                 {% elif jdc.competency.category.value == 'leadership' %}bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-400
+                                                 {% else %}bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-400{% endif %}">
+                                        {{ jdc.competency.category.value | replace('_', ' ') | title }}
+                                    </span>
+                                    {% if jdc.is_mandatory %}
+                                    <span class="text-xs text-red-600 dark:text-red-400">Required</span>
+                                    {% else %}
+                                    <span class="text-xs text-slate-500">Preferred</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <div class="text-right">
+                                    <span class="text-sm font-medium text-slate-900 dark:text-white">L{{ jdc.required_level }}</span>
+                                </div>
+                                <form method="post" action="/people/hr/job-descriptions/{{ jd.job_description_id }}/competencies/{{ jdc.competency_id }}/delete"
+                                      onsubmit="return confirm('Remove this competency?')">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                    <button type="submit" class="text-red-600 hover:text-red-700 dark:text-red-400 p-1">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                        </svg>
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <p class="text-sm text-slate-500 dark:text-slate-400">No competencies assigned yet.</p>
+                    {% endif %}
+
+                    <!-- Add Competency Form -->
+                    {% if all_competencies %}
+                    <form method="post" action="/people/hr/job-descriptions/{{ jd.job_description_id }}/competencies" class="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                        <div class="space-y-3">
+                            <div>
+                                <label for="competency_id" class="form-label text-sm">Add Competency</label>
+                                <select name="competency_id" id="competency_id" required class="form-select w-full text-sm">
+                                    <option value="">Select...</option>
+                                    {% for comp in all_competencies %}
+                                    <option value="{{ comp.competency_id }}">{{ comp.competency_name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label for="required_level" class="form-label text-sm">Level</label>
+                                    <select name="required_level" id="required_level" class="form-select w-full text-sm">
+                                        <option value="1">1 - Awareness</option>
+                                        <option value="2">2 - Basic</option>
+                                        <option value="3" selected>3 - Intermediate</option>
+                                        <option value="4">4 - Advanced</option>
+                                        <option value="5">5 - Expert</option>
+                                    </select>
+                                </div>
+                                <div class="flex items-end">
+                                    <label class="flex items-center gap-2 text-sm">
+                                        <input type="checkbox" name="is_mandatory" value="true" checked
+                                               class="rounded border-slate-300 text-teal-600 focus:ring-teal-500">
+                                        Required
+                                    </label>
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-secondary btn-sm w-full">Add Competency</button>
+                        </div>
+                    </form>
+                    {% endif %}
+                </div>
+            </div>
+
+            {% if jd.certifications_required or jd.certifications_preferred %}
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="font-medium text-slate-900 dark:text-white">Certifications</h4>
+                </div>
+                <div class="card-body space-y-3">
+                    {% if jd.certifications_required %}
+                    <div>
+                        <h5 class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Required</h5>
+                        <p class="text-sm text-slate-700 dark:text-slate-300">{{ jd.certifications_required }}</p>
+                    </div>
+                    {% endif %}
+                    {% if jd.certifications_preferred %}
+                    <div>
+                        <h5 class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Preferred</h5>
+                        <p class="text-sm text-slate-700 dark:text-slate-300">{{ jd.certifications_preferred }}</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+
+            {% if jd.travel_requirements or jd.direct_reports %}
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="font-medium text-slate-900 dark:text-white">Additional Details</h4>
+                </div>
+                <div class="card-body space-y-2 text-sm">
+                    {% if jd.travel_requirements %}
+                    <div class="flex justify-between">
+                        <span class="text-slate-500 dark:text-slate-400">Travel</span>
+                        <span class="text-slate-900 dark:text-white">{{ jd.travel_requirements }}</span>
+                    </div>
+                    {% endif %}
+                    {% if jd.direct_reports %}
+                    <div class="flex justify-between">
+                        <span class="text-slate-500 dark:text-slate-400">Direct Reports</span>
+                        <span class="text-slate-900 dark:text-white">{{ jd.direct_reports }}</span>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

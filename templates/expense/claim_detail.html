@@ -41,7 +41,7 @@
             <div class="flex items-center gap-3">
                 <span class="badge badge-neutral">{{ claim.status.value if claim.status else 'DRAFT' }}</span>
                 {% if can_paystack %}
-                <a href="/finance/payments/reimburse/{{ claim.claim_id }}" class="btn btn-primary">
+                <a href="/finance/payments/reimburse/{{ claim.claim_id }}" class="btn btn-primary" onclick="return confirm('Pay this claim via Paystack now?');">
                     Pay with Paystack
                 </a>
                 {% endif %}

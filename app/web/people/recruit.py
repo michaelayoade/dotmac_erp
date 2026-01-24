@@ -19,7 +19,13 @@ from app.models.people.recruit import (
     OfferStatus,
 )
 from app.services.common import PaginationParams, coerce_uuid
-from app.services.people.hr import DepartmentFilters, DesignationFilters, EmployeeFilters, OrganizationService
+from app.services.people.hr import (
+    DepartmentFilters,
+    DesignationFilters,
+    EmployeeFilters,
+    EmployeeService,
+    OrganizationService,
+)
 from app.services.people.recruit import RecruitmentService
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context, get_db, require_hr_access
@@ -122,6 +128,7 @@ def new_job_opening_form(
     """New job opening form."""
     org_id = coerce_uuid(auth.organization_id)
     org_svc = OrganizationService(db, org_id)
+    emp_svc = EmployeeService(db, org_id)
 
     departments = org_svc.list_departments(
         DepartmentFilters(is_active=True),
@@ -131,7 +138,7 @@ def new_job_opening_form(
         DesignationFilters(is_active=True),
         PaginationParams(limit=200),
     ).items
-    managers = org_svc.list_employees(
+    managers = emp_svc.list_employees(
         EmployeeFilters(is_active=True),
         PaginationParams(limit=500),
     ).items
@@ -208,6 +215,8 @@ def create_job_opening(
     except Exception as e:
         db.rollback()
         org_svc = OrganizationService(db, org_id)
+        emp_svc = EmployeeService(db, org_id)
+        emp_svc = EmployeeService(db, org_id)
 
         context = base_context(request, auth, "New Job Opening", "recruit", db=db)
         context["request"] = request
@@ -219,7 +228,7 @@ def create_job_opening(
                 "designations": org_svc.list_designations(
                     DesignationFilters(is_active=True), PaginationParams(limit=200)
                 ).items,
-                "managers": org_svc.list_employees(
+                "managers": emp_svc.list_employees(
                     EmployeeFilters(is_active=True), PaginationParams(limit=500)
                 ).items,
                 "form_data": {
@@ -288,6 +297,9 @@ def edit_job_opening_form(
     org_id = coerce_uuid(auth.organization_id)
     svc = RecruitmentService(db)
     org_svc = OrganizationService(db, org_id)
+    emp_svc = EmployeeService(db, org_id)
+    emp_svc = EmployeeService(db, org_id)
+    emp_svc = EmployeeService(db, org_id)
 
     try:
         opening = svc.get_job_opening(org_id, coerce_uuid(job_opening_id))
@@ -305,7 +317,7 @@ def edit_job_opening_form(
             "designations": org_svc.list_designations(
                 DesignationFilters(is_active=True), PaginationParams(limit=200)
             ).items,
-            "managers": org_svc.list_employees(
+            "managers": emp_svc.list_employees(
                 EmployeeFilters(is_active=True), PaginationParams(limit=500)
             ).items,
             "form_data": {},
@@ -375,6 +387,7 @@ def update_job_opening(
     except Exception as e:
         db.rollback()
         org_svc = OrganizationService(db, org_id)
+        emp_svc = EmployeeService(db, org_id)
         opening = svc.get_job_opening(org_id, coerce_uuid(job_opening_id))
 
         context = base_context(request, auth, "Edit Job Opening", "recruit", db=db)
@@ -388,7 +401,7 @@ def update_job_opening(
                 "designations": org_svc.list_designations(
                     DesignationFilters(is_active=True), PaginationParams(limit=200)
                 ).items,
-                "managers": org_svc.list_employees(
+                "managers": emp_svc.list_employees(
                     EmployeeFilters(is_active=True), PaginationParams(limit=500)
                 ).items,
                 "form_data": {},
@@ -999,11 +1012,12 @@ def new_interview_form(
     org_id = coerce_uuid(auth.organization_id)
     svc = RecruitmentService(db)
     org_svc = OrganizationService(db, org_id)
+    emp_svc = EmployeeService(db, org_id)
 
     applicants = svc.list_applicants(
         org_id, pagination=PaginationParams(limit=200)
     ).items
-    employees = org_svc.list_employees(
+    employees = emp_svc.list_employees(
         EmployeeFilters(is_active=True),
         PaginationParams(limit=500),
     ).items
@@ -1075,7 +1089,7 @@ def create_interview(
         context.update(
             {
                 "applicants": svc.list_applicants(org_id, pagination=PaginationParams(limit=200)).items,
-                "employees": org_svc.list_employees(EmployeeFilters(is_active=True), PaginationParams(limit=500)).items,
+                "employees": emp_svc.list_employees(EmployeeFilters(is_active=True), PaginationParams(limit=500)).items,
                 "rounds": [r.value for r in InterviewRound],
                 "interview_types": ["IN_PERSON", "VIDEO", "PHONE"],
                 "form_data": {
@@ -1133,6 +1147,7 @@ def edit_interview_form(
     org_id = coerce_uuid(auth.organization_id)
     svc = RecruitmentService(db)
     org_svc = OrganizationService(db, org_id)
+    emp_svc = EmployeeService(db, org_id)
 
     from app.models.people.recruit.interview import InterviewRound
 
@@ -1147,7 +1162,7 @@ def edit_interview_form(
         {
             "interview": interview,
             "applicants": svc.list_applicants(org_id, pagination=PaginationParams(limit=200)).items,
-            "employees": org_svc.list_employees(EmployeeFilters(is_active=True), PaginationParams(limit=500)).items,
+            "employees": emp_svc.list_employees(EmployeeFilters(is_active=True), PaginationParams(limit=500)).items,
             "rounds": [r.value for r in InterviewRound],
             "interview_types": ["IN_PERSON", "VIDEO", "PHONE"],
             "form_data": {},
@@ -1199,6 +1214,7 @@ def update_interview(
     except Exception as e:
         db.rollback()
         org_svc = OrganizationService(db, org_id)
+        emp_svc = EmployeeService(db, org_id)
         interview = svc.get_interview(org_id, coerce_uuid(interview_id))
 
         context = base_context(request, auth, "Edit Interview", "recruit", db=db)
@@ -1207,7 +1223,7 @@ def update_interview(
             {
                 "interview": interview,
                 "applicants": svc.list_applicants(org_id, pagination=PaginationParams(limit=200)).items,
-                "employees": org_svc.list_employees(EmployeeFilters(is_active=True), PaginationParams(limit=500)).items,
+                "employees": emp_svc.list_employees(EmployeeFilters(is_active=True), PaginationParams(limit=500)).items,
                 "rounds": [r.value for r in InterviewRound],
                 "interview_types": ["IN_PERSON", "VIDEO", "PHONE"],
                 "form_data": {},

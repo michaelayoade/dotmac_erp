@@ -120,6 +120,8 @@ class WebhookService:
                 self._handle_transfer_success(intent, event_data)
             elif event_type == "transfer.failed":
                 self._handle_transfer_failed(intent, event_data)
+            elif event_type == "transfer.reversed":
+                self._handle_transfer_reversed(intent, event_data)
             else:
                 logger.info(f"Unhandled event type: {event_type}")
 
@@ -226,10 +228,14 @@ class WebhookService:
         else:
             completed_at = datetime.now(timezone.utc)
 
+        # Extract fee from webhook payload (Paystack uses 'fee' or 'fees')
+        fee_kobo = data.get("fee") or data.get("fees")
+
         payment_svc.process_successful_transfer(
             intent=intent,
             completed_at=completed_at,
             gateway_response=data,
+            fee_kobo=fee_kobo,
         )
 
         logger.info(
@@ -237,6 +243,7 @@ class WebhookService:
             extra={
                 "intent_id": str(intent.intent_id),
                 "transfer_code": data.get("transfer_code"),
+                "fee_kobo": fee_kobo,
             },
         )
 
@@ -257,6 +264,47 @@ class WebhookService:
                 "intent_id": str(intent.intent_id),
                 "error": error,
                 "transfer_code": data.get("transfer_code"),
+            },
+        )
+
+    def _handle_transfer_reversed(
+        self,
+        intent: PaymentIntent,
+        data: dict[str, Any],
+    ) -> None:
+        """
+        Handle transfer reversal event.
+
+        This occurs when a completed transfer is reversed by the bank
+        or Paystack (e.g., account issues, compliance, etc.).
+        """
+        payment_svc = PaymentService(self.db, intent.organization_id)
+
+        # Parse reversed_at timestamp
+        reversed_at_str = data.get("reversed_at") or data.get("updated_at")
+        if reversed_at_str:
+            try:
+                reversed_at = datetime.fromisoformat(reversed_at_str.replace("Z", "+00:00"))
+            except ValueError:
+                reversed_at = datetime.now(timezone.utc)
+        else:
+            reversed_at = datetime.now(timezone.utc)
+
+        reason = data.get("reason") or data.get("message") or "Transfer reversed"
+
+        payment_svc.process_transfer_reversal(
+            intent=intent,
+            reversed_at=reversed_at,
+            gateway_response=data,
+            reason=reason,
+        )
+
+        logger.warning(
+            f"Processed transfer.reversed for intent {intent.intent_id}",
+            extra={
+                "intent_id": str(intent.intent_id),
+                "transfer_code": data.get("transfer_code"),
+                "reason": reason,
             },
         )
 
@@ -315,6 +363,8 @@ class WebhookService:
                 self._handle_transfer_success(intent, webhook.payload or {})
             elif webhook.event_type == "transfer.failed":
                 self._handle_transfer_failed(intent, webhook.payload or {})
+            elif webhook.event_type == "transfer.reversed":
+                self._handle_transfer_reversed(intent, webhook.payload or {})
 
             webhook.status = WebhookStatus.PROCESSED
             webhook.processed_at = datetime.now(timezone.utc)

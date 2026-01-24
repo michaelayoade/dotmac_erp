@@ -2562,6 +2562,219 @@ class APWebService:
 
         return RedirectResponse(url="/finance/ap/invoices", status_code=303)
 
+    def invoice_edit_form_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        invoice_id: str,
+    ) -> HTMLResponse | RedirectResponse:
+        """Return the edit invoice form with existing invoice data."""
+        org_id = coerce_uuid(auth.organization_id)
+        inv_id = coerce_uuid(invoice_id)
+
+        invoice = db.get(SupplierInvoice, inv_id)
+        if not invoice or invoice.organization_id != org_id:
+            return RedirectResponse(url="/finance/ap/invoices", status_code=303)
+
+        if invoice.status != SupplierInvoiceStatus.DRAFT:
+            return RedirectResponse(
+                url=f"/finance/ap/invoices/{invoice_id}?error=Only+draft+invoices+can+be+edited",
+                status_code=303,
+            )
+
+        context = base_context(request, auth, "Edit AP Invoice", "ap")
+        context.update(self.invoice_form_context(db, str(auth.organization_id)))
+
+        # Add existing invoice data
+        supplier = db.get(Supplier, invoice.supplier_id)
+        lines = (
+            db.query(SupplierInvoiceLine)
+            .filter(SupplierInvoiceLine.invoice_id == inv_id)
+            .order_by(SupplierInvoiceLine.line_number)
+            .all()
+        )
+
+        context["invoice"] = {
+            "invoice_id": invoice.invoice_id,
+            "invoice_number": invoice.invoice_number,
+            "supplier_id": invoice.supplier_id,
+            "invoice_date": invoice.invoice_date,
+            "due_date": invoice.due_date,
+            "currency_code": invoice.currency_code,
+            "vendor_invoice_number": invoice.vendor_invoice_number,
+            "description": invoice.description,
+            "notes": invoice.notes,
+            "internal_notes": invoice.internal_notes,
+            "lines": [
+                {
+                    "line_id": line.line_id,
+                    "expense_account_id": line.expense_account_id,
+                    "description": line.description,
+                    "quantity": line.quantity,
+                    "unit_price": line.unit_price,
+                    "tax_code_id": line.tax_code_id,
+                    "tax_amount": line.tax_amount,
+                    "cost_center_id": line.cost_center_id,
+                    "project_id": line.project_id,
+                }
+                for line in lines
+            ],
+        }
+
+        return templates.TemplateResponse(request, "finance/ap/invoice_form.html", context)
+
+    async def update_invoice_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        invoice_id: str,
+    ) -> HTMLResponse | JSONResponse | RedirectResponse:
+        """Handle invoice update form submission."""
+        content_type = request.headers.get("content-type", "")
+
+        if "application/json" in content_type:
+            data = await request.json()
+        else:
+            form_data = await request.form()
+            data = dict(form_data)
+
+        try:
+            input_data = self.build_invoice_input(data)
+
+            invoice = supplier_invoice_service.update_invoice(
+                db=db,
+                organization_id=auth.organization_id,
+                invoice_id=coerce_uuid(invoice_id),
+                input=input_data,
+                updated_by_user_id=auth.user_id,
+            )
+
+            if "application/json" in content_type:
+                return JSONResponse(
+                    content={"success": True, "invoice_id": str(invoice.invoice_id)}
+                )
+
+            return RedirectResponse(
+                url=f"/finance/ap/invoices/{invoice.invoice_id}?success=Invoice+updated+successfully",
+                status_code=303,
+            )
+
+        except Exception as e:
+            if "application/json" in content_type:
+                return JSONResponse(
+                    status_code=400,
+                    content={"detail": str(e)},
+                )
+
+            context = base_context(request, auth, "Edit AP Invoice", "ap")
+            context.update(self.invoice_form_context(db, str(auth.organization_id)))
+            context["error"] = str(e)
+            context["form_data"] = data
+            return templates.TemplateResponse(request, "finance/ap/invoice_form.html", context)
+
+    def submit_invoice_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        invoice_id: str,
+    ) -> RedirectResponse:
+        """Submit invoice for approval."""
+        try:
+            supplier_invoice_service.submit_invoice(
+                db=db,
+                organization_id=auth.organization_id,
+                invoice_id=coerce_uuid(invoice_id),
+                submitted_by_user_id=auth.user_id,
+            )
+            return RedirectResponse(
+                url=f"/finance/ap/invoices/{invoice_id}?success=Invoice+submitted+for+approval",
+                status_code=303,
+            )
+        except Exception as e:
+            return RedirectResponse(
+                url=f"/finance/ap/invoices/{invoice_id}?error={str(e)}",
+                status_code=303,
+            )
+
+    def approve_invoice_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        invoice_id: str,
+    ) -> RedirectResponse:
+        """Approve a submitted invoice."""
+        try:
+            supplier_invoice_service.approve_invoice(
+                db=db,
+                organization_id=auth.organization_id,
+                invoice_id=coerce_uuid(invoice_id),
+                approved_by_user_id=auth.user_id,
+            )
+            return RedirectResponse(
+                url=f"/finance/ap/invoices/{invoice_id}?success=Invoice+approved",
+                status_code=303,
+            )
+        except Exception as e:
+            return RedirectResponse(
+                url=f"/finance/ap/invoices/{invoice_id}?error={str(e)}",
+                status_code=303,
+            )
+
+    def post_invoice_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        invoice_id: str,
+    ) -> RedirectResponse:
+        """Post invoice to general ledger."""
+        try:
+            supplier_invoice_service.post_invoice(
+                db=db,
+                organization_id=auth.organization_id,
+                invoice_id=coerce_uuid(invoice_id),
+                posted_by_user_id=auth.user_id,
+            )
+            return RedirectResponse(
+                url=f"/finance/ap/invoices/{invoice_id}?success=Invoice+posted+to+ledger",
+                status_code=303,
+            )
+        except Exception as e:
+            return RedirectResponse(
+                url=f"/finance/ap/invoices/{invoice_id}?error={str(e)}",
+                status_code=303,
+            )
+
+    def void_invoice_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        invoice_id: str,
+    ) -> RedirectResponse:
+        """Void an invoice."""
+        try:
+            supplier_invoice_service.void_invoice(
+                db=db,
+                organization_id=auth.organization_id,
+                invoice_id=coerce_uuid(invoice_id),
+                voided_by_user_id=auth.user_id,
+                reason="Voided via web interface",
+            )
+            return RedirectResponse(
+                url=f"/finance/ap/invoices/{invoice_id}?success=Invoice+voided",
+                status_code=303,
+            )
+        except Exception as e:
+            return RedirectResponse(
+                url=f"/finance/ap/invoices/{invoice_id}?error={str(e)}",
+                status_code=303,
+            )
+
     def list_payments_response(
         self,
         request: Request,
@@ -2688,6 +2901,158 @@ class APWebService:
             return templates.TemplateResponse(request, "finance/ap/payment_detail.html", context)
 
         return RedirectResponse(url="/finance/ap/payments", status_code=303)
+
+    def payment_edit_form_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        payment_id: str,
+    ) -> HTMLResponse | RedirectResponse:
+        """Return the edit payment form with existing payment data."""
+        org_id = coerce_uuid(auth.organization_id)
+        pay_id = coerce_uuid(payment_id)
+
+        payment = db.get(SupplierPayment, pay_id)
+        if not payment or payment.organization_id != org_id:
+            return RedirectResponse(url="/finance/ap/payments", status_code=303)
+
+        if payment.status != APPaymentStatus.DRAFT:
+            return RedirectResponse(
+                url=f"/finance/ap/payments/{payment_id}?error=Only+draft+payments+can+be+edited",
+                status_code=303,
+            )
+
+        context = base_context(request, auth, "Edit AP Payment", "ap")
+        context.update(self.payment_form_context(db, str(auth.organization_id)))
+
+        # Add existing payment data
+        context["payment"] = {
+            "payment_id": payment.payment_id,
+            "payment_number": payment.payment_number,
+            "supplier_id": payment.supplier_id,
+            "payment_date": payment.payment_date,
+            "payment_method": payment.payment_method.value if payment.payment_method else "",
+            "currency_code": payment.currency_code,
+            "amount": payment.amount,
+            "reference": payment.reference,
+            "description": payment.description,
+            "bank_account_id": payment.bank_account_id,
+        }
+
+        return templates.TemplateResponse(request, "finance/ap/payment_form.html", context)
+
+    async def update_payment_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        payment_id: str,
+    ) -> HTMLResponse | JSONResponse | RedirectResponse:
+        """Handle payment update form submission."""
+        content_type = request.headers.get("content-type", "")
+
+        if "application/json" in content_type:
+            data = await request.json()
+        else:
+            form_data = await request.form()
+            data = dict(form_data)
+
+        try:
+            # Update payment - for now redirect back with error since full update isn't implemented
+            return RedirectResponse(
+                url=f"/finance/ap/payments/{payment_id}?error=Payment+update+not+yet+implemented",
+                status_code=303,
+            )
+
+        except Exception as e:
+            if "application/json" in content_type:
+                return JSONResponse(
+                    status_code=400,
+                    content={"detail": str(e)},
+                )
+
+            context = base_context(request, auth, "Edit AP Payment", "ap")
+            context.update(self.payment_form_context(db, str(auth.organization_id)))
+            context["error"] = str(e)
+            context["form_data"] = data
+            return templates.TemplateResponse(request, "finance/ap/payment_form.html", context)
+
+    def approve_payment_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        payment_id: str,
+    ) -> RedirectResponse:
+        """Approve payment."""
+        try:
+            supplier_payment_service.approve_payment(
+                db=db,
+                organization_id=auth.organization_id,
+                payment_id=coerce_uuid(payment_id),
+                approved_by_user_id=auth.user_id,
+            )
+            return RedirectResponse(
+                url=f"/finance/ap/payments/{payment_id}?success=Payment+approved",
+                status_code=303,
+            )
+        except Exception as e:
+            return RedirectResponse(
+                url=f"/finance/ap/payments/{payment_id}?error={str(e)}",
+                status_code=303,
+            )
+
+    def post_payment_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        payment_id: str,
+    ) -> RedirectResponse:
+        """Post payment to general ledger."""
+        try:
+            supplier_payment_service.post_payment(
+                db=db,
+                organization_id=auth.organization_id,
+                payment_id=coerce_uuid(payment_id),
+                posted_by_user_id=auth.user_id,
+            )
+            return RedirectResponse(
+                url=f"/finance/ap/payments/{payment_id}?success=Payment+posted+to+ledger",
+                status_code=303,
+            )
+        except Exception as e:
+            return RedirectResponse(
+                url=f"/finance/ap/payments/{payment_id}?error={str(e)}",
+                status_code=303,
+            )
+
+    def void_payment_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        payment_id: str,
+    ) -> RedirectResponse:
+        """Void a payment."""
+        try:
+            supplier_payment_service.void_payment(
+                db=db,
+                organization_id=auth.organization_id,
+                payment_id=coerce_uuid(payment_id),
+                voided_by_user_id=auth.user_id,
+                reason="Voided via web interface",
+            )
+            return RedirectResponse(
+                url=f"/finance/ap/payments/{payment_id}?success=Payment+voided",
+                status_code=303,
+            )
+        except Exception as e:
+            return RedirectResponse(
+                url=f"/finance/ap/payments/{payment_id}?error={str(e)}",
+                status_code=303,
+            )
 
     def list_payment_batches_response(
         self,

@@ -17,6 +17,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.people.hr.employee import Employee, EmployeeStatus
+from app.models.people.hr.employment_type import EmploymentType
 from app.models.people.payroll.employee_tax_profile import EmployeeTaxProfile
 from app.models.people.payroll.salary_assignment import SalaryStructureAssignment
 from app.models.people.payroll.salary_component import SalaryComponent, SalaryComponentType
@@ -277,6 +278,20 @@ class PayrollWebService:
         # Calculate PAYE breakdown for display
         paye_breakdown = None
         tax_profile = None
+        skip_deductions = False
+
+        employee = db.get(Employee, slip.employee_id) if slip.employee_id else None
+        structure = db.get(SalaryStructure, slip.structure_id) if slip.structure_id else None
+        if employee and structure:
+            employment_type = employee.employment_type
+            if employment_type is None and employee.employment_type_id:
+                employment_type = db.get(EmploymentType, employee.employment_type_id)
+
+            type_code = (employment_type.type_code or "").strip().lower() if employment_type else ""
+            type_name = (employment_type.type_name or "").strip().lower() if employment_type else ""
+            is_contract = type_code == "contract" or type_name == "contract"
+            is_contract_structure = (structure.structure_name or "").strip().lower() == "contract staff"
+            skip_deductions = is_contract and is_contract_structure
 
         if slip.employee_id:
             tax_profile = (
@@ -290,7 +305,7 @@ class PayrollWebService:
             )
 
             # Calculate PAYE breakdown if we have gross pay
-            if slip.gross_pay > 0:
+            if slip.gross_pay > 0 and not skip_deductions:
                 calculator = PAYECalculator(db)
                 # Estimate basic as 60% of gross (common structure) for breakdown display
                 basic_estimate = slip.gross_pay * Decimal("0.6")

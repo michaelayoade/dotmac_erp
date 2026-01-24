@@ -4,7 +4,7 @@ Location Model - Core Org.
 import enum
 import uuid
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 
 from sqlalchemy import (
     Boolean,
@@ -18,7 +18,7 @@ from sqlalchemy import (
     func,
     text,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
@@ -30,6 +30,12 @@ class LocationType(str, enum.Enum):
     WAREHOUSE = "WAREHOUSE"
     PLANT = "PLANT"
     REMOTE = "REMOTE"
+
+
+class GeofenceType(str, enum.Enum):
+    """Type of geofence boundary."""
+    CIRCLE = "CIRCLE"      # Traditional radius-based
+    POLYGON = "POLYGON"    # GeoJSON polygon boundary
 
 
 class Location(Base):
@@ -84,6 +90,19 @@ class Location(Base):
         nullable=False,
         default=True,
         server_default=text("true"),
+    )
+
+    # Enhanced GeoJSON polygon geofencing
+    geofence_type: Mapped[GeofenceType] = mapped_column(
+        Enum(GeofenceType, name="geofence_type_enum"),
+        nullable=False,
+        default=GeofenceType.CIRCLE,
+        server_default=text("'CIRCLE'"),
+    )
+    geofence_polygon: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSONB,
+        nullable=True,
+        comment="GeoJSON Polygon or MultiPolygon geometry for complex boundaries",
     )
 
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)

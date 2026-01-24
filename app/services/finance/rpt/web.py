@@ -8,8 +8,11 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 from uuid import UUID
+
+if TYPE_CHECKING:
+    from app.web.deps import WebAuthContext
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse
@@ -31,7 +34,9 @@ from app.config import settings
 from app.services.common import coerce_uuid
 from app.services.finance.platform.org_context import org_context_service
 from app.templates import templates
-from app.web.deps import base_context, WebAuthContext
+
+# NOTE: WebAuthContext and base_context are imported lazily inside response methods
+# to avoid circular imports with app.web.deps
 
 
 def _parse_date(value: Optional[str]) -> Optional[date]:
@@ -1610,11 +1615,12 @@ class ReportsWebService:
     def dashboard_response(
         self,
         request: Request,
-        auth: WebAuthContext,
+        auth: "WebAuthContext",
         start_date: Optional[str],
         end_date: Optional[str],
         db: Session,
     ) -> HTMLResponse:
+        from app.web.deps import base_context
         context = base_context(request, auth, "Reports", "reports")
         context.update(
             self.dashboard_context(
@@ -1629,10 +1635,11 @@ class ReportsWebService:
     def trial_balance_response(
         self,
         request: Request,
-        auth: WebAuthContext,
+        auth: "WebAuthContext",
         as_of_date: Optional[str],
         db: Session,
     ) -> HTMLResponse:
+        from app.web.deps import base_context
         context = base_context(request, auth, "Trial Balance", "reports")
         context.update(
             self.trial_balance_context(
@@ -1646,11 +1653,12 @@ class ReportsWebService:
     def income_statement_response(
         self,
         request: Request,
-        auth: WebAuthContext,
+        auth: "WebAuthContext",
         start_date: Optional[str],
         end_date: Optional[str],
         db: Session,
     ) -> HTMLResponse:
+        from app.web.deps import base_context
         context = base_context(request, auth, "Statement of Profit or Loss", "reports")
         context.update(
             self.income_statement_context(
@@ -1665,10 +1673,11 @@ class ReportsWebService:
     def balance_sheet_response(
         self,
         request: Request,
-        auth: WebAuthContext,
+        auth: "WebAuthContext",
         as_of_date: Optional[str],
         db: Session,
     ) -> HTMLResponse:
+        from app.web.deps import base_context
         context = base_context(request, auth, "Statement of Financial Position", "reports")
         context.update(
             self.balance_sheet_context(
@@ -1682,10 +1691,11 @@ class ReportsWebService:
     def ap_aging_response(
         self,
         request: Request,
-        auth: WebAuthContext,
+        auth: "WebAuthContext",
         as_of_date: Optional[str],
         db: Session,
     ) -> HTMLResponse:
+        from app.web.deps import base_context
         context = base_context(request, auth, "AP Aging Report", "reports")
         context.update(
             self.ap_aging_context(
@@ -1699,10 +1709,11 @@ class ReportsWebService:
     def ar_aging_response(
         self,
         request: Request,
-        auth: WebAuthContext,
+        auth: "WebAuthContext",
         as_of_date: Optional[str],
         db: Session,
     ) -> HTMLResponse:
+        from app.web.deps import base_context
         context = base_context(request, auth, "AR Aging Report", "reports")
         context.update(
             self.ar_aging_context(
@@ -1716,12 +1727,13 @@ class ReportsWebService:
     def general_ledger_response(
         self,
         request: Request,
-        auth: WebAuthContext,
+        auth: "WebAuthContext",
         account_id: Optional[str],
         start_date: Optional[str],
         end_date: Optional[str],
         db: Session,
     ) -> HTMLResponse:
+        from app.web.deps import base_context
         context = base_context(request, auth, "General Ledger", "reports")
         context.update(
             self.general_ledger_context(
@@ -1737,11 +1749,12 @@ class ReportsWebService:
     def tax_summary_response(
         self,
         request: Request,
-        auth: WebAuthContext,
+        auth: "WebAuthContext",
         start_date: Optional[str],
         end_date: Optional[str],
         db: Session,
     ) -> HTMLResponse:
+        from app.web.deps import base_context
         context = base_context(request, auth, "Tax Summary", "reports")
         context.update(
             self.tax_summary_context(
@@ -1756,11 +1769,12 @@ class ReportsWebService:
     def expense_summary_response(
         self,
         request: Request,
-        auth: WebAuthContext,
+        auth: "WebAuthContext",
         start_date: Optional[str],
         end_date: Optional[str],
         db: Session,
     ) -> HTMLResponse:
+        from app.web.deps import base_context
         context = base_context(request, auth, "Expense Summary", "reports")
         context.update(
             self.expense_summary_context(
@@ -1775,11 +1789,12 @@ class ReportsWebService:
     def cash_flow_response(
         self,
         request: Request,
-        auth: WebAuthContext,
+        auth: "WebAuthContext",
         start_date: Optional[str],
         end_date: Optional[str],
         db: Session,
     ) -> HTMLResponse:
+        from app.web.deps import base_context
         context = base_context(request, auth, "Cash Flow Statement", "reports")
         context.update(
             self.cash_flow_context(
@@ -1794,11 +1809,12 @@ class ReportsWebService:
     def changes_in_equity_response(
         self,
         request: Request,
-        auth: WebAuthContext,
+        auth: "WebAuthContext",
         start_date: Optional[str],
         end_date: Optional[str],
         db: Session,
     ) -> HTMLResponse:
+        from app.web.deps import base_context
         context = base_context(request, auth, "Changes in Equity", "reports")
         context.update(
             self.changes_in_equity_context(
@@ -1815,13 +1831,14 @@ class ReportsWebService:
     def budget_vs_actual_response(
         self,
         request: Request,
-        auth: WebAuthContext,
+        auth: "WebAuthContext",
         start_date: Optional[str],
         end_date: Optional[str],
         budget_id: Optional[str],
         budget_code: Optional[str],
         db: Session,
     ) -> HTMLResponse:
+        from app.web.deps import base_context
         context = base_context(request, auth, "Budget vs Actual", "reports")
         context.update(
             self.budget_vs_actual_context(

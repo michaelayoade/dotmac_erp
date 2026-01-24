@@ -661,8 +661,16 @@ class EmployeeService:
             default_shift_type_id=data.default_shift_type_id,
             date_of_joining=data.date_of_joining or date.today(),
             probation_end_date=data.probation_end_date,
+            confirmation_date=data.confirmation_date,
             status=data.status or EmployeeStatus.DRAFT,
             cost_center_id=data.cost_center_id,
+            # Personal contact
+            personal_email=data.personal_email,
+            personal_phone=data.personal_phone,
+            # Emergency contact
+            emergency_contact_name=data.emergency_contact_name,
+            emergency_contact_phone=data.emergency_contact_phone,
+            # Bank details
             bank_name=data.bank_name,
             bank_account_number=data.bank_account_number,
             bank_account_name=data.bank_account_name,
@@ -807,6 +815,26 @@ class EmployeeService:
             employee.bank_branch_code = data.bank_sort_code
         elif use_provided_fields and "bank_sort_code" in provided_fields:
             employee.bank_branch_code = None
+
+        # Personal contact
+        if data.personal_email is not None:
+            employee.personal_email = data.personal_email
+        elif use_provided_fields and "personal_email" in provided_fields:
+            employee.personal_email = None
+        if data.personal_phone is not None:
+            employee.personal_phone = data.personal_phone
+        elif use_provided_fields and "personal_phone" in provided_fields:
+            employee.personal_phone = None
+
+        # Emergency contact
+        if data.emergency_contact_name is not None:
+            employee.emergency_contact_name = data.emergency_contact_name
+        elif use_provided_fields and "emergency_contact_name" in provided_fields:
+            employee.emergency_contact_name = None
+        if data.emergency_contact_phone is not None:
+            employee.emergency_contact_phone = data.emergency_contact_phone
+        elif use_provided_fields and "emergency_contact_phone" in provided_fields:
+            employee.emergency_contact_phone = None
 
         if data.notes is not None:
             employee.notes = data.notes

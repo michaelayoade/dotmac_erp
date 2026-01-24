@@ -1,0 +1,180 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}{% if cycle %}Edit {{ cycle.cycle_name }}{% else %}New Appraisal Cycle{% endif %}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a>
+    <span class="mx-2">/</span>
+    <a href="/people/perf/cycles" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Cycles</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">{% if cycle %}Edit{% else %}New{% endif %}</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl">
+    {% if error %}
+    <div class="mb-6 p-4 rounded-lg bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-800">
+        <div class="flex items-center gap-2 text-red-700 dark:text-red-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span>{{ error }}</span>
+        </div>
+    </div>
+    {% endif %}
+
+    <form method="post" action="{% if cycle %}/people/perf/cycles/{{ cycle.cycle_id }}/edit{% else %}/people/perf/cycles/new{% endif %}" class="space-y-6">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+        <!-- Basic Information -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Basic Information</h3>
+            </div>
+            <div class="card-body space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="cycle_code" class="form-label required">Cycle Code</label>
+                        <input type="text" name="cycle_code" id="cycle_code" required
+                               class="form-input w-full font-mono"
+                               value="{{ form_data.cycle_code or (cycle.cycle_code if cycle else '') }}"
+                               placeholder="e.g., FY2024-Q4">
+                        <p class="text-xs text-slate-500 mt-1">Unique identifier for this cycle</p>
+                    </div>
+                    <div>
+                        <label for="cycle_name" class="form-label required">Cycle Name</label>
+                        <input type="text" name="cycle_name" id="cycle_name" required
+                               class="form-input w-full"
+                               value="{{ form_data.cycle_name or (cycle.cycle_name if cycle else '') }}"
+                               placeholder="e.g., Annual Review 2024">
+                    </div>
+                </div>
+
+                <div>
+                    <label for="description" class="form-label">Description</label>
+                    <textarea name="description" id="description" rows="2"
+                              class="form-input w-full"
+                              placeholder="Brief description of this cycle...">{{ form_data.description or (cycle.description if cycle else '') }}</textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- Review Period -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Review Period</h3>
+                <p class="text-sm text-slate-500 dark:text-slate-400">The time period being evaluated (e.g., fiscal year)</p>
+            </div>
+            <div class="card-body">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="review_period_start" class="form-label required">Period Start</label>
+                        <input type="date" name="review_period_start" id="review_period_start" required
+                               class="form-input w-full"
+                               value="{{ form_data.review_period_start or (cycle.review_period_start.isoformat() if cycle and cycle.review_period_start else '') }}">
+                    </div>
+                    <div>
+                        <label for="review_period_end" class="form-label required">Period End</label>
+                        <input type="date" name="review_period_end" id="review_period_end" required
+                               class="form-input w-full"
+                               value="{{ form_data.review_period_end or (cycle.review_period_end.isoformat() if cycle and cycle.review_period_end else '') }}">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Process Dates -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Process Dates</h3>
+                <p class="text-sm text-slate-500 dark:text-slate-400">When the appraisal process runs</p>
+            </div>
+            <div class="card-body space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="start_date" class="form-label required">Process Start</label>
+                        <input type="date" name="start_date" id="start_date" required
+                               class="form-input w-full"
+                               value="{{ form_data.start_date or (cycle.start_date.isoformat() if cycle and cycle.start_date else '') }}">
+                        <p class="text-xs text-slate-500 mt-1">When appraisal process begins</p>
+                    </div>
+                    <div>
+                        <label for="end_date" class="form-label required">Process End</label>
+                        <input type="date" name="end_date" id="end_date" required
+                               class="form-input w-full"
+                               value="{{ form_data.end_date or (cycle.end_date.isoformat() if cycle and cycle.end_date else '') }}">
+                        <p class="text-xs text-slate-500 mt-1">When appraisal process ends</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Phase Deadlines -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Phase Deadlines</h3>
+                <p class="text-sm text-slate-500 dark:text-slate-400">Optional deadlines for each phase</p>
+            </div>
+            <div class="card-body">
+                <div class="grid grid-cols-3 gap-4">
+                    <div>
+                        <label for="self_assessment_deadline" class="form-label">Self-Assessment</label>
+                        <input type="date" name="self_assessment_deadline" id="self_assessment_deadline"
+                               class="form-input w-full"
+                               value="{{ form_data.self_assessment_deadline or (cycle.self_assessment_deadline.isoformat() if cycle and cycle.self_assessment_deadline else '') }}">
+                    </div>
+                    <div>
+                        <label for="manager_review_deadline" class="form-label">Manager Review</label>
+                        <input type="date" name="manager_review_deadline" id="manager_review_deadline"
+                               class="form-input w-full"
+                               value="{{ form_data.manager_review_deadline or (cycle.manager_review_deadline.isoformat() if cycle and cycle.manager_review_deadline else '') }}">
+                    </div>
+                    <div>
+                        <label for="calibration_deadline" class="form-label">Calibration</label>
+                        <input type="date" name="calibration_deadline" id="calibration_deadline"
+                               class="form-input w-full"
+                               value="{{ form_data.calibration_deadline or (cycle.calibration_deadline.isoformat() if cycle and cycle.calibration_deadline else '') }}">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Eligibility Settings</h3>
+            </div>
+            <div class="card-body space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="min_tenure_months" class="form-label">Minimum Tenure (months)</label>
+                        <input type="number" name="min_tenure_months" id="min_tenure_months"
+                               class="form-input w-full" min="0" max="24"
+                               value="{{ form_data.min_tenure_months or (cycle.min_tenure_months if cycle else 3) }}">
+                        <p class="text-xs text-slate-500 mt-1">Minimum months employed to participate</p>
+                    </div>
+                    <div class="flex items-end pb-1">
+                        <label class="flex items-center gap-2">
+                            <input type="checkbox" name="include_probation_employees" value="true"
+                                   class="rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+                                   {% if form_data.include_probation_employees == 'true' or (cycle and cycle.include_probation_employees) %}checked{% endif %}>
+                            <span class="text-sm text-slate-700 dark:text-slate-300">Include probation employees</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex justify-end gap-3">
+            <a href="/people/perf/cycles{% if cycle %}/{{ cycle.cycle_id }}{% endif %}" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">
+                {% if cycle %}Save Changes{% else %}Create Cycle{% endif %}
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

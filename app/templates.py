@@ -8,6 +8,7 @@ This ensures consistent globals (i18n, datetime, etc.) across all routes.
 from datetime import datetime
 from decimal import Decimal
 from typing import Union
+from urllib.parse import unquote_plus
 
 from fastapi.templating import Jinja2Templates
 
@@ -48,6 +49,14 @@ def format_number(value: Union[Decimal, float, int, None], decimals: int = 2) ->
         return str(value)
 
 
+def urldecode(value: str | None) -> str:
+    """Decode URL-encoded string (handles + and %XX sequences)."""
+    if value is None:
+        return ""
+    return unquote_plus(value)
+
+
 # Register custom filters
 templates.env.filters["format_currency"] = format_currency
 templates.env.filters["format_number"] = format_number
+templates.env.filters["urldecode"] = urldecode

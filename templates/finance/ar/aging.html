@@ -318,6 +318,11 @@ function agingReport() {
             const ctx = document.getElementById('agingBarChart');
             if (!ctx) return;
 
+            // Destroy existing chart if present
+            if (this.charts.bar) this.charts.bar.destroy();
+            const existingChart = Chart.getChart(ctx);
+            if (existingChart) existingChart.destroy();
+
             const colors = this.getColors();
             const data = this.chartData;
 
@@ -384,6 +389,11 @@ function agingReport() {
         initDonutChart() {
             const ctx = document.getElementById('agingDonutChart');
             if (!ctx) return;
+
+            // Destroy existing chart if present
+            if (this.charts.donut) this.charts.donut.destroy();
+            const existingChart = Chart.getChart(ctx);
+            if (existingChart) existingChart.destroy();
 
             const colors = this.getColors();
             const data = this.chartData;

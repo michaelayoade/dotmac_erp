@@ -1,0 +1,81 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}New Onboarding - {{ person.first_name }} {{ person.last_name }}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400">Employees</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr/employees/{{ employee.employee_id }}" class="hover:text-teal-600 dark:hover:text-teal-400">{{ employee.employee_code }}</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">New Onboarding</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl">
+    <form method="post" action="/people/hr/employees/{{ employee.employee_id }}/onboarding/new" class="space-y-6">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Create Onboarding Checklist</h3>
+            </div>
+            <div class="card-body space-y-4">
+                <div class="flex items-center gap-4 p-4 rounded-lg bg-slate-50 dark:bg-slate-800/50">
+                    <div class="w-12 h-12 rounded-full bg-teal-100 dark:bg-teal-900 flex items-center justify-center">
+                        <span class="text-lg font-bold text-teal-600 dark:text-teal-400">
+                            {{ (person.first_name or '?')[0] }}{{ (person.last_name or '?')[0] }}
+                        </span>
+                    </div>
+                    <div>
+                        <div class="font-medium text-slate-900 dark:text-white">
+                            {{ person.first_name }} {{ person.last_name }}
+                        </div>
+                        <div class="text-sm text-slate-500 dark:text-slate-400">
+                            {{ employee.employee_code }}
+                            {% if employee.date_of_joining %}
+                            &bull; Joining {{ employee.date_of_joining.strftime('%d %b %Y') }}
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <label for="template_id" class="form-label">Onboarding Template</label>
+                    <select name="template_id" id="template_id" class="form-input w-full">
+                        <option value="">No template (blank checklist)</option>
+                        {% for t in templates %}
+                        <option value="{{ t.template_id }}">{{ t.template_name }}</option>
+                        {% endfor %}
+                    </select>
+                    <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                        Select a template to pre-populate checklist items, or start with a blank checklist
+                    </p>
+                </div>
+
+                <div>
+                    <label for="notes" class="form-label">Notes (Optional)</label>
+                    <textarea name="notes" id="notes" rows="3" class="form-input w-full"
+                        placeholder="Any special instructions or notes for this employee's onboarding..."></textarea>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex items-center justify-between">
+            <a href="/people/hr/employees/{{ employee.employee_id }}"
+               class="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300">
+                &larr; Back to Employee
+            </a>
+            <button type="submit" class="btn btn-primary">
+                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                </svg>
+                Create Onboarding
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

@@ -144,6 +144,8 @@ class ExpenseClaimBase(BaseModel):
     expense_period_end: Optional[date] = None
     purpose: str = Field(max_length=500)
     project_id: Optional[UUID] = None
+    ticket_id: Optional[UUID] = None
+    task_id: Optional[UUID] = None
     currency_code: str = "NGN"
     cost_center_id: Optional[UUID] = None
     recipient_bank_code: Optional[str] = Field(default=None, max_length=20)
@@ -165,6 +167,8 @@ class ExpenseClaimUpdate(BaseModel):
     expense_period_end: Optional[date] = None
     purpose: Optional[str] = Field(default=None, max_length=500)
     project_id: Optional[UUID] = None
+    ticket_id: Optional[UUID] = None
+    task_id: Optional[UUID] = None
     cost_center_id: Optional[UUID] = None
     recipient_bank_code: Optional[str] = Field(default=None, max_length=20)
     recipient_account_number: Optional[str] = Field(default=None, max_length=20)

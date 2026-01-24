@@ -1,8 +1,7 @@
 """
-GL Account Bulk Action Service.
+GL Bulk Action Services.
 
-Provides bulk operations for chart of accounts.
-Note: Accounts cannot be deleted if they have journal entries.
+Provides bulk operations for chart of accounts and journal entries.
 """
 
 from __future__ import annotations
@@ -13,8 +12,11 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.models.finance.gl.account import Account
+from app.models.finance.gl.journal_entry import JournalEntry, JournalStatus
 from app.models.finance.gl.journal_line import JournalLine
+from app.schemas.bulk_actions import BulkActionResult
 from app.services.bulk_actions import BulkActionService
+from app.services.finance.gl.journal import JournalService
 
 
 class AccountBulkService(BulkActionService[Account]):
@@ -95,3 +97,144 @@ def get_account_bulk_service(
 ) -> AccountBulkService:
     """Factory function to create an AccountBulkService instance."""
     return AccountBulkService(db, organization_id, user_id)
+
+
+class JournalBulkService(BulkActionService[JournalEntry]):
+    """
+    Bulk operations for journal entries.
+
+    Supported actions:
+    - post: Post journal entries to the ledger
+    - delete: Remove journal entries (only DRAFT status)
+    - export: Export to CSV
+    """
+
+    model = JournalEntry
+    id_field = "journal_entry_id"
+    org_field = "organization_id"
+
+    # Fields to export in CSV
+    export_fields = [
+        ("journal_number", "Journal Number"),
+        ("entry_date", "Entry Date"),
+        ("posting_date", "Posting Date"),
+        ("description", "Description"),
+        ("source_module", "Source"),
+        ("reference", "Reference"),
+        ("total_debit", "Total Debit"),
+        ("total_credit", "Total Credit"),
+        ("status", "Status"),
+    ]
+
+    def can_delete(self, entity: JournalEntry) -> tuple[bool, str]:
+        """
+        Check if a journal entry can be deleted.
+
+        A journal entry can only be deleted if status is DRAFT.
+        """
+        if entity.status != JournalStatus.DRAFT:
+            return (
+                False,
+                f"Cannot delete '{entity.journal_number}': only DRAFT entries can be deleted (current status: {entity.status.value})",
+            )
+        return (True, "")
+
+    def _get_export_value(self, entity: JournalEntry, field_name: str) -> str:
+        """Handle special field formatting for journal export."""
+        if field_name == "status":
+            return entity.status.value if entity.status else ""
+        if field_name in ("entry_date", "posting_date"):
+            val = getattr(entity, field_name, None)
+            return val.isoformat() if val else ""
+
+        return super()._get_export_value(entity, field_name)
+
+    def _get_export_filename(self) -> str:
+        """Get journal export filename."""
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        return f"journals_export_{timestamp}.csv"
+
+    async def bulk_post(self, ids: list[UUID]) -> BulkActionResult:
+        """
+        Post multiple journal entries to the ledger.
+
+        Only entries in DRAFT or APPROVED status can be posted.
+        """
+        if not ids:
+            return BulkActionResult.failure("No IDs provided")
+
+        entities = self._get_entities(ids)
+        if not entities:
+            return BulkActionResult.failure("No journal entries found with provided IDs")
+
+        success_count = 0
+        failed_count = 0
+        errors: list[str] = []
+
+        for entry in entities:
+            try:
+                JournalService.post_journal(
+                    self.db,
+                    self.organization_id,
+                    entry.journal_entry_id,
+                    self.user_id,
+                )
+                success_count += 1
+            except Exception as e:
+                failed_count += 1
+                errors.append(f"{entry.journal_number}: {str(e)}")
+
+        if success_count > 0:
+            self.db.commit()
+
+        if failed_count > 0:
+            return BulkActionResult.partial(success_count, failed_count, errors)
+
+        return BulkActionResult.success(success_count, f"Posted {success_count} journal entries")
+
+    async def bulk_approve(self, ids: list[UUID]) -> BulkActionResult:
+        """
+        Approve multiple journal entries.
+
+        Only entries in DRAFT status can be approved.
+        """
+        if not ids:
+            return BulkActionResult.failure("No IDs provided")
+
+        entities = self._get_entities(ids)
+        if not entities:
+            return BulkActionResult.failure("No journal entries found with provided IDs")
+
+        success_count = 0
+        failed_count = 0
+        errors: list[str] = []
+
+        for entry in entities:
+            try:
+                JournalService.approve_journal(
+                    self.db,
+                    self.organization_id,
+                    entry.journal_entry_id,
+                    self.user_id,
+                )
+                success_count += 1
+            except Exception as e:
+                failed_count += 1
+                errors.append(f"{entry.journal_number}: {str(e)}")
+
+        if success_count > 0:
+            self.db.commit()
+
+        if failed_count > 0:
+            return BulkActionResult.partial(success_count, failed_count, errors)
+
+        return BulkActionResult.success(success_count, f"Approved {success_count} journal entries")
+
+
+def get_journal_bulk_service(
+    db: Session,
+    organization_id: UUID,
+    user_id: UUID | None = None,
+) -> JournalBulkService:
+    """Factory function to create a JournalBulkService instance."""
+    return JournalBulkService(db, organization_id, user_id)

@@ -242,46 +242,94 @@ class CategoryService:
         """
         defaults = [
             {
-                "category_code": "NET",
-                "category_name": "Network Issue",
-                "description": "Connectivity, speed, and network-related issues",
+                "category_code": "TECH",
+                "category_name": "Technical Support",
+                "description": "Technical issues, troubleshooting, and system problems",
                 "color": "#3B82F6",  # Blue
-                "icon": "wifi",
+                "icon": "wrench",
+                "default_priority": "MEDIUM",
+                "response_hours": 4,
+                "resolution_hours": 24,
             },
             {
                 "category_code": "BILL",
-                "category_name": "Billing",
-                "description": "Payment, invoicing, and account balance issues",
+                "category_name": "Billing & Payments",
+                "description": "Invoicing, payments, refunds, and account balance inquiries",
                 "color": "#10B981",  # Green
                 "icon": "credit-card",
+                "default_priority": "MEDIUM",
+                "response_hours": 8,
+                "resolution_hours": 48,
             },
             {
-                "category_code": "HW",
-                "category_name": "Hardware",
-                "description": "Equipment, device, and physical infrastructure issues",
-                "color": "#F59E0B",  # Amber
-                "icon": "server",
-            },
-            {
-                "category_code": "SW",
-                "category_name": "Software",
-                "description": "Application, portal, and software-related issues",
+                "category_code": "ACCT",
+                "category_name": "Account Management",
+                "description": "Account changes, access issues, and user management",
                 "color": "#8B5CF6",  # Purple
-                "icon": "code",
+                "icon": "user",
+                "default_priority": "MEDIUM",
+                "response_hours": 4,
+                "resolution_hours": 24,
             },
             {
-                "category_code": "INST",
-                "category_name": "Installation",
-                "description": "New installations and setup requests",
+                "category_code": "SALES",
+                "category_name": "Sales Inquiry",
+                "description": "Product inquiries, quotes, and new service requests",
+                "color": "#F59E0B",  # Amber
+                "icon": "shopping-cart",
+                "default_priority": "LOW",
+                "response_hours": 24,
+                "resolution_hours": 72,
+            },
+            {
+                "category_code": "FEAT",
+                "category_name": "Feature Request",
+                "description": "New feature suggestions and enhancement requests",
+                "color": "#EC4899",  # Pink
+                "icon": "lightbulb",
+                "default_priority": "LOW",
+                "response_hours": 48,
+                "resolution_hours": None,
+            },
+            {
+                "category_code": "BUG",
+                "category_name": "Bug Report",
+                "description": "Software bugs, defects, and unexpected behavior",
+                "color": "#EF4444",  # Red
+                "icon": "bug",
+                "default_priority": "HIGH",
+                "response_hours": 2,
+                "resolution_hours": 24,
+            },
+            {
+                "category_code": "TRAIN",
+                "category_name": "Training & Onboarding",
+                "description": "Training requests, documentation, and user guidance",
                 "color": "#06B6D4",  # Cyan
-                "icon": "wrench",
+                "icon": "academic-cap",
+                "default_priority": "LOW",
+                "response_hours": 24,
+                "resolution_hours": 72,
+            },
+            {
+                "category_code": "URGENT",
+                "category_name": "Urgent / Outage",
+                "description": "Critical issues, service outages, and emergencies",
+                "color": "#DC2626",  # Dark Red
+                "icon": "exclamation-triangle",
+                "default_priority": "URGENT",
+                "response_hours": 1,
+                "resolution_hours": 4,
             },
             {
                 "category_code": "OTHER",
-                "category_name": "Other",
-                "description": "General inquiries and other issues",
+                "category_name": "General Inquiry",
+                "description": "General questions and inquiries not covered by other categories",
                 "color": "#6B7280",  # Gray
-                "icon": "help-circle",
+                "icon": "question-mark-circle",
+                "default_priority": "LOW",
+                "response_hours": 24,
+                "resolution_hours": 72,
             },
         ]
 

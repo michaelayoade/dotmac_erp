@@ -42,6 +42,26 @@ from .errors import (
 )
 from .organization import OrganizationService
 from .lifecycle import LifecycleService
+from .employee_extended import (
+    EmployeeDocumentService,
+    EmployeeQualificationService,
+    EmployeeCertificationService,
+    EmployeeDependentService,
+    SkillService,
+    EmployeeSkillService,
+    DocumentNotFoundError,
+    QualificationNotFoundError,
+    CertificationNotFoundError,
+    DependentNotFoundError,
+    SkillNotFoundError,
+    EmployeeSkillNotFoundError,
+)
+from .job_description import (
+    CompetencyService,
+    JobDescriptionService,
+    CompetencyNotFoundError,
+    JobDescriptionNotFoundError,
+)
 from .organization_types import (
     DepartmentCreateData,
     DepartmentFilters,
@@ -65,6 +85,14 @@ __all__ = [
     "EmployeeService",
     "OrganizationService",
     "LifecycleService",
+    "EmployeeDocumentService",
+    "EmployeeQualificationService",
+    "EmployeeCertificationService",
+    "EmployeeDependentService",
+    "SkillService",
+    "EmployeeSkillService",
+    "CompetencyService",
+    "JobDescriptionService",
     # Employee Types
     "EmployeeFilters",
     "EmployeeCreateData",
@@ -101,4 +129,14 @@ __all__ = [
     "EmployeeGradeNotFoundError",
     "CircularDepartmentError",
     "ValidationError",
+    # Extended Data Errors
+    "DocumentNotFoundError",
+    "QualificationNotFoundError",
+    "CertificationNotFoundError",
+    "DependentNotFoundError",
+    "SkillNotFoundError",
+    "EmployeeSkillNotFoundError",
+    # Job Description Errors
+    "CompetencyNotFoundError",
+    "JobDescriptionNotFoundError",
 ]

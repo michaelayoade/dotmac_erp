@@ -14,6 +14,18 @@ from app.services.auth_dependencies import (
     require_web_session,
     optional_web_session,
 )
+from app.services.feature_flags import (
+    require_feature,
+    is_feature_enabled,
+    FEATURE_INVENTORY,
+    FEATURE_FIXED_ASSETS,
+    FEATURE_LEASES,
+    FEATURE_BUDGETING,
+    FEATURE_MULTI_CURRENCY,
+    FEATURE_PROJECT_ACCOUNTING,
+    FEATURE_BANK_RECONCILIATION,
+    FEATURE_RECURRING_TRANSACTIONS,
+)
 
 __all__ = [
     "require_audit_auth",
@@ -27,6 +39,16 @@ __all__ = [
     "require_admin_bypass",
     "require_web_session",
     "optional_web_session",
+    "require_feature",
+    "is_feature_enabled",
+    "FEATURE_INVENTORY",
+    "FEATURE_FIXED_ASSETS",
+    "FEATURE_LEASES",
+    "FEATURE_BUDGETING",
+    "FEATURE_MULTI_CURRENCY",
+    "FEATURE_PROJECT_ACCOUNTING",
+    "FEATURE_BANK_RECONCILIATION",
+    "FEATURE_RECURRING_TRANSACTIONS",
 ]
 
 

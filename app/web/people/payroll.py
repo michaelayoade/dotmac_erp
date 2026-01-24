@@ -309,21 +309,47 @@ def new_slip_form(
 
 
 @router.post("/slips/new")
-def create_slip(
+async def create_slip(
     request: Request,
-    employee_id: str = Form(...),
-    start_date: str = Form(...),
-    end_date: str = Form(...),
-    posting_date: str = Form(None),
-    total_working_days: str = Form(None),
-    absent_days: str = Form("0"),
-    leave_without_pay: str = Form("0"),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
     """Create new salary slip."""
+    form = getattr(request.state, "csrf_form", None)
+    if form is None:
+        form = await request.form()
+
+    employee_id = (form.get("employee_id") or "").strip()
+    start_date = (form.get("start_date") or "").strip()
+    end_date = (form.get("end_date") or "").strip()
+    posting_date = (form.get("posting_date") or "").strip()
+    total_working_days = (form.get("total_working_days") or "").strip()
+    absent_days = (form.get("absent_days") or "0").strip()
+    leave_without_pay = (form.get("leave_without_pay") or "0").strip()
+
     org_id = coerce_uuid(auth.organization_id)
     user_id = coerce_uuid(auth.user_id)
+
+    if not employee_id or not start_date or not end_date:
+        employees = (
+            db.query(Employee)
+            .filter(
+                Employee.organization_id == org_id,
+                Employee.status.in_([EmployeeStatus.ACTIVE, EmployeeStatus.ON_LEAVE]),
+            )
+            .order_by(Employee.employee_code)
+            .all()
+        )
+        context = base_context(request, auth, "New Salary Slip", "payroll", db=db)
+        context["request"] = request
+        context.update(
+            {
+                "slip": None,
+                "employees": employees,
+                "error": "Employee, period start, and period end are required.",
+            }
+        )
+        return templates.TemplateResponse(request, "people/payroll/slip_form.html", context)
 
     # Parse dates
     start = datetime.strptime(start_date, "%Y-%m-%d").date()

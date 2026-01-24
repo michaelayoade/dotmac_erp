@@ -94,7 +94,7 @@ class TestSmtpConfig:
         assert config["use_tls"] is True
         assert config["use_ssl"] is False
         assert config["from_email"] == "noreply@example.com"
-        assert config["from_name"] == "IFRS Ledger"
+        assert config["from_name"] == "Dotmac ERP"
 
     def test_get_smtp_config_custom(self, monkeypatch):
         """Test SMTP config with custom values."""

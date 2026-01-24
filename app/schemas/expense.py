@@ -145,6 +145,7 @@ class ExpenseClaimBase(BaseModel):
     purpose: str = Field(max_length=500)
     project_id: Optional[UUID] = None
     ticket_id: Optional[UUID] = None
+    task_id: Optional[UUID] = None
     currency_code: str = "NGN"
     cost_center_id: Optional[UUID] = None
     notes: Optional[str] = None
@@ -165,6 +166,7 @@ class ExpenseClaimUpdate(BaseModel):
     purpose: Optional[str] = Field(default=None, max_length=500)
     project_id: Optional[UUID] = None
     ticket_id: Optional[UUID] = None
+    task_id: Optional[UUID] = None
     cost_center_id: Optional[UUID] = None
     notes: Optional[str] = None
 

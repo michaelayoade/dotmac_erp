@@ -1,0 +1,199 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}Submit Feedback{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/perf/feedback" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Feedback</a>
+    <span class="mx-2">/</span>
+    <a href="/people/perf/feedback/{{ feedback.feedback_id }}" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Details</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">Submit</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl">
+    {% if error %}
+    <div class="mb-6 p-4 rounded-lg bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-800">
+        <div class="flex items-center gap-2 text-red-700 dark:text-red-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span>{{ error }}</span>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Context Card -->
+    <div class="card mb-6">
+        <div class="card-header">
+            <h3 class="font-medium text-slate-900 dark:text-white">Providing Feedback For</h3>
+        </div>
+        <div class="card-body">
+            <dl class="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                    <dt class="text-slate-500 dark:text-slate-400">Employee</dt>
+                    <dd class="font-medium text-slate-900 dark:text-white">
+                        {{ feedback.appraisal.employee.full_name if feedback.appraisal and feedback.appraisal.employee else '-' }}
+                    </dd>
+                </div>
+                <div>
+                    <dt class="text-slate-500 dark:text-slate-400">Cycle</dt>
+                    <dd class="font-medium text-slate-900 dark:text-white">
+                        {{ feedback.appraisal.cycle.cycle_name if feedback.appraisal and feedback.appraisal.cycle else '-' }}
+                    </dd>
+                </div>
+                <div>
+                    <dt class="text-slate-500 dark:text-slate-400">Feedback Type</dt>
+                    <dd>
+                        {% set type_colors = {
+                            'PEER': 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
+                            'SUBORDINATE': 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300',
+                            'EXTERNAL': 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300'
+                        } %}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium {{ type_colors.get(feedback.feedback_type, 'bg-slate-100 text-slate-700') }}">
+                            {{ feedback.feedback_type | title }}
+                        </span>
+                    </dd>
+                </div>
+                <div>
+                    <dt class="text-slate-500 dark:text-slate-400">Anonymous</dt>
+                    <dd class="text-slate-700 dark:text-slate-300">
+                        {% if feedback.is_anonymous %}
+                        <span class="text-green-600 dark:text-green-400">Yes - your identity will be hidden</span>
+                        {% else %}
+                        <span class="text-slate-500">No - your name will be visible</span>
+                        {% endif %}
+                    </dd>
+                </div>
+            </dl>
+        </div>
+    </div>
+
+    <form method="post" action="/people/perf/feedback/{{ feedback.feedback_id }}/submit" class="space-y-6" x-data="{ rating: {{ form_data.overall_rating or 0 }} }">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+        <!-- Rating Card -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Overall Rating</h3>
+            </div>
+            <div class="card-body">
+                <p class="text-sm text-slate-500 dark:text-slate-400 mb-4">
+                    Rate the employee's overall performance on a scale of 1-5.
+                </p>
+                <div class="flex flex-wrap gap-3">
+                    {% for i in range(1, 6) %}
+                    <label class="cursor-pointer">
+                        <input type="radio" name="overall_rating" value="{{ i }}" class="sr-only peer"
+                               x-model="rating" {% if form_data.overall_rating == i %}checked{% endif %}>
+                        <div class="w-16 h-16 rounded-xl flex flex-col items-center justify-center border-2 transition-all
+                                    peer-checked:border-teal-500 peer-checked:bg-teal-50 dark:peer-checked:bg-teal-900/20
+                                    border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600">
+                            <span class="text-xl font-bold text-slate-700 dark:text-slate-300">{{ i }}</span>
+                            <span class="text-xs text-slate-500 dark:text-slate-400">
+                                {% if i == 1 %}Poor
+                                {% elif i == 2 %}Fair
+                                {% elif i == 3 %}Good
+                                {% elif i == 4 %}Great
+                                {% else %}Excellent{% endif %}
+                            </span>
+                        </div>
+                    </label>
+                    {% endfor %}
+                </div>
+                {% if errors.overall_rating %}
+                <p class="text-sm text-red-600 mt-2">{{ errors.overall_rating }}</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Feedback Content Card -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Detailed Feedback</h3>
+            </div>
+            <div class="card-body space-y-4">
+                <!-- Strengths -->
+                <div>
+                    <label for="strengths" class="form-label">
+                        <svg class="w-4 h-4 inline mr-1 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        Strengths
+                    </label>
+                    <textarea name="strengths" id="strengths" rows="3" class="form-textarea w-full"
+                              placeholder="What does this employee do well? What are their key strengths?"
+                    >{{ form_data.strengths or '' }}</textarea>
+                    <p class="text-xs text-slate-500 mt-1">Highlight positive attributes, skills, and achievements.</p>
+                    {% if errors.strengths %}
+                    <p class="text-sm text-red-600 mt-1">{{ errors.strengths }}</p>
+                    {% endif %}
+                </div>
+
+                <!-- Areas for Improvement -->
+                <div>
+                    <label for="areas_for_improvement" class="form-label">
+                        <svg class="w-4 h-4 inline mr-1 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+                        </svg>
+                        Areas for Improvement
+                    </label>
+                    <textarea name="areas_for_improvement" id="areas_for_improvement" rows="3" class="form-textarea w-full"
+                              placeholder="What areas could this employee develop? What skills need improvement?"
+                    >{{ form_data.areas_for_improvement or '' }}</textarea>
+                    <p class="text-xs text-slate-500 mt-1">Constructive suggestions for growth and development.</p>
+                    {% if errors.areas_for_improvement %}
+                    <p class="text-sm text-red-600 mt-1">{{ errors.areas_for_improvement }}</p>
+                    {% endif %}
+                </div>
+
+                <!-- General Comments -->
+                <div>
+                    <label for="general_comments" class="form-label">
+                        <svg class="w-4 h-4 inline mr-1 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+                        </svg>
+                        General Comments
+                    </label>
+                    <textarea name="general_comments" id="general_comments" rows="4" class="form-textarea w-full"
+                              placeholder="Any additional observations, examples, or context you'd like to share..."
+                    >{{ form_data.general_comments or '' }}</textarea>
+                    <p class="text-xs text-slate-500 mt-1">Any other feedback or observations about their work.</p>
+                    {% if errors.general_comments %}
+                    <p class="text-sm text-red-600 mt-1">{{ errors.general_comments }}</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Anonymous Notice -->
+        {% if feedback.is_anonymous %}
+        <div class="p-4 rounded-lg bg-blue-50 border border-blue-200 dark:bg-blue-900/20 dark:border-blue-800">
+            <div class="flex items-start gap-3">
+                <svg class="w-5 h-5 text-blue-500 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <div class="text-sm text-blue-700 dark:text-blue-300">
+                    <p class="font-medium">Anonymous Feedback</p>
+                    <p class="text-blue-600 dark:text-blue-400">Your identity will be hidden from the employee and their manager. HR administrators may still access your identity for audit purposes.</p>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="flex justify-end gap-3">
+            <a href="/people/perf/feedback/{{ feedback.feedback_id }}" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">
+                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                </svg>
+                Submit Feedback
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

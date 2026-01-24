@@ -1,0 +1,179 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}Self Assessment{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a>
+    <span class="mx-2">/</span>
+    <a href="/people/perf/appraisals" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Appraisals</a>
+    <span class="mx-2">/</span>
+    <a href="/people/perf/appraisals/{{ appraisal.appraisal_id }}" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">{{ appraisal.employee.full_name if appraisal.employee else 'Detail' }}</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">Self Assessment</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl">
+    {% if error %}
+    <div class="mb-6 p-4 rounded-lg bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-800">
+        <div class="flex items-center gap-2 text-red-700 dark:text-red-400">
+            <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span>{{ error }}</span>
+        </div>
+    </div>
+    {% endif %}
+
+    {# Appraisal Context Card #}
+    <div class="card mb-6">
+        <div class="card-body">
+            <div class="flex items-center gap-4">
+                <div class="w-12 h-12 rounded-full bg-teal-100 dark:bg-teal-900 flex items-center justify-center">
+                    <span class="text-lg font-bold text-teal-600 dark:text-teal-400">
+                        {{ (appraisal.employee.full_name or '?')[0] if appraisal.employee else '?' }}
+                    </span>
+                </div>
+                <div>
+                    <h2 class="text-lg font-semibold text-slate-900 dark:text-white">
+                        {{ appraisal.employee.full_name if appraisal.employee else 'Unknown Employee' }}
+                    </h2>
+                    <p class="text-slate-500 dark:text-slate-400">{{ appraisal.cycle.cycle_name if appraisal.cycle else 'Unknown Cycle' }}</p>
+                </div>
+                <div class="ml-auto">
+                    <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+                        Self Assessment
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <form method="post" action="/people/perf/appraisals/{{ appraisal.appraisal_id }}/self-assessment" class="space-y-6">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+        {# Overall Self Rating #}
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Overall Self Rating</h3>
+                <p class="text-sm text-slate-500 dark:text-slate-400">Rate your overall performance for this review period</p>
+            </div>
+            <div class="card-body">
+                <div class="flex flex-wrap gap-3" x-data="{ rating: '{{ form_data.self_overall_rating or '' }}' }">
+                    {% set rating_options = [
+                        {'value': 5, 'label': 'Exceptional', 'desc': 'Consistently exceeds all expectations'},
+                        {'value': 4, 'label': 'Exceeds Expectations', 'desc': 'Frequently exceeds expectations'},
+                        {'value': 3, 'label': 'Meets Expectations', 'desc': 'Consistently meets all expectations'},
+                        {'value': 2, 'label': 'Needs Improvement', 'desc': 'Sometimes meets expectations'},
+                        {'value': 1, 'label': 'Unsatisfactory', 'desc': 'Does not meet expectations'}
+                    ] %}
+                    {% for opt in rating_options %}
+                    <label class="flex-1 min-w-[140px] cursor-pointer">
+                        <input type="radio" name="self_overall_rating" value="{{ opt.value }}"
+                               class="sr-only peer" x-model="rating"
+                               {{ 'checked' if form_data.self_overall_rating|string == opt.value|string else '' }}>
+                        <div class="p-4 rounded-lg border-2 border-slate-200 dark:border-slate-700
+                                    peer-checked:border-teal-500 peer-checked:bg-teal-50 dark:peer-checked:bg-teal-900/20
+                                    hover:border-slate-300 dark:hover:border-slate-600 transition-all text-center">
+                            <div class="text-2xl font-bold text-slate-900 dark:text-white mb-1">{{ opt.value }}</div>
+                            <div class="text-sm font-medium text-slate-700 dark:text-slate-300">{{ opt.label }}</div>
+                            <div class="text-xs text-slate-500 dark:text-slate-400 mt-1">{{ opt.desc }}</div>
+                        </div>
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        {# Self Assessment Details #}
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Self Assessment Details</h3>
+            </div>
+            <div class="card-body space-y-4">
+                <div>
+                    <label for="self_summary" class="form-label">Performance Summary</label>
+                    <textarea name="self_summary" id="self_summary" rows="4"
+                              class="form-input w-full"
+                              placeholder="Provide an overall summary of your performance during this review period...">{{ form_data.self_summary or '' }}</textarea>
+                    <p class="text-xs text-slate-500 mt-1">Summarize your overall contributions and performance.</p>
+                </div>
+
+                <div>
+                    <label for="achievements" class="form-label">Key Achievements</label>
+                    <textarea name="achievements" id="achievements" rows="4"
+                              class="form-input w-full"
+                              placeholder="List your key accomplishments, successful projects, and goals met...">{{ form_data.achievements or '' }}</textarea>
+                    <p class="text-xs text-slate-500 mt-1">Highlight specific accomplishments, metrics achieved, and successful outcomes.</p>
+                </div>
+
+                <div>
+                    <label for="challenges" class="form-label">Challenges Faced</label>
+                    <textarea name="challenges" id="challenges" rows="3"
+                              class="form-input w-full"
+                              placeholder="Describe any significant challenges or obstacles you encountered...">{{ form_data.challenges or '' }}</textarea>
+                    <p class="text-xs text-slate-500 mt-1">Describe obstacles you faced and how you addressed them.</p>
+                </div>
+
+                <div>
+                    <label for="development_needs" class="form-label">Development Needs</label>
+                    <textarea name="development_needs" id="development_needs" rows="3"
+                              class="form-input w-full"
+                              placeholder="Identify areas where you would like to grow or improve...">{{ form_data.development_needs or '' }}</textarea>
+                    <p class="text-xs text-slate-500 mt-1">Identify skills, knowledge, or competencies you want to develop.</p>
+                </div>
+            </div>
+        </div>
+
+        {# KRA Self Ratings (if applicable) #}
+        {% if appraisal.kra_scores %}
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">KRA Self Ratings</h3>
+                <p class="text-sm text-slate-500 dark:text-slate-400">Rate your performance on each Key Result Area</p>
+            </div>
+            <div class="card-body">
+                <div class="space-y-4">
+                    {% for score in appraisal.kra_scores %}
+                    <div class="p-4 rounded-lg bg-slate-50 dark:bg-slate-800/50">
+                        <div class="flex items-center justify-between mb-3">
+                            <div>
+                                <h4 class="font-medium text-slate-900 dark:text-white">{{ score.kra.kra_name if score.kra else 'Unknown KRA' }}</h4>
+                                <span class="text-xs text-slate-500 dark:text-slate-400">Weight: {{ score.weightage }}%</span>
+                            </div>
+                            <select name="kra_rating_{{ score.appraisal_kra_score_id }}" class="form-input w-24 text-center">
+                                <option value="">-</option>
+                                {% for i in range(1, 6) %}
+                                <option value="{{ i }}" {{ 'selected' if score.self_rating == i }}>{{ i }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <textarea name="kra_comment_{{ score.appraisal_kra_score_id }}" rows="2"
+                                  class="form-input w-full text-sm"
+                                  placeholder="Comments for this KRA...">{{ score.self_comment or '' }}</textarea>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        {# Form Actions #}
+        <div class="flex justify-end gap-3">
+            <a href="/people/perf/appraisals/{{ appraisal.appraisal_id }}" class="btn btn-secondary">
+                Cancel
+            </a>
+            <button type="submit" class="btn btn-primary">
+                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                </svg>
+                Submit Self Assessment
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

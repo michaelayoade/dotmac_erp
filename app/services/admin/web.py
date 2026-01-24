@@ -863,6 +863,133 @@ class AdminWebService:
         }
 
     @staticmethod
+    def role_profile_context(
+        db: Session,
+        role_id: str,
+    ) -> dict:
+        """Get context for role profile/detail view."""
+        from app.services.common import coerce_uuid
+
+        role = db.get(Role, coerce_uuid(role_id))
+        if not role:
+            return {"role": None}
+
+        # Get role permissions with details
+        role_permissions = (
+            db.query(Permission)
+            .join(RolePermission, RolePermission.permission_id == Permission.id)
+            .filter(RolePermission.role_id == role.id)
+            .filter(Permission.is_active.is_(True))
+            .order_by(Permission.key)
+            .all()
+        )
+
+        # Group permissions by module (first part of key before colon)
+        permissions_by_module: dict[str, list[dict]] = {}
+        for perm in role_permissions:
+            key_parts = perm.key.split(":")
+            module = key_parts[0] if key_parts else "general"
+
+            if module not in permissions_by_module:
+                permissions_by_module[module] = []
+
+            permissions_by_module[module].append({
+                "key": perm.key,
+                "description": perm.description,
+                "action": key_parts[-1] if len(key_parts) > 1 else "access",
+            })
+
+        # Sort modules by name
+        permissions_by_module = dict(sorted(permissions_by_module.items()))
+
+        # Get member count
+        member_count = (
+            db.query(func.count(PersonRole.id))
+            .filter(PersonRole.role_id == role.id)
+            .scalar() or 0
+        )
+
+        # Get role members with details (up to 50)
+        members_query = (
+            db.query(Person)
+            .join(PersonRole, PersonRole.person_id == Person.id)
+            .filter(PersonRole.role_id == role.id)
+            .order_by(Person.display_name, Person.first_name, Person.email)
+            .limit(50)
+            .all()
+        )
+
+        members = []
+        for person in members_query:
+            name = person.name or person.email or "Unknown"
+            initials = (
+                "".join(word[0].upper() for word in name.split()[:2])
+                if name
+                else "?"
+            )
+            members.append({
+                "id": str(person.id),
+                "name": name,
+                "email": person.email,
+                "initials": initials,
+            })
+
+        # Module display names
+        module_names = {
+            "audit": "Audit & Compliance",
+            "auth": "Authentication",
+            "rbac": "Roles & Permissions",
+            "scheduler": "Job Scheduler",
+            "settings": "System Settings",
+            "integrations": "Integrations",
+            "finance": "Finance Module",
+            "gl": "General Ledger",
+            "ar": "Accounts Receivable",
+            "ap": "Accounts Payable",
+            "fa": "Fixed Assets",
+            "banking": "Banking",
+            "inv": "Inventory",
+            "tax": "Tax Management",
+            "lease": "Lease Accounting",
+            "cons": "Consolidation",
+            "fx": "Foreign Exchange",
+            "reports": "Financial Reports",
+            "rpt": "Reporting API",
+            "payments": "Payment Gateway",
+            "automation": "Automation",
+            "org": "Organization Setup",
+            "import": "Data Import",
+            "hr": "Human Resources",
+            "payroll": "Payroll",
+            "leave": "Leave Management",
+            "attendance": "Attendance",
+            "perf": "Performance Management",
+            "recruit": "Recruitment",
+            "training": "Training & Development",
+            "selfservice": "Self-Service Portal",
+            "expense": "Expense Management",
+            "operations": "Operations",
+            "support": "Support & Ticketing",
+            "tasks": "Task Management",
+        }
+
+        return {
+            "role": {
+                "id": str(role.id),
+                "name": role.name,
+                "description": role.description or "",
+                "is_active": role.is_active,
+                "created_at": _format_datetime(role.created_at),
+                "updated_at": _format_datetime(role.updated_at),
+            },
+            "permissions_by_module": permissions_by_module,
+            "permission_count": len(role_permissions),
+            "member_count": member_count,
+            "members": members,
+            "module_names": module_names,
+        }
+
+    @staticmethod
     def create_role(
         db: Session,
         name: str,
@@ -2633,7 +2760,22 @@ class AdminWebService:
         auth: WebAuthContext,
         role_id: str,
     ) -> HTMLResponse | RedirectResponse:
-        return self.roles_edit_response(request, db, auth, role_id)
+        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        if isinstance(auth_or_redirect, RedirectResponse):
+            return auth_or_redirect
+        context = self.role_profile_context(db, role_id)
+        if not context.get("role"):
+            raise HTTPException(status_code=404, detail="Role not found")
+        title = f"Role Profile - {context['role']['name']}"
+        return self._render_admin_template(
+            request,
+            "admin/role_profile.html",
+            auth_or_redirect,
+            title,
+            "Role Profile",
+            "roles",
+            context,
+        )
 
     def roles_edit_response(
         self,

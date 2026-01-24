@@ -42,6 +42,20 @@ def _parse_uuid(value: Optional[str]) -> Optional[UUID]:
         return None
 
 
+def _get_employees(db: Session, org_id: UUID) -> list[Employee]:
+    """Get active employees for dropdowns."""
+    from sqlalchemy import select
+    from app.models.person import Person
+    stmt = (
+        select(Employee)
+        .join(Person, Employee.person_id == Person.id)
+        .where(Employee.organization_id == org_id)
+        .where(Employee.status == EmployeeStatus.ACTIVE)
+        .order_by(Person.first_name.asc(), Person.last_name.asc())
+    )
+    return list(db.scalars(stmt).all())
+
+
 @router.get("", response_class=HTMLResponse)
 @router.get("/", response_class=HTMLResponse)
 @router.get("/records", response_class=HTMLResponse)
@@ -52,6 +66,8 @@ def attendance_overview(
     end_date: Optional[str] = None,
     employee_id: Optional[str] = None,
     page: int = Query(default=1, ge=1),
+    success: Optional[str] = None,
+    error: Optional[str] = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -90,17 +106,25 @@ def attendance_overview(
                 "check_in": record.check_in,
                 "check_out": record.check_out,
                 "working_hours": record.working_hours,
+                "overtime_hours": record.overtime_hours,
                 "shift_name": shift_type.shift_name if shift_type else "-",
                 "late_entry": record.late_entry,
                 "early_exit": record.early_exit,
             }
         )
 
+    # Get data for bulk attendance modal
+    employees = _get_employees(db, org_id)
+    shifts = svc.list_shift_types(org_id, is_active=True).items
+
     context = base_context(request, auth, "Attendance", "attendance", db=db)
     context["request"] = request
     context.update(
         {
             "records": records,
+            "employees": employees,
+            "shifts": shifts,
+            "today": date.today().isoformat(),
             "statuses": [s.value for s in AttendanceStatus],
             "status": status,
             "start_date": start_date,
@@ -111,6 +135,8 @@ def attendance_overview(
             "total": result.total,
             "has_prev": result.has_prev,
             "has_next": result.has_next,
+            "success": success,
+            "error": error,
         }
     )
     return templates.TemplateResponse(request, "people/attendance/records.html", context)
@@ -132,6 +158,70 @@ def delete_attendance_record(
         db.rollback()
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return RedirectResponse(url="/people/attendance", status_code=303)
+
+
+@router.post("/records/bulk-mark")
+async def bulk_mark_attendance(
+    request: Request,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Bulk mark attendance for multiple employees."""
+    from urllib.parse import quote
+
+    form = getattr(request.state, "csrf_form", None)
+    if form is None:
+        form = await request.form()
+
+    employee_ids = form.getlist("employee_ids")
+    attendance_date_str = (form.get("attendance_date") or "").strip()
+    status_str = (form.get("status") or "").strip()
+    shift_type_id = (form.get("shift_type_id") or "").strip()
+
+    if not employee_ids:
+        return RedirectResponse(
+            url="/people/attendance?error=No+employees+selected",
+            status_code=303
+        )
+
+    if not attendance_date_str or not status_str:
+        return RedirectResponse(
+            url="/people/attendance?error=Date+and+status+are+required",
+            status_code=303
+        )
+
+    valid_ids = []
+    for emp_id in employee_ids:
+        try:
+            valid_ids.append(coerce_uuid(emp_id))
+        except Exception:
+            pass
+
+    if not valid_ids:
+        return RedirectResponse(
+            url="/people/attendance?error=No+valid+employees+selected",
+            status_code=303
+        )
+
+    try:
+        org_id = coerce_uuid(auth.organization_id)
+        svc = AttendanceService(db)
+
+        result = svc.bulk_mark_attendance(
+            org_id,
+            employee_ids=valid_ids,
+            attendance_date=date.fromisoformat(attendance_date_str),
+            status=AttendanceStatus(status_str),
+            shift_type_id=coerce_uuid(shift_type_id) if shift_type_id else None,
+        )
+        db.commit()
+
+        success_msg = quote(f"Marked attendance for {result['success_count']} employee(s). {result['failed_count']} failed.")
+        return RedirectResponse(url=f"/people/attendance?success={success_msg}", status_code=303)
+    except Exception as e:
+        db.rollback()
+        error_msg = quote(str(e))
+        return RedirectResponse(url=f"/people/attendance?error={error_msg}", status_code=303)
 
 
 @router.get("/shifts", response_class=HTMLResponse)
@@ -735,3 +825,206 @@ def attendance_trends_report(
         "months": months,
     })
     return templates.TemplateResponse(request, "people/attendance/reports/trends.html", context)
+
+
+# =============================================================================
+# Attendance Requests
+# =============================================================================
+
+
+@router.get("/requests", response_class=HTMLResponse)
+def attendance_requests_list(
+    request: Request,
+    status: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    page: int = Query(default=1, ge=1),
+    success: Optional[str] = None,
+    error: Optional[str] = None,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Attendance requests list page."""
+    from app.models.people.attendance import AttendanceRequestStatus
+
+    org_id = coerce_uuid(auth.organization_id)
+    pagination = PaginationParams.from_page(page, per_page=20)
+    svc = AttendanceService(db)
+
+    status_enum = None
+    if status:
+        try:
+            status_enum = AttendanceRequestStatus(status)
+        except ValueError:
+            status_enum = None
+
+    result = svc.list_attendance_requests(
+        org_id,
+        from_date=_parse_date(start_date),
+        to_date=_parse_date(end_date),
+        status=status_enum,
+        pagination=pagination,
+    )
+
+    # Count pending requests
+    pending_result = svc.list_attendance_requests(
+        org_id,
+        status=AttendanceRequestStatus.PENDING,
+        pagination=PaginationParams(offset=0, limit=1),
+    )
+
+    context = base_context(request, auth, "Attendance Requests", "attendance", db=db)
+    context.update({
+        "requests": result.items,
+        "pending_count": pending_result.total,
+        "statuses": [s.value for s in AttendanceRequestStatus],
+        "status": status,
+        "start_date": start_date,
+        "end_date": end_date,
+        "page": result.page,
+        "total_pages": result.total_pages,
+        "total": result.total,
+        "has_prev": result.has_prev,
+        "has_next": result.has_next,
+        "success": success,
+        "error": error,
+    })
+    return templates.TemplateResponse(request, "people/attendance/requests.html", context)
+
+
+@router.post("/requests/{request_id}/approve")
+async def approve_attendance_request(
+    request_id: str,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Approve an attendance request."""
+    from urllib.parse import quote
+
+    try:
+        org_id = coerce_uuid(auth.organization_id)
+        svc = AttendanceService(db)
+        svc.approve_attendance_request(org_id, coerce_uuid(request_id))
+        db.commit()
+        success_msg = quote("Attendance request approved successfully")
+        return RedirectResponse(url=f"/people/attendance/requests?success={success_msg}", status_code=303)
+    except Exception as e:
+        db.rollback()
+        error_msg = quote(str(e))
+        return RedirectResponse(url=f"/people/attendance/requests?error={error_msg}", status_code=303)
+
+
+@router.post("/requests/{request_id}/reject")
+async def reject_attendance_request(
+    request_id: str,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Reject an attendance request."""
+    from urllib.parse import quote
+
+    try:
+        org_id = coerce_uuid(auth.organization_id)
+        svc = AttendanceService(db)
+        svc.reject_attendance_request(org_id, coerce_uuid(request_id))
+        db.commit()
+        success_msg = quote("Attendance request rejected")
+        return RedirectResponse(url=f"/people/attendance/requests?success={success_msg}", status_code=303)
+    except Exception as e:
+        db.rollback()
+        error_msg = quote(str(e))
+        return RedirectResponse(url=f"/people/attendance/requests?error={error_msg}", status_code=303)
+
+
+@router.post("/requests/bulk-approve")
+async def bulk_approve_attendance_requests(
+    request: Request,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Bulk approve attendance requests."""
+    from urllib.parse import quote
+
+    form = getattr(request.state, "csrf_form", None)
+    if form is None:
+        form = await request.form()
+
+    request_ids = form.getlist("request_ids")
+    if not request_ids:
+        return RedirectResponse(
+            url="/people/attendance/requests?error=No+requests+selected",
+            status_code=303
+        )
+
+    valid_ids = []
+    for req_id in request_ids:
+        try:
+            valid_ids.append(coerce_uuid(req_id))
+        except Exception:
+            pass
+
+    if not valid_ids:
+        return RedirectResponse(
+            url="/people/attendance/requests?error=No+valid+requests+selected",
+            status_code=303
+        )
+
+    try:
+        org_id = coerce_uuid(auth.organization_id)
+        svc = AttendanceService(db)
+        result = svc.bulk_approve_attendance_requests(org_id, valid_ids)
+        db.commit()
+
+        success_msg = quote(f"Approved {result['approved']} request(s)")
+        return RedirectResponse(url=f"/people/attendance/requests?success={success_msg}", status_code=303)
+    except Exception as e:
+        db.rollback()
+        error_msg = quote(str(e))
+        return RedirectResponse(url=f"/people/attendance/requests?error={error_msg}", status_code=303)
+
+
+@router.post("/requests/bulk-reject")
+async def bulk_reject_attendance_requests(
+    request: Request,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Bulk reject attendance requests."""
+    from urllib.parse import quote
+
+    form = getattr(request.state, "csrf_form", None)
+    if form is None:
+        form = await request.form()
+
+    request_ids = form.getlist("request_ids")
+    if not request_ids:
+        return RedirectResponse(
+            url="/people/attendance/requests?error=No+requests+selected",
+            status_code=303
+        )
+
+    valid_ids = []
+    for req_id in request_ids:
+        try:
+            valid_ids.append(coerce_uuid(req_id))
+        except Exception:
+            pass
+
+    if not valid_ids:
+        return RedirectResponse(
+            url="/people/attendance/requests?error=No+valid+requests+selected",
+            status_code=303
+        )
+
+    try:
+        org_id = coerce_uuid(auth.organization_id)
+        svc = AttendanceService(db)
+        result = svc.bulk_reject_attendance_requests(org_id, valid_ids)
+        db.commit()
+
+        success_msg = quote(f"Rejected {result['rejected']} request(s)")
+        return RedirectResponse(url=f"/people/attendance/requests?success={success_msg}", status_code=303)
+    except Exception as e:
+        db.rollback()
+        error_msg = quote(str(e))
+        return RedirectResponse(url=f"/people/attendance/requests?error={error_msg}", status_code=303)

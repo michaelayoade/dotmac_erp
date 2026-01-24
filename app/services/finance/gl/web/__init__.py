@@ -122,6 +122,66 @@ class GLWebService(AccountWebService, JournalWebService, PeriodWebService):
         service = get_account_bulk_service(db, auth.organization_id, auth.user_id)
         return await service.bulk_deactivate(req.ids)
 
+    # =====================================================================
+    # Bulk Action Methods - Journals
+    # =====================================================================
+
+    async def bulk_delete_journals_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+    ):
+        """Handle bulk delete journals request."""
+        from app.services.finance.gl.bulk import get_journal_bulk_service
+
+        body = await request.json()
+        req = BulkActionRequest(**body)
+        service = get_journal_bulk_service(db, auth.organization_id, auth.user_id)
+        return await service.bulk_delete(req.ids)
+
+    async def bulk_export_journals_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+    ):
+        """Handle bulk export journals request."""
+        from app.services.finance.gl.bulk import get_journal_bulk_service
+
+        body = await request.json()
+        req = BulkExportRequest(**body)
+        service = get_journal_bulk_service(db, auth.organization_id, auth.user_id)
+        return await service.bulk_export(req.ids, req.format)
+
+    async def bulk_approve_journals_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+    ):
+        """Handle bulk approve journals request."""
+        from app.services.finance.gl.bulk import get_journal_bulk_service
+
+        body = await request.json()
+        req = BulkActionRequest(**body)
+        service = get_journal_bulk_service(db, auth.organization_id, auth.user_id)
+        return await service.bulk_approve(req.ids)
+
+    async def bulk_post_journals_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+    ):
+        """Handle bulk post journals request."""
+        from app.services.finance.gl.bulk import get_journal_bulk_service
+
+        body = await request.json()
+        req = BulkActionRequest(**body)
+        service = get_journal_bulk_service(db, auth.organization_id, auth.user_id)
+        return await service.bulk_post(req.ids)
+
 
 # Module-level singleton for backward compatibility
 gl_web_service = GLWebService()

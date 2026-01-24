@@ -1,0 +1,146 @@
+{% extends "operations/base_operations.html" %}
+
+{% block title %}{{ project.project_name }} - Attachments{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    {# Header #}
+    <div class="flex items-center justify-between">
+        <div class="flex items-center gap-3">
+            <a href="/operations/projects/{{ project.project_code }}" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                </svg>
+            </a>
+            <div>
+                <h1 class="text-2xl font-display font-semibold text-slate-900 dark:text-white">{{ project.project_name }}</h1>
+                <p class="text-sm text-slate-500 dark:text-slate-400">{{ project.project_code }} - Attachments</p>
+            </div>
+        </div>
+    </div>
+
+    {# Flash Messages #}
+    {% if request.query_params.get('success') %}
+    <div class="rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 p-4">
+        <p class="text-sm text-emerald-700 dark:text-emerald-300">{{ request.query_params.get('success')|replace('+', ' ') }}</p>
+    </div>
+    {% endif %}
+    {% if request.query_params.get('error') %}
+    <div class="rounded-lg bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 p-4">
+        <p class="text-sm text-rose-700 dark:text-rose-300">{{ request.query_params.get('error')|replace('+', ' ') }}</p>
+    </div>
+    {% endif %}
+
+    <div class="grid gap-6 lg:grid-cols-3">
+        {# Upload Form #}
+        <div class="lg:col-span-1">
+            <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800 p-6">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Upload File</h2>
+                <form method="post" enctype="multipart/form-data" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">File</label>
+                        <input type="file" name="file" required
+                               accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.zip"
+                               class="block w-full text-sm text-slate-500 dark:text-slate-400
+                                      file:mr-4 file:py-2 file:px-4
+                                      file:rounded-lg file:border-0
+                                      file:text-sm file:font-medium
+                                      file:bg-amber-50 file:text-amber-700
+                                      hover:file:bg-amber-100
+                                      dark:file:bg-amber-900/20 dark:file:text-amber-400">
+                        <p class="mt-1 text-xs text-slate-400">Max 10MB. Images, PDFs, Office docs, or ZIP files.</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Description (optional)</label>
+                        <input type="text" name="description" placeholder="Brief description..."
+                               class="w-full rounded-lg border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white focus:border-amber-500 focus:ring-amber-500">
+                    </div>
+                    <button type="submit" class="w-full rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 transition-colors">
+                        <svg class="inline-block h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                        </svg>
+                        Upload
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        {# Attachments List #}
+        <div class="lg:col-span-2">
+            <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
+                <div class="border-b border-slate-200 dark:border-slate-700 px-6 py-4">
+                    <h2 class="text-lg font-semibold text-slate-900 dark:text-white">
+                        Files ({{ attachments|length }})
+                    </h2>
+                </div>
+                {% if attachments %}
+                <div class="divide-y divide-slate-200 dark:divide-slate-700">
+                    {% for att in attachments %}
+                    <div class="flex items-center justify-between px-6 py-4 hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                        <div class="flex items-center gap-4">
+                            {# File Icon #}
+                            <div class="flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center
+                                {% if att.content_type and att.content_type.startswith('image/') %}bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400
+                                {% elif att.content_type == 'application/pdf' %}bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400
+                                {% elif 'spreadsheet' in (att.content_type or '') or 'excel' in (att.content_type or '') %}bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400
+                                {% elif 'document' in (att.content_type or '') or 'word' in (att.content_type or '') %}bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400
+                                {% else %}bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400{% endif %}">
+                                {% if att.content_type and att.content_type.startswith('image/') %}
+                                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                                </svg>
+                                {% elif att.content_type == 'application/pdf' %}
+                                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+                                </svg>
+                                {% else %}
+                                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                </svg>
+                                {% endif %}
+                            </div>
+                            <div>
+                                <p class="font-medium text-slate-900 dark:text-white">{{ att.file_name }}</p>
+                                <p class="text-sm text-slate-500 dark:text-slate-400">
+                                    {{ (att.file_size / 1024)|round(1) }} KB
+                                    {% if att.description %} - {{ att.description }}{% endif %}
+                                </p>
+                                <p class="text-xs text-slate-400">
+                                    Uploaded {{ att.uploaded_at.strftime('%b %d, %Y at %H:%M') if att.uploaded_at else 'Unknown' }}
+                                </p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <a href="/operations/projects/{{ project.project_code }}/attachments/{{ att.attachment_id }}/download"
+                               class="rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600 transition-colors">
+                                <svg class="inline-block h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                                </svg>
+                                Download
+                            </a>
+                            <form method="post" action="/operations/projects/{{ project.project_code }}/attachments/{{ att.attachment_id }}/delete"
+                                  onsubmit="return confirm('Delete this file?')">
+                                <button type="submit" class="rounded-lg bg-rose-50 px-3 py-1.5 text-sm font-medium text-rose-700 hover:bg-rose-100 dark:bg-rose-900/20 dark:text-rose-400 dark:hover:bg-rose-900/30 transition-colors">
+                                    <svg class="inline-block h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                    </svg>
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="px-6 py-12 text-center">
+                    <svg class="mx-auto h-12 w-12 text-slate-300 dark:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+                    </svg>
+                    <h3 class="mt-4 text-lg font-medium text-slate-900 dark:text-white">No attachments yet</h3>
+                    <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">Upload files using the form on the left.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

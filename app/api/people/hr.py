@@ -276,6 +276,7 @@ def create_location(
         longitude=payload.longitude,
         geofence_radius_m=payload.geofence_radius_m,
         geofence_enabled=payload.geofence_enabled,
+        geofence_polygon=payload.geofence_polygon,
         is_active=payload.is_active,
     )
     db.add(location)

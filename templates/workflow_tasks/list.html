@@ -1,0 +1,284 @@
+{% extends "base.html" %}
+
+{% block title %}My Tasks - {{ brand.name | default("Dotmac") }}{% endblock %}
+
+{% block body %}
+<div class="min-h-screen bg-slate-50 dark:bg-slate-900">
+    <!-- Header -->
+    <header class="sticky top-0 z-40 border-b border-slate-200/70 bg-white/95 backdrop-blur dark:border-slate-800/70 dark:bg-slate-900/95">
+        <div class="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+            <div class="flex h-16 items-center justify-between">
+                <div class="flex items-center gap-4">
+                    <a href="/dashboard" class="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                        </svg>
+                    </a>
+                    <div>
+                        <h1 class="text-xl font-semibold text-slate-900 dark:text-white">My Tasks</h1>
+                        {% if total_tasks %}
+                        <p class="text-sm text-slate-500 dark:text-slate-400">{{ total_tasks }} total task{{ 's' if total_tasks != 1 else '' }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-8">
+        {% if no_employee %}
+        <!-- No Employee Record -->
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-8 text-center">
+            <svg class="h-16 w-16 mx-auto text-slate-300 dark:text-slate-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+            </svg>
+            <h3 class="text-lg font-medium text-slate-900 dark:text-white mb-1">No Employee Record</h3>
+            <p class="text-sm text-slate-500 dark:text-slate-400">
+                Your account is not linked to an employee record. Please contact HR.
+            </p>
+        </div>
+        {% else %}
+
+        <!-- Summary Cards -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-4">
+                <div class="flex items-center gap-3">
+                    <div class="h-10 w-10 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+                        <svg class="h-5 w-5 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="text-2xl font-bold text-slate-900 dark:text-white">{{ summary.get('PENDING', 0) }}</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Pending</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-4">
+                <div class="flex items-center gap-3">
+                    <div class="h-10 w-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                        <svg class="h-5 w-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="text-2xl font-bold text-slate-900 dark:text-white">{{ summary.get('IN_PROGRESS', 0) }}</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">In Progress</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-4">
+                <div class="flex items-center gap-3">
+                    <div class="h-10 w-10 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
+                        <svg class="h-5 w-5 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="text-2xl font-bold text-slate-900 dark:text-white">{{ summary.get('COMPLETED', 0) }}</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Completed</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-4">
+                <div class="flex items-center gap-3">
+                    <div class="h-10 w-10 rounded-full bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center">
+                        <svg class="h-5 w-5 text-rose-600 dark:text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="text-2xl font-bold text-slate-900 dark:text-white">{{ summary.get('EXPIRED', 0) + summary.get('CANCELLED', 0) }}</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Expired/Cancelled</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="mb-6 flex flex-wrap gap-2">
+            <a href="/tasks"
+               class="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium transition-colors
+                      {% if not current_status and not current_priority %}bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300{% else %}bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700{% endif %}">
+                All
+            </a>
+            {% for status in statuses %}
+            <a href="/tasks?status={{ status }}"
+               class="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium transition-colors
+                      {% if current_status == status %}bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300{% else %}bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700{% endif %}">
+                {{ status | replace("_", " ") | title }}
+                {% if summary.get(status, 0) > 0 %}
+                <span class="ml-1.5 text-xs text-slate-500 dark:text-slate-500">({{ summary.get(status, 0) }})</span>
+                {% endif %}
+            </a>
+            {% endfor %}
+        </div>
+
+        <!-- Priority Filter -->
+        <div class="mb-6 flex flex-wrap gap-2">
+            <span class="text-sm text-slate-500 dark:text-slate-400 self-center mr-2">Priority:</span>
+            <a href="/tasks{% if current_status %}?status={{ current_status }}{% endif %}"
+               class="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium transition-colors
+                      {% if not current_priority %}bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300{% else %}bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700{% endif %}">
+                Any
+            </a>
+            {% for priority in priorities %}
+            <a href="/tasks?priority={{ priority }}{% if current_status %}&status={{ current_status }}{% endif %}"
+               class="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium transition-colors
+                      {% if current_priority == priority %}
+                        {% if priority == 'URGENT' %}bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300
+                        {% elif priority == 'HIGH' %}bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300
+                        {% elif priority == 'MEDIUM' %}bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300
+                        {% else %}bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300{% endif %}
+                      {% else %}bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700{% endif %}">
+                {{ priority | title }}
+            </a>
+            {% endfor %}
+        </div>
+
+        <!-- Tasks List -->
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+            {% if tasks %}
+            <ul class="divide-y divide-slate-100 dark:divide-slate-700">
+                {% for task in tasks %}
+                <li class="relative {% if task.is_overdue %}bg-rose-50/50 dark:bg-rose-900/10{% endif %}">
+                    <div class="block px-4 py-4 sm:px-6 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+                        <div class="flex items-start gap-4">
+                            <!-- Priority Indicator -->
+                            <div class="flex-shrink-0 mt-1">
+                                {% if task.priority == 'URGENT' %}
+                                <span class="inline-flex h-3 w-3 rounded-full bg-rose-500"></span>
+                                {% elif task.priority == 'HIGH' %}
+                                <span class="inline-flex h-3 w-3 rounded-full bg-amber-500"></span>
+                                {% elif task.priority == 'MEDIUM' %}
+                                <span class="inline-flex h-3 w-3 rounded-full bg-blue-500"></span>
+                                {% else %}
+                                <span class="inline-flex h-3 w-3 rounded-full bg-slate-400"></span>
+                                {% endif %}
+                            </div>
+
+                            <!-- Content -->
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-start justify-between gap-4">
+                                    <div>
+                                        <a href="{{ task.action_url }}" class="text-sm font-semibold text-slate-900 dark:text-white hover:text-teal-600 dark:hover:text-teal-400">
+                                            {{ task.title }}
+                                        </a>
+                                        {% if task.description %}
+                                        <p class="mt-1 text-sm text-slate-600 dark:text-slate-400 line-clamp-2">
+                                            {{ task.description }}
+                                        </p>
+                                        {% endif %}
+                                        <div class="mt-2 flex items-center gap-3 text-xs text-slate-500 dark:text-slate-500">
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded-full
+                                                {% if task.status == 'PENDING' %}bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400
+                                                {% elif task.status == 'IN_PROGRESS' %}bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400
+                                                {% elif task.status == 'COMPLETED' %}bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400
+                                                {% else %}bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-400{% endif %}">
+                                                {{ task.status | replace("_", " ") | title }}
+                                            </span>
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400">
+                                                {{ task.module | replace("_", " ") | title }}
+                                            </span>
+                                            <span class="{% if task.is_overdue %}text-rose-600 dark:text-rose-400 font-medium{% endif %}">
+                                                {{ task.due_display }}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Actions -->
+                                    <div class="flex items-center gap-2">
+                                        {% if task.status != 'COMPLETED' and task.status != 'CANCELLED' %}
+                                        <form action="/tasks/{{ task.id }}/complete" method="post" class="inline">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                            <button type="submit"
+                                                    class="inline-flex items-center px-2.5 py-1.5 text-xs font-medium rounded-lg text-emerald-700 bg-emerald-100 hover:bg-emerald-200 dark:text-emerald-400 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/50 transition-colors"
+                                                    title="Mark Complete">
+                                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                                </svg>
+                                            </button>
+                                        </form>
+                                        <form action="/tasks/{{ task.id }}/snooze" method="post" class="inline">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                            <input type="hidden" name="days" value="1">
+                                            <button type="submit"
+                                                    class="inline-flex items-center px-2.5 py-1.5 text-xs font-medium rounded-lg text-amber-700 bg-amber-100 hover:bg-amber-200 dark:text-amber-400 dark:bg-amber-900/30 dark:hover:bg-amber-900/50 transition-colors"
+                                                    title="Snooze 1 day">
+                                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                                </svg>
+                                            </button>
+                                        </form>
+                                        {% endif %}
+                                        <a href="{{ task.action_url }}"
+                                           class="inline-flex items-center px-2.5 py-1.5 text-xs font-medium rounded-lg text-slate-700 bg-slate-100 hover:bg-slate-200 dark:text-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 transition-colors"
+                                           title="View Details">
+                                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                                            </svg>
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </li>
+                {% endfor %}
+            </ul>
+
+            <!-- Pagination -->
+            {% if has_previous or has_more %}
+            <div class="px-4 py-3 sm:px-6 border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 flex items-center justify-between">
+                {% if has_previous %}
+                <a href="/tasks?{% if current_status %}status={{ current_status }}&{% endif %}{% if current_priority %}priority={{ current_priority }}&{% endif %}page={{ page - 1 }}"
+                   class="inline-flex items-center px-3 py-1.5 text-sm font-medium text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors">
+                    <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                    </svg>
+                    Previous
+                </a>
+                {% else %}
+                <span></span>
+                {% endif %}
+
+                <span class="text-sm text-slate-500 dark:text-slate-400">Page {{ page }}</span>
+
+                {% if has_more %}
+                <a href="/tasks?{% if current_status %}status={{ current_status }}&{% endif %}{% if current_priority %}priority={{ current_priority }}&{% endif %}page={{ page + 1 }}"
+                   class="inline-flex items-center px-3 py-1.5 text-sm font-medium text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors">
+                    Next
+                    <svg class="h-4 w-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                    </svg>
+                </a>
+                {% else %}
+                <span></span>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            {% else %}
+            <!-- Empty State -->
+            <div class="px-4 py-16 text-center">
+                <svg class="h-16 w-16 mx-auto text-slate-300 dark:text-slate-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
+                </svg>
+                <h3 class="text-lg font-medium text-slate-900 dark:text-white mb-1">No tasks found</h3>
+                <p class="text-sm text-slate-500 dark:text-slate-400">
+                    {% if current_status or current_priority %}
+                    No tasks match your current filters.
+                    {% else %}
+                    You're all caught up! No tasks assigned to you.
+                    {% endif %}
+                </p>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+    </main>
+</div>
+{% endblock %}

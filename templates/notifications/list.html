@@ -1,0 +1,191 @@
+{% extends "base.html" %}
+
+{% block title %}Notifications - {{ brand.name | default("Dotmac") }}{% endblock %}
+
+{% block body %}
+<div class="min-h-screen bg-slate-50 dark:bg-slate-900">
+    <!-- Header -->
+    <header class="sticky top-0 z-40 border-b border-slate-200/70 bg-white/95 backdrop-blur dark:border-slate-800/70 dark:bg-slate-900/95">
+        <div class="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
+            <div class="flex h-16 items-center justify-between">
+                <div class="flex items-center gap-4">
+                    <a href="/dashboard" class="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                        </svg>
+                    </a>
+                    <div>
+                        <h1 class="text-xl font-semibold text-slate-900 dark:text-white">Notifications</h1>
+                        {% if unread_count > 0 %}
+                        <p class="text-sm text-slate-500 dark:text-slate-400">{{ unread_count }} unread</p>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="flex items-center gap-3">
+                    {% if unread_count > 0 %}
+                    <form action="/notifications/mark-all-read" method="post">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                        <button type="submit" class="text-sm font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300 transition-colors">
+                            Mark all as read
+                        </button>
+                    </form>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Filter Pills -->
+        <div class="mb-6 flex flex-wrap gap-2">
+            <a href="/notifications?filter=all"
+               class="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium transition-colors
+                      {% if current_filter == 'all' %}bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300{% else %}bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700{% endif %}">
+                All
+            </a>
+            <a href="/notifications?filter=unread"
+               class="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium transition-colors
+                      {% if current_filter == 'unread' %}bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300{% else %}bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700{% endif %}">
+                Unread
+                {% if unread_count > 0 %}
+                <span class="ml-1.5 inline-flex items-center justify-center h-5 min-w-[1.25rem] px-1 rounded-full bg-rose-500 text-white text-xs font-semibold">
+                    {{ unread_count }}
+                </span>
+                {% endif %}
+            </a>
+            {% for entity_type, count in entity_counts.items() %}
+            <a href="/notifications?filter={{ entity_type | lower }}"
+               class="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium transition-colors
+                      {% if current_filter == entity_type | lower %}bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300{% else %}bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700{% endif %}">
+                {{ entity_type | replace("_", " ") | title }}
+                <span class="ml-1.5 text-xs text-slate-500 dark:text-slate-500">({{ count }})</span>
+            </a>
+            {% endfor %}
+        </div>
+
+        <!-- Notifications List -->
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+            {% if notifications_list %}
+            <ul class="divide-y divide-slate-100 dark:divide-slate-700">
+                {% for notification in notifications_list %}
+                <li class="relative {% if not notification.read %}bg-teal-50/50 dark:bg-teal-900/10{% endif %}">
+                    <a href="{{ notification.url }}"
+                       class="block px-4 py-4 sm:px-6 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
+                       hx-post="/notifications/{{ notification.id }}/read"
+                       hx-swap="none"
+                       hx-trigger="click">
+                        <div class="flex items-start gap-4">
+                            <!-- Icon -->
+                            <div class="flex-shrink-0">
+                                {% if notification.type == 'mention' %}
+                                <div class="h-10 w-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                                    <svg class="h-5 w-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207"/>
+                                    </svg>
+                                </div>
+                                {% elif notification.type == 'payment' %}
+                                <div class="h-10 w-10 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
+                                    <svg class="h-5 w-5 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                    </svg>
+                                </div>
+                                {% elif notification.type == 'invoice' %}
+                                <div class="h-10 w-10 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+                                    <svg class="h-5 w-5 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                    </svg>
+                                </div>
+                                {% elif notification.type == 'alert' %}
+                                <div class="h-10 w-10 rounded-full bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center">
+                                    <svg class="h-5 w-5 text-rose-600 dark:text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                                    </svg>
+                                </div>
+                                {% else %}
+                                <div class="h-10 w-10 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center">
+                                    <svg class="h-5 w-5 text-slate-600 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+                                    </svg>
+                                </div>
+                                {% endif %}
+                            </div>
+
+                            <!-- Content -->
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-start justify-between gap-4">
+                                    <div>
+                                        <p class="text-sm {% if not notification.read %}font-semibold{% else %}font-medium{% endif %} text-slate-900 dark:text-white">
+                                            {{ notification.title }}
+                                        </p>
+                                        <p class="mt-1 text-sm text-slate-600 dark:text-slate-400 line-clamp-2">
+                                            {{ notification.message }}
+                                        </p>
+                                        <div class="mt-2 flex items-center gap-3 text-xs text-slate-500 dark:text-slate-500">
+                                            <span>{{ notification.time }}</span>
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400">
+                                                {{ notification.entity_type | replace("_", " ") | title }}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    {% if not notification.read %}
+                                    <span class="flex-shrink-0 h-2.5 w-2.5 rounded-full bg-teal-500"></span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </a>
+                </li>
+                {% endfor %}
+            </ul>
+
+            <!-- Pagination -->
+            {% if has_previous or has_more %}
+            <div class="px-4 py-3 sm:px-6 border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 flex items-center justify-between">
+                {% if has_previous %}
+                <a href="/notifications?filter={{ current_filter }}&page={{ page - 1 }}"
+                   class="inline-flex items-center px-3 py-1.5 text-sm font-medium text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors">
+                    <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                    </svg>
+                    Previous
+                </a>
+                {% else %}
+                <span></span>
+                {% endif %}
+
+                <span class="text-sm text-slate-500 dark:text-slate-400">Page {{ page }}</span>
+
+                {% if has_more %}
+                <a href="/notifications?filter={{ current_filter }}&page={{ page + 1 }}"
+                   class="inline-flex items-center px-3 py-1.5 text-sm font-medium text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors">
+                    Next
+                    <svg class="h-4 w-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                    </svg>
+                </a>
+                {% else %}
+                <span></span>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            {% else %}
+            <!-- Empty State -->
+            <div class="px-4 py-16 text-center">
+                <svg class="h-16 w-16 mx-auto text-slate-300 dark:text-slate-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+                </svg>
+                <h3 class="text-lg font-medium text-slate-900 dark:text-white mb-1">No notifications</h3>
+                <p class="text-sm text-slate-500 dark:text-slate-400">
+                    {% if current_filter == 'unread' %}
+                    You're all caught up! No unread notifications.
+                    {% else %}
+                    You don't have any notifications yet.
+                    {% endif %}
+                </p>
+            </div>
+            {% endif %}
+        </div>
+    </main>
+</div>
+{% endblock %}

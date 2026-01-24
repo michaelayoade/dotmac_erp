@@ -516,6 +516,15 @@ document.addEventListener('DOMContentLoaded', function() {
     Chart.defaults.color = textColor;
     Chart.defaults.plugins.legend.display = false;
 
+    // Helper to safely create charts (destroys existing chart on same canvas)
+    function createChart(canvas, config) {
+        const existingChart = Chart.getChart(canvas);
+        if (existingChart) {
+            existingChart.destroy();
+        }
+        return createChart(canvas, config);
+    }
+
     const colors = {
         teal: { solid: '#14b8a6', light: 'rgba(20, 184, 166, 0.15)' },
         rose: { solid: '#f43f5e', light: 'rgba(244, 63, 94, 0.15)' },
@@ -547,7 +556,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const config = JSON.parse(canvas.dataset.chartConfig || '{}');
 
         if (chartType === 'trendLine') {
-            new Chart(canvas, {
+            createChart(canvas, {
                 type: 'line',
                 data: {
                     labels: config.labels || [],
@@ -601,7 +610,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         else if (chartType === 'groupedBar') {
-            new Chart(canvas, {
+            createChart(canvas, {
                 type: 'bar',
                 data: {
                     labels: config.labels || [],
@@ -634,7 +643,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         else if (chartType === 'donut') {
             const categoryColors = [colors.teal.solid, colors.blue.solid, colors.violet.solid, colors.amber.solid, colors.rose.solid, colors.emerald.solid];
-            new Chart(canvas, {
+            createChart(canvas, {
                 type: 'doughnut',
                 data: {
                     labels: config.labels || [],
@@ -656,7 +665,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         else if (chartType === 'horizontalBar') {
             const barColor = config.color || colors.teal.solid;
-            new Chart(canvas, {
+            createChart(canvas, {
                 type: 'bar',
                 data: {
                     labels: config.labels || [],
@@ -689,7 +698,7 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('grossMarginValue').textContent = grossMargin.toFixed(1) + '%';
         document.getElementById('netMarginValue').textContent = netMargin.toFixed(1) + '%';
 
-        new Chart(profitGaugeEl, {
+        createChart(profitGaugeEl, {
             type: 'doughnut',
             data: {
                 labels: ['Net Margin', 'Remaining'],
@@ -716,7 +725,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // AR Aging Polar Area
     const arAgingEl = document.getElementById('arAgingChart');
     if (arAgingEl) {
-        new Chart(arAgingEl, {
+        createChart(arAgingEl, {
             type: 'doughnut',
             data: {
                 labels: ['Current', '1-30 Days', '31-60 Days', '60+ Days'],
@@ -739,7 +748,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const invoiceStatus = chartData.invoice_status || {};
 
     if (document.getElementById('arStatusChart')) {
-        new Chart(document.getElementById('arStatusChart'), {
+        createChart(document.getElementById('arStatusChart'), {
             type: 'doughnut',
             data: {
                 labels: ['Draft', 'Posted', 'Paid'],
@@ -759,7 +768,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     if (document.getElementById('apStatusChart')) {
-        new Chart(document.getElementById('apStatusChart'), {
+        createChart(document.getElementById('apStatusChart'), {
             type: 'doughnut',
             data: {
                 labels: ['Draft', 'Posted', 'Paid'],

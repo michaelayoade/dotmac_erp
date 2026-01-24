@@ -1,0 +1,129 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}Record Transfer{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr/employees/{{ employee.employee_id }}" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">{{ employee.full_name }}</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">Record Transfer</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl">
+    {% if error %}
+    <div class="mb-6 p-4 rounded-lg bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-800">
+        <div class="flex items-center gap-2 text-red-700 dark:text-red-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span>{{ error }}</span>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Employee Info Card -->
+    <div class="card mb-6">
+        <div class="card-header">
+            <h3 class="font-medium text-slate-900 dark:text-white">Employee Information</h3>
+        </div>
+        <div class="card-body">
+            <div class="flex items-center gap-4">
+                <div class="w-14 h-14 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white text-xl font-bold">
+                    {{ employee.full_name[0] }}
+                </div>
+                <div>
+                    <h2 class="text-lg font-semibold text-slate-900 dark:text-white">{{ employee.full_name }}</h2>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">
+                        {{ employee.designation.designation_name if employee.designation else '-' }}
+                        {% if employee.department %}
+                        &bull; {{ employee.department.department_name }}
+                        {% endif %}
+                        {% if employee.branch %}
+                        &bull; {{ employee.branch }}
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <form method="post" action="/people/hr/employees/{{ employee.employee_id }}/transfers/new" class="space-y-6">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Transfer Details</h3>
+            </div>
+            <div class="card-body space-y-4">
+                <div>
+                    <label for="transfer_date" class="form-label required">Effective Date</label>
+                    <input type="date" name="transfer_date" id="transfer_date" required
+                           class="form-input w-full"
+                           value="{{ form_data.transfer_date or '' }}">
+                </div>
+
+                <div>
+                    <label for="new_department_id" class="form-label">New Department</label>
+                    <select name="new_department_id" id="new_department_id" class="form-select w-full">
+                        <option value="">No change</option>
+                        {% for department in departments %}
+                        {% if department.department_id != employee.department_id %}
+                        <option value="{{ department.department_id }}" {% if form_data.new_department_id == department.department_id | string %}selected{% endif %}>
+                            {{ department.department_name }}
+                        </option>
+                        {% endif %}
+                        {% endfor %}
+                    </select>
+                    <p class="text-xs text-slate-500 mt-1">Current: {{ employee.department.department_name if employee.department else 'None' }}</p>
+                </div>
+
+                <div>
+                    <label for="new_designation_id" class="form-label">New Designation</label>
+                    <select name="new_designation_id" id="new_designation_id" class="form-select w-full">
+                        <option value="">No change</option>
+                        {% for designation in designations %}
+                        {% if designation.designation_id != employee.designation_id %}
+                        <option value="{{ designation.designation_id }}" {% if form_data.new_designation_id == designation.designation_id | string %}selected{% endif %}>
+                            {{ designation.designation_name }}
+                        </option>
+                        {% endif %}
+                        {% endfor %}
+                    </select>
+                    <p class="text-xs text-slate-500 mt-1">Current: {{ employee.designation.designation_name if employee.designation else 'None' }}</p>
+                </div>
+
+                <div>
+                    <label for="new_branch" class="form-label">New Branch/Location</label>
+                    <input type="text" name="new_branch" id="new_branch"
+                           class="form-input w-full"
+                           placeholder="Enter new branch or location"
+                           value="{{ form_data.new_branch or '' }}">
+                    <p class="text-xs text-slate-500 mt-1">Current: {{ employee.branch if employee.branch else 'None' }}</p>
+                </div>
+
+                <div>
+                    <label for="notes" class="form-label">Notes</label>
+                    <textarea name="notes" id="notes" rows="3" class="form-textarea w-full"
+                              placeholder="Add any notes about this transfer...">{{ form_data.notes or '' }}</textarea>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex justify-end gap-3">
+            <a href="/people/hr/employees/{{ employee.employee_id }}" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">
+                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                </svg>
+                Record Transfer
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

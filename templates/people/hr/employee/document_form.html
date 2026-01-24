@@ -1,0 +1,107 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}Upload Document - {{ employee.full_name }}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400">Employees</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr/employees/{{ employee.employee_id }}/documents" class="hover:text-teal-600 dark:hover:text-teal-400">{{ employee.employee_code }}</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">Upload Document</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl">
+    {% if error %}
+    <div class="mb-6 p-4 rounded-lg bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-800">
+        <div class="flex items-center gap-2 text-red-700 dark:text-red-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span>{{ error }}</span>
+        </div>
+    </div>
+    {% endif %}
+
+    <form method="post" action="/people/hr/employees/{{ employee.employee_id }}/documents/new" class="space-y-6">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Document Details</h3>
+            </div>
+            <div class="card-body space-y-4">
+                <div>
+                    <label for="document_type" class="form-label required">Document Type</label>
+                    <select name="document_type" id="document_type" required class="form-select w-full">
+                        <option value="">Select Type</option>
+                        {% for dt in document_types %}
+                        <option value="{{ dt.value }}" {{ 'selected' if form_data.document_type == dt.value }}>
+                            {{ dt.value | replace('_', ' ') | title }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label for="document_name" class="form-label required">Document Name</label>
+                    <input type="text" name="document_name" id="document_name" required
+                           class="form-input w-full" value="{{ form_data.document_name or '' }}"
+                           placeholder="e.g., Employment Contract 2024">
+                </div>
+
+                <div>
+                    <label for="description" class="form-label">Description</label>
+                    <textarea name="description" id="description" rows="2"
+                              class="form-input w-full"
+                              placeholder="Optional description...">{{ form_data.description or '' }}</textarea>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">File Information</h3>
+            </div>
+            <div class="card-body space-y-4">
+                <div>
+                    <label for="file_path" class="form-label required">File Path/URL</label>
+                    <input type="text" name="file_path" id="file_path" required
+                           class="form-input w-full" value="{{ form_data.file_path or '' }}"
+                           placeholder="/uploads/documents/file.pdf or https://...">
+                    <p class="text-xs text-slate-500 mt-1">Storage path or URL where the file is stored.</p>
+                </div>
+
+                <div>
+                    <label for="file_name" class="form-label required">Original Filename</label>
+                    <input type="text" name="file_name" id="file_name" required
+                           class="form-input w-full" value="{{ form_data.file_name or '' }}"
+                           placeholder="contract.pdf">
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="issue_date" class="form-label">Issue Date</label>
+                        <input type="date" name="issue_date" id="issue_date"
+                               class="form-input w-full" value="{{ form_data.issue_date or '' }}">
+                    </div>
+                    <div>
+                        <label for="expiry_date" class="form-label">Expiry Date</label>
+                        <input type="date" name="expiry_date" id="expiry_date"
+                               class="form-input w-full" value="{{ form_data.expiry_date or '' }}">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex justify-end gap-3">
+            <a href="/people/hr/employees/{{ employee.employee_id }}/documents" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">Upload Document</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

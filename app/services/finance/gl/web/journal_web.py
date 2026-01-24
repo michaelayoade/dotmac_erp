@@ -36,6 +36,7 @@ from app.services.finance.gl.web.base import (
     parse_status,
     period_option_view,
 )
+from app.services.finance.gl.journal import JournalService
 
 logger = logging.getLogger(__name__)
 
@@ -783,3 +784,53 @@ class JournalWebService:
             return templates.TemplateResponse(request, "finance/gl/journal_detail.html", context)
 
         return RedirectResponse(url="/finance/gl/journals", status_code=303)
+
+    def post_journal_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        entry_id: str,
+    ) -> RedirectResponse:
+        """Post journal entry to ledger."""
+        try:
+            JournalService.post_journal(
+                db=db,
+                organization_id=coerce_uuid(auth.organization_id),
+                journal_entry_id=coerce_uuid(entry_id),
+                posted_by_user_id=coerce_uuid(auth.user_id),
+            )
+            return RedirectResponse(
+                url=f"/finance/gl/journals/{entry_id}?success=Journal+entry+posted+to+ledger",
+                status_code=303,
+            )
+        except Exception as e:
+            return RedirectResponse(
+                url=f"/finance/gl/journals/{entry_id}?error={str(e)}",
+                status_code=303,
+            )
+
+    def reverse_journal_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        entry_id: str,
+    ) -> RedirectResponse:
+        """Reverse a posted journal entry."""
+        try:
+            reversal = JournalService.reverse_entry(
+                db=db,
+                organization_id=coerce_uuid(auth.organization_id),
+                journal_entry_id=coerce_uuid(entry_id),
+                reversed_by_user_id=coerce_uuid(auth.user_id),
+            )
+            return RedirectResponse(
+                url=f"/finance/gl/journals/{reversal.journal_entry_id}?success=Journal+entry+reversed",
+                status_code=303,
+            )
+        except Exception as e:
+            return RedirectResponse(
+                url=f"/finance/gl/journals/{entry_id}?error={str(e)}",
+                status_code=303,
+            )

@@ -236,6 +236,34 @@ class ARWebService(
         service = get_ar_invoice_bulk_service(db, auth.organization_id, auth.user_id)
         return await service.bulk_export(req.ids, req.format)
 
+    async def bulk_approve_invoices_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+    ):
+        """Handle bulk approve invoices request."""
+        from app.services.finance.ar.invoice_bulk import get_ar_invoice_bulk_service
+
+        body = await request.json()
+        req = BulkActionRequest(**body)
+        service = get_ar_invoice_bulk_service(db, auth.organization_id, auth.user_id)
+        return await service.bulk_approve(req.ids)
+
+    async def bulk_post_invoices_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+    ):
+        """Handle bulk post invoices request."""
+        from app.services.finance.ar.invoice_bulk import get_ar_invoice_bulk_service
+
+        body = await request.json()
+        req = BulkActionRequest(**body)
+        service = get_ar_invoice_bulk_service(db, auth.organization_id, auth.user_id)
+        return await service.bulk_post(req.ids)
+
     # =====================================================================
     # Bulk Action Methods - Receipts
     # =====================================================================

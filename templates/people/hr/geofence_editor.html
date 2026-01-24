@@ -1,0 +1,494 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}Geofence Editor{% endblock %}
+
+{% block head_extra %}
+<!-- Leaflet CSS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+<!-- Leaflet Draw CSS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css"/>
+<style>
+    #map {
+        height: 500px;
+        width: 100%;
+        border-radius: 0.75rem;
+        z-index: 1;
+    }
+    .leaflet-draw-toolbar a {
+        background-color: white;
+    }
+    .geofence-status {
+        transition: all 0.3s ease;
+    }
+    .geofence-status.inside {
+        background-color: rgb(16 185 129 / 0.1);
+        border-color: rgb(16 185 129);
+        color: rgb(5 150 105);
+    }
+    .geofence-status.outside {
+        background-color: rgb(239 68 68 / 0.1);
+        border-color: rgb(239 68 68);
+        color: rgb(220 38 38);
+    }
+</style>
+{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400">
+    <a href="/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr/locations" class="hover:text-primary-600 dark:hover:text-primary-400">Branches</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr/locations/{{ location.location_id }}/edit" class="hover:text-primary-600 dark:hover:text-primary-400">{{ location.location_name }}</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white">Geofence</span>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<div class="flex items-center gap-2">
+    <a href="/people/hr/locations/{{ location.location_id }}/edit" class="btn btn-secondary">
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+        </svg>
+        Back to Edit
+    </a>
+    <button type="button" id="save-btn" class="btn btn-primary btn-loading">
+        <span class="btn-spinner"></span>
+        <svg class="h-4 w-4 btn-hide-on-load" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+        </svg>
+        <span class="btn-hide-on-load">Save Geofence</span>
+    </button>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6" x-data="geofenceEditor()" x-init="init()">
+    <!-- Info Card -->
+    <div class="card">
+        <div class="flex items-start gap-4">
+            <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-primary-100 dark:bg-primary-900/30">
+                <svg class="h-6 w-6 text-primary-600 dark:text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+                </svg>
+            </div>
+            <div class="flex-1">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white">{{ location.location_name }}</h2>
+                <p class="text-sm text-slate-500 dark:text-slate-400">{{ location.location_code }} &middot; {{ location.address_line_1 or "No address" }}</p>
+            </div>
+            <div class="flex items-center gap-3">
+                <!-- Mode Indicator -->
+                <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg"
+                     :class="hasPolygon ? 'bg-teal-50 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400' : 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'">
+                    <template x-if="hasPolygon">
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/>
+                        </svg>
+                    </template>
+                    <template x-if="!hasPolygon">
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <circle cx="12" cy="12" r="9" stroke-width="2"/>
+                        </svg>
+                    </template>
+                    <span class="text-sm font-medium" x-text="hasPolygon ? 'Polygon Mode' : 'Circle Mode'"></span>
+                </div>
+                <!-- Enabled Toggle -->
+                <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" x-model="geofenceEnabled" class="sr-only peer">
+                    <div class="relative w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 dark:peer-focus:ring-primary-800 rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-primary-600"></div>
+                    <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Enabled</span>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <!-- Map Card -->
+    <div class="card p-0 overflow-hidden">
+        <div class="p-4 border-b border-slate-200 dark:border-slate-700">
+            <div class="flex items-center justify-between flex-wrap gap-4">
+                <div>
+                    <h3 class="font-medium text-slate-900 dark:text-white">Geofence Boundary</h3>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">
+                        Draw a polygon for precise boundaries, or use the circle as a simple radius.
+                    </p>
+                </div>
+                <div class="flex items-center gap-4">
+                    <!-- Circle radius control -->
+                    <div class="flex items-center gap-3">
+                        <label class="text-sm text-slate-500 dark:text-slate-400">Radius:</label>
+                        <input type="range" x-model="radius" min="50" max="2000" step="50"
+                               @input="updateCircle()"
+                               class="w-24 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer dark:bg-slate-700">
+                        <span class="text-sm font-mono font-medium text-slate-900 dark:text-white w-14" x-text="radius + 'm'"></span>
+                    </div>
+                    <!-- Clear polygon button -->
+                    <button type="button"
+                            x-show="hasPolygon"
+                            @click="clearPolygon()"
+                            class="btn btn-secondary btn-sm text-red-600 hover:text-red-700">
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                        </svg>
+                        Clear Polygon
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div id="map"></div>
+    </div>
+
+    <!-- Test Location Card -->
+    <div class="card">
+        <h3 class="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            Test Location
+        </h3>
+        <div class="flex flex-wrap items-end gap-4">
+            <div class="flex-1 min-w-[200px]">
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Latitude</label>
+                <input type="number" step="any" x-model="testLat" placeholder="e.g., 6.5244"
+                       class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-mono focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
+            </div>
+            <div class="flex-1 min-w-[200px]">
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Longitude</label>
+                <input type="number" step="any" x-model="testLng" placeholder="e.g., 3.3792"
+                       class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-mono focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
+            </div>
+            <button type="button" @click="useCurrentLocation()" class="btn btn-secondary">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                </svg>
+                Use My Location
+            </button>
+            <button type="button" @click="testLocation()" class="btn btn-primary">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                Test
+            </button>
+        </div>
+        <!-- Test Result -->
+        <div x-show="testResult" x-transition class="mt-4">
+            <div :class="testResult?.inside ? 'geofence-status inside' : 'geofence-status outside'"
+                 class="rounded-lg border-2 p-4 flex items-center gap-3">
+                <template x-if="testResult?.inside">
+                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </template>
+                <template x-if="!testResult?.inside">
+                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </template>
+                <div>
+                    <p class="font-medium" x-text="testResult?.message"></p>
+                    <p class="text-sm opacity-75" x-show="testResult?.distance_m" x-text="'Distance: ' + testResult?.distance_m + 'm'"></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Instructions -->
+    <div class="card bg-slate-50 dark:bg-slate-800/50">
+        <h3 class="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">How it works</h3>
+        <div class="prose prose-sm dark:prose-invert max-w-none">
+            <ul class="text-slate-600 dark:text-slate-400 space-y-2">
+                <li><strong>Circle (default):</strong> Drag the marker to set the center. Adjust the radius with the slider. This is used when no polygon is drawn.</li>
+                <li><strong>Polygon (optional):</strong> Use the polygon tool in the map toolbar to draw a custom boundary. When a polygon exists, it overrides the circle.</li>
+                <li><strong>Testing:</strong> Enter coordinates or use your current location to check if a point is inside the geofence.</li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<!-- Leaflet Draw JS -->
+<script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+
+<script>
+function geofenceEditor() {
+    return {
+        map: null,
+        marker: null,
+        circle: null,
+        drawnItems: null,
+        drawControl: null,
+
+        geofenceEnabled: true,
+        center: { lat: 0, lng: 0 },
+        radius: 500,
+        polygonGeoJSON: null,
+
+        testLat: '',
+        testLng: '',
+        testMarker: null,
+        testResult: null,
+
+        locationId: '{{ location.location_id }}',
+
+        get hasPolygon() {
+            return this.polygonGeoJSON !== null;
+        },
+
+        init() {
+            // Load initial data
+            const data = {{ geofence_data | safe }};
+            this.center = data.center || { lat: 6.5244, lng: 3.3792 }; // Default to Lagos
+            this.radius = data.radius || 500;
+            this.polygonGeoJSON = data.polygon || null;
+            this.geofenceEnabled = {{ 'true' if location.geofence_enabled else 'false' }};
+
+            // If no center set, default to Lagos
+            if (!this.center.lat || !this.center.lng) {
+                this.center = { lat: 6.5244, lng: 3.3792 };
+            }
+
+            // Initialize map
+            this.$nextTick(() => {
+                this.initMap();
+            });
+
+            // Save button handler
+            document.getElementById('save-btn').addEventListener('click', () => this.save());
+        },
+
+        initMap() {
+            // Create map
+            this.map = L.map('map').setView([this.center.lat, this.center.lng], 16);
+
+            // Add tile layer
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; OpenStreetMap contributors'
+            }).addTo(this.map);
+
+            // Initialize drawn items layer for polygons
+            this.drawnItems = new L.FeatureGroup();
+            this.map.addLayer(this.drawnItems);
+
+            // Add circle (always visible as fallback)
+            this.setupCircle();
+
+            // Add polygon draw controls
+            this.setupPolygonControls();
+
+            // Load existing polygon if present
+            if (this.polygonGeoJSON) {
+                this.loadPolygon();
+            }
+        },
+
+        setupCircle() {
+            // Add draggable marker for center
+            this.marker = L.marker([this.center.lat, this.center.lng], {
+                draggable: true
+            }).addTo(this.map);
+
+            this.marker.on('dragend', (e) => {
+                const pos = e.target.getLatLng();
+                this.center = { lat: pos.lat, lng: pos.lng };
+                this.updateCircle();
+            });
+
+            // Add circle
+            this.circle = L.circle([this.center.lat, this.center.lng], {
+                radius: this.radius,
+                color: '#3b82f6',
+                fillColor: '#3b82f6',
+                fillOpacity: 0.15,
+                weight: 2,
+                dashArray: '5, 5'
+            }).addTo(this.map);
+
+            // Fit bounds to circle
+            this.map.fitBounds(this.circle.getBounds(), { padding: [50, 50] });
+        },
+
+        setupPolygonControls() {
+            this.drawControl = new L.Control.Draw({
+                edit: {
+                    featureGroup: this.drawnItems,
+                    remove: true
+                },
+                draw: {
+                    polygon: {
+                        allowIntersection: false,
+                        shapeOptions: {
+                            color: '#14b8a6',
+                            fillColor: '#14b8a6',
+                            fillOpacity: 0.3,
+                            weight: 2
+                        }
+                    },
+                    polyline: false,
+                    rectangle: false,
+                    circle: false,
+                    circlemarker: false,
+                    marker: false
+                }
+            });
+            this.map.addControl(this.drawControl);
+
+            // Handle new polygon creation
+            this.map.on(L.Draw.Event.CREATED, (e) => {
+                this.drawnItems.clearLayers();
+                this.drawnItems.addLayer(e.layer);
+                this.polygonGeoJSON = e.layer.toGeoJSON().geometry;
+            });
+
+            // Handle polygon edit
+            this.map.on(L.Draw.Event.EDITED, (e) => {
+                e.layers.eachLayer((layer) => {
+                    this.polygonGeoJSON = layer.toGeoJSON().geometry;
+                });
+            });
+
+            // Handle polygon delete
+            this.map.on(L.Draw.Event.DELETED, () => {
+                this.polygonGeoJSON = null;
+            });
+        },
+
+        loadPolygon() {
+            const layer = L.geoJSON(this.polygonGeoJSON, {
+                style: {
+                    color: '#14b8a6',
+                    fillColor: '#14b8a6',
+                    fillOpacity: 0.3,
+                    weight: 2
+                }
+            });
+            layer.eachLayer((l) => this.drawnItems.addLayer(l));
+            this.map.fitBounds(this.drawnItems.getBounds(), { padding: [50, 50] });
+        },
+
+        clearPolygon() {
+            this.drawnItems.clearLayers();
+            this.polygonGeoJSON = null;
+            // Re-center on circle
+            this.map.fitBounds(this.circle.getBounds(), { padding: [50, 50] });
+        },
+
+        updateCircle() {
+            if (this.circle) {
+                this.circle.setLatLng([this.center.lat, this.center.lng]);
+                this.circle.setRadius(this.radius);
+            }
+            if (this.marker) {
+                this.marker.setLatLng([this.center.lat, this.center.lng]);
+            }
+        },
+
+        async save() {
+            const btn = document.getElementById('save-btn');
+            btn.classList.add('htmx-request');
+
+            const payload = {
+                geofence_enabled: this.geofenceEnabled,
+                center: this.center,
+                radius: parseInt(this.radius),
+                polygon: this.polygonGeoJSON,
+            };
+
+            try {
+                const response = await fetch(`/people/hr/locations/${this.locationId}/geofence`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(payload),
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    alert('Geofence saved successfully!');
+                } else {
+                    alert('Error: ' + (result.error || 'Failed to save geofence'));
+                }
+            } catch (error) {
+                alert('Error saving geofence: ' + error.message);
+            } finally {
+                btn.classList.remove('htmx-request');
+            }
+        },
+
+        useCurrentLocation() {
+            if (!navigator.geolocation) {
+                alert('Geolocation is not supported by your browser');
+                return;
+            }
+
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    this.testLat = position.coords.latitude.toFixed(6);
+                    this.testLng = position.coords.longitude.toFixed(6);
+                },
+                (error) => {
+                    alert('Unable to get your location: ' + error.message);
+                }
+            );
+        },
+
+        async testLocation() {
+            if (!this.testLat || !this.testLng) {
+                alert('Please enter latitude and longitude');
+                return;
+            }
+
+            // Show test marker on map
+            if (this.testMarker) {
+                this.map.removeLayer(this.testMarker);
+            }
+            this.testMarker = L.marker([parseFloat(this.testLat), parseFloat(this.testLng)], {
+                icon: L.divIcon({
+                    className: 'test-marker',
+                    html: '<div style="background:#ef4444;width:12px;height:12px;border-radius:50%;border:2px solid white;box-shadow:0 2px 4px rgba(0,0,0,0.3);"></div>',
+                    iconSize: [12, 12],
+                    iconAnchor: [6, 6]
+                })
+            }).addTo(this.map);
+
+            try {
+                const response = await fetch(`/people/hr/locations/${this.locationId}/geofence/test`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        latitude: parseFloat(this.testLat),
+                        longitude: parseFloat(this.testLng),
+                    }),
+                });
+
+                this.testResult = await response.json();
+
+                // Update test marker color based on result
+                if (this.testMarker) {
+                    this.map.removeLayer(this.testMarker);
+                    const color = this.testResult.inside ? '#10b981' : '#ef4444';
+                    this.testMarker = L.marker([parseFloat(this.testLat), parseFloat(this.testLng)], {
+                        icon: L.divIcon({
+                            className: 'test-marker',
+                            html: `<div style="background:${color};width:14px;height:14px;border-radius:50%;border:2px solid white;box-shadow:0 2px 4px rgba(0,0,0,0.3);"></div>`,
+                            iconSize: [14, 14],
+                            iconAnchor: [7, 7]
+                        })
+                    }).addTo(this.map);
+                }
+            } catch (error) {
+                this.testResult = {
+                    inside: false,
+                    message: 'Error testing location: ' + error.message
+                };
+            }
+        }
+    };
+}
+</script>
+{% endblock %}

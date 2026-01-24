@@ -14,6 +14,27 @@ from app.tasks.expense import (
     post_cash_advance_disbursement,
     settle_cash_advance_with_claim,
     calculate_expense_analytics,
+    poll_stuck_expense_transfers,
+)
+
+from app.tasks.hr import (
+    process_probation_ending_notifications,
+    process_contract_expiry_notifications,
+    process_work_anniversary_notifications,
+    process_birthday_notifications,
+    process_performance_review_reminders,
+    process_certification_expiry_notifications,
+    calculate_hr_analytics,
+)
+
+from app.tasks.performance import (
+    process_cycle_phase_transitions,
+    generate_cycle_appraisals,
+    calculate_cycle_progress,
+    check_upcoming_deadlines,
+    sync_all_cycle_progress,
+    activate_cycle,
+    complete_cycle,
 )
 
 __all__ = [
@@ -31,4 +52,21 @@ __all__ = [
     "post_cash_advance_disbursement",
     "settle_cash_advance_with_claim",
     "calculate_expense_analytics",
+    "poll_stuck_expense_transfers",
+    # HR module tasks
+    "process_probation_ending_notifications",
+    "process_contract_expiry_notifications",
+    "process_work_anniversary_notifications",
+    "process_birthday_notifications",
+    "process_performance_review_reminders",
+    "process_certification_expiry_notifications",
+    "calculate_hr_analytics",
+    # Performance module tasks
+    "process_cycle_phase_transitions",
+    "generate_cycle_appraisals",
+    "calculate_cycle_progress",
+    "check_upcoming_deadlines",
+    "sync_all_cycle_progress",
+    "activate_cycle",
+    "complete_cycle",
 ]

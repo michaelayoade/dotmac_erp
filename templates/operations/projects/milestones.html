@@ -122,7 +122,7 @@
                             </span>
 
                             {% if milestone.linked_task %}
-                            <a href="/operations/projects/{{ project.project_code }}/tasks/{{ milestone.linked_task.task_id }}"
+                            <a href="/operations/projects/{{ project.project_code }}/tasks/{{ milestone.linked_task.task_code or milestone.linked_task.task_id }}"
                                class="text-xs text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300">
                                 Linked Task: {{ milestone.linked_task.task_name }}
                             </a>

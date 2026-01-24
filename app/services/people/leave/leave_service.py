@@ -1243,6 +1243,7 @@ class LeaveService:
         Returns a list of employees with their leave balances across all leave types.
         """
         from app.models.people.hr import Employee, Department
+        from app.models.person import Person
 
         target_year = year or date.today().year
 
@@ -1250,9 +1251,9 @@ class LeaveService:
         alloc_query = (
             self.db.query(
                 Employee.employee_id,
-                Employee.first_name,
-                Employee.last_name,
-                Department.name.label("department_name"),
+                Person.first_name,
+                Person.last_name,
+                Department.department_name.label("department_name"),
                 LeaveType.leave_type_name,
                 LeaveType.leave_type_id,
                 func.sum(LeaveAllocation.new_leaves_allocated + LeaveAllocation.carry_forward_leaves).label("total_allocated"),
@@ -1266,6 +1267,7 @@ class LeaveService:
                 ).label("balance"),
             )
             .join(LeaveAllocation, LeaveAllocation.employee_id == Employee.employee_id)
+            .join(Person, Person.id == Employee.person_id)
             .join(LeaveType, LeaveType.leave_type_id == LeaveAllocation.leave_type_id)
             .outerjoin(Department, Employee.department_id == Department.department_id)
             .filter(
@@ -1279,9 +1281,9 @@ class LeaveService:
 
         results = alloc_query.group_by(
             Employee.employee_id,
-            Employee.first_name,
-            Employee.last_name,
-            Department.name,
+            Person.first_name,
+            Person.last_name,
+            Department.department_name,
             LeaveType.leave_type_name,
             LeaveType.leave_type_id,
         ).all()
@@ -1399,6 +1401,7 @@ class LeaveService:
         suitable for calendar display.
         """
         from app.models.people.hr import Employee, Department
+        from app.models.person import Person
 
         today = date.today()
         if not start_date:
@@ -1412,12 +1415,13 @@ class LeaveService:
         query = (
             self.db.query(
                 LeaveApplication,
-                Employee.first_name,
-                Employee.last_name,
-                Department.name.label("department_name"),
+                Person.first_name,
+                Person.last_name,
+                Department.department_name.label("department_name"),
                 LeaveType.leave_type_name,
             )
             .join(Employee, Employee.employee_id == LeaveApplication.employee_id)
+            .join(Person, Person.id == Employee.person_id)
             .outerjoin(Department, Employee.department_id == Department.department_id)
             .join(LeaveType, LeaveType.leave_type_id == LeaveApplication.leave_type_id)
             .filter(
@@ -1471,9 +1475,10 @@ class LeaveService:
         start_date = end_date - relativedelta(months=months - 1)
 
         # Query monthly aggregates
+        month_expr = func.date_trunc("month", LeaveApplication.from_date).label("month")
         results = (
             self.db.query(
-                func.date_trunc("month", LeaveApplication.from_date).label("month"),
+                month_expr,
                 func.count(LeaveApplication.application_id).label("application_count"),
                 func.sum(LeaveApplication.total_leave_days).label("total_days"),
                 func.count(
@@ -1492,8 +1497,8 @@ class LeaveService:
                 LeaveApplication.from_date >= start_date,
                 LeaveApplication.from_date <= today,
             )
-            .group_by(func.date_trunc("month", LeaveApplication.from_date))
-            .order_by(func.date_trunc("month", LeaveApplication.from_date))
+            .group_by(month_expr)
+            .order_by(month_expr)
             .all()
         )
 

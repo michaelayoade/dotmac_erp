@@ -35,6 +35,8 @@ class KPIStatus(str, enum.Enum):
     """KPI tracking status."""
     DRAFT = "DRAFT"
     ACTIVE = "ACTIVE"
+    ON_TRACK = "ON_TRACK"
+    AT_RISK = "AT_RISK"
     ACHIEVED = "ACHIEVED"
     MISSED = "MISSED"
     DEFERRED = "DEFERRED"

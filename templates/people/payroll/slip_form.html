@@ -26,6 +26,7 @@
     {% endif %}
 
     <form action="/people/payroll/slips/new" method="post" class="card">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <div class="p-6 border-b border-slate-200 dark:border-slate-700">
             <h2 class="text-lg font-semibold text-slate-900 dark:text-white">
                 {% if slip %}Edit Salary Slip{% else %}Generate Salary Slip{% endif %}

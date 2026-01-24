@@ -1,0 +1,149 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}Add Dependent - {{ employee.full_name }}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400">Employees</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr/employees/{{ employee.employee_id }}/dependents" class="hover:text-teal-600 dark:hover:text-teal-400">{{ employee.employee_code }}</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">Add Dependent</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl">
+    <form method="post" action="/people/hr/employees/{{ employee.employee_id }}/dependents/new" class="space-y-6">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Personal Information</h3>
+            </div>
+            <div class="card-body space-y-4">
+                <div>
+                    <label for="full_name" class="form-label required">Full Name</label>
+                    <input type="text" name="full_name" id="full_name" required
+                           class="form-input w-full" value="{{ form_data.full_name or '' }}">
+                </div>
+
+                <div>
+                    <label for="relationship" class="form-label required">Relationship</label>
+                    <select name="relationship" id="relationship" required class="form-select w-full">
+                        <option value="">Select Relationship</option>
+                        {% for rt in relationship_types %}
+                        <option value="{{ rt.value }}" {{ 'selected' if form_data.relationship == rt.value }}>
+                            {{ rt.value | replace('_', ' ') | title }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="date_of_birth" class="form-label">Date of Birth</label>
+                        <input type="date" name="date_of_birth" id="date_of_birth"
+                               class="form-input w-full" value="{{ form_data.date_of_birth or '' }}">
+                    </div>
+                    <div>
+                        <label for="gender" class="form-label">Gender</label>
+                        <select name="gender" id="gender" class="form-select w-full">
+                            <option value="">Select Gender</option>
+                            <option value="male" {{ 'selected' if form_data.gender == 'male' }}>Male</option>
+                            <option value="female" {{ 'selected' if form_data.gender == 'female' }}>Female</option>
+                            <option value="other" {{ 'selected' if form_data.gender == 'other' }}>Other</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label for="national_id" class="form-label">National ID / SSN</label>
+                    <input type="text" name="national_id" id="national_id"
+                           class="form-input w-full" value="{{ form_data.national_id or '' }}"
+                           placeholder="Government-issued ID number">
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Contact Information</h3>
+            </div>
+            <div class="card-body space-y-4">
+                <div>
+                    <label for="phone_number" class="form-label">Phone Number</label>
+                    <input type="tel" name="phone_number" id="phone_number"
+                           class="form-input w-full" value="{{ form_data.phone_number or '' }}">
+                </div>
+
+                <div>
+                    <label for="email" class="form-label">Email</label>
+                    <input type="email" name="email" id="email"
+                           class="form-input w-full" value="{{ form_data.email or '' }}">
+                </div>
+
+                <div>
+                    <label for="address" class="form-label">Address</label>
+                    <textarea name="address" id="address" rows="2"
+                              class="form-input w-full">{{ form_data.address or '' }}</textarea>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Status & Designations</h3>
+            </div>
+            <div class="card-body space-y-4">
+                <div class="flex items-center gap-2">
+                    <input type="checkbox" name="is_emergency_contact" id="is_emergency_contact" value="true"
+                           class="rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+                           {{ 'checked' if form_data.is_emergency_contact }}>
+                    <label for="is_emergency_contact" class="text-sm text-slate-700 dark:text-slate-300">
+                        Designate as emergency contact
+                    </label>
+                </div>
+
+                <div class="flex items-center gap-2">
+                    <input type="checkbox" name="is_beneficiary" id="is_beneficiary" value="true"
+                           class="rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+                           {{ 'checked' if form_data.is_beneficiary }}>
+                    <label for="is_beneficiary" class="text-sm text-slate-700 dark:text-slate-300">
+                        Designate as beneficiary for benefits/insurance
+                    </label>
+                </div>
+
+                <div id="beneficiary_percentage_wrapper" class="pl-6 {% if not form_data.is_beneficiary %}hidden{% endif %}">
+                    <label for="beneficiary_percentage" class="form-label">Beneficiary Percentage</label>
+                    <div class="flex items-center gap-2">
+                        <input type="number" name="beneficiary_percentage" id="beneficiary_percentage"
+                               class="form-input w-24" value="{{ form_data.beneficiary_percentage or '' }}"
+                               min="0" max="100" step="1">
+                        <span class="text-slate-500">%</span>
+                    </div>
+                </div>
+
+                <div>
+                    <label for="notes" class="form-label">Notes</label>
+                    <textarea name="notes" id="notes" rows="2"
+                              class="form-input w-full">{{ form_data.notes or '' }}</textarea>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex justify-end gap-3">
+            <a href="/people/hr/employees/{{ employee.employee_id }}/dependents" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">Add Dependent</button>
+        </div>
+    </form>
+</div>
+
+<script>
+document.getElementById('is_beneficiary').addEventListener('change', function() {
+    document.getElementById('beneficiary_percentage_wrapper').classList.toggle('hidden', !this.checked);
+});
+</script>
+{% endblock %}

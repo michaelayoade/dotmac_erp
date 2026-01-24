@@ -93,7 +93,53 @@
             </svg>
             Expenses
         </a>
+        <a href="/operations/projects/{{ project.project_code }}/attachments" class="inline-flex items-center gap-2 rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600 transition-colors">
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/>
+            </svg>
+            Files
+        </a>
     </div>
+
+    {% if customer_info %}
+    <div class="rounded-lg border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-800">
+        <h3 class="text-sm font-medium text-slate-500 dark:text-slate-400">Customer</h3>
+        <div class="mt-4 space-y-2">
+            <div class="flex justify-between text-sm">
+                <span class="text-slate-600 dark:text-slate-400">Name</span>
+                <span class="font-medium text-slate-900 dark:text-white text-right">
+                    {{ customer_info.customer_name }}
+                    <span class="block font-mono text-xs text-slate-400">{{ customer_info.customer_code }}</span>
+                </span>
+            </div>
+            {% if customer_info.email or customer_info.phone %}
+            <div class="flex justify-between text-sm">
+                <span class="text-slate-600 dark:text-slate-400">Contact</span>
+                <span class="font-medium text-slate-900 dark:text-white text-right">
+                    {% if customer_info.email %}
+                    <div>{{ customer_info.email }}</div>
+                    {% endif %}
+                    {% if customer_info.phone %}
+                    <div class="text-slate-600 dark:text-slate-400">{{ customer_info.phone }}</div>
+                    {% endif %}
+                </span>
+            </div>
+            {% endif %}
+            {% if customer_info.billing_address %}
+            <div class="flex justify-between text-sm">
+                <span class="text-slate-600 dark:text-slate-400">Billing Address</span>
+                <span class="font-medium text-slate-900 dark:text-white text-right">{{ customer_info.billing_address }}</span>
+            </div>
+            {% endif %}
+            {% if customer_info.shipping_address %}
+            <div class="flex justify-between text-sm">
+                <span class="text-slate-600 dark:text-slate-400">Shipping Address</span>
+                <span class="font-medium text-slate-900 dark:text-white text-right">{{ customer_info.shipping_address }}</span>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
 
     <!-- Dashboard Grid -->
     <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">

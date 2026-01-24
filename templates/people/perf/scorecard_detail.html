@@ -1,0 +1,278 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}Scorecard - {{ scorecard.employee.full_name if scorecard.employee else 'Details' }}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/perf/scorecards" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Scorecards</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">{{ scorecard.period_label or 'Details' }}</span>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<div class="flex items-center gap-2">
+    {% if not scorecard.is_finalized %}
+    <a href="/people/perf/scorecards/{{ scorecard.scorecard_id }}/finalize" class="btn btn-primary">
+        <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        Finalize
+    </a>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    {% if success %}
+    <div class="p-4 rounded-lg bg-green-50 border border-green-200 dark:bg-green-900/20 dark:border-green-800">
+        <div class="flex items-center gap-2 text-green-700 dark:text-green-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+            </svg>
+            <span>{{ success | replace('+', ' ') }}</span>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if error %}
+    <div class="p-4 rounded-lg bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-800">
+        <div class="flex items-center gap-2 text-red-700 dark:text-red-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span>{{ error | replace('+', ' ') }}</span>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Header Card -->
+    <div class="card">
+        <div class="card-body">
+            <div class="flex flex-wrap items-center justify-between gap-4">
+                <div class="flex items-center gap-4">
+                    <div class="w-14 h-14 rounded-full bg-gradient-to-br from-teal-400 to-cyan-500 flex items-center justify-center text-white text-xl font-bold">
+                        {{ scorecard.employee.full_name[0] if scorecard.employee else '?' }}
+                    </div>
+                    <div>
+                        <h2 class="text-xl font-semibold text-slate-900 dark:text-white">
+                            {{ scorecard.employee.full_name if scorecard.employee else '-' }}
+                        </h2>
+                        <p class="text-sm text-slate-500 dark:text-slate-400">
+                            {{ scorecard.employee.designation.designation_name if scorecard.employee and scorecard.employee.designation else '-' }}
+                            {% if scorecard.employee and scorecard.employee.department %}
+                             &bull; {{ scorecard.employee.department.department_name }}
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-6">
+                    <div class="text-center">
+                        <p class="text-xs text-slate-500 dark:text-slate-400 uppercase">Period</p>
+                        <p class="font-medium text-slate-900 dark:text-white">{{ scorecard.period_label or (scorecard.period_start.strftime("%b %Y")) }}</p>
+                        <p class="text-xs text-slate-500">{{ scorecard.period_start.strftime("%b %d") }} - {{ scorecard.period_end.strftime("%b %d, %Y") }}</p>
+                    </div>
+                    <div class="text-center">
+                        <p class="text-xs text-slate-500 dark:text-slate-400 uppercase">Status</p>
+                        {% if scorecard.is_finalized %}
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300">
+                            Finalized
+                        </span>
+                        {% else %}
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300">
+                            In Progress
+                        </span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Overall Score Card -->
+    {% if scorecard.is_finalized %}
+    <div class="card">
+        <div class="card-body">
+            <div class="grid grid-cols-2 md:grid-cols-6 gap-4">
+                <!-- Overall Score -->
+                <div class="col-span-2 text-center p-4 rounded-lg bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-700">
+                    <p class="text-xs text-slate-500 dark:text-slate-400 uppercase mb-1">Overall Score</p>
+                    <p class="text-4xl font-bold {% if scorecard.overall_score >= 80 %}text-green-600 dark:text-green-400{% elif scorecard.overall_score >= 60 %}text-amber-600 dark:text-amber-400{% else %}text-red-600 dark:text-red-400{% endif %}">
+                        {{ "%.1f"|format(scorecard.overall_score) if scorecard.overall_score else '-' }}%
+                    </p>
+                    {% if scorecard.rating_label %}
+                    <p class="text-sm font-medium text-slate-600 dark:text-slate-300 mt-1">{{ scorecard.rating_label }}</p>
+                    {% endif %}
+                </div>
+
+                <!-- Perspective Scores -->
+                {% set perspective_data = [
+                    ('Financial', scorecard.financial_score, 'from-blue-500 to-blue-600'),
+                    ('Customer', scorecard.customer_score, 'from-purple-500 to-purple-600'),
+                    ('Process', scorecard.process_score, 'from-amber-500 to-amber-600'),
+                    ('Learning', scorecard.learning_score, 'from-teal-500 to-teal-600')
+                ] %}
+                {% for name, score, gradient in perspective_data %}
+                <div class="text-center p-3 rounded-lg bg-slate-50 dark:bg-slate-800">
+                    <p class="text-xs text-slate-500 dark:text-slate-400 uppercase mb-1">{{ name }}</p>
+                    <p class="text-xl font-bold text-slate-900 dark:text-white">
+                        {{ "%.1f"|format(score) if score else '-' }}%
+                    </p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Perspectives Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {% set perspective_info = {
+            'FINANCIAL': {'name': 'Financial', 'icon': 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z', 'color': 'blue'},
+            'CUSTOMER': {'name': 'Customer', 'icon': 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z', 'color': 'purple'},
+            'PROCESS': {'name': 'Internal Process', 'icon': 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z', 'color': 'amber'},
+            'LEARNING': {'name': 'Learning & Growth', 'icon': 'M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253', 'color': 'teal'}
+        } %}
+
+        {% for key, items in perspectives.items() %}
+        {% set info = perspective_info[key] %}
+        <div class="card">
+            <div class="card-header flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 rounded-lg bg-{{ info.color }}-100 dark:bg-{{ info.color }}-900/30 flex items-center justify-center">
+                        <svg class="w-5 h-5 text-{{ info.color }}-600 dark:text-{{ info.color }}-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="{{ info.icon }}"/>
+                        </svg>
+                    </div>
+                    <h3 class="font-medium text-slate-900 dark:text-white">{{ info.name }}</h3>
+                </div>
+                {% if scorecard.is_finalized %}
+                {% set score_attr = key.lower() + '_score' %}
+                {% set score = scorecard[score_attr] %}
+                {% if score %}
+                <span class="text-lg font-bold {% if score >= 80 %}text-green-600{% elif score >= 60 %}text-amber-600{% else %}text-red-600{% endif %}">
+                    {{ "%.1f"|format(score) }}%
+                </span>
+                {% endif %}
+                {% endif %}
+            </div>
+            <div class="card-body">
+                {% if items %}
+                <div class="space-y-3">
+                    {% for item in items %}
+                    <div class="p-3 rounded-lg bg-slate-50 dark:bg-slate-800">
+                        <div class="flex items-start justify-between gap-4">
+                            <div class="flex-1">
+                                <h4 class="font-medium text-slate-900 dark:text-white">{{ item.metric_name }}</h4>
+                                {% if item.description %}
+                                <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{{ item.description }}</p>
+                                {% endif %}
+                            </div>
+                            {% if item.status %}
+                            {% set status_colors = {
+                                'ON_TRACK': 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
+                                'AT_RISK': 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
+                                'OFF_TRACK': 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
+                                'ACHIEVED': 'bg-teal-100 text-teal-700 dark:bg-teal-900 dark:text-teal-300'
+                            } %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium {{ status_colors.get(item.status, 'bg-slate-100 text-slate-700') }}">
+                                {{ item.status | replace('_', ' ') | title }}
+                            </span>
+                            {% endif %}
+                        </div>
+                        <div class="mt-3 grid grid-cols-4 gap-2 text-xs">
+                            <div>
+                                <span class="text-slate-500 dark:text-slate-400">Target</span>
+                                <p class="font-medium text-slate-900 dark:text-white">
+                                    {{ item.target_value }}{% if item.unit_of_measure %} {{ item.unit_of_measure }}{% endif %}
+                                </p>
+                            </div>
+                            <div>
+                                <span class="text-slate-500 dark:text-slate-400">Actual</span>
+                                <p class="font-medium text-slate-900 dark:text-white">
+                                    {% if item.actual_value is not none %}
+                                    {{ item.actual_value }}{% if item.unit_of_measure %} {{ item.unit_of_measure }}{% endif %}
+                                    {% else %}
+                                    <span class="text-slate-400">-</span>
+                                    {% endif %}
+                                </p>
+                            </div>
+                            <div>
+                                <span class="text-slate-500 dark:text-slate-400">Score</span>
+                                <p class="font-medium {% if item.score and item.score >= 80 %}text-green-600{% elif item.score and item.score >= 60 %}text-amber-600{% elif item.score %}text-red-600{% else %}text-slate-900 dark:text-white{% endif %}">
+                                    {% if item.score %}{{ "%.0f"|format(item.score) }}%{% else %}-{% endif %}
+                                </p>
+                            </div>
+                            <div>
+                                <span class="text-slate-500 dark:text-slate-400">Weight</span>
+                                <p class="font-medium text-slate-900 dark:text-white">{{ "%.0f"|format(item.weightage) }}%</p>
+                            </div>
+                        </div>
+                        {% if not scorecard.is_finalized %}
+                        <div class="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
+                            <a href="/people/perf/scorecards/{{ scorecard.scorecard_id }}/update-item/{{ item.item_id }}"
+                               class="text-sm text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300">
+                                Update Actual Value &rarr;
+                            </a>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-sm text-slate-500 dark:text-slate-400 text-center py-4">No metrics in this perspective.</p>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Summary -->
+    {% if scorecard.summary %}
+    <div class="card">
+        <div class="card-header">
+            <h3 class="font-medium text-slate-900 dark:text-white">Summary</h3>
+        </div>
+        <div class="card-body">
+            <p class="text-slate-600 dark:text-slate-400">{{ scorecard.summary }}</p>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Metadata -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="font-medium text-slate-900 dark:text-white">Details</h3>
+        </div>
+        <div class="card-body">
+            <dl class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div>
+                    <dt class="text-slate-500 dark:text-slate-400">Created</dt>
+                    <dd class="font-medium text-slate-900 dark:text-white">{{ scorecard.created_at.strftime("%b %d, %Y") if scorecard.created_at else '-' }}</dd>
+                </div>
+                {% if scorecard.finalized_on %}
+                <div>
+                    <dt class="text-slate-500 dark:text-slate-400">Finalized</dt>
+                    <dd class="font-medium text-slate-900 dark:text-white">{{ scorecard.finalized_on.strftime("%b %d, %Y") }}</dd>
+                </div>
+                {% endif %}
+                <div>
+                    <dt class="text-slate-500 dark:text-slate-400">Total Metrics</dt>
+                    <dd class="font-medium text-slate-900 dark:text-white">{{ scorecard.items | length }}</dd>
+                </div>
+                {% if scorecard.score_change %}
+                <div>
+                    <dt class="text-slate-500 dark:text-slate-400">Change vs Previous</dt>
+                    <dd class="font-medium {% if scorecard.score_change > 0 %}text-green-600{% elif scorecard.score_change < 0 %}text-red-600{% else %}text-slate-900{% endif %}">
+                        {% if scorecard.score_change > 0 %}+{% endif %}{{ "%.1f"|format(scorecard.score_change) }}%
+                    </dd>
+                </div>
+                {% endif %}
+            </dl>
+        </div>
+    </div>
+</div>
+{% endblock %}

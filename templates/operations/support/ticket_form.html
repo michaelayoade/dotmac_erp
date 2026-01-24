@@ -29,7 +29,7 @@
     </div>
     {% endif %}
 
-    <form method="post" action="{{ '/operations/support/tickets/' + ticket.ticket_id|string if ticket else '/operations/support/tickets' }}" class="card p-6 space-y-6">
+    <form method="post" action="{{ '/operations/support/tickets/' + ticket.ticket_number if ticket else '/operations/support/tickets' }}" class="card p-6 space-y-6">
 
         {# Ticket Number (shown only for edit) #}
         {% if ticket %}
@@ -73,10 +73,15 @@
         <div class="grid gap-6 sm:grid-cols-2">
             <div>
                 <label class="form-label">Customer</label>
-                <select name="customer_id" class="form-input">
+                <select id="customer_id" name="customer_id" class="form-input">
                     <option value="">No customer linked</option>
                     {% for cust in customers %}
-                    <option value="{{ cust.customer_id }}" {{ 'selected' if ticket and ticket.customer_id and ticket.customer_id|string == cust.customer_id }}>
+                    <option value="{{ cust.customer_id }}"
+                            data-email="{{ cust.customer_email or '' }}"
+                            data-phone="{{ cust.customer_phone or '' }}"
+                            data-billing="{{ cust.billing_address or '' }}"
+                            data-shipping="{{ cust.shipping_address or '' }}"
+                            {{ 'selected' if ticket and ticket.customer_id and ticket.customer_id|string == cust.customer_id }}>
                         {{ cust.customer_name }} ({{ cust.customer_code }})
                     </option>
                     {% endfor %}
@@ -93,6 +98,27 @@
                     {% endfor %}
                 </select>
             </div>
+        </div>
+
+        <div class="grid gap-6 sm:grid-cols-2">
+            <div>
+                <label class="form-label">Contact Email</label>
+                <input id="contact_email" name="contact_email" type="email"
+                       value="{{ ticket.contact_email if ticket else '' }}"
+                       class="form-input" placeholder="Auto-filled from customer or enter manually">
+                <p class="text-xs text-slate-400 mt-1">Auto-populated from customer, but can be edited</p>
+            </div>
+            <div>
+                <label class="form-label">Contact Phone</label>
+                <input id="contact_phone" name="contact_phone" type="tel"
+                       value="{{ ticket.contact_phone if ticket else '' }}"
+                       class="form-input" placeholder="Auto-filled from customer or enter manually">
+            </div>
+        </div>
+        <div>
+            <label class="form-label">Address</label>
+            <textarea id="contact_address" name="contact_address" rows="2"
+                      class="form-input" placeholder="Auto-filled from customer or enter manually">{{ ticket.contact_address if ticket else '' }}</textarea>
         </div>
 
         {# Raised By #}
@@ -143,7 +169,7 @@
 
         {# Actions #}
         <div class="flex items-center justify-between pt-4 border-t border-slate-200 dark:border-slate-700">
-            <a href="{{ '/operations/support/tickets/' + ticket.ticket_id|string if ticket else '/operations/support/tickets' }}" class="btn btn-secondary">Cancel</a>
+            <a href="{{ '/operations/support/tickets/' + ticket.ticket_number if ticket else '/operations/support/tickets' }}" class="btn btn-secondary">Cancel</a>
             <button type="submit" class="btn btn-primary">
                 <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
@@ -153,4 +179,45 @@
         </div>
     </form>
 </div>
+
+<script>
+    (function () {
+        const select = document.getElementById("customer_id");
+        const email = document.getElementById("contact_email");
+        const phone = document.getElementById("contact_phone");
+        const address = document.getElementById("contact_address");
+
+        // Only auto-populate if fields are empty (don't overwrite existing data on edit)
+        const updateFromCustomer = () => {
+            const opt = select.options[select.selectedIndex];
+            if (!opt || !opt.value) {
+                return;
+            }
+            // Only fill if currently empty
+            if (!email.value) {
+                email.value = opt.dataset.email || "";
+            }
+            if (!phone.value) {
+                phone.value = opt.dataset.phone || "";
+            }
+            if (!address.value) {
+                // Use billing address as default
+                address.value = opt.dataset.billing || opt.dataset.shipping || "";
+            }
+        };
+
+        // On customer change, always update (user is explicitly selecting a new customer)
+        select.addEventListener("change", () => {
+            const opt = select.options[select.selectedIndex];
+            if (opt && opt.value) {
+                email.value = opt.dataset.email || "";
+                phone.value = opt.dataset.phone || "";
+                address.value = opt.dataset.billing || opt.dataset.shipping || "";
+            }
+        });
+
+        // On initial load, only populate if fields are empty (preserve existing values on edit)
+        updateFromCustomer();
+    })();
+</script>
 {% endblock %}

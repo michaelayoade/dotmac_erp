@@ -11,7 +11,6 @@ from app.web.finance.gl import router as gl_router
 from app.web.finance.ap import router as ap_router
 from app.web.finance.ar import router as ar_router
 from app.web.finance.fa import router as fa_router
-from app.web.finance.fin_inst import router as fin_inst_router
 from app.web.finance.banking import router as banking_router
 from app.web.finance.tax import router as tax_router
 from app.web.finance.reports import router as reports_router
@@ -34,7 +33,6 @@ router.include_router(gl_router)
 router.include_router(ap_router)
 router.include_router(ar_router)
 router.include_router(fa_router)
-router.include_router(fin_inst_router)
 router.include_router(banking_router)
 router.include_router(tax_router)
 router.include_router(reports_router)

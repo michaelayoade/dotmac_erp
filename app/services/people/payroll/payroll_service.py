@@ -696,7 +696,7 @@ class PayrollService:
         results = (
             self.db.query(
                 Department.department_id,
-                Department.name.label("department_name"),
+                Department.department_name.label("department_name"),
                 func.count(SalarySlip.slip_id).label("slip_count"),
                 func.sum(SalarySlip.gross_pay).label("total_gross"),
                 func.sum(SalarySlip.total_deduction).label("total_deductions"),
@@ -710,7 +710,7 @@ class PayrollService:
                 SalarySlip.start_date >= start_date,
                 SalarySlip.end_date <= end_date,
             )
-            .group_by(Department.department_id, Department.name)
+            .group_by(Department.department_id, Department.department_name)
             .order_by(func.sum(SalarySlip.net_pay).desc())
             .all()
         )
@@ -779,7 +779,7 @@ class PayrollService:
                 SalaryComponent.component_name,
                 SalaryComponent.component_code,
                 SalaryComponent.is_statutory,
-                func.count(SalarySlipDeduction.deduction_id).label("deduction_count"),
+                func.count(SalarySlipDeduction.line_id).label("deduction_count"),
                 func.sum(SalarySlipDeduction.amount).label("total_amount"),
             )
             .select_from(SalarySlipDeduction)

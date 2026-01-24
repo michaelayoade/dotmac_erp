@@ -17,7 +17,7 @@
             </div>
             <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ project.project_name }}</p>
         </div>
-        <button type="button" onclick="openAllocationModal()"
+        <button type="button" onclick="document.getElementById('add-member-modal').classList.remove('hidden')"
                 class="inline-flex items-center gap-2 rounded-lg bg-amber-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-amber-700 transition-colors">
             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
@@ -26,127 +26,225 @@
         </button>
     </div>
 
-    <!-- Team Summary -->
-    <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+    <!-- Messages -->
+    {% if request.query_params.get('success') %}
+    <div class="rounded-lg bg-green-50 border border-green-200 p-4 text-sm text-green-800 dark:bg-green-900/20 dark:border-green-800 dark:text-green-300">
+        {{ request.query_params.get('success') | replace('+', ' ') }}
+    </div>
+    {% endif %}
+    {% if request.query_params.get('error') %}
+    <div class="rounded-lg bg-red-50 border border-red-200 p-4 text-sm text-red-800 dark:bg-red-900/20 dark:border-red-800 dark:text-red-300">
+        {{ request.query_params.get('error') | replace('+', ' ') }}
+    </div>
+    {% endif %}
+
+    <!-- Utilization Summary -->
+    <div class="grid grid-cols-1 gap-4 sm:grid-cols-4">
         <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
-            <div class="text-2xl font-bold text-slate-900 dark:text-white">{{ allocations|length }}</div>
+            <div class="text-2xl font-bold text-slate-900 dark:text-white">{{ utilization.total_team_members }}</div>
             <div class="text-sm text-slate-500 dark:text-slate-400">Team Members</div>
         </div>
         <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
-            <div class="text-2xl font-bold text-slate-900 dark:text-white">
-                {{ allocations|selectattr('is_active')|list|length }}
-            </div>
-            <div class="text-sm text-slate-500 dark:text-slate-400">Active</div>
+            <div class="text-2xl font-bold text-blue-600 dark:text-blue-400">{{ utilization.total_allocated_percent|round(0)|int }}%</div>
+            <div class="text-sm text-slate-500 dark:text-slate-400">Total Allocated</div>
         </div>
         <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
-            <div class="text-2xl font-bold text-slate-900 dark:text-white">
-                {% set total_alloc = allocations|selectattr('is_active')|map(attribute='allocation_percent')|sum %}
-                {{ total_alloc|int }}%
-            </div>
-            <div class="text-sm text-slate-500 dark:text-slate-400">Total Allocation</div>
+            <div class="text-2xl font-bold text-green-600 dark:text-green-400">{{ utilization.total_hours_logged|round(1) }}</div>
+            <div class="text-sm text-slate-500 dark:text-slate-400">Hours Logged</div>
+        </div>
+        <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
+            <div class="text-2xl font-bold text-amber-600 dark:text-amber-400">{{ utilization.billable_percent|round(0)|int }}%</div>
+            <div class="text-sm text-slate-500 dark:text-slate-400">Billable %</div>
         </div>
     </div>
 
     <!-- Team List -->
-    <div class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
+    <div class="rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
+        {% if allocations %}
         <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
             <thead class="bg-slate-50 dark:bg-slate-800/50">
                 <tr>
-                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Team Member</th>
-                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Role</th>
-                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Allocation</th>
-                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Period</th>
-                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Status</th>
-                    <th scope="col" class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Actions</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Team Member</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Role</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Allocation</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Period</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Status</th>
+                    <th class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Actions</th>
                 </tr>
             </thead>
             <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
                 {% for alloc in allocations %}
-                <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                    <td class="px-6 py-4">
+                <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                    <td class="px-6 py-4 whitespace-nowrap">
                         <div class="flex items-center gap-3">
-                            <div class="h-10 w-10 rounded-full bg-amber-100 flex items-center justify-center dark:bg-amber-900/30">
-                                <span class="text-sm font-medium text-amber-700 dark:text-amber-300">
-                                    {{ alloc.employee.full_name[:2]|upper if alloc.employee and alloc.employee.full_name else 'NA' }}
-                                </span>
+                            <div class="flex-shrink-0 h-10 w-10 rounded-full bg-slate-200 dark:bg-slate-600 flex items-center justify-center text-sm font-medium text-slate-700 dark:text-slate-300">
+                                {{ (alloc.employee.person.first_name[0] if alloc.employee and alloc.employee.person else '?') }}{{ (alloc.employee.person.last_name[0] if alloc.employee and alloc.employee.person else '') }}
                             </div>
                             <div>
-                                <div class="text-sm font-medium text-slate-900 dark:text-white">
-                                    {{ alloc.employee.full_name if alloc.employee else 'Unknown' }}
+                                <div class="font-medium text-slate-900 dark:text-white">
+                                    {% if alloc.employee and alloc.employee.person %}
+                                    {{ alloc.employee.person.first_name }} {{ alloc.employee.person.last_name }}
+                                    {% else %}
+                                    Unknown
+                                    {% endif %}
                                 </div>
-                                <div class="text-xs text-slate-500 dark:text-slate-400">
+                                <div class="text-sm text-slate-500 dark:text-slate-400">
                                     {{ alloc.employee.employee_code if alloc.employee else '' }}
                                 </div>
                             </div>
                         </div>
                     </td>
-                    <td class="px-6 py-4">
-                        <span class="text-sm text-slate-600 dark:text-slate-400">{{ alloc.role_on_project or '-' }}</span>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-700 dark:text-slate-300">
+                        {{ alloc.role_on_project or '-' }}
                     </td>
-                    <td class="px-6 py-4">
+                    <td class="px-6 py-4 whitespace-nowrap">
                         <div class="flex items-center gap-2">
-                            <div class="h-2 w-16 rounded-full bg-slate-200 dark:bg-slate-700">
-                                <div class="h-2 rounded-full bg-amber-500" style="width: {{ alloc.allocation_percent }}%"></div>
+                            <div class="flex-1 h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden" style="width: 100px;">
+                                <div class="h-full bg-blue-500" style="width: {{ alloc.allocation_percent|float }}%"></div>
                             </div>
-                            <span class="text-sm font-medium text-slate-900 dark:text-white">{{ alloc.allocation_percent|int }}%</span>
+                            <span class="text-sm font-medium text-slate-700 dark:text-slate-300">{{ alloc.allocation_percent|round(0)|int }}%</span>
                         </div>
                     </td>
-                    <td class="px-6 py-4">
-                        <div class="text-sm text-slate-600 dark:text-slate-400">
-                            {{ alloc.start_date.strftime('%d %b %Y') if alloc.start_date else '-' }}
-                            {% if alloc.end_date %}
-                            - {{ alloc.end_date.strftime('%d %b %Y') }}
-                            {% endif %}
-                        </div>
-                    </td>
-                    <td class="px-6 py-4">
-                        {% if alloc.is_active %}
-                        <span class="inline-flex rounded-full px-2 py-1 text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
-                            Active
-                        </span>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-700 dark:text-slate-300">
+                        {{ alloc.start_date.strftime('%b %d, %Y') }}
+                        {% if alloc.end_date %}
+                        - {{ alloc.end_date.strftime('%b %d, %Y') }}
                         {% else %}
-                        <span class="inline-flex rounded-full px-2 py-1 text-xs font-medium bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300">
-                            Ended
-                        </span>
+                        - Ongoing
                         {% endif %}
                     </td>
-                    <td class="px-6 py-4 text-right">
-                        {% if alloc.is_active %}
-                        <button type="button" onclick="endAllocation('{{ alloc.allocation_id }}')"
-                                class="text-sm text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white">
-                            End
-                        </button>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        {% if alloc.is_current %}
+                        <span class="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900/30 dark:text-green-400">Active</span>
+                        {% elif not alloc.is_active %}
+                        <span class="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-800 dark:bg-slate-700 dark:text-slate-400">Ended</span>
+                        {% else %}
+                        <span class="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">Scheduled</span>
                         {% endif %}
                     </td>
-                </tr>
-                {% else %}
-                <tr>
-                    <td colspan="6" class="px-6 py-12 text-center">
-                        <p class="text-sm text-slate-500 dark:text-slate-400">No team members allocated</p>
+                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm">
+                        <div class="flex items-center justify-end gap-2">
+                            {% if alloc.is_active %}
+                            <form action="/operations/projects/{{ project.project_code }}/team/{{ alloc.allocation_id }}/end" method="post" class="inline"
+                                  onsubmit="return confirm('End this allocation?');">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                <button type="submit" class="text-amber-500 hover:text-amber-700 dark:hover:text-amber-300" title="End Allocation">
+                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"/>
+                                    </svg>
+                                </button>
+                            </form>
+                            {% endif %}
+                            <form action="/operations/projects/{{ project.project_code }}/team/{{ alloc.allocation_id }}/delete" method="post" class="inline"
+                                  onsubmit="return confirm('Delete this allocation? This cannot be undone.');">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                <button type="submit" class="text-red-500 hover:text-red-700 dark:hover:text-red-300" title="Delete">
+                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                    </svg>
+                                </button>
+                            </form>
+                        </div>
                     </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
+        {% else %}
+        <div class="py-12 text-center">
+            <svg class="mx-auto h-12 w-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+            </svg>
+            <h3 class="mt-2 text-sm font-medium text-slate-900 dark:text-white">No team members</h3>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Add team members to this project.</p>
+        </div>
+        {% endif %}
     </div>
 </div>
 
-<!-- Allocation Modal (placeholder for future implementation) -->
-<div id="allocationModal" class="hidden fixed inset-0 z-50 overflow-y-auto">
-    <!-- Modal content would go here -->
+<!-- Add Member Modal -->
+<div id="add-member-modal" class="hidden fixed inset-0 z-50 overflow-y-auto">
+    <div class="flex min-h-screen items-center justify-center p-4">
+        <div class="fixed inset-0 bg-slate-900/50 transition-opacity" onclick="document.getElementById('add-member-modal').classList.add('hidden')"></div>
+        <div class="relative w-full max-w-lg rounded-xl bg-white shadow-xl dark:bg-slate-800">
+            <form action="/operations/projects/{{ project.project_code }}/team" method="post" class="p-6">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Add Team Member</h3>
+                    <button type="button" onclick="document.getElementById('add-member-modal').classList.add('hidden')"
+                            class="text-slate-400 hover:text-slate-500">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Employee</label>
+                        <select name="employee_id" required
+                                class="mt-1 block w-full rounded-lg border-slate-300 focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
+                            <option value="">Select employee...</option>
+                            {% for emp in employees %}
+                            <option value="{{ emp.employee_id }}">
+                                {{ emp.person.first_name if emp.person else '' }} {{ emp.person.last_name if emp.person else '' }} ({{ emp.employee_code }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Role on Project</label>
+                        <input type="text" name="role_on_project" placeholder="e.g., Developer, Designer, PM"
+                               class="mt-1 block w-full rounded-lg border-slate-300 focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Allocation %</label>
+                            <input type="number" name="allocation_percent" value="100" min="1" max="100" required
+                                   class="mt-1 block w-full rounded-lg border-slate-300 focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Start Date</label>
+                            <input type="date" name="start_date" required
+                                   class="mt-1 block w-full rounded-lg border-slate-300 focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">End Date (optional)</label>
+                        <input type="date" name="end_date"
+                               class="mt-1 block w-full rounded-lg border-slate-300 focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Cost Rate/hr</label>
+                            <input type="number" name="cost_rate_per_hour" step="0.01" placeholder="0.00"
+                                   class="mt-1 block w-full rounded-lg border-slate-300 focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Billing Rate/hr</label>
+                            <input type="number" name="billing_rate_per_hour" step="0.01" placeholder="0.00"
+                                   class="mt-1 block w-full rounded-lg border-slate-300 focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-6 flex justify-end gap-3">
+                    <button type="button" onclick="document.getElementById('add-member-modal').classList.add('hidden')"
+                            class="rounded-lg px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700">
+                        Cancel
+                    </button>
+                    <button type="submit"
+                            class="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700">
+                        Add Member
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
 </div>
-
-<script>
-function openAllocationModal() {
-    // TODO: Implement modal for adding team member
-    alert('Add team member feature - coming soon');
-}
-
-function endAllocation(allocationId) {
-    if (confirm('Are you sure you want to end this allocation?')) {
-        // TODO: Implement end allocation
-        alert('End allocation feature - coming soon');
-    }
-}
-</script>
 {% endblock %}

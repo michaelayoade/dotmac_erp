@@ -12,7 +12,6 @@ from app.models.finance.ar.invoice_line import InvoiceLine
 from app.models.finance.ar.invoice_line_tax import InvoiceLineTax
 from app.models.finance.ar.customer_payment import CustomerPayment, PaymentMethod, PaymentStatus
 from app.models.finance.ar.payment_allocation import PaymentAllocation
-from app.models.finance.ar.expected_credit_loss import ExpectedCreditLoss, ECLMethodology, ECLStage
 from app.models.finance.ar.ar_aging_snapshot import ARAgingSnapshot
 from app.models.finance.ar.quote import Quote, QuoteLine, QuoteStatus
 from app.models.finance.ar.sales_order import (
@@ -40,9 +39,6 @@ __all__ = [
     "PaymentMethod",
     "PaymentStatus",
     "PaymentAllocation",
-    "ExpectedCreditLoss",
-    "ECLMethodology",
-    "ECLStage",
     "ARAgingSnapshot",
     # Quotes
     "Quote",

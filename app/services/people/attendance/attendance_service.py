@@ -8,7 +8,7 @@ from __future__ import annotations
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 import math
-from typing import TYPE_CHECKING, List, Optional, Sequence
+from typing import TYPE_CHECKING, Any, List, Optional, Sequence
 from uuid import UUID
 
 from sqlalchemy import and_, case, func, or_, select
@@ -24,8 +24,17 @@ from app.models.people.attendance import (
 )
 from app.models.people.hr.employee import Employee
 from app.models.finance.core_org.location import Location
+from app.models.finance.core_org.organization import Organization
 from app.services.common import PaginatedResult, PaginationParams
 from app.services.common import ValidationError
+
+# Shapely for GeoJSON polygon validation
+try:
+    from shapely.geometry import Point, shape
+    from shapely.validation import make_valid
+    SHAPELY_AVAILABLE = True
+except ImportError:
+    SHAPELY_AVAILABLE = False
 
 if TYPE_CHECKING:
     from app.web.deps import WebAuthContext
@@ -129,6 +138,43 @@ class AttendanceService:
         )
         return 2 * radius_m * math.asin(math.sqrt(a))
 
+    @staticmethod
+    def _point_in_polygon(
+        latitude: float,
+        longitude: float,
+        geojson_polygon: dict[str, Any],
+    ) -> bool:
+        """Check if a point is inside a GeoJSON polygon.
+
+        Args:
+            latitude: Point latitude (decimal degrees)
+            longitude: Point longitude (decimal degrees)
+            geojson_polygon: GeoJSON Polygon or MultiPolygon geometry
+
+        Returns:
+            True if point is inside the polygon
+        """
+        if not SHAPELY_AVAILABLE:
+            raise ValidationError(
+                "Polygon geofencing requires shapely library. "
+                "Install with: pip install shapely"
+            )
+
+        try:
+            # GeoJSON uses longitude, latitude order (x, y)
+            point = Point(longitude, latitude)
+
+            # Convert GeoJSON to Shapely geometry
+            polygon = shape(geojson_polygon)
+
+            # Ensure polygon is valid
+            if not polygon.is_valid:
+                polygon = make_valid(polygon)
+
+            return polygon.contains(point)
+        except Exception as e:
+            raise ValidationError(f"Invalid geofence polygon: {e}")
+
     def _get_employee_location(
         self,
         org_id: UUID,
@@ -153,27 +199,65 @@ class AttendanceService:
         *,
         action_label: str,
     ) -> None:
+        """Validate employee location against geofence (circle or polygon).
+
+        Supports two geofence types:
+        - CIRCLE: Traditional radius-based validation using Haversine distance
+        - POLYGON: GeoJSON polygon boundary using Shapely point-in-polygon
+
+        Args:
+            org_id: Organization ID
+            employee_id: Employee ID
+            latitude: Employee's current latitude
+            longitude: Employee's current longitude
+            action_label: Action being performed (for error messages)
+
+        Raises:
+            ValidationError: If employee is outside geofence
+        """
+        org = self.db.get(Organization, org_id)
+        if not org or (org.hr_attendance_mode or "").upper() != "GEOFENCED":
+            return
+
         location = self._get_employee_location(org_id, employee_id)
         if not location:
             raise ValidationError("Branch location not configured for employee.")
         if not location.geofence_enabled:
             return
-        if location.latitude is None or location.longitude is None:
-            raise ValidationError("Branch location coordinates not configured.")
         if latitude is None or longitude is None:
             raise ValidationError(f"Location is required for {action_label}.")
 
-        distance = self._haversine_distance_m(
-            float(latitude),
-            float(longitude),
-            float(location.latitude),
-            float(location.longitude),
-        )
-        radius = float(location.geofence_radius_m or 0)
-        if distance > radius:
-            raise ValidationError(
-                f"you're not within the allowed radius for {action_label}"
+        # Use polygon if configured, otherwise fall back to circle
+        if location.geofence_polygon:
+            # Polygon-based validation using GeoJSON
+            is_inside = self._point_in_polygon(
+                float(latitude),
+                float(longitude),
+                location.geofence_polygon,
             )
+
+            if not is_inside:
+                raise ValidationError(
+                    f"You are outside the allowed work area for {action_label}. "
+                    "Please move to the designated location."
+                )
+        else:
+            # Circle-based validation using Haversine distance (default)
+            if location.latitude is None or location.longitude is None:
+                raise ValidationError("Branch location coordinates not configured.")
+
+            distance = self._haversine_distance_m(
+                float(latitude),
+                float(longitude),
+                float(location.latitude),
+                float(location.longitude),
+            )
+            radius = float(location.geofence_radius_m or 0)
+            if distance > radius:
+                raise ValidationError(
+                    f"You're not within the allowed radius for {action_label}. "
+                    f"Distance: {distance:.0f}m, Allowed: {radius:.0f}m"
+                )
 
     # =========================================================================
     # Shift Types

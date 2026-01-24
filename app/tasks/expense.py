@@ -9,7 +9,7 @@ Handles:
 """
 
 import logging
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 from uuid import UUID
 import uuid
@@ -567,3 +567,105 @@ def calculate_expense_analytics(
                 "success": False,
                 "error": str(e),
             }
+
+
+@shared_task
+def poll_stuck_expense_transfers() -> dict:
+    """
+    Poll Paystack for status of stuck expense reimbursement transfers.
+
+    Checks transfers in PROCESSING state for more than 1 hour and
+    updates their status via direct API query.
+
+    Returns:
+        Dict with polling results
+    """
+    from datetime import timedelta
+
+    from app.models.finance.payments.payment_intent import (
+        PaymentDirection,
+        PaymentIntent,
+        PaymentIntentStatus,
+    )
+    from app.services.domain_settings import SettingDomain, resolve_value
+    from app.services.finance.payments.payment_service import PaymentService
+    from app.services.finance.payments.paystack_client import PaystackConfig
+
+    logger.info("Polling stuck expense transfers")
+
+    results = {
+        "intents_checked": 0,
+        "completed": 0,
+        "failed": 0,
+        "still_pending": 0,
+        "errors": [],
+    }
+
+    with SessionLocal() as db:
+        # Find transfers stuck in PROCESSING for more than 1 hour
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=1)
+
+        stuck_intents = db.scalars(
+            select(PaymentIntent).where(
+                PaymentIntent.direction == PaymentDirection.OUTBOUND,
+                PaymentIntent.status == PaymentIntentStatus.PROCESSING,
+                PaymentIntent.source_type == "EXPENSE_CLAIM",
+                PaymentIntent.transfer_code.isnot(None),
+                PaymentIntent.created_at < cutoff,
+            )
+        ).all()
+
+        if not stuck_intents:
+            logger.info("No stuck transfers found")
+            return results
+
+        # Group by organization to use correct config
+        by_org: dict[uuid.UUID, list[PaymentIntent]] = {}
+        for intent in stuck_intents:
+            by_org.setdefault(intent.organization_id, []).append(intent)
+
+        for org_id, intents in by_org.items():
+            # Get Paystack config for this org
+            secret_key = resolve_value(db, SettingDomain.payments, "paystack_secret_key")
+            if not secret_key:
+                logger.warning(f"No Paystack key for org {org_id}")
+                continue
+
+            config = PaystackConfig(secret_key=secret_key)
+            svc = PaymentService(db, org_id)
+
+            for intent in intents:
+                try:
+                    results["intents_checked"] += 1
+                    old_status = intent.status
+
+                    svc.poll_transfer_status(intent, config)
+
+                    if intent.status == PaymentIntentStatus.COMPLETED:
+                        results["completed"] += 1
+                    elif intent.status == PaymentIntentStatus.FAILED:
+                        results["failed"] += 1
+                    else:
+                        results["still_pending"] += 1
+
+                except Exception as e:
+                    logger.error(
+                        "Failed to poll transfer %s: %s",
+                        intent.intent_id,
+                        e,
+                    )
+                    results["errors"].append({
+                        "intent_id": str(intent.intent_id),
+                        "error": str(e),
+                    })
+
+            db.commit()
+
+    logger.info(
+        "Transfer polling complete: %d checked, %d completed, %d failed",
+        results["intents_checked"],
+        results["completed"],
+        results["failed"],
+    )
+
+    return results

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import secrets
 from urllib.parse import urlsplit
 
@@ -21,12 +22,32 @@ def _default_port(scheme: str | None) -> int | None:
     return None
 
 
-def _request_host_parts(request: Request) -> tuple[str | None, int | None]:
+def _parse_host_port(value: str, scheme: str | None) -> tuple[str | None, int | None]:
+    if not value:
+        return None, None
+    parsed = urlsplit(f"{scheme or 'http'}://{value}")
+    if not parsed.hostname:
+        return None, None
+    return parsed.hostname, parsed.port or _default_port(parsed.scheme)
+
+
+def _forwarded_host_parts(request: Request) -> tuple[str | None, int | None]:
+    forwarded_host = request.headers.get("x-forwarded-host")
+    if not forwarded_host:
+        return None, None
+    forwarded_host = forwarded_host.split(",")[0].strip()
+    forwarded_proto = request.headers.get("x-forwarded-proto") or request.url.scheme
+    return _parse_host_port(forwarded_host, forwarded_proto)
+
+
+def _request_host_candidates(request: Request) -> list[tuple[str | None, int | None]]:
     host = request.url.hostname
     scheme = request.url.scheme
-    if not host:
-        return None, None
-    return host, request.url.port or _default_port(scheme)
+    request_parts = (host, request.url.port or _default_port(scheme)) if host else (None, None)
+    forwarded_parts = _forwarded_host_parts(request)
+    app_url = os.getenv("APP_URL", "").strip()
+    app_parts = _origin_parts(app_url) if app_url else (None, None)
+    return [request_parts, forwarded_parts, app_parts]
 
 
 def _origin_parts(value: str) -> tuple[str | None, int | None]:
@@ -40,10 +61,12 @@ def _origin_matches_request(request: Request, origin_value: str) -> bool:
     origin_host, origin_port = _origin_parts(origin_value)
     if not origin_host:
         return False
-    request_host, request_port = _request_host_parts(request)
-    if not request_host:
-        return False
-    return origin_host.lower() == request_host.lower() and origin_port == request_port
+    for request_host, request_port in _request_host_candidates(request):
+        if not request_host:
+            continue
+        if origin_host.lower() == request_host.lower() and origin_port == request_port:
+            return True
+    return False
 
 
 def _is_secure_request(request: Request) -> bool:

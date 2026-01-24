@@ -98,6 +98,7 @@
                     <a href="/people/payroll/slips" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Salary Slips</a>
                     <a href="/people/payroll/components" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Salary Components</a>
                     <a href="/people/payroll/structures" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Salary Structures</a>
+                    <a href="/people/payroll/assignments" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Salary Assignments</a>
                     <a href="/people/payroll/runs" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Payroll Runs</a>
                     <a href="/people/payroll/reports/summary" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Reports</a>
                 </div>
@@ -225,7 +226,9 @@
                     {% if can_team_leave %}
                     <a href="/people/self/team/leave" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Team Leave</a>
                     {% endif %}
+                    {% if can_team_expenses %}
                     <a href="/people/self/team/expenses" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Team Expenses</a>
+                    {% endif %}
                 </div>
             </div>
 
@@ -304,6 +307,7 @@
                 <span x-show="!sidebarCollapsed" class="truncate" x-cloak>My Expenses</span>
             </a>
 
+            {% if has_team_approvals %}
             <div class="pt-2 pb-3" x-show="!sidebarCollapsed" x-cloak>
                 <span class="px-3 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Approvals</span>
             </div>
@@ -319,6 +323,7 @@
             </a>
             {% endif %}
 
+            {% if can_team_expenses %}
             <a href="/people/self/team/expenses"
                :class="activeModule === 'self-team-expenses' ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
                class="flex items-center gap-3 rounded-lg border px-3 py-2.5 font-medium transition-all">
@@ -327,6 +332,8 @@
                 </svg>
                 <span x-show="!sidebarCollapsed" class="truncate" x-cloak>Team Expenses</span>
             </a>
+            {% endif %}
+            {% endif %}
 
             {% if "finance" in accessible_modules or "operations" in accessible_modules or "expense" in accessible_modules %}
             <div class="pt-4 pb-2" x-show="!sidebarCollapsed" x-cloak>

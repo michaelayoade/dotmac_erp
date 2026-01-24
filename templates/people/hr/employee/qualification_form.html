@@ -1,0 +1,101 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}Add Qualification - {{ employee.full_name }}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400">Employees</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr/employees/{{ employee.employee_id }}/qualifications" class="hover:text-teal-600 dark:hover:text-teal-400">{{ employee.employee_code }}</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">Add Qualification</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl">
+    <form method="post" action="/people/hr/employees/{{ employee.employee_id }}/qualifications/new" class="space-y-6">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Qualification Details</h3>
+            </div>
+            <div class="card-body space-y-4">
+                <div>
+                    <label for="qualification_type" class="form-label required">Type</label>
+                    <select name="qualification_type" id="qualification_type" required class="form-select w-full">
+                        <option value="">Select Type</option>
+                        {% for qt in qualification_types %}
+                        <option value="{{ qt.value }}" {{ 'selected' if form_data.qualification_type == qt.value }}>
+                            {{ qt.value | replace('_', ' ') | title }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label for="qualification_name" class="form-label required">Qualification Name</label>
+                    <input type="text" name="qualification_name" id="qualification_name" required
+                           class="form-input w-full" value="{{ form_data.qualification_name or '' }}"
+                           placeholder="e.g., Bachelor of Science in Computer Science">
+                </div>
+
+                <div>
+                    <label for="field_of_study" class="form-label">Field of Study / Major</label>
+                    <input type="text" name="field_of_study" id="field_of_study"
+                           class="form-input w-full" value="{{ form_data.field_of_study or '' }}"
+                           placeholder="e.g., Computer Science">
+                </div>
+
+                <div>
+                    <label for="institution_name" class="form-label required">Institution Name</label>
+                    <input type="text" name="institution_name" id="institution_name" required
+                           class="form-input w-full" value="{{ form_data.institution_name or '' }}"
+                           placeholder="e.g., University of Technology">
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="start_date" class="form-label">Start Date</label>
+                        <input type="date" name="start_date" id="start_date"
+                               class="form-input w-full" value="{{ form_data.start_date or '' }}">
+                    </div>
+                    <div>
+                        <label for="end_date" class="form-label">End Date</label>
+                        <input type="date" name="end_date" id="end_date"
+                               class="form-input w-full" value="{{ form_data.end_date or '' }}">
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-2">
+                    <input type="checkbox" name="is_ongoing" id="is_ongoing" value="true"
+                           class="rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+                           {{ 'checked' if form_data.is_ongoing }}>
+                    <label for="is_ongoing" class="text-sm text-slate-700 dark:text-slate-300">Currently pursuing this qualification</label>
+                </div>
+
+                <div>
+                    <label for="grade" class="form-label">Grade / GPA</label>
+                    <input type="text" name="grade" id="grade"
+                           class="form-input w-full" value="{{ form_data.grade or '' }}"
+                           placeholder="e.g., First Class, 3.8/4.0">
+                </div>
+
+                <div>
+                    <label for="notes" class="form-label">Notes</label>
+                    <textarea name="notes" id="notes" rows="2"
+                              class="form-input w-full">{{ form_data.notes or '' }}</textarea>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex justify-end gap-3">
+            <a href="/people/hr/employees/{{ employee.employee_id }}/qualifications" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">Add Qualification</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

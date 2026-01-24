@@ -22,6 +22,7 @@ from app.models.finance.ar.customer import Customer, CustomerType, RiskCategory
 from app.models.finance.ar.customer_payment import CustomerPayment, PaymentStatus
 from app.models.finance.ar.invoice import Invoice, InvoiceStatus, InvoiceType
 from app.models.finance.ar.invoice_line import InvoiceLine
+from app.models.finance.ar.invoice_line_tax import InvoiceLineTax
 from app.models.finance.ar.payment_allocation import PaymentAllocation
 from app.models.finance.core_org.cost_center import CostCenter
 from app.models.finance.core_org.project import Project
@@ -2201,6 +2202,226 @@ class ARWebService:
 
         return RedirectResponse(url="/finance/ar/invoices", status_code=303)
 
+    def invoice_edit_form_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        invoice_id: str,
+    ) -> HTMLResponse | RedirectResponse:
+        """Return the edit invoice form with existing invoice data."""
+        org_id = coerce_uuid(auth.organization_id)
+        inv_id = coerce_uuid(invoice_id)
+
+        invoice = db.get(Invoice, inv_id)
+        if not invoice or invoice.organization_id != org_id:
+            return RedirectResponse(url="/finance/ar/invoices", status_code=303)
+
+        if invoice.status != InvoiceStatus.DRAFT:
+            # Can't edit non-draft invoices, redirect to detail page
+            return RedirectResponse(
+                url=f"/finance/ar/invoices/{invoice_id}?error=Only+draft+invoices+can+be+edited",
+                status_code=303,
+            )
+
+        context = base_context(request, auth, "Edit AR Invoice", "ar")
+        context.update(self.invoice_form_context(db, str(auth.organization_id)))
+
+        # Add existing invoice data
+        customer = db.get(Customer, invoice.customer_id)
+        lines = (
+            db.query(InvoiceLine)
+            .filter(InvoiceLine.invoice_id == inv_id)
+            .order_by(InvoiceLine.line_number)
+            .all()
+        )
+
+        # Build invoice object for template
+        context["invoice"] = {
+            "invoice_id": invoice.invoice_id,
+            "invoice_number": invoice.invoice_number,
+            "customer_id": invoice.customer_id,
+            "invoice_date": invoice.invoice_date,
+            "due_date": invoice.due_date,
+            "currency_code": invoice.currency_code,
+            "po_number": invoice.po_number,
+            "description": invoice.notes,
+            "notes": invoice.notes,
+            "internal_notes": invoice.internal_notes,
+            "terms": invoice.payment_terms,
+            "cost_center_id": None,  # Would need to pull from first line if needed
+            "project_id": None,
+            "lines": [
+                {
+                    "line_id": line.line_id,
+                    "revenue_account_id": line.revenue_account_id,
+                    "description": line.description,
+                    "quantity": line.quantity,
+                    "unit_price": line.unit_price,
+                    "tax_amount": line.tax_amount,
+                    "line_taxes": (
+                        db.query(InvoiceLineTax)
+                        .filter(InvoiceLineTax.line_id == line.line_id)
+                        .all()
+                    ),
+                }
+                for line in lines
+            ],
+        }
+
+        return templates.TemplateResponse(request, "finance/ar/invoice_form.html", context)
+
+    async def update_invoice_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        invoice_id: str,
+    ) -> HTMLResponse | JSONResponse | RedirectResponse:
+        """Handle invoice update form submission."""
+        content_type = request.headers.get("content-type", "")
+
+        if "application/json" in content_type:
+            data = await request.json()
+        else:
+            form_data = await request.form()
+            data = dict(form_data)
+
+        try:
+            input_data = self.build_invoice_input(data)
+
+            invoice = ar_invoice_service.update_invoice(
+                db=db,
+                organization_id=auth.organization_id,
+                invoice_id=coerce_uuid(invoice_id),
+                input=input_data,
+                updated_by_user_id=auth.user_id,
+            )
+
+            if "application/json" in content_type:
+                return JSONResponse(
+                    content={"success": True, "invoice_id": str(invoice.invoice_id)}
+                )
+
+            return RedirectResponse(
+                url=f"/finance/ar/invoices/{invoice.invoice_id}?success=Invoice+updated+successfully",
+                status_code=303,
+            )
+
+        except Exception as e:
+            if "application/json" in content_type:
+                return JSONResponse(
+                    status_code=400,
+                    content={"detail": str(e)},
+                )
+
+            context = base_context(request, auth, "Edit AR Invoice", "ar")
+            context.update(self.invoice_form_context(db, str(auth.organization_id)))
+            context["error"] = str(e)
+            context["form_data"] = data
+            return templates.TemplateResponse(request, "finance/ar/invoice_form.html", context)
+
+    def submit_invoice_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        invoice_id: str,
+    ) -> RedirectResponse:
+        """Submit invoice for approval."""
+        try:
+            ar_invoice_service.submit_invoice(
+                db=db,
+                organization_id=auth.organization_id,
+                invoice_id=coerce_uuid(invoice_id),
+                submitted_by_user_id=auth.user_id,
+            )
+            return RedirectResponse(
+                url=f"/finance/ar/invoices/{invoice_id}?success=Invoice+submitted+for+approval",
+                status_code=303,
+            )
+        except Exception as e:
+            return RedirectResponse(
+                url=f"/finance/ar/invoices/{invoice_id}?error={str(e)}",
+                status_code=303,
+            )
+
+    def approve_invoice_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        invoice_id: str,
+    ) -> RedirectResponse:
+        """Approve a submitted invoice."""
+        try:
+            ar_invoice_service.approve_invoice(
+                db=db,
+                organization_id=auth.organization_id,
+                invoice_id=coerce_uuid(invoice_id),
+                approved_by_user_id=auth.user_id,
+            )
+            return RedirectResponse(
+                url=f"/finance/ar/invoices/{invoice_id}?success=Invoice+approved",
+                status_code=303,
+            )
+        except Exception as e:
+            return RedirectResponse(
+                url=f"/finance/ar/invoices/{invoice_id}?error={str(e)}",
+                status_code=303,
+            )
+
+    def post_invoice_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        invoice_id: str,
+    ) -> RedirectResponse:
+        """Post invoice to general ledger."""
+        try:
+            ar_invoice_service.post_invoice(
+                db=db,
+                organization_id=auth.organization_id,
+                invoice_id=coerce_uuid(invoice_id),
+                posted_by_user_id=auth.user_id,
+            )
+            return RedirectResponse(
+                url=f"/finance/ar/invoices/{invoice_id}?success=Invoice+posted+to+ledger",
+                status_code=303,
+            )
+        except Exception as e:
+            return RedirectResponse(
+                url=f"/finance/ar/invoices/{invoice_id}?error={str(e)}",
+                status_code=303,
+            )
+
+    def void_invoice_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        invoice_id: str,
+    ) -> RedirectResponse:
+        """Void an invoice."""
+        try:
+            ar_invoice_service.void_invoice(
+                db=db,
+                organization_id=auth.organization_id,
+                invoice_id=coerce_uuid(invoice_id),
+                voided_by_user_id=auth.user_id,
+                reason="Voided via web interface",
+            )
+            return RedirectResponse(
+                url=f"/finance/ar/invoices/{invoice_id}?success=Invoice+voided",
+                status_code=303,
+            )
+        except Exception as e:
+            return RedirectResponse(
+                url=f"/finance/ar/invoices/{invoice_id}?error={str(e)}",
+                status_code=303,
+            )
+
     def list_receipts_response(
         self,
         request: Request,
@@ -2530,6 +2751,184 @@ class ARWebService:
             return templates.TemplateResponse(request, "finance/ar/credit_note_detail.html", context)
 
         return RedirectResponse(url="/finance/ar/credit-notes", status_code=303)
+
+    def credit_note_edit_form_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        credit_note_id: str,
+    ) -> HTMLResponse | RedirectResponse:
+        """Return the edit credit note form with existing data."""
+        org_id = coerce_uuid(auth.organization_id)
+        cn_id = coerce_uuid(credit_note_id)
+
+        credit_note = db.get(Invoice, cn_id)
+        if not credit_note or credit_note.organization_id != org_id:
+            return RedirectResponse(url="/finance/ar/credit-notes", status_code=303)
+
+        if credit_note.status != InvoiceStatus.DRAFT:
+            return RedirectResponse(
+                url=f"/finance/ar/credit-notes/{credit_note_id}?error=Only+draft+credit+notes+can+be+edited",
+                status_code=303,
+            )
+
+        context = base_context(request, auth, "Edit Credit Note", "ar")
+        context.update(self.credit_note_form_context(db, str(auth.organization_id)))
+        context["credit_note"] = credit_note
+
+        return templates.TemplateResponse(request, "finance/ar/credit_note_form.html", context)
+
+    async def update_credit_note_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        credit_note_id: str,
+    ) -> HTMLResponse | JSONResponse | RedirectResponse:
+        """Handle credit note update form submission."""
+        content_type = request.headers.get("content-type", "")
+
+        if "application/json" in content_type:
+            data = await request.json()
+        else:
+            form_data = await request.form()
+            data = dict(form_data)
+
+        try:
+            input_data = self.build_credit_note_input(data)
+
+            credit_note = ar_invoice_service.update_invoice(
+                db=db,
+                organization_id=auth.organization_id,
+                invoice_id=coerce_uuid(credit_note_id),
+                input=input_data,
+                updated_by_user_id=auth.user_id,
+            )
+
+            if "application/json" in content_type:
+                return JSONResponse(
+                    content={"success": True, "credit_note_id": str(credit_note.invoice_id)}
+                )
+
+            return RedirectResponse(
+                url=f"/finance/ar/credit-notes/{credit_note.invoice_id}?success=Credit+note+updated+successfully",
+                status_code=303,
+            )
+
+        except Exception as e:
+            if "application/json" in content_type:
+                return JSONResponse(
+                    status_code=400,
+                    content={"detail": str(e)},
+                )
+
+            context = base_context(request, auth, "Edit Credit Note", "ar")
+            context.update(self.credit_note_form_context(db, str(auth.organization_id)))
+            context["error"] = str(e)
+            context["form_data"] = data
+            return templates.TemplateResponse(request, "finance/ar/credit_note_form.html", context)
+
+    def submit_credit_note_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        credit_note_id: str,
+    ) -> RedirectResponse:
+        """Submit credit note for approval."""
+        try:
+            ar_invoice_service.submit_invoice(
+                db=db,
+                organization_id=auth.organization_id,
+                invoice_id=coerce_uuid(credit_note_id),
+                submitted_by_user_id=auth.user_id,
+            )
+            return RedirectResponse(
+                url=f"/finance/ar/credit-notes/{credit_note_id}?success=Credit+note+submitted+for+approval",
+                status_code=303,
+            )
+        except Exception as e:
+            return RedirectResponse(
+                url=f"/finance/ar/credit-notes/{credit_note_id}?error={str(e)}",
+                status_code=303,
+            )
+
+    def approve_credit_note_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        credit_note_id: str,
+    ) -> RedirectResponse:
+        """Approve a submitted credit note."""
+        try:
+            ar_invoice_service.approve_invoice(
+                db=db,
+                organization_id=auth.organization_id,
+                invoice_id=coerce_uuid(credit_note_id),
+                approved_by_user_id=auth.user_id,
+            )
+            return RedirectResponse(
+                url=f"/finance/ar/credit-notes/{credit_note_id}?success=Credit+note+approved",
+                status_code=303,
+            )
+        except Exception as e:
+            return RedirectResponse(
+                url=f"/finance/ar/credit-notes/{credit_note_id}?error={str(e)}",
+                status_code=303,
+            )
+
+    def post_credit_note_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        credit_note_id: str,
+    ) -> RedirectResponse:
+        """Post credit note to general ledger."""
+        try:
+            ar_invoice_service.post_invoice(
+                db=db,
+                organization_id=auth.organization_id,
+                invoice_id=coerce_uuid(credit_note_id),
+                posted_by_user_id=auth.user_id,
+            )
+            return RedirectResponse(
+                url=f"/finance/ar/credit-notes/{credit_note_id}?success=Credit+note+posted+to+ledger",
+                status_code=303,
+            )
+        except Exception as e:
+            return RedirectResponse(
+                url=f"/finance/ar/credit-notes/{credit_note_id}?error={str(e)}",
+                status_code=303,
+            )
+
+    def void_credit_note_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        credit_note_id: str,
+    ) -> RedirectResponse:
+        """Void a credit note."""
+        try:
+            ar_invoice_service.void_invoice(
+                db=db,
+                organization_id=auth.organization_id,
+                invoice_id=coerce_uuid(credit_note_id),
+                voided_by_user_id=auth.user_id,
+                reason="Voided via web interface",
+            )
+            return RedirectResponse(
+                url=f"/finance/ar/credit-notes/{credit_note_id}?success=Credit+note+voided",
+                status_code=303,
+            )
+        except Exception as e:
+            return RedirectResponse(
+                url=f"/finance/ar/credit-notes/{credit_note_id}?error={str(e)}",
+                status_code=303,
+            )
 
     def aging_report_response(
         self,

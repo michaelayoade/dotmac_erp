@@ -190,6 +190,9 @@ class TicketService:
         category_id: Optional[UUID] = None,
         team_id: Optional[UUID] = None,
         opening_date: Optional[date] = None,
+        contact_email: Optional[str] = None,
+        contact_phone: Optional[str] = None,
+        contact_address: Optional[str] = None,
     ) -> Ticket:
         """
         Create a new support ticket.
@@ -224,6 +227,9 @@ class TicketService:
             team_id=coerce_uuid(team_id) if team_id else None,
             opening_date=opening_date or date.today(),
             created_by_id=uid,
+            contact_email=contact_email,
+            contact_phone=contact_phone,
+            contact_address=contact_address,
         )
 
         db.add(ticket)
@@ -249,6 +255,9 @@ class TicketService:
         customer_id: Optional[UUID] = None,
         category_id: Optional[UUID] = None,
         team_id: Optional[UUID] = None,
+        contact_email: Optional[str] = None,
+        contact_phone: Optional[str] = None,
+        contact_address: Optional[str] = None,
     ) -> Optional[Ticket]:
         """Update ticket details (not status - use update_status for that)."""
         ticket = self.get_ticket(db, organization_id, ticket_id)
@@ -289,6 +298,14 @@ class TicketService:
             ticket.project_id = coerce_uuid(project_id) if project_id else None
         if customer_id is not None:
             ticket.customer_id = coerce_uuid(customer_id) if customer_id else None
+
+        # Contact info fields (can be auto-populated from customer or manually entered)
+        if contact_email is not None:
+            ticket.contact_email = contact_email if contact_email else None
+        if contact_phone is not None:
+            ticket.contact_phone = contact_phone if contact_phone else None
+        if contact_address is not None:
+            ticket.contact_address = contact_address if contact_address else None
 
         # Track category change for logging
         if category_id is not None:
@@ -755,30 +772,14 @@ class TicketService:
 
     def _generate_ticket_number(self, db: Session, organization_id: UUID) -> str:
         """Generate a unique ticket number for manual tickets."""
-        # Get highest existing ticket number for this org
-        today = date.today()
-        prefix = f"TKT-{today.strftime('%Y%m')}-"
+        from app.models.finance.core_config import SequenceType
+        from app.services.finance.common.numbering import SyncNumberingService
 
-        result = db.execute(
-            select(Ticket.ticket_number)
-            .where(
-                Ticket.organization_id == organization_id,
-                Ticket.ticket_number.like(f"{prefix}%"),
-            )
-            .order_by(Ticket.ticket_number.desc())
-            .limit(1)
-        ).scalar_one_or_none()
-
-        if result:
-            try:
-                last_num = int(result.replace(prefix, ""))
-                next_num = last_num + 1
-            except ValueError:
-                next_num = 1
-        else:
-            next_num = 1
-
-        return f"{prefix}{next_num:04d}"
+        numbering_service = SyncNumberingService(db)
+        return numbering_service.generate_next_number(
+            organization_id=organization_id,
+            sequence_type=SequenceType.SUPPORT_TICKET,
+        )
 
     # =========================================================================
     # Bulk Operations

@@ -30,6 +30,8 @@ from app.models.people.base import AuditMixin, ERPNextSyncMixin, StatusTrackingM
 
 if TYPE_CHECKING:
     from app.models.people.hr.employee import Employee
+    from app.models.pm.task import Task
+    from app.models.support.ticket import Ticket
 
 
 class ExpenseClaimStatus(str, enum.Enum):
@@ -129,6 +131,7 @@ class ExpenseClaim(Base, AuditMixin, StatusTrackingMixin, ERPNextSyncMixin):
         Index("idx_expense_claim_employee", "employee_id"),
         Index("idx_expense_claim_status", "organization_id", "status"),
         Index("idx_expense_claim_date", "organization_id", "claim_date"),
+        Index("idx_expense_claim_task", "task_id"),
         {"schema": "expense"},
     )
 
@@ -180,8 +183,21 @@ class ExpenseClaim(Base, AuditMixin, StatusTrackingMixin, ERPNextSyncMixin):
     )
     project_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
+        ForeignKey("core_org.project.project_id"),
         nullable=True,
         comment="If expense is project-related",
+    )
+    ticket_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("support.ticket.ticket_id"),
+        nullable=True,
+        comment="Related support ticket from ERPNext",
+    )
+    task_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("pm.task.task_id"),
+        nullable=True,
+        comment="Related project task",
     )
 
     # Totals
@@ -300,6 +316,18 @@ class ExpenseClaim(Base, AuditMixin, StatusTrackingMixin, ERPNextSyncMixin):
     items: Mapped[list["ExpenseClaimItem"]] = relationship(
         "ExpenseClaimItem",
         back_populates="claim",
+    )
+    project: Mapped[Optional["Project"]] = relationship(
+        "Project",
+        foreign_keys=[project_id],
+    )
+    ticket: Mapped[Optional["Ticket"]] = relationship(
+        "Ticket",
+        foreign_keys=[ticket_id],
+    )
+    task: Mapped[Optional["Task"]] = relationship(
+        "Task",
+        foreign_keys=[task_id],
     )
 
     @property

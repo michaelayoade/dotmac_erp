@@ -102,6 +102,7 @@ class VerifyTransferResponse:
     recipient_code: str
     completed_at: Optional[str]
     reason: Optional[str]  # failure reason if any
+    fee: Optional[int] = None  # Fee in kobo charged for this transfer
 
 
 @dataclass
@@ -525,6 +526,7 @@ class PaystackClient:
             recipient_code=d["recipient"]["recipient_code"],
             completed_at=d.get("completed_at"),
             reason=d.get("reason"),
+            fee=d.get("fee") or d.get("fees"),  # Paystack uses 'fee' or 'fees'
         )
 
     def close(self):

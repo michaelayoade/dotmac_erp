@@ -158,7 +158,7 @@
                         <td class="px-4 py-2">
                             {% set usage_pct = (balance.used / balance.allocated * 100) if balance.allocated > 0 else 0 %}
                             <div class="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5">
-                                <div class="h-1.5 rounded-full {% if usage_pct >= 90 %}bg-rose-500{% elif usage_pct >= 70 %}bg-amber-500{% else %}bg-teal-500{% endif %}" style="width: {{ usage_pct | min(100) }}%"></div>
+                        <div class="h-1.5 rounded-full {% if usage_pct >= 90 %}bg-rose-500{% elif usage_pct >= 70 %}bg-amber-500{% else %}bg-teal-500{% endif %}" style="width: {{ [usage_pct, 100] | min }}%"></div>
                             </div>
                         </td>
                     </tr>

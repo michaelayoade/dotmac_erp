@@ -1,0 +1,224 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}{% if jd %}Edit Job Description{% else %}New Job Description{% endif %}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr" class="hover:text-teal-600 dark:hover:text-teal-400">HR</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr/job-descriptions" class="hover:text-teal-600 dark:hover:text-teal-400">Job Descriptions</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">{% if jd %}Edit{% else %}New{% endif %}</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl">
+    {% if error %}
+    <div class="mb-6 p-4 rounded-lg bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-800">
+        <div class="flex items-center gap-2 text-red-700 dark:text-red-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span>{{ error }}</span>
+        </div>
+    </div>
+    {% endif %}
+
+    <form method="post" action="{% if jd %}/people/hr/job-descriptions/{{ jd.job_description_id }}/edit{% else %}/people/hr/job-descriptions/new{% endif %}" class="space-y-6">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Basic Information</h3>
+            </div>
+            <div class="card-body space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="jd_code" class="form-label required">JD Code</label>
+                        <input type="text" name="jd_code" id="jd_code" required
+                               class="form-input w-full font-mono"
+                               value="{{ form_data.jd_code or (jd.jd_code if jd else '') }}"
+                               placeholder="e.g., JD-SE-001">
+                    </div>
+                    <div>
+                        <label for="status" class="form-label required">Status</label>
+                        <select name="status" id="status" required class="form-select w-full">
+                            {% for st in statuses %}
+                            <option value="{{ st.value }}"
+                                    {{ 'selected' if (form_data.status == st.value) or (jd and jd.status.value == st.value) or (not jd and not form_data and st.value == 'draft') }}>
+                                {{ st.value | replace('_', ' ') | title }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label for="job_title" class="form-label required">Job Title</label>
+                    <input type="text" name="job_title" id="job_title" required
+                           class="form-input w-full"
+                           value="{{ form_data.job_title or (jd.job_title if jd else '') }}"
+                           placeholder="e.g., Senior Software Engineer">
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="designation_id" class="form-label required">Designation</label>
+                        <select name="designation_id" id="designation_id" required class="form-select w-full">
+                            <option value="">Select Designation</option>
+                            {% for des in designations %}
+                            <option value="{{ des.designation_id }}"
+                                    {{ 'selected' if (form_data.designation_id == des.designation_id | string) or (jd and jd.designation_id == des.designation_id) }}>
+                                {{ des.designation_name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label for="department_id" class="form-label">Department</label>
+                        <select name="department_id" id="department_id" class="form-select w-full">
+                            <option value="">All Departments</option>
+                            {% for dept in departments %}
+                            <option value="{{ dept.department_id }}"
+                                    {{ 'selected' if (form_data.department_id == dept.department_id | string) or (jd and jd.department_id == dept.department_id) }}>
+                                {{ dept.department_name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <p class="text-xs text-slate-500 mt-1">Leave empty if this JD applies to all departments.</p>
+                    </div>
+                </div>
+
+                <div>
+                    <label for="summary" class="form-label">Summary</label>
+                    <textarea name="summary" id="summary" rows="2"
+                              class="form-input w-full"
+                              placeholder="Brief overview of the role...">{{ form_data.summary or (jd.summary if jd else '') }}</textarea>
+                </div>
+
+                <div>
+                    <label for="purpose" class="form-label">Purpose</label>
+                    <textarea name="purpose" id="purpose" rows="2"
+                              class="form-input w-full"
+                              placeholder="Why does this role exist?">{{ form_data.purpose or (jd.purpose if jd else '') }}</textarea>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Responsibilities & Requirements</h3>
+            </div>
+            <div class="card-body space-y-4">
+                <div>
+                    <label for="key_responsibilities" class="form-label">Key Responsibilities</label>
+                    <textarea name="key_responsibilities" id="key_responsibilities" rows="5"
+                              class="form-input w-full"
+                              placeholder="- Design and develop...&#10;- Collaborate with...&#10;- Mentor junior...">{{ form_data.key_responsibilities or (jd.key_responsibilities if jd else '') }}</textarea>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="education_requirements" class="form-label">Education Requirements</label>
+                        <textarea name="education_requirements" id="education_requirements" rows="3"
+                                  class="form-input w-full"
+                                  placeholder="Bachelor's degree in...">{{ form_data.education_requirements or (jd.education_requirements if jd else '') }}</textarea>
+                    </div>
+                    <div>
+                        <label for="experience_requirements" class="form-label">Experience Requirements</label>
+                        <textarea name="experience_requirements" id="experience_requirements" rows="3"
+                                  class="form-input w-full"
+                                  placeholder="5+ years in...">{{ form_data.experience_requirements or (jd.experience_requirements if jd else '') }}</textarea>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="min_years_experience" class="form-label">Min Years Experience</label>
+                        <input type="number" name="min_years_experience" id="min_years_experience"
+                               class="form-input w-full" min="0" max="50"
+                               value="{{ form_data.min_years_experience or (jd.min_years_experience if jd else '') }}">
+                    </div>
+                    <div>
+                        <label for="max_years_experience" class="form-label">Max Years Experience</label>
+                        <input type="number" name="max_years_experience" id="max_years_experience"
+                               class="form-input w-full" min="0" max="50"
+                               value="{{ form_data.max_years_experience or (jd.max_years_experience if jd else '') }}">
+                    </div>
+                </div>
+
+                <div>
+                    <label for="technical_skills" class="form-label">Technical Skills</label>
+                    <textarea name="technical_skills" id="technical_skills" rows="3"
+                              class="form-input w-full"
+                              placeholder="Python, PostgreSQL, AWS...">{{ form_data.technical_skills or (jd.technical_skills if jd else '') }}</textarea>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="certifications_required" class="form-label">Required Certifications</label>
+                        <textarea name="certifications_required" id="certifications_required" rows="2"
+                                  class="form-input w-full"
+                                  placeholder="AWS Solutions Architect...">{{ form_data.certifications_required or (jd.certifications_required if jd else '') }}</textarea>
+                    </div>
+                    <div>
+                        <label for="certifications_preferred" class="form-label">Preferred Certifications</label>
+                        <textarea name="certifications_preferred" id="certifications_preferred" rows="2"
+                                  class="form-input w-full"
+                                  placeholder="PMP, Scrum Master...">{{ form_data.certifications_preferred or (jd.certifications_preferred if jd else '') }}</textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Working Conditions & Reporting</h3>
+            </div>
+            <div class="card-body space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="work_location" class="form-label">Work Location</label>
+                        <input type="text" name="work_location" id="work_location"
+                               class="form-input w-full"
+                               value="{{ form_data.work_location or (jd.work_location if jd else '') }}"
+                               placeholder="e.g., Remote, Hybrid, On-site">
+                    </div>
+                    <div>
+                        <label for="travel_requirements" class="form-label">Travel Requirements</label>
+                        <input type="text" name="travel_requirements" id="travel_requirements"
+                               class="form-input w-full"
+                               value="{{ form_data.travel_requirements or (jd.travel_requirements if jd else '') }}"
+                               placeholder="e.g., Up to 25%">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="reports_to" class="form-label">Reports To</label>
+                        <input type="text" name="reports_to" id="reports_to"
+                               class="form-input w-full"
+                               value="{{ form_data.reports_to or (jd.reports_to if jd else '') }}"
+                               placeholder="e.g., Engineering Manager">
+                    </div>
+                    <div>
+                        <label for="direct_reports" class="form-label">Direct Reports</label>
+                        <input type="text" name="direct_reports" id="direct_reports"
+                               class="form-input w-full"
+                               value="{{ form_data.direct_reports or (jd.direct_reports if jd else '') }}"
+                               placeholder="e.g., 3-5 developers">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex justify-end gap-3">
+            <a href="/people/hr/job-descriptions" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">{% if jd %}Save Changes{% else %}Create Job Description{% endif %}</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

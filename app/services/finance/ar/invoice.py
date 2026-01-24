@@ -379,6 +379,197 @@ class ARInvoiceService(ListResponseMixin):
         return invoice
 
     @staticmethod
+    def update_invoice(
+        db: Session,
+        organization_id: UUID,
+        invoice_id: UUID,
+        input: ARInvoiceInput,
+        updated_by_user_id: UUID,
+    ) -> Invoice:
+        """
+        Update an existing AR invoice (only DRAFT status).
+
+        Args:
+            db: Database session
+            organization_id: Organization scope
+            invoice_id: Invoice to update
+            input: Updated invoice input data
+            updated_by_user_id: User updating the invoice
+
+        Returns:
+            Updated Invoice
+        """
+        org_id = coerce_uuid(organization_id)
+        inv_id = coerce_uuid(invoice_id)
+        user_id = coerce_uuid(updated_by_user_id)
+        customer_id = coerce_uuid(input.customer_id)
+
+        # Get existing invoice
+        invoice = db.get(Invoice, inv_id)
+        if not invoice or invoice.organization_id != org_id:
+            raise HTTPException(status_code=404, detail="Invoice not found")
+
+        if invoice.status != InvoiceStatus.DRAFT:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot edit invoice with status '{invoice.status.value}'",
+            )
+
+        # Validate customer
+        customer = db.get(Customer, customer_id)
+        if not customer or customer.organization_id != org_id:
+            raise HTTPException(status_code=404, detail="Customer not found")
+
+        if not customer.is_active:
+            raise HTTPException(status_code=400, detail="Customer is not active")
+
+        # Validate lines
+        if not input.lines:
+            raise HTTPException(
+                status_code=400, detail="Invoice must have at least one line"
+            )
+
+        # Delete existing lines and their tax records
+        existing_lines = (
+            db.query(InvoiceLine)
+            .filter(InvoiceLine.invoice_id == inv_id)
+            .all()
+        )
+        for line in existing_lines:
+            db.query(InvoiceLineTax).filter(
+                InvoiceLineTax.line_id == line.line_id
+            ).delete()
+        db.query(InvoiceLine).filter(InvoiceLine.invoice_id == inv_id).delete()
+
+        # Calculate totals from lines
+        subtotal = Decimal("0")
+        tax_total = Decimal("0")
+        line_tax_results = []
+
+        tax_service = TaxCalculationService(db)
+
+        for line_input in input.lines:
+            line_amount = line_input.quantity * line_input.unit_price - line_input.discount_amount
+            subtotal += line_amount
+
+            # Determine tax codes: prefer new multi-tax field, fall back to legacy single field
+            effective_tax_codes = list(line_input.tax_code_ids) if line_input.tax_code_ids else []
+            if line_input.tax_code_id and line_input.tax_code_id not in effective_tax_codes:
+                effective_tax_codes.append(line_input.tax_code_id)
+
+            if effective_tax_codes:
+                tax_result = tax_service.calculate_line_tax(
+                    organization_id=org_id,
+                    line_amount=line_amount,
+                    tax_code_ids=effective_tax_codes,
+                    transaction_date=input.invoice_date,
+                )
+                line_tax_results.append(tax_result)
+                tax_total += tax_result.total_tax
+            else:
+                line_tax_results.append(None)
+
+        total_amount = subtotal + tax_total
+
+        # Handle credit notes
+        if input.invoice_type == InvoiceType.CREDIT_NOTE:
+            total_amount = -abs(total_amount)
+            subtotal = -abs(subtotal)
+            tax_total = -abs(tax_total)
+
+        # Calculate functional currency amount
+        exchange_rate = input.exchange_rate or Decimal("1.0")
+        functional_amount = total_amount * exchange_rate
+
+        # Update invoice fields
+        invoice.customer_id = customer_id
+        invoice.contract_id = input.contract_id
+        invoice.invoice_type = input.invoice_type
+        invoice.invoice_date = input.invoice_date
+        invoice.due_date = input.due_date
+        invoice.currency_code = input.currency_code
+        invoice.exchange_rate = exchange_rate
+        invoice.exchange_rate_type_id = input.exchange_rate_type_id
+        invoice.subtotal = subtotal
+        invoice.tax_amount = tax_total
+        invoice.total_amount = total_amount
+        invoice.functional_currency_amount = functional_amount
+        invoice.payment_terms_id = input.payment_terms_id
+        invoice.billing_address = input.billing_address or customer.billing_address
+        invoice.shipping_address = input.shipping_address or customer.shipping_address
+        invoice.notes = input.notes
+        invoice.internal_notes = input.internal_notes
+        invoice.ar_control_account_id = customer.ar_control_account_id
+        invoice.is_intercompany = input.is_intercompany
+        invoice.intercompany_org_id = input.intercompany_org_id
+        invoice.updated_by_user_id = user_id
+        invoice.updated_at = datetime.now(timezone.utc)
+
+        db.flush()
+
+        # Create new lines and their tax records
+        for idx, line_input in enumerate(input.lines, start=1):
+            line_amount = line_input.quantity * line_input.unit_price - line_input.discount_amount
+            if input.invoice_type == InvoiceType.CREDIT_NOTE:
+                line_amount = -abs(line_amount)
+
+            tax_result = line_tax_results[idx - 1]
+            line_tax_total = tax_result.total_tax if tax_result else Decimal("0")
+            if input.invoice_type == InvoiceType.CREDIT_NOTE and tax_result:
+                line_tax_total = -abs(line_tax_total)
+
+            effective_tax_codes = list(line_input.tax_code_ids) if line_input.tax_code_ids else []
+            if line_input.tax_code_id and line_input.tax_code_id not in effective_tax_codes:
+                effective_tax_codes.append(line_input.tax_code_id)
+            primary_tax_code_id = effective_tax_codes[0] if effective_tax_codes else None
+
+            line = InvoiceLine(
+                invoice_id=invoice.invoice_id,
+                line_number=idx,
+                description=line_input.description,
+                quantity=line_input.quantity,
+                unit_price=line_input.unit_price,
+                line_amount=line_amount,
+                discount_amount=line_input.discount_amount,
+                tax_code_id=primary_tax_code_id,
+                tax_amount=line_tax_total,
+                revenue_account_id=line_input.revenue_account_id
+                or customer.default_revenue_account_id,
+                item_id=line_input.item_id,
+                cost_center_id=line_input.cost_center_id,
+                project_id=line_input.project_id,
+                segment_id=line_input.segment_id,
+                obligation_id=line_input.performance_obligation_id,
+            )
+            db.add(line)
+            db.flush()
+
+            # Create InvoiceLineTax records for each tax
+            if tax_result and tax_result.taxes:
+                for tax_detail in tax_result.taxes:
+                    tax_amount = tax_detail.tax_amount
+                    base_amount = tax_detail.base_amount
+                    if input.invoice_type == InvoiceType.CREDIT_NOTE:
+                        tax_amount = -abs(tax_amount)
+                        base_amount = -abs(base_amount)
+
+                    line_tax = InvoiceLineTax(
+                        line_id=line.line_id,
+                        tax_code_id=tax_detail.tax_code_id,
+                        base_amount=base_amount,
+                        tax_rate=tax_detail.tax_rate,
+                        tax_amount=tax_amount,
+                        is_inclusive=tax_detail.is_inclusive,
+                        sequence=tax_detail.sequence,
+                    )
+                    db.add(line_tax)
+
+        db.commit()
+        db.refresh(invoice)
+
+        return invoice
+
+    @staticmethod
     def submit_invoice(
         db: Session,
         organization_id: UUID,

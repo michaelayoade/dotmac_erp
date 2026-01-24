@@ -83,6 +83,72 @@ def create_asset(
     )
 
 
+@router.get("/assets/{asset_id}", response_class=HTMLResponse)
+def view_asset(
+    request: Request,
+    asset_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Asset detail page."""
+    return fa_web_service.asset_detail_response(request, auth, db, asset_id)
+
+
+@router.get("/assets/{asset_id}/edit", response_class=HTMLResponse)
+def edit_asset_form(
+    request: Request,
+    asset_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Edit asset form page."""
+    return fa_web_service.asset_edit_form_response(request, auth, db, asset_id)
+
+
+@router.post("/assets/{asset_id}/edit")
+async def update_asset(
+    request: Request,
+    asset_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Update an existing fixed asset."""
+    return await fa_web_service.update_asset_response(request, auth, db, asset_id)
+
+
+@router.post("/assets/{asset_id}/dispose")
+async def dispose_asset(
+    request: Request,
+    asset_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Dispose a fixed asset."""
+    return await fa_web_service.dispose_asset_response(request, auth, db, asset_id)
+
+
+@router.post("/assets/{asset_id}/revalue")
+async def revalue_asset(
+    request: Request,
+    asset_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Revalue a fixed asset."""
+    return await fa_web_service.revalue_asset_response(request, auth, db, asset_id)
+
+
+@router.post("/assets/{asset_id}/impair")
+async def impair_asset(
+    request: Request,
+    asset_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Record impairment for a fixed asset."""
+    return await fa_web_service.impair_asset_response(request, auth, db, asset_id)
+
+
 # =============================================================================
 # Bulk Actions - Assets
 # =============================================================================
@@ -223,3 +289,13 @@ def depreciation_schedule(
         )
     )
     return templates.TemplateResponse(request, "finance/fa/depreciation.html", context)
+
+
+@router.post("/depreciation/run")
+async def run_depreciation(
+    request: Request,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Run depreciation for a period."""
+    return await fa_web_service.run_depreciation_response(request, auth, db)

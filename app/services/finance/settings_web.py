@@ -41,6 +41,9 @@ SEQUENCE_TYPE_LABELS = {
     SequenceType.SALES_ORDER: "Sales Order",
     SequenceType.SHIPMENT: "Shipment",
     SequenceType.EXPENSE: "Expense",
+    SequenceType.SUPPORT_TICKET: "Support Ticket",
+    SequenceType.PROJECT: "Project",
+    SequenceType.TASK: "Task",
 }
 
 RESET_FREQUENCY_LABELS = {
@@ -527,6 +530,108 @@ class SettingsWebService:
             payload = DomainSettingUpdate(
                 value_type=spec.value_type,
                 value_text=str(value) if value is not None else None,
+            )
+            service.upsert_by_key(db, key, payload)
+
+        db.commit()
+        return True, None
+
+    # ========== Payments Settings ==========
+
+    def get_payments_settings_context(
+        self, db, organization_id: uuid.UUID
+    ) -> dict[str, Any]:
+        """Get payments settings for the form."""
+        from sqlalchemy import select
+        from app.models.finance.banking.bank_account import BankAccount, BankAccountStatus
+        from app.models.finance.gl.account import Account, AccountType
+
+        specs = list_specs(SettingDomain.payments)
+        settings = {}
+
+        for spec in specs:
+            value = resolve_value(db, SettingDomain.payments, spec.key)
+            settings[spec.key] = {
+                "value": value if not spec.is_secret else "",
+                "default": spec.default,
+                "type": spec.value_type.value,
+                "is_secret": spec.is_secret,
+                "has_value": value is not None and value != "",
+            }
+
+        # Get active bank accounts for dropdowns
+        bank_accounts = db.execute(
+            select(BankAccount)
+            .where(
+                BankAccount.organization_id == organization_id,
+                BankAccount.status == BankAccountStatus.active,
+            )
+            .order_by(BankAccount.account_name)
+        ).scalars().all()
+
+        # Get expense accounts for fee account dropdown
+        expense_accounts = db.execute(
+            select(Account)
+            .where(
+                Account.organization_id == organization_id,
+                Account.account_type == AccountType.expense,
+                Account.is_active == True,
+            )
+            .order_by(Account.account_code)
+        ).scalars().all()
+
+        return {
+            "settings": settings,
+            "specs": specs,
+            "bank_accounts": bank_accounts,
+            "expense_accounts": expense_accounts,
+        }
+
+    def update_payments_settings(
+        self, db, organization_id: uuid.UUID, data: dict[str, Any]
+    ) -> tuple[bool, Optional[str]]:
+        """Update payments settings."""
+        from app.services.settings_spec import coerce_value
+
+        service = DOMAIN_SETTINGS_SERVICE.get(SettingDomain.payments)
+        if not service:
+            return False, "Payments settings service not found"
+
+        # Validate UUID fields (bank accounts and GL accounts)
+        uuid_fields = [
+            "paystack_collection_bank_account_id",
+            "paystack_transfer_bank_account_id",
+            "paystack_transfer_fee_account_id",
+        ]
+        for field in uuid_fields:
+            value = data.get(field)
+            if value and value.strip():
+                try:
+                    uuid.UUID(value.strip())
+                except ValueError:
+                    return False, f"{field}: Must be a valid UUID"
+
+        # Ensure unchecked checkboxes are persisted as false
+        data.setdefault("paystack_enabled", "false")
+        data.setdefault("paystack_transfers_enabled", "false")
+
+        for key, value in data.items():
+            spec = get_spec(SettingDomain.payments, key)
+            if not spec:
+                continue
+
+            # Skip empty password fields (don't overwrite existing)
+            if spec.is_secret and value == "":
+                continue
+
+            coerced, error = coerce_value(spec, value)
+            if error:
+                return False, f"{key}: {error}"
+
+            payload = DomainSettingUpdate(
+                value_type=spec.value_type,
+                value_text=str(coerced) if coerced is not None else None,
+                is_secret=spec.is_secret,
             )
             service.upsert_by_key(db, key, payload)
 
