@@ -4,6 +4,17 @@ module.exports = {
     "./templates/**/*.html",
     "./static/js/**/*.js",
   ],
+  safelist: [
+    "md:pl-16",
+    "md:pl-64",
+    "md:ml-16",
+    "md:ml-20",
+    "md:ml-64",
+    "md:hidden",
+    "translate-x-0",
+    "-translate-x-full",
+    "md:translate-x-0",
+  ],
   darkMode: 'class',
   theme: {
     extend: {
