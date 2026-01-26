@@ -225,6 +225,8 @@ def achieve_milestone(
         actual_date = data.actual_date if data else None
         milestone = svc.achieve_milestone(milestone_id, actual_date)
         db.commit()
+        if milestone.actual_date is None:
+            raise HTTPException(status_code=500, detail="Milestone actual date was not set")
         return MilestoneAchieveResponse(
             milestone_id=milestone.milestone_id,
             status=milestone.status,

@@ -75,7 +75,7 @@ class AccountCategoryImporter(BaseImporter[AccountCategory]):
 
     def get_unique_key(self, row: Dict[str, Any]) -> str:
         """Unique key is the Zoho account type."""
-        return row.get("Account Type", "").strip()
+        return str(row.get("Account Type", "") or "").strip()
 
     def check_duplicate(self, row: Dict[str, Any]) -> Optional[AccountCategory]:
         """Check if category already exists."""
@@ -88,7 +88,7 @@ class AccountCategoryImporter(BaseImporter[AccountCategory]):
 
         # Check cache first
         if category_code in self._category_cache:
-            return True  # Already processed
+            return self.db.get(AccountCategory, self._category_cache[category_code])
 
         # Check database
         existing = self.db.execute(
@@ -105,7 +105,7 @@ class AccountCategoryImporter(BaseImporter[AccountCategory]):
 
     def create_entity(self, row: Dict[str, Any]) -> AccountCategory:
         """Create a new account category from Zoho account type."""
-        account_type = row.get("Account Type", "").strip()
+        account_type = str(row.get("Account Type", "") or "").strip()
         category_code = self._make_category_code(account_type)
 
         ifrs_category, _ = ZOHO_ACCOUNT_TYPE_MAPPING.get(
@@ -152,7 +152,7 @@ class AccountCategoryImporter(BaseImporter[AccountCategory]):
         """Ensure all required categories exist before importing accounts."""
         unique_types = set()
         for row in rows:
-            account_type = row.get("Account Type", "").strip()
+            account_type = str(row.get("Account Type", "") or "").strip()
             if account_type:
                 unique_types.add(account_type)
 
@@ -203,15 +203,15 @@ class AccountImporter(BaseImporter[Account]):
 
     def get_unique_key(self, row: Dict[str, Any]) -> str:
         """Unique key is account code or account name."""
-        code = row.get("Account Code", "").strip()
+        code = str(row.get("Account Code", "") or "").strip()
         if code:
             return code
-        return row.get("Account Name", "").strip()
+        return str(row.get("Account Name", "") or "").strip()
 
     def check_duplicate(self, row: Dict[str, Any]) -> Optional[Account]:
         """Check if account already exists by code or name."""
-        code = row.get("Account Code", "").strip()
-        name = row.get("Account Name", "").strip()
+        code = str(row.get("Account Code", "") or "").strip()
+        name = str(row.get("Account Name", "") or "").strip()
 
         # Check by code first
         if code:

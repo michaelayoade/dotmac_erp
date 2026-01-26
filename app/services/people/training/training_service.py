@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, List, Optional, Sequence
+from typing import TYPE_CHECKING, Any, List, Optional, Sequence
 from uuid import UUID
 
 from sqlalchemy import and_, case, func, or_, select
@@ -246,7 +246,7 @@ class TrainingService:
     def retire_program(self, org_id: UUID, program_id: UUID) -> TrainingProgram:
         """Retire a training program."""
         program = self.get_program(org_id, program_id)
-        program.status = TrainingProgramStatus.RETIRED
+        program.status = TrainingProgramStatus.ARCHIVED
         self.db.flush()
         return program
 
@@ -985,8 +985,8 @@ class TrainingService:
         ).unique().all()
 
         # Aggregate by program
-        program_costs = {}
-        category_costs = {}
+        program_costs: dict[UUID, dict[str, Any]] = {}
+        category_costs: dict[str, dict[str, Any]] = {}
         total_cost = Decimal("0")
         total_attendees = 0
         total_hours = 0

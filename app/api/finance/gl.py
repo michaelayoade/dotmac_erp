@@ -79,7 +79,10 @@ def create_account(
         description=payload.description,
         is_reconciliation_required=payload.is_reconcilable,
     )
-    return chart_of_accounts_service.create_account(db, organization_id, input_data)
+    user_id = UUID(auth["person_id"]) if auth.get("person_id") else None
+    return chart_of_accounts_service.create_account(
+        db, organization_id, input_data, created_by_user_id=user_id
+    )
 
 
 @router.get("/accounts/{account_id}", response_model=AccountRead)
@@ -132,13 +135,24 @@ def update_account(
     db: Session = Depends(get_db),
 ):
     """Update a GL account."""
+    user_id = UUID(auth["person_id"]) if auth.get("person_id") else None
     return chart_of_accounts_service.update_account(
         db=db,
         organization_id=organization_id,
         account_id=account_id,
         account_name=payload.account_name,
         description=payload.description,
+        search_terms=payload.search_terms,
         is_active=payload.is_active,
+        is_posting_allowed=payload.is_posting_allowed,
+        is_budgetable=payload.is_budgetable,
+        is_reconciliation_required=payload.is_reconciliation_required,
+        is_multi_currency=payload.is_multi_currency,
+        default_currency_code=payload.default_currency_code,
+        subledger_type=payload.subledger_type,
+        is_cash_equivalent=payload.is_cash_equivalent,
+        is_financial_instrument=payload.is_financial_instrument,
+        updated_by_user_id=user_id,
     )
 
 
@@ -151,6 +165,17 @@ def deactivate_account(
 ):
     """Deactivate a GL account."""
     return chart_of_accounts_service.deactivate_account(db, organization_id, account_id)
+
+
+@router.post("/accounts/{account_id}/activate", response_model=AccountRead)
+def activate_account(
+    account_id: UUID,
+    organization_id: UUID = Depends(require_organization_id),
+    auth: dict = Depends(require_tenant_permission("gl:accounts:update")),
+    db: Session = Depends(get_db),
+):
+    """Activate a GL account."""
+    return chart_of_accounts_service.activate_account(db, organization_id, account_id)
 
 
 # =============================================================================

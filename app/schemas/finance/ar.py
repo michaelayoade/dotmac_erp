@@ -2,6 +2,7 @@
 AR Schemas.
 
 Pydantic schemas for Accounts Receivable APIs.
+Field names match template forms for seamless UI integration.
 """
 
 from datetime import date, datetime
@@ -17,19 +18,28 @@ from pydantic import BaseModel, ConfigDict, Field
 # =============================================================================
 
 class CustomerBase(BaseModel):
-    """Base customer schema."""
+    """
+    Base customer schema with template-friendly field names.
+
+    Input schemas (Create/Update) use field names directly without validation_alias.
+    This allows API clients to send template-friendly names (customer_name, tax_id, etc.)
+    """
 
     customer_code: str = Field(max_length=30)
-    customer_type: str = Field(default="corporate", max_length=20)
-    legal_name: str = Field(max_length=255)
+    customer_type: str = Field(default="COMPANY", max_length=20)
+    customer_name: str = Field(max_length=255)  # Template name (service maps to legal_name)
     trading_name: Optional[str] = Field(default=None, max_length=255)
-    tax_identification_number: Optional[str] = Field(default=None, max_length=50)
-    credit_terms_days: int = 30
+    tax_id: Optional[str] = Field(default=None, max_length=50)  # Template name (service maps to tax_identification_number)
+    payment_terms_days: int = Field(default=30)  # Template name (service maps to credit_terms_days)
     credit_limit: Optional[Decimal] = None
     currency_code: str = Field(default="NGN", max_length=3)
     default_revenue_account_id: Optional[UUID] = None
-    ar_control_account_id: Optional[UUID] = None
+    default_receivable_account_id: Optional[UUID] = None  # Template name (service maps to ar_control_account_id)
     is_active: bool = True
+    # Additional template fields
+    email: Optional[str] = Field(default=None, max_length=255)
+    phone: Optional[str] = Field(default=None, max_length=50)
+    address: Optional[str] = Field(default=None, max_length=500)
 
 
 class CustomerCreate(CustomerBase):
@@ -41,20 +51,35 @@ class CustomerCreate(CustomerBase):
 class CustomerUpdate(BaseModel):
     """Update customer request."""
 
-    legal_name: Optional[str] = Field(default=None, max_length=255)
+    customer_name: Optional[str] = Field(default=None, max_length=255)
     trading_name: Optional[str] = Field(default=None, max_length=255)
-    credit_terms_days: Optional[int] = None
+    tax_id: Optional[str] = Field(default=None, max_length=50)
+    payment_terms_days: Optional[int] = None
     credit_limit: Optional[Decimal] = None
     is_active: Optional[bool] = None
+    email: Optional[str] = Field(default=None, max_length=255)
+    phone: Optional[str] = Field(default=None, max_length=50)
+    address: Optional[str] = Field(default=None, max_length=500)
 
 
-class CustomerRead(CustomerBase):
-    """Customer response."""
+class CustomerRead(BaseModel):
+    """Customer response with template-friendly field names."""
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     customer_id: UUID
     organization_id: UUID
+    customer_code: str
+    customer_type: str
+    customer_name: str = Field(validation_alias="legal_name")
+    trading_name: Optional[str] = None
+    tax_id: Optional[str] = Field(default=None, validation_alias="tax_identification_number")
+    payment_terms_days: int = Field(validation_alias="credit_terms_days")
+    credit_limit: Optional[Decimal] = None
+    currency_code: str
+    default_revenue_account_id: Optional[UUID] = None
+    default_receivable_account_id: Optional[UUID] = Field(default=None, validation_alias="ar_control_account_id")
+    is_active: bool
     created_at: datetime
     updated_at: Optional[datetime] = None
 

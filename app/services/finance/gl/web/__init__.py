@@ -46,10 +46,11 @@ from app.services.finance.gl.web.base import (
 # Import the modular service components
 from app.services.finance.gl.web.account_web import AccountWebService
 from app.services.finance.gl.web.journal_web import JournalWebService
+from app.services.finance.gl.web.ledger_web import LedgerWebService, ledger_web_service
 from app.services.finance.gl.web.period_web import PeriodWebService
 
 
-class GLWebService(AccountWebService, JournalWebService, PeriodWebService):
+class GLWebService(AccountWebService, JournalWebService, LedgerWebService, PeriodWebService):
     """
     Unified GL Web Service facade.
 
@@ -208,8 +209,10 @@ __all__ = [
     # Service classes
     "AccountWebService",
     "JournalWebService",
+    "LedgerWebService",
     "PeriodWebService",
     "GLWebService",
-    # Singleton
+    # Singletons
     "gl_web_service",
+    "ledger_web_service",
 ]

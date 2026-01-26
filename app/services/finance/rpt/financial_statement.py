@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Optional
+from typing import List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -266,7 +266,7 @@ class FinancialStatementService(ListResponseMixin):
         organization_id: UUID,
         statement_type: StatementType,
         line_sequences: list[tuple[UUID, int]],
-    ) -> list[FinancialStatementLine]:
+    ) -> List[FinancialStatementLine]:
         """
         Reorder statement lines.
 
@@ -395,7 +395,7 @@ class FinancialStatementService(ListResponseMixin):
         source_organization_id: UUID,
         target_organization_id: UUID,
         statement_type: StatementType,
-    ) -> list[FinancialStatementLine]:
+    ) -> List[FinancialStatementLine]:
         """
         Copy statement structure from one org to another.
 

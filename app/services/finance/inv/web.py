@@ -26,6 +26,7 @@ from app.config import settings
 from app.services.common import coerce_uuid
 from app.services.finance.common.numbering import SyncNumberingService
 from app.services.finance.inv.item import item_service, item_category_service, ItemInput, ItemCategoryInput
+from app.services.finance.inv.transaction import TransactionInput
 from app.services.finance.inv.warehouse import warehouse_service, WarehouseInput
 from app.services.finance.platform.org_context import org_context_service
 from app.services.finance.platform.currency_context import get_currency_context
@@ -312,26 +313,29 @@ class InventoryWebService:
                 stock_summary_data = inventory_balance_service.get_item_stock_summary(
                     db, org_id, item_uuid
                 )
-                stock_summary = {
-                    "total_on_hand": stock_summary_data.total_on_hand,
-                    "total_reserved": stock_summary_data.total_reserved,
-                    "total_available": stock_summary_data.total_available,
-                    "below_reorder": stock_summary_data.below_reorder,
-                    "below_minimum": stock_summary_data.below_minimum,
-                    "above_maximum": stock_summary_data.above_maximum,
-                }
+                if stock_summary_data:
+                    stock_summary = {
+                        "total_on_hand": stock_summary_data.total_on_hand,
+                        "total_reserved": stock_summary_data.total_reserved,
+                        "total_available": stock_summary_data.total_available,
+                        "below_reorder": stock_summary_data.below_reorder,
+                        "below_minimum": stock_summary_data.below_minimum,
+                        "above_maximum": stock_summary_data.above_maximum,
+                    }
 
-                # Format warehouse breakdown
-                for wh_balance in stock_summary_data.warehouses:
-                    warehouse_stock.append({
-                        "warehouse_id": wh_balance.warehouse_id,
-                        "warehouse_code": wh_balance.warehouse_code,
-                        "quantity_on_hand": wh_balance.quantity_on_hand,
-                        "quantity_reserved": wh_balance.quantity_reserved,
-                        "quantity_available": wh_balance.quantity_available,
-                        "average_cost": wh_balance.average_cost,
-                        "total_value": _format_currency(wh_balance.total_value, item_obj.currency_code),
-                    })
+                    # Format warehouse breakdown
+                    for wh_balance in stock_summary_data.warehouses:
+                        warehouse_stock.append({
+                            "warehouse_id": wh_balance.warehouse_id,
+                            "warehouse_code": wh_balance.warehouse_code,
+                            "quantity_on_hand": wh_balance.quantity_on_hand,
+                            "quantity_reserved": wh_balance.quantity_reserved,
+                            "quantity_available": wh_balance.quantity_available,
+                            "average_cost": wh_balance.average_cost,
+                            "total_value": _format_currency(
+                                wh_balance.total_value, item_obj.currency_code
+                            ),
+                        })
             except Exception:
                 pass
 
@@ -1231,7 +1235,7 @@ class InventoryWebService:
         )
 
         total_items = len(inventory)
-        total_value = sum(b.total_value for b in inventory)
+        total_value = sum((b.total_value for b in inventory), Decimal("0"))
 
         return {
             "warehouse": warehouse,
@@ -1432,6 +1436,47 @@ class InventoryWebService:
         except Exception:
             pass  # Just redirect back
         return RedirectResponse(url="/operations/inv/warehouses", status_code=303)
+
+    @staticmethod
+    def transaction_form_response(
+        request: Request,
+        auth: WebAuthContext,
+        transaction_type: str,
+        db: Session,
+    ) -> HTMLResponse:
+        return InventoryTransactionWebService.transaction_form_response(
+            request, auth, transaction_type, db
+        )
+
+    @staticmethod
+    def create_transaction_response(
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> HTMLResponse | RedirectResponse:
+        return InventoryTransactionWebService.create_transaction_response(
+            request, auth, db
+        )
+
+    @staticmethod
+    def create_transfer_response(
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> RedirectResponse:
+        return InventoryTransactionWebService.create_transfer_response(
+            request, auth, db
+        )
+
+    @staticmethod
+    def create_adjustment_response(
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> RedirectResponse:
+        return InventoryTransactionWebService.create_adjustment_response(
+            request, auth, db
+        )
 
 
 def _calculate_urgency(available: Decimal, reorder_point: Decimal) -> str:
@@ -1661,17 +1706,29 @@ class InventoryTransactionWebService:
             if not fiscal_period:
                 return RedirectResponse(url="/operations/inv/transactions?error=no_fiscal_period", status_code=303)
 
+            item = db.get(Item, UUID(item_id))
+            if not item or item.organization_id != org_id:
+                return RedirectResponse(url="/operations/inv/transactions?error=item_not_found", status_code=303)
+
+            txn_input = TransactionInput(
+                transaction_type=TransactionType.TRANSFER,
+                transaction_date=txn_date,
+                fiscal_period_id=fiscal_period.fiscal_period_id,
+                item_id=UUID(item_id),
+                warehouse_id=UUID(from_warehouse_id),
+                to_warehouse_id=UUID(to_warehouse_id),
+                quantity=qty,
+                unit_cost=item.average_cost or Decimal("0"),
+                uom=item.base_uom,
+                currency_code=item.currency_code,
+                reference=reference,
+            )
+
             InventoryTransactionService.create_transfer(
                 db=db,
                 organization_id=org_id,
-                item_id=UUID(item_id),
-                from_warehouse_id=UUID(from_warehouse_id),
-                to_warehouse_id=UUID(to_warehouse_id),
-                quantity=qty,
-                transaction_date=txn_date,
-                fiscal_period_id=fiscal_period.fiscal_period_id,
+                input=txn_input,
                 created_by_user_id=auth.user_id,
-                reference=reference,
             )
 
             return RedirectResponse(url="/operations/inv/transactions", status_code=303)
@@ -1746,19 +1803,5 @@ class InventoryTransactionWebService:
         except Exception as e:
             return RedirectResponse(url=f"/operations/inv/transactions?error={str(e)}", status_code=303)
 
-
-# Add transaction methods to the main service
-InventoryWebService.transaction_form_response = staticmethod(
-    InventoryTransactionWebService.transaction_form_response
-)
-InventoryWebService.create_transaction_response = staticmethod(
-    InventoryTransactionWebService.create_transaction_response
-)
-InventoryWebService.create_transfer_response = staticmethod(
-    InventoryTransactionWebService.create_transfer_response
-)
-InventoryWebService.create_adjustment_response = staticmethod(
-    InventoryTransactionWebService.create_adjustment_response
-)
 
 inv_web_service = InventoryWebService()

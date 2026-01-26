@@ -5,7 +5,7 @@ Enables/disables features per organization for gradual rollout
 and A/B testing capabilities.
 """
 
-from typing import Optional
+from typing import List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -331,7 +331,7 @@ class FeatureFlagService(ListResponseMixin):
         include_system_defaults: bool = True,
         limit: int = 50,
         offset: int = 0,
-    ) -> list[SystemConfiguration]:
+    ) -> List[SystemConfiguration]:
         """
         List all feature flags.
 
@@ -372,7 +372,7 @@ class FeatureFlagService(ListResponseMixin):
         organization_id: Optional[str] = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> list[SystemConfiguration]:
+    ) -> List[SystemConfiguration]:
         """
         List feature flags (for ListResponseMixin compatibility).
 

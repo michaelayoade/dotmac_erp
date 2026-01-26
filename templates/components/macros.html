@@ -94,7 +94,9 @@
    Usage: {{ empty_state("No invoices", "Create your first invoice to get started", icon="document", cta_text="New Invoice", cta_href="/invoices/new") }}
    Uses enhanced empty state styling with floating animation
    ============================================ #}
-{% macro empty_state(title, description=none, icon="document", cta_text=none, cta_href=none) %}
+{% macro empty_state(title, description=none, icon="document", cta_text=none, cta_href=none, action_text=none, action_url=none, action_label=none) %}
+{% set resolved_text = cta_text or action_text or action_label %}
+{% set resolved_href = cta_href or action_url %}
 <div class="empty-state">
   <div class="empty-state-icon">
     <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -105,12 +107,12 @@
   {% if description %}
   <p class="empty-state-description">{{ description }}</p>
   {% endif %}
-  {% if cta_text and cta_href %}
-  <a href="{{ cta_href }}" class="btn btn-teal">
+  {% if resolved_text and resolved_href %}
+  <a href="{{ resolved_href }}" class="btn btn-teal">
     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
     </svg>
-    {{ cta_text }}
+    {{ resolved_text }}
   </a>
   {% endif %}
 </div>

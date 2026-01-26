@@ -6,7 +6,7 @@ Improves cross-module integration:
 - Asset custodian now uses proper FK to Employee (custodian_employee_id)
 
 Revision ID: 20260124_task_asset_fks
-Revises: 20260124_add_ticket_contact_fields
+Revises: 20260124_ticket_contact
 Create Date: 2026-01-24
 
 """
@@ -18,7 +18,7 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision: str = "20260124_task_asset_fks"
-down_revision: Union[str, None] = "20260124_add_ticket_contact_fields"
+down_revision: Union[str, None] = "20260124_ticket_contact"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

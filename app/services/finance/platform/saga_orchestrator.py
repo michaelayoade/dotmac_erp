@@ -11,7 +11,7 @@ import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Callable, Generic, Optional, TypeVar
+from typing import Any, Callable, Generic, List, Optional, TypeVar
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -435,7 +435,7 @@ class SagaOrchestrator(ABC):
         status: Optional[SagaStatus] = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> list[SagaExecution]:
+    ) -> List[SagaExecution]:
         """List sagas with optional filters."""
         query = db.query(SagaExecution)
 

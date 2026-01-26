@@ -22,7 +22,7 @@ from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, Generic, List, Optional, Set, Tuple, Type, TypeVar, Union
+from typing import Any, Callable, Dict, Generic, List, Optional, Sequence, Set, Tuple, Type, TypeVar, Union
 from uuid import UUID, uuid4
 
 from sqlalchemy.orm import Session
@@ -396,7 +396,17 @@ class ValidationRule:
         elif self.rule_type == "custom":
             # Custom validation function
             if callable(self.value):
-                return self.value(field_value)
+                result = self.value(field_value)
+                if (
+                    isinstance(result, tuple)
+                    and len(result) == 2
+                    and isinstance(result[0], bool)
+                    and (result[1] is None or isinstance(result[1], str))
+                ):
+                    return result[0], result[1]
+                if isinstance(result, bool):
+                    return result, None if result else (self.message or "Invalid value")
+                return False, self.message or "Invalid value"
 
         return True, None
 
@@ -587,7 +597,7 @@ def resolve_column_alias(column_name: str, field_type: str) -> Optional[str]:
     return None
 
 
-def detect_csv_format(columns: List[str]) -> str:
+def detect_csv_format(columns: Sequence[str]) -> str:
     """
     Detect the likely source format of the CSV based on column names.
     Returns: "zoho", "quickbooks", "xero", "sage", "wave", "freshbooks", or "generic"
@@ -696,7 +706,7 @@ class BaseImporter(ABC, Generic[T]):
 
     # Subclasses must define these
     entity_name: str = "Entity"
-    model_class: Type[T] = None
+    model_class: Optional[Type[T]] = None
 
     def __init__(self, db: Session, config: ImportConfig):
         self.db = db
@@ -1027,7 +1037,7 @@ class BaseImporter(ABC, Generic[T]):
         """Return list of optional field names from mappings."""
         return [m.source_field for m in self.get_field_mappings() if not m.required]
 
-    def resolve_column(self, columns: List[str], field_type: str) -> Optional[str]:
+    def resolve_column(self, columns: Sequence[str], field_type: str) -> Optional[str]:
         """
         Find a matching column for a field type using column aliases.
         Returns the actual column name from the CSV if found.
@@ -1047,7 +1057,7 @@ class BaseImporter(ABC, Generic[T]):
 
         return None
 
-    def auto_map_columns(self, columns: List[str]) -> Dict[str, ColumnMapping]:
+    def auto_map_columns(self, columns: Sequence[str]) -> Dict[str, ColumnMapping]:
         """
         Automatically map CSV columns to expected fields.
         Returns dict of target_field -> ColumnMapping.
@@ -1158,7 +1168,7 @@ class BaseImporter(ABC, Generic[T]):
         try:
             with open(file_path, "r", encoding=self.config.encoding) as f:
                 reader = csv.DictReader(f)
-                columns = reader.fieldnames or []
+                columns = list(reader.fieldnames or [])
                 rows = []
                 for i, row in enumerate(reader):
                     rows.append(row)
@@ -1210,8 +1220,8 @@ class BaseImporter(ABC, Generic[T]):
 
             if not is_mapped:
                 # Check if any column matches the required field
-                for col in columns:
-                    if col.lower() == req_field.lower():
+                for column_name in columns:
+                    if column_name.lower() == req_field.lower():
                         is_mapped = True
                         break
 
@@ -1223,14 +1233,14 @@ class BaseImporter(ABC, Generic[T]):
         for idx, row in enumerate(rows[:20], start=1):  # Validate first 20 rows
             # Check required fields
             for field in required_fields:
-                col = None
+                col: Optional[str] = None
                 for m in column_mappings_dict.values():
                     if m.target_field == field or m.source_column == field:
                         col = m.source_column
                         break
 
                 if col:
-                    value = row.get(col, "").strip()
+                    value = str(row.get(col, "") or "").strip()
                     if not value:
                         errors.append(f"Row {idx}: Required field '{field}' is empty")
 
@@ -1246,7 +1256,7 @@ class BaseImporter(ABC, Generic[T]):
                     value = row.get(col, "")
                     is_valid, error_msg = rule.validate(value)
                     if not is_valid:
-                        errors.append(f"Row {idx}: {error_msg}")
+                        errors.append(f"Row {idx}: {error_msg or 'Invalid value'}")
 
         # Prepare sample data for preview display
         sample_data = []
@@ -1293,7 +1303,7 @@ class BaseImporter(ABC, Generic[T]):
             value = row.get(rule.field_name)
             valid, error_msg = rule.validate(value)
             if not valid:
-                self.result.add_error(row_num, error_msg, rule.field_name, str(value))
+                self.result.add_error(row_num, error_msg or "Invalid value", rule.field_name, str(value))
                 is_valid = False
 
         return is_valid

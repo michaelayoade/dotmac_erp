@@ -211,12 +211,12 @@ class CustomFieldsService:
 
         # Validate provided values
         for field_code, value in field_values.items():
-            defn = definitions_by_code.get(field_code)
-            if not defn:
+            defn_for_field = definitions_by_code.get(field_code)
+            if not defn_for_field:
                 # Unknown field - could ignore or error
                 continue
 
-            is_valid, error = defn.validate_value(value)
+            is_valid, error = defn_for_field.validate_value(value)
             if not is_valid and error:
                 errors.append(error)
 
@@ -301,11 +301,12 @@ class CustomFieldsService:
             sections[section].append(field_schema)
 
         # Convert to list format
-        result = []
+        result: List[Dict[str, Any]] = []
         for section_name, fields in sections.items():
+            field_list: List[Dict[str, Any]] = fields
             result.append({
                 "section_name": section_name,
-                "fields": sorted(fields, key=lambda f: f["display_order"]),
+                "fields": sorted(field_list, key=lambda f: f["display_order"]),
             })
 
         return result

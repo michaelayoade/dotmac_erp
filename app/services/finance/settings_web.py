@@ -544,7 +544,8 @@ class SettingsWebService:
         """Get payments settings for the form."""
         from sqlalchemy import select
         from app.models.finance.banking.bank_account import BankAccount, BankAccountStatus
-        from app.models.finance.gl.account import Account, AccountType
+        from app.models.finance.gl.account import Account
+        from app.models.finance.gl.account_category import AccountCategory, IFRSCategory
 
         specs = list_specs(SettingDomain.payments)
         settings = {}
@@ -559,7 +560,7 @@ class SettingsWebService:
                 "has_value": value is not None and value != "",
             }
 
-        # Get active bank accounts for dropdowns
+        # Get active bank accounts from Banking module (for reconciliation features)
         bank_accounts = db.execute(
             select(BankAccount)
             .where(
@@ -569,13 +570,31 @@ class SettingsWebService:
             .order_by(BankAccount.account_name)
         ).scalars().all()
 
-        # Get expense accounts for fee account dropdown
-        expense_accounts = db.execute(
+        # Get GL bank/cash accounts from Chart of Accounts
+        # Try multiple approaches: is_cash_equivalent, subledger_type, or account code pattern (12xx)
+        from sqlalchemy import or_
+        gl_bank_accounts = db.execute(
             select(Account)
             .where(
                 Account.organization_id == organization_id,
-                Account.account_type == AccountType.expense,
-                Account.is_active == True,
+                Account.is_active.is_(True),
+                or_(
+                    Account.is_cash_equivalent.is_(True),
+                    Account.subledger_type == "BANK",
+                    Account.account_code.like("12%"),
+                ),
+            )
+            .order_by(Account.account_code)
+        ).scalars().all()
+
+        # Get expense accounts for fee account dropdown
+        expense_accounts = db.execute(
+            select(Account)
+            .join(AccountCategory, Account.category_id == AccountCategory.category_id)
+            .where(
+                Account.organization_id == organization_id,
+                AccountCategory.ifrs_category == IFRSCategory.EXPENSES,
+                Account.is_active.is_(True),
             )
             .order_by(Account.account_code)
         ).scalars().all()
@@ -584,6 +603,7 @@ class SettingsWebService:
             "settings": settings,
             "specs": specs,
             "bank_accounts": bank_accounts,
+            "gl_bank_accounts": gl_bank_accounts,
             "expense_accounts": expense_accounts,
         }
 

@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from decimal import Decimal
-from typing import Optional
+from typing import List, Optional
 from uuid import UUID
 import uuid as uuid_lib
 
@@ -126,6 +126,8 @@ class SupplierPaymentService(ListResponseMixin):
                     status_code=400,
                     detail=f"Amount mismatch: gross ({gross_amount}) - WHT ({wht_amount}) != net ({input.amount})",
                 )
+
+        wht_code_id: Optional[UUID] = None
 
         # WHT code is required if WHT amount is non-zero
         if wht_amount > Decimal("0") and not input.wht_code_id:
@@ -478,7 +480,7 @@ class SupplierPaymentService(ListResponseMixin):
         db: Session,
         organization_id: UUID,
         payment_id: UUID,
-    ) -> list[APPaymentAllocation]:
+    ) -> List[APPaymentAllocation]:
         """
         Get allocations for a payment.
 
@@ -514,7 +516,7 @@ class SupplierPaymentService(ListResponseMixin):
         to_date: Optional[date] = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> list[SupplierPayment]:
+    ) -> List[SupplierPayment]:
         """
         List payments with optional filters.
 

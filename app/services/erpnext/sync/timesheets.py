@@ -60,7 +60,7 @@ class TimesheetSyncService(BaseSyncService[TimeEntry]):
             filters.append(["modified", ">=", since.isoformat()])
 
         # Only fetch submitted timesheets
-        filters.append(["docstatus", "=", 1])
+        filters.append(["docstatus", "=", "1"])
 
         # Get parent timesheet fields
         parent_fields = [

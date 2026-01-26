@@ -1,0 +1,223 @@
+{% extends "finance/base_finance.html" %}
+
+{% block page_title %}General Ledger{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400">
+    <a href="/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/finance/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Finance</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white">General Ledger</span>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<div class="flex items-center gap-2">
+    <button onclick="window.print()"
+            class="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700">
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
+        </svg>
+        Print
+    </button>
+    <a href="/finance/gl/journals/new"
+       class="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-primary-600 to-primary-500 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-primary-500/25 btn-hover">
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+        </svg>
+        New Journal Entry
+    </a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6 page-enter">
+    <!-- Filters -->
+    <div class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-800/50">
+        <form method="get" class="flex flex-wrap items-end gap-4">
+            <!-- Account Filter -->
+            <div class="flex-1 min-w-[200px]">
+                <label for="account_id" class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Account</label>
+                <select name="account_id" id="account_id"
+                        class="w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                    <option value="">All Accounts</option>
+                    {% for account in accounts %}
+                    <option value="{{ account.account_id }}" {{ 'selected' if selected_account_id == account.account_id else '' }}>
+                        {{ account.account_code }} - {{ account.account_name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Date Range -->
+            <div>
+                <label for="start_date" class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">From Date</label>
+                <input type="date" name="start_date" id="start_date" value="{{ start_date }}"
+                       class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+            </div>
+            <div>
+                <label for="end_date" class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">To Date</label>
+                <input type="date" name="end_date" id="end_date" value="{{ end_date }}"
+                       class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+            </div>
+
+            <!-- Search -->
+            <div class="min-w-[200px]">
+                <label for="search" class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Search</label>
+                <input type="text" name="search" id="search" value="{{ search }}"
+                       placeholder="Description, reference..."
+                       class="w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+            </div>
+
+            <!-- Submit -->
+            <button type="submit"
+                    class="rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600">
+                Apply
+            </button>
+            {% if selected_account_id or start_date or end_date or search %}
+            <a href="/finance/gl/ledger"
+               class="rounded-lg px-4 py-2 text-sm font-medium text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200">
+                Clear
+            </a>
+            {% endif %}
+        </form>
+    </div>
+
+    <!-- Account Header (when single account selected) -->
+    {% if selected_account %}
+    <div class="rounded-xl border border-teal-200 bg-teal-50 p-4 dark:border-teal-800 dark:bg-teal-900/30">
+        <div class="flex items-center gap-3">
+            <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-teal-100 dark:bg-teal-800">
+                <svg class="h-5 w-5 text-teal-600 dark:text-teal-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                </svg>
+            </div>
+            <div>
+                <p class="font-mono text-sm font-medium text-teal-700 dark:text-teal-300">{{ selected_account.account_code }}</p>
+                <p class="text-lg font-semibold text-teal-900 dark:text-white">{{ selected_account.account_name }}</p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Ledger Transactions Table -->
+    <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50 overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full table-ledger">
+                <thead>
+                    <tr class="border-b border-slate-200 dark:border-slate-700">
+                        <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Date</th>
+                        {% if not selected_account %}
+                        <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Account</th>
+                        {% endif %}
+                        <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Journal #</th>
+                        <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Description</th>
+                        <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Reference</th>
+                        <th class="px-6 py-4 text-right text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 table-cell-debit">Debit</th>
+                        <th class="px-6 py-4 text-right text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 table-cell-credit">Credit</th>
+                        {% if show_balance_column %}
+                        <th class="px-6 py-4 text-right text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Balance</th>
+                        {% endif %}
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                    {% for line in lines %}
+                    <tr class="row-highlight">
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-400">{{ line.posting_date }}</td>
+                        {% if not selected_account %}
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <a href="/finance/gl/ledger?account_id={{ line.account_id }}" class="group">
+                                <span class="font-mono text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">{{ line.account_code }}</span>
+                                <span class="text-sm text-slate-500 dark:text-slate-400 ml-1">{{ line.account_name | truncate(30) }}</span>
+                            </a>
+                        </td>
+                        {% endif %}
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <a href="/finance/gl/journals/{{ line.journal_entry_id }}" class="font-mono text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">
+                                {{ line.journal_number }}
+                            </a>
+                        </td>
+                        <td class="px-6 py-4">
+                            <p class="text-sm text-slate-900 dark:text-white">{{ line.description | truncate(50) }}</p>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-400">{{ line.reference }}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium font-mono text-slate-900 dark:text-white table-cell-debit">{{ line.debit }}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium font-mono text-slate-900 dark:text-white table-cell-credit">{{ line.credit }}</td>
+                        {% if show_balance_column %}
+                        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium font-mono text-slate-900 dark:text-white">{{ line.balance }}</td>
+                        {% endif %}
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="{{ 8 if show_balance_column else 7 }}" class="px-6 py-12 text-center">
+                            <div class="empty-state">
+                                <div class="empty-state-icon">
+                                    <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+                                    </svg>
+                                </div>
+                                <p class="empty-state-title">No ledger entries found</p>
+                                <p class="empty-state-description">
+                                    {% if selected_account or start_date or end_date or search %}
+                                    Try adjusting your filters or
+                                    {% else %}
+                                    Post journal entries to see transactions here, or
+                                    {% endif %}
+                                </p>
+                                <a href="/finance/gl/journals/new" class="btn btn-teal">
+                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                                    </svg>
+                                    New Journal Entry
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        {% if total_pages > 1 %}
+        <div class="flex items-center justify-between border-t border-slate-200 px-6 py-4 dark:border-slate-700">
+            <p class="text-sm text-slate-500 dark:text-slate-400">
+                Showing {{ offset + 1 }} to {{ offset + lines | length }} of {{ total_count }} entries
+            </p>
+            <div class="flex items-center gap-2">
+                {% if page > 1 %}
+                <a href="?page={{ page - 1 }}{% if selected_account_id %}&account_id={{ selected_account_id }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if search %}&search={{ search }}{% endif %}"
+                   class="rounded-lg border border-slate-300 px-3 py-1 text-sm hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-800">
+                    Previous
+                </a>
+                {% endif %}
+                <span class="text-sm text-slate-600 dark:text-slate-400">Page {{ page }} of {{ total_pages }}</span>
+                {% if page < total_pages %}
+                <a href="?page={{ page + 1 }}{% if selected_account_id %}&account_id={{ selected_account_id }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if search %}&search={{ search }}{% endif %}"
+                   class="rounded-lg border border-slate-300 px-3 py-1 text-sm hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-800">
+                    Next
+                </a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Summary Stats (when filtered) -->
+    {% if lines %}
+    <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <div class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-800/50">
+            <p class="text-sm text-slate-500 dark:text-slate-400">Total Entries</p>
+            <p class="text-2xl font-semibold text-slate-900 dark:text-white">{{ total_count }}</p>
+        </div>
+        {% if selected_account and lines %}
+        <div class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-800/50">
+            <p class="text-sm text-slate-500 dark:text-slate-400">Latest Balance</p>
+            <p class="text-2xl font-semibold text-slate-900 dark:text-white">{{ lines[0].balance if lines else '$0.00' }}</p>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

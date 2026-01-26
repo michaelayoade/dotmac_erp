@@ -405,12 +405,17 @@ class TaxPeriodService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         check_date = as_of_date or date.today()
 
-        return db.query(TaxPeriod).filter(
-            TaxPeriod.organization_id == org_id,
-            TaxPeriod.status == TaxPeriodStatus.OPEN,
-            TaxPeriod.due_date < check_date,
-            TaxPeriod.is_extension_filed == False,
-        ).order_by(TaxPeriod.due_date).all()
+        return (
+            db.query(TaxPeriod)
+            .filter(
+                TaxPeriod.organization_id == org_id,
+                TaxPeriod.status == TaxPeriodStatus.OPEN,
+                TaxPeriod.due_date < check_date,
+                TaxPeriod.is_extension_filed == False,
+            )
+            .order_by(TaxPeriod.due_date)
+            .all()
+        )
 
     @staticmethod
     def get(db: Session, period_id: str) -> Optional[TaxPeriod]:

@@ -398,7 +398,7 @@ function soForm() {
         submitForm() {
             const hiddenForm = document.createElement('form');
             hiddenForm.method = 'POST';
-            hiddenForm.action = '/sales-orders/new';
+            hiddenForm.action = '/finance/sales-orders/new';
 
             const fields = [
                 'customer_id', 'order_date', 'currency_code', 'customer_po_number',

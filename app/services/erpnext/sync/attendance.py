@@ -201,8 +201,8 @@ class AttendanceSyncService(BaseSyncService[Attendance]):
             check_out=data.get("check_out"),
             working_hours=data.get("working_hours"),
             overtime_hours=data.get("overtime_hours", Decimal("0")),
-            is_late=data.get("is_late", False),
-            is_early_exit=data.get("is_early_exit", False),
+            late_entry=data.get("is_late", False),
+            early_exit=data.get("is_early_exit", False),
             # created_by_id not set for synced records
         )
         return attendance
@@ -226,8 +226,8 @@ class AttendanceSyncService(BaseSyncService[Attendance]):
         entity.check_out = data.get("check_out")
         entity.working_hours = data.get("working_hours")
         entity.overtime_hours = data.get("overtime_hours", entity.overtime_hours)
-        entity.is_late = data.get("is_late", entity.is_late)
-        entity.is_early_exit = data.get("is_early_exit", entity.is_early_exit)
+        entity.late_entry = data.get("is_late", entity.late_entry)
+        entity.early_exit = data.get("is_early_exit", entity.early_exit)
         entity.updated_by_id = self.user_id
         return entity
 

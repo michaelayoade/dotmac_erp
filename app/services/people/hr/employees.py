@@ -14,7 +14,7 @@ import uuid
 from datetime import date, datetime, timezone
 from typing import TYPE_CHECKING, List, Optional
 
-from sqlalchemy import func, or_, select, update
+from sqlalchemy import Integer, cast, func, or_, select, text, update
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.auth import AuthProvider, UserCredential
@@ -142,24 +142,17 @@ class EmployeeService:
 
         # Get current max sequence for this year
         prefix = f"EMP-{year}-"
+        seq_expr = cast(func.substring(Employee.employee_code, len(prefix) + 1), Integer)
         stmt = (
-            select(func.max(Employee.employee_code))
+            select(func.max(seq_expr))
             .where(
                 Employee.organization_id == self.organization_id,
                 Employee.employee_code.like(f"{prefix}%"),
+                Employee.employee_code.op("~")(f"^{prefix}\\d+$"),
             )
         )
-        max_code = self.db.scalar(stmt)
-
-        if max_code:
-            # Extract sequence number and increment
-            try:
-                seq = int(max_code.replace(prefix, ""))
-                next_seq = seq + 1
-            except ValueError:
-                next_seq = 1
-        else:
-            next_seq = 1
+        max_seq = self.db.scalar(stmt)
+        next_seq = (max_seq or 0) + 1
 
         return f"{prefix}{next_seq:04d}"
 
@@ -473,6 +466,8 @@ class EmployeeService:
                     node.direct_reports.append(build_node(report, current_depth + 1))
 
             return node
+        reports_by_manager: dict[Optional[uuid.UUID], list[Employee]] = {}
+
         if root_employee_id:
             root_stmt = (
                 select(Employee)
@@ -492,7 +487,6 @@ class EmployeeService:
                 raise EmployeeNotFoundError(root_employee_id)
 
             employee_by_id = {root.employee_id: root}
-            reports_by_manager: dict[Optional[uuid.UUID], list[Employee]] = {}
             current_level = [root.employee_id]
             current_depth = 0
 
@@ -538,7 +532,6 @@ class EmployeeService:
         )
         roots = list(self.db.scalars(roots_stmt).all())
 
-        reports_by_manager: dict[Optional[uuid.UUID], list[Employee]] = {}
         for emp in roots:
             reports_by_manager.setdefault(None, []).append(emp)
 
@@ -618,6 +611,12 @@ class EmployeeService:
         # Auto-generate employee code if not provided
         employee_code = data.employee_number
         if not employee_code:
+            # Serialize code generation per org/year to avoid duplicates.
+            lock_key = (self.organization_id.int ^ datetime.now(timezone.utc).year) % (2**63)
+            self.db.execute(
+                text("SELECT pg_advisory_xact_lock(:key)"),
+                {"key": lock_key},
+            )
             employee_code = self._generate_employee_code()
 
         # Check for duplicate employee code
@@ -703,7 +702,7 @@ class EmployeeService:
         """
         employee = self.get_employee(employee_id)
 
-        provided_fields = getattr(data, "provided_fields", set())
+        provided_fields: set[str] = set(getattr(data, "provided_fields", set()))
         use_provided_fields = bool(provided_fields)
 
         # Validate and update employee code

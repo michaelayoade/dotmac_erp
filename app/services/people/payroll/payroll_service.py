@@ -10,7 +10,7 @@ from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 
-from sqlalchemy import and_, case, func, or_, select
+from sqlalchemy import and_, case, func, literal_column, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.people.hr.employee import Employee, EmployeeStatus
@@ -853,9 +853,13 @@ class PayrollService:
         start_date = end_date - relativedelta(months=months - 1)
 
         # Query monthly aggregates
+        month_bucket = func.date_trunc(
+            literal_column("'month'"),
+            SalarySlip.start_date,
+        ).label("month")
         results = (
             self.db.query(
-                func.date_trunc("month", SalarySlip.start_date).label("month"),
+                month_bucket,
                 func.count(SalarySlip.slip_id).label("slip_count"),
                 func.sum(SalarySlip.gross_pay).label("total_gross"),
                 func.sum(SalarySlip.total_deduction).label("total_deductions"),
@@ -866,8 +870,8 @@ class PayrollService:
                 SalarySlip.start_date >= start_date,
                 SalarySlip.start_date <= today,
             )
-            .group_by(func.date_trunc("month", SalarySlip.start_date))
-            .order_by(func.date_trunc("month", SalarySlip.start_date))
+            .group_by(month_bucket)
+            .order_by(month_bucket)
             .all()
         )
 

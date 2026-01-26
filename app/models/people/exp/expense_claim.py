@@ -30,6 +30,7 @@ from app.models.people.base import AuditMixin, ERPNextSyncMixin, StatusTrackingM
 
 if TYPE_CHECKING:
     from app.models.people.hr.employee import Employee
+    from app.models.pm.project import Project
     from app.models.pm.task import Task
     from app.models.support.ticket import Ticket
 

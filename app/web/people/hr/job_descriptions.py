@@ -7,7 +7,13 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.models.people.hr import JobDescriptionStatus
-from app.services.people.hr import OrganizationService, CompetencyService, JobDescriptionService
+from app.services.people.hr import (
+    OrganizationService,
+    CompetencyService,
+    JobDescriptionService,
+    DepartmentFilters,
+    DesignationFilters,
+)
 from app.services.common import PaginationParams, coerce_uuid
 from app.services.people.hr.web.employee_web import DEFAULT_PAGE_SIZE
 from app.templates import templates
@@ -44,7 +50,7 @@ def list_job_descriptions(
     jd_status = JobDescriptionStatus(status) if status else None
     dept_id = coerce_uuid(department_id) if department_id else None
 
-    pagination = PaginationParams(page=page, page_size=DEFAULT_PAGE_SIZE)
+    pagination = PaginationParams.from_page(page, per_page=DEFAULT_PAGE_SIZE)
     result = jd_svc.list_job_descriptions(
         status=jd_status,
         department_id=dept_id,
@@ -52,7 +58,10 @@ def list_job_descriptions(
         pagination=pagination,
     )
 
-    departments = org_svc.list_departments(is_active=True).items
+    departments = org_svc.list_departments(
+        DepartmentFilters(is_active=True),
+        PaginationParams(limit=200),
+    ).items
 
     context = base_context(request, auth, "Job Descriptions", "job-descriptions", db=db)
     context.update({
@@ -79,8 +88,14 @@ def new_job_description_form(
     org_id = coerce_uuid(auth.organization_id)
     org_svc = OrganizationService(db, org_id)
 
-    designations = org_svc.list_designations(is_active=True).items
-    departments = org_svc.list_departments(is_active=True).items
+    designations = org_svc.list_designations(
+        DesignationFilters(is_active=True),
+        PaginationParams(limit=200),
+    ).items
+    departments = org_svc.list_departments(
+        DepartmentFilters(is_active=True),
+        PaginationParams(limit=200),
+    ).items
 
     context = base_context(request, auth, "New Job Description", "job-descriptions", db=db)
     context.update({
@@ -148,8 +163,14 @@ def create_job_description(
         return RedirectResponse(url="/people/hr/job-descriptions?success=Job+description+created", status_code=303)
     except Exception as e:
         db.rollback()
-        designations = org_svc.list_designations(is_active=True).items
-        departments = org_svc.list_departments(is_active=True).items
+        designations = org_svc.list_designations(
+            DesignationFilters(is_active=True),
+            PaginationParams(limit=200),
+        ).items
+        departments = org_svc.list_departments(
+            DepartmentFilters(is_active=True),
+            PaginationParams(limit=200),
+        ).items
 
         context = base_context(request, auth, "New Job Description", "job-descriptions", db=db)
         context.update({
@@ -227,8 +248,14 @@ def edit_job_description_form(
     if not jd:
         return RedirectResponse(url="/people/hr/job-descriptions?error=Job+description+not+found", status_code=303)
 
-    designations = org_svc.list_designations(is_active=True).items
-    departments = org_svc.list_departments(is_active=True).items
+    designations = org_svc.list_designations(
+        DesignationFilters(is_active=True),
+        PaginationParams(limit=200),
+    ).items
+    departments = org_svc.list_departments(
+        DepartmentFilters(is_active=True),
+        PaginationParams(limit=200),
+    ).items
 
     context = base_context(request, auth, f"Edit {jd.job_title}", "job-descriptions", db=db)
     context.update({
@@ -302,8 +329,14 @@ def update_job_description(
     except Exception as e:
         db.rollback()
         jd = jd_svc.get_job_description(coerce_uuid(jd_id))
-        designations = org_svc.list_designations(is_active=True).items
-        departments = org_svc.list_departments(is_active=True).items
+        designations = org_svc.list_designations(
+            DesignationFilters(is_active=True),
+            PaginationParams(limit=200),
+        ).items
+        departments = org_svc.list_departments(
+            DepartmentFilters(is_active=True),
+            PaginationParams(limit=200),
+        ).items
 
         context = base_context(request, auth, f"Edit Job Description", "job-descriptions", db=db)
         context.update({

@@ -29,6 +29,7 @@ from app.services.people.hr import (
     DepartmentUpdateData,
     DesignationCreateData,
     DesignationUpdateData,
+    DesignationFilters,
     EmploymentTypeCreateData,
     EmploymentTypeUpdateData,
     EmployeeGradeCreateData,
@@ -60,6 +61,12 @@ from app.web.deps import base_context, get_db, require_hr_access, WebAuthContext
 
 
 router = APIRouter(prefix="/hr", tags=["hr-web"])
+
+
+def _safe_form_text(value: object | None, default: str = "") -> str:
+    if isinstance(value, str):
+        return value.strip()
+    return default
 
 
 def _parse_bool(value: Optional[str], default: bool = False) -> bool:
@@ -147,44 +154,44 @@ async def create_employee(
         form = await request.form()
 
     # Person fields
-    first_name = (form.get("first_name") or "").strip()
-    last_name = (form.get("last_name") or "").strip()
-    email = (form.get("email") or "").strip()
-    phone = (form.get("phone") or "").strip()
-    date_of_birth = (form.get("date_of_birth") or "").strip()
-    gender = (form.get("gender") or "").strip()
-    address_line1 = (form.get("address_line1") or "").strip()
-    address_line2 = (form.get("address_line2") or "").strip()
-    city = (form.get("city") or "").strip()
-    region = (form.get("region") or "").strip()
-    postal_code = (form.get("postal_code") or "").strip()
-    country_code = (form.get("country_code") or "").strip()
+    first_name = _safe_form_text(form.get("first_name"))
+    last_name = _safe_form_text(form.get("last_name"))
+    email = _safe_form_text(form.get("email"))
+    phone = _safe_form_text(form.get("phone"))
+    date_of_birth = _safe_form_text(form.get("date_of_birth"))
+    gender = _safe_form_text(form.get("gender"))
+    address_line1 = _safe_form_text(form.get("address_line1"))
+    address_line2 = _safe_form_text(form.get("address_line2"))
+    city = _safe_form_text(form.get("city"))
+    region = _safe_form_text(form.get("region"))
+    postal_code = _safe_form_text(form.get("postal_code"))
+    country_code = _safe_form_text(form.get("country_code"))
     # Employee fields
-    employee_code = (form.get("employee_code") or "").strip()
-    department_id = (form.get("department_id") or "").strip()
-    designation_id = (form.get("designation_id") or "").strip()
-    employment_type_id = (form.get("employment_type_id") or "").strip()
-    grade_id = (form.get("grade_id") or "").strip()
-    reports_to_id = (form.get("reports_to_id") or "").strip()
-    assigned_location_id = (form.get("assigned_location_id") or "").strip()
-    default_shift_type_id = (form.get("default_shift_type_id") or "").strip()
-    linked_person_id = (form.get("linked_person_id") or "").strip()
-    cost_center_id = (form.get("cost_center_id") or "").strip()
-    date_of_joining = (form.get("date_of_joining") or "").strip()
-    probation_end_date = (form.get("probation_end_date") or "").strip()
-    confirmation_date = (form.get("confirmation_date") or "").strip()
-    notes = (form.get("notes") or "").strip()
-    status = (form.get("status") or "DRAFT").strip()
+    employee_code = _safe_form_text(form.get("employee_code"))
+    department_id = _safe_form_text(form.get("department_id"))
+    designation_id = _safe_form_text(form.get("designation_id"))
+    employment_type_id = _safe_form_text(form.get("employment_type_id"))
+    grade_id = _safe_form_text(form.get("grade_id"))
+    reports_to_id = _safe_form_text(form.get("reports_to_id"))
+    assigned_location_id = _safe_form_text(form.get("assigned_location_id"))
+    default_shift_type_id = _safe_form_text(form.get("default_shift_type_id"))
+    linked_person_id = _safe_form_text(form.get("linked_person_id"))
+    cost_center_id = _safe_form_text(form.get("cost_center_id"))
+    date_of_joining = _safe_form_text(form.get("date_of_joining"))
+    probation_end_date = _safe_form_text(form.get("probation_end_date"))
+    confirmation_date = _safe_form_text(form.get("confirmation_date"))
+    notes = _safe_form_text(form.get("notes"))
+    status = _safe_form_text(form.get("status"), "DRAFT")
     # Personal contact & emergency
-    personal_email = (form.get("personal_email") or "").strip()
-    personal_phone = (form.get("personal_phone") or "").strip()
-    emergency_contact_name = (form.get("emergency_contact_name") or "").strip()
-    emergency_contact_phone = (form.get("emergency_contact_phone") or "").strip()
+    personal_email = _safe_form_text(form.get("personal_email"))
+    personal_phone = _safe_form_text(form.get("personal_phone"))
+    emergency_contact_name = _safe_form_text(form.get("emergency_contact_name"))
+    emergency_contact_phone = _safe_form_text(form.get("emergency_contact_phone"))
     # Bank details
-    bank_name = (form.get("bank_name") or "").strip()
-    bank_account_name = (form.get("bank_account_name") or "").strip()
-    bank_account_number = (form.get("bank_account_number") or "").strip()
-    bank_branch_code = (form.get("bank_branch_code") or "").strip()
+    bank_name = _safe_form_text(form.get("bank_name"))
+    bank_account_name = _safe_form_text(form.get("bank_account_name"))
+    bank_account_number = _safe_form_text(form.get("bank_account_number"))
+    bank_branch_code = _safe_form_text(form.get("bank_branch_code"))
 
     if (not linked_person_id and (not first_name or not last_name or not email)) or not date_of_joining:
         errors = {
@@ -443,31 +450,31 @@ async def update_employee(
     if form is None:
         form = await request.form()
 
-    employee_code = (form.get("employee_code") or "").strip()
-    department_id = (form.get("department_id") or "").strip()
-    designation_id = (form.get("designation_id") or "").strip()
-    employment_type_id = (form.get("employment_type_id") or "").strip()
-    grade_id = (form.get("grade_id") or "").strip()
-    reports_to_id = (form.get("reports_to_id") or "").strip()
-    assigned_location_id = (form.get("assigned_location_id") or "").strip()
-    default_shift_type_id = (form.get("default_shift_type_id") or "").strip()
-    linked_person_id = (form.get("linked_person_id") or "").strip()
-    cost_center_id = (form.get("cost_center_id") or "").strip()
-    date_of_joining = (form.get("date_of_joining") or "").strip()
-    probation_end_date = (form.get("probation_end_date") or "").strip()
-    confirmation_date = (form.get("confirmation_date") or "").strip()
-    notes = (form.get("notes") or "").strip()
-    status = (form.get("status") or "").strip()
+    employee_code = _safe_form_text(form.get("employee_code"))
+    department_id = _safe_form_text(form.get("department_id"))
+    designation_id = _safe_form_text(form.get("designation_id"))
+    employment_type_id = _safe_form_text(form.get("employment_type_id"))
+    grade_id = _safe_form_text(form.get("grade_id"))
+    reports_to_id = _safe_form_text(form.get("reports_to_id"))
+    assigned_location_id = _safe_form_text(form.get("assigned_location_id"))
+    default_shift_type_id = _safe_form_text(form.get("default_shift_type_id"))
+    linked_person_id = _safe_form_text(form.get("linked_person_id"))
+    cost_center_id = _safe_form_text(form.get("cost_center_id"))
+    date_of_joining = _safe_form_text(form.get("date_of_joining"))
+    probation_end_date = _safe_form_text(form.get("probation_end_date"))
+    confirmation_date = _safe_form_text(form.get("confirmation_date"))
+    notes = _safe_form_text(form.get("notes"))
+    status = _safe_form_text(form.get("status"))
     # Personal contact & emergency
-    personal_email = (form.get("personal_email") or "").strip()
-    personal_phone = (form.get("personal_phone") or "").strip()
-    emergency_contact_name = (form.get("emergency_contact_name") or "").strip()
-    emergency_contact_phone = (form.get("emergency_contact_phone") or "").strip()
+    personal_email = _safe_form_text(form.get("personal_email"))
+    personal_phone = _safe_form_text(form.get("personal_phone"))
+    emergency_contact_name = _safe_form_text(form.get("emergency_contact_name"))
+    emergency_contact_phone = _safe_form_text(form.get("emergency_contact_phone"))
     # Bank details
-    bank_name = (form.get("bank_name") or "").strip()
-    bank_account_name = (form.get("bank_account_name") or "").strip()
-    bank_account_number = (form.get("bank_account_number") or "").strip()
-    bank_branch_code = (form.get("bank_branch_code") or "").strip()
+    bank_name = _safe_form_text(form.get("bank_name"))
+    bank_account_name = _safe_form_text(form.get("bank_account_name"))
+    bank_account_number = _safe_form_text(form.get("bank_account_number"))
+    bank_branch_code = _safe_form_text(form.get("bank_branch_code"))
 
     status_enum = None
     if status:
@@ -592,7 +599,7 @@ async def suspend_employee(
     form = getattr(request.state, "csrf_form", None)
     if form is None:
         form = await request.form()
-    reason = (form.get("reason") or "").strip()
+    reason = _safe_form_text(form.get("reason"))
 
     org_id = coerce_uuid(auth.organization_id)
     svc = EmployeeService(db, org_id)
@@ -628,7 +635,7 @@ async def resign_employee(
     form = getattr(request.state, "csrf_form", None)
     if form is None:
         form = await request.form()
-    date_of_leaving = (form.get("date_of_leaving") or "").strip()
+    date_of_leaving = _safe_form_text(form.get("date_of_leaving"))
 
     org_id = coerce_uuid(auth.organization_id)
     svc = EmployeeService(db, org_id)
@@ -667,8 +674,8 @@ async def terminate_employee(
     form = getattr(request.state, "csrf_form", None)
     if form is None:
         form = await request.form()
-    date_of_leaving = (form.get("date_of_leaving") or "").strip()
-    reason = (form.get("reason") or "").strip()
+    date_of_leaving = _safe_form_text(form.get("date_of_leaving"))
+    reason = _safe_form_text(form.get("reason"))
 
     org_id = coerce_uuid(auth.organization_id)
     svc = EmployeeService(db, org_id)
@@ -753,8 +760,8 @@ async def create_onboarding(
     if form is None:
         form = await request.form()
 
-    template_id = (form.get("template_id") or "").strip()
-    notes = (form.get("notes") or "").strip()
+    template_id = _safe_form_text(form.get("template_id"))
+    notes = _safe_form_text(form.get("notes"))
 
     org_id = coerce_uuid(auth.organization_id)
     svc = EmployeeService(db, org_id)
@@ -873,8 +880,8 @@ async def create_employee_user_credentials(
     if form is None:
         form = await request.form()
 
-    username = (form.get("username") or "").strip()
-    password = (form.get("password") or "").strip()
+    username = _safe_form_text(form.get("username"))
+    password = _safe_form_text(form.get("password"))
     must_change = _parse_bool(form.get("must_change_password"), False)
 
     org_id = coerce_uuid(auth.organization_id)
@@ -912,7 +919,7 @@ async def link_employee_user(
     if form is None:
         form = await request.form()
 
-    person_id = (form.get("person_id") or "").strip()
+    person_id = _safe_form_text(form.get("person_id"))
     if not person_id:
         context = hr_web_service.employee_detail_response(
             request, auth, db, str(employee_id)
@@ -1001,10 +1008,10 @@ async def bulk_update_employees(
         form = await request.form()
 
     employee_ids = form.getlist("employee_ids")
-    department_id = (form.get("department_id") or "").strip()
-    designation_id = (form.get("designation_id") or "").strip()
-    reports_to_id = (form.get("reports_to_id") or "").strip()
-    status = (form.get("status") or "").strip()
+    department_id = _safe_form_text(form.get("department_id"))
+    designation_id = _safe_form_text(form.get("designation_id"))
+    reports_to_id = _safe_form_text(form.get("reports_to_id"))
+    status = _safe_form_text(form.get("status"))
 
     if not employee_ids:
         return RedirectResponse(url="/people/hr/employees", status_code=303)
@@ -1137,10 +1144,10 @@ async def create_department(
     if form is None:
         form = await request.form()
 
-    department_code = (form.get("department_code") or "").strip()
-    department_name = (form.get("department_name") or "").strip()
-    description = (form.get("description") or "").strip()
-    parent_department_id = (form.get("parent_department_id") or "").strip()
+    department_code = _safe_form_text(form.get("department_code"))
+    department_name = _safe_form_text(form.get("department_name"))
+    description = _safe_form_text(form.get("description"))
+    parent_department_id = _safe_form_text(form.get("parent_department_id"))
     is_active = _parse_bool(form.get("is_active"), True)
 
     if not department_code or not department_name:
@@ -1301,18 +1308,18 @@ async def create_location(
     if form is None:
         form = await request.form()
 
-    location_code = (form.get("location_code") or "").strip()
-    location_name = (form.get("location_name") or "").strip()
-    location_type = (form.get("location_type") or "").strip()
-    address_line_1 = (form.get("address_line_1") or "").strip()
-    address_line_2 = (form.get("address_line_2") or "").strip()
-    city = (form.get("city") or "").strip()
-    state_province = (form.get("state_province") or "").strip()
-    postal_code = (form.get("postal_code") or "").strip()
-    country_code = (form.get("country_code") or "").strip()
-    latitude_value = (form.get("latitude") or "").strip()
-    longitude_value = (form.get("longitude") or "").strip()
-    radius_value = (form.get("geofence_radius_m") or "").strip()
+    location_code = _safe_form_text(form.get("location_code"))
+    location_name = _safe_form_text(form.get("location_name"))
+    location_type = _safe_form_text(form.get("location_type"))
+    address_line_1 = _safe_form_text(form.get("address_line_1"))
+    address_line_2 = _safe_form_text(form.get("address_line_2"))
+    city = _safe_form_text(form.get("city"))
+    state_province = _safe_form_text(form.get("state_province"))
+    postal_code = _safe_form_text(form.get("postal_code"))
+    country_code = _safe_form_text(form.get("country_code"))
+    latitude_value = _safe_form_text(form.get("latitude"))
+    longitude_value = _safe_form_text(form.get("longitude"))
+    radius_value = _safe_form_text(form.get("geofence_radius_m"))
     geofence_enabled = _parse_bool(form.get("geofence_enabled"), True)
     is_active = _parse_bool(form.get("is_active"), True)
 
@@ -1407,18 +1414,18 @@ async def update_location(
     if form is None:
         form = await request.form()
 
-    location_code = (form.get("location_code") or "").strip()
-    location_name = (form.get("location_name") or "").strip()
-    location_type = (form.get("location_type") or "").strip()
-    address_line_1 = (form.get("address_line_1") or "").strip()
-    address_line_2 = (form.get("address_line_2") or "").strip()
-    city = (form.get("city") or "").strip()
-    state_province = (form.get("state_province") or "").strip()
-    postal_code = (form.get("postal_code") or "").strip()
-    country_code = (form.get("country_code") or "").strip()
-    latitude_value = (form.get("latitude") or "").strip()
-    longitude_value = (form.get("longitude") or "").strip()
-    radius_value = (form.get("geofence_radius_m") or "").strip()
+    location_code = _safe_form_text(form.get("location_code"))
+    location_name = _safe_form_text(form.get("location_name"))
+    location_type = _safe_form_text(form.get("location_type"))
+    address_line_1 = _safe_form_text(form.get("address_line_1"))
+    address_line_2 = _safe_form_text(form.get("address_line_2"))
+    city = _safe_form_text(form.get("city"))
+    state_province = _safe_form_text(form.get("state_province"))
+    postal_code = _safe_form_text(form.get("postal_code"))
+    country_code = _safe_form_text(form.get("country_code"))
+    latitude_value = _safe_form_text(form.get("latitude"))
+    longitude_value = _safe_form_text(form.get("longitude"))
+    radius_value = _safe_form_text(form.get("geofence_radius_m"))
     geofence_enabled = _parse_bool(form.get("geofence_enabled"), True)
     is_active = _parse_bool(form.get("is_active"), True)
 
@@ -1515,10 +1522,10 @@ async def update_department(
     if form is None:
         form = await request.form()
 
-    department_code = (form.get("department_code") or "").strip()
-    department_name = (form.get("department_name") or "").strip()
-    description = (form.get("description") or "").strip()
-    parent_department_id = (form.get("parent_department_id") or "").strip()
+    department_code = _safe_form_text(form.get("department_code"))
+    department_name = _safe_form_text(form.get("department_name"))
+    description = _safe_form_text(form.get("description"))
+    parent_department_id = _safe_form_text(form.get("parent_department_id"))
     is_active = _parse_bool(form.get("is_active"), True)
 
     if not department_code or not department_name:
@@ -1621,9 +1628,9 @@ async def create_designation(
     if form is None:
         form = await request.form()
 
-    designation_code = (form.get("designation_code") or "").strip()
-    designation_name = (form.get("designation_name") or "").strip()
-    description = (form.get("description") or "").strip()
+    designation_code = _safe_form_text(form.get("designation_code"))
+    designation_name = _safe_form_text(form.get("designation_name"))
+    description = _safe_form_text(form.get("description"))
     is_active = _parse_bool(form.get("is_active"), True)
 
     if not designation_code or not designation_name:
@@ -1675,9 +1682,9 @@ async def update_designation(
     if form is None:
         form = await request.form()
 
-    designation_code = (form.get("designation_code") or "").strip()
-    designation_name = (form.get("designation_name") or "").strip()
-    description = (form.get("description") or "").strip()
+    designation_code = _safe_form_text(form.get("designation_code"))
+    designation_name = _safe_form_text(form.get("designation_name"))
+    description = _safe_form_text(form.get("description"))
     is_active = _parse_bool(form.get("is_active"), True)
 
     if not designation_code or not designation_name:
@@ -1770,9 +1777,9 @@ async def create_employment_type(
     if form is None:
         form = await request.form()
 
-    type_code = (form.get("type_code") or "").strip()
-    type_name = (form.get("type_name") or "").strip()
-    description = (form.get("description") or "").strip()
+    type_code = _safe_form_text(form.get("type_code"))
+    type_name = _safe_form_text(form.get("type_name"))
+    description = _safe_form_text(form.get("description"))
     is_active = _parse_bool(form.get("is_active"), True)
 
     if not type_code or not type_name:
@@ -1824,9 +1831,9 @@ async def update_employment_type(
     if form is None:
         form = await request.form()
 
-    type_code = (form.get("type_code") or "").strip()
-    type_name = (form.get("type_name") or "").strip()
-    description = (form.get("description") or "").strip()
+    type_code = _safe_form_text(form.get("type_code"))
+    type_name = _safe_form_text(form.get("type_name"))
+    description = _safe_form_text(form.get("description"))
     is_active = _parse_bool(form.get("is_active"), True)
 
     if not type_code or not type_name:
@@ -1919,12 +1926,12 @@ async def create_grade(
     if form is None:
         form = await request.form()
 
-    grade_code = (form.get("grade_code") or "").strip()
-    grade_name = (form.get("grade_name") or "").strip()
-    description = (form.get("description") or "").strip()
-    rank_value = (form.get("rank") or "").strip()
-    min_salary_value = (form.get("min_salary") or "").strip()
-    max_salary_value = (form.get("max_salary") or "").strip()
+    grade_code = _safe_form_text(form.get("grade_code"))
+    grade_name = _safe_form_text(form.get("grade_name"))
+    description = _safe_form_text(form.get("description"))
+    rank_value = _safe_form_text(form.get("rank"))
+    min_salary_value = _safe_form_text(form.get("min_salary"))
+    max_salary_value = _safe_form_text(form.get("max_salary"))
     is_active = _parse_bool(form.get("is_active"), True)
 
     errors = {
@@ -2010,12 +2017,12 @@ async def update_grade(
     if form is None:
         form = await request.form()
 
-    grade_code = (form.get("grade_code") or "").strip()
-    grade_name = (form.get("grade_name") or "").strip()
-    description = (form.get("description") or "").strip()
-    rank_value = (form.get("rank") or "").strip()
-    min_salary_value = (form.get("min_salary") or "").strip()
-    max_salary_value = (form.get("max_salary") or "").strip()
+    grade_code = _safe_form_text(form.get("grade_code"))
+    grade_name = _safe_form_text(form.get("grade_name"))
+    description = _safe_form_text(form.get("description"))
+    rank_value = _safe_form_text(form.get("rank"))
+    min_salary_value = _safe_form_text(form.get("min_salary"))
+    max_salary_value = _safe_form_text(form.get("max_salary"))
     is_active = _parse_bool(form.get("is_active"), True)
 
     errors = {
@@ -3160,7 +3167,7 @@ def list_job_descriptions(
     jd_status = JobDescriptionStatus(status) if status else None
     dept_id = coerce_uuid(department_id) if department_id else None
 
-    pagination = PaginationParams(page=page, page_size=DEFAULT_PAGE_SIZE)
+    pagination = PaginationParams.from_page(page, per_page=DEFAULT_PAGE_SIZE)
     result = jd_svc.list_job_descriptions(
         status=jd_status,
         department_id=dept_id,
@@ -3168,7 +3175,10 @@ def list_job_descriptions(
         pagination=pagination,
     )
 
-    departments = org_svc.list_departments(is_active=True).items
+    departments = org_svc.list_departments(
+        DepartmentFilters(is_active=True),
+        PaginationParams(limit=200),
+    ).items
 
     context = base_context(request, auth, "Job Descriptions", "job-descriptions", db=db)
     context.update({
@@ -3195,8 +3205,14 @@ def new_job_description_form(
     org_id = coerce_uuid(auth.organization_id)
     org_svc = OrganizationService(db, org_id)
 
-    designations = org_svc.list_designations(is_active=True).items
-    departments = org_svc.list_departments(is_active=True).items
+    designations = org_svc.list_designations(
+        DesignationFilters(is_active=True),
+        PaginationParams(limit=200),
+    ).items
+    departments = org_svc.list_departments(
+        DepartmentFilters(is_active=True),
+        PaginationParams(limit=200),
+    ).items
 
     context = base_context(request, auth, "New Job Description", "job-descriptions", db=db)
     context.update({
@@ -3264,8 +3280,14 @@ def create_job_description(
         return RedirectResponse(url="/people/hr/job-descriptions?success=Job+description+created", status_code=303)
     except Exception as e:
         db.rollback()
-        designations = org_svc.list_designations(is_active=True).items
-        departments = org_svc.list_departments(is_active=True).items
+        designations = org_svc.list_designations(
+            DesignationFilters(is_active=True),
+            PaginationParams(limit=200),
+        ).items
+        departments = org_svc.list_departments(
+            DepartmentFilters(is_active=True),
+            PaginationParams(limit=200),
+        ).items
 
         context = base_context(request, auth, "New Job Description", "job-descriptions", db=db)
         context.update({
@@ -3343,8 +3365,14 @@ def edit_job_description_form(
     if not jd:
         return RedirectResponse(url="/people/hr/job-descriptions?error=Job+description+not+found", status_code=303)
 
-    designations = org_svc.list_designations(is_active=True).items
-    departments = org_svc.list_departments(is_active=True).items
+    designations = org_svc.list_designations(
+        DesignationFilters(is_active=True),
+        PaginationParams(limit=200),
+    ).items
+    departments = org_svc.list_departments(
+        DepartmentFilters(is_active=True),
+        PaginationParams(limit=200),
+    ).items
 
     context = base_context(request, auth, f"Edit {jd.job_title}", "job-descriptions", db=db)
     context.update({
@@ -3418,8 +3446,14 @@ def update_job_description(
     except Exception as e:
         db.rollback()
         jd = jd_svc.get_job_description(coerce_uuid(jd_id))
-        designations = org_svc.list_designations(is_active=True).items
-        departments = org_svc.list_departments(is_active=True).items
+        designations = org_svc.list_designations(
+            DesignationFilters(is_active=True),
+            PaginationParams(limit=200),
+        ).items
+        departments = org_svc.list_departments(
+            DepartmentFilters(is_active=True),
+            PaginationParams(limit=200),
+        ).items
 
         context = base_context(request, auth, f"Edit Job Description", "job-descriptions", db=db)
         context.update({

@@ -19,6 +19,7 @@ from app.models.finance.cons.consolidation_run import ConsolidationRun, Consolid
 from app.models.finance.cons.elimination_entry import EliminationEntry
 from app.models.finance.cons.legal_entity import LegalEntity
 from app.services.common import coerce_uuid
+from app.models.finance.gl.journal_entry import JournalType
 from app.services.finance.gl.journal import JournalService, JournalInput, JournalLineInput
 
 
@@ -162,8 +163,9 @@ class CONSPostingAdapter:
 
         # Create journal entry
         journal_input = JournalInput(
-            fiscal_period_id=run.fiscal_period_id,
-            journal_date=posting_date,
+            journal_type=JournalType.CONSOLIDATION,
+            entry_date=posting_date,
+            posting_date=posting_date,
             description=f"Consolidation elimination: {entry.elimination_type.value}",
             source_module="CONS",
             source_document_type="ELIMINATION",
@@ -177,13 +179,12 @@ class CONSPostingAdapter:
                 organization_id=parent.organization_id,
                 input=journal_input,
                 created_by_user_id=user_id,
-                idempotency_key=idempotency_key,
             )
 
             return CONSPostingResult(
                 success=True,
-                journal_entry_id=journal_entry.entry_id,
-                entry_number=journal_entry.entry_number,
+                journal_entry_id=journal_entry.journal_entry_id,
+                entry_number=journal_entry.journal_number,
                 message=f"Posted elimination entry {entry.entry_id}",
             )
 
@@ -338,8 +339,9 @@ class CONSPostingAdapter:
         ]
 
         journal_input = JournalInput(
-            fiscal_period_id=run.fiscal_period_id,
-            journal_date=posting_date,
+            journal_type=JournalType.CONSOLIDATION,
+            entry_date=posting_date,
+            posting_date=posting_date,
             description=f"Currency translation adjustment: {entity.entity_code}",
             source_module="CONS",
             source_document_type="CTA",
@@ -353,7 +355,6 @@ class CONSPostingAdapter:
                 organization_id=parent.organization_id,
                 input=journal_input,
                 created_by_user_id=user_id,
-                idempotency_key=idempotency_key,
             )
 
             # Update run total
@@ -361,8 +362,8 @@ class CONSPostingAdapter:
 
             return CONSPostingResult(
                 success=True,
-                journal_entry_id=journal_entry.entry_id,
-                entry_number=journal_entry.entry_number,
+                journal_entry_id=journal_entry.journal_entry_id,
+                entry_number=journal_entry.journal_number,
                 message=f"Posted CTA for {entity.entity_code}",
             )
 
@@ -458,8 +459,9 @@ class CONSPostingAdapter:
         ]
 
         journal_input = JournalInput(
-            fiscal_period_id=run.fiscal_period_id,
-            journal_date=posting_date,
+            journal_type=JournalType.CONSOLIDATION,
+            entry_date=posting_date,
+            posting_date=posting_date,
             description=f"NCI allocation: {entity.entity_code}",
             source_module="CONS",
             source_document_type="NCI",
@@ -473,13 +475,12 @@ class CONSPostingAdapter:
                 organization_id=parent.organization_id,
                 input=journal_input,
                 created_by_user_id=user_id,
-                idempotency_key=idempotency_key,
             )
 
             return CONSPostingResult(
                 success=True,
-                journal_entry_id=journal_entry.entry_id,
-                entry_number=journal_entry.entry_number,
+                journal_entry_id=journal_entry.journal_entry_id,
+                entry_number=journal_entry.journal_number,
                 message=f"Posted NCI allocation for {entity.entity_code}",
             )
 

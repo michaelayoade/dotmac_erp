@@ -1,6 +1,6 @@
 import os
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Optional, cast
 from uuid import UUID
 
 from fastapi import Cookie, Depends, Header, HTTPException, Request
@@ -69,7 +69,7 @@ def get_current_user_id(
         raise HTTPException(status_code=401, detail="Unauthorized")
 
     now = datetime.now(timezone.utc)
-    person_uuid = coerce_uuid(person_id)
+    person_uuid = cast(UUID, coerce_uuid(person_id))
     session_uuid = coerce_uuid(session_id)
     session = (
         db.query(AuthSession)

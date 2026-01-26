@@ -8,7 +8,7 @@ conversion capabilities for multi-currency accounting operations.
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
-from typing import Optional
+from typing import List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -104,7 +104,7 @@ class FXService(ListResponseMixin):
             )
 
         # Try direct rate first
-        rate = (
+        direct_rate = (
             db.query(ExchangeRate)
             .filter(
                 and_(
@@ -119,8 +119,8 @@ class FXService(ListResponseMixin):
             .first()
         )
 
-        if rate:
-            return rate
+        if direct_rate:
+            return direct_rate
 
         # Try inverse rate
         inverse_rate = (

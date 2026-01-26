@@ -5,6 +5,7 @@ import secrets
 from urllib.parse import urlsplit
 
 from fastapi import HTTPException, Request
+from starlette.middleware.base import RequestResponseEndpoint
 from starlette.responses import Response
 
 CSRF_COOKIE_NAME = "csrf_token"
@@ -129,7 +130,7 @@ async def _extract_csrf_token(request: Request) -> str | None:
     return None
 
 
-async def csrf_middleware(request: Request, call_next) -> Response:
+async def csrf_middleware(request: Request, call_next: RequestResponseEndpoint) -> Response:
     csrf_cookie = request.cookies.get(CSRF_COOKIE_NAME) or ""
     request.state.csrf_token = csrf_cookie
 

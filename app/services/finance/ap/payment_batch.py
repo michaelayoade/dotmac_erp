@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any, List, Optional, cast
 from uuid import UUID
 import uuid as uuid_lib
 
@@ -479,7 +479,7 @@ class PaymentBatchService(ListResponseMixin):
         db: Session,
         organization_id: UUID,
         batch_id: UUID,
-    ) -> list[SupplierPayment]:
+    ) -> List[SupplierPayment]:
         """
         Get all payments in a batch.
 
@@ -502,9 +502,13 @@ class PaymentBatchService(ListResponseMixin):
         if not batch:
             raise HTTPException(status_code=404, detail="Payment batch not found")
 
-        return db.query(SupplierPayment).filter(
-            SupplierPayment.payment_batch_id == batch_id
-        ).order_by(SupplierPayment.payment_number).all()
+        return cast(
+            List[SupplierPayment],
+            db.query(SupplierPayment)
+            .filter(SupplierPayment.payment_batch_id == batch_id)
+            .order_by(SupplierPayment.payment_number)
+            .all(),
+        )
 
     @staticmethod
     def get(db: Session, batch_id: str) -> Optional[APPaymentBatch]:
@@ -522,7 +526,7 @@ class PaymentBatchService(ListResponseMixin):
         to_date: Optional[date] = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> list[APPaymentBatch]:
+    ) -> List[APPaymentBatch]:
         """
         List payment batches with filters.
 
@@ -554,7 +558,10 @@ class PaymentBatchService(ListResponseMixin):
         if to_date:
             query = query.filter(APPaymentBatch.batch_date <= to_date)
 
-        return query.order_by(APPaymentBatch.batch_date.desc()).offset(offset).limit(limit).all()
+        return cast(
+            List[APPaymentBatch],
+            query.order_by(APPaymentBatch.batch_date.desc()).offset(offset).limit(limit).all(),
+        )
 
 
 # Module-level instance

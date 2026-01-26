@@ -37,6 +37,7 @@ class PayrollEntryStatus(str, enum.Enum):
     """Payroll entry lifecycle status."""
 
     DRAFT = "DRAFT"
+    PENDING = "PENDING"
     SLIPS_CREATED = "SLIPS_CREATED"
     SUBMITTED = "SUBMITTED"
     APPROVED = "APPROVED"
@@ -95,6 +96,21 @@ class PayrollEntry(Base, AuditMixin, ERPNextSyncMixin, StatusTrackingMixin):
     payroll_frequency: Mapped[PayrollFrequency] = mapped_column(
         Enum(PayrollFrequency, name="payroll_frequency", create_type=False),
         default=PayrollFrequency.MONTHLY,
+    )
+
+    # Period identification
+    payroll_year: Mapped[Optional[int]] = mapped_column(
+        nullable=True,
+        comment="Year of the payroll period",
+    )
+    payroll_month: Mapped[Optional[int]] = mapped_column(
+        nullable=True,
+        comment="Month of the payroll period (1-12)",
+    )
+    entry_name: Mapped[Optional[str]] = mapped_column(
+        String(100),
+        nullable=True,
+        comment="Human-readable name for this payroll run",
     )
 
     # Currency

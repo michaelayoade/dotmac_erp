@@ -11,9 +11,9 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from app.models.finance.gl.account import Account
+from app.models.finance.gl.account import Account, AccountType
 from app.models.finance.gl.journal_entry import JournalEntry, JournalStatus
-from app.models.finance.gl.journal_line import JournalLine
+from app.models.finance.gl.journal_entry_line import JournalEntryLine
 from app.schemas.bulk_actions import BulkActionResult
 from app.services.bulk_actions import BulkActionService
 from app.services.finance.gl.journal import JournalService
@@ -40,9 +40,10 @@ class AccountBulkService(BulkActionService[Account]):
         ("account_code", "Account Code"),
         ("account_name", "Account Name"),
         ("account_type", "Account Type"),
-        ("account_category", "Category"),
-        ("is_control_account", "Control Account"),
-        ("currency_code", "Currency"),
+        ("category", "Category"),
+        ("normal_balance", "Normal Balance"),
+        ("subledger_type", "Subledger Type"),
+        ("default_currency_code", "Currency"),
         ("is_active", "Active"),
         ("description", "Description"),
     ]
@@ -51,19 +52,19 @@ class AccountBulkService(BulkActionService[Account]):
         """
         Check if an account can be deleted.
 
-        An account cannot be deleted if it has journal entries or is a system account.
+        An account cannot be deleted if it has journal entries or is a control account.
         """
-        # Check if this is a system/control account
-        if entity.is_control_account:
+        # Check if this is a control account (not for direct posting)
+        if entity.account_type == AccountType.CONTROL:
             return (
                 False,
                 f"Cannot delete '{entity.account_name}': is a control account",
             )
 
-        # Check for journal lines
+        # Check for journal entry lines
         journal_count = (
-            self.db.query(JournalLine)
-            .filter(JournalLine.account_id == entity.account_id)
+            self.db.query(JournalEntryLine)
+            .filter(JournalEntryLine.account_id == entity.account_id)
             .count()
         )
 
@@ -79,8 +80,10 @@ class AccountBulkService(BulkActionService[Account]):
         """Handle special field formatting for account export."""
         if field_name == "account_type":
             return entity.account_type.value if entity.account_type else ""
-        if field_name == "account_category":
-            return entity.account_category.value if entity.account_category else ""
+        if field_name == "normal_balance":
+            return entity.normal_balance.value if entity.normal_balance else ""
+        if field_name == "category":
+            return entity.category.category_name if entity.category else ""
 
         return super()._get_export_value(entity, field_name)
 
@@ -163,6 +166,10 @@ class JournalBulkService(BulkActionService[JournalEntry]):
         if not ids:
             return BulkActionResult.failure("No IDs provided")
 
+        user_id = self.user_id
+        if user_id is None:
+            return BulkActionResult.failure("User ID is required to post journals")
+
         entities = self._get_entities(ids)
         if not entities:
             return BulkActionResult.failure("No journal entries found with provided IDs")
@@ -177,7 +184,7 @@ class JournalBulkService(BulkActionService[JournalEntry]):
                     self.db,
                     self.organization_id,
                     entry.journal_entry_id,
-                    self.user_id,
+                    user_id,
                 )
                 success_count += 1
             except Exception as e:
@@ -201,6 +208,10 @@ class JournalBulkService(BulkActionService[JournalEntry]):
         if not ids:
             return BulkActionResult.failure("No IDs provided")
 
+        user_id = self.user_id
+        if user_id is None:
+            return BulkActionResult.failure("User ID is required to approve journals")
+
         entities = self._get_entities(ids)
         if not entities:
             return BulkActionResult.failure("No journal entries found with provided IDs")
@@ -215,7 +226,7 @@ class JournalBulkService(BulkActionService[JournalEntry]):
                     self.db,
                     self.organization_id,
                     entry.journal_entry_id,
-                    self.user_id,
+                    user_id,
                 )
                 success_count += 1
             except Exception as e:

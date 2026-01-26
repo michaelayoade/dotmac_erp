@@ -5,7 +5,7 @@ Ensures the request cache is cleared after each request completes,
 preventing memory leaks and cache pollution between requests.
 """
 
-from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
 from starlette.responses import Response
 
@@ -24,7 +24,7 @@ class RequestCacheMiddleware(BaseHTTPMiddleware):
         app.add_middleware(RequestCacheMiddleware)
     """
 
-    async def dispatch(self, request: Request, call_next) -> Response:
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         """Process request and ensure cache cleanup."""
         try:
             response = await call_next(request)

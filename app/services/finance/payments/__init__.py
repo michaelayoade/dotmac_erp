@@ -22,6 +22,10 @@ from app.services.finance.payments.payment_service import (
 from app.services.finance.payments.webhook_service import (
     WebhookService,
 )
+from app.services.finance.payments.web import (
+    PaymentWebService,
+    payment_web_service,
+)
 
 __all__ = [
     # Client
@@ -37,5 +41,7 @@ __all__ = [
     "VerifyTransferResponse",
     # Services
     "PaymentService",
+    "PaymentWebService",
+    "payment_web_service",
     "WebhookService",
 ]

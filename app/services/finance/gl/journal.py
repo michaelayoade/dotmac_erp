@@ -106,8 +106,14 @@ class JournalService(ListResponseMixin):
             raise HTTPException(status_code=400, detail="Journal must have at least one line")
 
         # Validate balance
-        total_debit = sum(l.debit_amount for l in input.lines)
-        total_credit = sum(l.credit_amount for l in input.lines)
+        total_debit = sum(
+            (l.debit_amount or Decimal("0") for l in input.lines),
+            Decimal("0"),
+        )
+        total_credit = sum(
+            (l.credit_amount or Decimal("0") for l in input.lines),
+            Decimal("0"),
+        )
 
         if abs(total_debit - total_credit) > Decimal("0.000001"):
             raise HTTPException(
@@ -132,14 +138,14 @@ class JournalService(ListResponseMixin):
         functional_debit = Decimal("0")
         functional_credit = Decimal("0")
 
-        for line in input.lines:
-            if line.debit_amount_functional is None:
-                line.debit_amount_functional = line.debit_amount * input.exchange_rate
-            if line.credit_amount_functional is None:
-                line.credit_amount_functional = line.credit_amount * input.exchange_rate
+        for line_input in input.lines:
+            if line_input.debit_amount_functional is None:
+                line_input.debit_amount_functional = line_input.debit_amount * input.exchange_rate
+            if line_input.credit_amount_functional is None:
+                line_input.credit_amount_functional = line_input.credit_amount * input.exchange_rate
 
-            functional_debit += line.debit_amount_functional
-            functional_credit += line.credit_amount_functional
+            functional_debit += line_input.debit_amount_functional
+            functional_credit += line_input.credit_amount_functional
 
         # Create journal entry
         journal = JournalEntry(
@@ -172,7 +178,7 @@ class JournalService(ListResponseMixin):
 
         # Create lines
         for i, line_input in enumerate(input.lines):
-            line = JournalEntryLine(
+            entry_line = JournalEntryLine(
                 journal_entry_id=journal.journal_entry_id,
                 line_number=i + 1,
                 account_id=coerce_uuid(line_input.account_id),
@@ -188,7 +194,7 @@ class JournalService(ListResponseMixin):
                 project_id=coerce_uuid(line_input.project_id) if line_input.project_id else None,
                 segment_id=coerce_uuid(line_input.segment_id) if line_input.segment_id else None,
             )
-            db.add(line)
+            db.add(entry_line)
 
         db.commit()
         db.refresh(journal)
@@ -238,8 +244,14 @@ class JournalService(ListResponseMixin):
             raise HTTPException(status_code=400, detail="Journal must have at least one line")
 
         # Validate balance
-        total_debit = sum(l.debit_amount for l in input.lines)
-        total_credit = sum(l.credit_amount for l in input.lines)
+        total_debit = sum(
+            (l.debit_amount or Decimal("0") for l in input.lines),
+            Decimal("0"),
+        )
+        total_credit = sum(
+            (l.credit_amount or Decimal("0") for l in input.lines),
+            Decimal("0"),
+        )
 
         if abs(total_debit - total_credit) > Decimal("0.000001"):
             raise HTTPException(
@@ -259,14 +271,14 @@ class JournalService(ListResponseMixin):
         functional_debit = Decimal("0")
         functional_credit = Decimal("0")
 
-        for line in input.lines:
-            if line.debit_amount_functional is None:
-                line.debit_amount_functional = line.debit_amount * input.exchange_rate
-            if line.credit_amount_functional is None:
-                line.credit_amount_functional = line.credit_amount * input.exchange_rate
+        for line_input in input.lines:
+            if line_input.debit_amount_functional is None:
+                line_input.debit_amount_functional = line_input.debit_amount * input.exchange_rate
+            if line_input.credit_amount_functional is None:
+                line_input.credit_amount_functional = line_input.credit_amount * input.exchange_rate
 
-            functional_debit += line.debit_amount_functional
-            functional_credit += line.credit_amount_functional
+            functional_debit += line_input.debit_amount_functional
+            functional_credit += line_input.credit_amount_functional
 
         # Update journal
         journal.journal_type = input.journal_type
@@ -291,7 +303,7 @@ class JournalService(ListResponseMixin):
 
         # Create new lines
         for i, line_input in enumerate(input.lines):
-            line = JournalEntryLine(
+            entry_line = JournalEntryLine(
                 journal_entry_id=journal.journal_entry_id,
                 line_number=i + 1,
                 account_id=coerce_uuid(line_input.account_id),
@@ -307,7 +319,7 @@ class JournalService(ListResponseMixin):
                 project_id=coerce_uuid(line_input.project_id) if line_input.project_id else None,
                 segment_id=coerce_uuid(line_input.segment_id) if line_input.segment_id else None,
             )
-            db.add(line)
+            db.add(entry_line)
 
         db.commit()
         db.refresh(journal)

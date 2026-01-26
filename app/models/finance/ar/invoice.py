@@ -227,6 +227,7 @@ class Invoice(Base, VersionedMixin):
     )
 
     # Relationships
+    customer = relationship("Customer", foreign_keys=[customer_id], lazy="joined")
     lines: Mapped[list["InvoiceLine"]] = relationship(
         "InvoiceLine",
         back_populates="invoice",

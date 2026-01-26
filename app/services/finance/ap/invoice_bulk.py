@@ -7,6 +7,7 @@ Provides bulk operations for AP (supplier) invoice documents.
 from __future__ import annotations
 
 from datetime import datetime
+from typing import cast
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -97,7 +98,7 @@ class APInvoiceBulkService(BulkActionService[SupplierInvoice]):
             # This would need a join - for now return supplier_id
             return str(entity.supplier_id) if entity.supplier_id else ""
 
-        return super()._get_export_value(entity, field_name)
+        return cast(str, super()._get_export_value(entity, field_name))
 
     def _get_export_filename(self) -> str:
         """Get supplier invoice export filename."""

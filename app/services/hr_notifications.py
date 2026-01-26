@@ -41,9 +41,12 @@ def _employee_full_name(employee: Optional["Employee"]) -> str:
     if not employee:
         return "Employee"
     full_name = getattr(employee, "full_name", None)
-    if full_name:
+    if isinstance(full_name, str) and full_name:
         return full_name
-    return getattr(employee, "employee_number", "Employee")
+    employee_number = getattr(employee, "employee_number", None)
+    if isinstance(employee_number, str) and employee_number:
+        return employee_number
+    return "Employee"
 
 
 def _employee_first_name(employee: Optional["Employee"]) -> str:
@@ -61,18 +64,20 @@ def _get_employee_email(employee: Optional["Employee"]) -> Optional[str]:
 
     # Try company email first
     company_email = getattr(employee, "company_email", None)
-    if company_email:
+    if isinstance(company_email, str) and company_email:
         return company_email
 
     # Try personal email
     personal_email = getattr(employee, "personal_email", None)
-    if personal_email:
+    if isinstance(personal_email, str) and personal_email:
         return personal_email
 
     # Try person's email
     person = getattr(employee, "person", None)
     if person:
-        return getattr(person, "email", None)
+        person_email = getattr(person, "email", None)
+        if isinstance(person_email, str) and person_email:
+            return person_email
 
     return None
 
@@ -145,9 +150,11 @@ HR Notifications
 
         try:
             send_email(
-                to=manager_email,
-                subject=subject,
-                body=body,
+                self.db,
+                manager_email,
+                subject,
+                body_html=body.replace("\n", "<br>"),
+                body_text=body,
             )
             logger.info(
                 "Sent probation notification for %s to %s",
@@ -197,11 +204,12 @@ HR Notifications
 
         employee_url = f"{self.app_url}/people/hr/employees/{employee.employee_id}"
 
+        contract_end_date = getattr(employee, "contract_end_date", None)
         body = f"""Hi {manager_first},
 
 This is to inform you that the contract for {employee_name} will expire in {days_remaining} days.
 
-Contract End Date: {employee.contract_end_date.strftime("%B %d, %Y") if employee.contract_end_date else 'N/A'}
+Contract End Date: {contract_end_date.strftime("%B %d, %Y") if contract_end_date else 'N/A'}
 
 Please take necessary action regarding contract renewal or extension.
 
@@ -213,9 +221,11 @@ HR Notifications
 
         try:
             send_email(
-                to=manager_email,
-                subject=subject,
-                body=body,
+                self.db,
+                manager_email,
+                subject,
+                body_html=body.replace("\n", "<br>"),
+                body_text=body,
             )
             logger.info(
                 "Sent contract expiry notification for %s to %s",
@@ -278,9 +288,11 @@ HR Notifications
 
         try:
             send_email(
-                to=manager_email,
-                subject=subject,
-                body=body,
+                self.db,
+                manager_email,
+                subject,
+                body_html=body.replace("\n", "<br>"),
+                body_text=body,
             )
             logger.info(
                 "Sent anniversary notification for %s to %s",
@@ -336,9 +348,11 @@ HR Notifications
 
         try:
             send_email(
-                to=manager_email,
-                subject=subject,
-                body=body,
+                self.db,
+                manager_email,
+                subject,
+                body_html=body.replace("\n", "<br>"),
+                body_text=body,
             )
             logger.info(
                 "Sent birthday notification for %s to %s",
@@ -403,9 +417,11 @@ HR Notifications
 
         try:
             send_email(
-                to=employee_email,
-                subject=subject,
-                body=body,
+                self.db,
+                employee_email,
+                subject,
+                body_html=body.replace("\n", "<br>"),
+                body_text=body,
             )
             logger.info(
                 "Sent self-assessment reminder to %s",
@@ -469,9 +485,11 @@ HR Notifications
 
         try:
             send_email(
-                to=manager_email,
-                subject=subject,
-                body=body,
+                self.db,
+                manager_email,
+                subject,
+                body_html=body.replace("\n", "<br>"),
+                body_text=body,
             )
             logger.info(
                 "Sent manager review reminder to %s for employee %s",
@@ -530,9 +548,11 @@ HR Notifications
 
         try:
             send_email(
-                to=employee_email,
-                subject=subject,
-                body=body,
+                self.db,
+                employee_email,
+                subject,
+                body_html=body.replace("\n", "<br>"),
+                body_text=body,
             )
             logger.info(
                 "Sent certification expiry notification to %s for cert %s",

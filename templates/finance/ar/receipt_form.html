@@ -478,7 +478,7 @@ function receiptForm() {
             };
 
             try {
-                const url = this.isEditMode ? `/ar/receipts/${this.receiptId}/edit` : '/ar/receipts/new';
+                const url = this.isEditMode ? `/finance/ar/receipts/${this.receiptId}/edit` : '/finance/ar/receipts/new';
                 const response = await fetch(url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -491,7 +491,7 @@ function receiptForm() {
                         detail: { message: successMessage, type: 'success' }
                     }));
                     setTimeout(() => {
-                        window.location.href = this.isEditMode ? `/ar/receipts/${this.receiptId}` : '/ar/receipts';
+                        window.location.href = this.isEditMode ? `/finance/ar/receipts/${this.receiptId}` : '/finance/ar/receipts';
                     }, 1000);
                 } else {
                     const data = await response.json();

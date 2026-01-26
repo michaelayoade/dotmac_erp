@@ -333,13 +333,16 @@ class LeaseWebService:
         )
 
         total_payment = sum(
-            Decimal(str(schedule.total_payment)) for schedule in schedules
+            (Decimal(str(schedule.total_payment)) for schedule in schedules),
+            Decimal("0"),
         )
         total_interest = sum(
-            Decimal(str(schedule.interest_portion)) for schedule in schedules
+            (Decimal(str(schedule.interest_portion)) for schedule in schedules),
+            Decimal("0"),
         )
         total_principal = sum(
-            Decimal(str(schedule.principal_portion)) for schedule in schedules
+            (Decimal(str(schedule.principal_portion)) for schedule in schedules),
+            Decimal("0"),
         )
 
         summary = {

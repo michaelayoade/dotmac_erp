@@ -31,6 +31,7 @@ from .employee_types import (
 from .errors import (
     CircularDepartmentError,
     DepartmentNotFoundError,
+    LocationNotFoundError,
     DesignationNotFoundError,
     EmployeeAlreadyExistsError,
     EmployeeGradeNotFoundError,
@@ -124,6 +125,7 @@ __all__ = [
     "EmployeeStatusError",
     "InvalidManagerError",
     "DepartmentNotFoundError",
+    "LocationNotFoundError",
     "DesignationNotFoundError",
     "EmploymentTypeNotFoundError",
     "EmployeeGradeNotFoundError",

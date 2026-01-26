@@ -93,7 +93,7 @@ class ARInvoiceBulkService(BulkActionService[Invoice]):
             # This would need a join - for now return empty or customer_id
             return str(entity.customer_id) if entity.customer_id else ""
 
-        return super()._get_export_value(entity, field_name)
+        return str(super()._get_export_value(entity, field_name))
 
     def _get_export_filename(self) -> str:
         """Get invoice export filename."""

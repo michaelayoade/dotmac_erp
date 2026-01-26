@@ -9,11 +9,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
-from typing import Optional
+from typing import List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import func
+from sqlalchemy import Integer, func
 from sqlalchemy.orm import Session
 
 from app.models.finance.cons.intercompany_balance import IntercompanyBalance
@@ -326,7 +326,7 @@ class IntercompanyService(ListResponseMixin):
         db: Session,
         group_id: UUID,
         fiscal_period_id: UUID,
-    ) -> list[IntercompanyBalance]:
+    ) -> List[IntercompanyBalance]:
         """
         Get unmatched intercompany balances.
 
@@ -400,7 +400,7 @@ class IntercompanyService(ListResponseMixin):
                 func.sum(IntercompanyBalance.from_entity_functional_amount).label("total_from"),
                 func.sum(IntercompanyBalance.to_entity_functional_amount).label("total_to"),
                 func.sum(IntercompanyBalance.difference_amount).label("total_diff"),
-                func.sum(func.cast(IntercompanyBalance.is_matched, Decimal)).label("matched"),
+                func.sum(func.cast(IntercompanyBalance.is_matched, Integer)).label("matched"),
                 func.count(IntercompanyBalance.balance_id).label("total_count"),
             )
             .filter(
@@ -433,7 +433,7 @@ class IntercompanyService(ListResponseMixin):
         db: Session,
         group_id: UUID,
         fiscal_period_id: UUID,
-    ) -> list[IntercompanyBalance]:
+    ) -> List[IntercompanyBalance]:
         """
         Get matched balances ready for elimination.
 
@@ -536,7 +536,7 @@ class IntercompanyService(ListResponseMixin):
         is_eliminated: Optional[bool] = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> list[IntercompanyBalance]:
+    ) -> List[IntercompanyBalance]:
         """List intercompany balances with optional filters."""
         query = db.query(IntercompanyBalance)
 

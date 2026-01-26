@@ -60,7 +60,7 @@ class MaterialRequestSyncService(BaseSyncService[MaterialRequest]):
         self._project_cache: dict[str, uuid.UUID] = {}
         self._ticket_cache: dict[str, uuid.UUID] = {}
         self._task_cache: dict[str, uuid.UUID] = {}
-        self._employee_by_user_cache: dict[str, uuid.UUID] = {}
+        self._employee_by_user_cache: dict[str, Optional[uuid.UUID]] = {}
 
     def fetch_records(self, client: Any, since: Optional[datetime] = None):
         """Fetch Material Requests with their items."""

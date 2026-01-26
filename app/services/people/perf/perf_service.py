@@ -297,7 +297,7 @@ class PerformanceService:
     def close_cycle(self, org_id: UUID, cycle_id: UUID) -> AppraisalCycle:
         """Close an appraisal cycle."""
         cycle = self.get_cycle(org_id, cycle_id)
-        cycle.status = AppraisalCycleStatus.CLOSED
+        cycle.status = AppraisalCycleStatus.COMPLETED
         self.db.flush()
         return cycle
 

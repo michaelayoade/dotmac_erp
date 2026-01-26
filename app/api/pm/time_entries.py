@@ -19,6 +19,7 @@ from app.schemas.pm import (
     TimeEntryRead,
     TimeEntryUpdate,
     TimeEntryWithDetails,
+    TimesheetDay,
     TimesheetWeek,
 )
 from app.services.common import NotFoundError, PaginationParams, ValidationError
@@ -140,7 +141,7 @@ def get_my_timesheet(
 
     # Group entries by date
     week_end = week_start + timedelta(days=6)
-    days_map = {}
+    days_map: dict[date, list[TimeEntryWithDetails]] = {}
     for i in range(7):
         d = week_start + timedelta(days=i)
         days_map[d] = []
@@ -173,15 +174,17 @@ def get_my_timesheet(
         if entry.is_billable:
             billable_hours += entry.hours
 
-    days = []
+    days: list[TimesheetDay] = []
     for d in sorted(days_map.keys()):
         day_entries = days_map[d]
         day_total = sum(e.hours for e in day_entries)
-        days.append({
-            "date": d,
-            "entries": day_entries,
-            "total_hours": day_total,
-        })
+        days.append(
+            TimesheetDay(
+                date=d,
+                entries=day_entries,
+                total_hours=day_total,
+            )
+        )
 
     return TimesheetWeek(
         employee_id=employee_id,

@@ -8,6 +8,7 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
+from app.models.people.hr import Employee
 from app.models.people.hr.lifecycle import (
     BoardingStatus,
     EmployeeOnboarding,
@@ -18,6 +19,7 @@ from app.models.people.hr.lifecycle import (
     EmployeePromotionDetail,
     EmployeeTransfer,
     EmployeeTransferDetail,
+    SeparationType,
 )
 from app.services.common import PaginatedResult, PaginationParams
 from app.services.people.hr.errors import (
@@ -36,6 +38,18 @@ class LifecycleService:
 
     def __init__(self, db: Session) -> None:
         self.db = db
+
+    def _get_employee(self, org_id: UUID, employee_id: UUID) -> Employee:
+        employee = self.db.scalar(
+            select(Employee).where(
+                Employee.employee_id == employee_id,
+                Employee.organization_id == org_id,
+                Employee.is_deleted == False,
+            )
+        )
+        if not employee:
+            raise ValueError(f"Employee {employee_id} not found")
+        return employee
 
     # =========================================================================
     # Onboarding
@@ -60,7 +74,12 @@ class LifecycleService:
         query = query.options(joinedload(EmployeeOnboarding.activities))
         query = query.order_by(EmployeeOnboarding.created_at.desc())
 
-        count_query = select(func.count()).select_from(query.subquery())
+        count_subq = (
+            query.with_only_columns(EmployeeOnboarding.onboarding_id)
+            .distinct()
+            .subquery()
+        )
+        count_query = select(func.count()).select_from(count_subq)
         total = self.db.scalar(count_query) or 0
 
         if pagination:
@@ -85,7 +104,7 @@ class LifecycleService:
             )
         )
         if not onboarding:
-            raise OnboardingNotFoundError(str(onboarding_id))
+            raise OnboardingNotFoundError(message=f"Onboarding {onboarding_id} not found")
         return onboarding
 
     def create_onboarding(
@@ -102,6 +121,7 @@ class LifecycleService:
         notes: Optional[str] = None,
         activities: Optional[list[dict]] = None,
     ) -> EmployeeOnboarding:
+        self._get_employee(org_id, employee_id)
         onboarding = EmployeeOnboarding(
             organization_id=org_id,
             employee_id=employee_id,
@@ -192,7 +212,7 @@ class LifecycleService:
             )
         )
         if not activity:
-            raise OnboardingNotFoundError(f"Activity {activity_id} not found")
+            raise OnboardingNotFoundError(message=f"Activity {activity_id} not found")
 
         if completed:
             activity.status = "completed"
@@ -239,7 +259,12 @@ class LifecycleService:
         query = query.options(joinedload(EmployeeSeparation.activities))
         query = query.order_by(EmployeeSeparation.created_at.desc())
 
-        count_query = select(func.count()).select_from(query.subquery())
+        count_subq = (
+            query.with_only_columns(EmployeeSeparation.separation_id)
+            .distinct()
+            .subquery()
+        )
+        count_query = select(func.count()).select_from(count_subq)
         total = self.db.scalar(count_query) or 0
 
         if pagination:
@@ -264,7 +289,7 @@ class LifecycleService:
             )
         )
         if not separation:
-            raise SeparationNotFoundError(str(separation_id))
+            raise SeparationNotFoundError(message=f"Separation {separation_id} not found")
         return separation
 
     def create_separation(
@@ -283,6 +308,7 @@ class LifecycleService:
         notes: Optional[str] = None,
         activities: Optional[list[dict]] = None,
     ) -> EmployeeSeparation:
+        self._get_employee(org_id, employee_id)
         separation = EmployeeSeparation(
             organization_id=org_id,
             employee_id=employee_id,
@@ -381,7 +407,12 @@ class LifecycleService:
         query = query.options(joinedload(EmployeePromotion.details))
         query = query.order_by(EmployeePromotion.promotion_date.desc())
 
-        count_query = select(func.count()).select_from(query.subquery())
+        count_subq = (
+            query.with_only_columns(EmployeePromotion.promotion_id)
+            .distinct()
+            .subquery()
+        )
+        count_query = select(func.count()).select_from(count_subq)
         total = self.db.scalar(count_query) or 0
 
         if pagination:
@@ -406,7 +437,7 @@ class LifecycleService:
             )
         )
         if not promotion:
-            raise PromotionNotFoundError(str(promotion_id))
+            raise PromotionNotFoundError(message=f"Promotion {promotion_id} not found")
         return promotion
 
     def create_promotion(
@@ -418,6 +449,7 @@ class LifecycleService:
         notes: Optional[str] = None,
         details: Optional[list[dict]] = None,
     ) -> EmployeePromotion:
+        self._get_employee(org_id, employee_id)
         promotion = EmployeePromotion(
             organization_id=org_id,
             employee_id=employee_id,
@@ -490,7 +522,12 @@ class LifecycleService:
         query = query.options(joinedload(EmployeeTransfer.details))
         query = query.order_by(EmployeeTransfer.transfer_date.desc())
 
-        count_query = select(func.count()).select_from(query.subquery())
+        count_subq = (
+            query.with_only_columns(EmployeeTransfer.transfer_id)
+            .distinct()
+            .subquery()
+        )
+        count_query = select(func.count()).select_from(count_subq)
         total = self.db.scalar(count_query) or 0
 
         if pagination:
@@ -515,7 +552,7 @@ class LifecycleService:
             )
         )
         if not transfer:
-            raise TransferNotFoundError(str(transfer_id))
+            raise TransferNotFoundError(message=f"Transfer {transfer_id} not found")
         return transfer
 
     def create_transfer(
@@ -527,6 +564,7 @@ class LifecycleService:
         notes: Optional[str] = None,
         details: Optional[list[dict]] = None,
     ) -> EmployeeTransfer:
+        self._get_employee(org_id, employee_id)
         transfer = EmployeeTransfer(
             organization_id=org_id,
             employee_id=employee_id,

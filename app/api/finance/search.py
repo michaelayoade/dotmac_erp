@@ -97,8 +97,14 @@ def global_search(
                 "has_more": result.has_more,
             }
 
+    total_count = 0
+    for entity_result in results.values():
+        suggestions = entity_result.get("suggestions")
+        if isinstance(suggestions, list):
+            total_count += len(suggestions)
+
     return {
         "query": q,
         "results": results,
-        "total_count": sum(len(r.get("suggestions", [])) for r in results.values()),
+        "total_count": total_count,
     }

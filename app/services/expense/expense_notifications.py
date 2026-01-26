@@ -45,18 +45,24 @@ def _employee_full_name(employee: Optional["Employee"]) -> str:
     if not employee:
         return "Employee"
     full_name = getattr(employee, "full_name", None)
-    if full_name:
+    if isinstance(full_name, str) and full_name:
         return full_name
     person = getattr(employee, "person", None)
     if person:
         name = getattr(person, "name", None)
-        if name:
+        if isinstance(name, str) and name:
             return name
-        first = getattr(person, "first_name", "")
-        last = getattr(person, "last_name", "")
-        if first or last:
-            return f"{first} {last}".strip()
-    return getattr(employee, "employee_code", "Employee")
+        first = getattr(person, "first_name", None)
+        last = getattr(person, "last_name", None)
+        if isinstance(first, str) or isinstance(last, str):
+            first_str = first if isinstance(first, str) else ""
+            last_str = last if isinstance(last, str) else ""
+            if first_str or last_str:
+                return f"{first_str} {last_str}".strip()
+    employee_code = getattr(employee, "employee_code", None)
+    if isinstance(employee_code, str) and employee_code:
+        return employee_code
+    return "Employee"
 
 
 def _employee_first_name(employee: Optional["Employee"]) -> str:
@@ -66,13 +72,23 @@ def _employee_first_name(employee: Optional["Employee"]) -> str:
     person = getattr(employee, "person", None)
     if person:
         first = getattr(person, "first_name", None)
-        if first:
+        if isinstance(first, str) and first:
             return first
         name = getattr(person, "name", None)
-        if name:
+        if isinstance(name, str) and name:
             return name.split(" ")[0]
     full_name = _employee_full_name(employee)
     return full_name.split(" ")[0] if full_name else "there"
+
+
+def _employee_work_email(employee: Optional["Employee"]) -> Optional[str]:
+    """Get employee work email if available."""
+    if not employee:
+        return None
+    work_email = getattr(employee, "work_email", None)
+    if isinstance(work_email, str) and work_email:
+        return work_email
+    return None
 
 
 class ExpenseNotificationService:
@@ -312,7 +328,10 @@ View claim at: {claim_url}
         """
 
         try:
-            return send_email(self.db, employee.work_email, subject, body_html, body_text)
+            to_email = _employee_work_email(employee)
+            if not to_email:
+                return False
+            return send_email(self.db, to_email, subject, body_html, body_text)
         except Exception as e:
             logger.error(f"Failed to send approval notification: {e}")
             return False
@@ -414,7 +433,10 @@ View claim at: {claim_url}
         """
 
         try:
-            return send_email(self.db, employee.work_email, subject, body_html, body_text)
+            to_email = _employee_work_email(employee)
+            if not to_email:
+                return False
+            return send_email(self.db, to_email, subject, body_html, body_text)
         except Exception as e:
             logger.error(f"Failed to send rejection notification: {e}")
             return False
@@ -520,7 +542,10 @@ View claim at: {claim_url}
         """
 
         try:
-            return send_email(self.db, employee.work_email, subject, body_html, body_text)
+            to_email = _employee_work_email(employee)
+            if not to_email:
+                return False
+            return send_email(self.db, to_email, subject, body_html, body_text)
         except Exception as e:
             logger.error(f"Failed to send limit notification: {e}")
             return False
@@ -720,7 +745,10 @@ View details at: {claim_url}
         """
 
         try:
-            return send_email(self.db, employee.work_email, subject, body_html, body_text)
+            to_email = _employee_work_email(employee)
+            if not to_email:
+                return False
+            return send_email(self.db, to_email, subject, body_html, body_text)
         except Exception as e:
             logger.error(f"Failed to send payment notification: {e}")
             return False

@@ -11,7 +11,7 @@ Provides simple key-value translation lookup with:
 import json
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping, cast
 
 # Base directory for locale files
 LOCALES_DIR = Path(__file__).parent.parent / "locales"
@@ -34,10 +34,13 @@ def _load_locale(locale: str) -> dict[str, Any]:
             # Fallback to default locale
             return _load_locale(DEFAULT_LOCALE)
         return {}
-    return json.loads(path.read_text(encoding="utf-8"))
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    if isinstance(raw, dict):
+        return cast(dict[str, Any], raw)
+    return {}
 
 
-def _get_nested(data: dict, key: str, default: Any = None) -> Any:
+def _get_nested(data: Mapping[str, Any], key: str, default: Any = None) -> Any:
     """Get nested dictionary value using dot notation.
 
     Args:
@@ -49,7 +52,7 @@ def _get_nested(data: dict, key: str, default: Any = None) -> Any:
         Value at key path or default
     """
     keys = key.split(".")
-    value = data
+    value: Any = data
     for k in keys:
         if isinstance(value, dict):
             value = value.get(k)
@@ -91,6 +94,9 @@ def t(key: str, locale: str = DEFAULT_LOCALE, **kwargs) -> str:
     if value is None:
         # Return key as fallback (helps identify missing translations)
         return key
+
+    if not isinstance(value, str):
+        return str(value)
 
     if kwargs:
         try:

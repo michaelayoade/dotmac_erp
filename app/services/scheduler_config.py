@@ -2,6 +2,8 @@ import logging
 import os
 from datetime import timedelta
 
+from celery.schedules import crontab
+
 from app.db import SessionLocal
 from app.models.domain_settings import DomainSetting, SettingDomain
 from app.models.scheduler import ScheduleType, ScheduledTask
@@ -140,12 +142,26 @@ def build_beat_schedule() -> dict:
             .all()
         )
         for task in tasks:
-            if task.schedule_type != ScheduleType.interval:
+            task_schedule = None
+
+            if task.schedule_type == ScheduleType.interval:
+                interval_seconds = max(task.interval_seconds or 0, 1)
+                task_schedule = timedelta(seconds=interval_seconds)
+            elif task.schedule_type == ScheduleType.crontab:
+                task_schedule = crontab(
+                    minute=task.cron_minute or "0",
+                    hour=task.cron_hour or "8",
+                    day_of_week=task.cron_day_of_week or "*",
+                    day_of_month=task.cron_day_of_month or "*",
+                    month_of_year=task.cron_month_of_year or "*",
+                )
+
+            if task_schedule is None:
                 continue
-            interval_seconds = max(task.interval_seconds or 0, 1)
+
             schedule[f"scheduled_task_{task.id}"] = {
                 "task": task.task_name,
-                "schedule": timedelta(seconds=interval_seconds),
+                "schedule": task_schedule,
                 "args": task.args_json or [],
                 "kwargs": task.kwargs_json or {},
             }

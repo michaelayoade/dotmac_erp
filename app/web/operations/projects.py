@@ -7,10 +7,10 @@ resources, and time tracking.
 
 from typing import Optional
 
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
@@ -41,6 +41,17 @@ def _safe_date(value: str) -> Optional[date]:
         return None
 
 
+def _safe_form_text(value: object) -> str:
+    """Normalize form values to text for safe parsing."""
+    if value is None:
+        return ""
+    if isinstance(value, UploadFile):
+        return ""
+    if isinstance(value, str):
+        return value
+    return str(value)
+
+
 def _safe_decimal(value: str, default: Optional[Decimal] = None) -> Optional[Decimal]:
     """Safely parse a decimal string, returning default if invalid."""
     if not value or not value.strip():
@@ -49,6 +60,20 @@ def _safe_decimal(value: str, default: Optional[Decimal] = None) -> Optional[Dec
         return Decimal(value.strip())
     except Exception:
         return default
+
+
+def _project_type_duration_days(project_type):
+    """Duration in days for project types that drive auto scheduling."""
+    from app.models.finance.core_org.project import ProjectType
+
+    durations = {
+        ProjectType.FIBER_OPTICS_INSTALLATION: 14,
+        ProjectType.FIBER_OPTICS_RELOCATION: 14,
+        ProjectType.AIR_FIBER_INSTALLATION: 3,
+        ProjectType.AIR_FIBER_RELOCATION: 3,
+        ProjectType.CABLE_RERUN: 5,
+    }
+    return durations.get(project_type)
 
 
 # ============================================================================
@@ -88,6 +113,141 @@ def _get_projects(db: Session, org_id):
         Project.organization_id == coerce_uuid(org_id)
     ).order_by(Project.project_name)
     return list(db.scalars(stmt).all())
+
+
+def _get_project_templates(db: Session, org_id):
+    """Get all project templates for the organization."""
+    from app.models.pm.project_template import ProjectTemplate
+    from sqlalchemy import select
+
+    stmt = select(ProjectTemplate).where(
+        ProjectTemplate.organization_id == coerce_uuid(org_id)
+    ).order_by(ProjectTemplate.name)
+    return list(db.scalars(stmt).all())
+
+
+def _resolve_project_template(db: Session, org_id, template_ref: str):
+    """Resolve project template by UUID."""
+    from app.models.pm.project_template import ProjectTemplate
+    from sqlalchemy import select
+
+    try:
+        template_uuid = coerce_uuid(template_ref)
+    except HTTPException:
+        return None
+
+    return db.scalars(
+        select(ProjectTemplate).where(
+            ProjectTemplate.template_id == template_uuid,
+            ProjectTemplate.organization_id == coerce_uuid(org_id),
+        )
+    ).first()
+
+
+def _template_tasks_payload(db: Session, template_id):
+    """Build client-side payload for template task editor."""
+    from app.models.pm.project_template_task import ProjectTemplateTask, ProjectTemplateTaskDependency
+    from sqlalchemy import select
+
+    tasks = list(
+        db.scalars(
+            select(ProjectTemplateTask)
+            .where(ProjectTemplateTask.template_id == template_id)
+            .order_by(ProjectTemplateTask.order_index, ProjectTemplateTask.template_task_id)
+        ).all()
+    )
+    if not tasks:
+        return []
+
+    deps = list(
+        db.scalars(
+            select(ProjectTemplateTaskDependency).where(
+                ProjectTemplateTaskDependency.template_task_id.in_(
+                    [t.template_task_id for t in tasks]
+                )
+            )
+        ).all()
+    )
+
+    deps_map = {}
+    for dep in deps:
+        deps_map.setdefault(dep.template_task_id, []).append(dep.depends_on_template_task_id)
+
+    payload = []
+    for task in tasks:
+        payload.append(
+            {
+                "client_id": str(task.template_task_id),
+                "task_name": task.task_name,
+                "description": task.description or "",
+                "depends_on": [str(tid) for tid in deps_map.get(task.template_task_id, [])],
+            }
+        )
+    return payload
+
+
+def _apply_project_template(db: Session, org_id, project, template_id):
+    """Create project tasks from a template (one-time on project creation)."""
+    from app.models.finance.core_config import SequenceType
+    from app.models.pm.project_template_task import (
+        ProjectTemplateTask,
+        ProjectTemplateTaskDependency,
+    )
+    from app.models.pm.task_dependency import TaskDependency
+    from app.services.finance.common.numbering import SyncNumberingService
+    from sqlalchemy import select
+
+    services = _get_services(db, org_id)
+    numbering_service = SyncNumberingService(db)
+
+    template_tasks = list(
+        db.scalars(
+            select(ProjectTemplateTask)
+            .where(ProjectTemplateTask.template_id == template_id)
+            .order_by(ProjectTemplateTask.order_index, ProjectTemplateTask.template_task_id)
+        ).all()
+    )
+    if not template_tasks:
+        return
+
+    task_map = {}
+    for template_task in template_tasks:
+        task_code = numbering_service.generate_next_number(
+            organization_id=coerce_uuid(org_id),
+            sequence_type=SequenceType.TASK,
+        )
+        task = services["task"].create_task(
+            {
+                "project_id": project.project_id,
+                "task_code": task_code,
+                "task_name": template_task.task_name,
+                "description": template_task.description,
+            }
+        )
+        task_map[template_task.template_task_id] = task
+
+    deps = list(
+        db.scalars(
+            select(ProjectTemplateTaskDependency).where(
+                ProjectTemplateTaskDependency.template_task_id.in_(
+                    [t.template_task_id for t in template_tasks]
+                )
+            )
+        ).all()
+    )
+    for dep in deps:
+        task = task_map.get(dep.template_task_id)
+        depends_on = task_map.get(dep.depends_on_template_task_id)
+        if not task or not depends_on:
+            continue
+        db.add(
+            TaskDependency(
+                task_id=task.task_id,
+                depends_on_task_id=depends_on.task_id,
+                dependency_type=dep.dependency_type,
+                lag_days=dep.lag_days,
+            )
+        )
 
 
 def _get_tickets(db: Session, org_id):
@@ -289,14 +449,23 @@ def new_project_form(
         .order_by(Customer.trading_name)
     ).all()
 
+    allowed_project_types = [
+        ProjectType.FIBER_OPTICS_INSTALLATION,
+        ProjectType.AIR_FIBER_INSTALLATION,
+        ProjectType.CABLE_RERUN,
+        ProjectType.FIBER_OPTICS_RELOCATION,
+        ProjectType.AIR_FIBER_RELOCATION,
+    ]
+
     context = {
         "request": request,
         **base_context(request, auth, "New Project", "projects", db=db),
         "project": None,
         "statuses": [s.value for s in ProjectStatus],
-        "project_types": [t.value for t in ProjectType],
+        "project_types": [t.value for t in allowed_project_types],
         "priorities": [p.value for p in ProjectPriority],
         "customers": customers,
+        "project_templates": _get_project_templates(db, org_id),
     }
 
     return templates.TemplateResponse("operations/projects/form.html", context)
@@ -331,18 +500,486 @@ def edit_project_form(
         .order_by(Customer.trading_name)
     ).all()
 
+    allowed_project_types = [
+        ProjectType.FIBER_OPTICS_INSTALLATION,
+        ProjectType.AIR_FIBER_INSTALLATION,
+        ProjectType.CABLE_RERUN,
+        ProjectType.FIBER_OPTICS_RELOCATION,
+        ProjectType.AIR_FIBER_RELOCATION,
+    ]
+
     context = {
         "request": request,
         **base_context(request, auth, "Edit Project", "projects", db=db),
         "project": project,
         "statuses": [s.value for s in ProjectStatus],
-        "project_types": [t.value for t in ProjectType],
+        "project_types": [t.value for t in allowed_project_types],
         "priorities": [p.value for p in ProjectPriority],
         "customers": customers,
+        "project_templates": _get_project_templates(db, org_id),
     }
 
     return templates.TemplateResponse("operations/projects/form.html", context)
 
+
+# ============================================================================
+# Project Templates (Global)
+# ============================================================================
+
+
+@router.get("/templates", response_class=HTMLResponse)
+def project_template_list(
+    request: Request,
+    auth: WebAuthContext = Depends(require_operations_access),
+    db: Session = Depends(get_db),
+):
+    """Project template list page."""
+    templates_list = _get_project_templates(db, auth.organization_id)
+    context = {
+        "request": request,
+        **base_context(request, auth, "Project Templates", "templates", db=db),
+        "templates": templates_list,
+    }
+    return templates.TemplateResponse("operations/projects/templates/list.html", context)
+
+
+@router.get("/templates/new", response_class=HTMLResponse)
+def new_project_template_form(
+    request: Request,
+    auth: WebAuthContext = Depends(require_operations_access),
+    db: Session = Depends(get_db),
+):
+    """New project template form page."""
+    from app.models.finance.core_org.project import ProjectType
+
+    context = {
+        "request": request,
+        **base_context(request, auth, "New Project Template", "templates", db=db),
+        "template": None,
+        "project_types": [t.value for t in ProjectType],
+        "tasks_payload_json": "[]",
+    }
+    return templates.TemplateResponse("operations/projects/templates/form.html", context)
+
+
+@router.post("/templates", response_class=RedirectResponse)
+async def create_project_template(
+    request: Request,
+    auth: WebAuthContext = Depends(require_operations_access),
+    db: Session = Depends(get_db),
+):
+    """Create a new project template with ordered tasks."""
+    import json
+    import logging
+    from app.models.finance.core_org.project import ProjectType
+    from app.models.pm.project_template import ProjectTemplate
+    from app.models.pm.project_template_task import (
+        ProjectTemplateTask,
+        ProjectTemplateTaskDependency,
+    )
+    from app.models.pm.task_dependency import DependencyType
+
+    org_id = coerce_uuid(auth.organization_id)
+    form = getattr(request.state, "csrf_form", None)
+    if form is None:
+        form = await request.form()
+
+    logging.getLogger(__name__).warning(
+        "Project template POST form keys: %s",
+        list(form.keys()),
+    )
+
+    template_name_value = _safe_form_text(form.get("template_name") or form.get("name")).strip()
+    project_type = _safe_form_text(form.get("project_type") or "INTERNAL").strip()
+    tasks_json = _safe_form_text(form.get("tasks_json")) or "[]"
+    if not template_name_value:
+        context = {
+            "request": request,
+            **base_context(request, auth, "New Project Template", "templates", db=db),
+            "template": None,
+            "project_types": [t.value for t in ProjectType],
+            "error": "Template name is required.",
+            "submitted_name": template_name_value,
+        }
+        return templates.TemplateResponse(
+            "operations/projects/templates/form.html",
+            context,
+            status_code=400,
+        )
+    template = ProjectTemplate(
+        organization_id=org_id,
+        name=template_name_value,
+        project_type=ProjectType(project_type) if project_type else ProjectType.INTERNAL,
+    )
+    db.add(template)
+    db.flush()
+
+    try:
+        task_payload = json.loads(tasks_json or "[]")
+    except json.JSONDecodeError:
+        task_payload = []
+
+    task_map = {}
+    order_index = 1
+    for task_entry in task_payload:
+        task_name = (task_entry.get("task_name") or "").strip()
+        if not task_name:
+            continue
+        task = ProjectTemplateTask(
+            template_id=template.template_id,
+            task_name=task_name,
+            description=(task_entry.get("description") or "").strip() or None,
+            order_index=order_index,
+        )
+        db.add(task)
+        db.flush()
+        task_map[str(task_entry.get("client_id"))] = task
+        order_index += 1
+
+    for task_entry in task_payload:
+        client_id = str(task_entry.get("client_id"))
+        mapped_task = task_map.get(client_id)
+        if not mapped_task:
+            continue
+        depends_on = task_entry.get("depends_on") or []
+        for depends_on_id in depends_on:
+            depends_on_task = task_map.get(str(depends_on_id))
+            if not depends_on_task:
+                continue
+            db.add(
+                ProjectTemplateTaskDependency(
+                    template_task_id=mapped_task.template_task_id,
+                    depends_on_template_task_id=depends_on_task.template_task_id,
+                    dependency_type=DependencyType.FINISH_TO_START,
+                )
+            )
+
+    db.commit()
+    return RedirectResponse(url=f"/operations/projects/templates/{template.template_id}", status_code=303)
+
+
+@router.get("/templates/{template_id}", response_class=HTMLResponse)
+def project_template_detail(
+    request: Request,
+    template_id: str,
+    auth: WebAuthContext = Depends(require_operations_access),
+    db: Session = Depends(get_db),
+):
+    """Project template detail page."""
+    from app.models.pm.project_template_task import ProjectTemplateTask
+    from app.models.pm.project_template_task import ProjectTemplateTaskDependency
+    from sqlalchemy import select
+
+    org_id = coerce_uuid(auth.organization_id)
+    template = _resolve_project_template(db, org_id, template_id)
+    if not template:
+        return templates.TemplateResponse(
+            "errors/404.html",
+            {"request": request, "message": "Project template not found"},
+            status_code=404,
+        )
+
+    tasks = list(
+        db.scalars(
+            select(ProjectTemplateTask)
+            .where(ProjectTemplateTask.template_id == template.template_id)
+            .order_by(ProjectTemplateTask.order_index, ProjectTemplateTask.template_task_id)
+        ).all()
+    )
+    dependencies = list(
+        db.scalars(
+            select(ProjectTemplateTaskDependency).where(
+                ProjectTemplateTaskDependency.template_task_id.in_(
+                    [t.template_task_id for t in tasks]
+                )
+            )
+        ).all()
+    )
+
+    context = {
+        "request": request,
+        **base_context(request, auth, template.name, "templates", db=db),
+        "template": template,
+        "tasks": tasks,
+        "dependencies": dependencies,
+    }
+    return templates.TemplateResponse("operations/projects/templates/detail.html", context)
+
+
+@router.get("/templates/{template_id}/edit", response_class=HTMLResponse)
+def edit_project_template_form(
+    request: Request,
+    template_id: str,
+    auth: WebAuthContext = Depends(require_operations_access),
+    db: Session = Depends(get_db),
+):
+    """Edit project template form page."""
+    import json
+    from app.models.finance.core_org.project import ProjectType
+
+    org_id = coerce_uuid(auth.organization_id)
+    template = _resolve_project_template(db, org_id, template_id)
+    if not template:
+        return templates.TemplateResponse(
+            "errors/404.html",
+            {"request": request, "message": "Project template not found"},
+            status_code=404,
+        )
+
+    tasks_payload = _template_tasks_payload(db, template.template_id)
+    context = {
+        "request": request,
+        **base_context(request, auth, f"Edit {template.name}", "templates", db=db),
+        "template": template,
+        "project_types": [t.value for t in ProjectType],
+        "tasks_payload_json": json.dumps(tasks_payload),
+    }
+    return templates.TemplateResponse("operations/projects/templates/form.html", context)
+
+
+@router.post("/templates/{template_id}", response_class=RedirectResponse)
+async def update_project_template(
+    request: Request,
+    template_id: str,
+    auth: WebAuthContext = Depends(require_operations_access),
+    db: Session = Depends(get_db),
+):
+    """Update a project template and its tasks."""
+    import json
+    from sqlalchemy import delete, select
+    from app.models.finance.core_org.project import ProjectType
+    from app.models.pm.project_template import ProjectTemplate
+    from app.models.pm.project_template_task import (
+        ProjectTemplateTask,
+        ProjectTemplateTaskDependency,
+    )
+    from app.models.pm.task_dependency import DependencyType
+
+    org_id = coerce_uuid(auth.organization_id)
+    template = _resolve_project_template(db, org_id, template_id)
+    if not template:
+        return templates.TemplateResponse(
+            "errors/404.html",
+            {"request": request, "message": "Project template not found"},
+            status_code=404,
+        )
+
+    form = getattr(request.state, "csrf_form", None)
+    if form is None:
+        form = await request.form()
+
+    template_name_value = _safe_form_text(form.get("template_name") or form.get("name")).strip()
+    project_type = _safe_form_text(form.get("project_type") or "INTERNAL").strip()
+    tasks_json = _safe_form_text(form.get("tasks_json")) or "[]"
+
+    if not template_name_value:
+        context = {
+            "request": request,
+            **base_context(request, auth, f"Edit {template.name}", "templates", db=db),
+            "template": template,
+            "project_types": [t.value for t in ProjectType],
+            "error": "Template name is required.",
+            "submitted_name": template_name_value,
+            "tasks_payload_json": tasks_json,
+        }
+        return templates.TemplateResponse(
+            "operations/projects/templates/form.html",
+            context,
+            status_code=400,
+        )
+
+    template.name = template_name_value
+    template.project_type = ProjectType(project_type) if project_type else ProjectType.INTERNAL
+
+    try:
+        task_payload = json.loads(tasks_json or "[]")
+    except json.JSONDecodeError:
+        task_payload = []
+
+    existing_tasks = list(
+        db.scalars(
+            select(ProjectTemplateTask)
+            .where(ProjectTemplateTask.template_id == template.template_id)
+        ).all()
+    )
+    if existing_tasks:
+        task_ids = [t.template_task_id for t in existing_tasks]
+        db.execute(
+            delete(ProjectTemplateTaskDependency).where(
+                ProjectTemplateTaskDependency.template_task_id.in_(task_ids)
+            )
+        )
+        db.execute(
+            delete(ProjectTemplateTask).where(
+                ProjectTemplateTask.template_id == template.template_id
+            )
+        )
+
+    task_map = {}
+    order_index = 1
+    for task_entry in task_payload:
+        task_name = (task_entry.get("task_name") or "").strip()
+        if not task_name:
+            continue
+        task = ProjectTemplateTask(
+            template_id=template.template_id,
+            task_name=task_name,
+            description=(task_entry.get("description") or "").strip() or None,
+            order_index=order_index,
+        )
+        db.add(task)
+        db.flush()
+        task_map[str(task_entry.get("client_id"))] = task
+        order_index += 1
+
+    for task_entry in task_payload:
+        client_id = str(task_entry.get("client_id"))
+        mapped_task = task_map.get(client_id)
+        if not mapped_task:
+            continue
+        depends_on = task_entry.get("depends_on") or []
+        for depends_on_id in depends_on:
+            depends_on_task = task_map.get(str(depends_on_id))
+            if not depends_on_task:
+                continue
+            db.add(
+                ProjectTemplateTaskDependency(
+                    template_task_id=mapped_task.template_task_id,
+                    depends_on_template_task_id=depends_on_task.template_task_id,
+                    dependency_type=DependencyType.FINISH_TO_START,
+                )
+            )
+
+    db.commit()
+    return RedirectResponse(url=f"/operations/projects/templates/{template.template_id}", status_code=303)
+
+
+# ============================================================================
+# Global Task Management
+# ============================================================================
+
+
+@router.get("/tasks", response_class=HTMLResponse)
+def global_task_list(
+    request: Request,
+    auth: WebAuthContext = Depends(require_operations_access),
+    status: Optional[str] = None,
+    priority: Optional[str] = None,
+    project_id: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    """Global task list page."""
+    from app.models.pm.task import TaskStatus, TaskPriority
+
+    org_id = coerce_uuid(auth.organization_id)
+    services = _get_services(db, org_id)
+
+    tasks = services["task"].list_tasks(
+        project_id=coerce_uuid(project_id) if project_id else None,
+        status=TaskStatus(status) if status else None,
+        priority=TaskPriority(priority) if priority else None,
+        include_subtasks=True,
+    ).items
+
+    context = {
+        "request": request,
+        **base_context(request, auth, "Project Tasks", "tasks", db=db),
+        "tasks": tasks,
+        "projects": _get_projects(db, org_id),
+        "statuses": [s.value for s in TaskStatus],
+        "priorities": [p.value for p in TaskPriority],
+        "status_filter": status,
+        "priority_filter": priority,
+        "project_filter": project_id,
+    }
+    return templates.TemplateResponse("operations/projects/tasks/global_list.html", context)
+
+
+@router.get("/tasks/new", response_class=HTMLResponse)
+def global_task_new_form(
+    request: Request,
+    auth: WebAuthContext = Depends(require_operations_access),
+    db: Session = Depends(get_db),
+):
+    """Global new task form page."""
+    from app.models.pm.task import TaskStatus, TaskPriority
+
+    org_id = coerce_uuid(auth.organization_id)
+    context = {
+        "request": request,
+        **base_context(request, auth, "New Task", "tasks", db=db),
+        "task": None,
+        "projects": _get_projects(db, org_id),
+        "statuses": [s.value for s in TaskStatus],
+        "priorities": [p.value for p in TaskPriority],
+        "team_members": _get_employees(db, org_id),
+        "tickets": _get_tickets(db, org_id),
+    }
+    return templates.TemplateResponse("operations/projects/tasks/global_form.html", context)
+
+
+@router.post("/tasks", response_class=RedirectResponse)
+def create_global_task(
+    request: Request,
+    auth: WebAuthContext = Depends(require_operations_access),
+    project_id: str = Form(...),
+    task_name: str = Form(...),
+    task_code: str = Form(default=""),
+    status: str = Form(default="OPEN"),
+    priority: str = Form(default="MEDIUM"),
+    description: str = Form(default=""),
+    start_date: str = Form(default=""),
+    due_date: str = Form(default=""),
+    estimated_hours: str = Form(default=""),
+    assigned_to_id: str = Form(default=""),
+    ticket_id: str = Form(default=""),
+    parent_task_id: str = Form(default=""),
+    db: Session = Depends(get_db),
+):
+    """Create a new task from the global task form."""
+    from app.models.finance.core_config import SequenceType
+    from app.models.pm.task import TaskPriority, TaskStatus
+    from app.services.finance.common.numbering import SyncNumberingService
+
+    org_id = coerce_uuid(auth.organization_id)
+    services = _get_services(db, org_id)
+
+    task_code_value = task_code.strip() if task_code else ""
+    if not task_code_value:
+        numbering_service = SyncNumberingService(db)
+        task_code_value = numbering_service.generate_next_number(
+            organization_id=org_id,
+            sequence_type=SequenceType.TASK,
+        )
+
+    parent_task_uuid = coerce_uuid(parent_task_id) if parent_task_id else None
+    if parent_task_uuid:
+        parent_task = services["task"].get_task(parent_task_uuid)
+        if not parent_task or str(parent_task.project_id) != str(project_id):
+            parent_task_uuid = None
+
+    task = services["task"].create_task(
+        {
+            "project_id": coerce_uuid(project_id),
+            "task_code": task_code_value,
+            "task_name": task_name.strip(),
+            "description": description.strip() if description else None,
+            "parent_task_id": parent_task_uuid,
+            "ticket_id": coerce_uuid(ticket_id) if ticket_id else None,
+            "priority": TaskPriority(priority) if priority else TaskPriority.MEDIUM,
+            "assigned_to_id": coerce_uuid(assigned_to_id) if assigned_to_id else None,
+            "start_date": _safe_date(start_date),
+            "due_date": _safe_date(due_date),
+            "estimated_hours": _safe_decimal(estimated_hours),
+            "status": TaskStatus(status) if status else TaskStatus.OPEN,
+        }
+    )
+
+    db.commit()
+    return RedirectResponse(
+        url=f"/operations/projects/tasks?project_id={task.project_id}",
+        status_code=303,
+    )
 
 @router.get("/{project_id}", response_class=HTMLResponse)
 def project_dashboard(
@@ -404,8 +1041,9 @@ def create_project(
     project_name: str = Form(...),
     description: str = Form(default=""),
     status: str = Form(default="PLANNING"),
-    project_type: str = Form(default="INTERNAL"),
+    project_type: str = Form(default=""),
     project_priority: str = Form(default="MEDIUM"),
+    project_template_id: str = Form(default=""),
     customer_id: str = Form(default=""),
     start_date: str = Form(default=""),
     end_date: str = Form(default=""),
@@ -417,6 +1055,8 @@ def create_project(
     from app.models.finance.core_org.project import Project, ProjectStatus, ProjectType, ProjectPriority
     from app.models.finance.core_config import SequenceType
     from app.services.finance.common.numbering import SyncNumberingService
+    from app.models.finance.ar.customer import Customer
+    from sqlalchemy import select
 
     org_id = coerce_uuid(auth.organization_id)
 
@@ -428,22 +1068,123 @@ def create_project(
             sequence_type=SequenceType.PROJECT,
         )
 
+    project_type_value = (project_type or "").strip()
+    if not project_type_value:
+        customers = db.scalars(
+            select(Customer)
+            .where(Customer.organization_id == org_id, Customer.is_active == True)
+            .order_by(Customer.trading_name)
+        ).all()
+        allowed_project_types = [
+            ProjectType.FIBER_OPTICS_INSTALLATION,
+            ProjectType.AIR_FIBER_INSTALLATION,
+            ProjectType.CABLE_RERUN,
+            ProjectType.FIBER_OPTICS_RELOCATION,
+            ProjectType.AIR_FIBER_RELOCATION,
+        ]
+        context = {
+            "request": request,
+            **base_context(request, auth, "New Project", "projects", db=db),
+            "project": None,
+            "statuses": [s.value for s in ProjectStatus],
+            "project_types": [t.value for t in allowed_project_types],
+            "priorities": [p.value for p in ProjectPriority],
+            "customers": customers,
+            "project_templates": _get_project_templates(db, org_id),
+            "error": "Please select a project type.",
+            "form_data": {
+                "project_code": project_code,
+                "project_name": project_name,
+                "description": description,
+                "status": status,
+                "project_type": project_type_value,
+                "project_priority": project_priority,
+                "project_template_id": project_template_id,
+                "customer_id": customer_id,
+                "start_date": start_date,
+                "end_date": end_date,
+                "budget_amount": budget_amount,
+                "percent_complete": percent_complete,
+            },
+        }
+        return templates.TemplateResponse(
+            "operations/projects/form.html",
+            context,
+            status_code=400,
+        )
+
+    try:
+        project_type_enum = ProjectType(project_type_value)
+    except ValueError:
+        customers = db.scalars(
+            select(Customer)
+            .where(Customer.organization_id == org_id, Customer.is_active == True)
+            .order_by(Customer.trading_name)
+        ).all()
+        allowed_project_types = [
+            ProjectType.FIBER_OPTICS_INSTALLATION,
+            ProjectType.AIR_FIBER_INSTALLATION,
+            ProjectType.CABLE_RERUN,
+            ProjectType.FIBER_OPTICS_RELOCATION,
+            ProjectType.AIR_FIBER_RELOCATION,
+        ]
+        context = {
+            "request": request,
+            **base_context(request, auth, "New Project", "projects", db=db),
+            "project": None,
+            "statuses": [s.value for s in ProjectStatus],
+            "project_types": [t.value for t in allowed_project_types],
+            "priorities": [p.value for p in ProjectPriority],
+            "customers": customers,
+            "project_templates": _get_project_templates(db, org_id),
+            "error": "Invalid project type selection.",
+            "form_data": {
+                "project_code": project_code,
+                "project_name": project_name,
+                "description": description,
+                "status": status,
+                "project_type": project_type_value,
+                "project_priority": project_priority,
+                "project_template_id": project_template_id,
+                "customer_id": customer_id,
+                "start_date": start_date,
+                "end_date": end_date,
+                "budget_amount": budget_amount,
+                "percent_complete": percent_complete,
+            },
+        }
+        return templates.TemplateResponse(
+            "operations/projects/form.html",
+            context,
+            status_code=400,
+        )
+
+    start_date_value = date.today()
+    duration_days = _project_type_duration_days(project_type_enum)
+    end_date_value = start_date_value + timedelta(days=duration_days) if duration_days else None
+
     project = Project(
         organization_id=org_id,
         project_code=project_code_value,
         project_name=project_name.strip(),
         description=description.strip() if description else None,
         status=ProjectStatus(status),
-        project_type=ProjectType(project_type) if project_type else ProjectType.INTERNAL,
+        project_type=project_type_enum,
         project_priority=ProjectPriority(project_priority) if project_priority else ProjectPriority.MEDIUM,
+        project_template_id=coerce_uuid(project_template_id) if project_template_id else None,
         customer_id=coerce_uuid(customer_id) if customer_id else None,
-        start_date=_safe_date(start_date),
-        end_date=_safe_date(end_date),
+        start_date=start_date_value,
+        end_date=end_date_value,
         budget_amount=_safe_decimal(budget_amount),
         percent_complete=_safe_decimal(percent_complete, Decimal("0")),
     )
 
     db.add(project)
+    db.flush()
+
+    if project.project_template_id:
+        _apply_project_template(db, org_id, project, project.project_template_id)
+
     db.commit()
 
     return RedirectResponse(
@@ -2224,233 +2965,6 @@ def project_expenses(
     }
 
     return templates.TemplateResponse("operations/projects/expenses.html", context)
-
-
-# ============================================================================
-# Resource Allocation (Team Management)
-# ============================================================================
-
-
-@router.get("/{project_id}/team", response_class=HTMLResponse)
-def project_team(
-    request: Request,
-    project_id: str,
-    auth: WebAuthContext = Depends(require_operations_access),
-    db: Session = Depends(get_db),
-):
-    """Project team/resource allocations page."""
-    org_id = coerce_uuid(auth.organization_id)
-    project = _resolve_project_ref(db, org_id, project_id)
-
-    if not project:
-        return templates.TemplateResponse(
-            "errors/404.html",
-            {"request": request, "message": "Project not found"},
-            status_code=404,
-        )
-
-    services = _get_services(db, org_id)
-    allocations = services["resource"].get_project_team(project.project_id)
-    utilization = services["resource"].get_project_utilization(project.project_id)
-    employees = _get_employees(db, org_id)
-
-    context = {
-        "request": request,
-        **base_context(request, auth, f"Team - {project.project_name}", "projects", db=db),
-        "project": project,
-        "allocations": allocations,
-        "utilization": utilization,
-        "employees": employees,
-    }
-
-    return templates.TemplateResponse("operations/projects/team.html", context)
-
-
-@router.post("/{project_id}/team", response_class=RedirectResponse)
-def add_team_member(
-    request: Request,
-    project_id: str,
-    employee_id: str = Form(...),
-    role_on_project: Optional[str] = Form(None),
-    allocation_percent: str = Form("100"),
-    start_date: str = Form(...),
-    end_date: Optional[str] = Form(None),
-    cost_rate_per_hour: Optional[str] = Form(None),
-    billing_rate_per_hour: Optional[str] = Form(None),
-    auth: WebAuthContext = Depends(require_operations_access),
-    db: Session = Depends(get_db),
-):
-    """Add a team member to the project."""
-    org_id = coerce_uuid(auth.organization_id)
-    project = _resolve_project_ref(db, org_id, project_id)
-
-    if not project:
-        return RedirectResponse(url="/operations/projects?error=Project+not+found", status_code=303)
-
-    services = _get_services(db, org_id)
-
-    try:
-        data = {
-            "project_id": project.project_id,
-            "employee_id": coerce_uuid(employee_id),
-            "role_on_project": role_on_project or None,
-            "allocation_percent": _safe_decimal(allocation_percent, Decimal("100")),
-            "start_date": _safe_date(start_date) or date.today(),
-            "end_date": _safe_date(end_date),
-            "cost_rate_per_hour": _safe_decimal(cost_rate_per_hour),
-            "billing_rate_per_hour": _safe_decimal(billing_rate_per_hour),
-        }
-        services["resource"].allocate_resource(data)
-        db.commit()
-    except (ValidationError, ConflictError) as e:
-        db.rollback()
-        return RedirectResponse(
-            url=f"/operations/projects/{project.project_code}/team?error={str(e)}",
-            status_code=303,
-        )
-    except Exception as e:
-        db.rollback()
-        return RedirectResponse(
-            url=f"/operations/projects/{project.project_code}/team?error={str(e)}",
-            status_code=303,
-        )
-
-    return RedirectResponse(
-        url=f"/operations/projects/{project.project_code}/team?success=Team+member+added",
-        status_code=303,
-    )
-
-
-@router.post("/{project_id}/team/{allocation_id}", response_class=RedirectResponse)
-def update_team_member(
-    request: Request,
-    project_id: str,
-    allocation_id: str,
-    role_on_project: Optional[str] = Form(None),
-    allocation_percent: Optional[str] = Form(None),
-    end_date: Optional[str] = Form(None),
-    cost_rate_per_hour: Optional[str] = Form(None),
-    billing_rate_per_hour: Optional[str] = Form(None),
-    auth: WebAuthContext = Depends(require_operations_access),
-    db: Session = Depends(get_db),
-):
-    """Update team member allocation."""
-    org_id = coerce_uuid(auth.organization_id)
-    project = _resolve_project_ref(db, org_id, project_id)
-
-    if not project:
-        return RedirectResponse(url="/operations/projects?error=Project+not+found", status_code=303)
-
-    services = _get_services(db, org_id)
-
-    try:
-        data = {}
-        if role_on_project is not None:
-            data["role_on_project"] = role_on_project or None
-        if allocation_percent:
-            data["allocation_percent"] = _safe_decimal(allocation_percent, Decimal("100"))
-        if end_date:
-            data["end_date"] = _safe_date(end_date)
-        if cost_rate_per_hour:
-            data["cost_rate_per_hour"] = _safe_decimal(cost_rate_per_hour)
-        if billing_rate_per_hour:
-            data["billing_rate_per_hour"] = _safe_decimal(billing_rate_per_hour)
-
-        services["resource"].update_allocation(coerce_uuid(allocation_id), data)
-        db.commit()
-    except NotFoundError as e:
-        db.rollback()
-        return RedirectResponse(
-            url=f"/operations/projects/{project.project_code}/team?error=Allocation+not+found",
-            status_code=303,
-        )
-    except Exception as e:
-        db.rollback()
-        return RedirectResponse(
-            url=f"/operations/projects/{project.project_code}/team?error={str(e)}",
-            status_code=303,
-        )
-
-    return RedirectResponse(
-        url=f"/operations/projects/{project.project_code}/team?success=Allocation+updated",
-        status_code=303,
-    )
-
-
-@router.post("/{project_id}/team/{allocation_id}/end", response_class=RedirectResponse)
-def end_team_member(
-    request: Request,
-    project_id: str,
-    allocation_id: str,
-    end_date: Optional[str] = Form(None),
-    auth: WebAuthContext = Depends(require_operations_access),
-    db: Session = Depends(get_db),
-):
-    """End team member allocation."""
-    org_id = coerce_uuid(auth.organization_id)
-    project = _resolve_project_ref(db, org_id, project_id)
-
-    if not project:
-        return RedirectResponse(url="/operations/projects?error=Project+not+found", status_code=303)
-
-    services = _get_services(db, org_id)
-
-    try:
-        services["resource"].end_allocation(
-            coerce_uuid(allocation_id),
-            end_date_value=_safe_date(end_date) if end_date else None,
-        )
-        db.commit()
-    except NotFoundError:
-        db.rollback()
-        return RedirectResponse(
-            url=f"/operations/projects/{project.project_code}/team?error=Allocation+not+found",
-            status_code=303,
-        )
-    except ConflictError as e:
-        db.rollback()
-        return RedirectResponse(
-            url=f"/operations/projects/{project.project_code}/team?error={str(e)}",
-            status_code=303,
-        )
-
-    return RedirectResponse(
-        url=f"/operations/projects/{project.project_code}/team?success=Allocation+ended",
-        status_code=303,
-    )
-
-
-@router.post("/{project_id}/team/{allocation_id}/delete", response_class=RedirectResponse)
-def delete_team_member(
-    request: Request,
-    project_id: str,
-    allocation_id: str,
-    auth: WebAuthContext = Depends(require_operations_access),
-    db: Session = Depends(get_db),
-):
-    """Delete team member allocation."""
-    org_id = coerce_uuid(auth.organization_id)
-    project = _resolve_project_ref(db, org_id, project_id)
-
-    if not project:
-        return RedirectResponse(url="/operations/projects?error=Project+not+found", status_code=303)
-
-    services = _get_services(db, org_id)
-
-    try:
-        services["resource"].delete_allocation(coerce_uuid(allocation_id))
-        db.commit()
-    except NotFoundError:
-        db.rollback()
-        return RedirectResponse(
-            url=f"/operations/projects/{project.project_code}/team?error=Allocation+not+found",
-            status_code=303,
-        )
-
-    return RedirectResponse(
-        url=f"/operations/projects/{project.project_code}/team?success=Allocation+deleted",
-        status_code=303,
-    )
 
 
 # ============================================================================

@@ -163,7 +163,7 @@ class LeaseModificationService(ListResponseMixin):
             liability_before=liability_before,
             rou_asset_before=rou_asset_before,
             remaining_lease_term_before=remaining_term_before,
-            discount_rate_before=liability.incremental_borrowing_rate,
+            discount_rate_before=liability.discount_rate,
             liability_after=liability_before,  # Unchanged
             rou_asset_after=rou_asset_before,  # Unchanged
             liability_adjustment=Decimal("0"),
@@ -201,7 +201,7 @@ class LeaseModificationService(ListResponseMixin):
             new_discount_rate = input.revised_discount_rate
         else:
             # Use revised rate at modification date for certain modifications
-            new_discount_rate = liability.incremental_borrowing_rate
+            new_discount_rate = liability.discount_rate
 
         # Determine new term
         if input.revised_lease_term_months:
@@ -216,9 +216,9 @@ class LeaseModificationService(ListResponseMixin):
             new_payment_amount = liability.initial_liability_amount / (contract.lease_term_months or 1)
 
         # Calculate new liability (PV of remaining payments at new rate)
-        new_liability = LeaseCalculationService.calculate_pv_lease_payments(
-            periodic_payment=new_payment_amount,
-            discount_rate=new_discount_rate,
+        new_liability = LeaseCalculationService.calculate_pv(
+            payment=new_payment_amount,
+            rate=new_discount_rate,
             periods=new_term_months,
         )
 
@@ -249,7 +249,7 @@ class LeaseModificationService(ListResponseMixin):
             liability_before=liability_before,
             rou_asset_before=rou_asset_before,
             remaining_lease_term_before=remaining_term_before,
-            discount_rate_before=liability.incremental_borrowing_rate,
+            discount_rate_before=liability.discount_rate,
             new_lease_payments=input.new_lease_payments,
             revised_discount_rate=input.revised_discount_rate,
             revised_lease_term_months=input.revised_lease_term_months,
@@ -266,7 +266,7 @@ class LeaseModificationService(ListResponseMixin):
         # Update liability and asset
         liability.current_liability_balance = new_liability
         if input.revised_discount_rate:
-            liability.incremental_borrowing_rate = input.revised_discount_rate
+            liability.discount_rate = input.revised_discount_rate
 
         asset.carrying_amount = new_rou_asset
         asset.modification_adjustments += rou_asset_adjustment

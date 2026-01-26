@@ -5,13 +5,13 @@ Adapted from DotMac People for the unified ERP platform.
 """
 from __future__ import annotations
 
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 import math
 from typing import TYPE_CHECKING, Any, List, Optional, Sequence
 from uuid import UUID
 
-from sqlalchemy import and_, case, func, or_, select
+from sqlalchemy import and_, case, func, literal_column, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.people.attendance import (
@@ -171,7 +171,7 @@ class AttendanceService:
             if not polygon.is_valid:
                 polygon = make_valid(polygon)
 
-            return polygon.contains(point)
+            return bool(polygon.contains(point))
         except Exception as e:
             raise ValidationError(f"Invalid geofence polygon: {e}")
 
@@ -189,6 +189,31 @@ class AttendanceService:
                 Location.organization_id == org_id,
             )
         )
+
+    @staticmethod
+    def _normalize_dt(value: datetime) -> datetime:
+        """Ensure datetime is timezone-aware (default UTC)."""
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value
+
+    @staticmethod
+    def _now_like(reference: Optional[datetime] = None) -> datetime:
+        """Return timezone-aware now, using reference tz when available."""
+        if reference and reference.tzinfo is not None:
+            return datetime.now(tz=reference.tzinfo)
+        return datetime.now(tz=timezone.utc)
+
+    @staticmethod
+    def _combine_date_time(
+        day: date,
+        clock: time,
+        tzinfo: Optional[timezone],
+    ) -> datetime:
+        dt = datetime.combine(day, clock)
+        if tzinfo is not None:
+            dt = dt.replace(tzinfo=tzinfo)
+        return dt
 
     def _validate_geofence(
         self,
@@ -225,7 +250,7 @@ class AttendanceService:
         if not location.geofence_enabled:
             return
         if latitude is None or longitude is None:
-            raise ValidationError(f"Location is required for {action_label}.")
+            raise ValidationError("You are currently outside the check-in radius.")
 
         # Use polygon if configured, otherwise fall back to circle
         if location.geofence_polygon:
@@ -644,7 +669,7 @@ class AttendanceService:
         longitude: Optional[float] = None,
     ) -> Attendance:
         """Record employee check-in."""
-        now = check_in_time or datetime.now()
+        now = check_in_time or self._now_like()
         today = now.date()
 
         # Check if already checked in
@@ -666,7 +691,10 @@ class AttendanceService:
         late_entry = False
         if shift_type_id:
             shift = self.get_shift_type(org_id, shift_type_id)
-            shift_start = datetime.combine(today, shift.start_time)
+            tzinfo = now.tzinfo if isinstance(now.tzinfo, timezone) else None
+            shift_start = self._combine_date_time(
+                today, shift.start_time, tzinfo
+            )
             grace_end = shift_start + timedelta(minutes=shift.late_entry_grace_period)
             late_entry = now > grace_end
 
@@ -701,7 +729,7 @@ class AttendanceService:
         longitude: Optional[float] = None,
     ) -> Attendance:
         """Record employee check-out."""
-        now = check_out_time or datetime.now()
+        now = check_out_time or self._now_like()
         today = now.date()
 
         attendance = self.get_attendance_by_date(org_id, employee_id, today)
@@ -723,7 +751,10 @@ class AttendanceService:
         early_exit = False
         if attendance.shift_type_id:
             shift = self.get_shift_type(org_id, attendance.shift_type_id)
-            shift_end = datetime.combine(today, shift.end_time)
+            tzinfo = now.tzinfo if isinstance(now.tzinfo, timezone) else None
+            shift_end = self._combine_date_time(
+                today, shift.end_time, tzinfo
+            )
             if shift.end_time <= shift.start_time:
                 shift_end += timedelta(days=1)
             grace_start = shift_end - timedelta(minutes=shift.early_exit_grace_period)
@@ -736,7 +767,9 @@ class AttendanceService:
 
         # Calculate working hours
         if attendance.check_in:
-            delta = now - attendance.check_in
+            check_in_dt = self._normalize_dt(attendance.check_in)
+            now_dt = self._normalize_dt(now)
+            delta = now_dt - check_in_dt
             attendance.working_hours = Decimal(str(delta.total_seconds() / 3600))
 
         self.db.flush()
@@ -757,11 +790,14 @@ class AttendanceService:
                 f"Attendance already checked in at {attendance.check_in}"
             )
 
-        now = check_in_time or datetime.now()
+        now = check_in_time or self._now_like(attendance.check_in)
         late_entry = False
         if attendance.shift_type_id:
             shift = self.get_shift_type(org_id, attendance.shift_type_id)
-            shift_start = datetime.combine(attendance.attendance_date, shift.start_time)
+            tzinfo = now.tzinfo if isinstance(now.tzinfo, timezone) else None
+            shift_start = self._combine_date_time(
+                attendance.attendance_date, shift.start_time, tzinfo
+            )
             grace_end = shift_start + timedelta(minutes=shift.late_entry_grace_period)
             late_entry = now > grace_end
 
@@ -791,11 +827,14 @@ class AttendanceService:
                 f"Attendance already checked out at {attendance.check_out}"
             )
 
-        now = check_out_time or datetime.now()
+        now = check_out_time or self._now_like(attendance.check_in)
         early_exit = False
         if attendance.shift_type_id:
             shift = self.get_shift_type(org_id, attendance.shift_type_id)
-            shift_end = datetime.combine(attendance.attendance_date, shift.end_time)
+            tzinfo = now.tzinfo if isinstance(now.tzinfo, timezone) else None
+            shift_end = self._combine_date_time(
+                attendance.attendance_date, shift.end_time, tzinfo
+            )
             if shift.end_time <= shift.start_time:
                 shift_end += timedelta(days=1)
             grace_start = shift_end - timedelta(minutes=shift.early_exit_grace_period)
@@ -807,7 +846,9 @@ class AttendanceService:
             attendance.remarks = notes
 
         if attendance.check_in:
-            delta = now - attendance.check_in
+            check_in_dt = self._normalize_dt(attendance.check_in)
+            now_dt = self._normalize_dt(now)
+            delta = now_dt - check_in_dt
             attendance.working_hours = Decimal(str(delta.total_seconds() / 3600))
 
         self.db.flush()
@@ -1326,6 +1367,8 @@ class AttendanceService:
         Returns status breakdown, late/early stats, and working hours summary.
         """
         from app.models.people.hr import Employee, Department
+        from app.models.person import Person
+        from app.models.person import Person
 
         today = date.today()
         if not start_date:
@@ -1405,9 +1448,9 @@ class AttendanceService:
         query = (
             self.db.query(
                 Employee.employee_id,
-                Employee.first_name,
-                Employee.last_name,
-                Department.name.label("department_name"),
+                Person.first_name,
+                Person.last_name,
+                Department.department_name.label("department_name"),
                 func.count(Attendance.attendance_id).label("total_days"),
                 func.count(case((Attendance.status == AttendanceStatus.PRESENT, 1))).label("present"),
                 func.count(case((Attendance.status == AttendanceStatus.ABSENT, 1))).label("absent"),
@@ -1417,6 +1460,7 @@ class AttendanceService:
                 func.sum(Attendance.overtime_hours).label("overtime_hours"),
             )
             .join(Attendance, Attendance.employee_id == Employee.employee_id)
+            .join(Person, Employee.person_id == Person.id)
             .outerjoin(Department, Employee.department_id == Department.department_id)
             .filter(
                 Attendance.organization_id == org_id,
@@ -1430,9 +1474,9 @@ class AttendanceService:
 
         results = query.group_by(
             Employee.employee_id,
-            Employee.first_name,
-            Employee.last_name,
-            Department.name,
+            Person.first_name,
+            Person.last_name,
+            Department.department_name,
         ).all()
 
         employees = []
@@ -1478,6 +1522,7 @@ class AttendanceService:
         Returns list of late/early records with employee details.
         """
         from app.models.people.hr import Employee, Department
+        from app.models.person import Person
 
         today = date.today()
         if not start_date:
@@ -1489,11 +1534,12 @@ class AttendanceService:
         query = (
             self.db.query(
                 Attendance,
-                Employee.first_name,
-                Employee.last_name,
-                Department.name.label("department_name"),
+                Person.first_name,
+                Person.last_name,
+                Department.department_name.label("department_name"),
             )
             .join(Employee, Employee.employee_id == Attendance.employee_id)
+            .join(Person, Employee.person_id == Person.id)
             .outerjoin(Department, Employee.department_id == Department.department_id)
             .filter(
                 Attendance.organization_id == org_id,
@@ -1553,9 +1599,13 @@ class AttendanceService:
         start_date = end_date - relativedelta(months=months - 1)
 
         # Query monthly aggregates
+        month_bucket = func.date_trunc(
+            literal_column("'month'"),
+            Attendance.attendance_date,
+        ).label("month")
         results = (
             self.db.query(
-                func.date_trunc("month", Attendance.attendance_date).label("month"),
+                month_bucket,
                 func.count(Attendance.attendance_id).label("total_records"),
                 func.count(case((Attendance.status == AttendanceStatus.PRESENT, 1))).label("present"),
                 func.count(case((Attendance.status == AttendanceStatus.ABSENT, 1))).label("absent"),
@@ -1567,8 +1617,8 @@ class AttendanceService:
                 Attendance.attendance_date >= start_date,
                 Attendance.attendance_date <= today,
             )
-            .group_by(func.date_trunc("month", Attendance.attendance_date))
-            .order_by(func.date_trunc("month", Attendance.attendance_date))
+            .group_by(month_bucket)
+            .order_by(month_bucket)
             .all()
         )
 

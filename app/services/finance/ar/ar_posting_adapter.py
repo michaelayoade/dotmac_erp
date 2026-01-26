@@ -166,7 +166,7 @@ class ARPostingAdapter:
 
         # Credit lines (revenue accounts)
         for inv_line in lines:
-            account_id = inv_line.revenue_account_id
+            account_id: Optional[UUID] = inv_line.revenue_account_id
             if not account_id:
                 account_id = customer.default_revenue_account_id
 
@@ -344,6 +344,9 @@ class ARPostingAdapter:
         exchange_rate = payment.exchange_rate or Decimal("1.0")
         functional_amount = payment.amount * exchange_rate
 
+        if not payment.bank_account_id:
+            return ARPostingResult(success=False, message="Payment has no bank account linked")
+
         # Build journal lines
         journal_lines = [
             # Debit Bank/Cash
@@ -457,7 +460,7 @@ class ARPostingAdapter:
         """
         from app.models.finance.gl.fiscal_period import FiscalPeriod
 
-        tax_transaction_ids = []
+        tax_transaction_ids: list[UUID] = []
 
         # Get fiscal period from invoice date
         fiscal_period = (
@@ -495,7 +498,7 @@ class ARPostingAdapter:
                     base_amount=base_amount,
                     currency_code=invoice.currency_code,
                     counterparty_name=customer.legal_name,
-                    counterparty_tax_id=customer.tax_id,
+                    counterparty_tax_id=customer.tax_identification_number,
                     exchange_rate=exchange_rate,
                 )
                 tax_transaction_ids.append(tax_txn.transaction_id)

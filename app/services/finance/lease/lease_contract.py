@@ -288,7 +288,7 @@ class LeaseContractService(ListResponseMixin):
         interest_expense_account_id: UUID,
         rou_asset_account_id: UUID,
         depreciation_expense_account_id: UUID,
-    ) -> tuple[LeaseContract, LeaseLiability, LeaseAsset]:
+    ) -> tuple[LeaseContract, LeaseLiability | None, LeaseAsset | None]:
         """
         Activate a lease and create initial recognition entries.
 

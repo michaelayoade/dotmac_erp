@@ -410,7 +410,7 @@ def link_advance_to_claim(
         org_id=organization_id,
         claim_id=claim_id,
         advance_id=payload.advance_id,
-        amount=payload.amount_to_adjust,
+        amount_to_adjust=payload.amount_to_adjust,
     )
     db.commit()
     return ExpenseClaimRead.model_validate(claim)
@@ -533,17 +533,17 @@ def approve_advance(
     organization_id: UUID = Depends(require_organization_id),
     approver_id: Optional[UUID] = None,
     approved_amount: Optional[Decimal] = None,
-    notes: Optional[str] = None,
     db: Session = Depends(get_db),
 ):
     """Approve a cash advance."""
+    if approver_id is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="approver_id required")
     svc = ExpenseService(db)
     advance = svc.approve_advance(
         org_id=organization_id,
         advance_id=advance_id,
         approver_id=approver_id,
         approved_amount=approved_amount,
-        notes=notes,
     )
     db.commit()
     return CashAdvanceRead.model_validate(advance)

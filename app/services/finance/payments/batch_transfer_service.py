@@ -28,7 +28,8 @@ from app.models.finance.payments.payment_intent import (
 )
 from app.models.domain_settings import SettingDomain
 from app.services.common import coerce_uuid
-from app.services.finance.common.numbering import generate_next_number
+from app.models.finance.core_config.numbering_sequence import SequenceType
+from app.services.finance.platform.sequence import SequenceService
 from app.services.finance.payments.paystack_client import PaystackClient, PaystackConfig
 from app.services.settings_spec import resolve_value
 
@@ -94,11 +95,10 @@ class BatchTransferService:
         bank_account_uuid = coerce_uuid(bank_account_id)
 
         # Generate batch number
-        batch_number = generate_next_number(
+        batch_number = SequenceService.get_next_number(
             self.db,
             self.organization_id,
-            "TRANSFER_BATCH",
-            batch_date,
+            SequenceType.PAYMENT,
         )
 
         # Create batch

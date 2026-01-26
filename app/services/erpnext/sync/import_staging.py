@@ -148,17 +148,26 @@ class StagingImportService:
     def _count_invalid_records(self, batch_id: uuid.UUID) -> int:
         """Count invalid records in batch."""
         count = 0
-        for model in [
-            StagingDepartment,
-            StagingDesignation,
-            StagingEmploymentType,
-            StagingEmployeeGrade,
-            StagingEmployee,
-        ]:
-            count += self.db.query(model).filter(
-                model.batch_id == batch_id,
-                model.validation_status == StagingStatus.INVALID,
-            ).count()
+        count += self.db.query(StagingDepartment).filter(
+            StagingDepartment.batch_id == batch_id,
+            StagingDepartment.validation_status == StagingStatus.INVALID,
+        ).count()
+        count += self.db.query(StagingDesignation).filter(
+            StagingDesignation.batch_id == batch_id,
+            StagingDesignation.validation_status == StagingStatus.INVALID,
+        ).count()
+        count += self.db.query(StagingEmploymentType).filter(
+            StagingEmploymentType.batch_id == batch_id,
+            StagingEmploymentType.validation_status == StagingStatus.INVALID,
+        ).count()
+        count += self.db.query(StagingEmployeeGrade).filter(
+            StagingEmployeeGrade.batch_id == batch_id,
+            StagingEmployeeGrade.validation_status == StagingStatus.INVALID,
+        ).count()
+        count += self.db.query(StagingEmployee).filter(
+            StagingEmployee.batch_id == batch_id,
+            StagingEmployee.validation_status == StagingStatus.INVALID,
+        ).count()
         return count
 
     def _populate_caches(self):
@@ -274,9 +283,9 @@ class StagingImportService:
             if staging.parent_department_name and staging.imported_department_id:
                 parent_id = self._dept_cache.get(staging.parent_department_name)
                 if parent_id:
-                    dept = self.db.get(Department, staging.imported_department_id)
-                    if dept:
-                        dept.parent_department_id = parent_id
+                    dept_record = self.db.get(Department, staging.imported_department_id)
+                    if dept_record:
+                        dept_record.parent_department_id = parent_id
 
         self.db.flush()
         logger.info(f"Departments imported: {result.imported}, skipped: {result.skipped}")
@@ -522,11 +531,31 @@ class StagingImportService:
                     continue
 
                 # Resolve foreign keys
-                department_id = self._dept_cache.get(staging.department_name)
-                designation_id = self._desg_cache.get(staging.designation_name)
-                employment_type_id = self._emptype_cache.get(staging.employment_type_name)
-                grade_id = self._grade_cache.get(staging.grade_name)
-                reports_to_id = self._emp_cache.get(staging.reports_to_name)
+                department_id = (
+                    self._dept_cache.get(staging.department_name)
+                    if staging.department_name
+                    else None
+                )
+                designation_id = (
+                    self._desg_cache.get(staging.designation_name)
+                    if staging.designation_name
+                    else None
+                )
+                employment_type_id = (
+                    self._emptype_cache.get(staging.employment_type_name)
+                    if staging.employment_type_name
+                    else None
+                )
+                grade_id = (
+                    self._grade_cache.get(staging.grade_name)
+                    if staging.grade_name
+                    else None
+                )
+                reports_to_id = (
+                    self._emp_cache.get(staging.reports_to_name)
+                    if staging.reports_to_name
+                    else None
+                )
 
                 # Map status
                 status = EmployeeStatus.ACTIVE

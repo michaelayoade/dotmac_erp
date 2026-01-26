@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 # Maximum account code length in the database
 MAX_ACCOUNT_CODE_LENGTH = 20
 
-from app.models.finance.gl.account import Account
+from app.models.finance.gl.account import Account, AccountType, NormalBalance
 from app.models.finance.gl.account_category import AccountCategory
 from app.services.erpnext.mappings.accounts import AccountMapping, ROOT_TYPE_MAP
 
@@ -139,8 +139,8 @@ class AccountSyncService(BaseSyncService[Account]):
             account_code=account_code,
             account_name=data["account_name"][:200],
             category_id=category_id,
-            account_type=account_type,
-            normal_balance=data.get("normal_balance", "DEBIT")[:6],
+            account_type=AccountType(account_type),
+            normal_balance=NormalBalance(data.get("normal_balance", "DEBIT")[:6]),
             is_posting_allowed=not is_header,  # Header accounts don't allow posting
             is_active=data.get("is_active", True),
             default_currency_code=data.get("currency_code", "NGN")[:3],
@@ -168,8 +168,8 @@ class AccountSyncService(BaseSyncService[Account]):
 
         entity.account_name = data["account_name"][:200]
         entity.category_id = category_id
-        entity.account_type = account_type
-        entity.normal_balance = data.get("normal_balance", "DEBIT")[:6]
+        entity.account_type = AccountType(account_type)
+        entity.normal_balance = NormalBalance(data.get("normal_balance", "DEBIT")[:6])
         entity.is_posting_allowed = not is_header
         entity.is_active = data.get("is_active", True)
         entity.default_currency_code = data.get("currency_code", "NGN")[:3]

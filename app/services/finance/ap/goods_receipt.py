@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any, List, Optional
 from uuid import UUID
 import uuid as uuid_lib
 
@@ -151,6 +151,11 @@ class GoodsReceiptService(ListResponseMixin):
             po_line = db.query(PurchaseOrderLine).filter(
                 PurchaseOrderLine.line_id == po_line_id
             ).first()
+            if not po_line:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Purchase order line {po_line_id} not found",
+                )
 
             # Validate quantity doesn't exceed remaining
             remaining_qty = po_line.quantity_ordered - po_line.quantity_received
@@ -313,6 +318,8 @@ class GoodsReceiptService(ListResponseMixin):
 
         # Create inventory transactions for accepted lines (if any)
         if receipt.status in [ReceiptStatus.ACCEPTED, ReceiptStatus.PARTIAL]:
+            if receipt.received_by_user_id is None:
+                raise HTTPException(status_code=400, detail="Receipt has no received_by_user_id")
             GoodsReceiptService._create_inventory_transactions_for_receipt(
                 db=db,
                 organization_id=org_id,
@@ -367,6 +374,8 @@ class GoodsReceiptService(ListResponseMixin):
         receipt.status = ReceiptStatus.ACCEPTED
 
         # Create inventory transactions for accepted lines
+        if receipt.received_by_user_id is None:
+            raise HTTPException(status_code=400, detail="Receipt has no received_by_user_id")
         GoodsReceiptService._create_inventory_transactions_for_receipt(
             db=db,
             organization_id=org_id,
@@ -403,7 +412,7 @@ class GoodsReceiptService(ListResponseMixin):
         """
         from app.models.finance.gl.fiscal_period import FiscalPeriod
 
-        transaction_ids = []
+        transaction_ids: List[UUID] = []
 
         # Get fiscal period for the receipt date
         fiscal_period = (
@@ -541,23 +550,31 @@ class GoodsReceiptService(ListResponseMixin):
         ).first()
 
     @staticmethod
-    def get_receipt_lines(db: Session, receipt_id: str) -> list[GoodsReceiptLine]:
+    def get_receipt_lines(db: Session, receipt_id: str) -> List[GoodsReceiptLine]:
         """Get all lines for a goods receipt."""
-        return db.query(GoodsReceiptLine).filter(
-            GoodsReceiptLine.receipt_id == coerce_uuid(receipt_id)
-        ).order_by(GoodsReceiptLine.line_number).all()
+        return (
+            db.query(GoodsReceiptLine)
+            .filter(GoodsReceiptLine.receipt_id == coerce_uuid(receipt_id))
+            .order_by(GoodsReceiptLine.line_number)
+            .all()
+        )
 
     @staticmethod
     def list_by_po(
         db: Session,
         organization_id: UUID,
         po_id: UUID,
-    ) -> list[GoodsReceipt]:
+    ) -> List[GoodsReceipt]:
         """List all goods receipts for a purchase order."""
-        return db.query(GoodsReceipt).filter(
-            GoodsReceipt.organization_id == coerce_uuid(organization_id),
-            GoodsReceipt.po_id == coerce_uuid(po_id),
-        ).order_by(GoodsReceipt.receipt_date.desc()).all()
+        return (
+            db.query(GoodsReceipt)
+            .filter(
+                GoodsReceipt.organization_id == coerce_uuid(organization_id),
+                GoodsReceipt.po_id == coerce_uuid(po_id),
+            )
+            .order_by(GoodsReceipt.receipt_date.desc())
+            .all()
+        )
 
     @staticmethod
     def list(
@@ -570,7 +587,7 @@ class GoodsReceiptService(ListResponseMixin):
         to_date: Optional[date] = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> list[GoodsReceipt]:
+    ) -> List[GoodsReceipt]:
         """
         List goods receipts with filters.
 

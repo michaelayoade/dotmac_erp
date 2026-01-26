@@ -189,9 +189,9 @@ class ARInventoryIntegration:
         elif item.costing_method == CostingMethod.SPECIFIC_IDENTIFICATION:
             # Must have specific lot
             if lot_id:
-                lot = db.get(InventoryLot, lot_id)
-                if lot:
-                    unit_cost = lot.unit_cost
+                specific_lot = db.get(InventoryLot, lot_id)
+                if specific_lot:
+                    unit_cost = specific_lot.unit_cost
                     total_cost = quantity * unit_cost
                     return CostingResult(unit_cost=unit_cost, total_cost=total_cost, lot_id=lot_id)
 

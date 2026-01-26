@@ -6,7 +6,7 @@ Handles category management for support tickets.
 
 import logging
 import uuid
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, cast
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -81,6 +81,7 @@ class CategoryService:
         description: Optional[str] = None,
         color: Optional[str] = None,
         icon: Optional[str] = None,
+        display_order: Optional[int] = None,
         default_team_id: Optional[uuid.UUID] = None,
         default_priority: Optional[str] = None,
         response_hours: Optional[int] = None,
@@ -116,6 +117,7 @@ class CategoryService:
             .where(TicketCategory.organization_id == organization_id)
             .order_by(TicketCategory.display_order.desc())
         ).scalar_one_or_none() or 0
+        target_order = display_order if display_order is not None else max_order + 1
 
         category = TicketCategory(
             organization_id=organization_id,
@@ -124,7 +126,7 @@ class CategoryService:
             description=description,
             color=color,
             icon=icon,
-            display_order=max_order + 1,
+            display_order=target_order,
             default_team_id=default_team_id,
             default_priority=default_priority,
             response_hours=response_hours,
@@ -335,8 +337,22 @@ class CategoryService:
 
         created = []
         for i, cat_data in enumerate(defaults):
-            cat_data["display_order"] = i + 1
-            category, _ = self.create_category(db, organization_id, **cat_data)
+            category_code = cast(str, cat_data["category_code"])
+            category_name = cast(str, cat_data["category_name"])
+            category, _ = self.create_category(
+                db,
+                organization_id,
+                category_code,
+                category_name,
+                description=cast(Optional[str], cat_data.get("description")),
+                color=cast(Optional[str], cat_data.get("color")),
+                icon=cast(Optional[str], cat_data.get("icon")),
+                display_order=i + 1,
+                default_team_id=cast(Optional[uuid.UUID], cat_data.get("default_team_id")),
+                default_priority=cast(Optional[str], cat_data.get("default_priority")),
+                response_hours=cast(Optional[int], cat_data.get("response_hours")),
+                resolution_hours=cast(Optional[int], cat_data.get("resolution_hours")),
+            )
             if category:
                 created.append(category)
 

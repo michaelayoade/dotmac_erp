@@ -50,7 +50,12 @@ class ChecklistTemplateService:
         query = query.options(joinedload(ChecklistTemplate.items))
         query = query.order_by(ChecklistTemplate.template_name)
 
-        count_query = select(func.count()).select_from(query.subquery())
+        count_subq = (
+            query.with_only_columns(ChecklistTemplate.template_id)
+            .distinct()
+            .subquery()
+        )
+        count_query = select(func.count()).select_from(count_subq)
         total = self.db.scalar(count_query) or 0
 
         if pagination:

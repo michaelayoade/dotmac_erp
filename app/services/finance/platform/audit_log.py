@@ -8,7 +8,7 @@ import hashlib
 import json
 import logging
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any, List, Optional
 from uuid import UUID
 
 from sqlalchemy import and_
@@ -262,7 +262,7 @@ class AuditLogService(ListResponseMixin):
         if not records:
             return ""
 
-        prev_hash = None
+        prev_hash: Optional[str] = None
         for record in records:
             record_payload = {
                 "audit_id": str(record.audit_id),
@@ -278,7 +278,7 @@ class AuditLogService(ListResponseMixin):
             }
             prev_hash = AuditLogService._compute_hash(prev_hash, record_payload)
 
-        return prev_hash
+        return prev_hash or ""
 
     @staticmethod
     def verify_hash_chain(

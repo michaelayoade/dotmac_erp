@@ -835,6 +835,46 @@ class LeaveService:
             limit=pagination.limit if pagination else len(items),
         )
 
+    def list_team_applications(
+        self,
+        org_id: UUID,
+        *,
+        employee_ids: Sequence[UUID],
+        status: Optional[LeaveApplicationStatus] = None,
+        pagination: Optional[PaginationParams] = None,
+    ) -> PaginatedResult[LeaveApplication]:
+        """List leave applications for a set of employees."""
+        if not employee_ids:
+            return PaginatedResult(items=[], total=0, offset=0, limit=pagination.limit if pagination else 0)
+
+        query = select(LeaveApplication).where(
+            LeaveApplication.organization_id == org_id,
+            LeaveApplication.employee_id.in_(employee_ids),
+        )
+
+        if status:
+            status_value = status
+            if isinstance(status, str):
+                status_value = LeaveApplicationStatus(status)
+            query = query.where(LeaveApplication.status == status_value)
+
+        query = query.order_by(LeaveApplication.from_date.desc())
+
+        count_query = select(func.count()).select_from(query.subquery())
+        total = self.db.scalar(count_query) or 0
+
+        if pagination:
+            query = query.offset(pagination.offset).limit(pagination.limit)
+
+        items = list(self.db.scalars(query).all())
+
+        return PaginatedResult(
+            items=items,
+            total=total,
+            offset=pagination.offset if pagination else 0,
+            limit=pagination.limit if pagination else len(items),
+        )
+
     def get_application(self, org_id: UUID, application_id: UUID) -> LeaveApplication:
         """Get a leave application by ID."""
         application = self.db.scalar(
@@ -981,9 +1021,7 @@ class LeaveService:
 
         application.status = LeaveApplicationStatus.APPROVED
         application.approved_by_id = approver_id
-        application.approval_date = date.today()
-        if notes:
-            application.approval_notes = notes
+        application.approved_at = datetime.utcnow()
 
         # Update allocation
         allocation = self.db.scalar(

@@ -522,7 +522,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (existingChart) {
             existingChart.destroy();
         }
-        return createChart(canvas, config);
+        return new Chart(canvas, config);
     }
 
     const colors = {

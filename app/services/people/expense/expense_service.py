@@ -98,6 +98,11 @@ CLAIM_STATUS_TRANSITIONS = {
         ExpenseClaimStatus.REJECTED,
         ExpenseClaimStatus.DRAFT,  # Return for corrections
     },
+    ExpenseClaimStatus.PENDING_APPROVAL: {
+        ExpenseClaimStatus.APPROVED,
+        ExpenseClaimStatus.REJECTED,
+        ExpenseClaimStatus.DRAFT,  # Return for corrections
+    },
     ExpenseClaimStatus.APPROVED: {
         ExpenseClaimStatus.PAID,
     },
@@ -494,7 +499,10 @@ class ExpenseService:
         """Approve an expense claim."""
         claim = self.get_claim(org_id, claim_id)
 
-        if claim.status != ExpenseClaimStatus.SUBMITTED:
+        if claim.status not in {
+            ExpenseClaimStatus.SUBMITTED,
+            ExpenseClaimStatus.PENDING_APPROVAL,
+        }:
             raise ExpenseClaimStatusError(
                 claim.status.value, ExpenseClaimStatus.APPROVED.value
             )
@@ -533,7 +541,10 @@ class ExpenseService:
         """Reject an expense claim."""
         claim = self.get_claim(org_id, claim_id)
 
-        if claim.status != ExpenseClaimStatus.SUBMITTED:
+        if claim.status not in {
+            ExpenseClaimStatus.SUBMITTED,
+            ExpenseClaimStatus.PENDING_APPROVAL,
+        }:
             raise ExpenseClaimStatusError(
                 claim.status.value, ExpenseClaimStatus.REJECTED.value
             )
@@ -923,8 +934,6 @@ class ExpenseService:
 
         advance.status = CashAdvanceStatus.DISBURSED
         advance.disbursed_on = disbursement_date or date.today()
-        if disbursed_amount is not None:
-            advance.disbursed_amount = disbursed_amount
         advance.payment_reference = payment_reference
 
         self.db.flush()
@@ -951,7 +960,7 @@ class ExpenseService:
         # Check if fully settled
         total_accounted = advance.amount_settled + advance.amount_refunded
         if total_accounted >= (advance.approved_amount or advance.requested_amount):
-            advance.status = CashAdvanceStatus.SETTLED
+            advance.status = CashAdvanceStatus.FULLY_SETTLED
             advance.settled_on = date.today()
 
         self.db.flush()
@@ -981,7 +990,7 @@ class ExpenseService:
         # Check if fully settled
         total_accounted = advance.amount_settled + advance.amount_refunded
         if total_accounted >= (advance.approved_amount or advance.requested_amount):
-            advance.status = CashAdvanceStatus.SETTLED
+            advance.status = CashAdvanceStatus.FULLY_SETTLED
             advance.settled_on = settlement_date or date.today()
 
         self.db.flush()
@@ -1138,7 +1147,9 @@ class ExpenseService:
             )
 
         if status:
-            status_value = status
+            status_value: Optional[CardTransactionStatus] = (
+                status if isinstance(status, CardTransactionStatus) else None
+            )
             if isinstance(status, str):
                 try:
                     status_value = CardTransactionStatus(status)

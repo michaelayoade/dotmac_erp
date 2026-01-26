@@ -221,11 +221,10 @@ class PerformanceAutomationService:
         # Base query for active employees
         query = (
             select(Employee)
-            .options(joinedload(Employee.reports_to))
+            .options(joinedload(Employee.manager))
             .where(
                 Employee.organization_id == cycle.organization_id,
                 Employee.status == EmployeeStatus.ACTIVE,
-                Employee.is_active == True,  # noqa: E712
                 Employee.date_of_joining.isnot(None),
                 Employee.date_of_joining <= tenure_cutoff,
             )

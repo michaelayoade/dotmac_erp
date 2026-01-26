@@ -29,6 +29,7 @@ from app.schemas.expense import (
     ExpenseLimitRuleUpdate,
     ExpenseLimitRuleRead,
     ExpenseLimitRuleListResponse,
+    ExpenseLimitRuleBrief,
     # Approver Limits
     ExpenseApproverLimitCreate,
     ExpenseApproverLimitUpdate,
@@ -432,14 +433,16 @@ def evaluate_claim_limits(
             result=result.result.value,
             result_message=result.message,
             triggered_rules=[
-                {
-                    "rule_id": result.triggered_rule.rule_id,
-                    "rule_code": result.triggered_rule.rule_code,
-                    "rule_name": result.triggered_rule.rule_name,
-                    "limit_amount": result.triggered_rule.limit_amount,
-                    "action_type": result.triggered_rule.action_type.value,
-                }
-            ] if result.triggered_rule else [],
+                ExpenseLimitRuleBrief(
+                    rule_id=result.triggered_rule.rule_id,
+                    rule_code=result.triggered_rule.rule_code,
+                    rule_name=result.triggered_rule.rule_name,
+                    limit_amount=result.triggered_rule.limit_amount,
+                    action_type=result.triggered_rule.action_type.value,
+                )
+            ]
+            if result.triggered_rule
+            else [],
             eligible_approvers=eligible,
         )
     except Exception as e:

@@ -31,7 +31,7 @@ class FormParser:
 
     Example:
         parser = FormParser(form_data)
-        name = parser.str("name")
+        name = parser.get_str("name")
         age = parser.int("age")
         salary = parser.decimal("salary")
     """
@@ -39,7 +39,7 @@ class FormParser:
     def __init__(self, form: Mapping[str, Any]) -> None:
         self._form = form
 
-    def str(self, key: str, default: str = "") -> str:
+    def get_str(self, key: str, default: str = "") -> str:
         """Extract string value, stripping whitespace."""
         value = self._form.get(key, default)
         # Handle UploadFile objects (return default)
@@ -51,12 +51,12 @@ class FormParser:
 
     def str_or_none(self, key: str) -> Optional[str]:
         """Extract string value or None if empty."""
-        value = self.str(key, "")
+        value = self.get_str(key, "")
         return value if value else None
 
     def int(self, key: str) -> Optional[int]:
         """Extract integer value or None if invalid/empty."""
-        value = self.str(key, "")
+        value = self.get_str(key, "")
         if not value:
             return None
         try:
@@ -66,7 +66,7 @@ class FormParser:
 
     def decimal(self, key: str) -> Optional[Decimal]:
         """Extract Decimal value or None if invalid/empty."""
-        value = self.str(key, "")
+        value = self.get_str(key, "")
         if not value:
             return None
         try:
@@ -76,7 +76,7 @@ class FormParser:
 
     def date(self, key: str) -> Optional[date]:
         """Extract date from ISO format (YYYY-MM-DD) or None if invalid."""
-        value = self.str(key, "")
+        value = self.get_str(key, "")
         if not value:
             return None
         try:
@@ -86,7 +86,7 @@ class FormParser:
 
     def enum(self, key: str, enum_class: type, default: Optional[Any] = None) -> Optional[Any]:
         """Extract enum value or default if invalid."""
-        value = self.str(key, "")
+        value = self.get_str(key, "")
         if not value:
             return default
         try:

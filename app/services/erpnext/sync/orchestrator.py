@@ -7,7 +7,7 @@ import logging
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any, Optional, Sequence, cast
 
 from sqlalchemy.orm import Session
 
@@ -280,10 +280,10 @@ class ERPNextSyncOrchestrator:
         self.db.flush()
         return history
 
-    def _filter_entities(self, entities: list[str]) -> list[str]:
+    def _filter_entities(self, entities: Sequence[str]) -> list[str]:
         """Filter entities based on config."""
         if not self.config.entity_types:
-            return entities
+            return list(entities)
         return [e for e in entities if e in self.config.entity_types]
 
     def test_connection(self) -> dict[str, Any]:
@@ -300,13 +300,14 @@ class ERPNextSyncOrchestrator:
 
         Returns counts for each entity type.
         """
-        preview = {
-            "entity_types": {},
+        entity_types: dict[str, dict[str, Any]] = {}
+        preview: dict[str, Any] = {
+            "entity_types": entity_types,
             "total_records": 0,
         }
 
         # Determine entities to sync
-        all_entities = []
+        all_entities: list[str] = []
         for phase in SYNC_PHASES:
             all_entities.extend(phase["entities"])
 
@@ -371,7 +372,7 @@ class ERPNextSyncOrchestrator:
         if not doctype:
             return 0
 
-        filters = {}
+        filters: dict[str, Any] = {}
         # Company filters for company-scoped DocTypes
         if self.config.erpnext_company and entity_type in [
             "accounts", "assets", "warehouses", "departments",
@@ -396,7 +397,7 @@ class ERPNextSyncOrchestrator:
             SyncHistory with results
         """
         # Determine entities to sync
-        all_entities = []
+        all_entities: list[str] = []
         for phase in SYNC_PHASES:
             all_entities.extend(phase["entities"])
 
@@ -443,10 +444,13 @@ class ERPNextSyncOrchestrator:
         try:
             service = self._get_service(entity_type)
             incremental = self.config.sync_type == SyncType.INCREMENTAL
-            result = service.sync(
+            result = cast(
+                SyncResult,
+                service.sync(
                 client=self.client,
                 incremental=incremental,
                 batch_size=self.config.batch_size,
+                ),
             )
             return result
 

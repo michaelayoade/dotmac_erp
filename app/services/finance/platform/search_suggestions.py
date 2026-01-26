@@ -19,7 +19,7 @@ from app.models.finance.ap.supplier import Supplier
 from app.models.finance.gl.account import Account
 from app.models.finance.inv.item import Item
 from app.models.finance.tax.tax_code import TaxCode
-from app.models.finance.banking.bank_account import BankAccount
+from app.models.finance.banking.bank_account import BankAccount, BankAccountStatus
 
 
 @dataclass
@@ -32,7 +32,7 @@ class SearchSuggestion:
     meta: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
-        result = {"id": self.id, "label": self.label}
+        result: Dict[str, Any] = {"id": self.id, "label": self.label}
         if self.subtitle:
             result["subtitle"] = self.subtitle
         if self.category:
@@ -316,7 +316,7 @@ class SearchSuggestionsService:
         base_query = (
             db.query(BankAccount)
             .filter(BankAccount.organization_id == org_id)
-            .filter(BankAccount.is_active == True)
+            .filter(BankAccount.status == BankAccountStatus.active)
             .filter(
                 or_(
                     func.lower(BankAccount.account_name).contains(q),

@@ -162,7 +162,7 @@ async def settings_index(
             },
             {
                 "title": "Payments",
-                "description": "Configure payment gateway integration (Paystack).",
+                "description": "Configure payment providers and gateway integrations.",
                 "url": "/settings/payments",
                 "icon": "credit-card",
             },
@@ -386,7 +386,7 @@ async def toggle_feature(
     form_data = getattr(request.state, "csrf_form", None)
     if form_data is None:
         form_data = await request.form()
-    enabled = form_data.get("enabled", "false").lower() == "true"
+    enabled = str(form_data.get("enabled", "false")).lower() == "true"
 
     success, error = settings_web_service.toggle_feature(
         db, auth.organization_id, feature_key, enabled
@@ -406,27 +406,42 @@ async def toggle_feature(
 
 
 @router.get("/payments", response_class=HTMLResponse)
-async def payments_settings(
+async def payments_settings_index(
     request: Request,
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
-    """Payments configuration page."""
+    """Payments settings landing page."""
     result = settings_web_service.get_payments_settings_context(db, auth.organization_id)
 
-    context = base_context(request, auth, "Payments Configuration", "settings", db=db)
+    context = base_context(request, auth, "Payments Settings", "settings", db=db)
     context.update(result)
 
-    return templates.TemplateResponse(request, "finance/settings/payments.html", context)
+    return templates.TemplateResponse(request, "finance/settings/payments_index.html", context)
 
 
-@router.post("/payments", response_class=HTMLResponse)
-async def update_payments_settings(
+@router.get("/payments/paystack", response_class=HTMLResponse)
+async def paystack_settings(
     request: Request,
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
-    """Update payments settings."""
+    """Paystack settings page."""
+    result = settings_web_service.get_payments_settings_context(db, auth.organization_id)
+
+    context = base_context(request, auth, "Paystack Settings", "settings", db=db)
+    context.update(result)
+
+    return templates.TemplateResponse(request, "finance/settings/paystack.html", context)
+
+
+@router.post("/payments/paystack", response_class=HTMLResponse)
+async def update_paystack_settings(
+    request: Request,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Update Paystack settings."""
     form_data = getattr(request.state, "csrf_form", None)
     if form_data is None:
         form_data = await request.form()
@@ -438,12 +453,12 @@ async def update_payments_settings(
 
     if not success:
         result = settings_web_service.get_payments_settings_context(db, auth.organization_id)
-        context = base_context(request, auth, "Payments Configuration", "settings", db=db)
+        context = base_context(request, auth, "Paystack Settings", "settings", db=db)
         context.update(result)
         context["error"] = error
-        return templates.TemplateResponse(request, "finance/settings/payments.html", context)
+        return templates.TemplateResponse(request, "finance/settings/paystack.html", context)
 
-    return RedirectResponse(url="/settings/payments?saved=1", status_code=303)
+    return RedirectResponse(url="/settings/payments/paystack?saved=1", status_code=303)
 
 
 # ========== Branding Settings ==========

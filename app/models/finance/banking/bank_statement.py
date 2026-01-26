@@ -7,8 +7,8 @@ Represents imported bank statements and their transaction lines.
 import enum
 from datetime import date, datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, List
-from uuid import uuid4
+from typing import TYPE_CHECKING, List, Optional
+from uuid import UUID, uuid4
 
 from sqlalchemy import (
     Boolean,
@@ -22,7 +22,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID as SAUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.config import settings
@@ -67,21 +67,21 @@ class BankStatement(Base):
 
     # Primary key
     statement_id: Mapped[UUID] = mapped_column(
-        UUID(as_uuid=True),
+        SAUUID(as_uuid=True),
         primary_key=True,
         default=uuid4,
     )
 
     # Organization
     organization_id: Mapped[UUID] = mapped_column(
-        UUID(as_uuid=True),
+        SAUUID(as_uuid=True),
         nullable=False,
         index=True,
     )
 
     # Bank account reference
     bank_account_id: Mapped[UUID] = mapped_column(
-        UUID(as_uuid=True),
+        SAUUID(as_uuid=True),
         ForeignKey("banking.bank_accounts.bank_account_id", ondelete="CASCADE"),
         nullable=False,
     )
@@ -134,7 +134,7 @@ class BankStatement(Base):
         nullable=False,
         default=datetime.utcnow,
     )
-    imported_by: Mapped[UUID] = mapped_column(UUID(as_uuid=True), nullable=True)
+    imported_by: Mapped[Optional[UUID]] = mapped_column(SAUUID(as_uuid=True), nullable=True)
 
     # Line counts
     total_lines: Mapped[int] = mapped_column(nullable=False, default=0)
@@ -203,14 +203,14 @@ class BankStatementLine(Base):
 
     # Primary key
     line_id: Mapped[UUID] = mapped_column(
-        UUID(as_uuid=True),
+        SAUUID(as_uuid=True),
         primary_key=True,
         default=uuid4,
     )
 
     # Statement reference
     statement_id: Mapped[UUID] = mapped_column(
-        UUID(as_uuid=True),
+        SAUUID(as_uuid=True),
         ForeignKey("banking.bank_statements.statement_id", ondelete="CASCADE"),
         nullable=False,
     )
@@ -250,12 +250,12 @@ class BankStatementLine(Base):
 
     # Matching status
     is_matched: Mapped[bool] = mapped_column(Boolean, default=False)
-    matched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
-    matched_by: Mapped[UUID] = mapped_column(UUID(as_uuid=True), nullable=True)
+    matched_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    matched_by: Mapped[Optional[UUID]] = mapped_column(SAUUID(as_uuid=True), nullable=True)
 
     # GL matching (for matched transactions)
-    matched_journal_line_id: Mapped[UUID] = mapped_column(
-        UUID(as_uuid=True),
+    matched_journal_line_id: Mapped[Optional[UUID]] = mapped_column(
+        SAUUID(as_uuid=True),
         nullable=True,
     )
 

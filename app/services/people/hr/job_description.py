@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import date, datetime, timezone
+from decimal import Decimal
 from typing import TYPE_CHECKING, List, Optional
 
 from sqlalchemy import select, func, and_
@@ -21,6 +22,7 @@ from app.models.people.hr import (
     Department,
 )
 from app.services.common import PaginatedResult, PaginationParams, paginate
+from app.services.people.hr.errors import ValidationError
 
 if TYPE_CHECKING:
     from app.auth import Principal
@@ -140,9 +142,8 @@ class CompetencyService:
         return PaginatedResult(
             items=list(results),
             total=len(results),
-            page=1,
-            page_size=len(results),
-            pages=1,
+            offset=0,
+            limit=len(results),
         )
 
     def create_competency(
@@ -182,7 +183,7 @@ class CompetencyService:
         )
 
         if self.principal:
-            competency.created_by = str(self.principal.user_id)
+            competency.created_by_id = self.principal.user_id
 
         self.db.add(competency)
         return competency
@@ -205,12 +206,24 @@ class CompetencyService:
                     f"Competency with code '{data['competency_code']}' already exists"
                 )
 
+        allowed_fields = {
+            "competency_code",
+            "competency_name",
+            "category",
+            "description",
+            "level_1_description",
+            "level_2_description",
+            "level_3_description",
+            "level_4_description",
+            "level_5_description",
+            "is_active",
+        }
         for key, value in data.items():
-            if hasattr(competency, key):
+            if key in allowed_fields:
                 setattr(competency, key, value)
 
         if self.principal:
-            competency.modified_by = str(self.principal.user_id)
+            competency.updated_by_id = self.principal.user_id
 
         return competency
 
@@ -223,7 +236,7 @@ class CompetencyService:
         competency.is_deleted = True
         competency.deleted_at = datetime.now(timezone.utc)
         if self.principal:
-            competency.deleted_by = str(self.principal.user_id)
+            competency.deleted_by_id = self.principal.user_id
 
 
 # =============================================================================
@@ -243,6 +256,20 @@ class JobDescriptionService:
         self.db = db
         self.organization_id = organization_id
         self.principal = principal
+
+    def _validate_org_reference(
+        self,
+        model: type,
+        entity_id: Optional[uuid.UUID],
+        label: str,
+    ) -> None:
+        if entity_id is None:
+            return
+        record = self.db.get(model, entity_id)
+        if not record or getattr(record, "organization_id", None) != self.organization_id:
+            raise ValidationError(f"{label} {entity_id} not found")
+        if getattr(record, "is_deleted", False):
+            raise ValidationError(f"{label} {entity_id} not found")
 
     def get_job_description(
         self, jd_id: uuid.UUID, *, load_competencies: bool = False
@@ -325,9 +352,8 @@ class JobDescriptionService:
         return PaginatedResult(
             items=list(results),
             total=len(results),
-            page=1,
-            page_size=len(results),
-            pages=1,
+            offset=0,
+            limit=len(results),
         )
 
     def create_job_description(
@@ -362,6 +388,9 @@ class JobDescriptionService:
         if existing:
             raise DuplicateCodeError(f"Job description with code '{jd_code}' already exists")
 
+        self._validate_org_reference(Designation, designation_id, "Designation")
+        self._validate_org_reference(Department, department_id, "Department")
+
         jd = JobDescription(
             organization_id=self.organization_id,
             jd_code=jd_code,
@@ -389,7 +418,7 @@ class JobDescriptionService:
         )
 
         if self.principal:
-            jd.created_by = str(self.principal.user_id)
+            jd.created_by_id = self.principal.user_id
 
         self.db.add(jd)
         return jd
@@ -412,12 +441,42 @@ class JobDescriptionService:
                     f"Job description with code '{data['jd_code']}' already exists"
                 )
 
+        if "designation_id" in data:
+            self._validate_org_reference(Designation, data["designation_id"], "Designation")
+        if "department_id" in data:
+            self._validate_org_reference(Department, data["department_id"], "Department")
+
+        allowed_fields = {
+            "jd_code",
+            "job_title",
+            "designation_id",
+            "department_id",
+            "summary",
+            "purpose",
+            "key_responsibilities",
+            "education_requirements",
+            "experience_requirements",
+            "min_years_experience",
+            "max_years_experience",
+            "technical_skills",
+            "certifications_required",
+            "certifications_preferred",
+            "work_location",
+            "travel_requirements",
+            "physical_requirements",
+            "reports_to",
+            "direct_reports",
+            "additional_notes",
+            "status",
+            "effective_from",
+            "effective_to",
+        }
         for key, value in data.items():
-            if hasattr(jd, key):
+            if key in allowed_fields:
                 setattr(jd, key, value)
 
         if self.principal:
-            jd.modified_by = str(self.principal.user_id)
+            jd.updated_by_id = self.principal.user_id
 
         return jd
 
@@ -430,7 +489,7 @@ class JobDescriptionService:
         jd.is_deleted = True
         jd.deleted_at = datetime.now(timezone.utc)
         if self.principal:
-            jd.deleted_by = str(self.principal.user_id)
+            jd.deleted_by_id = self.principal.user_id
 
     def activate_job_description(self, jd_id: uuid.UUID) -> JobDescription:
         """Activate a job description."""
@@ -443,7 +502,7 @@ class JobDescriptionService:
             jd.effective_from = date.today()
 
         if self.principal:
-            jd.modified_by = str(self.principal.user_id)
+            jd.updated_by_id = self.principal.user_id
 
         return jd
 
@@ -457,7 +516,7 @@ class JobDescriptionService:
         jd.effective_to = date.today()
 
         if self.principal:
-            jd.modified_by = str(self.principal.user_id)
+            jd.updated_by_id = self.principal.user_id
 
         return jd
 
@@ -479,6 +538,7 @@ class JobDescriptionService:
         jd = self.get_job_description(jd_id)
         if not jd:
             raise JobDescriptionNotFoundError(f"Job description {jd_id} not found")
+        self._validate_org_reference(Competency, competency_id, "Competency")
 
         # Check if competency already exists for this JD
         stmt = select(JobDescriptionCompetency).where(
@@ -492,7 +552,7 @@ class JobDescriptionService:
             # Update existing
             existing.required_level = required_level
             if weight is not None:
-                existing.weight = weight
+                existing.weight = Decimal(str(weight))
             existing.is_mandatory = is_mandatory
             existing.notes = notes
             return existing
@@ -501,13 +561,13 @@ class JobDescriptionService:
             job_description_id=jd_id,
             competency_id=competency_id,
             required_level=required_level,
-            weight=weight,
+            weight=Decimal(str(weight)) if weight is not None else None,
             is_mandatory=is_mandatory,
             notes=notes,
         )
 
         if self.principal:
-            jd_competency.created_by = str(self.principal.user_id)
+            jd_competency.created_by_id = self.principal.user_id
 
         self.db.add(jd_competency)
         return jd_competency

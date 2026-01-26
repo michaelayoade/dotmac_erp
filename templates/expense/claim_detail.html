@@ -45,6 +45,12 @@
                     Pay with Paystack
                 </a>
                 {% endif %}
+                {% if can_submit %}
+                <form method="post" action="/expense/claims/{{ claim.claim_id }}/submit">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <button type="submit" class="btn btn-primary">Submit for Approval</button>
+                </form>
+                {% endif %}
                 {% if can_act %}
                 <form method="post" action="/expense/claims/{{ claim.claim_id }}/approve">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">

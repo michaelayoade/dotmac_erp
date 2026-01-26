@@ -15,6 +15,7 @@ from threading import Lock
 from typing import Callable
 
 from fastapi import HTTPException, Request, status
+from starlette.middleware.base import RequestResponseEndpoint
 from starlette.responses import JSONResponse, Response
 
 logger = logging.getLogger(__name__)
@@ -146,7 +147,8 @@ class RedisRateLimiter:
                 socket_timeout=2,
             )
             # Test connection
-            self._client.ping()
+            if self._client is not None:
+                self._client.ping()
             self._available = True
             logger.info("Redis rate limiter initialized successfully")
         except ImportError:
@@ -171,7 +173,10 @@ class RedisRateLimiter:
         window_start = now - window_seconds
         redis_key = f"ratelimit:{key}"
 
-        pipe = self._client.pipeline()
+        client = self._client
+        if client is None:
+            raise RuntimeError("Redis not available")
+        pipe = client.pipeline()
         try:
             # Remove old entries
             pipe.zremrangebyscore(redis_key, 0, window_start)
@@ -194,7 +199,7 @@ class RedisRateLimiter:
                 else:
                     retry_after = window_seconds
                 # Remove the entry we just added since we're rejecting
-                self._client.zrem(redis_key, str(now))
+                client.zrem(redis_key, str(now))
                 return True, 0, retry_after
 
             remaining = max_requests - current_count - 1
@@ -206,7 +211,7 @@ class RedisRateLimiter:
 
     def reset(self, key: str) -> None:
         """Reset rate limit for a key."""
-        if self.is_available:
+        if self.is_available and self._client is not None:
             self._client.delete(f"ratelimit:{key}")
 
 
@@ -292,7 +297,7 @@ def _make_rate_limit_key(request: Request, config: RateLimitConfig) -> str:
     return f"{_get_client_ip(request)}:{request.url.path}"
 
 
-async def rate_limit_middleware(request: Request, call_next) -> Response:
+async def rate_limit_middleware(request: Request, call_next: RequestResponseEndpoint) -> Response:
     """Middleware that enforces rate limits on configured endpoints."""
     path = request.url.path
 

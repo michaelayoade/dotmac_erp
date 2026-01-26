@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import date, datetime, timezone
+from decimal import Decimal
 from typing import TYPE_CHECKING, List, Optional
 
 from sqlalchemy import select, func
@@ -98,6 +99,18 @@ class EmployeeDocumentService:
         self.organization_id = organization_id
         self.principal = principal
 
+    def _get_employee(self, employee_id: uuid.UUID) -> Employee:
+        employee = self.db.scalar(
+            select(Employee).where(
+                Employee.employee_id == employee_id,
+                Employee.organization_id == self.organization_id,
+                Employee.is_deleted == False,
+            )
+        )
+        if not employee:
+            raise EmployeeExtendedDataError(f"Employee {employee_id} not found")
+        return employee
+
     def list_documents(
         self,
         employee_id: uuid.UUID,
@@ -155,6 +168,7 @@ class EmployeeDocumentService:
         expiry_date: Optional[date] = None,
     ) -> EmployeeDocument:
         """Create a new document record."""
+        self._get_employee(employee_id)
         doc = EmployeeDocument(
             organization_id=self.organization_id,
             employee_id=employee_id,
@@ -254,6 +268,18 @@ class EmployeeQualificationService:
         self.organization_id = organization_id
         self.principal = principal
 
+    def _get_employee(self, employee_id: uuid.UUID) -> Employee:
+        employee = self.db.scalar(
+            select(Employee).where(
+                Employee.employee_id == employee_id,
+                Employee.organization_id == self.organization_id,
+                Employee.is_deleted == False,
+            )
+        )
+        if not employee:
+            raise EmployeeExtendedDataError(f"Employee {employee_id} not found")
+        return employee
+
     def list_qualifications(
         self,
         employee_id: uuid.UUID,
@@ -310,6 +336,7 @@ class EmployeeQualificationService:
         notes: Optional[str] = None,
     ) -> EmployeeQualification:
         """Create a new qualification record."""
+        self._get_employee(employee_id)
         qual = EmployeeQualification(
             organization_id=self.organization_id,
             employee_id=employee_id,
@@ -385,6 +412,18 @@ class EmployeeCertificationService:
         self.organization_id = organization_id
         self.principal = principal
 
+    def _get_employee(self, employee_id: uuid.UUID) -> Employee:
+        employee = self.db.scalar(
+            select(Employee).where(
+                Employee.employee_id == employee_id,
+                Employee.organization_id == self.organization_id,
+                Employee.is_deleted == False,
+            )
+        )
+        if not employee:
+            raise EmployeeExtendedDataError(f"Employee {employee_id} not found")
+        return employee
+
     def list_certifications(
         self,
         employee_id: uuid.UUID,
@@ -440,6 +479,7 @@ class EmployeeCertificationService:
         notes: Optional[str] = None,
     ) -> EmployeeCertification:
         """Create a new certification record."""
+        self._get_employee(employee_id)
         cert = EmployeeCertification(
             organization_id=self.organization_id,
             employee_id=employee_id,
@@ -545,6 +585,18 @@ class EmployeeDependentService:
         self.organization_id = organization_id
         self.principal = principal
 
+    def _get_employee(self, employee_id: uuid.UUID) -> Employee:
+        employee = self.db.scalar(
+            select(Employee).where(
+                Employee.employee_id == employee_id,
+                Employee.organization_id == self.organization_id,
+                Employee.is_deleted == False,
+            )
+        )
+        if not employee:
+            raise EmployeeExtendedDataError(f"Employee {employee_id} not found")
+        return employee
+
     def list_dependents(
         self,
         employee_id: uuid.UUID,
@@ -560,7 +612,7 @@ class EmployeeDependentService:
         )
 
         if relationship:
-            query = query.where(EmployeeDependent.relationship == relationship)
+            query = query.where(EmployeeDependent.relation_type == relationship)
         if emergency_contacts_only:
             query = query.where(EmployeeDependent.is_emergency_contact == True)
         if beneficiaries_only:
@@ -610,6 +662,7 @@ class EmployeeDependentService:
         """Create a new dependent record."""
         from app.models.people.hr.employee_extended import Gender as DepGender
 
+        self._get_employee(employee_id)
         dep = EmployeeDependent(
             organization_id=self.organization_id,
             employee_id=employee_id,
@@ -789,6 +842,30 @@ class EmployeeSkillService:
         self.organization_id = organization_id
         self.principal = principal
 
+    def _get_employee(self, employee_id: uuid.UUID) -> Employee:
+        employee = self.db.scalar(
+            select(Employee).where(
+                Employee.employee_id == employee_id,
+                Employee.organization_id == self.organization_id,
+                Employee.is_deleted == False,
+            )
+        )
+        if not employee:
+            raise EmployeeExtendedDataError(f"Employee {employee_id} not found")
+        return employee
+
+    def _get_skill(self, skill_id: uuid.UUID) -> Skill:
+        skill = self.db.scalar(
+            select(Skill).where(
+                Skill.skill_id == skill_id,
+                Skill.organization_id == self.organization_id,
+                Skill.is_deleted == False,
+            )
+        )
+        if not skill:
+            raise SkillNotFoundError(f"Skill {skill_id} not found")
+        return skill
+
     def list_employee_skills(
         self,
         employee_id: uuid.UUID,
@@ -855,13 +932,15 @@ class EmployeeSkillService:
         # Validate proficiency level
         if not 1 <= proficiency_level <= 5:
             raise ValueError("Proficiency level must be between 1 and 5")
+        self._get_employee(employee_id)
+        self._get_skill(skill_id)
 
         emp_skill = EmployeeSkill(
             organization_id=self.organization_id,
             employee_id=employee_id,
             skill_id=skill_id,
             proficiency_level=proficiency_level,
-            years_experience=years_experience,
+            years_experience=Decimal(str(years_experience)) if years_experience is not None else None,
             last_used_date=last_used_date,
             is_primary=is_primary,
             is_certified=is_certified,
@@ -892,7 +971,7 @@ class EmployeeSkillService:
                 raise ValueError("Proficiency level must be between 1 and 5")
             emp_skill.proficiency_level = proficiency_level
         if years_experience is not None:
-            emp_skill.years_experience = years_experience
+            emp_skill.years_experience = Decimal(str(years_experience))
         if last_used_date is not None:
             emp_skill.last_used_date = last_used_date
         if is_primary is not None:

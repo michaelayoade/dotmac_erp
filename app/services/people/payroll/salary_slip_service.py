@@ -632,6 +632,34 @@ class SalarySlipService:
             .all()
         )
 
+    @staticmethod
+    def count(
+        db: Session,
+        organization_id: UUID,
+        employee_id: Optional[UUID] = None,
+        status: Optional[SalarySlipStatus] = None,
+        from_date: Optional[date] = None,
+        to_date: Optional[date] = None,
+    ) -> int:
+        """Count salary slips with filters."""
+        org_id = coerce_uuid(organization_id)
+
+        query = db.query(SalarySlip).filter(SalarySlip.organization_id == org_id)
+
+        if employee_id:
+            query = query.filter(SalarySlip.employee_id == coerce_uuid(employee_id))
+
+        if status:
+            query = query.filter(SalarySlip.status == status)
+
+        if from_date:
+            query = query.filter(SalarySlip.start_date >= from_date)
+
+        if to_date:
+            query = query.filter(SalarySlip.end_date <= to_date)
+
+        return query.count()
+
 
 # Module-level singleton instance
 salary_slip_service = SalarySlipService()

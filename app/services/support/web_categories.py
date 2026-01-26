@@ -7,7 +7,7 @@ Handles category management template responses.
 import logging
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
-from fastapi import Request
+from fastapi import Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
@@ -144,7 +144,7 @@ class CategoryWebService:
         default_priority: Optional[str] = None,
         response_hours: Optional[int] = None,
         resolution_hours: Optional[int] = None,
-    ) -> RedirectResponse:
+    ) -> Response:
         """Create a new category."""
         org_id = coerce_uuid(auth.organization_id)
 
@@ -167,6 +167,11 @@ class CategoryWebService:
                 )
 
             db.commit()
+
+            if not category:
+                return self.category_form_response(
+                    request, auth, db, error="Category not created"
+                )
 
             return RedirectResponse(
                 url="/operations/support/categories",
@@ -195,7 +200,7 @@ class CategoryWebService:
         response_hours: Optional[int] = None,
         resolution_hours: Optional[int] = None,
         is_active: Optional[bool] = None,
-    ) -> RedirectResponse:
+    ) -> Response:
         """Update a category."""
         cid = coerce_uuid(category_id)
 

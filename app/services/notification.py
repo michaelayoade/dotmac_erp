@@ -9,7 +9,7 @@ import uuid
 from datetime import datetime, timedelta
 from typing import List, Optional
 
-from sqlalchemy import select, update, delete
+from sqlalchemy import select, update, delete, func
 from sqlalchemy.orm import Session
 
 from app.models.notification import (
@@ -292,9 +292,8 @@ class NotificationService:
         if organization_id:
             query = query.where(Notification.organization_id == organization_id)
 
-        return db.scalar(
-            query.with_only_columns(Notification.notification_id.count())
-        ) or 0
+        count_query = select(func.count()).select_from(query.subquery())
+        return db.scalar(count_query) or 0
 
     def list_notifications(
         self,

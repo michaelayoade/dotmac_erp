@@ -1,7 +1,7 @@
 """Organization routes - Departments, Designations, Employment Types, Grades."""
 
 from types import SimpleNamespace
-from typing import Optional
+from typing import Any, Optional
 from decimal import Decimal, InvalidOperation
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -30,6 +30,14 @@ from ._common import _parse_bool
 
 
 router = APIRouter()
+
+
+def _form_str(form: Any, key: str) -> str:
+    """Normalize form value to a trimmed string."""
+    value = form.get(key)
+    if value is None:
+        return ""
+    return str(value).strip()
 
 
 # =============================================================================
@@ -81,11 +89,11 @@ async def create_department(
     if form is None:
         form = await request.form()
 
-    department_code = (form.get("department_code") or "").strip()
-    department_name = (form.get("department_name") or "").strip()
-    description = (form.get("description") or "").strip()
-    parent_department_id = (form.get("parent_department_id") or "").strip()
-    head_id = (form.get("head_id") or "").strip()
+    department_code = _form_str(form, "department_code")
+    department_name = _form_str(form, "department_name")
+    description = _form_str(form, "description")
+    parent_department_id = _form_str(form, "parent_department_id")
+    head_id = _form_str(form, "head_id")
     is_active = _parse_bool(form.get("is_active"), True)
 
     if not department_code or not department_name:
@@ -151,11 +159,11 @@ async def update_department(
     if form is None:
         form = await request.form()
 
-    department_code = (form.get("department_code") or "").strip()
-    department_name = (form.get("department_name") or "").strip()
-    description = (form.get("description") or "").strip()
-    parent_department_id = (form.get("parent_department_id") or "").strip()
-    head_id = (form.get("head_id") or "").strip()
+    department_code = _form_str(form, "department_code")
+    department_name = _form_str(form, "department_name")
+    description = _form_str(form, "description")
+    parent_department_id = _form_str(form, "parent_department_id")
+    head_id = _form_str(form, "head_id")
     is_active = _parse_bool(form.get("is_active"), True)
 
     if not department_code or not department_name:
@@ -261,9 +269,9 @@ async def create_designation(
     if form is None:
         form = await request.form()
 
-    designation_code = (form.get("designation_code") or "").strip()
-    designation_name = (form.get("designation_name") or "").strip()
-    description = (form.get("description") or "").strip()
+    designation_code = _form_str(form, "designation_code")
+    designation_name = _form_str(form, "designation_name")
+    description = _form_str(form, "description")
     is_active = _parse_bool(form.get("is_active"), True)
 
     if not designation_code or not designation_name:
@@ -315,9 +323,9 @@ async def update_designation(
     if form is None:
         form = await request.form()
 
-    designation_code = (form.get("designation_code") or "").strip()
-    designation_name = (form.get("designation_name") or "").strip()
-    description = (form.get("description") or "").strip()
+    designation_code = _form_str(form, "designation_code")
+    designation_name = _form_str(form, "designation_name")
+    description = _form_str(form, "description")
     is_active = _parse_bool(form.get("is_active"), True)
 
     if not designation_code or not designation_name:
@@ -410,9 +418,9 @@ async def create_employment_type(
     if form is None:
         form = await request.form()
 
-    type_code = (form.get("type_code") or "").strip()
-    type_name = (form.get("type_name") or "").strip()
-    description = (form.get("description") or "").strip()
+    type_code = _form_str(form, "type_code")
+    type_name = _form_str(form, "type_name")
+    description = _form_str(form, "description")
     is_active = _parse_bool(form.get("is_active"), True)
 
     if not type_code or not type_name:
@@ -464,9 +472,9 @@ async def update_employment_type(
     if form is None:
         form = await request.form()
 
-    type_code = (form.get("type_code") or "").strip()
-    type_name = (form.get("type_name") or "").strip()
-    description = (form.get("description") or "").strip()
+    type_code = _form_str(form, "type_code")
+    type_name = _form_str(form, "type_name")
+    description = _form_str(form, "description")
     is_active = _parse_bool(form.get("is_active"), True)
 
     if not type_code or not type_name:
@@ -559,12 +567,12 @@ async def create_grade(
     if form is None:
         form = await request.form()
 
-    grade_code = (form.get("grade_code") or "").strip()
-    grade_name = (form.get("grade_name") or "").strip()
-    description = (form.get("description") or "").strip()
-    rank_value = (form.get("rank") or "").strip()
-    min_salary_value = (form.get("min_salary") or "").strip()
-    max_salary_value = (form.get("max_salary") or "").strip()
+    grade_code = _form_str(form, "grade_code")
+    grade_name = _form_str(form, "grade_name")
+    description = _form_str(form, "description")
+    rank_value = _form_str(form, "rank")
+    min_salary_value = _form_str(form, "min_salary")
+    max_salary_value = _form_str(form, "max_salary")
     is_active = _parse_bool(form.get("is_active"), True)
 
     errors = {
@@ -650,12 +658,12 @@ async def update_grade(
     if form is None:
         form = await request.form()
 
-    grade_code = (form.get("grade_code") or "").strip()
-    grade_name = (form.get("grade_name") or "").strip()
-    description = (form.get("description") or "").strip()
-    rank_value = (form.get("rank") or "").strip()
-    min_salary_value = (form.get("min_salary") or "").strip()
-    max_salary_value = (form.get("max_salary") or "").strip()
+    grade_code = _form_str(form, "grade_code")
+    grade_name = _form_str(form, "grade_name")
+    description = _form_str(form, "description")
+    rank_value = _form_str(form, "rank")
+    min_salary_value = _form_str(form, "min_salary")
+    max_salary_value = _form_str(form, "max_salary")
     is_active = _parse_bool(form.get("is_active"), True)
 
     errors = {

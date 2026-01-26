@@ -69,16 +69,18 @@ def create_supplier(
     db: Session = Depends(get_db),
 ):
     """Create a new supplier."""
+    # Thin wrapper: pass template-friendly names directly to service
+    # Service handles field mapping internally
     input_data = SupplierInput(
         supplier_code=payload.supplier_code,
-        supplier_type=parse_enum(SupplierType, payload.supplier_type),
-        legal_name=payload.legal_name,
+        supplier_type=parse_enum(SupplierType, payload.supplier_type) or SupplierType.VENDOR,
+        supplier_name=payload.supplier_name,  # Template-friendly name
         trading_name=payload.trading_name,
-        tax_identification_number=payload.tax_identification_number,
+        tax_id=payload.tax_id,  # Template-friendly name
         payment_terms_days=payload.payment_terms_days,
         currency_code=payload.currency_code,
         default_expense_account_id=payload.default_expense_account_id,
-        ap_control_account_id=payload.ap_control_account_id,
+        default_payable_account_id=payload.default_payable_account_id,  # Template-friendly name
     )
     return supplier_service.create_supplier(db, organization_id, input_data)
 

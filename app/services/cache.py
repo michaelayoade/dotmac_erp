@@ -14,7 +14,7 @@ import json
 import logging
 import os
 from datetime import timedelta
-from typing import Any, Callable, Optional, TypeVar, Union
+from typing import Any, Callable, Optional, TypeVar, Union, cast
 from uuid import UUID
 
 import redis
@@ -132,19 +132,26 @@ class CacheService:
         Returns:
             Cached value or default
         """
-        if not self.is_available:
+        client = self.client
+        if client is None:
             return default
 
         try:
             full_key = self._make_key(key)
-            value = self.client.get(full_key)
+            value_any = cast(Any, client.get(full_key))
 
-            if value is None:
+            if value_any is None:
                 logger.debug("Cache miss: %s", key)
                 return default
 
             logger.debug("Cache hit: %s", key)
-            return self._deserialize(value)
+            if isinstance(value_any, bytes):
+                value_str = value_any.decode("utf-8")
+            elif isinstance(value_any, str):
+                value_str = value_any
+            else:
+                value_str = str(value_any)
+            return cast(Optional[T], self._deserialize(value_str))
 
         except redis.RedisError as e:
             logger.warning("Cache get error for %s: %s", key, e)
@@ -167,7 +174,8 @@ class CacheService:
         Returns:
             True if successful
         """
-        if not self.is_available:
+        client = self.client
+        if client is None:
             return False
 
         ttl = ttl_seconds or self.TTL_DEFAULT
@@ -175,7 +183,7 @@ class CacheService:
         try:
             full_key = self._make_key(key)
             serialized = self._serialize(value)
-            self.client.setex(full_key, ttl, serialized)
+            client.setex(full_key, ttl, serialized)
             logger.debug("Cache set: %s (ttl=%ds)", key, ttl)
             return True
 
@@ -193,14 +201,15 @@ class CacheService:
         Returns:
             True if deleted
         """
-        if not self.is_available:
+        client = self.client
+        if client is None:
             return False
 
         try:
             full_key = self._make_key(key)
-            deleted = self.client.delete(full_key)
-            logger.debug("Cache delete: %s (deleted=%d)", key, deleted)
-            return deleted > 0
+            deleted_any = cast(Any, client.delete(full_key))
+            logger.debug("Cache delete: %s (deleted=%d)", key, deleted_any)
+            return int(deleted_any) > 0
 
         except redis.RedisError as e:
             logger.warning("Cache delete error for %s: %s", key, e)
@@ -216,19 +225,20 @@ class CacheService:
         Returns:
             Number of keys deleted
         """
-        if not self.is_available:
+        client = self.client
+        if client is None:
             return 0
 
         try:
             full_pattern = self._make_key(pattern)
-            keys = list(self.client.scan_iter(match=full_pattern, count=100))
+            keys = list(client.scan_iter(match=full_pattern, count=100))
 
             if not keys:
                 return 0
 
-            deleted = self.client.delete(*keys)
-            logger.debug("Cache delete pattern: %s (deleted=%d)", pattern, deleted)
-            return deleted
+            deleted_any = cast(Any, client.delete(*keys))
+            logger.debug("Cache delete pattern: %s (deleted=%d)", pattern, deleted_any)
+            return int(deleted_any)
 
         except redis.RedisError as e:
             logger.warning("Cache delete_pattern error for %s: %s", pattern, e)

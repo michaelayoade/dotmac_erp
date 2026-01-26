@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
-from typing import Optional
+from typing import List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -469,7 +469,7 @@ class PriceListService(ListResponseMixin):
         currency_code: Optional[str] = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> list[PriceList]:
+    ) -> List[PriceList]:
         """List price lists with optional filters."""
         query = db.query(PriceList)
 
@@ -495,7 +495,7 @@ class PriceListService(ListResponseMixin):
         item_id: Optional[str] = None,
         limit: int = 100,
         offset: int = 0,
-    ) -> list[PriceListItem]:
+    ) -> List[PriceListItem]:
         """List items in a price list."""
         pl_id = coerce_uuid(price_list_id)
 

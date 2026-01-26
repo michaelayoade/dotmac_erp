@@ -9,8 +9,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.finance.gl.account import Account
-from app.models.finance.ar.customer import Customer
-from app.models.finance.ap.supplier import Supplier
+from app.models.finance.ar.customer import Customer, CustomerType
+from app.models.finance.ap.supplier import Supplier, SupplierType
 from app.services.erpnext.mappings.contacts import CustomerMapping, SupplierMapping
 
 from .base import BaseSyncService
@@ -99,7 +99,8 @@ class CustomerSyncService(BaseSyncService[Customer]):
         data.pop("_source_modified", None)
 
         # Map customer type - stored as VARCHAR
-        customer_type = CUSTOMER_TYPE_MAP.get(data.get("customer_type", ""), "COMPANY")
+        customer_type_value = CUSTOMER_TYPE_MAP.get(data.get("customer_type", ""), "COMPANY")
+        customer_type = CustomerType(customer_type_value)
 
         # Generate customer code from source name
         customer_code = (data.get("customer_code") or "CUST")[:30]
@@ -115,7 +116,7 @@ class CustomerSyncService(BaseSyncService[Customer]):
             trading_name=(data.get("trading_name") or legal_name)[:200],
             customer_type=customer_type,
             currency_code=(data.get("currency_code") or "NGN")[:3],
-            tax_identification_number=data.get("tax_id")[:50] if data.get("tax_id") else None,
+            tax_identification_number=str(data.get("tax_id") or "")[:50] or None,
             ar_control_account_id=ar_account_id,
             credit_terms_days=30,  # Default credit terms
             risk_category="MEDIUM",  # Default risk category
@@ -133,9 +134,12 @@ class CustomerSyncService(BaseSyncService[Customer]):
 
         entity.legal_name = (data.get("legal_name") or entity.legal_name)[:200]
         entity.trading_name = (data.get("trading_name") or entity.legal_name)[:200]
-        entity.customer_type = CUSTOMER_TYPE_MAP.get(data.get("customer_type", ""), entity.customer_type)
+        customer_type_value = CUSTOMER_TYPE_MAP.get(
+            data.get("customer_type", ""), entity.customer_type.value
+        )
+        entity.customer_type = CustomerType(customer_type_value)
         entity.currency_code = (data.get("currency_code") or "NGN")[:3]
-        entity.tax_identification_number = data.get("tax_id")[:50] if data.get("tax_id") else None
+        entity.tax_identification_number = str(data.get("tax_id") or "")[:50] or None
         entity.is_active = data.get("is_active", True)
 
         return entity
@@ -228,7 +232,8 @@ class SupplierSyncService(BaseSyncService[Supplier]):
         data.pop("_source_modified", None)
 
         # Map supplier type - stored as VARCHAR enum
-        supplier_type = SUPPLIER_TYPE_MAP.get(data.get("supplier_type", ""), "VENDOR")
+        supplier_type_value = SUPPLIER_TYPE_MAP.get(data.get("supplier_type", ""), "VENDOR")
+        supplier_type = SupplierType(supplier_type_value)
 
         supplier_code = (data.get("supplier_code") or "SUPP")[:30]
         legal_name = (data.get("legal_name") or supplier_code)[:200]
@@ -243,7 +248,7 @@ class SupplierSyncService(BaseSyncService[Supplier]):
             trading_name=(data.get("trading_name") or legal_name)[:200],
             supplier_type=supplier_type,
             currency_code=(data.get("currency_code") or "NGN")[:3],
-            tax_identification_number=data.get("tax_id")[:50] if data.get("tax_id") else None,
+            tax_identification_number=str(data.get("tax_id") or "")[:50] or None,
             ap_control_account_id=ap_account_id,
             is_active=data.get("is_active", True),
             created_by_user_id=self.user_id,
@@ -257,9 +262,12 @@ class SupplierSyncService(BaseSyncService[Supplier]):
 
         entity.legal_name = (data.get("legal_name") or entity.legal_name)[:200]
         entity.trading_name = (data.get("trading_name") or entity.legal_name)[:200]
-        entity.supplier_type = SUPPLIER_TYPE_MAP.get(data.get("supplier_type", ""), entity.supplier_type)
+        supplier_type_value = SUPPLIER_TYPE_MAP.get(
+            data.get("supplier_type", ""), entity.supplier_type.value
+        )
+        entity.supplier_type = SupplierType(supplier_type_value)
         entity.currency_code = (data.get("currency_code") or "NGN")[:3]
-        entity.tax_identification_number = data.get("tax_id")[:50] if data.get("tax_id") else None
+        entity.tax_identification_number = str(data.get("tax_id") or "")[:50] or None
         entity.is_active = data.get("is_active", True)
 
         return entity

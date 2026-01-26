@@ -40,6 +40,7 @@ class OfferStatus(str, enum.Enum):
     APPROVED = "APPROVED"
     EXTENDED = "EXTENDED"  # Sent to candidate
     ACCEPTED = "ACCEPTED"
+    CONVERTED = "CONVERTED"
     DECLINED = "DECLINED"
     WITHDRAWN = "WITHDRAWN"
     EXPIRED = "EXPIRED"

@@ -17,6 +17,7 @@ from app.api.deps import require_organization_id, require_tenant_auth
 from app.services.auth_dependencies import require_tenant_permission
 from app.api.finance.utils import parse_enum
 from app.db import SessionLocal
+from app.models.finance.tax.tax_code import TaxType
 from app.models.finance.tax.tax_period import TaxPeriodStatus, TaxPeriodFrequency
 from app.models.finance.tax.tax_return import TaxReturnStatus, TaxReturnType
 from app.models.finance.tax.tax_transaction import TaxTransactionType
@@ -63,10 +64,22 @@ class TaxJurisdictionCreate(BaseModel):
     jurisdiction_code: str = Field(max_length=20)
     jurisdiction_name: str = Field(max_length=100)
     country_code: str = Field(max_length=3)
-    tax_authority_name: Optional[str] = None
+    jurisdiction_level: str = Field(max_length=30, default="COUNTRY")  # COUNTRY, STATE, LOCAL
     currency_code: str = Field(max_length=3)
-    corporate_tax_rate: Decimal = Decimal("0")
-    effective_date: date
+    current_tax_rate: Decimal = Field(default=Decimal("0"), description="Current tax rate (e.g., 0.30 for 30%)")
+    tax_rate_effective_from: date
+    # GL Accounts (required for tax posting)
+    current_tax_payable_account_id: UUID
+    current_tax_expense_account_id: UUID
+    deferred_tax_asset_account_id: UUID
+    deferred_tax_liability_account_id: UUID
+    deferred_tax_expense_account_id: UUID
+    # Optional fields
+    description: Optional[str] = None
+    state_province: Optional[str] = None
+    tax_authority_name: Optional[str] = None
+    fiscal_year_end_month: int = Field(default=12, ge=1, le=12)
+    filing_due_months: int = Field(default=6, ge=1)
 
 
 class TaxJurisdictionRead(BaseModel):
@@ -79,8 +92,11 @@ class TaxJurisdictionRead(BaseModel):
     jurisdiction_code: str
     jurisdiction_name: str
     country_code: str
+    jurisdiction_level: str
+    current_tax_rate: Decimal
+    tax_rate_effective_from: date
+    currency_code: str
     tax_authority_name: Optional[str]
-    corporate_tax_rate: Decimal
     is_active: bool
 
 
@@ -109,9 +125,9 @@ class TaxCodeRead(BaseModel):
     tax_name: str
     tax_type: str
     jurisdiction_id: UUID
-    rate: Decimal
-    effective_date: date
-    end_date: Optional[date]
+    tax_rate: Decimal
+    effective_from: date
+    effective_to: Optional[date]
     is_recoverable: bool
     is_active: bool
 
@@ -316,10 +332,20 @@ def create_jurisdiction(
         jurisdiction_code=payload.jurisdiction_code,
         jurisdiction_name=payload.jurisdiction_name,
         country_code=payload.country_code,
-        tax_authority_name=payload.tax_authority_name,
+        jurisdiction_level=payload.jurisdiction_level,
+        current_tax_rate=payload.current_tax_rate,
+        tax_rate_effective_from=payload.tax_rate_effective_from,
         currency_code=payload.currency_code,
-        corporate_tax_rate=payload.corporate_tax_rate,
-        effective_date=payload.effective_date,
+        current_tax_payable_account_id=payload.current_tax_payable_account_id,
+        current_tax_expense_account_id=payload.current_tax_expense_account_id,
+        deferred_tax_asset_account_id=payload.deferred_tax_asset_account_id,
+        deferred_tax_liability_account_id=payload.deferred_tax_liability_account_id,
+        deferred_tax_expense_account_id=payload.deferred_tax_expense_account_id,
+        description=payload.description,
+        state_province=payload.state_province,
+        tax_authority_name=payload.tax_authority_name,
+        fiscal_year_end_month=payload.fiscal_year_end_month,
+        filing_due_months=payload.filing_due_months,
     )
     return tax_jurisdiction_service.create_jurisdiction(db, organization_id, input_data)
 
@@ -376,12 +402,13 @@ def create_tax_code(
     input_data = TaxCodeInput(
         tax_code=payload.tax_code,
         tax_name=payload.tax_name,
-        tax_type=payload.tax_type,
+        tax_type=parse_enum(TaxType, payload.tax_type),
         jurisdiction_id=payload.jurisdiction_id,
-        rate=payload.rate,
-        effective_date=payload.effective_date,
-        end_date=payload.end_date,
-        tax_account_id=payload.tax_account_id,
+        tax_rate=payload.rate,
+        effective_from=payload.effective_date,
+        effective_to=payload.end_date,
+        tax_collected_account_id=payload.tax_account_id,
+        tax_paid_account_id=payload.tax_account_id,
         is_recoverable=payload.is_recoverable,
     )
     return tax_code_service.create_tax_code(db, organization_id, input_data)

@@ -234,7 +234,7 @@ class OpeningBalanceImporter:
             OpeningBalancePreview with parsed data and validation
         """
         path = Path(file_path)
-        errors = []
+        errors: List[str] = []
         lines: List[OpeningBalanceLine] = []
 
         if not path.exists():
@@ -256,7 +256,7 @@ class OpeningBalanceImporter:
         try:
             with open(path, "r", encoding=self.config.encoding) as f:
                 reader = csv.DictReader(f)
-                columns = reader.fieldnames or []
+                columns = list(reader.fieldnames or [])
                 rows = list(reader)
         except Exception as e:
             return OpeningBalancePreview(
@@ -296,8 +296,8 @@ class OpeningBalanceImporter:
         unmatched_accounts = []
 
         for idx, row in enumerate(rows, start=1):
-            account_name = row.get(name_col, "").strip() if name_col else ""
-            account_type = row.get(type_col, "").strip() if type_col else ""
+            account_name = str(row.get(name_col, "") or "").strip() if name_col else ""
+            account_type = str(row.get(type_col, "") or "").strip() if type_col else ""
             try:
                 debit = self._parse_decimal(row.get(debit_col)) if debit_col else Decimal("0")
             except ValueError as exc:
@@ -308,9 +308,9 @@ class OpeningBalanceImporter:
             except ValueError as exc:
                 errors.append(f"Row {idx}: {exc}")
                 credit = Decimal("0")
-            balance_str = row.get(balance_col, "DEBIT").upper() if balance_col else "DEBIT"
-            notes = row.get(notes_col, "") if notes_col else ""
-            coa_match = row.get(coa_col, "") if coa_col else ""
+            balance_str = str(row.get(balance_col, "DEBIT") or "DEBIT").upper() if balance_col else "DEBIT"
+            notes = str(row.get(notes_col, "") or "") if notes_col else ""
+            coa_match = str(row.get(coa_col, "") or "") if coa_col else ""
 
             if not account_name:
                 errors.append(f"Row {idx}: Missing account name")
@@ -388,8 +388,8 @@ class OpeningBalanceImporter:
         Returns:
             OpeningBalanceResult with import status
         """
-        errors = []
-        warnings = []
+        errors: List[str] = []
+        warnings: list[str] = []
 
         # Preview first to validate
         preview = self.preview_file(file_path, entry_date)
@@ -436,8 +436,8 @@ class OpeningBalanceImporter:
         period = self.db.execute(
             select(FiscalPeriod).where(
                 FiscalPeriod.organization_id == self.config.organization_id,
-                FiscalPeriod.period_start <= entry_date,
-                FiscalPeriod.period_end >= entry_date,
+                FiscalPeriod.start_date <= entry_date,
+                FiscalPeriod.end_date >= entry_date,
             )
         ).scalar_one_or_none()
 

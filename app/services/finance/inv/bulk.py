@@ -74,7 +74,7 @@ class ItemBulkService(BulkActionService[Item]):
         if field_name == "item_type":
             return entity.item_type.value if entity.item_type else ""
 
-        return super()._get_export_value(entity, field_name)
+        return str(super()._get_export_value(entity, field_name))
 
     def _get_export_filename(self) -> str:
         """Get item export filename."""

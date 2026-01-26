@@ -805,5 +805,5 @@ def list_fonts(
         fonts = [f for f in fonts if f["category"] == category]
 
     return FontListResponse(
-        fonts=[FontOption(**f) for f in fonts]
+        fonts=[FontOption.model_validate(f) for f in fonts]
     )

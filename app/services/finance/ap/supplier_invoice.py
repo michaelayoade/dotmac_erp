@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from decimal import Decimal
-from typing import Optional
+from typing import List, Optional
 from uuid import UUID
 import uuid as uuid_lib
 
@@ -38,7 +38,7 @@ from app.models.finance.inv.item import Item, CostingMethod
 from app.models.finance.tax.tax_code import TaxCode
 from app.services.common import coerce_uuid
 from app.services.finance.platform.sequence import SequenceService
-from app.services.finance.tax.tax_calculation import TaxCalculationService
+from app.services.finance.tax.tax_calculation import TaxCalculationService, LineCalculationResult
 from app.services.response import ListResponseMixin
 
 
@@ -212,7 +212,7 @@ class SupplierInvoiceService(ListResponseMixin):
         tax_total = Decimal("0")
 
         # Pre-calculate taxes for all lines
-        line_tax_results = []
+        line_tax_results: list[LineCalculationResult | None] = []
         for line in input.lines:
             line_amount = line.quantity * line.unit_price
             subtotal += line_amount
@@ -224,15 +224,15 @@ class SupplierInvoiceService(ListResponseMixin):
 
             # Calculate taxes using centralized service
             if effective_tax_codes:
-                tax_result = TaxCalculationService.calculate_line_taxes(
+                line_tax_result = TaxCalculationService.calculate_line_taxes(
                     db=db,
                     organization_id=org_id,
                     line_amount=line_amount,
                     tax_code_ids=effective_tax_codes,
                     transaction_date=input.invoice_date,
                 )
-                line_tax_results.append(tax_result)
-                tax_total += tax_result.total_tax
+                line_tax_results.append(line_tax_result)
+                tax_total += line_tax_result.total_tax
             else:
                 line_tax_results.append(None)
 
@@ -300,7 +300,7 @@ class SupplierInvoiceService(ListResponseMixin):
                 effective_tax_codes.append(line_input.tax_code_id)
             primary_tax_code_id = effective_tax_codes[0] if effective_tax_codes else None
 
-            line = SupplierInvoiceLine(
+            invoice_line = SupplierInvoiceLine(
                 invoice_id=invoice.invoice_id,
                 line_number=idx,
                 description=line_input.description,
@@ -320,7 +320,7 @@ class SupplierInvoiceService(ListResponseMixin):
                 segment_id=line_input.segment_id,
                 capitalize_flag=line_input.capitalize_flag,
             )
-            db.add(line)
+            db.add(invoice_line)
             db.flush()  # Get line_id for tax records
 
             # Create SupplierInvoiceLineTax records for each tax (with recoverability)
@@ -335,7 +335,7 @@ class SupplierInvoiceService(ListResponseMixin):
                         recoverable = -abs(recoverable)
 
                     line_tax = SupplierInvoiceLineTax(
-                        line_id=line.line_id,
+                        line_id=invoice_line.line_id,
                         tax_code_id=tax_detail.tax_code_id,
                         base_amount=base_amount,
                         tax_rate=tax_detail.tax_rate,
@@ -408,7 +408,7 @@ class SupplierInvoiceService(ListResponseMixin):
         tax_total = Decimal("0")
 
         # Pre-calculate taxes for all lines
-        line_tax_results = []
+        line_tax_results: list[LineCalculationResult | None] = []
         for line in input.lines:
             line_amount = line.quantity * line.unit_price
             subtotal += line_amount
@@ -420,15 +420,15 @@ class SupplierInvoiceService(ListResponseMixin):
 
             # Calculate taxes using centralized service
             if effective_tax_codes:
-                tax_result = TaxCalculationService.calculate_line_taxes(
+                line_tax_result = TaxCalculationService.calculate_line_taxes(
                     db=db,
                     organization_id=org_id,
                     line_amount=line_amount,
                     tax_code_ids=effective_tax_codes,
                     transaction_date=input.invoice_date,
                 )
-                line_tax_results.append(tax_result)
-                tax_total += tax_result.total_tax
+                line_tax_results.append(line_tax_result)
+                tax_total += line_tax_result.total_tax
             else:
                 line_tax_results.append(None)
 
@@ -509,7 +509,7 @@ class SupplierInvoiceService(ListResponseMixin):
                 effective_tax_codes.append(line_input.tax_code_id)
             primary_tax_code_id = effective_tax_codes[0] if effective_tax_codes else None
 
-            line = SupplierInvoiceLine(
+            invoice_line = SupplierInvoiceLine(
                 invoice_id=inv_id,
                 line_number=idx,
                 description=line_input.description,
@@ -529,7 +529,7 @@ class SupplierInvoiceService(ListResponseMixin):
                 segment_id=line_input.segment_id,
                 capitalize_flag=line_input.capitalize_flag,
             )
-            db.add(line)
+            db.add(invoice_line)
             db.flush()
 
             if tax_result and tax_result.taxes:
@@ -543,7 +543,7 @@ class SupplierInvoiceService(ListResponseMixin):
                         recoverable = -abs(recoverable)
 
                     line_tax = SupplierInvoiceLineTax(
-                        line_id=line.line_id,
+                        line_id=invoice_line.line_id,
                         tax_code_id=tax_detail.tax_code_id,
                         base_amount=base_amount,
                         tax_rate=tax_detail.tax_rate,
@@ -941,7 +941,7 @@ class SupplierInvoiceService(ListResponseMixin):
         db: Session,
         organization_id: UUID,
         invoice_id: UUID,
-    ) -> list[SupplierInvoiceLine]:
+    ) -> List[SupplierInvoiceLine]:
         """
         Get lines for an invoice.
 
@@ -979,7 +979,7 @@ class SupplierInvoiceService(ListResponseMixin):
         overdue_only: bool = False,
         limit: int = 50,
         offset: int = 0,
-    ) -> list[SupplierInvoice]:
+    ) -> List[SupplierInvoice]:
         """
         List invoices with optional filters.
 

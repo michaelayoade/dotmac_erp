@@ -101,19 +101,20 @@ class PayrollGLAdapter:
             # Import GL services (deferred to avoid circular imports)
             from app.services.finance.gl.journal import JournalService
             from app.services.finance.gl import JournalInput, JournalLineInput
+            from app.models.finance.gl.journal_entry import JournalType
 
             # Build journal entry lines
             lines = []
 
             # DEBITS: Earnings (Salary Expense accounts)
             for earning in slip.earnings:
-                component = earning.salary_component
+                component = earning.component
                 if component and component.expense_account_id:
                     lines.append(JournalLineInput(
                         account_id=component.expense_account_id,
                         debit_amount=earning.amount,
                         credit_amount=Decimal("0.00"),
-                        description=f"{component.component_name}: {slip.employee_code}",
+                        description=f"{component.component_name}: {slip.employee_name or slip.employee_id}",
                         cost_center_id=cost_center_id,
                     ))
                 else:
@@ -123,13 +124,13 @@ class PayrollGLAdapter:
 
             # CREDITS: Deductions (Liability accounts like tax, pension, etc.)
             for deduction in slip.deductions:
-                component = deduction.salary_component
+                component = deduction.component
                 if component and component.liability_account_id:
                     lines.append(JournalLineInput(
                         account_id=component.liability_account_id,
                         debit_amount=Decimal("0.00"),
                         credit_amount=deduction.amount,
-                        description=f"{component.component_name}: {slip.employee_code}",
+                        description=f"{component.component_name}: {slip.employee_name or slip.employee_id}",
                     ))
                 else:
                     logger.warning(
@@ -147,7 +148,7 @@ class PayrollGLAdapter:
                     account_id=payroll_payable_account_id,
                     debit_amount=Decimal("0.00"),
                     credit_amount=slip.net_pay,
-                    description=f"Net Pay: {slip.employee_code}",
+                    description=f"Net Pay: {slip.employee_name or slip.employee_id}",
                 ))
 
             if not lines:
@@ -166,11 +167,19 @@ class PayrollGLAdapter:
 
             # Create journal entry
             journal_input = JournalInput(
-                journal_date=posting_date,
-                reference_number=slip.slip_number,
-                description=f"Salary: {slip.employee_code} ({slip.payroll_period_start} to {slip.payroll_period_end})",
+                journal_type=JournalType.STANDARD,
+                entry_date=posting_date,
+                posting_date=posting_date,
+                reference=slip.slip_number,
+                description=(
+                    f"Salary: {slip.employee_name or slip.employee_id} "
+                    f"({slip.start_date} to {slip.end_date})"
+                ),
+                currency_code=slip.currency_code,
+                exchange_rate=slip.exchange_rate,
                 source_module="PAYROLL",
-                source_document_id=str(slip_id),
+                source_document_type="SALARY_SLIP",
+                source_document_id=slip_id,
                 lines=lines,
             )
 
@@ -322,12 +331,11 @@ class PayrollGLAdapter:
             from app.services.finance.gl.journal import JournalService
 
             # Reverse the journal entry
-            reversal = JournalService.reverse_journal(
+            reversal = JournalService.reverse_entry(
                 db,
                 org_id,
                 slip.journal_entry_id,
                 reversal_date,
-                reason,
                 user_id,
             )
 

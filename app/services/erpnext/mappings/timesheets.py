@@ -2,13 +2,13 @@
 ERPNext Timesheet mapping for project time tracking sync.
 """
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Optional
 
 from .base import DocTypeMapping, FieldMapping, parse_date, parse_decimal
 
 
-def parse_date_from_datetime(value: Any) -> Optional[datetime]:
+def parse_date_from_datetime(value: Any) -> Optional[date]:
     """Extract date from datetime field."""
     if value is None:
         return None

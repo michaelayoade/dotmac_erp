@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from decimal import Decimal
-from typing import Optional
+from typing import List, Optional
 from uuid import UUID
 import uuid as uuid_lib
 
@@ -294,7 +294,7 @@ class APAgingService(ListResponseMixin):
         fiscal_period_id: UUID,
         as_of_date: Optional[date] = None,
         created_by_user_id: Optional[UUID] = None,
-    ) -> list[APAgingSnapshot]:
+    ) -> List[APAgingSnapshot]:
         """
         Create point-in-time aging snapshot for all suppliers.
 

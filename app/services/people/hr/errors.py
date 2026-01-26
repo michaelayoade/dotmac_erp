@@ -164,6 +164,22 @@ class DepartmentNotFoundError(NotFoundError):
         self.department_id = department_id
 
 
+class LocationNotFoundError(NotFoundError):
+    """Raised when a location is not found."""
+
+    def __init__(
+        self, location_id: "uuid.UUID | None" = None, message: str | None = None
+    ) -> None:
+        if message is None:
+            message = (
+                f"Location not found: {location_id}"
+                if location_id
+                else "Location not found"
+            )
+        super().__init__(message)
+        self.location_id = location_id
+
+
 class DesignationNotFoundError(NotFoundError):
     """Raised when a designation is not found."""
 

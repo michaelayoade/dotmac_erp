@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
-from typing import Optional
+from typing import Optional, cast
 from uuid import UUID
 
 from sqlalchemy import and_, func, or_
@@ -366,14 +366,15 @@ class InventoryBalanceService:
             reserved = InventoryBalanceService.get_reserved(db, org_id, item.item_id)
             available = on_hand - reserved
 
-            is_low = available <= item.reorder_point
-            if include_below_minimum and item.minimum_stock:
+            reorder_point = cast(Decimal, item.reorder_point)
+            is_low = available <= reorder_point
+            if include_below_minimum and item.minimum_stock is not None:
                 is_low = is_low or available < item.minimum_stock
 
             if is_low:
                 # Calculate suggested order quantity
                 reorder_qty = item.reorder_quantity or Decimal("0")
-                max_stock = item.maximum_stock or (item.reorder_point * 2)
+                max_stock = item.maximum_stock or (reorder_point * 2)
                 suggested_qty = max(reorder_qty, max_stock - on_hand)
 
                 low_stock.append(LowStockItem(
@@ -382,7 +383,7 @@ class InventoryBalanceService:
                     item_name=item.item_name,
                     quantity_on_hand=on_hand,
                     quantity_available=available,
-                    reorder_point=item.reorder_point,
+                    reorder_point=reorder_point,
                     reorder_quantity=item.reorder_quantity,
                     suggested_order_qty=suggested_qty if suggested_qty > 0 else reorder_qty,
                     default_supplier_id=item.default_supplier_id,

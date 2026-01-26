@@ -7,9 +7,9 @@ Manages inventory receipts, issues, transfers, and cost calculations.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP
-from typing import Optional
+from typing import List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -125,6 +125,8 @@ class InventoryTransactionService(ListResponseMixin):
 
         # Get current average cost from item
         item = db.get(Item, itm_id)
+        if not item:
+            return new_unit_cost
         current_avg_cost = item.average_cost or Decimal("0")
 
         # Calculate new weighted average

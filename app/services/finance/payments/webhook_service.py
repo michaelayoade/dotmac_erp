@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 from uuid import UUID, uuid4
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.finance.payments.payment_intent import PaymentIntent
@@ -85,7 +86,21 @@ class WebhookService:
             status=WebhookStatus.RECEIVED,
         )
         self.db.add(webhook)
-        self.db.flush()
+        try:
+            self.db.flush()
+        except IntegrityError:
+            self.db.rollback()
+            existing = (
+                self.db.query(PaymentWebhook)
+                .filter(PaymentWebhook.paystack_event_id == event_id)
+                .first()
+            )
+            if existing:
+                logger.info(f"Duplicate webhook received: {event_id}")
+                existing.status = WebhookStatus.DUPLICATE
+                self.db.flush()
+                return existing
+            raise
 
         try:
             # Find payment intent by reference

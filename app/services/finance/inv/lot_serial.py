@@ -6,10 +6,10 @@ Manages inventory lots, batches, and serial number tracking.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
+from typing import List, Optional
 from uuid import UUID
 import uuid as uuid_lib
 
@@ -57,7 +57,7 @@ class LotAllocation:
 
     lot_id: UUID
     quantity: Decimal
-    serial_numbers: list[str] = None
+    serial_numbers: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -382,15 +382,19 @@ class LotSerialService(ListResponseMixin):
         from datetime import timedelta
         cutoff_date = date.today() + timedelta(days=days_ahead)
 
-        return db.query(InventoryLot).join(
-            Item, InventoryLot.item_id == Item.item_id
-        ).filter(
-            Item.organization_id == org_id,
-            InventoryLot.expiry_date <= cutoff_date,
-            InventoryLot.expiry_date >= date.today(),
-            InventoryLot.quantity_on_hand > 0,
-            InventoryLot.is_active == True,
-        ).order_by(InventoryLot.expiry_date.asc()).all()
+        return (
+            db.query(InventoryLot)
+            .join(Item, InventoryLot.item_id == Item.item_id)
+            .filter(
+                Item.organization_id == org_id,
+                InventoryLot.expiry_date <= cutoff_date,
+                InventoryLot.expiry_date >= date.today(),
+                InventoryLot.quantity_on_hand > 0,
+                InventoryLot.is_active == True,
+            )
+            .order_by(InventoryLot.expiry_date.asc())
+            .all()
+        )
 
     @staticmethod
     def get_expired_lots(
@@ -409,14 +413,18 @@ class LotSerialService(ListResponseMixin):
         """
         org_id = coerce_uuid(organization_id)
 
-        return db.query(InventoryLot).join(
-            Item, InventoryLot.item_id == Item.item_id
-        ).filter(
-            Item.organization_id == org_id,
-            InventoryLot.expiry_date < date.today(),
-            InventoryLot.quantity_on_hand > 0,
-            InventoryLot.is_active == True,
-        ).order_by(InventoryLot.expiry_date.asc()).all()
+        return (
+            db.query(InventoryLot)
+            .join(Item, InventoryLot.item_id == Item.item_id)
+            .filter(
+                Item.organization_id == org_id,
+                InventoryLot.expiry_date < date.today(),
+                InventoryLot.quantity_on_hand > 0,
+                InventoryLot.is_active == True,
+            )
+            .order_by(InventoryLot.expiry_date.asc())
+            .all()
+        )
 
     @staticmethod
     def get_traceability(
@@ -543,9 +551,12 @@ class LotSerialService(ListResponseMixin):
         if not include_zero_quantity:
             query = query.filter(InventoryLot.quantity_on_hand > 0)
 
-        return query.order_by(
-            InventoryLot.received_date.desc()
-        ).offset(offset).limit(limit).all()
+        return (
+            query.order_by(InventoryLot.received_date.desc())
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )
 
 
 # Module-level instance

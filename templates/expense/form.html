@@ -25,6 +25,7 @@
     {% endif %}
 
     <form method="post" class="card p-6 space-y-6">
+        <input type="hidden" name="return_to" value="{{ return_to or '/expense' }}">
         <!-- Expense Date -->
         <div class="grid gap-6 sm:grid-cols-2">
             <div>
@@ -165,7 +166,7 @@
 
         <!-- Actions -->
         <div class="flex items-center justify-between pt-4 border-t border-slate-200 dark:border-slate-700">
-            <a href="/expense" class="btn btn-secondary">Cancel</a>
+            <a href="{{ return_to or '/expense' }}" class="btn btn-secondary">Cancel</a>
             <button type="submit" class="btn btn-primary">
                 <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>

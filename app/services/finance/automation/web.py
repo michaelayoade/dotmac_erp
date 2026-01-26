@@ -555,12 +555,12 @@ class AutomationWebService:
             count_subq = (
                 select(
                     RecurringLog.template_id,
-                    func.count().label("count"),
+                    func.count().label("generation_count"),
                 )
                 .where(RecurringLog.template_id.in_(template_ids))
                 .group_by(RecurringLog.template_id)
             )
-            counts = {row.template_id: row.count for row in db.execute(count_subq)}
+            counts = {row.template_id: row.generation_count for row in db.execute(count_subq)}
         else:
             counts = {}
 
@@ -596,7 +596,7 @@ class AutomationWebService:
         template_id: Optional[str] = None,
     ) -> dict:
         """Get context for recurring template form."""
-        context = {
+        context: dict[str, Any] = {
             "template": None,
             "entity_types": [
                 {"value": et.value, "label": _entity_type_label(et)}
@@ -732,7 +732,7 @@ class AutomationWebService:
         rule_id: Optional[str] = None,
     ) -> dict:
         """Get context for workflow rule form."""
-        context = {
+        context: dict[str, Any] = {
             "rule": None,
             "entity_types": [
                 {"value": et.value, "label": _workflow_entity_type_label(et)}
@@ -861,7 +861,7 @@ class AutomationWebService:
         field_id: Optional[str] = None,
     ) -> dict:
         """Get context for custom field form."""
-        context = {
+        context: dict[str, Any] = {
             "field": None,
             "entity_types": [
                 {"value": et.value, "label": _custom_field_entity_type_label(et)}
@@ -994,7 +994,7 @@ class AutomationWebService:
         template_id: Optional[str] = None,
     ) -> dict:
         """Get context for document template form."""
-        context = {
+        context: dict[str, Any] = {
             "template": None,
             "form_data": {},
             "template_types": [

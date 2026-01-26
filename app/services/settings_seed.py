@@ -471,6 +471,96 @@ def seed_payments_settings(db: Session) -> None:
     )
 
 
+def seed_scheduled_tasks(db: Session) -> None:
+    """Seed default scheduled tasks including finance reminders."""
+    from app.models.scheduler import ScheduledTask, ScheduleType
+
+    # Define default finance reminder tasks
+    default_tasks = [
+        {
+            "name": "Finance: All Reminders (Master)",
+            "task_name": "app.tasks.finance.process_all_finance_reminders",
+            "schedule_type": ScheduleType.crontab,
+            "cron_minute": "0",
+            "cron_hour": "8",  # 8 AM daily
+            "cron_day_of_week": "*",
+            "cron_day_of_month": "*",
+            "cron_month_of_year": "*",
+            "enabled": True,
+        },
+        {
+            "name": "Finance: Fiscal Period Close Reminders",
+            "task_name": "app.tasks.finance.process_fiscal_period_reminders",
+            "schedule_type": ScheduleType.crontab,
+            "cron_minute": "0",
+            "cron_hour": "8",
+            "cron_day_of_week": "*",
+            "cron_day_of_month": "*",
+            "cron_month_of_year": "*",
+            "enabled": False,  # Disabled - use master task instead
+        },
+        {
+            "name": "Finance: Tax Period Filing Reminders",
+            "task_name": "app.tasks.finance.process_tax_period_reminders",
+            "schedule_type": ScheduleType.crontab,
+            "cron_minute": "0",
+            "cron_hour": "8",
+            "cron_day_of_week": "*",
+            "cron_day_of_month": "*",
+            "cron_month_of_year": "*",
+            "enabled": False,  # Disabled - use master task instead
+        },
+        {
+            "name": "Finance: Bank Reconciliation Reminders",
+            "task_name": "app.tasks.finance.process_bank_reconciliation_reminders",
+            "schedule_type": ScheduleType.crontab,
+            "cron_minute": "0",
+            "cron_hour": "8",
+            "cron_day_of_week": "*",
+            "cron_day_of_month": "*",
+            "cron_month_of_year": "*",
+            "enabled": False,  # Disabled - use master task instead
+        },
+        {
+            "name": "Finance: AR Collection Reminders",
+            "task_name": "app.tasks.finance.process_ar_collection_reminders",
+            "schedule_type": ScheduleType.crontab,
+            "cron_minute": "0",
+            "cron_hour": "9",  # 9 AM - slightly staggered
+            "cron_day_of_week": "*",
+            "cron_day_of_month": "*",
+            "cron_month_of_year": "*",
+            "enabled": False,  # Disabled - use master task instead
+        },
+        {
+            "name": "Finance: Subledger Reconciliation Check",
+            "task_name": "app.tasks.finance.process_subledger_reconciliation",
+            "schedule_type": ScheduleType.crontab,
+            "cron_minute": "0",
+            "cron_hour": "7",  # 7 AM - before main reminders
+            "cron_day_of_week": "*",
+            "cron_day_of_month": "*",
+            "cron_month_of_year": "*",
+            "enabled": False,  # Disabled - use master task instead
+        },
+    ]
+
+    for task_def in default_tasks:
+        # Check if task already exists by task_name
+        existing = (
+            db.query(ScheduledTask)
+            .filter(ScheduledTask.task_name == task_def["task_name"])
+            .first()
+        )
+        if existing:
+            continue  # Don't overwrite existing configuration
+
+        task = ScheduledTask(**task_def)
+        db.add(task)
+
+    db.commit()
+
+
 def seed_all_settings(db: Session) -> None:
     """Seed all domain settings."""
     seed_auth_settings(db)
@@ -481,3 +571,4 @@ def seed_all_settings(db: Session) -> None:
     seed_features_settings(db)
     seed_reporting_settings(db)
     seed_payments_settings(db)
+    seed_scheduled_tasks(db)

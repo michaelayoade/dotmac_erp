@@ -6,7 +6,7 @@ then published asynchronously by a background processor.
 """
 
 from datetime import datetime, timedelta, timezone
-from typing import Any, Optional
+from typing import Any, List, Optional
 from uuid import UUID
 
 from sqlalchemy import and_
@@ -89,7 +89,7 @@ class OutboxPublisher(ListResponseMixin):
         db: Session,
         batch_size: int = 100,
         max_retry_count: Optional[int] = None,
-    ) -> list[EventOutbox]:
+    ) -> List[EventOutbox]:
         """
         Get pending events ready for publishing.
 
@@ -225,7 +225,7 @@ class OutboxPublisher(ListResponseMixin):
         db: Session,
         status: EventStatus = EventStatus.FAILED,
         limit: int = 100,
-    ) -> list[EventOutbox]:
+    ) -> List[EventOutbox]:
         """
         Get failed or dead events for manual review.
 
@@ -299,7 +299,7 @@ class OutboxPublisher(ListResponseMixin):
         aggregate_type: str,
         aggregate_id: str,
         limit: int = 50,
-    ) -> list[EventOutbox]:
+    ) -> List[EventOutbox]:
         """
         Get events for a specific aggregate.
 
@@ -330,7 +330,7 @@ class OutboxPublisher(ListResponseMixin):
         db: Session,
         correlation_id: str,
         limit: int = 50,
-    ) -> list[EventOutbox]:
+    ) -> List[EventOutbox]:
         """
         Get events by correlation ID.
 
@@ -357,7 +357,7 @@ class OutboxPublisher(ListResponseMixin):
         producer_module: Optional[str] = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> list[EventOutbox]:
+    ) -> List[EventOutbox]:
         """
         List events (for ListResponseMixin compatibility).
 

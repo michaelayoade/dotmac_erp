@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any, List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -121,7 +121,7 @@ class ApprovalWorkflowService(ListResponseMixin):
 
                 # Check if document amount exceeds threshold
                 if amount_to_compare >= workflow.threshold_amount:
-                    return workflow.workflow_id
+                        return workflow.workflow_id
 
         return fallback_workflow_id
 
@@ -717,7 +717,7 @@ class ApprovalWorkflowService(ListResponseMixin):
         status: Optional[ApprovalRequestStatus] = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> list[ApprovalRequest]:
+    ) -> List[ApprovalRequest]:
         """
         List approval requests (for ListResponseMixin compatibility).
 
@@ -756,7 +756,7 @@ class ApprovalWorkflowService(ListResponseMixin):
         is_active: Optional[bool] = True,
         limit: int = 50,
         offset: int = 0,
-    ) -> list[ApprovalWorkflow]:
+    ) -> List[ApprovalWorkflow]:
         """
         List approval workflows.
 

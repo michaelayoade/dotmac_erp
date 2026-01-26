@@ -7,7 +7,7 @@ Handles team management template responses.
 import logging
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
-from fastapi import Request
+from fastapi import Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -112,7 +112,7 @@ class TeamWebService:
         description: Optional[str] = None,
         lead_id: Optional[str] = None,
         auto_assign: bool = False,
-    ) -> RedirectResponse:
+    ) -> Response:
         """Create a new team."""
         org_id = coerce_uuid(auth.organization_id)
 
@@ -132,6 +132,11 @@ class TeamWebService:
                 )
 
             db.commit()
+
+            if not team:
+                return self.team_form_response(
+                    request, auth, db, error="Team not created"
+                )
 
             return RedirectResponse(
                 url=f"/operations/support/teams/{team.team_id}",
@@ -157,7 +162,7 @@ class TeamWebService:
         lead_id: Optional[str] = None,
         auto_assign: bool = False,
         is_active: bool = True,
-    ) -> RedirectResponse:
+    ) -> Response:
         """Update a team."""
         tid = coerce_uuid(team_id)
 

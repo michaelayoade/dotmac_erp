@@ -10,7 +10,7 @@ Handles:
 
 import logging
 from datetime import date, datetime, timedelta, timezone
-from typing import Optional
+from typing import Any, Optional
 from uuid import UUID
 import uuid
 
@@ -25,7 +25,7 @@ from app.models.expense import (
     LimitPeriodType,
 )
 from app.models.finance.core_org.organization import Organization
-from app.models.people.hr.employee import Employee
+from app.models.people.hr.employee import Employee, EmployeeStatus
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +48,7 @@ def refresh_period_usage_cache(organization_id: Optional[str] = None) -> dict:
 
     logger.info("Starting period usage cache refresh")
 
-    results = {
+    results: dict[str, Any] = {
         "organizations_processed": 0,
         "employees_refreshed": 0,
         "errors": [],
@@ -68,7 +68,7 @@ def refresh_period_usage_cache(organization_id: Optional[str] = None) -> dict:
                 employees = db.scalars(
                     select(Employee).where(
                         Employee.organization_id == org.organization_id,
-                        Employee.is_active == True,
+                        Employee.status == EmployeeStatus.ACTIVE,
                     )
                 ).all()
 
@@ -151,7 +151,7 @@ def process_expense_approval_reminders() -> dict:
 
     logger.info("Processing expense approval reminders")
 
-    results = {
+    results: dict[str, Any] = {
         "first_reminders_sent": 0,
         "second_reminders_sent": 0,
         "escalation_warnings_sent": 0,
@@ -587,13 +587,14 @@ def poll_stuck_expense_transfers() -> dict:
         PaymentIntent,
         PaymentIntentStatus,
     )
-    from app.services.domain_settings import SettingDomain, resolve_value
+    from app.models.domain_settings import SettingDomain
     from app.services.finance.payments.payment_service import PaymentService
     from app.services.finance.payments.paystack_client import PaystackConfig
+    from app.services.settings_spec import resolve_value
 
     logger.info("Polling stuck expense transfers")
 
-    results = {
+    results: dict[str, Any] = {
         "intents_checked": 0,
         "completed": 0,
         "failed": 0,
@@ -627,11 +628,17 @@ def poll_stuck_expense_transfers() -> dict:
         for org_id, intents in by_org.items():
             # Get Paystack config for this org
             secret_key = resolve_value(db, SettingDomain.payments, "paystack_secret_key")
-            if not secret_key:
-                logger.warning(f"No Paystack key for org {org_id}")
+            public_key = resolve_value(db, SettingDomain.payments, "paystack_public_key")
+            webhook_secret = resolve_value(db, SettingDomain.payments, "paystack_webhook_secret")
+            if not secret_key or not public_key:
+                logger.warning(f"No Paystack keys for org {org_id}")
                 continue
 
-            config = PaystackConfig(secret_key=secret_key)
+            config = PaystackConfig(
+                secret_key=str(secret_key),
+                public_key=str(public_key),
+                webhook_secret=str(webhook_secret or ""),
+            )
             svc = PaymentService(db, org_id)
 
             for intent in intents:

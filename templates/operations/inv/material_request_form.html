@@ -1,6 +1,6 @@
 {% extends "operations/base_operations.html" %}
 
-{% block page_title %}{{ 'Edit Material Request' if request else 'New Material Request' }}{% endblock %}
+{% block page_title %}{{ 'Edit Material Request' if material_request else 'New Material Request' }}{% endblock %}
 
 {% block breadcrumbs %}
 <nav class="flex items-center gap-2 text-sm text-slate-500 mt-1">
@@ -12,7 +12,7 @@
     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
     </svg>
-    <span class="text-slate-700 dark:text-slate-300">{{ 'Edit' if request else 'New' }}</span>
+    <span class="text-slate-700 dark:text-slate-300">{{ 'Edit' if material_request else 'New' }}</span>
 </nav>
 {% endblock %}
 
@@ -32,10 +32,10 @@
                 <div>
                     <label class="form-label required">Request Type</label>
                     <select name="request_type" x-model="requestType" required class="form-input form-select">
-                        <option value="PURCHASE" {% if request and request.request_type == 'PURCHASE' %}selected{% endif %}>Purchase</option>
-                        <option value="TRANSFER" {% if request and request.request_type == 'TRANSFER' %}selected{% endif %}>Material Transfer</option>
-                        <option value="ISSUE" {% if request and request.request_type == 'ISSUE' %}selected{% endif %}>Material Issue</option>
-                        <option value="MANUFACTURE" {% if request and request.request_type == 'MANUFACTURE' %}selected{% endif %}>Manufacture</option>
+                        <option value="PURCHASE" {% if material_request and material_request.request_type == 'PURCHASE' %}selected{% endif %}>Purchase</option>
+                        <option value="TRANSFER" {% if material_request and material_request.request_type == 'TRANSFER' %}selected{% endif %}>Material Transfer</option>
+                        <option value="ISSUE" {% if material_request and material_request.request_type == 'ISSUE' %}selected{% endif %}>Material Issue</option>
+                        <option value="MANUFACTURE" {% if material_request and material_request.request_type == 'MANUFACTURE' %}selected{% endif %}>Manufacture</option>
                     </select>
                     <p class="text-xs text-slate-400 mt-1" x-show="requestType === 'PURCHASE'">Request to purchase items from suppliers</p>
                     <p class="text-xs text-slate-400 mt-1" x-show="requestType === 'TRANSFER'">Request to transfer items between warehouses</p>
@@ -44,7 +44,7 @@
                 </div>
                 <div>
                     <label class="form-label required">Schedule Date</label>
-                    <input type="date" name="schedule_date" value="{{ request.schedule_date if request else today }}" required class="form-input">
+                    <input type="date" name="schedule_date" value="{{ material_request.schedule_date if material_request else today }}" required class="form-input">
                     <p class="text-xs text-slate-400 mt-1">Date when items are required</p>
                 </div>
             </div>
@@ -54,7 +54,7 @@
                     <select name="default_warehouse_id" class="form-input form-select">
                         <option value="">Select warehouse...</option>
                         {% for wh in warehouses %}
-                        <option value="{{ wh.warehouse_id }}" {% if request and request.default_warehouse_id == wh.warehouse_id %}selected{% endif %}>
+                        <option value="{{ wh.warehouse_id }}" {% if material_request and material_request.default_warehouse_id == wh.warehouse_id %}selected{% endif %}>
                             {{ wh.warehouse_name }}
                         </option>
                         {% endfor %}
@@ -65,7 +65,7 @@
                     <select name="requested_by_id" class="form-input form-select">
                         <option value="">Select employee...</option>
                         {% for emp in employees %}
-                        <option value="{{ emp.employee_id }}" {% if request and request.requested_by_id == emp.employee_id %}selected{% endif %}>
+                        <option value="{{ emp.employee_id }}" {% if material_request and material_request.requested_by_id == emp.employee_id %}selected{% endif %}>
                             {{ emp.full_name }}
                         </option>
                         {% endfor %}
@@ -74,7 +74,7 @@
             </div>
             <div class="mt-6">
                 <label class="form-label">Remarks</label>
-                <textarea name="remarks" rows="2" class="form-input" placeholder="Additional notes...">{{ request.remarks if request else '' }}</textarea>
+                <textarea name="remarks" rows="2" class="form-input" placeholder="Additional notes...">{{ material_request.remarks if material_request else '' }}</textarea>
             </div>
         </div>
 
@@ -169,7 +169,7 @@
                 <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
                 </svg>
-                {{ 'Update Request' if request else 'Create Request' }}
+                {{ 'Update Request' if material_request else 'Create Request' }}
             </button>
         </div>
     </form>
@@ -178,7 +178,7 @@
 <script>
 function materialRequestForm() {
     return {
-        requestType: '{{ request.request_type if request else "PURCHASE" }}',
+        requestType: '{{ material_request.request_type if material_request else "PURCHASE" }}',
         items: {{ items_json | default('[]') | safe }},
 
         addItem() {

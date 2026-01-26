@@ -304,8 +304,11 @@ class TaxCalculationService:
             )
             sequence += 1
 
-        total_tax = sum(t.tax_amount for t in taxes)
-        gross_amount = net_amount + sum(t.tax_amount for t in taxes if not t.is_inclusive)
+        total_tax = sum((t.tax_amount for t in taxes), Decimal("0"))
+        gross_amount = net_amount + sum(
+            (t.tax_amount for t in taxes if not t.is_inclusive),
+            Decimal("0"),
+        )
 
         # For inclusive taxes, the gross_amount stays the same as line_amount
         if inclusive_taxes and not exclusive_taxes:

@@ -14,7 +14,7 @@ from uuid import UUID
 import uuid as uuid_lib
 
 from fastapi import HTTPException
-from sqlalchemy import and_
+from sqlalchemy import and_, inspect as sa_inspect
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.models.finance.ar.contract import Contract
@@ -33,7 +33,7 @@ from app.models.finance.tax.tax_code import TaxCode
 from app.models.finance.ar.invoice_line_tax import InvoiceLineTax
 from app.services.common import coerce_uuid
 from app.services.finance.platform.sequence import SequenceService
-from app.services.finance.tax.tax_calculation import TaxCalculationService
+from app.services.finance.tax.tax_calculation import TaxCalculationService, LineCalculationResult
 from app.services.response import ListResponseMixin
 
 
@@ -123,15 +123,23 @@ def _batch_validate_org_refs(
         if not uuid_ids:
             continue
 
+        # Get the primary key column dynamically (some models use 'id', others use '<name>_id')
+        mapper: Any = sa_inspect(model)
+        pk_cols = mapper.primary_key
+        if not pk_cols:
+            raise ValueError(f"Model {model.__name__} has no primary key")
+        pk_attr = pk_cols[0].name  # e.g., 'account_id', 'invoice_id', etc.
+        pk_column = getattr(model, pk_attr)
+
         # Single query to get all records of this type
-        records = db.query(model).filter(model.id.in_(uuid_ids)).all()
+        records: list[Any] = db.query(model).filter(pk_column.in_(uuid_ids)).all()
         found_ids = set()
 
         for record in records:
             # Check organization scope
             if getattr(record, "organization_id", None) != organization_id:
                 raise HTTPException(status_code=404, detail=f"{label} not found")
-            found_ids.add(record.id)
+            found_ids.add(getattr(record, pk_attr))
 
         # Check for any missing IDs
         missing = uuid_ids - found_ids
@@ -241,7 +249,7 @@ class ARInvoiceService(ListResponseMixin):
         discount_total = Decimal("0")
 
         # Pre-calculate taxes for all lines
-        line_tax_results = []
+        line_tax_results: list[Optional[LineCalculationResult]] = []
         for line in input.lines:
             line_amount = line.quantity * line.unit_price - line.discount_amount
             subtotal += line_amount
@@ -253,15 +261,15 @@ class ARInvoiceService(ListResponseMixin):
 
             # Calculate taxes using centralized service
             if effective_tax_codes:
-                tax_result = TaxCalculationService.calculate_line_taxes(
+                line_tax_result = TaxCalculationService.calculate_line_taxes(
                     db=db,
                     organization_id=org_id,
                     line_amount=line_amount,
                     tax_code_ids=effective_tax_codes,
                     transaction_date=input.invoice_date,
                 )
-                line_tax_results.append(tax_result)
-                tax_total += tax_result.total_tax
+                line_tax_results.append(line_tax_result)
+                tax_total += line_tax_result.total_tax
             else:
                 line_tax_results.append(None)
 
@@ -332,7 +340,7 @@ class ARInvoiceService(ListResponseMixin):
                 effective_tax_codes.append(line_input.tax_code_id)
             primary_tax_code_id = effective_tax_codes[0] if effective_tax_codes else None
 
-            line = InvoiceLine(
+            invoice_line = InvoiceLine(
                 invoice_id=invoice.invoice_id,
                 line_number=idx,
                 description=line_input.description,
@@ -350,7 +358,7 @@ class ARInvoiceService(ListResponseMixin):
                 segment_id=line_input.segment_id,
                 obligation_id=line_input.performance_obligation_id,
             )
-            db.add(line)
+            db.add(invoice_line)
             db.flush()  # Get line_id for tax records
 
             # Create InvoiceLineTax records for each tax
@@ -363,7 +371,7 @@ class ARInvoiceService(ListResponseMixin):
                         base_amount = -abs(base_amount)
 
                     line_tax = InvoiceLineTax(
-                        line_id=line.line_id,
+                        line_id=invoice_line.line_id,
                         tax_code_id=tax_detail.tax_code_id,
                         base_amount=base_amount,
                         tax_rate=tax_detail.tax_rate,
@@ -444,9 +452,7 @@ class ARInvoiceService(ListResponseMixin):
         # Calculate totals from lines
         subtotal = Decimal("0")
         tax_total = Decimal("0")
-        line_tax_results = []
-
-        tax_service = TaxCalculationService(db)
+        line_tax_results: list[Optional[LineCalculationResult]] = []
 
         for line_input in input.lines:
             line_amount = line_input.quantity * line_input.unit_price - line_input.discount_amount
@@ -458,14 +464,15 @@ class ARInvoiceService(ListResponseMixin):
                 effective_tax_codes.append(line_input.tax_code_id)
 
             if effective_tax_codes:
-                tax_result = tax_service.calculate_line_tax(
+                line_tax_result = TaxCalculationService.calculate_line_taxes(
+                    db=db,
                     organization_id=org_id,
                     line_amount=line_amount,
                     tax_code_ids=effective_tax_codes,
                     transaction_date=input.invoice_date,
                 )
-                line_tax_results.append(tax_result)
-                tax_total += tax_result.total_tax
+                line_tax_results.append(line_tax_result)
+                tax_total += line_tax_result.total_tax
             else:
                 line_tax_results.append(None)
 
@@ -502,7 +509,6 @@ class ARInvoiceService(ListResponseMixin):
         invoice.ar_control_account_id = customer.ar_control_account_id
         invoice.is_intercompany = input.is_intercompany
         invoice.intercompany_org_id = input.intercompany_org_id
-        invoice.updated_by_user_id = user_id
         invoice.updated_at = datetime.now(timezone.utc)
 
         db.flush()

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any, List, Optional
 from uuid import UUID
 
 from decimal import Decimal
@@ -32,14 +32,20 @@ from app.services.finance.common import (
 
 @dataclass
 class SupplierInput:
-    """Input for creating/updating a supplier."""
+    """
+    Input for creating/updating a supplier.
 
+    Uses template-friendly field names for seamless API/web integration.
+    Service layer handles mapping to model fields internally.
+    """
+
+    # Template-friendly names (what API/templates send)
     supplier_code: str
     supplier_type: SupplierType
-    legal_name: str
-    ap_control_account_id: UUID
+    supplier_name: str  # Maps to model: legal_name
+    default_payable_account_id: Optional[UUID] = None  # Maps to model: ap_control_account_id
     trading_name: Optional[str] = None
-    tax_identification_number: Optional[str] = None
+    tax_id: Optional[str] = None  # Maps to model: tax_identification_number
     registration_number: Optional[str] = None
     payment_terms_days: int = 30
     currency_code: str = settings.default_functional_currency_code
@@ -53,6 +59,11 @@ class SupplierInput:
     remittance_address: Optional[dict[str, Any]] = None
     primary_contact: Optional[dict[str, Any]] = None
     bank_details: Optional[dict[str, Any]] = None
+    # Additional template fields (optional - for richer UI forms)
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    address: Optional[str] = None
+    payment_method: Optional[str] = None
 
 
 class SupplierService(ListResponseMixin):
@@ -94,18 +105,19 @@ class SupplierService(ListResponseMixin):
             entity_name="Supplier",
         )
 
+        # Map template-friendly names to model field names
         supplier = Supplier(
             organization_id=org_id,
             supplier_code=input.supplier_code,
             supplier_type=input.supplier_type,
-            legal_name=input.legal_name,
+            legal_name=input.supplier_name,  # template: supplier_name → model: legal_name
             trading_name=input.trading_name,
-            tax_identification_number=input.tax_identification_number,
+            tax_identification_number=input.tax_id,  # template: tax_id → model: tax_identification_number
             registration_number=input.registration_number,
             payment_terms_days=input.payment_terms_days,
             currency_code=input.currency_code,
             default_expense_account_id=input.default_expense_account_id,
-            ap_control_account_id=input.ap_control_account_id,
+            ap_control_account_id=input.default_payable_account_id,  # template: default_payable_account_id → model: ap_control_account_id
             supplier_group_id=input.supplier_group_id,
             is_related_party=input.is_related_party,
             related_party_relationship=input.related_party_relationship,
@@ -157,6 +169,8 @@ class SupplierService(ListResponseMixin):
             org_id=org_id,
             entity_name="Supplier",
         )
+        if not supplier:
+            raise HTTPException(status_code=404, detail="Supplier not found")
 
         # Validate unique supplier code (if changed)
         if supplier.supplier_code != input.supplier_code:
@@ -170,17 +184,18 @@ class SupplierService(ListResponseMixin):
                 exclude_id=sup_id,
             )
 
-        # Update fields
+        # Update fields - map template-friendly names to model field names
         supplier.supplier_code = input.supplier_code
         supplier.supplier_type = input.supplier_type
-        supplier.legal_name = input.legal_name
+        supplier.legal_name = input.supplier_name  # template: supplier_name → model: legal_name
         supplier.trading_name = input.trading_name
-        supplier.tax_identification_number = input.tax_identification_number
+        supplier.tax_identification_number = input.tax_id  # template: tax_id → model: tax_identification_number
         supplier.registration_number = input.registration_number
         supplier.payment_terms_days = input.payment_terms_days
         supplier.currency_code = input.currency_code
         supplier.default_expense_account_id = input.default_expense_account_id
-        supplier.ap_control_account_id = input.ap_control_account_id
+        if input.default_payable_account_id is not None:
+            supplier.ap_control_account_id = input.default_payable_account_id  # template: default_payable_account_id → model: ap_control_account_id
         supplier.supplier_group_id = input.supplier_group_id
         supplier.is_related_party = input.is_related_party
         supplier.related_party_relationship = input.related_party_relationship
@@ -228,17 +243,23 @@ class SupplierService(ListResponseMixin):
             org_id=org_id,
             entity_name="Supplier",
         )
+        if not supplier:
+            raise HTTPException(status_code=404, detail="Supplier not found")
 
-        # Update only provided fields (non-None values)
-        updatable_fields = [
-            "legal_name",
+        # Template field name → Model field name mapping
+        field_mapping = {
+            "supplier_name": "legal_name",
+            "tax_id": "tax_identification_number",
+            "default_payable_account_id": "ap_control_account_id",
+        }
+
+        # Fields that pass through unchanged (same name in template and model)
+        direct_fields = [
             "trading_name",
-            "tax_identification_number",
             "registration_number",
             "payment_terms_days",
             "currency_code",
             "default_expense_account_id",
-            "ap_control_account_id",
             "supplier_group_id",
             "is_related_party",
             "related_party_relationship",
@@ -250,7 +271,13 @@ class SupplierService(ListResponseMixin):
             "bank_details",
         ]
 
-        for field in updatable_fields:
+        # Update mapped fields (template name → model name)
+        for template_field, model_field in field_mapping.items():
+            if template_field in update_data and update_data[template_field] is not None:
+                setattr(supplier, model_field, update_data[template_field])
+
+        # Update direct fields (same name in both)
+        for field in direct_fields:
             if field in update_data and update_data[field] is not None:
                 setattr(supplier, field, update_data[field])
 
@@ -375,13 +402,16 @@ class SupplierService(ListResponseMixin):
         Raises:
             HTTPException(404): If not found
         """
-        return get_org_scoped_entity(
+        supplier = get_org_scoped_entity(
             db=db,
             model_class=Supplier,
             entity_id=supplier_id,
             org_id=organization_id,
             entity_name="Supplier",
         )
+        if not supplier:
+            raise HTTPException(status_code=404, detail="Supplier not found")
+        return supplier
 
     @staticmethod
     def get_by_code(
@@ -423,7 +453,7 @@ class SupplierService(ListResponseMixin):
         search: Optional[str] = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> list[Supplier]:
+    ) -> List[Supplier]:
         """
         List suppliers with optional filters.
 
@@ -495,6 +525,8 @@ class SupplierService(ListResponseMixin):
             org_id=organization_id,
             entity_name="Supplier",
         )
+        if not supplier:
+            raise HTTPException(status_code=404, detail="Supplier not found")
 
         # Get outstanding invoices
         outstanding_statuses = [
@@ -513,7 +545,7 @@ class SupplierService(ListResponseMixin):
             .all()
         )
 
-        total_outstanding = sum(inv.balance_due for inv in invoices)
+        total_outstanding = sum((inv.balance_due for inv in invoices), Decimal("0"))
         invoice_count = len(invoices)
 
         return {

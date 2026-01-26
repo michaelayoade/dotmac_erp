@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any, List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -30,17 +30,23 @@ from app.services.finance.common import (
 
 @dataclass
 class CustomerInput:
-    """Input for creating/updating a customer."""
+    """
+    Input for creating/updating a customer.
 
+    Uses template-friendly field names for seamless API/web integration.
+    Service layer handles mapping to model fields internally.
+    """
+
+    # Template-friendly names (what API/templates send)
     customer_code: str
     customer_type: CustomerType
-    legal_name: str
-    ar_control_account_id: UUID
+    customer_name: str  # Maps to model: legal_name
+    default_receivable_account_id: Optional[UUID] = None  # Maps to model: ar_control_account_id
     trading_name: Optional[str] = None
-    tax_identification_number: Optional[str] = None
+    tax_id: Optional[str] = None  # Maps to model: tax_identification_number
     registration_number: Optional[str] = None
     credit_limit: Optional[Decimal] = None
-    credit_terms_days: int = 30
+    payment_terms_days: int = 30  # Maps to model: credit_terms_days
     credit_hold: bool = False
     payment_terms_id: Optional[UUID] = None
     currency_code: str = settings.default_functional_currency_code
@@ -57,6 +63,10 @@ class CustomerInput:
     primary_contact: Optional[dict[str, Any]] = None
     bank_details: Optional[dict[str, Any]] = None
     is_active: bool = True
+    # Additional template fields (optional - for richer UI forms)
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    address: Optional[str] = None
 
 
 class CustomerService(ListResponseMixin):
@@ -98,21 +108,22 @@ class CustomerService(ListResponseMixin):
             entity_name="Customer",
         )
 
+        # Map template-friendly names to model field names
         customer = Customer(
             organization_id=org_id,
             customer_code=input.customer_code,
             customer_type=input.customer_type,
-            legal_name=input.legal_name,
+            legal_name=input.customer_name,  # template: customer_name → model: legal_name
             trading_name=input.trading_name,
-            tax_identification_number=input.tax_identification_number,
+            tax_identification_number=input.tax_id,  # template: tax_id → model: tax_identification_number
             registration_number=input.registration_number,
             credit_limit=input.credit_limit,
-            credit_terms_days=input.credit_terms_days,
+            credit_terms_days=input.payment_terms_days,  # template: payment_terms_days → model: credit_terms_days
             credit_hold=input.credit_hold,
             payment_terms_id=input.payment_terms_id,
             currency_code=input.currency_code,
             price_list_id=input.price_list_id,
-            ar_control_account_id=input.ar_control_account_id,
+            ar_control_account_id=input.default_receivable_account_id,  # template: default_receivable_account_id → model: ar_control_account_id
             default_revenue_account_id=input.default_revenue_account_id,
             sales_rep_user_id=input.sales_rep_user_id,
             customer_group_id=input.customer_group_id,
@@ -154,6 +165,7 @@ class CustomerService(ListResponseMixin):
         """
         org_id = coerce_uuid(organization_id)
         cust_id = coerce_uuid(customer_id)
+        org_id = coerce_uuid(organization_id)
 
         customer = get_org_scoped_entity(
             db=db,
@@ -162,6 +174,10 @@ class CustomerService(ListResponseMixin):
             org_id=org_id,
             entity_name="Customer",
         )
+        if not customer:
+            raise HTTPException(status_code=404, detail="Customer not found")
+        if not customer:
+            raise HTTPException(status_code=404, detail="Customer not found")
 
         # Validate unique customer code (if changed)
         if customer.customer_code != input.customer_code:
@@ -175,20 +191,21 @@ class CustomerService(ListResponseMixin):
                 exclude_id=cust_id,
             )
 
-        # Update fields
+        # Update fields - map template-friendly names to model field names
         customer.customer_code = input.customer_code
         customer.customer_type = input.customer_type
-        customer.legal_name = input.legal_name
+        customer.legal_name = input.customer_name  # template: customer_name → model: legal_name
         customer.trading_name = input.trading_name
-        customer.tax_identification_number = input.tax_identification_number
+        customer.tax_identification_number = input.tax_id  # template: tax_id → model: tax_identification_number
         customer.registration_number = input.registration_number
         customer.credit_limit = input.credit_limit
-        customer.credit_terms_days = input.credit_terms_days
+        customer.credit_terms_days = input.payment_terms_days  # template: payment_terms_days → model: credit_terms_days
         customer.credit_hold = input.credit_hold
         customer.payment_terms_id = input.payment_terms_id
         customer.currency_code = input.currency_code
         customer.price_list_id = input.price_list_id
-        customer.ar_control_account_id = input.ar_control_account_id
+        if input.default_receivable_account_id is not None:
+            customer.ar_control_account_id = input.default_receivable_account_id  # template: default_receivable_account_id → model: ar_control_account_id
         customer.default_revenue_account_id = input.default_revenue_account_id
         customer.sales_rep_user_id = input.sales_rep_user_id
         customer.customer_group_id = input.customer_group_id
@@ -239,20 +256,26 @@ class CustomerService(ListResponseMixin):
             org_id=org_id,
             entity_name="Customer",
         )
+        if not customer:
+            raise HTTPException(status_code=404, detail="Customer not found")
 
-        # Update only provided fields (non-None values)
-        updatable_fields = [
-            "legal_name",
+        # Template field name → Model field name mapping
+        field_mapping = {
+            "customer_name": "legal_name",
+            "tax_id": "tax_identification_number",
+            "payment_terms_days": "credit_terms_days",
+            "default_receivable_account_id": "ar_control_account_id",
+        }
+
+        # Fields that pass through unchanged (same name in template and model)
+        direct_fields = [
             "trading_name",
-            "tax_identification_number",
             "registration_number",
             "credit_limit",
-            "credit_terms_days",
             "credit_hold",
             "payment_terms_id",
             "currency_code",
             "price_list_id",
-            "ar_control_account_id",
             "default_revenue_account_id",
             "sales_rep_user_id",
             "customer_group_id",
@@ -266,7 +289,13 @@ class CustomerService(ListResponseMixin):
             "bank_details",
         ]
 
-        for field in updatable_fields:
+        # Update mapped fields (template name → model name)
+        for template_field, model_field in field_mapping.items():
+            if template_field in update_data and update_data[template_field] is not None:
+                setattr(customer, model_field, update_data[template_field])
+
+        # Update direct fields (same name in both)
+        for field in direct_fields:
             if field in update_data and update_data[field] is not None:
                 setattr(customer, field, update_data[field])
 
@@ -306,6 +335,18 @@ class CustomerService(ListResponseMixin):
             org_id=organization_id,
             entity_name="Customer",
         )
+        if not customer:
+            raise HTTPException(status_code=404, detail="Customer not found")
+        if not customer:
+            raise HTTPException(status_code=404, detail="Customer not found")
+        if not customer:
+            raise HTTPException(status_code=404, detail="Customer not found")
+        if not customer:
+            raise HTTPException(status_code=404, detail="Customer not found")
+        if not customer:
+            raise HTTPException(status_code=404, detail="Customer not found")
+        if not customer:
+            raise HTTPException(status_code=404, detail="Customer not found")
 
         customer.credit_limit = new_credit_limit
 
@@ -340,6 +381,8 @@ class CustomerService(ListResponseMixin):
             org_id=organization_id,
             entity_name="Customer",
         )
+        if not customer:
+            raise HTTPException(status_code=404, detail="Customer not found")
 
         customer.risk_category = new_risk_category
 
@@ -402,6 +445,7 @@ class CustomerService(ListResponseMixin):
         from app.models.finance.ar.invoice import Invoice, InvoiceStatus
 
         cust_id = coerce_uuid(customer_id)
+        org_id = coerce_uuid(organization_id)
 
         customer = get_org_scoped_entity(
             db=db,
@@ -410,6 +454,8 @@ class CustomerService(ListResponseMixin):
             org_id=organization_id,
             entity_name="Customer",
         )
+        if not customer:
+            raise HTTPException(status_code=404, detail="Customer not found")
 
         if customer.credit_limit is None:
             # No credit limit = unlimited
@@ -426,6 +472,7 @@ class CustomerService(ListResponseMixin):
             db.query(Invoice)
             .filter(
                 and_(
+                    Invoice.organization_id == org_id,
                     Invoice.customer_id == cust_id,
                     Invoice.status.in_(outstanding_statuses),
                 )
@@ -433,7 +480,7 @@ class CustomerService(ListResponseMixin):
             .all()
         )
 
-        current_balance = sum(inv.balance_due for inv in invoices)
+        current_balance = sum((inv.balance_due for inv in invoices), Decimal("0"))
         available_credit = customer.credit_limit - current_balance
         is_within_limit = (current_balance + requested_amount) <= customer.credit_limit
 
@@ -446,13 +493,18 @@ class CustomerService(ListResponseMixin):
         customer_id: str,
     ) -> Customer:
         """Get a customer by ID."""
-        return get_org_scoped_entity(
+        customer = get_org_scoped_entity(
             db=db,
             model_class=Customer,
             entity_id=customer_id,
             org_id=organization_id,
             entity_name="Customer",
         )
+        if not customer:
+            raise HTTPException(status_code=404, detail="Customer not found")
+        if not customer:
+            raise HTTPException(status_code=404, detail="Customer not found")
+        return customer
 
     @staticmethod
     def get_by_code(
@@ -485,7 +537,7 @@ class CustomerService(ListResponseMixin):
         search: Optional[str] = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> list[Customer]:
+    ) -> List[Customer]:
         """List customers with optional filters."""
         if not organization_id:
             raise HTTPException(status_code=400, detail="organization_id is required")
@@ -529,6 +581,7 @@ class CustomerService(ListResponseMixin):
         from app.models.finance.ar.invoice import Invoice, InvoiceStatus
 
         cust_id = coerce_uuid(customer_id)
+        org_id = coerce_uuid(organization_id)
 
         customer = get_org_scoped_entity(
             db=db,
@@ -537,6 +590,9 @@ class CustomerService(ListResponseMixin):
             org_id=organization_id,
             entity_name="Customer",
         )
+
+        if not customer:
+            raise HTTPException(status_code=404, detail="Customer not found")
 
         # Get outstanding invoices
         outstanding_statuses = [
@@ -549,6 +605,7 @@ class CustomerService(ListResponseMixin):
             db.query(Invoice)
             .filter(
                 and_(
+                    Invoice.organization_id == org_id,
                     Invoice.customer_id == cust_id,
                     Invoice.status.in_(outstanding_statuses),
                 )
@@ -556,7 +613,7 @@ class CustomerService(ListResponseMixin):
             .all()
         )
 
-        total_outstanding = sum(inv.balance_due for inv in invoices)
+        total_outstanding = sum((inv.balance_due for inv in invoices), Decimal("0"))
         invoice_count = len(invoices)
 
         return {

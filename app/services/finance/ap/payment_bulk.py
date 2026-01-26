@@ -105,7 +105,7 @@ class APPaymentBulkService(BulkActionService[SupplierPayment]):
         if field_name == "remittance_advice_sent":
             return "Yes" if entity.remittance_advice_sent else "No"
 
-        return super()._get_export_value(entity, field_name)
+        return str(super()._get_export_value(entity, field_name))
 
     def _get_export_filename(self) -> str:
         """Get payment export filename."""

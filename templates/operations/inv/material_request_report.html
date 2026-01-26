@@ -174,7 +174,7 @@
                             {% set fulfillment = (row.ordered_qty / row.requested_qty * 100) if row.requested_qty > 0 else 0 %}
                             <div class="flex items-center justify-end gap-2">
                                 <div class="w-16 h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                                    <div class="h-full bg-amber-500 rounded-full" style="width: {{ fulfillment | min(100) }}%"></div>
+                    <div class="h-full bg-amber-500 rounded-full" style="width: {{ 100 if fulfillment > 100 else fulfillment }}%"></div>
                                 </div>
                                 <span class="font-mono text-sm text-slate-600 dark:text-slate-400">{{ "%.1f" | format(fulfillment) }}%</span>
                             </div>

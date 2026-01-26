@@ -11,7 +11,7 @@ import socket
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 from urllib.parse import urlsplit
 from uuid import UUID
 
@@ -43,9 +43,9 @@ def _db_setting(db: Session | None, key: str) -> object | None:
     except HTTPException:
         return None
     if setting.value_text is not None:
-        return setting.value_text
+        return cast(object, setting.value_text)
     if setting.value_json is not None:
-        return setting.value_json
+        return cast(object, setting.value_json)
     return None
 
 
@@ -120,7 +120,7 @@ def _webhook_timeout(db: Session | None = None) -> float:
     return _coerce_float(raw, default=10.0)
 
 
-def _is_private_address(address: ipaddress._BaseAddress) -> bool:
+def _is_private_address(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
     return (
         address.is_private
         or address.is_loopback
@@ -397,17 +397,17 @@ class WorkflowService:
             return operator == "is_null" or (operator == "equals" and expected is None)
 
         if operator == "equals":
-            return value == expected
+            return bool(value == expected)
         elif operator == "not_equals":
-            return value != expected
+            return bool(value != expected)
         elif operator == "greater_than":
-            return value > expected
+            return bool(value > expected)
         elif operator == "greater_than_or_equal":
-            return value >= expected
+            return bool(value >= expected)
         elif operator == "less_than":
-            return value < expected
+            return bool(value < expected)
         elif operator == "less_than_or_equal":
-            return value <= expected
+            return bool(value <= expected)
         elif operator == "contains":
             return str(expected).lower() in str(value).lower()
         elif operator == "starts_with":
@@ -417,13 +417,13 @@ class WorkflowService:
         elif operator == "matches":
             return bool(re.match(str(expected), str(value), re.IGNORECASE))
         elif operator == "in":
-            return value in expected
+            return bool(value in expected)
         elif operator == "not_in":
-            return value not in expected
+            return bool(value not in expected)
         elif operator == "is_null":
-            return value is None
+            return bool(value is None)
         elif operator == "is_not_null":
-            return value is not None
+            return bool(value is not None)
 
         return False
 
@@ -635,7 +635,8 @@ class WorkflowService:
         """Webhook action."""
         import httpx
 
-        url = config.get("url")
+        url_value = config.get("url")
+        url = "" if url_value is None else str(url_value)
         is_valid, error_message = _validate_webhook_target(url, db)
         if not is_valid:
             return ActionResult(success=False, error_message=error_message)

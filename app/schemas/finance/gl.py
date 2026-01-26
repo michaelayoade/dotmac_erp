@@ -41,17 +41,44 @@ class AccountUpdate(BaseModel):
 
     account_name: Optional[str] = Field(default=None, max_length=200)
     description: Optional[str] = None
+    search_terms: Optional[str] = None
     is_active: Optional[bool] = None
+    is_posting_allowed: Optional[bool] = None
+    is_budgetable: Optional[bool] = None
+    is_reconciliation_required: Optional[bool] = None
+    is_multi_currency: Optional[bool] = None
+    default_currency_code: Optional[str] = Field(default=None, max_length=3)
+    subledger_type: Optional[str] = Field(default=None, max_length=20)
+    is_cash_equivalent: Optional[bool] = None
+    is_financial_instrument: Optional[bool] = None
 
 
-class AccountRead(AccountBase):
+class AccountRead(BaseModel):
     """Account response."""
 
     model_config = ConfigDict(from_attributes=True)
 
     account_id: UUID
     organization_id: UUID
+    category_id: UUID
+    account_code: str
+    account_name: str
+    description: Optional[str] = None
+    search_terms: Optional[str] = None
+    account_type: str
+    normal_balance: str
+    is_multi_currency: bool = False
+    default_currency_code: Optional[str] = None
+    is_active: bool = True
+    is_posting_allowed: bool = True
+    is_budgetable: bool = True
+    is_reconciliation_required: bool = False
+    subledger_type: Optional[str] = None
+    is_cash_equivalent: bool = False
+    is_financial_instrument: bool = False
+    created_by_user_id: Optional[UUID] = None
     created_at: datetime
+    updated_by_user_id: Optional[UUID] = None
     updated_at: Optional[datetime] = None
 
 

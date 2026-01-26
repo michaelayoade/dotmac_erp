@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
-from typing import Optional
+from typing import List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -351,7 +351,7 @@ class LegalEntityService(ListResponseMixin):
         db: Session,
         group_id: UUID,
         consolidation_method: Optional[ConsolidationMethod] = None,
-    ) -> list[LegalEntity]:
+    ) -> List[LegalEntity]:
         """
         Get entities to include in consolidation.
 
@@ -435,7 +435,7 @@ class LegalEntityService(ListResponseMixin):
         country_code: Optional[str] = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> list[LegalEntity]:
+    ) -> List[LegalEntity]:
         """List legal entities with optional filters."""
         query = db.query(LegalEntity)
 

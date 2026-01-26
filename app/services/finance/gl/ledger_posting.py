@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any, List, Optional
 from uuid import UUID
 import uuid as uuid_lib
 
@@ -80,6 +80,10 @@ class PostingResult:
     total_credit: Decimal = Decimal("0")
     message: str = ""
     correlation_id: Optional[str] = None
+
+    @property
+    def posting_batch_id(self) -> Optional[UUID]:
+        return self.batch_id
 
 
 @dataclass
@@ -344,8 +348,8 @@ class LedgerPostingService(ListResponseMixin):
     @staticmethod
     def _validate_balance(entries: list[PostingEntry]) -> None:
         """Validate that debits equal credits."""
-        total_debit = sum(e.debit_amount_functional for e in entries)
-        total_credit = sum(e.credit_amount_functional for e in entries)
+        total_debit = sum((e.debit_amount_functional for e in entries), Decimal("0"))
+        total_credit = sum((e.credit_amount_functional for e in entries), Decimal("0"))
 
         if abs(total_debit - total_credit) > LedgerPostingService.BALANCE_TOLERANCE:
             raise HTTPException(
@@ -433,7 +437,7 @@ class LedgerPostingService(ListResponseMixin):
         to_date: Optional[date] = None,
         limit: int = 100,
         offset: int = 0,
-    ) -> list[PostedLedgerLine]:
+    ) -> List[PostedLedgerLine]:
         """
         Get posted ledger lines.
 
@@ -487,7 +491,7 @@ class LedgerPostingService(ListResponseMixin):
         source_module: Optional[str] = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> list[PostingBatch]:
+    ) -> List[PostingBatch]:
         """
         List posting batches.
 

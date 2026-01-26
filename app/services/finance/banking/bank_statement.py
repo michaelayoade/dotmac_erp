@@ -5,9 +5,9 @@ Provides statement import and management functionality.
 """
 
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from decimal import Decimal
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, cast
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -164,11 +164,11 @@ class BankStatementService:
         # Calculate totals
         total_credits = Decimal("0")
         total_debits = Decimal("0")
-        for line in lines:
-            if line.transaction_type == StatementLineType.credit:
-                total_credits += line.amount
+        for line_input in lines:
+            if line_input.transaction_type == StatementLineType.credit:
+                total_credits += line_input.amount
             else:
-                total_debits += line.amount
+                total_debits += line_input.amount
 
         # Create statement
         statement = BankStatement(
@@ -250,7 +250,11 @@ class BankStatementService:
                 result.errors.append(f"Line {line_input.line_number}: {str(e)}")
 
         # Update bank account with latest statement info
-        bank_account.last_statement_date = statement_date
+        bank_account.last_statement_date = datetime.combine(
+            statement_date,
+            datetime.min.time(),
+            tzinfo=timezone.utc,
+        )
         bank_account.last_statement_balance = closing_balance
 
         db.flush()

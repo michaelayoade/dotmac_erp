@@ -48,6 +48,7 @@ from app.schemas.people.recruit import (
     JobOfferListResponse,
 )
 from app.services.people.recruit import RecruitmentService
+from app.services.people.recruit.recruit_service import JobOpeningNotFoundError
 from app.services.common import PaginationParams
 
 router = APIRouter(
@@ -171,7 +172,11 @@ def get_job_opening(
 ):
     """Get a job opening by ID."""
     svc = RecruitmentService(db)
-    return JobOpeningRead.model_validate(svc.get_job_opening(organization_id, job_opening_id))
+    try:
+        job_opening = svc.get_job_opening(organization_id, job_opening_id)
+    except JobOpeningNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job opening not found")
+    return JobOpeningRead.model_validate(job_opening)
 
 
 @router.patch("/job-openings/{job_opening_id}", response_model=JobOpeningRead)

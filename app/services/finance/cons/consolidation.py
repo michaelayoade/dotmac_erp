@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP
-from typing import Optional
+from typing import List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -277,7 +277,7 @@ class ConsolidationService(ListResponseMixin):
         group_id: UUID,
         run_id: UUID,
         intercompany_elimination_account_id: UUID,
-    ) -> list[EliminationEntry]:
+    ) -> List[EliminationEntry]:
         """
         Generate elimination entries for intercompany balances.
 
@@ -693,7 +693,7 @@ class ConsolidationService(ListResponseMixin):
         db: Session,
         run_id: UUID,
         segment_id: Optional[UUID] = None,
-    ) -> list[ConsolidatedBalance]:
+    ) -> List[ConsolidatedBalance]:
         """Get consolidated balances for a run."""
         r_id = coerce_uuid(run_id)
 
@@ -725,7 +725,7 @@ class ConsolidationService(ListResponseMixin):
         status: Optional[ConsolidationStatus] = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> list[ConsolidationRun]:
+    ) -> List[ConsolidationRun]:
         """List consolidation runs with optional filters."""
         query = db.query(ConsolidationRun)
 

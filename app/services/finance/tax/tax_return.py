@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any, List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -133,6 +133,8 @@ class TaxReturnService(ListResponseMixin):
         net_payable = total_output - total_input
         final_amount = net_payable + input.adjustments
 
+        if period.fiscal_period_id is None:
+            raise ValueError("Tax period is missing a fiscal period reference")
         # Build box values
         box_values = TaxReturnService._calculate_box_values(
             db, org_id, period.fiscal_period_id, input.return_type
@@ -308,14 +310,15 @@ class TaxReturnService(ListResponseMixin):
             period.status = TaxPeriodStatus.FILED
 
         # Mark transactions as included in return
-        db.query(TaxTransaction).filter(
-            TaxTransaction.organization_id == org_id,
-            TaxTransaction.fiscal_period_id == period.fiscal_period_id if period else None,
-            TaxTransaction.is_included_in_return == False,
-        ).update({
-            TaxTransaction.is_included_in_return: True,
-            TaxTransaction.tax_return_period: tax_return.return_reference or str(return_id),
-        })
+        if period and period.fiscal_period_id is not None:
+            db.query(TaxTransaction).filter(
+                TaxTransaction.organization_id == org_id,
+                TaxTransaction.fiscal_period_id == period.fiscal_period_id,
+                TaxTransaction.is_included_in_return == False,
+            ).update({
+                TaxTransaction.is_included_in_return: True,
+                TaxTransaction.tax_return_period: tax_return.return_reference or str(return_id),
+            })
 
         db.commit()
         db.refresh(tax_return)
@@ -560,6 +563,8 @@ class TaxReturnService(ListResponseMixin):
         tax_return.final_amount = tax_return.net_tax_payable + tax_return.adjustments
 
         # Recalculate box values
+        if period.fiscal_period_id is None:
+            raise ValueError("Tax period is missing a fiscal period reference")
         tax_return.box_values = TaxReturnService._calculate_box_values(
             db, org_id, period.fiscal_period_id, tax_return.return_type
         )
@@ -705,7 +710,7 @@ class TaxReturnService(ListResponseMixin):
         status: Optional[TaxReturnStatus] = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> list[TaxReturn]:
+    ) -> List[TaxReturn]:
         """
         List tax returns with filters.
 

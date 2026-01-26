@@ -26,6 +26,12 @@ from app.web.deps import (
 router = APIRouter(prefix="/self", tags=["people-self-service"])
 
 
+def _safe_form_text(value: object | None, default: str = "") -> str:
+    if isinstance(value, str):
+        return value.strip()
+    return default
+
+
 @router.get("/attendance", response_class=HTMLResponse)
 def my_attendance(
     request: Request,
@@ -184,21 +190,21 @@ async def create_expense_claim(
     if form is None:
         form = await request.form()
 
-    claim_date_str = (form.get("claim_date") or "").strip()
-    purpose = (form.get("purpose") or "").strip()
-    expense_date_str = (form.get("expense_date") or "").strip()
-    category_id = (form.get("category_id") or "").strip()
-    description = (form.get("description") or "").strip()
-    claimed_amount = (form.get("claimed_amount") or "").strip()
-    recipient_bank_code = (form.get("recipient_bank_code") or "").strip()
-    recipient_account_number = (form.get("recipient_account_number") or "").strip()
-    receipt_url = (form.get("receipt_url") or "").strip()
-    receipt_number = (form.get("receipt_number") or "").strip()
+    claim_date_str = _safe_form_text(form.get("claim_date"))
+    purpose = _safe_form_text(form.get("purpose"))
+    expense_date_str = _safe_form_text(form.get("expense_date"))
+    category_id = _safe_form_text(form.get("category_id"))
+    description = _safe_form_text(form.get("description"))
+    claimed_amount = _safe_form_text(form.get("claimed_amount"))
+    recipient_bank_code = _safe_form_text(form.get("recipient_bank_code"))
+    recipient_account_number = _safe_form_text(form.get("recipient_account_number"))
+    receipt_url = _safe_form_text(form.get("receipt_url"))
+    receipt_number = _safe_form_text(form.get("receipt_number"))
     receipt_file = form.get("receipt_file")
     submit_now = form.get("submit_now")
-    project_id = (form.get("project_id") or "").strip()
-    ticket_id = (form.get("ticket_id") or "").strip()
-    task_id = (form.get("task_id") or "").strip()
+    project_id = _safe_form_text(form.get("project_id"))
+    ticket_id = _safe_form_text(form.get("ticket_id"))
+    task_id = _safe_form_text(form.get("task_id"))
 
     if not all([claim_date_str, purpose, expense_date_str, category_id, description, claimed_amount, recipient_bank_code, recipient_account_number]):
         raise HTTPException(status_code=400, detail="Missing required fields")
@@ -262,8 +268,8 @@ async def update_expense_claim(
     if not item_ids:
         raise HTTPException(status_code=400, detail="No claim items submitted")
 
-    recipient_bank_code = (form.get("recipient_bank_code") or "").strip()
-    recipient_account_number = (form.get("recipient_account_number") or "").strip()
+    recipient_bank_code = _safe_form_text(form.get("recipient_bank_code"))
+    recipient_account_number = _safe_form_text(form.get("recipient_account_number"))
     if not recipient_bank_code or not recipient_account_number:
         raise HTTPException(status_code=400, detail="Bank code and account number are required")
 
@@ -274,12 +280,12 @@ async def update_expense_claim(
             items.append({"item_id": item_id, "remove": True})
             continue
 
-        expense_date_str = (form.get(f"expense_date_{item_id}") or "").strip()
-        category_id = (form.get(f"category_id_{item_id}") or "").strip()
-        description = (form.get(f"description_{item_id}") or "").strip()
-        claimed_amount_str = (form.get(f"claimed_amount_{item_id}") or "").strip()
-        receipt_number = (form.get(f"receipt_number_{item_id}") or "").strip()
-        receipt_url = (form.get(f"receipt_url_{item_id}") or "").strip()
+        expense_date_str = _safe_form_text(form.get(f"expense_date_{item_id}"))
+        category_id = _safe_form_text(form.get(f"category_id_{item_id}"))
+        description = _safe_form_text(form.get(f"description_{item_id}"))
+        claimed_amount_str = _safe_form_text(form.get(f"claimed_amount_{item_id}"))
+        receipt_number = _safe_form_text(form.get(f"receipt_number_{item_id}"))
+        receipt_url = _safe_form_text(form.get(f"receipt_url_{item_id}"))
 
         if not all([expense_date_str, category_id, description, claimed_amount_str]):
             raise HTTPException(status_code=400, detail="Missing required item fields")

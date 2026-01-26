@@ -92,8 +92,8 @@ class CustomerPaymentImporter(BaseImporter[CustomerPayment]):
         ]
 
     def get_unique_key(self, row: Dict[str, Any]) -> str:
-        return (row.get("Payment Number") or row.get("Payment No") or
-                row.get("Reference") or "").strip()
+        return str(row.get("Payment Number") or row.get("Payment No") or
+                   row.get("Reference") or "").strip()
 
     def check_duplicate(self, row: Dict[str, Any]) -> Optional[CustomerPayment]:
         payment_number = self.get_unique_key(row)
@@ -112,7 +112,7 @@ class CustomerPaymentImporter(BaseImporter[CustomerPayment]):
     def validate_row(self, row: Dict[str, Any], row_num: int) -> bool:
         is_valid = super().validate_row(row, row_num)
 
-        customer_name = (row.get("Customer Name") or row.get("Customer") or "").strip()
+        customer_name = str(row.get("Customer Name") or row.get("Customer") or "").strip()
         if not customer_name:
             self.result.add_error(row_num, "Customer name is required", "Customer Name")
             is_valid = False
@@ -126,8 +126,8 @@ class CustomerPaymentImporter(BaseImporter[CustomerPayment]):
 
     def create_entity(self, row: Dict[str, Any]) -> CustomerPayment:
         # Get payment number
-        payment_number = (row.get("payment_number") or row.get("payment_no_alt") or
-                          row.get("reference") or "").strip()
+        payment_number = str(row.get("payment_number") or row.get("payment_no_alt") or
+                             row.get("reference") or "").strip()
         if not payment_number:
             self._payment_counter += 1
             payment_number = f"RCPT{self._payment_counter:06d}"
@@ -136,7 +136,7 @@ class CustomerPaymentImporter(BaseImporter[CustomerPayment]):
         payment_date = row.get("payment_date") or row.get("date_alt") or date.today()
 
         # Get customer
-        customer_name = (row.get("customer_name") or row.get("customer_alt")).strip()
+        customer_name = str(row.get("customer_name") or row.get("customer_alt") or "").strip()
         customer_id = self._get_customer_id(customer_name)
 
         # Get amount and currency
@@ -189,8 +189,9 @@ class CustomerPaymentImporter(BaseImporter[CustomerPayment]):
         ).scalar_one_or_none()
 
         if customer:
-            self._customer_cache[customer_name] = customer.customer_id
-            return customer.customer_id
+            customer_id = customer.customer_id
+            self._customer_cache[customer_name] = customer_id
+            return customer_id
 
         raise ValueError(f"Customer '{customer_name}' not found.")
 
@@ -273,8 +274,8 @@ class SupplierPaymentImporter(BaseImporter[SupplierPayment]):
         ]
 
     def get_unique_key(self, row: Dict[str, Any]) -> str:
-        return (row.get("Payment Number") or row.get("Payment No") or
-                row.get("Reference") or "").strip()
+        return str(row.get("Payment Number") or row.get("Payment No") or
+                   row.get("Reference") or "").strip()
 
     def check_duplicate(self, row: Dict[str, Any]) -> Optional[SupplierPayment]:
         payment_number = self.get_unique_key(row)
@@ -293,8 +294,8 @@ class SupplierPaymentImporter(BaseImporter[SupplierPayment]):
     def validate_row(self, row: Dict[str, Any], row_num: int) -> bool:
         is_valid = super().validate_row(row, row_num)
 
-        supplier_name = (row.get("Vendor Name") or row.get("Vendor") or
-                         row.get("Supplier Name") or row.get("Supplier") or "").strip()
+        supplier_name = str(row.get("Vendor Name") or row.get("Vendor") or
+                            row.get("Supplier Name") or row.get("Supplier") or "").strip()
         if not supplier_name:
             self.result.add_error(row_num, "Vendor/Supplier name is required", "Vendor Name")
             is_valid = False
@@ -308,8 +309,8 @@ class SupplierPaymentImporter(BaseImporter[SupplierPayment]):
 
     def create_entity(self, row: Dict[str, Any]) -> SupplierPayment:
         # Get payment number
-        payment_number = (row.get("payment_number") or row.get("payment_no_alt") or
-                          row.get("reference") or "").strip()
+        payment_number = str(row.get("payment_number") or row.get("payment_no_alt") or
+                             row.get("reference") or "").strip()
         if not payment_number:
             self._payment_counter += 1
             payment_number = f"VPMT{self._payment_counter:06d}"
@@ -318,8 +319,8 @@ class SupplierPaymentImporter(BaseImporter[SupplierPayment]):
         payment_date = row.get("payment_date") or row.get("date_alt") or date.today()
 
         # Get supplier
-        supplier_name = (row.get("vendor_name") or row.get("vendor_alt") or
-                         row.get("supplier_name") or row.get("supplier_alt")).strip()
+        supplier_name = str(row.get("vendor_name") or row.get("vendor_alt") or
+                            row.get("supplier_name") or row.get("supplier_alt") or "").strip()
         supplier_id = self._get_supplier_id(supplier_name)
 
         # Get amount and currency
@@ -373,8 +374,9 @@ class SupplierPaymentImporter(BaseImporter[SupplierPayment]):
         ).scalar_one_or_none()
 
         if supplier:
-            self._supplier_cache[supplier_name] = supplier.supplier_id
-            return supplier.supplier_id
+            supplier_id = supplier.supplier_id
+            self._supplier_cache[supplier_name] = supplier_id
+            return supplier_id
 
         raise ValueError(f"Supplier '{supplier_name}' not found.")
 

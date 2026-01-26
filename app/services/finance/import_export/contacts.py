@@ -85,7 +85,7 @@ class CustomerImporter(BaseImporter[Customer]):
 
     def get_unique_key(self, row: Dict[str, Any]) -> str:
         """Unique key is the display name."""
-        return row.get("Display Name", "").strip()
+        return str(row.get("Display Name", "") or "").strip()
 
     def check_duplicate(self, row: Dict[str, Any]) -> Optional[Customer]:
         """Check if customer already exists by name."""
@@ -105,10 +105,10 @@ class CustomerImporter(BaseImporter[Customer]):
 
     def create_entity(self, row: Dict[str, Any]) -> Customer:
         """Create a new customer from transformed row data."""
-        display_name = row.get("display_name", "").strip()
-        company_name = row.get("company_name", "").strip()
-        first_name = row.get("first_name", "").strip()
-        last_name = row.get("last_name", "").strip()
+        display_name = str(row.get("display_name", "") or "").strip()
+        company_name = str(row.get("company_name", "") or "").strip()
+        first_name = str(row.get("first_name", "") or "").strip()
+        last_name = str(row.get("last_name", "") or "").strip()
 
         # Determine customer type
         if company_name:
@@ -248,7 +248,7 @@ class SupplierImporter(BaseImporter[Supplier]):
 
     def get_unique_key(self, row: Dict[str, Any]) -> str:
         """Unique key is the display name or contact name."""
-        return (row.get("Display Name") or row.get("Contact Name") or "").strip()
+        return str(row.get("Display Name") or row.get("Contact Name") or "").strip()
 
     def check_duplicate(self, row: Dict[str, Any]) -> Optional[Supplier]:
         """Check if supplier already exists by name."""
@@ -267,8 +267,8 @@ class SupplierImporter(BaseImporter[Supplier]):
 
     def create_entity(self, row: Dict[str, Any]) -> Supplier:
         """Create a new supplier from transformed row data."""
-        display_name = (row.get("display_name") or row.get("contact_name") or "").strip()
-        company_name = row.get("company_name", "").strip()
+        display_name = str(row.get("display_name") or row.get("contact_name") or "").strip()
+        company_name = str(row.get("company_name", "") or "").strip()
 
         # Determine supplier type
         if company_name:

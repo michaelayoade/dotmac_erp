@@ -29,6 +29,7 @@ from app.models.finance.banking.transaction_rule import (
     RuleType,
     RuleAction,
 )
+from app.services.common import coerce_uuid
 
 
 @dataclass
@@ -583,11 +584,20 @@ class TransactionCategorizationService:
     def update_payee(
         self,
         db: Session,
+        organization_id: UUID,
         payee_id: UUID,
         **kwargs,
     ) -> Optional[Payee]:
         """Update a payee."""
-        payee = db.get(Payee, payee_id)
+        org_id = coerce_uuid(organization_id)
+        payee = (
+            db.query(Payee)
+            .filter(
+                Payee.payee_id == coerce_uuid(payee_id),
+                Payee.organization_id == org_id,
+            )
+            .first()
+        )
         if not payee:
             return None
 
@@ -639,10 +649,19 @@ class TransactionCategorizationService:
     def increment_payee_match(
         self,
         db: Session,
+        organization_id: UUID,
         payee_id: UUID,
     ) -> None:
         """Increment match count for a payee."""
-        payee = db.get(Payee, payee_id)
+        org_id = coerce_uuid(organization_id)
+        payee = (
+            db.query(Payee)
+            .filter(
+                Payee.payee_id == coerce_uuid(payee_id),
+                Payee.organization_id == org_id,
+            )
+            .first()
+        )
         if payee:
             payee.match_count += 1
             payee.last_matched_at = datetime.utcnow()
@@ -698,11 +717,20 @@ class TransactionCategorizationService:
     def update_rule(
         self,
         db: Session,
+        organization_id: UUID,
         rule_id: UUID,
         **kwargs,
     ) -> Optional[TransactionRule]:
         """Update a rule."""
-        rule = db.get(TransactionRule, rule_id)
+        org_id = coerce_uuid(organization_id)
+        rule = (
+            db.query(TransactionRule)
+            .filter(
+                TransactionRule.rule_id == coerce_uuid(rule_id),
+                TransactionRule.organization_id == org_id,
+            )
+            .first()
+        )
         if not rule:
             return None
 
@@ -757,11 +785,20 @@ class TransactionCategorizationService:
     def record_rule_feedback(
         self,
         db: Session,
+        organization_id: UUID,
         rule_id: UUID,
         accepted: bool,
     ) -> None:
         """Record user feedback on a rule suggestion."""
-        rule = db.get(TransactionRule, rule_id)
+        org_id = coerce_uuid(organization_id)
+        rule = (
+            db.query(TransactionRule)
+            .filter(
+                TransactionRule.rule_id == coerce_uuid(rule_id),
+                TransactionRule.organization_id == org_id,
+            )
+            .first()
+        )
         if rule:
             rule.match_count += 1
             rule.last_matched_at = datetime.utcnow()

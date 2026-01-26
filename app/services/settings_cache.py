@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, cast
 
 from sqlalchemy.orm import Session
 
@@ -382,8 +382,8 @@ class SettingsCache:
 
         # Check cache
         cached = self._cache_get(cache_key)
-        if cached is not None:
-            return cached
+        if isinstance(cached, dict):
+            return cast(Dict[str, Any], cached)
 
         # Query database
         settings = (

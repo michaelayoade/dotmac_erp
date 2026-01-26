@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
-from typing import Optional
+from typing import List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -336,7 +336,7 @@ class TaxCodeService(ListResponseMixin):
         applies_to_sales: Optional[bool] = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> list[TaxCode]:
+    ) -> List[TaxCode]:
         """List tax codes with optional filters."""
         query = db.query(TaxCode)
 
@@ -366,7 +366,7 @@ class TaxCodeService(ListResponseMixin):
         db: Session,
         organization_id: str,
         as_of_date: date,
-    ) -> list[TaxCode]:
+    ) -> List[TaxCode]:
         """Get all tax codes effective on a given date."""
         org_id = coerce_uuid(organization_id)
 
@@ -620,7 +620,7 @@ class TaxJurisdictionService(ListResponseMixin):
         is_active: Optional[bool] = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> list[TaxJurisdiction]:
+    ) -> List[TaxJurisdiction]:
         """List jurisdictions with optional filters."""
         query = db.query(TaxJurisdiction)
 

@@ -380,3 +380,24 @@ class Employee(Base, AuditMixin, SoftDeleteMixin, ERPNextSyncMixin, VersionMixin
         if self.person:
             return self.person.email
         return None
+
+    @property
+    def first_name(self) -> Optional[str]:
+        """Get employee's first name from linked Person."""
+        if self.person:
+            return self.person.first_name
+        return None
+
+    @property
+    def last_name(self) -> Optional[str]:
+        """Get employee's last name from linked Person."""
+        if self.person:
+            return self.person.last_name
+        return None
+
+    @property
+    def display_name(self) -> Optional[str]:
+        """Get employee's display name from linked Person."""
+        if self.person:
+            return self.person.display_name
+        return None

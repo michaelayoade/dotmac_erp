@@ -47,14 +47,15 @@ class ItemCategoryImporter(BaseImporter[ItemCategory]):
         return []
 
     def get_unique_key(self, row: Dict[str, Any]) -> str:
-        return row.get("Category Name", row.get("Item Group", "Default")).strip()
+        value = row.get("Category Name") or row.get("Item Group") or "Default"
+        return str(value).strip()
 
     def check_duplicate(self, row: Dict[str, Any]) -> Optional[ItemCategory]:
         category_name = self.get_unique_key(row)
         category_code = self._make_category_code(category_name)
 
         if category_code in self._category_cache:
-            return True
+            return self.db.get(ItemCategory, self._category_cache[category_code])
 
         existing = self.db.execute(
             select(ItemCategory).where(
@@ -224,13 +225,13 @@ class ItemImporter(BaseImporter[Item]):
 
     def get_unique_key(self, row: Dict[str, Any]) -> str:
         """Unique key is item code or SKU."""
-        code = (row.get("Item Code") or row.get("SKU") or
-                row.get("Product Code") or "").strip()
+        code = str(row.get("Item Code") or row.get("SKU") or
+                   row.get("Product Code") or "").strip()
         if code:
             return code
         # Fallback to name
-        name = (row.get("Item Name") or row.get("Name") or
-                row.get("Product Name") or "").strip()
+        name = str(row.get("Item Name") or row.get("Name") or
+                   row.get("Product Name") or "").strip()
         return name
 
     def check_duplicate(self, row: Dict[str, Any]) -> Optional[Item]:
@@ -251,8 +252,8 @@ class ItemImporter(BaseImporter[Item]):
             return existing
 
         # Check by name
-        name = (row.get("Item Name") or row.get("Name") or
-                row.get("Product Name") or "").strip()
+        name = str(row.get("Item Name") or row.get("Name") or
+                   row.get("Product Name") or "").strip()
         if name:
             existing = self.db.execute(
                 select(Item).where(
@@ -266,12 +267,12 @@ class ItemImporter(BaseImporter[Item]):
     def create_entity(self, row: Dict[str, Any]) -> Item:
         """Create a new item from transformed row data."""
         # Get item name (try multiple fields)
-        item_name = (row.get("item_name") or row.get("item_name_alt") or
-                     row.get("item_name_alt2") or "Unknown Item").strip()
+        item_name = str(row.get("item_name") or row.get("item_name_alt") or
+                        row.get("item_name_alt2") or "Unknown Item").strip()
 
         # Get item code (try multiple fields or generate)
-        item_code = (row.get("item_code") or row.get("sku") or
-                     row.get("product_code") or "").strip()
+        item_code = str(row.get("item_code") or row.get("sku") or
+                        row.get("product_code") or "").strip()
         if not item_code:
             self._code_counter += 1
             item_code = f"ITEM{self._code_counter:05d}"
@@ -280,17 +281,17 @@ class ItemImporter(BaseImporter[Item]):
         description = row.get("description") or row.get("description_alt")
 
         # Determine item type
-        type_str = (row.get("item_type_str") or row.get("type_alt") or "INVENTORY").upper()
+        type_str = str(row.get("item_type_str") or row.get("type_alt") or "INVENTORY").upper()
         item_type = self._parse_item_type(type_str)
 
         # Get category
-        category_name = (row.get("category_name") or row.get("item_group") or
-                         row.get("category_alt") or "Default")
+        category_name = str(row.get("category_name") or row.get("item_group") or
+                            row.get("category_alt") or "Default")
         category_id = self._category_importer.get_category_id(category_name)
 
         # Get UOM
-        base_uom = (row.get("base_uom") or row.get("uom_alt") or
-                    row.get("base_unit_alt") or "EACH")[:20]
+        base_uom = str(row.get("base_uom") or row.get("uom_alt") or
+                       row.get("base_unit_alt") or "EACH")[:20]
 
         # Get pricing
         purchase_cost = (row.get("purchase_cost") or row.get("cost_alt") or
@@ -299,8 +300,8 @@ class ItemImporter(BaseImporter[Item]):
                       row.get("list_price_alt"))
 
         # Get currency
-        currency_code = (row.get("currency_code") or
-                         row.get("currency_alt") or "NGN")[:3]
+        currency_code = str(row.get("currency_code") or
+                            row.get("currency_alt") or "NGN")[:3]
 
         # Get stock management
         reorder_point = row.get("reorder_point") or row.get("reorder_level_alt")
@@ -312,8 +313,9 @@ class ItemImporter(BaseImporter[Item]):
             is_taxable = True
 
         is_active = row.get("is_active", True)
-        if row.get("status_str"):
-            is_active = row.get("status_str").lower() not in ("inactive", "disabled", "false")
+        status_val = row.get("status_str")
+        if status_val:
+            is_active = str(status_val).lower() not in ("inactive", "disabled", "false")
 
         item = Item(
             item_id=uuid4(),

@@ -12,6 +12,7 @@ from app.db import Base
 
 class ScheduleType(enum.Enum):
     interval = "interval"
+    crontab = "crontab"
 
 
 class ScheduledTask(Base):
@@ -26,6 +27,12 @@ class ScheduledTask(Base):
         Enum(ScheduleType), default=ScheduleType.interval
     )
     interval_seconds: Mapped[int] = mapped_column(Integer, default=3600)
+    # Crontab fields (used when schedule_type is crontab)
+    cron_minute: Mapped[str | None] = mapped_column(String(20), default="0")
+    cron_hour: Mapped[str | None] = mapped_column(String(20), default="8")
+    cron_day_of_week: Mapped[str | None] = mapped_column(String(20), default="*")
+    cron_day_of_month: Mapped[str | None] = mapped_column(String(20), default="*")
+    cron_month_of_year: Mapped[str | None] = mapped_column(String(20), default="*")
     args_json: Mapped[list | None] = mapped_column(MutableList.as_mutable(JSON))
     kwargs_json: Mapped[dict | None] = mapped_column(MutableDict.as_mutable(JSON))
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)

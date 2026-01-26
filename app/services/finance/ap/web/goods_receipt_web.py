@@ -514,7 +514,7 @@ class GoodsReceiptWebService:
             receipt_date = (
                 datetime.strptime(receipt_date_str, "%Y-%m-%d").date()
                 if receipt_date_str
-                else None
+                else date.today()
             )
 
             input_data = GoodsReceiptInput(

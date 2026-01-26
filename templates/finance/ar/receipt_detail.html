@@ -167,8 +167,8 @@
     </div>
 
     <!-- Attachments -->
-    {% set upload_url = "/ar/receipts/" ~ receipt.receipt_id ~ "/attachments" %}
-    {% set delete_base_url = "/ar/attachments" %}
+    {% set upload_url = "/finance/ar/receipts/" ~ receipt.receipt_id ~ "/attachments" %}
+    {% set delete_base_url = "/finance/ar/attachments" %}
     {% include "finance/partials/_attachments.html" %}
 </div>
 {% else %}

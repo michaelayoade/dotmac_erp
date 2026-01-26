@@ -10,7 +10,7 @@ import json
 import logging
 from datetime import date, datetime, timedelta
 from decimal import Decimal
-from typing import Optional
+from typing import Optional, cast
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -36,7 +36,13 @@ logger = logging.getLogger(__name__)
 def _customer_display_name(customer: Customer | None) -> str:
     if not customer:
         return "-"
-    return customer.trading_name or customer.legal_name
+    return cast(str, customer.trading_name or customer.legal_name)
+
+
+def _customer_email(customer: Customer | None) -> str | None:
+    if not customer:
+        return None
+    return (customer.primary_contact or {}).get("email")
 
 
 class QuoteWebService:
@@ -63,7 +69,7 @@ class QuoteWebService:
             {
                 "customer_id": str(c.customer_id),
                 "name": c.trading_name or c.legal_name,
-                "email": c.email,
+                "email": _customer_email(c),
             }
             for c in customers
         ]
@@ -152,14 +158,21 @@ class QuoteWebService:
             except ValueError:
                 pass
 
+        parsed_start_date = (
+            datetime.strptime(start_date, "%Y-%m-%d").date() if start_date else None
+        )
+        parsed_end_date = (
+            datetime.strptime(end_date, "%Y-%m-%d").date() if end_date else None
+        )
+
         # Get quotes from service
         quotes = quote_service.list_quotes(
             db,
             organization_id,
             customer_id=customer_id,
             status=status_filter,
-            start_date=start_date,
-            end_date=end_date,
+            start_date=parsed_start_date,
+            end_date=parsed_end_date,
         )
 
         # Format for template
@@ -231,7 +244,7 @@ class QuoteWebService:
             "quote_date": format_date(quote.quote_date),
             "valid_until": format_date(quote.valid_until),
             "customer_name": _customer_display_name(quote.customer),
-            "customer_email": quote.customer.email if quote.customer else "-",
+            "customer_email": _customer_email(quote.customer) or "-",
             "contact_name": quote.contact_name or "-",
             "contact_email": quote.contact_email or "-",
             "subtotal": format_currency(quote.subtotal, quote.currency_code),
@@ -460,7 +473,7 @@ class QuoteWebService:
     ) -> RedirectResponse:
         """Handle send quote action."""
         try:
-            quote_service.send(db, quote_id, str(auth.user_id))
+            quote_service.send(db, str(auth.organization_id), quote_id, str(auth.user_id))
             db.commit()
         except Exception:
             db.rollback()
@@ -475,7 +488,7 @@ class QuoteWebService:
     ) -> RedirectResponse:
         """Handle accept quote action."""
         try:
-            quote_service.accept(db, quote_id)
+            quote_service.accept(db, str(auth.organization_id), quote_id)
             db.commit()
         except Exception:
             db.rollback()
@@ -491,7 +504,7 @@ class QuoteWebService:
     ) -> RedirectResponse:
         """Handle reject quote action."""
         try:
-            quote_service.reject(db, quote_id, reason)
+            quote_service.reject(db, str(auth.organization_id), quote_id, reason)
             db.commit()
         except Exception:
             db.rollback()
@@ -506,7 +519,9 @@ class QuoteWebService:
     ) -> RedirectResponse:
         """Handle convert to invoice action."""
         try:
-            invoice = quote_service.convert_to_invoice(db, quote_id, str(auth.user_id))
+            invoice = quote_service.convert_to_invoice(
+                db, str(auth.organization_id), quote_id, str(auth.user_id)
+            )
             db.commit()
             return RedirectResponse(url=f"/ar/invoices/{invoice.invoice_id}", status_code=303)
         except Exception:
@@ -524,7 +539,7 @@ class QuoteWebService:
         """Handle convert to sales order action."""
         try:
             so = quote_service.convert_to_sales_order(
-                db, quote_id, str(auth.user_id),
+                db, str(auth.organization_id), quote_id, str(auth.user_id),
                 customer_po_number=customer_po_number,
             )
             db.commit()
@@ -542,7 +557,7 @@ class QuoteWebService:
     ) -> RedirectResponse:
         """Handle void quote action."""
         try:
-            quote_service.void(db, quote_id, str(auth.user_id))
+            quote_service.void(db, str(auth.organization_id), quote_id, str(auth.user_id))
             db.commit()
         except Exception:
             db.rollback()

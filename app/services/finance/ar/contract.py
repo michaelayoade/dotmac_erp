@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any, List, Optional
 from uuid import UUID
 import uuid as uuid_lib
 
@@ -610,11 +610,15 @@ class ContractService(ListResponseMixin):
             PerformanceObligation.status == "SATISFIED",
         ).all()
 
-        satisfied_amount = sum(o.allocated_transaction_price for o in satisfied)
-        remaining_price = contract.total_contract_value - satisfied_amount
+        satisfied_amount = sum(
+            (o.allocated_transaction_price or Decimal("0") for o in satisfied),
+            Decimal("0"),
+        )
+        total_value = contract.total_contract_value or Decimal("0")
+        remaining_price = total_value - satisfied_amount
 
         # Reallocate to unsatisfied obligations
-        total_ssp = sum(o.standalone_selling_price for o in obligations)
+        total_ssp = sum((o.standalone_selling_price for o in obligations), Decimal("0"))
         for obligation in obligations:
             allocation_ratio = obligation.standalone_selling_price / total_ssp
             obligation.allocated_transaction_price = remaining_price * allocation_ratio
@@ -627,11 +631,12 @@ class ContractService(ListResponseMixin):
             PerformanceObligation.contract_id == contract.contract_id
         ).all()
 
-        total_ssp = sum(o.standalone_selling_price for o in obligations)
+        total_ssp = sum((o.standalone_selling_price for o in obligations), Decimal("0"))
 
         for obligation in obligations:
             allocation_ratio = obligation.standalone_selling_price / total_ssp
-            new_allocated = contract.total_contract_value * allocation_ratio
+            total_value = contract.total_contract_value or Decimal("0")
+            new_allocated = total_value * allocation_ratio
 
             # Calculate cumulative catch-up
             expected_recognized = new_allocated * (obligation.satisfaction_percentage / Decimal("100"))
@@ -723,21 +728,27 @@ class ContractService(ListResponseMixin):
     def get_obligations(
         db: Session,
         contract_id: str,
-    ) -> list[PerformanceObligation]:
+    ) -> List[PerformanceObligation]:
         """Get all performance obligations for a contract."""
-        return db.query(PerformanceObligation).filter(
-            PerformanceObligation.contract_id == coerce_uuid(contract_id)
-        ).order_by(PerformanceObligation.obligation_number).all()
+        return (
+            db.query(PerformanceObligation)
+            .filter(PerformanceObligation.contract_id == coerce_uuid(contract_id))
+            .order_by(PerformanceObligation.obligation_number)
+            .all()
+        )
 
     @staticmethod
     def get_recognition_events(
         db: Session,
         obligation_id: str,
-    ) -> list[RevenueRecognitionEvent]:
+    ) -> List[RevenueRecognitionEvent]:
         """Get all recognition events for an obligation."""
-        return db.query(RevenueRecognitionEvent).filter(
-            RevenueRecognitionEvent.obligation_id == coerce_uuid(obligation_id)
-        ).order_by(RevenueRecognitionEvent.event_date).all()
+        return (
+            db.query(RevenueRecognitionEvent)
+            .filter(RevenueRecognitionEvent.obligation_id == coerce_uuid(obligation_id))
+            .order_by(RevenueRecognitionEvent.event_date)
+            .all()
+        )
 
     @staticmethod
     def list(
@@ -750,7 +761,7 @@ class ContractService(ListResponseMixin):
         to_date: Optional[date] = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> list[Contract]:
+    ) -> List[Contract]:
         """
         List contracts with filters.
 

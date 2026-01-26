@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import require_organization_id, require_tenant_auth
 from app.db import SessionLocal
 from app.models.domain_settings import SettingDomain
+from app.models.finance.payments.payment_intent import PaymentIntentStatus
 from app.services.finance.payments import (
     PaymentService,
     PaystackConfig,
@@ -246,16 +247,7 @@ def get_payment_status(
 
     Returns the current status of a payment intent.
     """
-    from app.models.finance.payments import PaymentIntent
-
-    intent = (
-        db.query(PaymentIntent)
-        .filter(
-            PaymentIntent.paystack_reference == reference,
-            PaymentIntent.organization_id == organization_id,
-        )
-        .first()
-    )
+    intent = PaymentService.get_intent_by_reference(db, reference, organization_id)
 
     if not intent:
         raise HTTPException(status_code=404, detail="Payment not found")
@@ -311,78 +303,11 @@ def verify_payment(
     Queries Paystack to get the current status of a payment and updates
     the local payment intent accordingly. Use this if webhook was missed.
     """
-    from app.models.finance.payments import PaymentIntent, PaymentIntentStatus
-    from datetime import datetime, timezone
-
-    intent = (
-        db.query(PaymentIntent)
-        .filter(
-            PaymentIntent.paystack_reference == reference,
-            PaymentIntent.organization_id == organization_id,
-        )
-        .first()
-    )
-
-    if not intent:
-        raise HTTPException(status_code=404, detail="Payment not found")
-
-    # If already completed, just return status
-    if intent.status == PaymentIntentStatus.COMPLETED:
-        return PaymentStatusResponse(
-            intent_id=intent.intent_id,
-            status=intent.status.value,
-            amount=float(intent.amount),
-            currency=intent.currency_code,
-            paid_at=intent.paid_at.isoformat() if intent.paid_at else None,
-            invoice_number=intent.intent_metadata.get("invoice_number") if intent.intent_metadata else None,
-            customer_payment_id=intent.customer_payment_id,
-        )
-
-    # Verify with Paystack
     config = get_paystack_config(db, organization_id)
     svc = PaymentService(db, organization_id)
-
-    from app.services.finance.payments import PaystackClient
-
     try:
-        with PaystackClient(config) as client:
-            result = client.verify_transaction(reference)
-
-        if result.status == "success":
-            # Parse paid_at
-            if result.paid_at:
-                try:
-                    paid_at = datetime.fromisoformat(result.paid_at.replace("Z", "+00:00"))
-                except ValueError:
-                    paid_at = datetime.now(timezone.utc)
-            else:
-                paid_at = datetime.now(timezone.utc)
-
-            # Process the successful payment
-            svc.process_successful_payment(
-                intent=intent,
-                transaction_id=result.transaction_id,
-                paid_at=paid_at,
-                gateway_response={
-                    "status": result.status,
-                    "gateway_response": result.gateway_response,
-                    "channel": result.channel,
-                },
-                channel=result.channel,
-            )
-            db.commit()
-
-        elif result.status == "failed":
-            svc.mark_payment_failed(
-                intent,
-                result.gateway_response or "Payment failed",
-            )
-            db.commit()
-
-        elif result.status == "abandoned":
-            svc.mark_payment_abandoned(intent)
-            db.commit()
-
+        intent = svc.verify_payment_by_reference(reference, config)
+        db.commit()
     except PaystackError as e:
         logger.error(f"Paystack verification failed: {e}")
         raise HTTPException(
@@ -514,6 +439,11 @@ def initialize_expense_payment(
     except PaystackError as e:
         logger.error(f"Expense payment initialization failed: {e}")
         raise HTTPException(status_code=502, detail=f"Payment gateway error: {e.message}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Unexpected error in expense payment: {e}")
+        raise HTTPException(status_code=500, detail=f"Expense payment error: {str(e)}")
 
     return ExpensePaymentResponse(
         intent_id=intent.intent_id,
@@ -541,8 +471,6 @@ def initiate_transfer(
 
     Authorization: Requires appropriate permission to process payments.
     """
-    from app.models.finance.payments import PaymentIntentStatus
-
     # Check if transfers are enabled
     transfers_enabled = resolve_value(db, SettingDomain.payments, "paystack_transfers_enabled")
     if not transfers_enabled:
@@ -602,21 +530,8 @@ def list_pending_transfers(
 
     Returns transfers that have been initialized but not yet completed.
     """
-    from app.models.finance.payments import PaymentIntent, PaymentIntentStatus, PaymentDirection
-
-    intents = (
-        db.query(PaymentIntent)
-        .filter(
-            PaymentIntent.organization_id == organization_id,
-            PaymentIntent.direction == PaymentDirection.OUTBOUND,
-            PaymentIntent.status.in_([
-                PaymentIntentStatus.PENDING,
-                PaymentIntentStatus.PROCESSING,
-            ]),
-        )
-        .order_by(PaymentIntent.created_at.desc())
-        .all()
-    )
+    svc = PaymentService(db, organization_id)
+    intents = svc.list_pending_transfers()
 
     return [
         ExpensePaymentResponse(
@@ -678,13 +593,7 @@ async def paystack_webhook(
     # Get reference to find organization and config
     reference = event_data.get("reference", "")
 
-    from app.models.finance.payments import PaymentIntent
-
-    intent = (
-        db.query(PaymentIntent)
-        .filter(PaymentIntent.paystack_reference == reference)
-        .first()
-    )
+    intent = PaymentService.get_intent_by_reference(db, reference)
 
     if not intent:
         # Log but don't fail - might be test webhook or unknown reference

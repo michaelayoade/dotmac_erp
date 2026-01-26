@@ -38,7 +38,7 @@
 
     {# Filters #}
     <div class="card p-4">
-        <form method="get" action="/quotes" class="flex flex-wrap items-center gap-4">
+        <form method="get" action="/finance/quotes" class="flex flex-wrap items-center gap-4">
             {# Status Filter #}
             <select name="status" class="form-select">
                 <option value="">All Statuses</option>
@@ -140,7 +140,7 @@
                                 'Get started by creating your first quote' if not (filter_status or filter_customer_id or filter_start_date or filter_end_date) else 'Try adjusting your filter criteria',
                                 'document',
                                 'New Quote' if not (filter_status or filter_customer_id or filter_start_date or filter_end_date) else none,
-                                '/quotes/new' if not (filter_status or filter_customer_id or filter_start_date or filter_end_date) else none
+                                '/finance/quotes/new' if not (filter_status or filter_customer_id or filter_start_date or filter_end_date) else none
                             ) }}
                         </td>
                     </tr>

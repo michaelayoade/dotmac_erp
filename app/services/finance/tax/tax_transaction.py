@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
-from typing import Optional
+from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -487,7 +487,7 @@ class TaxTransactionService(ListResponseMixin):
         end_date: Optional[date] = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> list[TaxTransaction]:
+    ) -> List[TaxTransaction]:
         """List tax transactions with optional filters."""
         query = db.query(TaxTransaction)
 
@@ -526,7 +526,7 @@ class TaxTransactionService(ListResponseMixin):
         db: Session,
         organization_id: str,
         fiscal_period_id: str,
-    ) -> list[TaxTransaction]:
+    ) -> List[TaxTransaction]:
         """Get transactions not yet included in a tax return."""
         org_id = coerce_uuid(organization_id)
         period_id = coerce_uuid(fiscal_period_id)
@@ -552,7 +552,7 @@ class TaxTransactionService(ListResponseMixin):
         tax_code_id: Optional[str] = None,
         page: int = 1,
         limit: int = 50,
-    ) -> tuple[list[dict], int]:
+    ) -> Tuple[List[Dict[str, Any]], int]:
         """
         Get VAT register - detailed list of all tax transactions.
 
@@ -633,7 +633,7 @@ class TaxTransactionService(ListResponseMixin):
         start_date: date,
         end_date: date,
         group_by: str = "period",
-    ) -> list[dict]:
+    ) -> List[Dict[str, Any]]:
         """
         Get tax liability summary (Output Tax - Input Tax = Net Payable).
 

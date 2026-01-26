@@ -9,7 +9,6 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
-from sqlalchemy import func, select
 from pydantic import BaseModel
 
 from app.api.deps import require_tenant_auth
@@ -24,12 +23,12 @@ from app.schemas.people.leave import LeaveApplicationRead
 from app.schemas.people.payroll import SalarySlipRead
 from app.schemas.people.perf import AppraisalRead, ScorecardRead
 from app.schemas.people.expense import ExpenseClaimRead, CashAdvanceRead
-from app.models.people.payroll.salary_slip import SalarySlip, SalarySlipStatus
+from app.models.people.payroll.salary_slip import SalarySlipStatus
 from app.models.people.perf.appraisal import AppraisalStatus
 from app.models.people.exp import ExpenseClaimStatus, CashAdvanceStatus
 from app.services.people.payroll.salary_slip_service import salary_slip_service
 from app.services.people.leave import LeaveService
-from app.models.people.leave import LeaveApplication, LeaveApplicationStatus
+from app.models.people.leave import LeaveApplicationStatus
 from app.services.people.hr.employee_types import EmployeeFilters
 from app.services.common import PaginationParams
 from app.services.people.attendance import AttendanceService
@@ -250,20 +249,21 @@ def team_leave_requests(
     if not report_ids:
         return {"items": [], "total": 0, "offset": offset, "limit": limit}
 
-    query = select(LeaveApplication).where(
-        LeaveApplication.organization_id == organization_id,
-        LeaveApplication.employee_id.in_(report_ids),
-    )
+    status_value = None
     if status:
         try:
             status_value = LeaveApplicationStatus(status)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail="Invalid status") from exc
-        query = query.where(LeaveApplication.status == status_value)
 
-    count_query = select(func.count()).select_from(query.subquery())
-    total = db.scalar(count_query) or 0
-    items = list(db.scalars(query.offset(offset).limit(limit)).all())
+    result = LeaveService(db).list_team_applications(
+        org_id=organization_id,
+        employee_ids=report_ids,
+        status=status_value,
+        pagination=PaginationParams(offset=offset, limit=limit),
+    )
+    items = result.items
+    total = result.total
     return {
         "items": [LeaveApplicationRead.model_validate(app) for app in items],
         "total": total,
@@ -381,21 +381,14 @@ def my_payslips(
         limit=limit,
         offset=offset,
     )
-    total = (
-        db.query(func.count())
-        .select_from(SalarySlip)
-        .filter(
-            SalarySlip.organization_id == organization_id,
-            SalarySlip.employee_id == employee_id,
-        )
+    total_count = salary_slip_service.count(
+        db=db,
+        organization_id=organization_id,
+        employee_id=employee_id,
+        status=status_value,
+        from_date=from_date,
+        to_date=to_date,
     )
-    if status_value:
-        total = total.filter(SalarySlip.status == status_value)
-    if from_date:
-        total = total.filter(SalarySlip.start_date >= from_date)
-    if to_date:
-        total = total.filter(SalarySlip.end_date <= to_date)
-    total_count = total.scalar() or 0
 
     return {
         "items": [SalarySlipRead.model_validate(s) for s in slips],

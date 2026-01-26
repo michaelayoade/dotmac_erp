@@ -6,6 +6,7 @@ Provides view-focused data and operations for HR web routes.
 from __future__ import annotations
 
 import logging
+from datetime import date, datetime
 from typing import Optional
 from uuid import UUID
 
@@ -36,6 +37,7 @@ from app.services.people.hr import (
     EmployeeFilters,
     EmployeeCreateData,
     EmployeeUpdateData,
+    TerminationData,
     DepartmentFilters,
     DepartmentCreateData,
     DepartmentUpdateData,
@@ -135,6 +137,7 @@ class HRWebService:
             person = emp.person
             dept = emp.department
             desig = emp.designation
+            status_value = emp.status.value if emp.status else "UNKNOWN"
 
             employees_view.append({
                 "employee_id": emp.employee_id,
@@ -144,7 +147,7 @@ class HRWebService:
                 "department_name": dept.department_name if dept else "",
                 "designation_name": desig.designation_name if desig else "",
                 "date_of_joining": emp.date_of_joining,
-                "status": emp.status.value,
+                "status": status_value,
                 "status_class": self._status_class(emp.status),
             })
 
@@ -172,6 +175,506 @@ class HRWebService:
             "people/hr/employees.html",
             context,
         )
+
+    def employee_stats_response(
+        self,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> dict:
+        """Return employee stats for dashboard widgets."""
+        org_id = coerce_uuid(auth.organization_id)
+        svc = EmployeeService(db, org_id)
+        return svc.get_employee_stats()
+
+    async def create_employee_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> RedirectResponse | HTMLResponse:
+        """Handle new employee form submission."""
+        form = getattr(request.state, "csrf_form", None)
+        if form is None:
+            form = await request.form()
+
+        # Person fields
+        first_name = self._form_str(form, "first_name")
+        last_name = self._form_str(form, "last_name")
+        email = self._form_str(form, "email")
+        phone = self._form_str(form, "phone")
+        date_of_birth = self._form_str(form, "date_of_birth")
+        gender = self._form_str(form, "gender")
+        address_line1 = self._form_str(form, "address_line1")
+        address_line2 = self._form_str(form, "address_line2")
+        city = self._form_str(form, "city")
+        region = self._form_str(form, "region")
+        postal_code = self._form_str(form, "postal_code")
+        country_code = self._form_str(form, "country_code")
+        # Employee fields
+        employee_code = self._form_str(form, "employee_code")
+        department_id = self._form_str(form, "department_id")
+        designation_id = self._form_str(form, "designation_id")
+        employment_type_id = self._form_str(form, "employment_type_id")
+        grade_id = self._form_str(form, "grade_id")
+        reports_to_id = self._form_str(form, "reports_to_id")
+        assigned_location_id = self._form_str(form, "assigned_location_id")
+        default_shift_type_id = self._form_str(form, "default_shift_type_id")
+        linked_person_id = self._form_str(form, "linked_person_id")
+        cost_center_id = self._form_str(form, "cost_center_id")
+        date_of_joining = self._form_str(form, "date_of_joining")
+        probation_end_date = self._form_str(form, "probation_end_date")
+        confirmation_date = self._form_str(form, "confirmation_date")
+        notes = self._form_str(form, "notes")
+        status = self._form_str(form, "status") or "DRAFT"
+        # Personal contact & emergency
+        personal_email = self._form_str(form, "personal_email")
+        personal_phone = self._form_str(form, "personal_phone")
+        emergency_contact_name = self._form_str(form, "emergency_contact_name")
+        emergency_contact_phone = self._form_str(form, "emergency_contact_phone")
+        # Bank details
+        bank_name = self._form_str(form, "bank_name")
+        bank_account_name = self._form_str(form, "bank_account_name")
+        bank_account_number = self._form_str(form, "bank_account_number")
+        bank_branch_code = self._form_str(form, "bank_branch_code")
+
+        if (not linked_person_id and (not first_name or not last_name or not email)) or not date_of_joining:
+            errors = {
+                "first_name": "Required" if not first_name else "",
+                "last_name": "Required" if not last_name else "",
+                "email": "Required" if not email else "",
+                "date_of_joining": "Required" if not date_of_joining else "",
+            }
+            return self.employee_new_form_response(
+                request,
+                auth,
+                db,
+                error="First name, last name, email, and date of joining are required.",
+                form_data={
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "email": email,
+                    "phone": phone,
+                    "date_of_birth": date_of_birth,
+                    "gender": gender,
+                    "address_line1": address_line1,
+                    "address_line2": address_line2,
+                    "city": city,
+                    "region": region,
+                    "postal_code": postal_code,
+                    "country_code": country_code,
+                    "employee_code": employee_code,
+                    "department_id": department_id,
+                    "designation_id": designation_id,
+                    "employment_type_id": employment_type_id,
+                    "grade_id": grade_id,
+                    "reports_to_id": reports_to_id,
+                    "assigned_location_id": assigned_location_id,
+                    "default_shift_type_id": default_shift_type_id,
+                    "linked_person_id": linked_person_id,
+                    "cost_center_id": cost_center_id,
+                    "date_of_joining": date_of_joining,
+                    "probation_end_date": probation_end_date,
+                    "status": status,
+                    "bank_name": bank_name,
+                    "bank_account_name": bank_account_name,
+                    "bank_account_number": bank_account_number,
+                    "bank_branch_code": bank_branch_code,
+                    "notes": notes,
+                },
+                errors=errors,
+            )
+
+        org_id = coerce_uuid(auth.organization_id)
+
+        joining_date = self._parse_date(date_of_joining)
+        dob = self._parse_date(date_of_birth)
+        probation_date = self._parse_date(probation_end_date)
+        confirm_date = self._parse_date(confirmation_date)
+
+        # Parse status
+        status_enum = EmployeeStatus.DRAFT
+        if status:
+            try:
+                status_enum = EmployeeStatus(status.upper())
+            except ValueError:
+                pass
+
+        # Check if person with this email already exists
+        existing_person = (
+            db.query(Person)
+            .filter(
+                Person.email == email,
+                Person.organization_id == org_id,
+            )
+            .first()
+        )
+
+        if existing_person:
+            # Check if they already have an employee record
+            svc = EmployeeService(db, org_id)
+            existing_emp = svc.get_employee_by_person(existing_person.id)
+            if existing_emp:
+                return self.employee_new_form_response(
+                    request,
+                    auth,
+                    db,
+                    error=f"A person with email '{email}' already has an employee record.",
+                    form_data={
+                        "first_name": first_name,
+                        "last_name": last_name,
+                        "email": email,
+                        "employee_code": employee_code,
+                        "department_id": department_id,
+                        "designation_id": designation_id,
+                        "assigned_location_id": assigned_location_id,
+                        "default_shift_type_id": default_shift_type_id,
+                        "linked_person_id": linked_person_id,
+                        "date_of_joining": date_of_joining,
+                        "status": status,
+                        "bank_name": bank_name,
+                        "bank_account_name": bank_account_name,
+                        "bank_account_number": bank_account_number,
+                        "bank_branch_code": bank_branch_code,
+                    },
+                )
+            person = existing_person
+        else:
+            if linked_person_id:
+                person = db.get(Person, coerce_uuid(linked_person_id))
+                if not person or person.organization_id != org_id:
+                    return self.employee_new_form_response(
+                        request,
+                        auth,
+                        db,
+                        error="Selected user account not found for this organization.",
+                        form_data={
+                            "first_name": first_name,
+                            "last_name": last_name,
+                            "email": email,
+                            "phone": phone,
+                            "date_of_birth": date_of_birth,
+                            "gender": gender,
+                            "address_line1": address_line1,
+                            "address_line2": address_line2,
+                            "city": city,
+                            "region": region,
+                            "postal_code": postal_code,
+                            "country_code": country_code,
+                            "employee_code": employee_code,
+                            "department_id": department_id,
+                            "designation_id": designation_id,
+                            "employment_type_id": employment_type_id,
+                            "grade_id": grade_id,
+                            "reports_to_id": reports_to_id,
+                            "assigned_location_id": assigned_location_id,
+                            "default_shift_type_id": default_shift_type_id,
+                            "linked_person_id": linked_person_id,
+                            "cost_center_id": cost_center_id,
+                            "date_of_joining": date_of_joining,
+                            "probation_end_date": probation_end_date,
+                            "status": status,
+                            "bank_name": bank_name,
+                            "bank_account_name": bank_account_name,
+                            "bank_account_number": bank_account_number,
+                            "bank_branch_code": bank_branch_code,
+                            "notes": notes,
+                        },
+                    )
+            else:
+                # Create new Person
+                person = Person(
+                    organization_id=org_id,
+                    first_name=first_name,
+                    last_name=last_name,
+                    email=email.lower(),
+                    phone=phone or None,
+                    date_of_birth=dob,
+                    gender=Gender(gender) if gender else Gender.unknown,
+                    address_line1=address_line1 or None,
+                    address_line2=address_line2 or None,
+                    city=city or None,
+                    region=region or None,
+                    postal_code=postal_code or None,
+                    country_code=country_code or None,
+                )
+                db.add(person)
+                db.flush()
+
+        # Create Employee linked to Person
+        svc = EmployeeService(db, org_id)
+        data = EmployeeCreateData(
+            employee_number=employee_code if employee_code else None,
+            department_id=coerce_uuid(department_id) if department_id else None,
+            designation_id=coerce_uuid(designation_id) if designation_id else None,
+            employment_type_id=coerce_uuid(employment_type_id) if employment_type_id else None,
+            grade_id=coerce_uuid(grade_id) if grade_id else None,
+            reports_to_id=coerce_uuid(reports_to_id) if reports_to_id else None,
+            assigned_location_id=coerce_uuid(assigned_location_id) if assigned_location_id else None,
+            default_shift_type_id=coerce_uuid(default_shift_type_id) if default_shift_type_id else None,
+            cost_center_id=coerce_uuid(cost_center_id) if cost_center_id else None,
+            date_of_joining=joining_date,
+            probation_end_date=probation_date,
+            confirmation_date=confirm_date,
+            status=status_enum,
+            personal_email=personal_email or None,
+            personal_phone=personal_phone or None,
+            emergency_contact_name=emergency_contact_name or None,
+            emergency_contact_phone=emergency_contact_phone or None,
+            bank_name=bank_name,
+            bank_account_name=bank_account_name,
+            bank_account_number=bank_account_number,
+            bank_sort_code=bank_branch_code,
+            notes=notes or None,
+        )
+
+        employee = svc.create_employee(person.id, data)
+        db.commit()
+
+        return RedirectResponse(
+            url=f"/people/hr/employees/{employee.employee_id}",
+            status_code=303,
+        )
+
+    async def update_employee_response(
+        self,
+        request: Request,
+        employee_id: UUID,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> RedirectResponse:
+        """Handle employee update form submission."""
+        org_id = coerce_uuid(auth.organization_id)
+        svc = EmployeeService(db, org_id)
+
+        form = getattr(request.state, "csrf_form", None)
+        if form is None:
+            form = await request.form()
+
+        employee_code = self._form_str(form, "employee_code")
+        department_id = self._form_str(form, "department_id")
+        designation_id = self._form_str(form, "designation_id")
+        employment_type_id = self._form_str(form, "employment_type_id")
+        grade_id = self._form_str(form, "grade_id")
+        reports_to_id = self._form_str(form, "reports_to_id")
+        assigned_location_id = self._form_str(form, "assigned_location_id")
+        default_shift_type_id = self._form_str(form, "default_shift_type_id")
+        linked_person_id = self._form_str(form, "linked_person_id")
+        cost_center_id = self._form_str(form, "cost_center_id")
+        date_of_joining = self._form_str(form, "date_of_joining")
+        probation_end_date = self._form_str(form, "probation_end_date")
+        confirmation_date = self._form_str(form, "confirmation_date")
+        notes = self._form_str(form, "notes")
+        status = self._form_str(form, "status")
+        # Personal contact & emergency
+        personal_email = self._form_str(form, "personal_email")
+        personal_phone = self._form_str(form, "personal_phone")
+        emergency_contact_name = self._form_str(form, "emergency_contact_name")
+        emergency_contact_phone = self._form_str(form, "emergency_contact_phone")
+        # Bank details
+        bank_name = self._form_str(form, "bank_name")
+        bank_account_name = self._form_str(form, "bank_account_name")
+        bank_account_number = self._form_str(form, "bank_account_number")
+        bank_branch_code = self._form_str(form, "bank_branch_code")
+
+        status_enum = None
+        if status:
+            try:
+                status_enum = EmployeeStatus(status.upper())
+            except ValueError:
+                pass
+
+        joining_date = self._parse_date(date_of_joining)
+        probation_date = self._parse_date(probation_end_date)
+        confirm_date = self._parse_date(confirmation_date)
+
+        provided_fields = {
+            "employee_number",
+            "department_id",
+            "designation_id",
+            "employment_type_id",
+            "grade_id",
+            "reports_to_id",
+            "cost_center_id",
+            "assigned_location_id",
+            "default_shift_type_id",
+            "date_of_joining",
+            "probation_end_date",
+            "confirmation_date",
+            "status",
+            "personal_email",
+            "personal_phone",
+            "emergency_contact_name",
+            "emergency_contact_phone",
+            "bank_name",
+            "bank_account_name",
+            "bank_account_number",
+            "bank_sort_code",
+            "notes",
+        }
+
+        data = EmployeeUpdateData(
+            employee_number=employee_code if employee_code else None,
+            department_id=coerce_uuid(department_id) if department_id else None,
+            designation_id=coerce_uuid(designation_id) if designation_id else None,
+            employment_type_id=coerce_uuid(employment_type_id) if employment_type_id else None,
+            grade_id=coerce_uuid(grade_id) if grade_id else None,
+            reports_to_id=coerce_uuid(reports_to_id) if reports_to_id else None,
+            assigned_location_id=coerce_uuid(assigned_location_id) if assigned_location_id else None,
+            default_shift_type_id=coerce_uuid(default_shift_type_id) if default_shift_type_id else None,
+            cost_center_id=coerce_uuid(cost_center_id) if cost_center_id else None,
+            date_of_joining=joining_date,
+            probation_end_date=probation_date,
+            confirmation_date=confirm_date,
+            status=status_enum,
+            personal_email=personal_email or None,
+            personal_phone=personal_phone or None,
+            emergency_contact_name=emergency_contact_name or None,
+            emergency_contact_phone=emergency_contact_phone or None,
+            bank_name=bank_name or None,
+            bank_account_name=bank_account_name or None,
+            bank_account_number=bank_account_number or None,
+            bank_sort_code=bank_branch_code or None,
+            notes=notes or None,
+            provided_fields=provided_fields,
+        )
+
+        if linked_person_id:
+            svc.link_employee_to_person(
+                coerce_uuid(employee_id),
+                coerce_uuid(linked_person_id),
+            )
+
+        svc.update_employee(coerce_uuid(employee_id), data)
+        db.commit()
+
+        return RedirectResponse(
+            url=f"/people/hr/employees/{employee_id}",
+            status_code=303,
+        )
+
+    def activate_employee_response(
+        self,
+        employee_id: UUID,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> RedirectResponse:
+        """Activate an employee."""
+        org_id = coerce_uuid(auth.organization_id)
+        svc = EmployeeService(db, org_id)
+        svc.activate_employee(employee_id)
+        db.commit()
+        return RedirectResponse(url=f"/people/hr/employees/{employee_id}", status_code=303)
+
+    async def suspend_employee_response(
+        self,
+        request: Request,
+        employee_id: UUID,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> RedirectResponse:
+        """Suspend an employee."""
+        form = getattr(request.state, "csrf_form", None)
+        if form is None:
+            form = await request.form()
+        reason = self._form_str(form, "reason")
+
+        org_id = coerce_uuid(auth.organization_id)
+        svc = EmployeeService(db, org_id)
+        svc.suspend_employee(employee_id, reason=reason or None)
+        db.commit()
+        return RedirectResponse(url=f"/people/hr/employees/{employee_id}", status_code=303)
+
+    def set_employee_on_leave_response(
+        self,
+        employee_id: UUID,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> RedirectResponse:
+        """Set an employee on leave."""
+        org_id = coerce_uuid(auth.organization_id)
+        svc = EmployeeService(db, org_id)
+        svc.set_on_leave(employee_id)
+        db.commit()
+        return RedirectResponse(url=f"/people/hr/employees/{employee_id}", status_code=303)
+
+    async def resign_employee_response(
+        self,
+        request: Request,
+        employee_id: UUID,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> RedirectResponse | HTMLResponse:
+        """Record employee resignation."""
+        form = getattr(request.state, "csrf_form", None)
+        if form is None:
+            form = await request.form()
+        date_of_leaving = self._form_str(form, "date_of_leaving")
+
+        org_id = coerce_uuid(auth.organization_id)
+        svc = EmployeeService(db, org_id)
+
+        leaving_date = self._parse_date(date_of_leaving)
+
+        if leaving_date:
+            svc.resign_employee(employee_id, leaving_date)
+            db.commit()
+            return RedirectResponse(url=f"/people/hr/employees/{employee_id}", status_code=303)
+
+        employee = svc.get_employee(employee_id)
+        context = self.employee_detail_response(
+            request,
+            auth,
+            db,
+            str(employee_id),
+        ).context
+        context.update({
+            "employee": employee,
+            "error": "Please provide a valid resignation date.",
+        })
+        return templates.TemplateResponse(request, "people/hr/employee_detail.html", context)
+
+    async def terminate_employee_response(
+        self,
+        request: Request,
+        employee_id: UUID,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> RedirectResponse | HTMLResponse:
+        """Terminate an employee."""
+        form = getattr(request.state, "csrf_form", None)
+        if form is None:
+            form = await request.form()
+        date_of_leaving = self._form_str(form, "date_of_leaving")
+        reason = self._form_str(form, "reason")
+
+        org_id = coerce_uuid(auth.organization_id)
+        svc = EmployeeService(db, org_id)
+
+        leaving_date = self._parse_date(date_of_leaving)
+
+        if leaving_date:
+            svc.terminate_employee(
+                employee_id,
+                TerminationData(
+                    date_of_leaving=leaving_date,
+                    reason=reason or None,
+                ),
+            )
+            db.commit()
+            return RedirectResponse(url=f"/people/hr/employees/{employee_id}", status_code=303)
+
+        employee = svc.get_employee(employee_id)
+        context = self.employee_detail_response(
+            request,
+            auth,
+            db,
+            str(employee_id),
+        ).context
+        context.update({
+            "employee": employee,
+            "error": "Please provide a valid termination date.",
+        })
+        return templates.TemplateResponse(request, "people/hr/employee_detail.html", context)
 
     def employee_detail_response(
         self,
@@ -396,6 +899,24 @@ class HRWebService:
             "people/hr/employee_form.html",
             context,
         )
+
+    @staticmethod
+    def _form_str(form: dict, key: str) -> str:
+        """Normalize form value to a trimmed string."""
+        value = form.get(key)
+        if value is None:
+            return ""
+        return str(value).strip()
+
+    @staticmethod
+    def _parse_date(value: str) -> Optional[date]:
+        """Parse a date string in YYYY-MM-DD format."""
+        if not value:
+            return None
+        try:
+            return datetime.strptime(value, "%Y-%m-%d").date()
+        except ValueError:
+            return None
 
     def employee_edit_form_response(
         self,

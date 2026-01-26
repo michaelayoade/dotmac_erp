@@ -80,12 +80,12 @@ class AssetBulkService(BulkActionService[Asset]):
         if field_name == "status":
             return entity.status.value if entity.status else ""
         if field_name == "depreciation_method":
-            return entity.depreciation_method.value if entity.depreciation_method else ""
+            return str(entity.depreciation_method) if entity.depreciation_method else ""
         if field_name in ("acquisition_date", "in_service_date"):
             val = getattr(entity, field_name, None)
             return val.isoformat() if val else ""
 
-        return super()._get_export_value(entity, field_name)
+        return str(super()._get_export_value(entity, field_name))
 
     def _get_export_filename(self) -> str:
         """Get asset export filename."""

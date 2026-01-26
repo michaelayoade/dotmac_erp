@@ -2,6 +2,7 @@
 AP Schemas.
 
 Pydantic schemas for Accounts Payable APIs.
+Field names match template forms for seamless UI integration.
 """
 
 from datetime import date, datetime
@@ -17,18 +18,28 @@ from pydantic import BaseModel, ConfigDict, Field
 # =============================================================================
 
 class SupplierBase(BaseModel):
-    """Base supplier schema."""
+    """
+    Base supplier schema with template-friendly field names.
+
+    Input schemas (Create/Update) use field names directly without validation_alias.
+    This allows API clients to send template-friendly names (supplier_name, tax_id, etc.)
+    """
 
     supplier_code: str = Field(max_length=30)
-    supplier_type: str = Field(default="vendor", max_length=20)
-    legal_name: str = Field(max_length=255)
+    supplier_type: str = Field(default="VENDOR", max_length=30)
+    supplier_name: str = Field(max_length=255)  # Template name (service maps to legal_name)
     trading_name: Optional[str] = Field(default=None, max_length=255)
-    tax_identification_number: Optional[str] = Field(default=None, max_length=50)
+    tax_id: Optional[str] = Field(default=None, max_length=50)  # Template name (service maps to tax_identification_number)
     payment_terms_days: int = 30
     currency_code: str = Field(default="NGN", max_length=3)
     default_expense_account_id: Optional[UUID] = None
-    ap_control_account_id: Optional[UUID] = None
+    default_payable_account_id: Optional[UUID] = None  # Template name (service maps to ap_control_account_id)
     is_active: bool = True
+    # Additional template fields
+    email: Optional[str] = Field(default=None, max_length=255)
+    phone: Optional[str] = Field(default=None, max_length=50)
+    address: Optional[str] = Field(default=None, max_length=500)
+    payment_method: Optional[str] = Field(default=None, max_length=30)  # BANK_TRANSFER, CHECK, WIRE, CASH
 
 
 class SupplierCreate(SupplierBase):
@@ -40,19 +51,34 @@ class SupplierCreate(SupplierBase):
 class SupplierUpdate(BaseModel):
     """Update supplier request."""
 
-    legal_name: Optional[str] = Field(default=None, max_length=255)
+    supplier_name: Optional[str] = Field(default=None, max_length=255)
     trading_name: Optional[str] = Field(default=None, max_length=255)
+    tax_id: Optional[str] = Field(default=None, max_length=50)
     payment_terms_days: Optional[int] = None
     is_active: Optional[bool] = None
+    email: Optional[str] = Field(default=None, max_length=255)
+    phone: Optional[str] = Field(default=None, max_length=50)
+    address: Optional[str] = Field(default=None, max_length=500)
+    payment_method: Optional[str] = Field(default=None, max_length=30)
 
 
-class SupplierRead(SupplierBase):
-    """Supplier response."""
+class SupplierRead(BaseModel):
+    """Supplier response with template-friendly field names."""
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     supplier_id: UUID
     organization_id: UUID
+    supplier_code: str
+    supplier_type: str
+    supplier_name: str = Field(validation_alias="legal_name")
+    trading_name: Optional[str] = None
+    tax_id: Optional[str] = Field(default=None, validation_alias="tax_identification_number")
+    payment_terms_days: int
+    currency_code: str
+    default_expense_account_id: Optional[UUID] = None
+    default_payable_account_id: Optional[UUID] = Field(default=None, validation_alias="ap_control_account_id")
+    is_active: bool
     created_at: datetime
     updated_at: Optional[datetime] = None
 

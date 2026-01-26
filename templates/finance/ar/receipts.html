@@ -154,7 +154,7 @@
                                     'Record your first customer receipt' if not (search or status or customer_id or start_date or end_date) else 'Try adjusting your search or filter criteria',
                                     'currency',
                                     'New Receipt' if not (search or status or customer_id or start_date or end_date) else none,
-                                    '/ar/receipts/new' if not (search or status or customer_id or start_date or end_date) else none
+                                    '/finance/ar/receipts/new' if not (search or status or customer_id or start_date or end_date) else none
                                 ) }}
                             </td>
                         </tr>
@@ -180,14 +180,14 @@
                 {
                     "name": "export",
                     "label": "Export",
-                    "endpoint": "/ar/receipts/bulk-export",
+                    "endpoint": "/finance/ar/receipts/bulk-export",
                     "icon": bulk_icon_export(),
                     "class": "btn-secondary"
                 },
                 {
                     "name": "delete",
                     "label": "Delete",
-                    "endpoint": "/ar/receipts/bulk-delete",
+                    "endpoint": "/finance/ar/receipts/bulk-delete",
                     "icon": bulk_icon_delete(),
                     "class": "btn-bulk-danger",
                     "confirm": "Delete selected receipts? Only PENDING receipts without allocations can be deleted."

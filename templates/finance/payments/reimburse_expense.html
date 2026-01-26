@@ -8,7 +8,7 @@
     <span class="mx-2">/</span>
     <a href="/expense/claims" class="hover:text-primary-600 dark:hover:text-primary-400">Expense Claims</a>
     <span class="mx-2">/</span>
-    <a href="/expense/claims/{{ expense_claim.expense_claim_id }}" class="hover:text-primary-600 dark:hover:text-primary-400">{{ expense_claim.claim_number }}</a>
+    <a href="/expense/claims/{{ expense_claim.claim_id }}" class="hover:text-primary-600 dark:hover:text-primary-400">{{ expense_claim.claim_number }}</a>
     <span class="mx-2">/</span>
     <span class="text-slate-900 dark:text-white">Reimburse</span>
 </nav>
@@ -49,13 +49,14 @@
             </div>
             <div class="flex items-center justify-between">
                 <span class="text-sm text-slate-500 dark:text-slate-400">Submission Date</span>
-                <span class="text-sm font-medium text-slate-900 dark:text-white">{{ expense_claim.submission_date }}</span>
+                <span class="text-sm font-medium text-slate-900 dark:text-white">{{ expense_claim.claim_date }}</span>
             </div>
             <div class="border-t border-slate-200 pt-4 dark:border-slate-700">
                 <div class="flex items-center justify-between">
                     <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Total Amount</span>
                     <span class="text-xl font-bold text-slate-900 dark:text-white">
-                        {{ expense_claim.currency_code or 'NGN' }} {{ expense_claim.total_amount | format_currency }}
+                        {{ expense_claim.currency_code or 'NGN' }}
+                        {{ (expense_claim.net_payable_amount or expense_claim.total_approved_amount or expense_claim.total_claimed_amount) | format_currency }}
                     </span>
                 </div>
             </div>
@@ -160,7 +161,7 @@
 
         <!-- Back Link -->
         <div class="mt-6 text-center">
-            <a href="/expense/claims/{{ expense_claim.expense_claim_id }}"
+            <a href="/expense/claims/{{ expense_claim.claim_id }}"
                class="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300">
                 &larr; Back to Expense Claim
             </a>
@@ -291,7 +292,7 @@ async function initiateTransfer() {
                 'X-CSRF-Token': '{{ csrf_token }}'
             },
             body: JSON.stringify({
-                expense_claim_id: '{{ expense_claim.expense_claim_id }}',
+                expense_claim_id: '{{ expense_claim.claim_id }}',
                 bank_code: verifiedBankCode,
                 account_number: verifiedAccountNumber
             })

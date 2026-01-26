@@ -458,8 +458,8 @@
 
     {# Attachments #}
     <div class="print:hidden">
-        {% set upload_url = "/ar/invoices/" ~ invoice.invoice_id ~ "/attachments" %}
-        {% set delete_base_url = "/ar/attachments" %}
+        {% set upload_url = "/finance/ar/invoices/" ~ invoice.invoice_id ~ "/attachments" %}
+        {% set delete_base_url = "/finance/ar/attachments" %}
         {% include "finance/partials/_attachments.html" %}
     </div>
 

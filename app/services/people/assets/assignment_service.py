@@ -56,7 +56,7 @@ class AssetAssignmentService:
             asset.depreciation_start_date = (
                 asset.depreciation_start_date or asset.in_service_date
             )
-        asset.custodian_user_id = employee.person_id
+        asset.custodian_employee_id = employee.employee_id
 
     def list_assignments(
         self,
@@ -103,7 +103,7 @@ class AssetAssignmentService:
             )
         )
         if not assignment:
-            raise AssetAssignmentError(f"Assignment {assignment_id} not found")
+            raise NotFoundError(f"Assignment {assignment_id} not found")
         return assignment
 
     def issue_asset(
@@ -166,7 +166,7 @@ class AssetAssignmentService:
         assignment.condition_on_return = condition_on_return
         if notes:
             assignment.notes = notes
-        asset.custodian_user_id = None
+        asset.custodian_employee_id = None
         self.db.flush()
         return assignment
 

@@ -243,6 +243,35 @@ async def bulk_deactivate_accounts(
     return await gl_web_service.bulk_deactivate_accounts_response(request, auth, db)
 
 
+# ═══════════════════════════════════════════════════════════════════
+# Ledger Transactions
+# ═══════════════════════════════════════════════════════════════════
+
+
+@router.get("/ledger", response_class=HTMLResponse)
+def list_ledger(
+    request: Request,
+    account_id: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    search: Optional[str] = None,
+    page: int = Query(default=1, ge=1),
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """General Ledger transactions page - all posted ledger entries."""
+    return gl_web_service.list_ledger_response(
+        request,
+        auth,
+        db,
+        account_id,
+        start_date,
+        end_date,
+        search,
+        page,
+    )
+
+
 @router.get("/journals", response_class=HTMLResponse)
 def list_journals(
     request: Request,

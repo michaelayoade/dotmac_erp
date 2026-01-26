@@ -107,6 +107,9 @@ class PaymentWebService:
             if data.get("gross_amount"):
                 gross_amount = Decimal(str(data["gross_amount"]))
 
+        if not data.get("bank_account_id"):
+            raise ValueError("Bank account is required for supplier payments")
+
         return SupplierPaymentInput(
             supplier_id=UUID(data["supplier_id"]),
             payment_date=payment_date,
@@ -116,7 +119,7 @@ class PaymentWebService:
                 settings.default_functional_currency_code,
             ),
             amount=Decimal(str(data.get("amount", 0))),
-            bank_account_id=UUID(data["bank_account_id"]) if data.get("bank_account_id") else None,
+            bank_account_id=UUID(data["bank_account_id"]),
             reference=data.get("reference"),
             description=data.get("description"),
             allocations=allocations,

@@ -1175,7 +1175,7 @@ function invoiceForm() {
                         detail: { message: 'Invoice created successfully', type: 'success' }
                     }));
                     setTimeout(() => {
-                        window.location.href = '/ar/invoices';
+                        window.location.href = '/finance/ar/invoices';
                     }, 1000);
                 } else {
                     const data = await response.json();

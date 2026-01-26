@@ -190,6 +190,7 @@ class TaskService:
             description=data.get("description"),
             parent_task_id=data.get("parent_task_id"),
             ticket_id=data.get("ticket_id"),
+            status=data.get("status", TaskStatus.OPEN),
             priority=data.get("priority", TaskPriority.MEDIUM),
             assigned_to_id=data.get("assigned_to_id"),
             start_date=data.get("start_date"),
@@ -487,7 +488,7 @@ class TaskService:
         self, task_id: uuid.UUID, new_parent_id: uuid.UUID
     ) -> bool:
         """Check if moving task under new_parent would create a cycle."""
-        current = new_parent_id
+        current: Optional[uuid.UUID] = new_parent_id
         while current:
             if current == task_id:
                 return True

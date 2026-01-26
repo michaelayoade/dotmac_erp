@@ -9,10 +9,11 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Optional, Type, TypeVar
+from typing import Any, Optional, Type, TypeVar, cast
 from uuid import UUID
 
-from sqlalchemy import update
+from sqlalchemy import update, inspect
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.orm import Session
 
 from app.services.common import coerce_uuid
@@ -106,7 +107,10 @@ def atomic_status_transition(
     """
     # Auto-detect ID column from model's primary key
     if id_column is None:
-        pk_columns = [c.name for c in model_class.__table__.primary_key.columns]
+        mapper = inspect(model_class)
+        if mapper is None:
+            raise ValueError(f"Cannot inspect model {model_class}")
+        pk_columns = [c.name for c in mapper.primary_key]
         if len(pk_columns) != 1:
             raise ValueError(f"Cannot auto-detect ID column for {model_class.__name__}")
         id_column = pk_columns[0]
@@ -142,8 +146,8 @@ def atomic_status_transition(
         .returning(getattr(model_class, id_column))
     )
 
-    result = db.execute(stmt)
-    rows_affected = result.rowcount
+    result = cast(CursorResult[Any], db.execute(stmt))
+    rows_affected = result.rowcount or 0
 
     if rows_affected == 0:
         # Update failed - determine why
@@ -234,7 +238,10 @@ def atomic_version_update(
         TransitionResult with success status and new version
     """
     if id_column is None:
-        pk_columns = [c.name for c in model_class.__table__.primary_key.columns]
+        mapper = inspect(model_class)
+        if mapper is None:
+            raise ValueError(f"Cannot inspect model {model_class}")
+        pk_columns = [c.name for c in mapper.primary_key]
         if len(pk_columns) != 1:
             raise ValueError(f"Cannot auto-detect ID column for {model_class.__name__}")
         id_column = pk_columns[0]
@@ -261,8 +268,8 @@ def atomic_version_update(
         .returning(getattr(model_class, id_column))
     )
 
-    result = db.execute(stmt)
-    rows_affected = result.rowcount
+    result = cast(CursorResult[Any], db.execute(stmt))
+    rows_affected = result.rowcount or 0
 
     if rows_affected == 0:
         entity = db.get(model_class, entity_id)
@@ -322,4 +329,4 @@ def check_version(
         return False
 
     current_version = getattr(entity, version_column)
-    return current_version == expected_version
+    return bool(current_version == expected_version)

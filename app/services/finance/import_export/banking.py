@@ -110,26 +110,26 @@ class BankAccountImporter(BaseImporter[BankAccount]):
 
     def get_unique_key(self, row: Dict[str, Any]) -> str:
         """Unique key is account number + bank code."""
-        account_number = (row.get("Account Number") or row.get("Account No") or "").strip()
-        bank_code = (row.get("Bank Code") or row.get("SWIFT") or
-                     row.get("BIC") or "").strip()
+        account_number = str(row.get("Account Number") or row.get("Account No") or "").strip()
+        bank_code = str(row.get("Bank Code") or row.get("SWIFT") or
+                        row.get("BIC") or "").strip()
         return f"{account_number}:{bank_code}"
 
     def check_duplicate(self, row: Dict[str, Any]) -> Optional[BankAccount]:
         """Check if bank account already exists."""
-        account_number = (row.get("Account Number") or row.get("Account No") or "").strip()
-        bank_code = (row.get("Bank Code") or row.get("SWIFT") or row.get("BIC") or "").strip()
+        account_number = str(row.get("Account Number") or row.get("Account No") or "").strip()
+        bank_code = str(row.get("Bank Code") or row.get("SWIFT") or row.get("BIC") or "").strip()
 
         if not account_number:
             return None
 
-        existing = self.db.execute(
-            select(BankAccount).where(
-                BankAccount.organization_id == self.config.organization_id,
-                BankAccount.account_number == account_number,
-                BankAccount.bank_code == bank_code if bank_code else True,
-            )
-        ).scalar_one_or_none()
+        query = select(BankAccount).where(
+            BankAccount.organization_id == self.config.organization_id,
+            BankAccount.account_number == account_number,
+        )
+        if bank_code:
+            query = query.where(BankAccount.bank_code == bank_code)
+        existing = self.db.execute(query).scalar_one_or_none()
 
         return existing
 
@@ -138,13 +138,13 @@ class BankAccountImporter(BaseImporter[BankAccount]):
         is_valid = super().validate_row(row, row_num)
 
         # Account number is required
-        account_number = (row.get("Account Number") or row.get("Account No") or "").strip()
+        account_number = str(row.get("Account Number") or row.get("Account No") or "").strip()
         if not account_number:
             self.result.add_error(row_num, "Account number is required", "Account Number")
             is_valid = False
 
         # Bank name is required
-        bank_name = (row.get("Bank Name") or row.get("Bank") or "").strip()
+        bank_name = str(row.get("Bank Name") or row.get("Bank") or "").strip()
         if not bank_name:
             self.result.add_error(row_num, "Bank name is required", "Bank Name")
             is_valid = False
@@ -154,23 +154,23 @@ class BankAccountImporter(BaseImporter[BankAccount]):
     def create_entity(self, row: Dict[str, Any]) -> BankAccount:
         """Create a new bank account from transformed row data."""
         # Get bank details
-        bank_name = (row.get("bank_name") or row.get("bank_alt") or "Unknown Bank").strip()
-        bank_code = (row.get("bank_code") or row.get("swift_code") or
-                     row.get("bic_code") or "").strip() or None
+        bank_name = str(row.get("bank_name") or row.get("bank_alt") or "Unknown Bank").strip()
+        bank_code = str(row.get("bank_code") or row.get("swift_code") or
+                        row.get("bic_code") or "").strip() or None
         branch_code = row.get("branch_code")
         branch_name = row.get("branch_name") or row.get("branch_alt")
 
         # Get account details
-        account_number = (row.get("account_number") or row.get("account_no_alt") or "").strip()
-        account_name = (row.get("account_name") or row.get("name_alt") or
-                        f"{bank_name} - {account_number[-4:]}").strip()
+        account_number = str(row.get("account_number") or row.get("account_no_alt") or "").strip()
+        account_name = str(row.get("account_name") or row.get("name_alt") or
+                           f"{bank_name} - {account_number[-4:]}").strip()
 
         # Parse account type
         type_str = (row.get("account_type_str") or row.get("type_alt") or "checking")
         account_type = self._parse_account_type(type_str)
 
         # Get currency
-        currency_code = (row.get("currency_code") or row.get("currency_alt") or "NGN")[:3]
+        currency_code = str(row.get("currency_code") or row.get("currency_alt") or "NGN")[:3]
 
         # Get or find GL account
         gl_account_id = self._get_gl_account_id(row, bank_name, currency_code)
@@ -196,14 +196,14 @@ class BankAccountImporter(BaseImporter[BankAccount]):
             account_number=account_number[:50],
             account_name=account_name[:200],
             account_type=account_type,
-            iban=row.get("iban")[:50] if row.get("iban") else None,
+            iban=str(row.get("iban"))[:50] if row.get("iban") else None,
             currency_code=currency_code,
             gl_account_id=gl_account_id,
             status=status,
             last_statement_balance=opening_balance,
-            contact_name=row.get("contact_name")[:200] if row.get("contact_name") else None,
-            contact_phone=row.get("contact_phone")[:50] if row.get("contact_phone") else None,
-            contact_email=row.get("contact_email")[:200] if row.get("contact_email") else None,
+            contact_name=str(row.get("contact_name"))[:200] if row.get("contact_name") else None,
+            contact_phone=str(row.get("contact_phone"))[:50] if row.get("contact_phone") else None,
+            contact_email=str(row.get("contact_email"))[:200] if row.get("contact_email") else None,
             notes=row.get("notes") or row.get("description_alt"),
             is_primary=is_primary,
             allow_overdraft=allow_overdraft,
@@ -245,20 +245,21 @@ class BankAccountImporter(BaseImporter[BankAccount]):
         # Try to find by GL account code
         gl_code = row.get("gl_account_code") or row.get("gl_account_code_alt")
         if gl_code:
-            cache_key = gl_code
+            cache_key = str(gl_code).strip()
             if cache_key in self._gl_account_cache:
                 return self._gl_account_cache[cache_key]
 
             account = self.db.execute(
                 select(Account).where(
                     Account.organization_id == self.config.organization_id,
-                    Account.account_code == gl_code,
+                    Account.account_code == cache_key,
                 )
             ).scalar_one_or_none()
 
             if account:
-                self._gl_account_cache[cache_key] = account.account_id
-                return account.account_id
+                account_id = account.account_id
+                self._gl_account_cache[cache_key] = account_id
+                return account_id
 
         # Try to find existing bank account with similar name
         cache_key = f"bank:{bank_name}"
@@ -269,13 +270,14 @@ class BankAccountImporter(BaseImporter[BankAccount]):
             select(Account).where(
                 Account.organization_id == self.config.organization_id,
                 Account.subledger_type == "BANK",
-                Account.is_active == True,
+                Account.is_active.is_(True),
             )
-        ).first()
+        ).scalar_one_or_none()
 
         if account:
-            self._gl_account_cache[cache_key] = account[0].account_id
-            return account[0].account_id
+            account_id = account.account_id
+            self._gl_account_cache[cache_key] = account_id
+            return account_id
 
         # Use default if provided
         if self.default_gl_account_id:

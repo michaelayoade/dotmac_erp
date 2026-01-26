@@ -1,3 +1,5 @@
+from typing import Any
+
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
@@ -61,7 +63,7 @@ def _normalize_spec_setting(
         coerced = coerced.strip().lower()
     allowed_lower = {v.lower() for v in spec.allowed} if spec.allowed else None
     if allowed_lower and coerced not in allowed_lower:
-        allowed = ", ".join(sorted(spec.allowed))
+        allowed = ", ".join(sorted(spec.allowed or []))
         _log_setting_attempt_failed(
             action="UPDATE",
             domain=domain,
@@ -377,7 +379,7 @@ def export_settings(
     if domains is None:
         domains = list(SettingDomain)
 
-    result = {
+    result: dict[str, Any] = {
         "version": "1.0",
         "exported_at": datetime.now(timezone.utc).isoformat(),
         "settings": {},
@@ -436,7 +438,7 @@ def import_settings(
             "errors": [{"domain": ..., "key": ..., "error": ...}],
         }
     """
-    result = {
+    result: dict[str, Any] = {
         "imported": [],
         "skipped": [],
         "errors": [],

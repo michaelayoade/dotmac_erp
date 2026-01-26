@@ -31,7 +31,11 @@ from app.schemas.finance.branding import (
 def hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
     """Convert hex color to RGB tuple."""
     hex_color = hex_color.lstrip("#")
-    return tuple(int(hex_color[i : i + 2], 16) for i in (0, 2, 4))
+    return (
+        int(hex_color[0:2], 16),
+        int(hex_color[2:4], 16),
+        int(hex_color[4:6], 16),
+    )
 
 
 def rgb_to_hex(r: int, g: int, b: int) -> str:
@@ -42,8 +46,10 @@ def rgb_to_hex(r: int, g: int, b: int) -> str:
 def hex_to_hsl(hex_color: str) -> tuple[float, float, float]:
     """Convert hex color to HSL (hue 0-360, saturation 0-1, lightness 0-1)."""
     r, g, b = hex_to_rgb(hex_color)
-    r, g, b = r / 255, g / 255, b / 255
-    h, l, s = colorsys.rgb_to_hls(r, g, b)
+    rf = r / 255.0
+    gf = g / 255.0
+    bf = b / 255.0
+    h, l, s = colorsys.rgb_to_hls(rf, gf, bf)
     return h * 360, s, l
 
 
@@ -110,7 +116,7 @@ def derive_brand_mark(name: str) -> str:
         return "??"
 
     # Split into words and take first letter of each
-    words = re.findall(r"[A-Z][a-z]*|[a-z]+", name)
+    words = [str(w) for w in re.findall(r"[A-Z][a-z]*|[a-z]+", name)]
     if len(words) >= 2:
         return (words[0][0] + words[1][0]).upper()
     elif len(words) == 1:
@@ -162,7 +168,8 @@ class CSSGenerator:
 
     def generate(self) -> str:
         """Generate complete CSS for the branding configuration."""
-        if not self.branding:
+        branding = self.branding
+        if not branding:
             return ""
 
         lines = []
@@ -170,11 +177,11 @@ class CSSGenerator:
         lines.append(":root {")
 
         # Primary color
-        if self.branding.primary_color:
-            palette = generate_color_palette(self.branding.primary_color)
+        if branding.primary_color:
+            palette = generate_color_palette(branding.primary_color)
             lines.append(f"  --teal: {palette.shade_500};")
-            lines.append(f"  --teal-light: {self.branding.primary_light or palette.shade_100};")
-            lines.append(f"  --teal-dark: {self.branding.primary_dark or palette.shade_700};")
+            lines.append(f"  --teal-light: {branding.primary_light or palette.shade_100};")
+            lines.append(f"  --teal-dark: {branding.primary_dark or palette.shade_700};")
             lines.append(f"  --brand-primary: {palette.shade_500};")
             lines.append(f"  --brand-primary-50: {palette.shade_50};")
             lines.append(f"  --brand-primary-100: {palette.shade_100};")
@@ -185,33 +192,33 @@ class CSSGenerator:
             lines.append(f"  --brand-primary-900: {palette.shade_900};")
 
         # Accent color
-        if self.branding.accent_color:
-            palette = generate_color_palette(self.branding.accent_color)
+        if branding.accent_color:
+            palette = generate_color_palette(branding.accent_color)
             lines.append(f"  --gold: {palette.shade_500};")
-            lines.append(f"  --gold-light: {self.branding.accent_light or palette.shade_100};")
-            lines.append(f"  --gold-dark: {self.branding.accent_dark or palette.shade_700};")
+            lines.append(f"  --gold-light: {branding.accent_light or palette.shade_100};")
+            lines.append(f"  --gold-dark: {branding.accent_dark or palette.shade_700};")
             lines.append(f"  --brand-accent: {palette.shade_500};")
 
         # Semantic colors
-        if self.branding.success_color:
-            lines.append(f"  --brand-success: {self.branding.success_color};")
-        if self.branding.warning_color:
-            lines.append(f"  --brand-warning: {self.branding.warning_color};")
-        if self.branding.danger_color:
-            lines.append(f"  --brand-danger: {self.branding.danger_color};")
+        if branding.success_color:
+            lines.append(f"  --brand-success: {branding.success_color};")
+        if branding.warning_color:
+            lines.append(f"  --brand-warning: {branding.warning_color};")
+        if branding.danger_color:
+            lines.append(f"  --brand-danger: {branding.danger_color};")
 
         # Typography
-        if self.branding.font_family_display:
-            lines.append(f'  --font-display: "{self.branding.font_family_display}", system-ui, sans-serif;')
-        if self.branding.font_family_body:
-            lines.append(f'  --font-body: "{self.branding.font_family_body}", system-ui, sans-serif;')
-        if self.branding.font_family_mono:
-            lines.append(f'  --font-mono: "{self.branding.font_family_mono}", monospace;')
+        if branding.font_family_display:
+            lines.append(f'  --font-display: "{branding.font_family_display}", system-ui, sans-serif;')
+        if branding.font_family_body:
+            lines.append(f'  --font-body: "{branding.font_family_body}", system-ui, sans-serif;')
+        if branding.font_family_mono:
+            lines.append(f'  --font-mono: "{branding.font_family_mono}", monospace;')
 
         # Border radius
-        if self.branding.border_radius:
+        if branding.border_radius:
             radius = self.BORDER_RADIUS_MAP.get(
-                self.branding.border_radius.value,
+                branding.border_radius.value,
                 "8px"
             )
             lines.append(f"  --border-radius-base: {radius};")
@@ -221,25 +228,28 @@ class CSSGenerator:
         lines.append("}")
 
         # Button style overrides
-        if self.branding.button_style:
+        if branding.button_style:
             lines.extend(self._generate_button_styles())
 
         # Sidebar style overrides
-        if self.branding.sidebar_style:
+        if branding.sidebar_style:
             lines.extend(self._generate_sidebar_styles())
 
         # Custom CSS injection
-        if self.branding.custom_css:
+        if branding.custom_css:
             lines.append("")
             lines.append("/* Custom CSS */")
-            lines.append(self.branding.custom_css)
+            lines.append(branding.custom_css)
 
         return "\n".join(lines)
 
     def _generate_button_styles(self) -> list[str]:
         """Generate button style overrides."""
+        branding = self.branding
+        if not branding:
+            return []
         lines = []
-        style = self.branding.button_style.value if self.branding.button_style else "gradient"
+        style = branding.button_style.value if branding.button_style else "gradient"
 
         if style == "solid":
             lines.append("")
@@ -266,8 +276,11 @@ class CSSGenerator:
 
     def _generate_sidebar_styles(self) -> list[str]:
         """Generate sidebar style overrides."""
+        branding = self.branding
+        if not branding:
+            return []
         lines = []
-        style = self.branding.sidebar_style.value if self.branding.sidebar_style else "dark"
+        style = branding.sidebar_style.value if branding.sidebar_style else "dark"
 
         if style == "light":
             lines.append("")

@@ -288,7 +288,7 @@ class AccountBalanceService(ListResponseMixin):
             ]
         else:
             # Return individual balance records
-            query = db.query(AccountBalance).filter(
+            balance_query = db.query(AccountBalance).filter(
                 and_(
                     AccountBalance.organization_id == org_id,
                     AccountBalance.fiscal_period_id == period_id,
@@ -297,9 +297,11 @@ class AccountBalanceService(ListResponseMixin):
             )
 
             if account_ids:
-                query = query.filter(AccountBalance.account_id.in_([coerce_uuid(a) for a in account_ids]))
+                balance_query = balance_query.filter(
+                    AccountBalance.account_id.in_([coerce_uuid(a) for a in account_ids])
+                )
 
-            balances = query.all()
+            balances = balance_query.all()
 
             # Get account codes
             acct_ids = [b.account_id for b in balances]
@@ -680,7 +682,7 @@ class AccountBalanceService(ListResponseMixin):
                 continue
 
             # Net balance = closing_debit - closing_credit
-            closing = balance.closing_debit - balance.closing_credit
+            closing = balance.closing_balance
             if closing >= 0:
                 debit_balance = closing
                 credit_balance = Decimal("0")

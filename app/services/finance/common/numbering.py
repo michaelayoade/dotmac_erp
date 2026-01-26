@@ -193,10 +193,10 @@ class NumberingService:
             return True
 
         if sequence.reset_frequency == ResetFrequency.YEARLY:
-            return reference_date.year != sequence.current_year
+            return bool(reference_date.year != sequence.current_year)
 
         if sequence.reset_frequency == ResetFrequency.MONTHLY:
-            return (
+            return bool(
                 reference_date.year != sequence.current_year or
                 reference_date.month != sequence.current_month
             )
@@ -446,10 +446,10 @@ class SyncNumberingService:
             return True
 
         if sequence.reset_frequency == ResetFrequency.YEARLY:
-            return reference_date.year != sequence.current_year
+            return bool(reference_date.year != sequence.current_year)
 
         if sequence.reset_frequency == ResetFrequency.MONTHLY:
-            return (
+            return bool(
                 reference_date.year != sequence.current_year or
                 reference_date.month != sequence.current_month
             )

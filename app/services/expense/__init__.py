@@ -41,6 +41,11 @@ from app.services.expense.expense_notifications import (
     ExpenseNotificationService,
     get_expense_notification_service,
 )
+from app.services.expense.web import (
+    ExpenseClaimsWebService,
+    expense_claims_web_service,
+)
+from app.services.expense.limit_web import expense_limit_web_service
 
 __all__ = [
     # Expense Service
@@ -73,4 +78,8 @@ __all__ = [
     # Notification Service
     "ExpenseNotificationService",
     "get_expense_notification_service",
+    # Web Service
+    "ExpenseClaimsWebService",
+    "expense_claims_web_service",
+    "expense_limit_web_service",
 ]

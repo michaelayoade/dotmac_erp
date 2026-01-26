@@ -8,21 +8,45 @@ from decimal import Decimal
 from typing import Optional, List
 from uuid import UUID
 
+from fastapi import HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models.finance.ar.quote import Quote, QuoteLine, QuoteStatus
+from app.models.finance.ar.customer import Customer
+from app.models.finance.ar.payment_terms import PaymentTerms
 from app.models.finance.ar.invoice import Invoice, InvoiceType, InvoiceStatus
 from app.models.finance.ar.invoice_line import InvoiceLine
 from app.models.finance.ar.sales_order import SalesOrder, SalesOrderLine, SOStatus
 from app.models.finance.core_config import SequenceType
+from app.models.finance.core_org.cost_center import CostCenter
+from app.models.finance.core_org.project import Project
+from app.models.finance.gl.account import Account
+from app.models.finance.tax.tax_code import TaxCode
 from app.services.common import coerce_uuid
-from app.services.finance.common import SyncNumberingService
+from app.services.finance.common import SyncNumberingService, get_org_scoped_entity
 
 
 class QuoteService:
     """Service for quote operations."""
+
+    @staticmethod
+    def _get_quote(
+        db: Session,
+        organization_id: UUID | str,
+        quote_id: UUID | str,
+    ) -> Quote:
+        quote = get_org_scoped_entity(
+            db=db,
+            model_class=Quote,
+            entity_id=quote_id,
+            org_id=organization_id,
+            entity_name="Quote",
+        )
+        if not quote:
+            raise HTTPException(status_code=404, detail="Quote not found")
+        return quote
 
     @staticmethod
     def generate_quote_number(db: Session, organization_id: UUID) -> str:
@@ -55,6 +79,22 @@ class QuoteService:
         """Create a new quote."""
         org_id = coerce_uuid(organization_id)
 
+        get_org_scoped_entity(
+            db=db,
+            model_class=Customer,
+            entity_id=customer_id,
+            org_id=org_id,
+            entity_name="Customer",
+        )
+        if payment_terms_id:
+            get_org_scoped_entity(
+                db=db,
+                model_class=PaymentTerms,
+                entity_id=payment_terms_id,
+                org_id=org_id,
+                entity_name="Payment terms",
+            )
+
         quote = Quote(
             organization_id=org_id,
             quote_number=QuoteService.generate_quote_number(db, org_id),
@@ -79,7 +119,7 @@ class QuoteService:
 
         # Add lines
         if lines:
-            QuoteService._add_lines(db, quote, lines)
+            QuoteService._add_lines(db, quote, lines, org_id)
 
         # Recalculate totals
         QuoteService._recalculate_totals(quote)
@@ -88,9 +128,47 @@ class QuoteService:
         return quote
 
     @staticmethod
-    def _add_lines(db: Session, quote: Quote, lines: List[dict]) -> None:
+    def _add_lines(db: Session, quote: Quote, lines: List[dict], org_id: UUID) -> None:
         """Add lines to quote."""
         for idx, line_data in enumerate(lines, start=1):
+            tax_code_id = line_data.get("tax_code_id")
+            revenue_account_id = line_data.get("revenue_account_id")
+            project_id = line_data.get("project_id")
+            cost_center_id = line_data.get("cost_center_id")
+
+            if tax_code_id:
+                get_org_scoped_entity(
+                    db=db,
+                    model_class=TaxCode,
+                    entity_id=tax_code_id,
+                    org_id=org_id,
+                    entity_name="Tax code",
+                )
+            if revenue_account_id:
+                get_org_scoped_entity(
+                    db=db,
+                    model_class=Account,
+                    entity_id=revenue_account_id,
+                    org_id=org_id,
+                    entity_name="Revenue account",
+                )
+            if project_id:
+                get_org_scoped_entity(
+                    db=db,
+                    model_class=Project,
+                    entity_id=project_id,
+                    org_id=org_id,
+                    entity_name="Project",
+                )
+            if cost_center_id:
+                get_org_scoped_entity(
+                    db=db,
+                    model_class=CostCenter,
+                    entity_id=cost_center_id,
+                    org_id=org_id,
+                    entity_name="Cost center",
+                )
+
             quantity = Decimal(str(line_data.get("quantity", 1)))
             unit_price = Decimal(str(line_data.get("unit_price", 0)))
             discount_percent = Decimal(str(line_data.get("discount_percent", 0)))
@@ -114,12 +192,12 @@ class QuoteService:
                 unit_price=unit_price,
                 discount_percent=discount_percent,
                 discount_amount=discount_amount,
-                tax_code_id=coerce_uuid(line_data["tax_code_id"]) if line_data.get("tax_code_id") else None,
+                tax_code_id=coerce_uuid(tax_code_id) if tax_code_id else None,
                 tax_amount=tax_amount,
                 line_total=line_total,
-                revenue_account_id=coerce_uuid(line_data["revenue_account_id"]) if line_data.get("revenue_account_id") else None,
-                project_id=coerce_uuid(line_data["project_id"]) if line_data.get("project_id") else None,
-                cost_center_id=coerce_uuid(line_data["cost_center_id"]) if line_data.get("cost_center_id") else None,
+                revenue_account_id=coerce_uuid(revenue_account_id) if revenue_account_id else None,
+                project_id=coerce_uuid(project_id) if project_id else None,
+                cost_center_id=coerce_uuid(cost_center_id) if cost_center_id else None,
             )
             db.add(line)
 
@@ -144,17 +222,33 @@ class QuoteService:
     @staticmethod
     def update(
         db: Session,
+        organization_id: str,
         quote_id: str,
         updated_by: str,
         **kwargs,
     ) -> Quote:
         """Update a quote (only if DRAFT)."""
-        quote = db.get(Quote, coerce_uuid(quote_id))
-        if not quote:
-            raise ValueError("Quote not found")
+        quote = QuoteService._get_quote(db, organization_id, quote_id)
 
         if quote.status != QuoteStatus.DRAFT:
             raise ValueError(f"Cannot update quote in {quote.status.value} status")
+
+        if "customer_id" in kwargs and kwargs["customer_id"]:
+            get_org_scoped_entity(
+                db=db,
+                model_class=Customer,
+                entity_id=kwargs["customer_id"],
+                org_id=organization_id,
+                entity_name="Customer",
+            )
+        if "payment_terms_id" in kwargs and kwargs["payment_terms_id"]:
+            get_org_scoped_entity(
+                db=db,
+                model_class=PaymentTerms,
+                entity_id=kwargs["payment_terms_id"],
+                org_id=organization_id,
+                entity_name="Payment terms",
+            )
 
         # Update allowed fields
         allowed_fields = [
@@ -180,13 +274,12 @@ class QuoteService:
     @staticmethod
     def send(
         db: Session,
+        organization_id: str,
         quote_id: str,
         sent_by: str,
     ) -> Quote:
         """Mark quote as sent."""
-        quote = db.get(Quote, coerce_uuid(quote_id))
-        if not quote:
-            raise ValueError("Quote not found")
+        quote = QuoteService._get_quote(db, organization_id, quote_id)
 
         if quote.status not in [QuoteStatus.DRAFT, QuoteStatus.SENT]:
             raise ValueError(f"Cannot send quote in {quote.status.value} status")
@@ -201,12 +294,11 @@ class QuoteService:
     @staticmethod
     def mark_viewed(
         db: Session,
+        organization_id: str,
         quote_id: str,
     ) -> Quote:
         """Mark quote as viewed by customer."""
-        quote = db.get(Quote, coerce_uuid(quote_id))
-        if not quote:
-            raise ValueError("Quote not found")
+        quote = QuoteService._get_quote(db, organization_id, quote_id)
 
         if quote.status == QuoteStatus.SENT:
             quote.status = QuoteStatus.VIEWED
@@ -218,12 +310,11 @@ class QuoteService:
     @staticmethod
     def accept(
         db: Session,
+        organization_id: str,
         quote_id: str,
     ) -> Quote:
         """Mark quote as accepted by customer."""
-        quote = db.get(Quote, coerce_uuid(quote_id))
-        if not quote:
-            raise ValueError("Quote not found")
+        quote = QuoteService._get_quote(db, organization_id, quote_id)
 
         if quote.status not in [QuoteStatus.SENT, QuoteStatus.VIEWED]:
             raise ValueError(f"Cannot accept quote in {quote.status.value} status")
@@ -243,13 +334,12 @@ class QuoteService:
     @staticmethod
     def reject(
         db: Session,
+        organization_id: str,
         quote_id: str,
         reason: Optional[str] = None,
     ) -> Quote:
         """Mark quote as rejected by customer."""
-        quote = db.get(Quote, coerce_uuid(quote_id))
-        if not quote:
-            raise ValueError("Quote not found")
+        quote = QuoteService._get_quote(db, organization_id, quote_id)
 
         if quote.status not in [QuoteStatus.SENT, QuoteStatus.VIEWED]:
             raise ValueError(f"Cannot reject quote in {quote.status.value} status")
@@ -264,14 +354,13 @@ class QuoteService:
     @staticmethod
     def convert_to_invoice(
         db: Session,
+        organization_id: str,
         quote_id: str,
         created_by: str,
         invoice_date: Optional[date] = None,
     ) -> Invoice:
         """Convert accepted quote to invoice."""
-        quote = db.get(Quote, coerce_uuid(quote_id))
-        if not quote:
-            raise ValueError("Quote not found")
+        quote = QuoteService._get_quote(db, organization_id, quote_id)
 
         if quote.status != QuoteStatus.ACCEPTED:
             raise ValueError(f"Can only convert accepted quotes, current status: {quote.status.value}")
@@ -337,15 +426,14 @@ class QuoteService:
     @staticmethod
     def convert_to_sales_order(
         db: Session,
+        organization_id: str,
         quote_id: str,
         created_by: str,
         order_date: Optional[date] = None,
         customer_po_number: Optional[str] = None,
     ) -> SalesOrder:
         """Convert accepted quote to sales order."""
-        quote = db.get(Quote, coerce_uuid(quote_id))
-        if not quote:
-            raise ValueError("Quote not found")
+        quote = QuoteService._get_quote(db, organization_id, quote_id)
 
         if quote.status != QuoteStatus.ACCEPTED:
             raise ValueError(f"Can only convert accepted quotes, current status: {quote.status.value}")
@@ -415,13 +503,12 @@ class QuoteService:
     @staticmethod
     def void(
         db: Session,
+        organization_id: str,
         quote_id: str,
         voided_by: str,
     ) -> Quote:
         """Void a quote."""
-        quote = db.get(Quote, coerce_uuid(quote_id))
-        if not quote:
-            raise ValueError("Quote not found")
+        quote = QuoteService._get_quote(db, organization_id, quote_id)
 
         if quote.status == QuoteStatus.CONVERTED:
             raise ValueError("Cannot void a converted quote")

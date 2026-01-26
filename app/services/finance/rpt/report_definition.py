@@ -7,7 +7,7 @@ Manages report definitions/templates for financial and operational reporting.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -417,7 +417,7 @@ class ReportDefinitionService(ListResponseMixin):
         db: Session,
         organization_id: str,
         report_type: ReportType,
-    ) -> list[ReportDefinition]:
+    ) -> List[ReportDefinition]:
         """Get report definitions by type."""
         return (
             db.query(ReportDefinition)
@@ -451,7 +451,7 @@ class ReportDefinitionService(ListResponseMixin):
         is_system_report: Optional[bool] = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> list[ReportDefinition]:
+    ) -> List[ReportDefinition]:
         """List report definitions with optional filters."""
         query = db.query(ReportDefinition)
 

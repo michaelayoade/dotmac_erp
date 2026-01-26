@@ -68,9 +68,16 @@ def _get_smtp_config(db: Session | None = None) -> dict:
     from_name = _get_db_setting(db, "smtp_from_name") or _env_value("SMTP_FROM_NAME") or "Dotmac ERP"
     reply_to = _get_db_setting(db, "email_reply_to") or _env_value("EMAIL_REPLY_TO")
 
+    port_int = 587
+    if port is not None:
+        try:
+            port_int = int(str(port))
+        except (TypeError, ValueError):
+            port_int = 587
+
     return {
         "host": host,
-        "port": int(port) if port else 587,
+        "port": port_int,
         "username": username,
         "password": password,
         "use_tls": bool(use_tls),

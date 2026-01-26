@@ -57,15 +57,19 @@ class OrgContextService:
 
         # Check request cache first
         cached = request_cache.get(cache_key)
-        if cached is not None:
-            return cached.get("functional")
+        if isinstance(cached, dict):
+            functional = cached.get("functional")
+            if isinstance(functional, str):
+                return functional
 
         # Check Redis cache
         redis_key = CacheKeys.org_currency(org_id)
         redis_cached = cache_service.get(redis_key)
-        if redis_cached is not None:
+        if isinstance(redis_cached, dict):
             request_cache.set(cache_key, redis_cached)
-            return redis_cached.get("functional")
+            functional = redis_cached.get("functional")
+            if isinstance(functional, str):
+                return functional
 
         # Load from database
         org = db.get(Organization, org_id)
@@ -108,15 +112,19 @@ class OrgContextService:
 
         # Check request cache first
         cached = request_cache.get(cache_key)
-        if cached is not None:
-            return cached.get("presentation")
+        if isinstance(cached, dict):
+            presentation = cached.get("presentation")
+            if isinstance(presentation, str):
+                return presentation
 
         # Check Redis cache
         redis_key = CacheKeys.org_currency(org_id)
         redis_cached = cache_service.get(redis_key)
-        if redis_cached is not None:
+        if isinstance(redis_cached, dict):
             request_cache.set(cache_key, redis_cached)
-            return redis_cached.get("presentation")
+            presentation = redis_cached.get("presentation")
+            if isinstance(presentation, str):
+                return presentation
 
         # Load from database
         org = db.get(Organization, org_id)
@@ -159,15 +167,21 @@ class OrgContextService:
 
         # Check request cache first
         cached = request_cache.get(cache_key)
-        if cached is not None:
-            return cached
+        if isinstance(cached, dict):
+            functional = cached.get("functional")
+            presentation = cached.get("presentation")
+            if isinstance(functional, str) and isinstance(presentation, str):
+                return {"functional": functional, "presentation": presentation}
 
         # Check Redis cache
         redis_key = CacheKeys.org_currency(org_id)
         redis_cached = cache_service.get(redis_key)
-        if redis_cached is not None:
+        if isinstance(redis_cached, dict):
             request_cache.set(cache_key, redis_cached)
-            return redis_cached
+            functional = redis_cached.get("functional")
+            presentation = redis_cached.get("presentation")
+            if isinstance(functional, str) and isinstance(presentation, str):
+                return {"functional": functional, "presentation": presentation}
 
         # Load from database
         org = db.get(Organization, org_id)

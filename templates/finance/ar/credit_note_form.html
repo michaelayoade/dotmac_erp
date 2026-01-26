@@ -687,7 +687,7 @@ function creditNoteForm() {
                         detail: { message: 'Credit note created successfully', type: 'success' }
                     }));
                     setTimeout(() => {
-                        window.location.href = '/ar/credit-notes';
+                        window.location.href = '/finance/ar/credit-notes';
                     }, 1000);
                 } else {
                     const data = await response.json();

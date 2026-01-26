@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any, List, Optional
 from uuid import UUID
 import uuid as uuid_lib
 
@@ -111,10 +111,10 @@ class PurchaseOrderService(ListResponseMixin):
         subtotal = Decimal("0")
         tax_total = Decimal("0")
 
-        for line in input.lines:
-            line_amount = line.quantity_ordered * line.unit_price
+        for line_input in input.lines:
+            line_amount = line_input.quantity_ordered * line_input.unit_price
             subtotal += line_amount
-            tax_total += line.tax_amount
+            tax_total += line_input.tax_amount
 
         total_amount = subtotal + tax_total
 
@@ -414,11 +414,14 @@ class PurchaseOrderService(ListResponseMixin):
         ).first()
 
     @staticmethod
-    def get_po_lines(db: Session, po_id: str) -> list[PurchaseOrderLine]:
+    def get_po_lines(db: Session, po_id: str) -> List[PurchaseOrderLine]:
         """Get all lines for a purchase order."""
-        return db.query(PurchaseOrderLine).filter(
-            PurchaseOrderLine.po_id == coerce_uuid(po_id)
-        ).order_by(PurchaseOrderLine.line_number).all()
+        return (
+            db.query(PurchaseOrderLine)
+            .filter(PurchaseOrderLine.po_id == coerce_uuid(po_id))
+            .order_by(PurchaseOrderLine.line_number)
+            .all()
+        )
 
     @staticmethod
     def list(
@@ -430,7 +433,7 @@ class PurchaseOrderService(ListResponseMixin):
         to_date: Optional[date] = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> list[PurchaseOrder]:
+    ) -> List[PurchaseOrder]:
         """
         List purchase orders with filters.
 

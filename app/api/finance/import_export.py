@@ -16,6 +16,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
+from sqlalchemy import select
 
 from app.api.deps import require_tenant_auth
 from app.services.auth_dependencies import require_tenant_permission
@@ -270,7 +271,7 @@ async def preview_import(
     - Validation errors and warnings
     - Required vs optional columns
     """
-    if not file.filename.endswith('.csv'):
+    if not file.filename or not file.filename.endswith(".csv"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Only CSV files are supported"
@@ -336,7 +337,7 @@ async def import_data(
     Supports various entity types including accounts, customers, suppliers,
     items, assets, bank accounts, invoices, expenses, and payments.
     """
-    if not file.filename.endswith('.csv'):
+    if not file.filename or not file.filename.endswith(".csv"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Only CSV files are supported"

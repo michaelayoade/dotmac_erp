@@ -11,6 +11,11 @@ from app.models.pm.milestone import Milestone, MilestoneStatus
 from app.models.pm.resource_allocation import ResourceAllocation
 from app.models.pm.task import Task, TaskPriority, TaskStatus
 from app.models.pm.task_dependency import DependencyType, TaskDependency
+from app.models.pm.project_template import ProjectTemplate
+from app.models.pm.project_template_task import (
+    ProjectTemplateTask,
+    ProjectTemplateTaskDependency,
+)
 from app.models.pm.time_entry import BillingStatus, TimeEntry
 
 __all__ = [
@@ -21,6 +26,10 @@ __all__ = [
     # Task Dependency
     "TaskDependency",
     "DependencyType",
+    # Project Templates
+    "ProjectTemplate",
+    "ProjectTemplateTask",
+    "ProjectTemplateTaskDependency",
     # Milestone
     "Milestone",
     "MilestoneStatus",

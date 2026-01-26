@@ -7,7 +7,7 @@ Stores recognized payees/payers for auto-categorization of bank transactions.
 import enum
 from datetime import datetime
 from typing import Optional
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from sqlalchemy import (
     Boolean,
@@ -20,7 +20,7 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID as SAUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -55,13 +55,13 @@ class Payee(Base):
         {"schema": "banking"},
     )
 
-    payee_id: Mapped[uuid4] = mapped_column(
-        UUID(as_uuid=True),
+    payee_id: Mapped[UUID] = mapped_column(
+        SAUUID(as_uuid=True),
         primary_key=True,
         default=uuid4,
     )
-    organization_id: Mapped[uuid4] = mapped_column(
-        UUID(as_uuid=True),
+    organization_id: Mapped[UUID] = mapped_column(
+        SAUUID(as_uuid=True),
         ForeignKey("core_org.organization.organization_id"),
         nullable=False,
     )
@@ -82,26 +82,26 @@ class Payee(Base):
     )
 
     # Default categorization
-    default_account_id: Mapped[Optional[uuid4]] = mapped_column(
-        UUID(as_uuid=True),
+    default_account_id: Mapped[Optional[UUID]] = mapped_column(
+        SAUUID(as_uuid=True),
         ForeignKey("gl.account.account_id"),
         nullable=True,
         comment="Default GL account for transactions with this payee",
     )
-    default_tax_code_id: Mapped[Optional[uuid4]] = mapped_column(
-        UUID(as_uuid=True),
+    default_tax_code_id: Mapped[Optional[UUID]] = mapped_column(
+        SAUUID(as_uuid=True),
         nullable=True,
         comment="Default tax code for transactions with this payee",
     )
 
     # Linked entities (optional)
-    supplier_id: Mapped[Optional[uuid4]] = mapped_column(
-        UUID(as_uuid=True),
+    supplier_id: Mapped[Optional[UUID]] = mapped_column(
+        SAUUID(as_uuid=True),
         ForeignKey("ap.supplier.supplier_id"),
         nullable=True,
     )
-    customer_id: Mapped[Optional[uuid4]] = mapped_column(
-        UUID(as_uuid=True),
+    customer_id: Mapped[Optional[UUID]] = mapped_column(
+        SAUUID(as_uuid=True),
         ForeignKey("ar.customer.customer_id"),
         nullable=True,
     )
@@ -122,8 +122,8 @@ class Payee(Base):
         nullable=False,
         server_default=func.now(),
     )
-    created_by: Mapped[Optional[uuid4]] = mapped_column(
-        UUID(as_uuid=True),
+    created_by: Mapped[Optional[UUID]] = mapped_column(
+        SAUUID(as_uuid=True),
         nullable=True,
     )
     updated_at: Mapped[Optional[datetime]] = mapped_column(

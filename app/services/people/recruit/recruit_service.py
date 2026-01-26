@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, List, Optional, Sequence
+from typing import TYPE_CHECKING, Any, List, Optional, Sequence
 from uuid import UUID
 
 from sqlalchemy import Integer, and_, func, or_, select
@@ -1273,8 +1273,8 @@ class RecruitmentService:
             }
 
         # Calculate days to hire for each
-        days_to_hire_list = []
-        opening_stats = {}
+        days_to_hire_list: list[int] = []
+        opening_stats: dict[UUID | None, dict[str, Any]] = {}
 
         for applicant in hired_applicants:
             if applicant.updated_at and applicant.applied_on:
@@ -1342,9 +1342,10 @@ class RecruitmentService:
             filters.append(JobApplicant.applied_on <= end_date)
 
         # Get applicants grouped by source
+        source_bucket = func.coalesce(JobApplicant.source, "Unknown")
         results = self.db.execute(
             select(
-                func.coalesce(JobApplicant.source, "Unknown").label("source"),
+                source_bucket.label("source"),
                 func.count(JobApplicant.applicant_id).label("total"),
                 func.sum(
                     func.cast(JobApplicant.status == ApplicantStatus.HIRED, Integer)
@@ -1354,7 +1355,7 @@ class RecruitmentService:
                 ).label("shortlisted"),
             )
             .where(*filters)
-            .group_by(func.coalesce(JobApplicant.source, "Unknown"))
+            .group_by(source_bucket)
             .order_by(func.count(JobApplicant.applicant_id).desc())
         ).all()
 

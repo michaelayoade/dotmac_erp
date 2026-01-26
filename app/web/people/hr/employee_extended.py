@@ -1,11 +1,13 @@
 """Employee Extended Data routes - Documents, Qualifications, Certifications, Dependents, Skills."""
 
+import uuid
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import ProgrammingError
 
 from app.models.people.hr import Employee, DocumentType, QualificationType, RelationshipType, SkillCategory
 from app.services.people.hr import (
@@ -25,6 +27,25 @@ from ._common import _parse_bool
 
 
 router = APIRouter()
+
+
+def _load_employee(emp_svc: EmployeeService, employee_id: uuid.UUID) -> Employee:
+    """Load employee with linked person to avoid lazy-loading after session close."""
+    employee = emp_svc.get_employee(employee_id)
+    _ = employee.person
+    return employee
+
+
+def _is_missing_table_error(exc: ProgrammingError) -> bool:
+    """Detect missing table errors (typically from skipped migrations)."""
+    orig = getattr(exc, "orig", None)
+    if getattr(orig, "sqlstate", None) == "42P01":
+        return True
+    if orig and orig.__class__.__name__ == "UndefinedTable":
+        return True
+    if orig and "UndefinedTable" in str(orig):
+        return True
+    return False
 
 
 # =============================================================================
@@ -50,12 +71,20 @@ def list_employee_documents(
     doc_svc = EmployeeDocumentService(db, org_id)
 
     try:
-        employee = emp_svc.get_employee(emp_id)
+        employee = _load_employee(emp_svc, emp_id)
     except Exception:
         return RedirectResponse(url="/people/hr/employees?error=Employee+not+found", status_code=303)
 
     doc_type = DocumentType(document_type) if document_type else None
-    documents = doc_svc.list_documents(emp_id, document_type=doc_type)
+    error_message = error
+    try:
+        documents = doc_svc.list_documents(emp_id, document_type=doc_type)
+    except ProgrammingError as exc:
+        if _is_missing_table_error(exc):
+            documents = []
+            error_message = "Employee document tables are not installed. Please run migrations."
+        else:
+            raise
 
     context = base_context(request, auth, f"Documents - {employee.full_name}", "employees", db=db)
     context.update({
@@ -64,7 +93,7 @@ def list_employee_documents(
         "document_types": list(DocumentType),
         "selected_type": document_type,
         "success": success,
-        "error": error,
+        "error": error_message,
     })
     return templates.TemplateResponse(request, "people/hr/employee/documents.html", context)
 
@@ -81,7 +110,7 @@ def new_document_form(
     emp_svc = EmployeeService(db, org_id)
 
     try:
-        employee = emp_svc.get_employee(coerce_uuid(employee_id))
+        employee = _load_employee(emp_svc, coerce_uuid(employee_id))
     except Exception:
         return RedirectResponse(url="/people/hr/employees?error=Employee+not+found", status_code=303)
 
@@ -134,7 +163,7 @@ def create_document(
     except Exception as e:
         db.rollback()
         emp_svc = EmployeeService(db, org_id)
-        employee = emp_svc.get_employee(emp_id)
+        employee = _load_employee(emp_svc, emp_id)
         context = base_context(request, auth, f"Upload Document - {employee.full_name}", "employees", db=db)
         context.update({
             "employee": employee,
@@ -242,11 +271,19 @@ def list_employee_qualifications(
     qual_svc = EmployeeQualificationService(db, org_id)
 
     try:
-        employee = emp_svc.get_employee(emp_id)
+        employee = _load_employee(emp_svc, emp_id)
     except Exception:
         return RedirectResponse(url="/people/hr/employees?error=Employee+not+found", status_code=303)
 
-    qualifications = qual_svc.list_qualifications(emp_id)
+    error_message = error
+    try:
+        qualifications = qual_svc.list_qualifications(emp_id)
+    except ProgrammingError as exc:
+        if _is_missing_table_error(exc):
+            qualifications = []
+            error_message = "Employee qualification tables are not installed. Please run migrations."
+        else:
+            raise
 
     context = base_context(request, auth, f"Qualifications - {employee.full_name}", "employees", db=db)
     context.update({
@@ -254,7 +291,7 @@ def list_employee_qualifications(
         "qualifications": qualifications,
         "qualification_types": list(QualificationType),
         "success": success,
-        "error": error,
+        "error": error_message,
     })
     return templates.TemplateResponse(request, "people/hr/employee/qualifications.html", context)
 
@@ -271,7 +308,7 @@ def new_qualification_form(
     emp_svc = EmployeeService(db, org_id)
 
     try:
-        employee = emp_svc.get_employee(coerce_uuid(employee_id))
+        employee = _load_employee(emp_svc, coerce_uuid(employee_id))
     except Exception:
         return RedirectResponse(url="/people/hr/employees?error=Employee+not+found", status_code=303)
 
@@ -382,18 +419,26 @@ def list_employee_certifications(
     cert_svc = EmployeeCertificationService(db, org_id)
 
     try:
-        employee = emp_svc.get_employee(emp_id)
+        employee = _load_employee(emp_svc, emp_id)
     except Exception:
         return RedirectResponse(url="/people/hr/employees?error=Employee+not+found", status_code=303)
 
-    certifications = cert_svc.list_certifications(emp_id)
+    error_message = error
+    try:
+        certifications = cert_svc.list_certifications(emp_id)
+    except ProgrammingError as exc:
+        if _is_missing_table_error(exc):
+            certifications = []
+            error_message = "Employee certification tables are not installed. Please run migrations."
+        else:
+            raise
 
     context = base_context(request, auth, f"Certifications - {employee.full_name}", "employees", db=db)
     context.update({
         "employee": employee,
         "certifications": certifications,
         "success": success,
-        "error": error,
+        "error": error_message,
     })
     return templates.TemplateResponse(request, "people/hr/employee/certifications.html", context)
 
@@ -410,7 +455,7 @@ def new_certification_form(
     emp_svc = EmployeeService(db, org_id)
 
     try:
-        employee = emp_svc.get_employee(coerce_uuid(employee_id))
+        employee = _load_employee(emp_svc, coerce_uuid(employee_id))
     except Exception:
         return RedirectResponse(url="/people/hr/employees?error=Employee+not+found", status_code=303)
 
@@ -518,11 +563,19 @@ def list_employee_dependents(
     dep_svc = EmployeeDependentService(db, org_id)
 
     try:
-        employee = emp_svc.get_employee(emp_id)
+        employee = _load_employee(emp_svc, emp_id)
     except Exception:
         return RedirectResponse(url="/people/hr/employees?error=Employee+not+found", status_code=303)
 
-    dependents = dep_svc.list_dependents(emp_id)
+    error_message = error
+    try:
+        dependents = dep_svc.list_dependents(emp_id)
+    except ProgrammingError as exc:
+        if _is_missing_table_error(exc):
+            dependents = []
+            error_message = "Employee dependent tables are not installed. Please run migrations."
+        else:
+            raise
 
     context = base_context(request, auth, f"Dependents - {employee.full_name}", "employees", db=db)
     context.update({
@@ -530,7 +583,7 @@ def list_employee_dependents(
         "dependents": dependents,
         "relationship_types": list(RelationshipType),
         "success": success,
-        "error": error,
+        "error": error_message,
     })
     return templates.TemplateResponse(request, "people/hr/employee/dependents.html", context)
 
@@ -547,7 +600,7 @@ def new_dependent_form(
     emp_svc = EmployeeService(db, org_id)
 
     try:
-        employee = emp_svc.get_employee(coerce_uuid(employee_id))
+        employee = _load_employee(emp_svc, coerce_uuid(employee_id))
     except Exception:
         return RedirectResponse(url="/people/hr/employees?error=Employee+not+found", status_code=303)
 
@@ -662,18 +715,26 @@ def list_employee_skills(
     skill_svc = EmployeeSkillService(db, org_id)
 
     try:
-        employee = emp_svc.get_employee(emp_id)
+        employee = _load_employee(emp_svc, emp_id)
     except Exception:
         return RedirectResponse(url="/people/hr/employees?error=Employee+not+found", status_code=303)
 
-    skills = skill_svc.list_employee_skills(emp_id)
+    error_message = error
+    try:
+        skills = skill_svc.list_employee_skills(emp_id)
+    except ProgrammingError as exc:
+        if _is_missing_table_error(exc):
+            skills = []
+            error_message = "Employee skills tables are not installed. Please run migrations."
+        else:
+            raise
 
     context = base_context(request, auth, f"Skills - {employee.full_name}", "employees", db=db)
     context.update({
         "employee": employee,
         "employee_skills": skills,
         "success": success,
-        "error": error,
+        "error": error_message,
     })
     return templates.TemplateResponse(request, "people/hr/employee/skills.html", context)
 
@@ -691,11 +752,19 @@ def new_skill_form(
     catalog_svc = SkillService(db, org_id)
 
     try:
-        employee = emp_svc.get_employee(coerce_uuid(employee_id))
+        employee = _load_employee(emp_svc, coerce_uuid(employee_id))
     except Exception:
         return RedirectResponse(url="/people/hr/employees?error=Employee+not+found", status_code=303)
 
-    skills = catalog_svc.list_skills()
+    error_message = None
+    try:
+        skills = catalog_svc.list_skills()
+    except ProgrammingError as exc:
+        if _is_missing_table_error(exc):
+            skills = []
+            error_message = "Skill catalog tables are not installed. Please run migrations."
+        else:
+            raise
 
     context = base_context(request, auth, f"Add Skill - {employee.full_name}", "employees", db=db)
     context.update({
@@ -703,6 +772,7 @@ def new_skill_form(
         "skills": skills,
         "skill_categories": list(SkillCategory),
         "form_data": {},
+        "error": error_message,
     })
     return templates.TemplateResponse(request, "people/hr/employee/skill_form.html", context)
 

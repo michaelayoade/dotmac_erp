@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP
-from typing import Optional
+from typing import List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -449,7 +449,7 @@ class TaxReconciliationService(ListResponseMixin):
         is_reviewed: Optional[bool] = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> list[TaxReconciliation]:
+    ) -> List[TaxReconciliation]:
         """List reconciliations with optional filters."""
         query = db.query(TaxReconciliation)
 

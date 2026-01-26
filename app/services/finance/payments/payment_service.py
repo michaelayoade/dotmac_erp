@@ -6,7 +6,7 @@ Handles payment intent creation and processing for Paystack integration.
 import logging
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any, Optional, cast
 from uuid import UUID, uuid4
 
 from fastapi import HTTPException
@@ -43,6 +43,18 @@ class PaymentService:
     def __init__(self, db: Session, organization_id: UUID):
         self.db = db
         self.organization_id = coerce_uuid(organization_id)
+
+    @staticmethod
+    def get_intent_by_reference(
+        db: Session,
+        reference: str,
+        organization_id: Optional[UUID] = None,
+    ) -> Optional[PaymentIntent]:
+        """Get a payment intent by reference (optionally scoped to org)."""
+        query = db.query(PaymentIntent).filter(PaymentIntent.paystack_reference == reference)
+        if organization_id is not None:
+            query = query.filter(PaymentIntent.organization_id == coerce_uuid(organization_id))
+        return query.first()
 
     def create_invoice_payment_intent(
         self,
@@ -95,11 +107,15 @@ class PaymentService:
         if not customer:
             raise HTTPException(status_code=400, detail="Customer not found for invoice")
 
-        email = customer.email
+        # Get email from primary_contact JSONB field
+        email = None
+        if customer.primary_contact and isinstance(customer.primary_contact, dict):
+            email = customer.primary_contact.get("email")
+
         if not email:
             raise HTTPException(
                 status_code=400,
-                detail="Customer email is required for online payment",
+                detail="Customer email is required for online payment. Add email to customer's primary contact.",
             )
 
         # Generate unique reference
@@ -177,6 +193,74 @@ class PaymentService:
 
         return intent
 
+    def verify_payment_by_reference(
+        self,
+        reference: str,
+        paystack_config: PaystackConfig,
+    ) -> PaymentIntent:
+        """Verify a payment by reference with Paystack and update intent status."""
+        intent = self.get_intent_by_reference(self.db, reference, self.organization_id)
+        if not intent:
+            raise HTTPException(status_code=404, detail="Payment not found")
+
+        if intent.status == PaymentIntentStatus.COMPLETED:
+            return intent
+
+        try:
+            with PaystackClient(paystack_config) as client:
+                result = client.verify_transaction(reference)
+
+            if result.status == "success":
+                if result.paid_at:
+                    try:
+                        paid_at = datetime.fromisoformat(result.paid_at.replace("Z", "+00:00"))
+                    except ValueError:
+                        paid_at = datetime.now(timezone.utc)
+                else:
+                    paid_at = datetime.now(timezone.utc)
+
+                self.process_successful_payment(
+                    intent=intent,
+                    transaction_id=result.transaction_id,
+                    paid_at=paid_at,
+                    gateway_response={
+                        "status": result.status,
+                        "gateway_response": result.gateway_response,
+                        "channel": result.channel,
+                    },
+                    channel=result.channel,
+                )
+
+            elif result.status == "failed":
+                self.mark_payment_failed(
+                    intent,
+                    result.gateway_response or "Payment failed",
+                )
+
+            elif result.status == "abandoned":
+                self.mark_payment_abandoned(intent)
+
+        except PaystackError:
+            raise
+
+        return intent
+
+    def list_pending_transfers(self) -> list[PaymentIntent]:
+        """List pending outbound transfers for the organization."""
+        return (
+            self.db.query(PaymentIntent)
+            .filter(
+                PaymentIntent.organization_id == self.organization_id,
+                PaymentIntent.direction == PaymentDirection.OUTBOUND,
+                PaymentIntent.status.in_([
+                    PaymentIntentStatus.PENDING,
+                    PaymentIntentStatus.PROCESSING,
+                ]),
+            )
+            .order_by(PaymentIntent.created_at.desc())
+            .all()
+        )
+
     def process_successful_payment(
         self,
         intent: PaymentIntent,
@@ -207,7 +291,7 @@ class PaymentService:
         if intent.status == PaymentIntentStatus.COMPLETED:
             logger.info(f"Payment intent {intent.intent_id} already completed")
             if intent.customer_payment_id:
-                return intent.customer_payment_id
+                return cast(UUID, intent.customer_payment_id)
             raise HTTPException(
                 status_code=400,
                 detail="Payment already processed but customer_payment_id missing",
@@ -330,7 +414,7 @@ class PaymentService:
                 },
             )
 
-            return payment.payment_id
+            return cast(UUID, payment.payment_id)
 
         except Exception as e:
             logger.exception(f"Failed to process payment for intent {intent.intent_id}")
@@ -466,7 +550,7 @@ class PaymentService:
             raise HTTPException(status_code=400, detail="No amount payable for this claim")
 
         # Get employee for recipient details
-        from app.models.people.employee import Employee
+        from app.models.people.hr.employee import Employee
 
         employee = self.db.get(Employee, claim.employee_id)
         if not employee:

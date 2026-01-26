@@ -69,6 +69,7 @@ class ChartOfAccountsService(ListResponseMixin):
         db: Session,
         organization_id: UUID,
         input: AccountInput,
+        created_by_user_id: Optional[UUID] = None,
     ) -> Account:
         """
         Create a new account.
@@ -77,6 +78,7 @@ class ChartOfAccountsService(ListResponseMixin):
             db: Database session
             organization_id: Organization scope
             input: Account input data
+            created_by_user_id: User creating the account (for audit trail)
 
         Returns:
             Created Account
@@ -112,6 +114,7 @@ class ChartOfAccountsService(ListResponseMixin):
             subledger_type=input.subledger_type,
             is_cash_equivalent=input.is_cash_equivalent,
             is_financial_instrument=input.is_financial_instrument,
+            created_by_user_id=created_by_user_id,
         )
 
         db.add(account)
@@ -131,6 +134,13 @@ class ChartOfAccountsService(ListResponseMixin):
         is_active: Optional[bool] = None,
         is_posting_allowed: Optional[bool] = None,
         is_budgetable: Optional[bool] = None,
+        is_reconciliation_required: Optional[bool] = None,
+        is_multi_currency: Optional[bool] = None,
+        default_currency_code: Optional[str] = None,
+        subledger_type: Optional[str] = None,
+        is_cash_equivalent: Optional[bool] = None,
+        is_financial_instrument: Optional[bool] = None,
+        updated_by_user_id: Optional[UUID] = None,
     ) -> Account:
         """
         Update an existing account.
@@ -140,6 +150,7 @@ class ChartOfAccountsService(ListResponseMixin):
             organization_id: Organization scope
             account_id: Account to update
             Various optional fields to update
+            updated_by_user_id: User updating the account (for audit trail)
 
         Returns:
             Updated Account
@@ -156,6 +167,8 @@ class ChartOfAccountsService(ListResponseMixin):
             org_id=organization_id,
             entity_name="Account",
         )
+        if account is None:
+            raise HTTPException(status_code=404, detail="Account not found")
 
         if account_name is not None:
             account.account_name = account_name
@@ -169,6 +182,20 @@ class ChartOfAccountsService(ListResponseMixin):
             account.is_posting_allowed = is_posting_allowed
         if is_budgetable is not None:
             account.is_budgetable = is_budgetable
+        if is_reconciliation_required is not None:
+            account.is_reconciliation_required = is_reconciliation_required
+        if is_multi_currency is not None:
+            account.is_multi_currency = is_multi_currency
+        if default_currency_code is not None:
+            account.default_currency_code = default_currency_code
+        if subledger_type is not None:
+            account.subledger_type = subledger_type
+        if is_cash_equivalent is not None:
+            account.is_cash_equivalent = is_cash_equivalent
+        if is_financial_instrument is not None:
+            account.is_financial_instrument = is_financial_instrument
+        if updated_by_user_id is not None:
+            account.updated_by_user_id = updated_by_user_id
 
         db.commit()
         db.refresh(account)

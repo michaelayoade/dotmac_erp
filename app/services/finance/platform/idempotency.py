@@ -6,7 +6,7 @@ return cached responses rather than re-executing operations.
 """
 
 from datetime import datetime, timedelta, timezone
-from typing import Any, Optional
+from typing import Any, List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -210,7 +210,7 @@ class IdempotencyService(ListResponseMixin):
         )
         db.commit()
 
-        return result.rowcount
+        return result.rowcount or 0
 
     @staticmethod
     def get(
@@ -243,7 +243,7 @@ class IdempotencyService(ListResponseMixin):
         include_expired: bool = False,
         limit: int = 50,
         offset: int = 0,
-    ) -> list[IdempotencyRecord]:
+    ) -> List[IdempotencyRecord]:
         """
         List idempotency records.
 

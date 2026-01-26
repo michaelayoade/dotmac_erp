@@ -24,7 +24,7 @@ from app.models.expense.expense_claim import (
     ExpenseClaimStatus,
     ExpenseCategory,
 )
-from app.models.finance.ap.supplier import Supplier
+from app.models.finance.ap.supplier import Supplier, SupplierType
 from app.models.finance.ap.supplier_invoice import (
     SupplierInvoice,
     SupplierInvoiceStatus,
@@ -192,7 +192,7 @@ class ExpensePostingAdapter:
         # Build employee name for description
         employee_name = "Employee"
         if claim.employee:
-            employee_name = f"{claim.employee.first_name} {claim.employee.last_name}"
+            employee_name = claim.employee.full_name
 
         # Create journal entry
         journal_input = JournalInput(
@@ -474,7 +474,7 @@ class ExpensePostingAdapter:
         # Build employee name for description
         employee_name = "Employee"
         if advance.employee:
-            employee_name = f"{advance.employee.first_name} {advance.employee.last_name}"
+            employee_name = advance.employee.full_name
 
         # Build journal lines
         journal_lines = [
@@ -658,7 +658,7 @@ class ExpensePostingAdapter:
         # Build employee name
         employee_name = "Employee"
         if claim.employee:
-            employee_name = f"{claim.employee.first_name} {claim.employee.last_name}"
+            employee_name = claim.employee.full_name
 
         # Build journal lines
         journal_lines = []
@@ -827,8 +827,8 @@ class ExpensePostingAdapter:
         # Try organization settings first
         from app.models.finance.core_org.organization import Organization
         org = db.get(Organization, organization_id)
-        if org and hasattr(org, 'employee_payable_account_id'):
-            acc_id = getattr(org, 'employee_payable_account_id', None)
+        if org and hasattr(org, "employee_payable_account_id"):
+            acc_id: Optional[UUID] = getattr(org, "employee_payable_account_id", None)
             if acc_id:
                 return acc_id
 
@@ -854,8 +854,8 @@ class ExpensePostingAdapter:
         # Try organization settings first
         from app.models.finance.core_org.organization import Organization
         org = db.get(Organization, organization_id)
-        if org and hasattr(org, 'employee_advance_account_id'):
-            acc_id = getattr(org, 'employee_advance_account_id', None)
+        if org and hasattr(org, "employee_advance_account_id"):
+            acc_id: Optional[UUID] = getattr(org, "employee_advance_account_id", None)
             if acc_id:
                 return acc_id
 
@@ -886,37 +886,33 @@ class ExpensePostingAdapter:
 
         from sqlalchemy import select
 
+        supplier_code = f"EMP-{employee.employee_id.hex[:8].upper()}"
+
         # Look for existing supplier linked to employee
         supplier = db.scalar(
             select(Supplier).where(
                 Supplier.organization_id == organization_id,
-                Supplier.employee_id == employee.employee_id,
+                Supplier.supplier_code == supplier_code,
             )
         )
         if supplier:
             return supplier
 
-        # Look by email match
-        if employee.work_email:
-            supplier = db.scalar(
-                select(Supplier).where(
-                    Supplier.organization_id == organization_id,
-                    Supplier.email == employee.work_email,
-                )
-            )
-            if supplier:
-                return supplier
+        payable_account_id = ExpensePostingAdapter._get_employee_payable_account(
+            db, organization_id
+        )
+        if not payable_account_id:
+            return None
 
         # Create new supplier for employee
         supplier = Supplier(
             organization_id=organization_id,
-            supplier_code=f"EMP-{employee.employee_id.hex[:8].upper()}",
-            legal_name=f"{employee.first_name} {employee.last_name}",
-            trading_name=f"{employee.first_name} {employee.last_name}",
-            email=employee.work_email,
-            supplier_type="INDIVIDUAL",
-            is_employee=True,
-            employee_id=employee.employee_id,
+            supplier_code=supplier_code,
+            supplier_type=SupplierType.CONTRACTOR,
+            legal_name=employee.full_name,
+            trading_name=employee.full_name,
+            ap_control_account_id=payable_account_id,
+            primary_contact={"email": employee.work_email} if employee.work_email else None,
             currency_code="NGN",
             is_active=True,
             created_by_user_id=user_id,
@@ -1010,7 +1006,7 @@ class ExpensePostingAdapter:
             )
 
         # Build journal lines
-        reimbursement_amount = claim.net_payable_amount
+        reimbursement_amount = claim.net_payable_amount or Decimal("0")
         if reimbursement_amount <= Decimal("0"):
             return ExpensePostingResult(
                 success=False,
@@ -1307,7 +1303,8 @@ class ExpensePostingAdapter:
 
         # Get the reimbursement amount from original journal
         reversal_amount = sum(
-            line.debit_amount for line in original_journal.lines if line.debit_amount > 0
+            (line.debit_amount for line in original_journal.lines if line.debit_amount > 0),
+            Decimal("0"),
         )
 
         if reversal_amount <= Decimal("0"):

@@ -9,7 +9,7 @@ from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
@@ -17,7 +17,9 @@ from app.api.deps import require_organization_id, require_tenant_auth
 from app.services.auth_dependencies import require_tenant_permission
 from app.db import SessionLocal
 from app.models.finance.rpt.disclosure_checklist import DisclosureStatus
-from app.models.finance.rpt.report_definition import ReportType
+from app.models.finance.rpt.report_definition import ReportType, ReportDefinition
+from app.models.finance.rpt.financial_statement_line import StatementType
+from app.models.finance.rpt.report_instance import ReportStatus
 from app.models.finance.rpt.report_schedule import ScheduleFrequency
 from app.schemas.finance.common import ListResponse
 from app.services.finance.rpt import (
@@ -48,6 +50,19 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+def _resolve_statement_type(db: Session, organization_id: UUID, report_id: UUID) -> StatementType:
+    definition = db.get(ReportDefinition, report_id)
+    if not definition or definition.organization_id != organization_id:
+        raise HTTPException(status_code=404, detail="Report definition not found")
+    try:
+        return StatementType(definition.report_type.value)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Report type {definition.report_type} does not support statement lines",
+        ) from exc
 
 
 # =============================================================================
@@ -446,23 +461,24 @@ def create_statement_line(
     db: Session = Depends(get_db),
 ):
     """Create a financial statement line."""
+    statement_type = _resolve_statement_type(db, organization_id, payload.report_id)
+    line_type = payload.line_type.upper()
     input_data = StatementLineInput(
-        report_id=payload.report_id,
+        statement_type=statement_type,
         line_code=payload.line_code,
         line_name=payload.line_name,
-        line_type=payload.line_type,
-        sequence=payload.sequence,
+        sequence_number=payload.sequence,
         parent_line_id=payload.parent_line_id,
-        account_id=payload.account_id,
-        formula=payload.formula,
-        is_bold=payload.is_bold,
+        calculation_formula=payload.formula,
         indent_level=payload.indent_level,
+        is_header=line_type == "HEADER",
+        is_total=line_type == "TOTAL",
+        is_subtotal=line_type == "SUBTOTAL",
     )
     return financial_statement_service.create_line(
         db=db,
         organization_id=organization_id,
         input=input_data,
-        created_by_user_id=created_by_user_id,
     )
 
 
@@ -476,13 +492,13 @@ def list_statement_lines(
     db: Session = Depends(get_db),
 ):
     """List statement lines for a report."""
-    lines = financial_statement_service.list_lines(
+    statement_type = _resolve_statement_type(db, organization_id, report_id)
+    lines = financial_statement_service.get_statement_structure(
         db=db,
         organization_id=str(organization_id),
-        report_id=str(report_id),
-        limit=limit,
-        offset=offset,
+        statement_type=statement_type,
     )
+    lines = lines[offset: offset + limit]
     return ListResponse(
         items=lines,
         count=len(lines),
@@ -501,14 +517,15 @@ def reorder_statement_lines(
     db: Session = Depends(get_db),
 ):
     """Reorder statement lines."""
+    statement_type = _resolve_statement_type(db, organization_id, report_id)
+    line_sequences = [(line_id, index + 1) for index, line_id in enumerate(line_order)]
     result = financial_statement_service.reorder_lines(
         db=db,
-        organization_id=str(organization_id),
-        report_id=str(report_id),
-        line_order=[str(lid) for lid in line_order],
-        updated_by_user_id=updated_by_user_id,
+        organization_id=organization_id,
+        statement_type=statement_type,
+        line_sequences=line_sequences,
     )
-    return {"lines_updated": result}
+    return {"lines_updated": len(result)}
 
 
 # =============================================================================
@@ -561,12 +578,18 @@ def list_report_instances(
     db: Session = Depends(get_db),
 ):
     """List report instances with filters."""
+    status_value = None
+    if status:
+        try:
+            status_value = ReportStatus(status)
+        except ValueError:
+            status_value = None
     instances = report_instance_service.list(
         db=db,
         organization_id=str(organization_id),
         report_def_id=str(report_def_id) if report_def_id else None,
         fiscal_period_id=str(fiscal_period_id) if fiscal_period_id else None,
-        status=status,
+        status=status_value,
         limit=limit,
         offset=offset,
     )
@@ -691,17 +714,23 @@ def record_disclosure_completion(
 ):
     """Record disclosure item completion."""
     input_data = DisclosureCompletionInput(
-        disclosure_item_id=payload.disclosure_item_id,
-        report_instance_id=payload.report_instance_id,
-        is_complete=payload.is_complete,
+        disclosure_location=payload.evidence_reference,
         notes=payload.notes,
-        evidence_reference=payload.evidence_reference,
     )
-    return disclosure_checklist_service.record_completion(
+    if payload.is_complete:
+        return disclosure_checklist_service.complete_item(
+            db=db,
+            organization_id=organization_id,
+            checklist_id=payload.disclosure_item_id,
+            completed_by_user_id=recorded_by_user_id,
+            input=input_data,
+        )
+    return disclosure_checklist_service.mark_not_applicable(
         db=db,
         organization_id=organization_id,
-        input=input_data,
-        recorded_by_user_id=recorded_by_user_id,
+        checklist_id=payload.disclosure_item_id,
+        reason=payload.notes or "Not applicable",
+        marked_by_user_id=recorded_by_user_id,
     )
 
 
@@ -715,11 +744,10 @@ def review_disclosure_completion(
     db: Session = Depends(get_db),
 ):
     """Review disclosure completion (SoD enforced)."""
-    return disclosure_checklist_service.review_completion(
+    return disclosure_checklist_service.review_item(
         db=db,
         organization_id=organization_id,
-        completion_id=completion_id,
-        is_approved=is_approved,
+        checklist_id=completion_id,
         reviewed_by_user_id=reviewed_by_user_id,
     )
 
@@ -732,10 +760,13 @@ def get_disclosure_summary(
     db: Session = Depends(get_db),
 ):
     """Get disclosure checklist summary for a report instance."""
+    instance = report_instance_service.get(db, str(instance_id))
+    if not instance.fiscal_period_id:
+        raise HTTPException(status_code=400, detail="Report instance has no fiscal period")
     return disclosure_checklist_service.get_summary(
         db=db,
         organization_id=str(organization_id),
-        report_instance_id=str(instance_id),
+        fiscal_period_id=str(instance.fiscal_period_id),
     )
 
 
@@ -824,11 +855,9 @@ def run_scheduled_report(
     db: Session = Depends(get_db),
 ):
     """Manually trigger a scheduled report."""
-    return report_scheduler_service.execute_schedule(
+    return report_scheduler_service.record_execution(
         db=db,
-        organization_id=organization_id,
         schedule_id=schedule_id,
-        triggered_by_user_id=triggered_by_user_id,
     )
 
 
@@ -842,12 +871,16 @@ def toggle_schedule_status(
     db: Session = Depends(get_db),
 ):
     """Enable or disable a report schedule."""
-    return report_scheduler_service.toggle_schedule(
+    if is_active:
+        return report_scheduler_service.activate(
+            db=db,
+            organization_id=organization_id,
+            schedule_id=schedule_id,
+        )
+    return report_scheduler_service.deactivate(
         db=db,
         organization_id=organization_id,
         schedule_id=schedule_id,
-        is_active=is_active,
-        updated_by_user_id=updated_by_user_id,
     )
 
 
@@ -862,13 +895,10 @@ def list_schedule_executions(
     db: Session = Depends(get_db),
 ):
     """List execution history for a schedule."""
-    executions = report_scheduler_service.list_executions(
+    executions = report_scheduler_service.get_upcoming_schedules(
         db=db,
         organization_id=str(organization_id),
-        schedule_id=str(schedule_id),
-        status=status,
-        limit=limit,
-        offset=offset,
+        hours_ahead=24,
     )
     return ListResponse(
         items=executions,

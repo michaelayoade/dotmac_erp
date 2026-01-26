@@ -18,6 +18,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.finance.core_org.cost_center import CostCenter
+from app.models.finance.core_org.location import Location, LocationType
 from app.models.people.hr import (
     Department,
     Designation,
@@ -31,11 +32,13 @@ from app.services.common import PaginatedResult, PaginationParams, paginate
 from .errors import (
     CircularDepartmentError,
     DepartmentNotFoundError,
+    LocationNotFoundError,
     DesignationNotFoundError,
     EmployeeGradeNotFoundError,
     EmploymentTypeNotFoundError,
     ValidationError,
 )
+from .employee_types import EmployeeFilters
 from .organization_types import (
     DepartmentCreateData,
     DepartmentFilters,
@@ -53,6 +56,7 @@ from .organization_types import (
     EmploymentTypeFilters,
     EmploymentTypeUpdateData,
 )
+from .employees import EmployeeService
 
 if TYPE_CHECKING:
     from app.auth import Principal
@@ -160,6 +164,25 @@ class OrganizationService:
     # =========================================================================
     # Department Methods
     # =========================================================================
+
+    def list_employees(
+        self,
+        filters: Optional[EmployeeFilters] = None,
+        pagination: Optional[PaginationParams] = None,
+        *,
+        eager_load: bool = False,
+    ) -> PaginatedResult[Employee]:
+        """List employees via EmployeeService for organization-scoped lookups."""
+        employee_service = EmployeeService(self.db, self.organization_id)
+        if filters is None:
+            filters = EmployeeFilters()
+        if pagination is None:
+            pagination = PaginationParams()
+        return employee_service.list_employees(
+            filters,
+            pagination,
+            eager_load=eager_load,
+        )
 
     def list_departments(
         self,
@@ -997,3 +1020,107 @@ class OrganizationService:
             )
 
         self.db.delete(grade)
+
+    # =========================================================================
+    # Locations
+    # =========================================================================
+
+    def list_locations(
+        self,
+        *,
+        search: Optional[str] = None,
+        is_active: Optional[bool] = None,
+        pagination: Optional[PaginationParams] = None,
+    ) -> PaginatedResult[Location]:
+        if pagination is None:
+            pagination = PaginationParams()
+
+        stmt = select(Location).where(Location.organization_id == self.organization_id)
+
+        if search:
+            search_term = f"%{search}%"
+            stmt = stmt.where(
+                or_(
+                    Location.location_code.ilike(search_term),
+                    Location.location_name.ilike(search_term),
+                )
+            )
+
+        if is_active is not None:
+            stmt = stmt.where(Location.is_active == is_active)
+
+        stmt = stmt.order_by(Location.location_name.asc())
+
+        return paginate(self.db, stmt, pagination)
+
+    def get_location(self, location_id: uuid.UUID) -> Location:
+        location = self.db.scalar(
+            select(Location).where(
+                Location.location_id == location_id,
+                Location.organization_id == self.organization_id,
+            )
+        )
+        if not location:
+            raise LocationNotFoundError(location_id)
+        return location
+
+    def create_location(
+        self,
+        *,
+        location_code: str,
+        location_name: str,
+        location_type: Optional[LocationType],
+        address_line_1: Optional[str] = None,
+        address_line_2: Optional[str] = None,
+        city: Optional[str] = None,
+        state_province: Optional[str] = None,
+        postal_code: Optional[str] = None,
+        country_code: Optional[str] = None,
+        latitude: Optional[float] = None,
+        longitude: Optional[float] = None,
+        geofence_radius_m: Optional[float] = None,
+        geofence_enabled: Optional[bool] = None,
+        geofence_polygon: Optional[str] = None,
+        is_active: Optional[bool] = None,
+    ) -> Location:
+        location = Location(
+            organization_id=self.organization_id,
+            location_code=location_code,
+            location_name=location_name,
+            location_type=location_type,
+            address_line_1=address_line_1,
+            address_line_2=address_line_2,
+            city=city,
+            state_province=state_province,
+            postal_code=postal_code,
+            country_code=country_code,
+            latitude=latitude,
+            longitude=longitude,
+            geofence_radius_m=geofence_radius_m,
+            geofence_enabled=geofence_enabled,
+            geofence_polygon=geofence_polygon,
+            is_active=is_active,
+            created_by_id=self.principal.id if self.principal else None,
+        )
+        self.db.add(location)
+        self.db.flush()
+        return location
+
+    def update_location(
+        self,
+        location_id: uuid.UUID,
+        update_data: dict,
+    ) -> Location:
+        location = self.get_location(location_id)
+        for key, value in update_data.items():
+            if hasattr(location, key):
+                setattr(location, key, value)
+        if hasattr(location, "updated_at"):
+            location.updated_at = datetime.now(timezone.utc)
+        if hasattr(location, "updated_by_id"):
+            location.updated_by_id = self.principal.id if self.principal else None
+        return location
+
+    def delete_location(self, location_id: uuid.UUID) -> None:
+        location = self.get_location(location_id)
+        self.db.delete(location)

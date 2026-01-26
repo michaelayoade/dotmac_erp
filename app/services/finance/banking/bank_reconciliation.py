@@ -6,7 +6,7 @@ and reconciliation workflow.
 """
 
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Dict, List, Optional, Tuple
 from uuid import UUID
@@ -433,7 +433,7 @@ class BankReconciliationService:
 
             # Find best match (by date proximity and reference)
             best_match = None
-            best_score = 0
+            best_score = 0.0
 
             for gl_line in potential_matches:
                 if gl_line.line_id in matched_gl_ids:
@@ -501,7 +501,7 @@ class BankReconciliationService:
             score += 35
 
         # Date proximity (30 points)
-        date_diff = abs((stmt_line.transaction_date - gl_line.entry.entry_date).days)
+        date_diff = abs((stmt_line.transaction_date - gl_line.journal_entry.entry_date).days)
         if date_diff == 0:
             score += 30
         elif date_diff <= 1:
@@ -612,7 +612,11 @@ class BankReconciliationService:
 
         # Update bank account
         bank_account = reconciliation.bank_account
-        bank_account.last_reconciled_date = reconciliation.reconciliation_date
+        bank_account.last_reconciled_date = datetime.combine(
+            reconciliation.reconciliation_date,
+            datetime.min.time(),
+            tzinfo=timezone.utc,
+        )
         bank_account.last_reconciled_balance = reconciliation.statement_closing_balance
 
         db.flush()

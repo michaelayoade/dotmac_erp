@@ -28,6 +28,7 @@ from app.schemas.finance.ar import (
 )
 from app.schemas.finance.common import ListResponse, PostingResultSchema
 from app.models.finance.ar.customer import CustomerType
+from app.models.finance.ar.invoice import InvoiceType
 from app.services.finance.ar import (
     customer_service,
     ar_invoice_service,
@@ -69,20 +70,19 @@ def create_customer(
     db: Session = Depends(get_db),
 ):
     """Create a new customer."""
-    # Convert string customer_type to enum
-    customer_type = CustomerType(payload.customer_type.upper())
-
+    # Thin wrapper: pass template-friendly names directly to service
+    # Service handles field mapping internally
     input_data = CustomerInput(
         customer_code=payload.customer_code,
-        customer_type=customer_type,
-        legal_name=payload.legal_name,
+        customer_type=CustomerType(payload.customer_type.upper()),
+        customer_name=payload.customer_name,  # Template-friendly name
         trading_name=payload.trading_name,
-        tax_identification_number=payload.tax_identification_number,
-        credit_terms_days=payload.credit_terms_days,
+        tax_id=payload.tax_id,  # Template-friendly name
+        payment_terms_days=payload.payment_terms_days,  # Template-friendly name
         credit_limit=payload.credit_limit,
         currency_code=payload.currency_code,
         default_revenue_account_id=payload.default_revenue_account_id,
-        ar_control_account_id=payload.ar_control_account_id,
+        default_receivable_account_id=payload.default_receivable_account_id,  # Template-friendly name
     )
     return customer_service.create_customer(db, organization_id, input_data)
 
@@ -170,10 +170,11 @@ def create_ar_invoice(
 
     input_data = ARInvoiceInput(
         customer_id=payload.customer_id,
+        invoice_type=InvoiceType.STANDARD,
         invoice_date=payload.invoice_date,
         due_date=payload.due_date,
         currency_code=payload.currency_code,
-        description=payload.description,
+        notes=payload.description,
         lines=lines,
     )
 

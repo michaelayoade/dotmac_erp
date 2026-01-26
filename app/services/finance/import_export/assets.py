@@ -48,14 +48,15 @@ class AssetCategoryImporter(BaseImporter[AssetCategory]):
         return []
 
     def get_unique_key(self, row: Dict[str, Any]) -> str:
-        return row.get("Asset Category", row.get("Asset Class", "General Assets")).strip()
+        value = row.get("Asset Category") or row.get("Asset Class") or "General Assets"
+        return str(value).strip()
 
     def check_duplicate(self, row: Dict[str, Any]) -> Optional[AssetCategory]:
         category_name = self.get_unique_key(row)
         category_code = self._make_category_code(category_name)
 
         if category_code in self._category_cache:
-            return True
+            return self.db.get(AssetCategory, self._category_cache[category_code])
 
         existing = self.db.execute(
             select(AssetCategory).where(

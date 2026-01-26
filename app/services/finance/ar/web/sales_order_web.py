@@ -10,7 +10,7 @@ import json
 import logging
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
+from typing import Optional, cast
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -36,7 +36,13 @@ logger = logging.getLogger(__name__)
 def _customer_display_name(customer: Customer | None) -> str:
     if not customer:
         return "-"
-    return customer.trading_name or customer.legal_name
+    return cast(str, customer.trading_name or customer.legal_name)
+
+
+def _customer_email(customer: Customer | None) -> str | None:
+    if not customer:
+        return None
+    return (customer.primary_contact or {}).get("email")
 
 
 class SalesOrderWebService:
@@ -63,7 +69,7 @@ class SalesOrderWebService:
             {
                 "customer_id": str(c.customer_id),
                 "name": _customer_display_name(c),
-                "email": c.email,
+                "email": _customer_email(c),
             }
             for c in customers
         ]
@@ -151,14 +157,21 @@ class SalesOrderWebService:
             except ValueError:
                 pass
 
+        parsed_start_date = (
+            datetime.strptime(start_date, "%Y-%m-%d").date() if start_date else None
+        )
+        parsed_end_date = (
+            datetime.strptime(end_date, "%Y-%m-%d").date() if end_date else None
+        )
+
         # Get orders from service
         orders = sales_order_service.list_orders(
             db,
             organization_id,
             customer_id=customer_id,
             status=status_filter,
-            start_date=start_date,
-            end_date=end_date,
+            start_date=parsed_start_date,
+            end_date=parsed_end_date,
         )
 
         # Format for template

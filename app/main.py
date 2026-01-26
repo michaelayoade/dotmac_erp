@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI, Request
 from time import monotonic
 from threading import Lock
-from starlette.responses import Response
+from starlette.responses import Response, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
@@ -283,6 +283,11 @@ _include_api_router(support_router, dependencies=[Depends(require_tenant_auth)])
 _include_api_router(pm_router, dependencies=[Depends(require_tenant_auth)])
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon():
+    return RedirectResponse(url="/static/favicon.svg")
 
 
 @app.get("/health")

@@ -20,7 +20,7 @@
 {% if order %}
 <div class="flex items-center gap-2">
     {% if order.can_submit %}
-    <form method="post" action="/sales-orders/{{ order.so_id }}/submit" class="inline">
+    <form method="post" action="/finance/sales-orders/{{ order.so_id }}/submit" class="inline">
         <button type="submit" class="btn btn-primary">
             <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
@@ -31,7 +31,7 @@
     {% endif %}
 
     {% if order.can_approve %}
-    <form method="post" action="/sales-orders/{{ order.so_id }}/approve" class="inline">
+    <form method="post" action="/finance/sales-orders/{{ order.so_id }}/approve" class="inline">
         <button type="submit" class="btn btn-primary">
             <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
@@ -42,7 +42,7 @@
     {% endif %}
 
     {% if order.can_confirm %}
-    <form method="post" action="/sales-orders/{{ order.so_id }}/confirm" class="inline">
+    <form method="post" action="/finance/sales-orders/{{ order.so_id }}/confirm" class="inline">
         <button type="submit" class="btn btn-primary">
             <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
@@ -62,7 +62,7 @@
     {% endif %}
 
     {% if order.can_invoice %}
-    <form method="post" action="/sales-orders/{{ order.so_id }}/create-invoice" class="inline">
+    <form method="post" action="/finance/sales-orders/{{ order.so_id }}/create-invoice" class="inline">
         <button type="submit" class="btn btn-secondary">
             <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
@@ -73,7 +73,7 @@
     {% endif %}
 
     {% if order.can_hold %}
-    <form method="post" action="/sales-orders/{{ order.so_id }}/hold" class="inline">
+    <form method="post" action="/finance/sales-orders/{{ order.so_id }}/hold" class="inline">
         <button type="submit" class="btn btn-secondary">
             <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
@@ -84,7 +84,7 @@
     {% endif %}
 
     {% if order.can_release %}
-    <form method="post" action="/sales-orders/{{ order.so_id }}/release" class="inline">
+    <form method="post" action="/finance/sales-orders/{{ order.so_id }}/release" class="inline">
         <button type="submit" class="btn btn-primary">
             <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
@@ -332,7 +332,7 @@
                         </td>
                         <td>
                             {% if not ship.is_delivered %}
-                            <form method="post" action="/sales-orders/shipments/{{ ship.shipment_id }}/deliver" class="inline">
+                            <form method="post" action="/finance/sales-orders/shipments/{{ ship.shipment_id }}/deliver" class="inline">
                                 <button type="submit" class="text-sm text-teal-600 hover:text-teal-700 dark:text-teal-400">
                                     Mark Delivered
                                 </button>
@@ -423,7 +423,7 @@
     <div class="modal-box">
         <h3 class="font-bold text-lg">Cancel Sales Order</h3>
         <p class="py-4">Are you sure you want to cancel this sales order?</p>
-        <form method="post" action="/sales-orders/{{ order.so_id }}/cancel">
+        <form method="post" action="/finance/sales-orders/{{ order.so_id }}/cancel">
             <div class="mb-4">
                 <label class="form-label">Reason (optional)</label>
                 <textarea name="reason" class="form-input" rows="2" placeholder="Enter cancellation reason"></textarea>

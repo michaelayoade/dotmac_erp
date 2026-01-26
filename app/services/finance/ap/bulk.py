@@ -78,7 +78,7 @@ class SupplierBulkService(BulkActionService[Supplier]):
             subfield = field_name.split(".")[1]
             return str(contact.get(subfield, ""))
 
-        return super()._get_export_value(entity, field_name)
+        return str(super()._get_export_value(entity, field_name))
 
     def _get_export_filename(self) -> str:
         """Get supplier export filename."""

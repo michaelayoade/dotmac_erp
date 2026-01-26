@@ -26,14 +26,30 @@ DEFAULT_ROUTES = [
 ]
 
 _FISCAL_PERIOD_PLACEHOLDER = "AUTO_FISCAL_PERIOD_ID"
+DEFAULT_EXCLUDE_PREFIXES = [
+    "/api/v1/lease",
+    "/api/v1/me",
+    "/api/v1/workflow-tasks/my-tasks",
+    "/api/v1/payments/banks",
+    "/lease",
+    "/me",
+    "/workflow-tasks/my-tasks",
+    "/payments/banks",
+]
 
 
-def _request(url: str, method: str = "GET", data: bytes | None = None, headers: dict | None = None):
+def _request(
+    url: str,
+    method: str = "GET",
+    data: bytes | None = None,
+    headers: dict | None = None,
+    timeout: int = 10,
+):
     req = urllib.request.Request(url, data=data, method=method)
     for key, value in (headers or {}).items():
         req.add_header(key, value)
     try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
             return resp.status, resp.read().decode("utf-8")
     except urllib.error.HTTPError as exc:
         return exc.code, exc.read().decode("utf-8")
@@ -41,13 +57,14 @@ def _request(url: str, method: str = "GET", data: bytes | None = None, headers: 
         return None, str(exc)
 
 
-def login(base_url: str, username: str, password: str) -> str | None:
+def login(base_url: str, username: str, password: str, timeout: int) -> str | None:
     payload = json.dumps({"username": username, "password": password}).encode("utf-8")
     status, body = _request(
         f"{base_url}/auth/login",
         method="POST",
         data=payload,
         headers={"Content-Type": "application/json"},
+        timeout=timeout,
     )
     if status != 200:
         print(f"Login failed: status={status}, body={body}")
@@ -68,16 +85,15 @@ def load_routes_from_openapi(
     include_api: bool,
     exclude_prefixes: list[str],
     skip_params: bool,
+    timeout: int,
 ) -> list[str]:
-    status, body = _request(f"{base_url}/openapi.json")
+    status, body = _request(f"{base_url}/openapi.json", timeout=timeout)
     if status != 200:
         raise SystemExit(f"Failed to load openapi.json: status={status}")
     data = json.loads(body)
     routes = []
     for path, methods in data.get("paths", {}).items():
         if skip_params and "{" in path:
-            continue
-        if any(path.startswith(prefix) for prefix in exclude_prefixes):
             continue
         if not include_api and path.startswith("/api"):
             continue
@@ -125,10 +141,26 @@ def load_routes_from_openapi(
     return sorted(set(routes))
 
 
-def get_default_fiscal_period_id(base_url: str, headers: dict) -> str | None:
+def filter_routes(
+    routes: list[str],
+    *,
+    exclude_prefixes: list[str],
+) -> list[str]:
+    if not exclude_prefixes:
+        return routes
+    filtered = []
+    for path in routes:
+        if any(path.startswith(prefix) for prefix in exclude_prefixes):
+            continue
+        filtered.append(path)
+    return filtered
+
+
+def get_default_fiscal_period_id(base_url: str, headers: dict, timeout: int) -> str | None:
     status, body = _request(
         f"{base_url}/api/v1/gl/fiscal-periods?limit=1",
         headers=headers,
+        timeout=timeout,
     )
     if status != 200:
         return None
@@ -161,29 +193,40 @@ def main() -> int:
     parser.add_argument("--include-api", action="store_true", help="Include /api* routes when loading from openapi.")
     parser.add_argument("--exclude-prefix", action="append", default=[], help="Exclude routes by prefix.")
     parser.add_argument("--include-params", action="store_true", help="Include parameterized routes like /items/{id}.")
+    parser.add_argument("--no-default-excludes", action="store_true", help="Do not apply default skip list.")
+    parser.add_argument("--timeout", type=int, default=30, help="Request timeout in seconds.")
     args = parser.parse_args()
 
     base_url = args.base_url.rstrip("/")
+    exclude_prefixes = list(args.exclude_prefix or [])
+    if not args.no_default_excludes:
+        exclude_prefixes = DEFAULT_EXCLUDE_PREFIXES + exclude_prefixes
     if args.from_openapi:
         routes = load_routes_from_openapi(
             base_url,
             include_api=args.include_api,
-            exclude_prefixes=args.exclude_prefix,
+            exclude_prefixes=exclude_prefixes,
             skip_params=not args.include_params,
+            timeout=args.timeout,
         )
     else:
         routes = load_routes(args.routes_file)
-    token = login(base_url, args.username, args.password)
+    routes = filter_routes(routes, exclude_prefixes=exclude_prefixes)
+    token = login(base_url, args.username, args.password, args.timeout)
 
     headers = {}
     if token:
         headers["Authorization"] = f"Bearer {token}"
-    fiscal_period_id = get_default_fiscal_period_id(base_url, headers)
+    fiscal_period_id = get_default_fiscal_period_id(base_url, headers, args.timeout)
     routes = substitute_fiscal_period_id(routes, fiscal_period_id)
 
     failures = []
     for path in routes:
-        status, body = _request(f"{base_url}{path}", headers=headers)
+        status, body = _request(
+            f"{base_url}{path}",
+            headers=headers,
+            timeout=args.timeout,
+        )
         if status is None or status >= 400:
             failures.append((path, status, body[:200]))
             print(f"FAIL {path} status={status} body={body[:200]!r}")

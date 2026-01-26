@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP
-from typing import Optional
+from typing import List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -441,13 +441,14 @@ class InventoryCountService(ListResponseMixin):
             if not item:
                 continue
 
+            variance_qty = line.variance_quantity or Decimal("0")
             txn_input = TransactionInput(
                 transaction_type=TransactionType.COUNT_ADJUSTMENT,
                 transaction_date=datetime.combine(count.count_date, datetime.min.time()),
                 fiscal_period_id=count.fiscal_period_id,
                 item_id=line.item_id,
                 warehouse_id=line.warehouse_id,
-                quantity=line.variance_quantity,
+                quantity=variance_qty,
                 unit_cost=line.unit_cost,
                 uom=line.uom,
                 currency_code=item.currency_code,
@@ -509,6 +510,14 @@ class InventoryCountService(ListResponseMixin):
             InventoryCountLine.count_id == cnt_id
         ).first()
 
+        total_variance = Decimal("0")
+        positive_variance = Decimal("0")
+        negative_variance = Decimal("0")
+        if variance_stats:
+            total_variance = variance_stats.total or Decimal("0")
+            positive_variance = variance_stats.positive or Decimal("0")
+            negative_variance = variance_stats.negative or Decimal("0")
+
         return CountSummary(
             count_id=count.count_id,
             count_number=count.count_number,
@@ -516,9 +525,9 @@ class InventoryCountService(ListResponseMixin):
             total_items=count.total_items,
             items_counted=count.items_counted,
             items_with_variance=count.items_with_variance,
-            total_variance_value=variance_stats.total or Decimal("0"),
-            positive_variance_value=variance_stats.positive or Decimal("0"),
-            negative_variance_value=variance_stats.negative or Decimal("0"),
+            total_variance_value=total_variance,
+            positive_variance_value=positive_variance,
+            negative_variance_value=negative_variance,
         )
 
     @staticmethod
@@ -540,7 +549,7 @@ class InventoryCountService(ListResponseMixin):
         status: Optional[CountStatus] = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> list[InventoryCount]:
+    ) -> List[InventoryCount]:
         """List inventory counts with optional filters."""
         query = db.query(InventoryCount)
 
@@ -564,7 +573,7 @@ class InventoryCountService(ListResponseMixin):
         is_counted: Optional[bool] = None,
         limit: int = 100,
         offset: int = 0,
-    ) -> list[InventoryCountLine]:
+    ) -> List[InventoryCountLine]:
         """List count lines with optional filters."""
         cnt_id = coerce_uuid(count_id)
 

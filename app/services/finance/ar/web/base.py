@@ -13,7 +13,7 @@ import logging
 from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal
-from typing import Optional
+from typing import List, Optional
 from uuid import UUID
 
 from sqlalchemy import func
@@ -45,7 +45,8 @@ logger = logging.getLogger(__name__)
 
 def parse_customer_type(value: Optional[str]) -> CustomerType:
     """Parse customer type from string value."""
-    return parse_enum_safe(CustomerType, value, CustomerType.COMPANY)
+    parsed = parse_enum_safe(CustomerType, value, CustomerType.COMPANY)
+    return parsed or CustomerType.COMPANY
 
 
 def parse_invoice_status(value: Optional[str]) -> Optional[InvoiceStatus]:
@@ -295,7 +296,7 @@ def get_accounts(
     organization_id: UUID,
     ifrs_category: IFRSCategory,
     subledger_type: Optional[str] = None,
-) -> list[Account]:
+) -> List[Account]:
     """Get accounts filtered by IFRS category and optional subledger type."""
     query = (
         db.query(Account)
@@ -311,7 +312,7 @@ def get_accounts(
     return query.order_by(Account.account_code).all()
 
 
-def get_cost_centers(db: Session, organization_id: UUID) -> list[CostCenter]:
+def get_cost_centers(db: Session, organization_id: UUID) -> List[CostCenter]:
     """Get active cost centers for organization."""
     return (
         db.query(CostCenter)
@@ -324,7 +325,7 @@ def get_cost_centers(db: Session, organization_id: UUID) -> list[CostCenter]:
     )
 
 
-def get_projects(db: Session, organization_id: UUID) -> list[Project]:
+def get_projects(db: Session, organization_id: UUID) -> List[Project]:
     """Get projects for organization."""
     return (
         db.query(Project)

@@ -207,9 +207,10 @@ class SagaRecoveryService:
                 SagaExecution.organization_id == coerce_uuid(organization_id)
             )
 
-        status_counts = dict(
-            query.group_by(SagaExecution.status).all()
-        )
+        status_counts: dict[SagaStatus, int] = {
+            status: count
+            for status, count in query.group_by(SagaExecution.status).all()
+        }
 
         stuck = SagaRecoveryService.find_stuck_sagas(db, organization_id)
 

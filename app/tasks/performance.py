@@ -10,7 +10,7 @@ Handles:
 
 import logging
 from datetime import date
-from typing import Optional
+from typing import Any, Optional
 from uuid import UUID
 
 from celery import shared_task
@@ -37,7 +37,7 @@ def process_cycle_phase_transitions() -> dict:
 
     logger.info("Processing cycle phase transitions")
 
-    results = {
+    results: dict[str, Any] = {
         "transitions": [],
         "errors": [],
     }
@@ -106,7 +106,7 @@ def generate_cycle_appraisals(cycle_id: str, template_id: Optional[str] = None) 
 
     logger.info("Generating appraisals for cycle %s", cycle_id)
 
-    results = {
+    results: dict[str, Any] = {
         "cycle_id": cycle_id,
         "appraisals_created": 0,
         "eligible_count": 0,
@@ -230,7 +230,7 @@ def check_upcoming_deadlines(days_ahead: int = 7) -> dict:
             service = PerformanceAutomationService(db)
             deadlines = service.get_upcoming_deadlines(days_ahead=days_ahead)
 
-            results = {
+            results: dict[str, Any] = {
                 "deadlines_found": len(deadlines),
                 "deadlines": deadlines,
             }
@@ -259,7 +259,7 @@ def sync_all_cycle_progress() -> dict:
 
     logger.info("Syncing progress for all active cycles")
 
-    results = {
+    results: dict[str, Any] = {
         "cycles_processed": 0,
         "cycle_progress": [],
         "errors": [],
@@ -331,7 +331,7 @@ def activate_cycle(cycle_id: str, template_id: Optional[str] = None) -> dict:
 
     logger.info("Activating cycle %s", cycle_id)
 
-    results = {
+    results: dict[str, Any] = {
         "cycle_id": cycle_id,
         "activated": False,
         "appraisals_created": 0,
@@ -406,7 +406,7 @@ def complete_cycle(cycle_id: str) -> dict:
 
     logger.info("Attempting to complete cycle %s", cycle_id)
 
-    results = {
+    results: dict[str, Any] = {
         "cycle_id": cycle_id,
         "completed": False,
         "reason": None,

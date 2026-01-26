@@ -9,11 +9,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Optional
+from typing import List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import func
+from sqlalchemy import Integer, func
 from sqlalchemy.orm import Session
 
 from app.models.finance.rpt.disclosure_checklist import (
@@ -453,7 +453,7 @@ class DisclosureChecklistService(ListResponseMixin):
                             DisclosureStatus.REVIEWED,
                             DisclosureStatus.NOT_APPLICABLE,
                         ]),
-                        db.bind.dialect.type_descriptor(type(1))
+                        Integer,
                     )
                 ).label("completed"),
             )
@@ -487,7 +487,7 @@ class DisclosureChecklistService(ListResponseMixin):
         db: Session,
         organization_id: str,
         fiscal_period_id: str,
-    ) -> list[DisclosureChecklist]:
+    ) -> List[DisclosureChecklist]:
         """
         Get incomplete mandatory disclosure items.
 
@@ -526,7 +526,7 @@ class DisclosureChecklistService(ListResponseMixin):
         organization_id: UUID,
         source_period_id: UUID,
         target_period_id: UUID,
-    ) -> list[DisclosureChecklist]:
+    ) -> List[DisclosureChecklist]:
         """
         Copy checklist from one period to another.
 

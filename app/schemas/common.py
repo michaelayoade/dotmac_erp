@@ -28,13 +28,11 @@ class ListResponse(BaseModel, Generic[T]):
     offset: int = Field(description="Number of items skipped")
 
     @computed_field
-    @property
     def count(self) -> int:
         """Deprecated: Use 'total' instead. Alias for backwards compatibility."""
         return self.total
 
     @computed_field
-    @property
     def has_more(self) -> bool:
         """Whether there are more items beyond this page."""
         return self.offset + len(self.items) < self.total

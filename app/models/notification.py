@@ -35,6 +35,12 @@ class EntityType(str, enum.Enum):
     EMPLOYEE = "EMPLOYEE"
     APPROVAL = "APPROVAL"
     SYSTEM = "SYSTEM"
+    # Finance module entity types
+    FISCAL_PERIOD = "FISCAL_PERIOD"
+    TAX_PERIOD = "TAX_PERIOD"
+    BANK_RECONCILIATION = "BANK_RECONCILIATION"
+    INVOICE = "INVOICE"
+    SUBLEDGER = "SUBLEDGER"
 
 
 class NotificationType(str, enum.Enum):

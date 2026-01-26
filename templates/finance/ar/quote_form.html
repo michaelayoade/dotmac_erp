@@ -709,7 +709,7 @@ function quoteForm() {
 
             // Submit via standard form
             const form = document.querySelector('form');
-            form.action = '/quotes/new';
+            form.action = '/finance/quotes/new';
             form.method = 'POST';
 
             // Create FormData from Alpine data
@@ -729,7 +729,7 @@ function quoteForm() {
             // Create a hidden form and submit
             const hiddenForm = document.createElement('form');
             hiddenForm.method = 'POST';
-            hiddenForm.action = '/quotes/new';
+            hiddenForm.action = '/finance/quotes/new';
 
             for (const [key, value] of formData.entries()) {
                 const input = document.createElement('input');

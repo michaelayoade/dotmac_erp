@@ -34,10 +34,12 @@ if TYPE_CHECKING:
 class KPIStatus(str, enum.Enum):
     """KPI tracking status."""
     DRAFT = "DRAFT"
+    PENDING = "PENDING"
     ACTIVE = "ACTIVE"
     ON_TRACK = "ON_TRACK"
     AT_RISK = "AT_RISK"
     ACHIEVED = "ACHIEVED"
+    COMPLETED = "COMPLETED"
     MISSED = "MISSED"
     DEFERRED = "DEFERRED"
     CANCELLED = "CANCELLED"

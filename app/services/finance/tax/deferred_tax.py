@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
-from typing import Optional
+from typing import List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -530,6 +530,15 @@ class DeferredTaxService(ListResponseMixin):
             .first()
         )
 
+        if result is None:
+            return {
+                "deferred_tax_expense_pl": Decimal("0"),
+                "deferred_tax_oci": Decimal("0"),
+                "deferred_tax_equity": Decimal("0"),
+                "tax_rate_change_impact": Decimal("0"),
+                "recognition_change": Decimal("0"),
+            }
+
         return {
             "deferred_tax_expense_pl": result.pl_total or Decimal("0"),
             "deferred_tax_oci": result.oci_total or Decimal("0"),
@@ -560,7 +569,7 @@ class DeferredTaxService(ListResponseMixin):
         is_active: Optional[bool] = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> list[DeferredTaxBasis]:
+    ) -> List[DeferredTaxBasis]:
         """List deferred tax bases with optional filters."""
         query = db.query(DeferredTaxBasis)
 
@@ -599,7 +608,7 @@ class DeferredTaxService(ListResponseMixin):
         basis_id: str,
         limit: int = 50,
         offset: int = 0,
-    ) -> list[DeferredTaxMovement]:
+    ) -> List[DeferredTaxMovement]:
         """List movements for a deferred tax basis."""
         return (
             db.query(DeferredTaxMovement)

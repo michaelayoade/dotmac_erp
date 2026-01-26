@@ -8,6 +8,7 @@ import logging
 from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
+from typing import Any, cast
 from uuid import UUID
 
 from sqlalchemy import func, and_, extract, case, or_
@@ -136,9 +137,10 @@ class DashboardService:
         ]
         years: set[int] = set()
         for model, column in sources:
+            org_col = cast(Any, model).organization_id
             rows = (
                 db.query(extract("year", column))
-                .filter(model.organization_id == org_id, column.isnot(None))
+                .filter(org_col == org_id, column.isnot(None))
                 .distinct()
                 .all()
             )

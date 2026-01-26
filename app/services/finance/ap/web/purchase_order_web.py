@@ -531,7 +531,11 @@ class PurchaseOrderWebService:
                     ))
 
             po_date_str = data.get("po_date")
-            po_date = datetime.strptime(po_date_str, "%Y-%m-%d").date() if po_date_str else None
+            po_date = (
+                datetime.strptime(po_date_str, "%Y-%m-%d").date()
+                if po_date_str
+                else date.today()
+            )
 
             expected_delivery_str = data.get("expected_delivery_date")
             expected_delivery = (
@@ -598,6 +602,7 @@ class PurchaseOrderWebService:
                 db=db,
                 organization_id=auth.organization_id,
                 po_id=UUID(po_id),
+                submitted_by_user_id=auth.person_id,
             )
             logger.info(
                 "submit_purchase_order_response: submitted PO %s for approval",

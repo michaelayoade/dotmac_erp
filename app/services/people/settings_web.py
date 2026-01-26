@@ -137,16 +137,6 @@ class PeopleSettingsWebService:
         data: dict[str, Any],
     ) -> tuple[bool, Optional[str]]:
         """Update HR settings."""
-        async with tenant_context(db, organization_id):
-            result = await db.execute(
-                select(Organization).where(
-                    Organization.organization_id == organization_id
-                )
-            )
-            org = result.scalar_one_or_none()
-        if not org:
-            return False, "Organization not found"
-
         # Update allowed HR fields
         allowed_fields = [
             "hr_employee_id_format",
@@ -158,21 +148,31 @@ class PeopleSettingsWebService:
             "timezone",  # Shared with finance but editable from HR
         ]
 
-        for field in allowed_fields:
-            if field in data:
-                value = data[field]
-                # Handle empty strings as None for optional fields
-                if value == "":
-                    value = None
-                # Handle integer conversion for specific fields
-                if field in ["hr_leave_year_start_month", "hr_probation_days"] and value:
-                    try:
-                        value = int(value)
-                    except (ValueError, TypeError):
-                        value = None
-                setattr(org, field, value)
+        async with tenant_context(db, organization_id):
+            result = await db.execute(
+                select(Organization).where(
+                    Organization.organization_id == organization_id
+                )
+            )
+            org = result.scalar_one_or_none()
+            if not org:
+                return False, "Organization not found"
 
-        await db.commit()
+            for field in allowed_fields:
+                if field in data:
+                    value = data[field]
+                    # Handle empty strings as None for optional fields
+                    if value == "":
+                        value = None
+                    # Handle integer conversion for specific fields
+                    if field in ["hr_leave_year_start_month", "hr_probation_days"] and value:
+                        try:
+                            value = int(value)
+                        except (ValueError, TypeError):
+                            value = None
+                    setattr(org, field, value)
+
+            await db.commit()
         return True, None
 
     # ========== Organization Profile (read-only for HR) ==========

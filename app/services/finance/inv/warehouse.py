@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any, Optional, List
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -361,7 +361,7 @@ class WarehouseService(ListResponseMixin):
         search: Optional[str] = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> list[Warehouse]:
+    ) -> List[Warehouse]:
         """List warehouses with optional filters."""
         query = db.query(Warehouse)
 
@@ -396,7 +396,7 @@ class WarehouseService(ListResponseMixin):
         is_active: Optional[bool] = None,
         limit: int = 100,
         offset: int = 0,
-    ) -> list[WarehouseLocation]:
+    ) -> List[WarehouseLocation]:
         """List locations in a warehouse."""
         wh_id = coerce_uuid(warehouse_id)
 

@@ -151,7 +151,7 @@ class TaxReportService:
                 TaxTransaction.transaction_type,
                 func.sum(TaxTransaction.tax_amount).label("total_tax"),
                 func.sum(TaxTransaction.base_amount).label("total_base"),
-                func.count(TaxTransaction.transaction_id).label("count"),
+                func.count(TaxTransaction.transaction_id).label("transaction_count"),
             )
             .join(TaxCode, TaxTransaction.tax_code_id == TaxCode.tax_code_id)
             .filter(
@@ -284,7 +284,7 @@ class TaxReportService:
                 rate=row.tax_rate,
                 total_base=row.total_base or Decimal("0"),
                 total_tax=row.total_tax or Decimal("0"),
-                transaction_count=row.count,
+                transaction_count=row.transaction_count,
             )
             for row in results
         ]

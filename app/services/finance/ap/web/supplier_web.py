@@ -57,15 +57,15 @@ class SupplierWebService:
         return SupplierInput(
             supplier_code=form_data.get("supplier_code", ""),
             supplier_type=parse_supplier_type(form_data.get("supplier_type")),
-            legal_name=form_data.get("supplier_name", ""),
+            supplier_name=form_data.get("supplier_name", ""),
             trading_name=form_data.get("supplier_name"),
-            tax_identification_number=form_data.get("tax_id"),
+            tax_id=form_data.get("tax_id"),
             currency_code=form_data.get(
                 "currency_code",
                 settings.default_functional_currency_code,
             ),
             payment_terms_days=int(form_data.get("payment_terms_days", 30)),
-            ap_control_account_id=(
+            default_payable_account_id=(
                 UUID(form_data["default_payable_account_id"])
                 if form_data.get("default_payable_account_id")
                 else UUID("00000000-0000-0000-0000-000000000001")

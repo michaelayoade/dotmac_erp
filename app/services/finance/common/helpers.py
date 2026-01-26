@@ -6,7 +6,7 @@ Provides reusable functions for entity validation, retrieval, and status managem
 
 from __future__ import annotations
 
-from typing import Any, Callable, Optional, Type, TypeVar
+from typing import Any, Callable, Optional, Type, TypeVar, cast
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -30,9 +30,11 @@ def get_model_pk_column(model_class: Type[T]) -> str:
         Primary key column name
     """
     mapper = inspect(model_class)
+    if mapper is None:
+        raise ValueError(f"Unable to inspect model {model_class.__name__}")
     pk_cols = mapper.primary_key
     if pk_cols:
-        return pk_cols[0].name
+        return cast(str, pk_cols[0].name)
     # Fallback to common naming convention
     name = model_class.__name__
     return f"{name[0].lower()}{name[1:]}_id"
@@ -50,7 +52,7 @@ def get_entity_display_name(model_class: Type[T]) -> str:
     """
     name = model_class.__name__
     # Convert CamelCase to spaces
-    result = []
+    result: list[str] = []
     for char in name:
         if char.isupper() and result:
             result.append(" ")
@@ -253,6 +255,7 @@ def toggle_entity_status(
         org_id=org_id,
         entity_name=entity_name,
     )
+    assert entity is not None
 
     # Run pre-check if provided
     if pre_check is not None:

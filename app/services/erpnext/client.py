@@ -8,7 +8,7 @@ import logging
 import time
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any, Optional, cast
 from urllib.parse import urljoin
 
 import httpx
@@ -102,7 +102,7 @@ class ERPNextClient:
                 response = self.client.request(method, path, **kwargs)
 
                 if response.status_code == 200:
-                    return response.json()
+                    return self._parse_json(response)
 
                 # Handle specific error codes
                 if response.status_code == 401:
@@ -125,7 +125,7 @@ class ERPNextClient:
                 # Other errors - don't retry
                 error_msg = response.text
                 try:
-                    error_data = response.json()
+                    error_data = self._parse_json(response)
                     if "message" in error_data:
                         error_msg = error_data["message"]
                     elif "_server_messages" in error_data:
@@ -143,6 +143,17 @@ class ERPNextClient:
 
         # Should not reach here, but just in case
         raise last_error or ERPNextError("Unknown error")
+
+    @staticmethod
+    def _parse_json(response: httpx.Response) -> dict[str, Any]:
+        """Parse JSON response into a dict payload."""
+        try:
+            data = response.json()
+        except Exception:
+            return {"message": response.text}
+        if isinstance(data, dict):
+            return data
+        return {"message": data}
 
     def test_connection(self) -> dict[str, Any]:
         """
@@ -182,7 +193,7 @@ class ERPNextClient:
             params["fields"] = str(fields)
 
         result = self._request("GET", f"/api/resource/{doctype}/{name}", params=params)
-        return result.get("data", {})
+        return cast(dict[str, Any], result.get("data", {}))
 
     def list_documents(
         self,
@@ -229,7 +240,7 @@ class ERPNextClient:
             params["order_by"] = order_by
 
         result = self._request("GET", f"/api/resource/{doctype}", params=params)
-        return result.get("data", [])
+        return cast(list[dict[str, Any]], result.get("data", []))
 
     def get_count(
         self,
@@ -632,7 +643,7 @@ class ERPNextClient:
         if from_date:
             filters["posting_date"] = [">=", from_date.strftime("%Y-%m-%d")]
         if to_date:
-            if "posting_date" in filters:
+            if from_date:
                 filters["posting_date"] = [
                     "between",
                     [from_date.strftime("%Y-%m-%d"), to_date.strftime("%Y-%m-%d")],
@@ -774,7 +785,7 @@ class ERPNextClient:
             f"/api/resource/{doctype}",
             json=payload,
         )
-        return result.get("data", {})
+        return cast(dict[str, Any], result.get("data", {}))
 
     def update_document(
         self,
@@ -801,7 +812,7 @@ class ERPNextClient:
             f"/api/resource/{doctype}/{name}",
             json=data,
         )
-        return result.get("data", {})
+        return cast(dict[str, Any], result.get("data", {}))
 
     def delete_document(
         self,
@@ -853,7 +864,7 @@ class ERPNextClient:
             "/api/method/frappe.client.submit",
             json={"doc": {"doctype": doctype, "name": name}},
         )
-        return result.get("message", {})
+        return cast(dict[str, Any], result.get("message", {}))
 
     def cancel_document(
         self,
@@ -880,7 +891,7 @@ class ERPNextClient:
             "/api/method/frappe.client.cancel",
             json={"doctype": doctype, "name": name},
         )
-        return result.get("message", {})
+        return cast(dict[str, Any], result.get("message", {}))
 
     def run_method(
         self,
@@ -906,7 +917,7 @@ class ERPNextClient:
         Raises:
             ERPNextError: On error
         """
-        payload = {"doctype": doctype, "name": name, "method": method}
+        payload: dict[str, Any] = {"doctype": doctype, "name": name, "method": method}
         if args:
             payload["args"] = args
 

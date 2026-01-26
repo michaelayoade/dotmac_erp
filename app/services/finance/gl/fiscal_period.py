@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
-from typing import Optional
+from typing import List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -338,7 +338,7 @@ class FiscalPeriodService(ListResponseMixin):
         status: Optional[PeriodStatus] = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> list[FiscalPeriod]:
+    ) -> List[FiscalPeriod]:
         """
         List fiscal periods with filters.
 

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import uuid
 from decimal import Decimal
-from typing import TYPE_CHECKING, Dict, List, Optional
+from typing import TYPE_CHECKING, Dict, List, Optional, cast
 
 from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
@@ -59,14 +59,14 @@ class ProjectExpenseService:
 
         return [
             {
-                "expense_id": e.id,
-                "claim_number": getattr(e, "claim_number", str(e.id)[:8]),
+                "expense_id": e.claim_id,
+                "claim_number": e.claim_number,
                 "description": getattr(e, "description", None),
-                "amount": getattr(e, "total_amount", Decimal("0")),
+                "amount": getattr(e, "total_claimed_amount", Decimal("0")),
                 "status": getattr(e, "status", "UNKNOWN"),
-                "expense_date": getattr(e, "expense_date", None),
+                "expense_date": getattr(e, "claim_date", None),
                 "employee_id": getattr(e, "employee_id", None),
-                "category": getattr(e, "category", None),
+                "category": None,
             }
             for e in expenses
         ]
@@ -78,7 +78,7 @@ class ProjectExpenseService:
         Returns aggregated expense data.
         """
         try:
-            from app.models.expense.expense_claim import ExpenseClaim, ExpenseStatus
+            from app.models.expense.expense_claim import ExpenseClaim, ExpenseClaimStatus
         except ImportError:
             return {
                 "project_id": project_id,
@@ -96,48 +96,37 @@ class ProjectExpenseService:
 
         # Total expenses
         total_count = self.db.scalar(
-            select(func.count(ExpenseClaim.id)).where(base_where)
+            select(func.count(ExpenseClaim.claim_id)).where(base_where)
         ) or 0
 
         total_amount = self.db.scalar(
-            select(func.sum(ExpenseClaim.total_amount)).where(base_where)
+            select(func.sum(ExpenseClaim.total_claimed_amount)).where(base_where)
         ) or Decimal("0")
 
         # Approved expenses
         approved_amount = Decimal("0")
         pending_amount = Decimal("0")
 
-        if hasattr(ExpenseStatus, "APPROVED"):
+        if hasattr(ExpenseClaimStatus, "APPROVED"):
             approved_amount = self.db.scalar(
-                select(func.sum(ExpenseClaim.total_amount)).where(
+                select(func.sum(ExpenseClaim.total_claimed_amount)).where(
                     base_where,
-                    ExpenseClaim.status == ExpenseStatus.APPROVED,
+                    ExpenseClaim.status == ExpenseClaimStatus.APPROVED,
                 )
             ) or Decimal("0")
 
-        if hasattr(ExpenseStatus, "PENDING"):
+        if hasattr(ExpenseClaimStatus, "PENDING_APPROVAL"):
             pending_amount = self.db.scalar(
-                select(func.sum(ExpenseClaim.total_amount)).where(
+                select(func.sum(ExpenseClaim.total_claimed_amount)).where(
                     base_where,
-                    ExpenseClaim.status == ExpenseStatus.PENDING,
+                    ExpenseClaim.status == ExpenseClaimStatus.PENDING_APPROVAL,
                 )
             ) or Decimal("0")
 
         # By category
-        expenses_by_category = {}
+        expenses_by_category: dict[str, Decimal] = {}
         if hasattr(ExpenseClaim, "category"):
-            category_amounts = self.db.execute(
-                select(
-                    ExpenseClaim.category,
-                    func.sum(ExpenseClaim.total_amount).label("amount"),
-                )
-                .where(base_where)
-                .group_by(ExpenseClaim.category)
-            ).all()
-            expenses_by_category = {
-                cat or "Uncategorized": amount
-                for cat, amount in category_amounts
-            }
+            expenses_by_category = {}
 
         return {
             "project_id": project_id,
@@ -153,4 +142,4 @@ class ProjectExpenseService:
     ) -> Dict[str, Decimal]:
         """Get expenses grouped by category."""
         summary = self.get_expense_summary(project_id)
-        return summary.get("expenses_by_category", {})
+        return cast(dict[str, Decimal], summary.get("expenses_by_category", {}))

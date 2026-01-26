@@ -35,6 +35,7 @@ if TYPE_CHECKING:
     from app.models.pm.resource_allocation import ResourceAllocation
     from app.models.pm.time_entry import TimeEntry
     from app.models.finance.ar.customer import Customer
+    from app.models.pm.project_template import ProjectTemplate
 
 
 class ProjectStatus(str, enum.Enum):
@@ -52,6 +53,11 @@ class ProjectType(str, enum.Enum):
     CLIENT = "CLIENT"
     FIXED_PRICE = "FIXED_PRICE"
     TIME_MATERIAL = "TIME_MATERIAL"
+    FIBER_OPTICS_INSTALLATION = "FIBER_OPTICS_INSTALLATION"
+    AIR_FIBER_INSTALLATION = "AIR_FIBER_INSTALLATION"
+    CABLE_RERUN = "CABLE_RERUN"
+    FIBER_OPTICS_RELOCATION = "FIBER_OPTICS_RELOCATION"
+    AIR_FIBER_RELOCATION = "AIR_FIBER_RELOCATION"
 
 
 class ProjectPriority(str, enum.Enum):
@@ -170,6 +176,12 @@ class Project(Base, ERPNextSyncMixin):
         default=ProjectType.INTERNAL,
     )
 
+    project_template_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("pm.project_template.template_id"),
+        nullable=True,
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -211,6 +223,11 @@ class Project(Base, ERPNextSyncMixin):
         "TimeEntry",
         foreign_keys="TimeEntry.project_id",
         back_populates="project",
+    )
+    project_template: Mapped[Optional["ProjectTemplate"]] = relationship(
+        "ProjectTemplate",
+        foreign_keys=[project_template_id],
+        lazy="joined",
     )
 
     @property

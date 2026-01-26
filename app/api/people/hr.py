@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import require_organization_id, require_tenant_auth
 from app.db import SessionLocal
-from app.models.finance.core_org.location import Location, LocationType
+from app.models.finance.core_org.location import LocationType
 from app.models.people.hr.checklist_template import ChecklistTemplateType
 from app.schemas.auth import UserCredentialRead
 from app.schemas.people.hr import (
@@ -235,20 +235,15 @@ def list_locations(
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
 ):
-    query = db.query(Location).filter(Location.organization_id == organization_id)
-    if search:
-        search_term = f"%{search}%"
-        query = query.filter(
-            Location.location_code.ilike(search_term)
-            | Location.location_name.ilike(search_term)
-        )
-    if is_active is not None:
-        query = query.filter(Location.is_active == is_active)
-    total = query.count()
-    items = query.offset(offset).limit(limit).all()
+    svc = OrganizationService(db, organization_id)
+    result = svc.list_locations(
+        search=search,
+        is_active=is_active,
+        pagination=PaginationParams(offset=offset, limit=limit),
+    )
     return LocationListResponse(
-        items=[LocationRead.model_validate(i) for i in items],
-        total=total,
+        items=[LocationRead.model_validate(i) for i in result.items],
+        total=result.total,
         offset=offset,
         limit=limit,
     )
@@ -261,8 +256,8 @@ def create_location(
     db: Session = Depends(get_db),
 ):
     location_type = parse_enum(payload.location_type, LocationType, "location_type")
-    location = Location(
-        organization_id=organization_id,
+    svc = OrganizationService(db, organization_id)
+    location = svc.create_location(
         location_code=payload.location_code,
         location_name=payload.location_name,
         location_type=location_type,
@@ -279,7 +274,6 @@ def create_location(
         geofence_polygon=payload.geofence_polygon,
         is_active=payload.is_active,
     )
-    db.add(location)
     db.commit()
     db.refresh(location)
     return LocationRead.model_validate(location)
@@ -291,10 +285,8 @@ def get_location(
     organization_id: UUID = Depends(require_organization_id),
     db: Session = Depends(get_db),
 ):
-    location = db.get(Location, location_id)
-    if not location or location.organization_id != organization_id:
-        raise HTTPException(status_code=404, detail="Location not found")
-    return LocationRead.model_validate(location)
+    svc = OrganizationService(db, organization_id)
+    return LocationRead.model_validate(svc.get_location(location_id))
 
 
 @router.patch("/locations/{location_id}", response_model=LocationRead)
@@ -304,9 +296,6 @@ def update_location(
     organization_id: UUID = Depends(require_organization_id),
     db: Session = Depends(get_db),
 ):
-    location = db.get(Location, location_id)
-    if not location or location.organization_id != organization_id:
-        raise HTTPException(status_code=404, detail="Location not found")
     update_data = payload.model_dump(exclude_unset=True)
     if "location_type" in update_data:
         update_data["location_type"] = parse_enum(
@@ -314,9 +303,8 @@ def update_location(
             LocationType,
             "location_type",
         )
-    for key, value in update_data.items():
-        if hasattr(location, key):
-            setattr(location, key, value)
+    svc = OrganizationService(db, organization_id)
+    location = svc.update_location(location_id, update_data)
     db.commit()
     db.refresh(location)
     return LocationRead.model_validate(location)
@@ -328,10 +316,8 @@ def delete_location(
     organization_id: UUID = Depends(require_organization_id),
     db: Session = Depends(get_db),
 ):
-    location = db.get(Location, location_id)
-    if not location or location.organization_id != organization_id:
-        raise HTTPException(status_code=404, detail="Location not found")
-    db.delete(location)
+    svc = OrganizationService(db, organization_id)
+    svc.delete_location(location_id)
     db.commit()
 
 

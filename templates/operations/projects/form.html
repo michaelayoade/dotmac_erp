@@ -13,12 +13,19 @@
         <h1 class="text-2xl font-display font-semibold text-slate-900 dark:text-white">{% if project %}Edit{% else %}New{% endif %} Project</h1>
     </div>
 
+    {% if error %}
+    <div class="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-800 dark:bg-rose-900/20 dark:text-rose-300">
+        {{ error }}
+    </div>
+    {% endif %}
+
+    {% set form_data = form_data if form_data is defined and form_data else {} %}
     <form method="post" class="rounded-lg border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-800 space-y-6">
         <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
             <div>
                 <label for="project_code" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Project Code</label>
                 <input type="text" name="project_code" id="project_code"
-                       value="{{ project.project_code if project else '' }}"
+                       value="{{ project.project_code if project else form_data.get('project_code', '') }}"
                        placeholder="Auto-generated if left blank"
                        class="mt-1 block w-full rounded-lg border-slate-300 focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
             </div>
@@ -27,7 +34,7 @@
                 <select name="status" id="status"
                         class="mt-1 block w-full rounded-lg border-slate-300 focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
                     {% for s in statuses %}
-                    <option value="{{ s }}" {{ 'selected' if project and project.status.value == s else '' }}>{{ s }}</option>
+                    <option value="{{ s }}" {{ 'selected' if project and project.status.value == s else ('selected' if not project and form_data.get('status', 'PLANNING') == s else '') }}>{{ s }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -37,9 +44,13 @@
             <div>
                 <label for="project_type" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Project Type</label>
                 <select name="project_type" id="project_type"
+                        required
                         class="mt-1 block w-full rounded-lg border-slate-300 focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
+                    {% if not project %}
+                    <option value="" disabled {{ 'selected' if not form_data.get('project_type') else '' }}>Select a project type</option>
+                    {% endif %}
                     {% for t in project_types %}
-                    <option value="{{ t }}" {{ 'selected' if project and project.project_type.value == t else '' }}>{{ t|replace('_', ' ')|title }}</option>
+                    <option value="{{ t }}" {{ 'selected' if project and project.project_type.value == t else ('selected' if not project and form_data.get('project_type') == t else '') }}>{{ t|replace('_', ' ')|title }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -48,10 +59,31 @@
                 <select name="project_priority" id="project_priority"
                         class="mt-1 block w-full rounded-lg border-slate-300 focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
                     {% for p in priorities %}
-                    <option value="{{ p }}" {{ 'selected' if project and project.project_priority.value == p else ('selected' if not project and p == 'MEDIUM' else '') }}>{{ p|title }}</option>
+                    <option value="{{ p }}" {{ 'selected' if project and project.project_priority.value == p else ('selected' if not project and form_data.get('project_priority', 'MEDIUM') == p else '') }}>{{ p|title }}</option>
                     {% endfor %}
                 </select>
             </div>
+        </div>
+
+        <div>
+            <label for="project_template_id" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Project Template</label>
+            <select name="project_template_id" id="project_template_id"
+                    class="mt-1 block w-full rounded-lg border-slate-300 focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white"
+                    {% if project %}disabled{% endif %}>
+                <option value="">No template</option>
+                {% for t in project_templates %}
+                <option value="{{ t.template_id }}"
+                        data-project-type="{{ t.project_type.value }}"
+                        {{ 'selected' if project and project.project_template_id and project.project_template_id|string == t.template_id|string else ('selected' if not project and form_data.get('project_template_id') and form_data.get('project_template_id')|string == t.template_id|string else '') }}>
+                    {{ t.name }} ({{ t.project_type.value|replace('_', ' ')|title }})
+                </option>
+                {% endfor %}
+            </select>
+            {% if project %}
+            <p class="text-xs text-slate-400 mt-1">Template is applied only when creating a project.</p>
+            {% else %}
+            <p class="text-xs text-slate-400 mt-1">Selecting a template will create its tasks for this project.</p>
+            {% endif %}
         </div>
 
         <div>
@@ -60,7 +92,7 @@
                     class="mt-1 block w-full rounded-lg border-slate-300 focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
                 <option value="">No customer (internal project)</option>
                 {% for c in customers %}
-                <option value="{{ c.customer_id }}" {{ 'selected' if project and project.customer_id and project.customer_id|string == c.customer_id|string else '' }}>{{ c.customer_name }} ({{ c.customer_code }})</option>
+                <option value="{{ c.customer_id }}" {{ 'selected' if project and project.customer_id and project.customer_id|string == c.customer_id|string else ('selected' if not project and form_data.get('customer_id') and form_data.get('customer_id')|string == c.customer_id|string else '') }}>{{ c.customer_name }} ({{ c.customer_code }})</option>
                 {% endfor %}
             </select>
             <p class="text-xs text-slate-400 mt-1">Select a customer for client-facing projects</p>
@@ -69,27 +101,29 @@
         <div>
             <label for="project_name" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Project Name</label>
             <input type="text" name="project_name" id="project_name" required
-                   value="{{ project.project_name if project else '' }}"
+                   value="{{ project.project_name if project else form_data.get('project_name', '') }}"
                    class="mt-1 block w-full rounded-lg border-slate-300 focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
         </div>
 
         <div>
             <label for="description" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Description</label>
             <textarea name="description" id="description" rows="4"
-                      class="mt-1 block w-full rounded-lg border-slate-300 focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">{{ project.description if project else '' }}</textarea>
+                      class="mt-1 block w-full rounded-lg border-slate-300 focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">{{ project.description if project else form_data.get('description', '') }}</textarea>
         </div>
 
         <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
             <div>
                 <label for="start_date" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Start Date</label>
                 <input type="date" name="start_date" id="start_date"
-                       value="{{ project.start_date.isoformat() if project and project.start_date else '' }}"
+                       {% if not project %}readonly{% endif %}
+                       value="{{ project.start_date.isoformat() if project and project.start_date else form_data.get('start_date', '') }}"
                        class="mt-1 block w-full rounded-lg border-slate-300 focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
             </div>
             <div>
                 <label for="end_date" class="block text-sm font-medium text-slate-700 dark:text-slate-300">End Date</label>
                 <input type="date" name="end_date" id="end_date"
-                       value="{{ project.end_date.isoformat() if project and project.end_date else '' }}"
+                       {% if not project %}readonly{% endif %}
+                       value="{{ project.end_date.isoformat() if project and project.end_date else form_data.get('end_date', '') }}"
                        class="mt-1 block w-full rounded-lg border-slate-300 focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
             </div>
         </div>
@@ -98,13 +132,13 @@
             <div>
                 <label for="budget_amount" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Budget</label>
                 <input type="number" name="budget_amount" id="budget_amount" step="0.01"
-                       value="{{ project.budget_amount if project and project.budget_amount else '' }}"
+                       value="{{ project.budget_amount if project and project.budget_amount else form_data.get('budget_amount', '') }}"
                        class="mt-1 block w-full rounded-lg border-slate-300 focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
             </div>
             <div>
                 <label for="percent_complete" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Progress (%)</label>
                 <input type="number" name="percent_complete" id="percent_complete" min="0" max="100"
-                       value="{{ project.percent_complete|int if project else 0 }}"
+                       value="{{ project.percent_complete|int if project else form_data.get('percent_complete', 0) }}"
                        class="mt-1 block w-full rounded-lg border-slate-300 focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
             </div>
         </div>
@@ -120,5 +154,79 @@
             </button>
         </div>
     </form>
+
+    {% if not project %}
+    <script>
+        (() => {
+            const typeSelect = document.getElementById("project_type");
+            const startInput = document.getElementById("start_date");
+            const endInput = document.getElementById("end_date");
+            const templateSelect = document.getElementById("project_template_id");
+            if (!typeSelect || !startInput || !endInput) return;
+
+            const durations = {
+                FIBER_OPTICS_INSTALLATION: 14,
+                FIBER_OPTICS_RELOCATION: 14,
+                AIR_FIBER_INSTALLATION: 3,
+                AIR_FIBER_RELOCATION: 3,
+                CABLE_RERUN: 5,
+            };
+
+            const templateTypeMap = {
+                FIBER_OPTICS_INSTALLATION: "FIBER_OPTICS_INSTALLATION",
+                FIBER_OPTICS_RELOCATION: "FIBER_OPTICS_INSTALLATION",
+                AIR_FIBER_INSTALLATION: "AIR_FIBER_INSTALLATION",
+                AIR_FIBER_RELOCATION: "AIR_FIBER_INSTALLATION",
+                CABLE_RERUN: "CABLE_RERUN",
+            };
+
+            const pad = (value) => String(value).padStart(2, "0");
+            const formatDate = (value) =>
+                `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`;
+
+            const updateTemplate = () => {
+                if (!templateSelect) return;
+                const selectedType = typeSelect.value;
+                const targetType = templateTypeMap[selectedType];
+                if (!targetType) {
+                    templateSelect.value = "";
+                    return;
+                }
+                const matching = Array.from(templateSelect.options).find(
+                    (option) => option.dataset.projectType === targetType
+                );
+                templateSelect.value = matching ? matching.value : "";
+            };
+
+            const updateDates = () => {
+                const selected = typeSelect.value;
+                if (!selected) {
+                    startInput.value = "";
+                    endInput.value = "";
+                    updateTemplate();
+                    return;
+                }
+
+                const today = new Date();
+                startInput.value = formatDate(today);
+
+                const days = durations[selected];
+                if (!days) {
+                    endInput.value = "";
+                    updateTemplate();
+                    return;
+                }
+
+                const end = new Date(today);
+                end.setDate(end.getDate() + days);
+                endInput.value = formatDate(end);
+                updateTemplate();
+            };
+
+            typeSelect.addEventListener("change", updateDates);
+            updateDates();
+        })();
+    </script>
+    {% endif %}
 </div>
 {% endblock %}

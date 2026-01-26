@@ -194,7 +194,12 @@ class ARInvoicePostingSaga(SagaOrchestrator):
         posting_date = date.fromisoformat(payload["posting_date"])
 
         invoice = db.get(Invoice, invoice_id)
+        if not invoice:
+            return StepResult(success=False, error="Invoice not found")
+
         customer = db.get(Customer, invoice.customer_id)
+        if not customer:
+            return StepResult(success=False, error="Customer not found")
         lines = (
             db.query(InvoiceLine)
             .filter(InvoiceLine.invoice_id == invoice_id)
@@ -236,7 +241,7 @@ class ARInvoicePostingSaga(SagaOrchestrator):
 
         # Credit revenue accounts (from invoice lines)
         for inv_line in lines:
-            revenue_account_id = inv_line.revenue_account_id
+            revenue_account_id: Optional[UUID] = inv_line.revenue_account_id
             if not revenue_account_id:
                 # Fall back to customer default
                 revenue_account_id = customer.default_revenue_account_id
@@ -376,6 +381,8 @@ class ARInvoicePostingSaga(SagaOrchestrator):
         journal_entry_id = coerce_uuid(context["journal_entry_id"])
 
         invoice = db.get(Invoice, invoice_id)
+        if not invoice:
+            return StepResult(success=False, error="Invoice not found")
         idempotency_key = payload.get("idempotency_key") or f"{org_id}:AR:{invoice_id}:post:v1"
 
         posting_request = PostingRequest(
@@ -481,7 +488,12 @@ class ARInvoicePostingSaga(SagaOrchestrator):
         invoice_id = coerce_uuid(payload["invoice_id"])
 
         invoice = db.get(Invoice, invoice_id)
+        if not invoice:
+            return StepResult(success=False, error="Invoice not found")
+
         customer = db.get(Customer, invoice.customer_id)
+        if not customer:
+            return StepResult(success=False, error="Customer not found")
         lines = (
             db.query(InvoiceLine)
             .filter(InvoiceLine.invoice_id == invoice_id)
@@ -530,7 +542,7 @@ class ARInvoicePostingSaga(SagaOrchestrator):
                     base_amount=base_amount,
                     currency_code=invoice.currency_code,
                     counterparty_name=customer.legal_name,
-                    counterparty_tax_id=customer.tax_id,
+                    counterparty_tax_id=customer.tax_identification_number,
                     exchange_rate=exchange_rate,
                 )
                 tax_transaction_ids.append(str(tax_txn.transaction_id))
@@ -565,8 +577,7 @@ class ARInvoicePostingSaga(SagaOrchestrator):
             for tax_id in tax_ids:
                 tax_txn = db.get(TaxTransaction, coerce_uuid(tax_id))
                 if tax_txn:
-                    tax_txn.is_void = True
-                    tax_txn.void_reason = "AR Saga compensation"
+                    db.delete(tax_txn)
 
             db.commit()
             logger.info("Voided %d AR tax transactions during saga compensation", len(tax_ids))
@@ -589,6 +600,9 @@ class ARInvoicePostingSaga(SagaOrchestrator):
         posting_batch_id = coerce_uuid(context["posting_batch_id"])
 
         invoice = db.get(Invoice, invoice_id)
+        if not invoice:
+            return StepResult(success=False, error="Invoice not found")
+
         original_status = invoice.status.value
 
         invoice.status = InvoiceStatus.POSTED

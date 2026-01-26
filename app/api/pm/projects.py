@@ -15,6 +15,7 @@ from app.schemas.pm import (
     ProjectDashboard,
     ProjectTeamResponse,
     ProjectTimeSummary,
+    TeamMemberSummary,
 )
 from app.services.common import NotFoundError
 from app.services.pm import (
@@ -96,16 +97,18 @@ def get_project_team(
         emp = alloc.employee
         emp_name = getattr(emp, "full_name", str(alloc.employee_id)[:8]) if emp else str(alloc.employee_id)[:8]
 
-        team_members.append({
-            "employee_id": alloc.employee_id,
-            "employee_name": emp_name,
-            "role_on_project": alloc.role_on_project,
-            "allocation_percent": alloc.allocation_percent,
-            "start_date": alloc.start_date,
-            "end_date": alloc.end_date,
-            "is_active": alloc.is_active,
-            "total_hours_logged": Decimal("0"),  # Would need to calculate
-        })
+        team_members.append(
+            TeamMemberSummary(
+                employee_id=alloc.employee_id,
+                employee_name=emp_name,
+                role_on_project=alloc.role_on_project,
+                allocation_percent=alloc.allocation_percent,
+                start_date=alloc.start_date,
+                end_date=alloc.end_date,
+                is_active=alloc.is_active,
+                total_hours_logged=Decimal("0"),  # Would need to calculate
+            )
+        )
         total_allocation += alloc.allocation_percent
 
     return ProjectTeamResponse(

@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any, List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -260,7 +260,7 @@ class ItemCategoryService(ListResponseMixin):
         search: Optional[str] = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> list[ItemCategory]:
+    ) -> List[ItemCategory]:
         """List item categories."""
         query = db.query(ItemCategory)
 
@@ -558,7 +558,7 @@ class ItemService(ListResponseMixin):
         search: Optional[str] = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> list[Item]:
+    ) -> List[Item]:
         """List items with optional filters."""
         query = db.query(Item)
 

@@ -57,18 +57,18 @@ class CustomerWebService:
         return CustomerInput(
             customer_code=form_data.get("customer_code", ""),
             customer_type=parse_customer_type(form_data.get("customer_type")),
-            legal_name=form_data.get("customer_name", ""),
+            customer_name=form_data.get("customer_name", ""),
             trading_name=form_data.get("customer_name"),
-            tax_identification_number=form_data.get("tax_id"),
+            tax_id=form_data.get("tax_id"),
             currency_code=form_data.get(
                 "currency_code",
                 settings.default_functional_currency_code,
             ),
-            credit_terms_days=int(form_data.get("payment_terms_days", 30)),
+            payment_terms_days=int(form_data.get("payment_terms_days", 30)),
             credit_limit=Decimal(credit_limit) if credit_limit else None,
             credit_hold=form_data.get("credit_hold") is not None,
             risk_category=RiskCategory.MEDIUM,
-            ar_control_account_id=(
+            default_receivable_account_id=(
                 UUID(form_data["default_receivable_account_id"])
                 if form_data.get("default_receivable_account_id")
                 else UUID("00000000-0000-0000-0000-000000000001")

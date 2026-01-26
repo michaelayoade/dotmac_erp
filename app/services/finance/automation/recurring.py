@@ -202,7 +202,7 @@ class RecurringService:
                     "description": line.description,
                     "quantity": str(line.quantity),
                     "unit_price": str(line.unit_price),
-                    "account_id": str(line.account_id),
+                    "account_id": str(line.revenue_account_id),
                     "tax_code_id": str(line.tax_code_id) if line.tax_code_id else None,
                 }
                 for line in invoice.lines
@@ -257,7 +257,13 @@ class RecurringService:
                     "description": line.description,
                     "quantity": str(line.quantity),
                     "unit_price": str(line.unit_price),
-                    "account_id": str(line.account_id),
+                    "account_id": (
+                        str(line.expense_account_id)
+                        if line.expense_account_id
+                        else str(line.asset_account_id)
+                        if line.asset_account_id
+                        else None
+                    ),
                     "tax_code_id": str(line.tax_code_id) if line.tax_code_id else None,
                 }
                 for line in bill.lines
@@ -337,6 +343,21 @@ class RecurringService:
     def get(self, db: Session, template_id: UUID) -> Optional[RecurringTemplate]:
         """Get a template by ID."""
         return db.get(RecurringTemplate, template_id)
+
+    def get_logs(
+        self,
+        db: Session,
+        template_id: UUID,
+        limit: int = 20,
+    ) -> List[RecurringLog]:
+        """Get recent logs for a recurring template."""
+        query = (
+            select(RecurringLog)
+            .where(RecurringLog.template_id == template_id)
+            .order_by(RecurringLog.generated_at.desc())
+            .limit(limit)
+        )
+        return list(db.execute(query).scalars().all())
 
     def list(
         self,

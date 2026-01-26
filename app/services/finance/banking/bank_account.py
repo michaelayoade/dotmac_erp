@@ -11,7 +11,7 @@ from typing import List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import and_, select
+from sqlalchemy import and_, select, update
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -84,7 +84,7 @@ class BankAccountService:
         # If this is set as primary, unset other primary accounts
         if input.is_primary:
             db.execute(
-                BankAccount.__table__.update()
+                update(BankAccount)
                 .where(
                     and_(
                         BankAccount.organization_id == org_id,
@@ -242,13 +242,13 @@ class BankAccountService:
         bank_account.contact_email = input.contact_email
         bank_account.notes = input.notes
         bank_account.allow_overdraft = input.allow_overdraft
-        bank_account.overdraft_limit = input.overdraft_limit
+        bank_account.overdraft_limit = input.overdraft_limit or Decimal("0")
         bank_account.updated_by = updated_by
 
         # Handle primary flag
         if input.is_primary and not bank_account.is_primary:
             db.execute(
-                BankAccount.__table__.update()
+                update(BankAccount)
                 .where(
                     and_(
                         BankAccount.organization_id == org_id,
@@ -368,18 +368,18 @@ class BankAccountService:
 
         # Query GL balance from journal entry lines
         from app.models.finance.gl.journal_entry_line import JournalEntryLine
-        from app.models.finance.gl.journal_entry import JournalEntry, JournalEntryStatus
+        from app.models.finance.gl.journal_entry import JournalEntry, JournalStatus
 
         query = select(
             JournalEntryLine.debit_amount,
             JournalEntryLine.credit_amount,
         ).join(
             JournalEntry,
-            JournalEntryLine.entry_id == JournalEntry.entry_id,
+            JournalEntryLine.journal_entry_id == JournalEntry.journal_entry_id,
         ).where(
             and_(
                 JournalEntryLine.account_id == bank_account.gl_account_id,
-                JournalEntry.status == JournalEntryStatus.posted,
+                    JournalEntry.status == JournalStatus.POSTED,
             )
         )
 
@@ -388,8 +388,8 @@ class BankAccountService:
 
         results = db.execute(query).all()
 
-        total_debit = sum(r.debit_amount or Decimal("0") for r in results)
-        total_credit = sum(r.credit_amount or Decimal("0") for r in results)
+        total_debit = sum((r.debit_amount or Decimal("0") for r in results), Decimal("0"))
+        total_credit = sum((r.credit_amount or Decimal("0") for r in results), Decimal("0"))
 
         # For asset accounts (bank), balance = debit - credit
         return total_debit - total_credit

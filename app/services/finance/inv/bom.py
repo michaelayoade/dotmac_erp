@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal, ROUND_HALF_UP
-from typing import Optional
+from typing import List, Optional, cast
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -302,16 +302,21 @@ class BOMService(ListResponseMixin):
         # Issue components
         component_txn_ids = []
         for issue in component_issues:
+            comp_item = cast(Item, issue["item"])
+            comp_component = cast(BOMComponent, issue["component"])
+            comp_quantity = cast(Decimal, issue["quantity"])
+            comp_unit_cost = cast(Decimal, issue["unit_cost"])
+            comp_warehouse_id = cast(UUID, issue["warehouse_id"])
             txn_input = TransactionInput(
                 transaction_type=TransactionType.DISASSEMBLY,  # Component consumption
                 transaction_date=input.transaction_date,
                 fiscal_period_id=input.fiscal_period_id,
-                item_id=issue["item"].item_id,
-                warehouse_id=issue["warehouse_id"],
-                quantity=issue["quantity"],
-                unit_cost=issue["unit_cost"],
-                uom=issue["component"].uom,
-                currency_code=issue["item"].currency_code,
+                item_id=comp_item.item_id,
+                warehouse_id=comp_warehouse_id,
+                quantity=comp_quantity,
+                unit_cost=comp_unit_cost,
+                uom=comp_component.uom,
+                currency_code=comp_item.currency_code,
                 source_document_type="ASSEMBLY",
                 source_document_id=bom.bom_id,
                 reference=input.reference or f"Assembly: {bom.bom_code}",
@@ -332,6 +337,8 @@ class BOMService(ListResponseMixin):
 
         # Get finished goods item
         finished_item = db.get(Item, bom.item_id)
+        if not finished_item:
+            raise HTTPException(status_code=404, detail="Finished goods item not found")
 
         # Receive finished goods
         assembly_input = TransactionInput(
@@ -414,6 +421,8 @@ class BOMService(ListResponseMixin):
             )
 
         finished_item = db.get(Item, bom.item_id)
+        if not finished_item:
+            raise HTTPException(status_code=404, detail="Finished goods item not found")
         finished_unit_cost = finished_item.average_cost or Decimal("0")
 
         # Issue finished goods
@@ -543,7 +552,7 @@ class BOMService(ListResponseMixin):
         is_active: Optional[bool] = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> list[BillOfMaterials]:
+    ) -> List[BillOfMaterials]:
         """List BOMs with optional filters."""
         query = db.query(BillOfMaterials)
 
@@ -566,13 +575,16 @@ class BOMService(ListResponseMixin):
     def list_components(
         db: Session,
         bom_id: str,
-    ) -> list[BOMComponent]:
+    ) -> List[BOMComponent]:
         """List components for a BOM."""
         b_id = coerce_uuid(bom_id)
 
-        return db.query(BOMComponent).filter(
-            BOMComponent.bom_id == b_id
-        ).order_by(BOMComponent.line_number).all()
+        return (
+            db.query(BOMComponent)
+            .filter(BOMComponent.bom_id == b_id)
+            .order_by(BOMComponent.line_number)
+            .all()
+        )
 
 
 # Module-level singleton instance

@@ -188,7 +188,7 @@ function shipmentForm() {
 
             const hiddenForm = document.createElement('form');
             hiddenForm.method = 'POST';
-            hiddenForm.action = '/sales-orders/{{ order.so_id }}/ship';
+            hiddenForm.action = '/finance/sales-orders/{{ order.so_id }}/ship';
 
             const fields = ['shipment_date', 'carrier', 'tracking_number', 'shipping_method', 'notes'];
             fields.forEach(field => {

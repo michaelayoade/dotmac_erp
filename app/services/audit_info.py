@@ -75,7 +75,11 @@ class AuditInfoService:
             for person in persons:
                 self._user_cache[person.id] = self._format_person_name(person)
 
-        return {uid: self._user_cache.get(uid) for uid in user_ids if uid in self._user_cache}
+        return {
+            uid: name
+            for uid in user_ids
+            if (name := self._user_cache.get(uid)) is not None
+        }
 
     def get_creator_names(self, entities: List[T]) -> Dict[UUID, str]:
         """

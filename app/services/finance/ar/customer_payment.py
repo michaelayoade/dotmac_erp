@@ -390,27 +390,44 @@ class CustomerPaymentService(ListResponseMixin):
                 TaxTransactionInput,
             )
             from app.models.finance.tax.tax_transaction import TaxTransactionType
+            from app.models.finance.gl.fiscal_period import FiscalPeriod
+            from app.models.finance.tax.tax_code import TaxCode
 
-            tax_transaction_service.record_transaction(
-                db=db,
-                organization_id=org_id,
-                input=TaxTransactionInput(
-                    tax_code_id=payment.wht_code_id,
-                    transaction_type=TaxTransactionType.WITHHOLDING,
-                    transaction_date=payment.payment_date,
-                    base_amount=gross_amount,  # WHT calculated on gross
-                    tax_amount=wht_amount,
-                    currency_code=payment.currency_code,
-                    exchange_rate=exchange_rate,
-                    source_module="AR",
-                    source_document_type="CUSTOMER_PAYMENT",
-                    source_document_id=pay_id,
-                    source_document_number=payment.payment_number,
-                    counterparty_name=customer.legal_name,
-                    counterparty_tax_id=customer.tax_identification_number,
-                    description=f"WHT on AR Receipt {payment.payment_number} (Cert: {payment.wht_certificate_number or 'N/A'})",
-                ),
+            fiscal_period = (
+                db.query(FiscalPeriod)
+                .filter(
+                    FiscalPeriod.organization_id == org_id,
+                    FiscalPeriod.start_date <= payment.payment_date,
+                    FiscalPeriod.end_date >= payment.payment_date,
+                )
+                .first()
             )
+
+            tax_code = db.get(TaxCode, payment.wht_code_id)
+            if fiscal_period and tax_code and tax_code.organization_id == org_id:
+                tax_transaction_service.create_transaction(
+                    db=db,
+                    organization_id=org_id,
+                    input=TaxTransactionInput(
+                        fiscal_period_id=fiscal_period.fiscal_period_id,
+                        tax_code_id=payment.wht_code_id,
+                        jurisdiction_id=tax_code.jurisdiction_id,
+                        transaction_type=TaxTransactionType.WITHHOLDING,
+                        transaction_date=payment.payment_date,
+                        source_document_type="CUSTOMER_PAYMENT",
+                        source_document_id=pay_id,
+                        source_document_reference=payment.payment_number,
+                        currency_code=payment.currency_code,
+                        base_amount=gross_amount,  # WHT calculated on gross
+                        tax_rate=tax_code.tax_rate,
+                        tax_amount=wht_amount,
+                        functional_base_amount=gross_amount * exchange_rate,
+                        functional_tax_amount=wht_amount * exchange_rate,
+                        exchange_rate=exchange_rate,
+                        counterparty_name=customer.legal_name,
+                        counterparty_tax_id=customer.tax_identification_number,
+                    ),
+                )
 
         # Apply allocations to invoices
         allocations = (

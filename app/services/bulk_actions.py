@@ -10,7 +10,7 @@ from __future__ import annotations
 import csv
 import io
 from abc import ABC, abstractmethod
-from typing import Any, Generic, TypeVar
+from typing import Any, Generic, TypeVar, cast
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -86,7 +86,7 @@ class BulkActionService(ABC, Generic[T]):
         Returns:
             List of entity instances
         """
-        return self._get_base_query(ids).all()
+        return cast(list[T], self._get_base_query(ids).all())
 
     @abstractmethod
     def can_delete(self, entity: T) -> tuple[bool, str]:
@@ -212,7 +212,7 @@ class BulkActionService(ABC, Generic[T]):
         Returns:
             String value for CSV export
         """
-        value = entity
+        value: Any = entity
         for part in field_name.split("."):
             if value is None:
                 return ""

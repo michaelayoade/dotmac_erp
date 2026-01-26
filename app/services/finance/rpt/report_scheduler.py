@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone, timedelta
-from typing import Optional
+from typing import List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -349,7 +349,7 @@ class ReportSchedulerService(ListResponseMixin):
     def get_due_schedules(
         db: Session,
         organization_id: Optional[str] = None,
-    ) -> list[ReportSchedule]:
+    ) -> List[ReportSchedule]:
         """
         Get schedules due for execution.
 
@@ -568,7 +568,7 @@ class ReportSchedulerService(ListResponseMixin):
         is_active: Optional[bool] = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> list[ReportSchedule]:
+    ) -> List[ReportSchedule]:
         """List schedules with optional filters."""
         query = db.query(ReportSchedule)
 

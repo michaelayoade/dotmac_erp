@@ -57,7 +57,7 @@ class TaskSyncService(BaseSyncService[Task]):
             filters.append(["modified", ">=", since.isoformat()])
 
         # Exclude template tasks
-        filters.append(["is_template", "=", 0])
+            filters.append(["is_template", "=", "0"])
 
         fields = [
             "name",

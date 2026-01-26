@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any, List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -166,7 +166,7 @@ class AssetCategoryService(ListResponseMixin):
         is_active: Optional[bool] = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> list[AssetCategory]:
+    ) -> List[AssetCategory]:
         """List asset categories."""
         query = db.query(AssetCategory)
 
@@ -543,7 +543,7 @@ class AssetService(ListResponseMixin):
         db: Session,
         organization_id: UUID,
         as_of_date: Optional[date] = None,
-    ) -> list[Asset]:
+    ) -> List[Asset]:
         """
         Get all assets eligible for depreciation.
 
@@ -584,7 +584,7 @@ class AssetService(ListResponseMixin):
         search: Optional[str] = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> list[Asset]:
+    ) -> List[Asset]:
         """List assets with optional filters."""
         query = db.query(Asset)
 

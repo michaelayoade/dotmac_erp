@@ -11,12 +11,12 @@ from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 
-from fastapi import Request
+from fastapi import Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.models.finance.tax.tax_code import TaxCode, TaxType
-from app.models.finance.tax.tax_return import TaxReturn
+from app.models.finance.tax.tax_return import TaxReturn, TaxReturnStatus
 from app.models.finance.tax.tax_transaction import TaxTransaction, TaxTransactionType
 from app.models.finance.tax.tax_period import TaxPeriodFrequency, TaxPeriodStatus
 from app.models.finance.gl.account import Account
@@ -36,6 +36,17 @@ from app.services.finance.tax.tax_return import TaxReturnBoxValue, tax_return_se
 from app.services.finance.tax.tax_transaction import tax_transaction_service
 from app.templates import templates
 from app.web.deps import base_context, WebAuthContext
+
+
+def _safe_form_text(value: object) -> str:
+    """Normalize form values to text for safe parsing."""
+    if value is None:
+        return ""
+    if isinstance(value, UploadFile):
+        return ""
+    if isinstance(value, str):
+        return value
+    return str(value)
 
 
 def _format_date(value: Optional[date]) -> str:
@@ -594,7 +605,8 @@ class TaxWebService:
         db: Session,
     ) -> HTMLResponse:
         check_date = date.fromisoformat(as_of_date) if as_of_date else None
-        overdue = tax_period_service.get_overdue_periods(db, auth.organization_id, check_date)
+        org_id = coerce_uuid(auth.organization_id)
+        overdue = tax_period_service.get_overdue_periods(db, org_id, check_date)
 
         context = base_context(request, auth, "Overdue Tax Periods", "tax")
         context["overdue_periods"] = overdue
@@ -614,11 +626,19 @@ class TaxWebService:
         limit = 50
         offset = (page - 1) * limit
 
+        org_id = coerce_uuid(auth.organization_id)
+        status_value: Optional[TaxReturnStatus] = None
+        if status:
+            try:
+                status_value = TaxReturnStatus(status)
+            except ValueError:
+                status_value = None
+
         returns = tax_return_service.list(
             db=db,
-            organization_id=str(auth.organization_id),
+            organization_id=org_id,
             tax_period_id=period_id,
-            status=status,
+            status=status_value,
             limit=limit,
             offset=offset,
         )
@@ -678,9 +698,10 @@ class TaxWebService:
     ) -> HTMLResponse:
         check_date = as_of_date or date.today().isoformat()
 
+        org_id = coerce_uuid(auth.organization_id)
         summary = deferred_tax_service.get_summary(
             db=db,
-            organization_id=str(auth.organization_id),
+            organization_id=org_id,
         )
 
         context = base_context(request, auth, "Deferred Tax Summary", "tax")
@@ -806,10 +827,11 @@ class TaxWebService:
         db: Session,
     ) -> RedirectResponse:
         try:
+            org_id = coerce_uuid(auth.organization_id)
             tax_return_service.recalculate(
                 db=db,
-                organization_id=auth.organization_id,
-                return_id=return_id,
+                organization_id=org_id,
+                return_id=coerce_uuid(return_id),
             )
         except Exception:
             pass
@@ -826,11 +848,17 @@ class TaxWebService:
         db: Session,
     ) -> RedirectResponse:
         try:
+            if not auth.person_id:
+                return RedirectResponse(
+                    url=f"/tax/returns/{return_id}",
+                    status_code=303,
+                )
+            org_id = coerce_uuid(auth.organization_id)
             tax_return_service.review_return(
                 db=db,
-                organization_id=auth.organization_id,
-                return_id=return_id,
-                reviewed_by_user_id=auth.person_id,
+                organization_id=org_id,
+                return_id=coerce_uuid(return_id),
+                reviewed_by_user_id=coerce_uuid(auth.person_id),
             )
         except Exception:
             pass
@@ -847,11 +875,17 @@ class TaxWebService:
         db: Session,
     ) -> RedirectResponse:
         try:
+            if not auth.person_id:
+                return RedirectResponse(
+                    url=f"/tax/returns/{return_id}",
+                    status_code=303,
+                )
+            org_id = coerce_uuid(auth.organization_id)
             tax_return_service.file_return(
                 db=db,
-                organization_id=auth.organization_id,
-                return_id=return_id,
-                filed_by_user_id=auth.person_id,
+                organization_id=org_id,
+                return_id=coerce_uuid(return_id),
+                filed_by_user_id=coerce_uuid(auth.person_id),
             )
         except Exception:
             pass
@@ -932,32 +966,32 @@ class TaxWebService:
 
         try:
             # Parse form data
-            tax_code_str = form.get("tax_code", "").strip()
-            tax_name = form.get("tax_name", "").strip()
-            tax_type_str = form.get("tax_type", "")
-            jurisdiction_id_str = form.get("jurisdiction_id", "")
-            description = form.get("description", "").strip() or None
+            tax_code_str = _safe_form_text(form.get("tax_code")).strip()
+            tax_name = _safe_form_text(form.get("tax_name")).strip()
+            tax_type_str = _safe_form_text(form.get("tax_type"))
+            jurisdiction_id_str = _safe_form_text(form.get("jurisdiction_id"))
+            description = _safe_form_text(form.get("description")).strip() or None
 
             # Parse rate based on rate type
-            rate_type = form.get("rate_type", "percentage")
+            rate_type = _safe_form_text(form.get("rate_type", "percentage"))
             if rate_type == "percentage":
-                rate_percentage = form.get("tax_rate_percentage", "0")
+                rate_percentage = _safe_form_text(form.get("tax_rate_percentage", "0"))
                 tax_rate = Decimal(rate_percentage) / Decimal("100")
             else:
-                rate_fixed = form.get("tax_rate_fixed", "0")
+                rate_fixed = _safe_form_text(form.get("tax_rate_fixed", "0"))
                 tax_rate = Decimal(rate_fixed)
 
             # Parse dates
-            effective_from_str = form.get("effective_from", "")
+            effective_from_str = _safe_form_text(form.get("effective_from"))
             effective_from = date.fromisoformat(effective_from_str) if effective_from_str else date.today()
 
-            effective_to_str = form.get("effective_to", "")
+            effective_to_str = _safe_form_text(form.get("effective_to"))
             effective_to = date.fromisoformat(effective_to_str) if effective_to_str else None
 
             # Parse booleans
-            is_compound = form.get("is_compound") == "true"
-            is_inclusive = form.get("is_inclusive") == "true"
-            is_recoverable = form.get("is_recoverable") == "true"
+            is_compound = _safe_form_text(form.get("is_compound")) == "true"
+            is_inclusive = _safe_form_text(form.get("is_inclusive")) == "true"
+            is_recoverable = _safe_form_text(form.get("is_recoverable")) == "true"
 
             recovery_rate_pct = form.get("recovery_rate", "100")
             recovery_rate = Decimal(recovery_rate_pct) / Decimal("100") if is_recoverable else Decimal("0")

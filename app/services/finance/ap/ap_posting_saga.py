@@ -135,6 +135,8 @@ class APInvoicePostingSaga(SagaOrchestrator):
         invoice_id = coerce_uuid(payload["invoice_id"])
 
         invoice = db.get(SupplierInvoice, invoice_id)
+        if not invoice:
+            return StepResult(success=False, error="Supplier invoice not found")
         if not invoice or invoice.organization_id != org_id:
             return StepResult(
                 success=False,
@@ -202,7 +204,12 @@ class APInvoicePostingSaga(SagaOrchestrator):
 
         # Load invoice and lines again (ensure fresh data)
         invoice = db.get(SupplierInvoice, invoice_id)
+        if not invoice:
+            return StepResult(success=False, error="Supplier invoice not found")
+
         supplier = db.get(Supplier, invoice.supplier_id)
+        if not supplier:
+            return StepResult(success=False, error="Supplier not found")
         lines = (
             db.query(SupplierInvoiceLine)
             .filter(SupplierInvoiceLine.invoice_id == invoice_id)
@@ -383,6 +390,8 @@ class APInvoicePostingSaga(SagaOrchestrator):
         journal_entry_id = coerce_uuid(context["journal_entry_id"])
 
         invoice = db.get(SupplierInvoice, invoice_id)
+        if not invoice:
+            return StepResult(success=False, error="Supplier invoice not found")
         idempotency_key = payload.get("idempotency_key") or f"{org_id}:AP:{invoice_id}:post:v1"
 
         posting_request = PostingRequest(
@@ -488,7 +497,12 @@ class APInvoicePostingSaga(SagaOrchestrator):
         invoice_id = coerce_uuid(payload["invoice_id"])
 
         invoice = db.get(SupplierInvoice, invoice_id)
+        if not invoice:
+            return StepResult(success=False, error="Supplier invoice not found")
+
         supplier = db.get(Supplier, invoice.supplier_id)
+        if not supplier:
+            return StepResult(success=False, error="Supplier not found")
         lines = (
             db.query(SupplierInvoiceLine)
             .filter(SupplierInvoiceLine.invoice_id == invoice_id)
@@ -538,7 +552,7 @@ class APInvoicePostingSaga(SagaOrchestrator):
                     base_amount=base_amount,
                     currency_code=invoice.currency_code,
                     counterparty_name=supplier.legal_name,
-                    counterparty_tax_id=supplier.tax_id,
+                    counterparty_tax_id=supplier.tax_identification_number,
                     exchange_rate=exchange_rate,
                 )
                 tax_transaction_ids.append(str(tax_txn.transaction_id))
@@ -574,8 +588,7 @@ class APInvoicePostingSaga(SagaOrchestrator):
             for tax_id in tax_ids:
                 tax_txn = db.get(TaxTransaction, coerce_uuid(tax_id))
                 if tax_txn:
-                    tax_txn.is_void = True
-                    tax_txn.void_reason = "Saga compensation"
+                    db.delete(tax_txn)
 
             db.commit()
             logger.info("Voided %d tax transactions during saga compensation", len(tax_ids))
@@ -598,6 +611,8 @@ class APInvoicePostingSaga(SagaOrchestrator):
         posting_batch_id = coerce_uuid(context["posting_batch_id"])
 
         invoice = db.get(SupplierInvoice, invoice_id)
+        if not invoice:
+            return StepResult(success=False, error="Supplier invoice not found")
 
         original_status = invoice.status.value
 

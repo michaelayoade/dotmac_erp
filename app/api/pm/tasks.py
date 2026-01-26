@@ -174,6 +174,8 @@ def start_task(
     try:
         task = svc.start_task(task_id)
         db.commit()
+        if task.actual_start_date is None:
+            raise HTTPException(status_code=500, detail="Task start date was not set")
         return TaskStartResponse(
             task_id=task.task_id,
             status=task.status,
@@ -196,6 +198,8 @@ def complete_task(
     try:
         task = svc.complete_task(task_id)
         db.commit()
+        if task.actual_end_date is None:
+            raise HTTPException(status_code=500, detail="Task end date was not set")
         return TaskCompleteResponse(
             task_id=task.task_id,
             status=task.status,

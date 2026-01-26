@@ -5,12 +5,13 @@ Provides view-focused data for material request web routes.
 """
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
+from typing import Any, Optional, TypedDict
 from uuid import UUID
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
+from app.models.finance.core_config.numbering_sequence import SequenceType
 from app.models.finance.inv import (
     MaterialRequest,
     MaterialRequestItem,
@@ -38,6 +39,13 @@ def _format_currency(
 
 def _format_date(value: Optional[date]) -> str:
     return value.strftime("%Y-%m-%d") if value else ""
+
+
+class _GroupTotals(TypedDict):
+    count: int
+    items: int
+    qty: Decimal
+    ordered: Decimal
 
 
 def _format_datetime(value: Optional[datetime]) -> str:
@@ -90,8 +98,14 @@ class MaterialRequestWebService:
 
         items = []
         for req in requests:
-            total_qty = sum(item.requested_qty for item in req.items) if req.items else Decimal("0")
-            total_ordered = sum(item.ordered_qty for item in req.items) if req.items else Decimal("0")
+            total_qty = (
+                sum((item.requested_qty for item in req.items), Decimal("0"))
+                if req.items else Decimal("0")
+            )
+            total_ordered = (
+                sum((item.ordered_qty for item in req.items), Decimal("0"))
+                if req.items else Decimal("0")
+            )
             # Get warehouse name
             warehouse_name = None
             if req.default_warehouse_id:
@@ -109,7 +123,7 @@ class MaterialRequestWebService:
                     .first()
                 )
                 if emp and emp.person:
-                    requested_by_name = emp.person.full_name
+                    requested_by_name = emp.person.name
 
             items.append({
                 "request_id": str(req.request_id),
@@ -232,7 +246,7 @@ class MaterialRequestWebService:
             db.query(Employee)
             .join(Person, Person.id == Employee.person_id)
             .filter(Employee.organization_id == org_id)
-            .order_by(Person.full_name)
+            .order_by(Person.first_name, Person.last_name)
             .all()
         )
 
@@ -240,26 +254,26 @@ class MaterialRequestWebService:
             {
                 "employee_id": str(e.employee_id),
                 "employee_code": e.employee_code or "",
-                "full_name": e.person.full_name if e.person else "",
+                "full_name": e.person.name if e.person else "",
             }
             for e in employees
         ]
 
         import json
-        context = {
+        context: dict[str, Any] = {
             "inventory_items": item_options,
             "warehouses": warehouse_options,
             "projects": project_options,
             "employees": employee_options,
             "request_types": [t.value for t in MaterialRequestType],
             "today": _format_date(date.today()),
-            "request": None,
+            "material_request": None,
             "items_json": "[]",
         }
 
         # If editing, load request data
         if request_id:
-            request = (
+            material_request = (
                 db.query(MaterialRequest)
                 .options(
                     joinedload(MaterialRequest.items).joinedload(MaterialRequestItem.request),
@@ -270,17 +284,17 @@ class MaterialRequestWebService:
                 )
                 .first()
             )
-            if request:
-                context["request"] = {
-                    "request_id": str(request.request_id),
-                    "request_number": request.request_number,
-                    "request_type": request.request_type.value,
-                    "status": request.status.value,
-                    "schedule_date": _format_date(request.schedule_date),
-                    "default_warehouse_id": str(request.default_warehouse_id) if request.default_warehouse_id else "",
-                    "requested_by_id": str(request.requested_by_id) if request.requested_by_id else "",
-                    "remarks": request.remarks or "",
-                    "can_edit": request.status == MaterialRequestStatus.DRAFT,
+            if material_request:
+                context["material_request"] = {
+                    "request_id": str(material_request.request_id),
+                    "request_number": material_request.request_number,
+                    "request_type": material_request.request_type.value,
+                    "status": material_request.status.value,
+                    "schedule_date": _format_date(material_request.schedule_date),
+                    "default_warehouse_id": str(material_request.default_warehouse_id) if material_request.default_warehouse_id else "",
+                    "requested_by_id": str(material_request.requested_by_id) if material_request.requested_by_id else "",
+                    "remarks": material_request.remarks or "",
+                    "can_edit": material_request.status == MaterialRequestStatus.DRAFT,
                 }
                 request_items = [
                     {
@@ -291,7 +305,7 @@ class MaterialRequestWebService:
                         "schedule_date": _format_date(item.schedule_date),
                         "project_id": str(item.project_id) if item.project_id else "",
                     }
-                    for item in sorted(request.items, key=lambda x: x.sequence)
+                    for item in sorted(material_request.items, key=lambda x: x.sequence)
                 ]
                 context["items_json"] = json.dumps(request_items)
 
@@ -318,7 +332,7 @@ class MaterialRequestWebService:
         )
 
         if not request:
-            return {"request": None}
+            return {"material_request": None}
 
         # Get related data for items
         item_ids = [item.inventory_item_id for item in request.items]
@@ -356,10 +370,16 @@ class MaterialRequestWebService:
                 .first()
             )
             if emp and emp.person:
-                requested_by_name = emp.person.full_name
+                requested_by_name = emp.person.name
 
-        total_qty = sum(item.requested_qty for item in request.items) if request.items else Decimal("0")
-        total_ordered = sum(item.ordered_qty for item in request.items) if request.items else Decimal("0")
+        total_qty = (
+            sum((item.requested_qty for item in request.items), Decimal("0"))
+            if request.items else Decimal("0")
+        )
+        total_ordered = (
+            sum((item.ordered_qty for item in request.items), Decimal("0"))
+            if request.items else Decimal("0")
+        )
 
         detail_items = []
         for item in sorted(request.items, key=lambda x: x.sequence):
@@ -384,7 +404,7 @@ class MaterialRequestWebService:
             })
 
         return {
-            "request": {
+            "material_request": {
                 "request_id": str(request.request_id),
                 "request_number": request.request_number,
                 "request_type": request.request_type.value,
@@ -432,12 +452,12 @@ class MaterialRequestWebService:
         total_requests = len(requests)
         total_items = sum(len(r.items) for r in requests)
         total_qty = sum(
-            sum(item.requested_qty for item in r.items)
-            for r in requests
+            (sum((item.requested_qty for item in r.items), Decimal("0")) for r in requests),
+            Decimal("0"),
         )
         total_ordered = sum(
-            sum(item.ordered_qty for item in r.items)
-            for r in requests
+            (sum((item.ordered_qty for item in r.items), Decimal("0")) for r in requests),
+            Decimal("0"),
         )
 
         # Calculate pending and completed
@@ -449,7 +469,7 @@ class MaterialRequestWebService:
         ])
 
         # Group data based on group_by parameter
-        grouped_data = {}
+        grouped_data: dict[str, _GroupTotals] = {}
         if group_by == "status":
             for req in requests:
                 key = req.status.value
@@ -493,7 +513,7 @@ class MaterialRequestWebService:
                     .first()
                 )
                 if emp and emp.person:
-                    requested_by_name = emp.person.full_name
+                    requested_by_name = emp.person.name
 
             recent_requests.append({
                 "request_id": str(req.request_id),
@@ -539,9 +559,8 @@ class MaterialRequestWebService:
         # Generate request number
         request_number = sequence_service.get_next_number(
             db,
-            str(organization_id),
-            "material_request",
-            prefix="MAT-REQ-",
+            organization_id,
+            SequenceType.PURCHASE_ORDER,
         )
 
         # Parse date

@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"
-      x-data="{ darkMode: localStorage.getItem('darkMode') === 'true', sidebarOpen: true, sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === 'true' }"
+      x-data="{ darkMode: localStorage.getItem('darkMode') === 'true', sidebarOpen: false, sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === 'true' }"
       x-init="$watch('darkMode', val => localStorage.setItem('darkMode', val)); $watch('sidebarCollapsed', val => localStorage.setItem('sidebarCollapsed', val))"
       :class="{ 'dark': darkMode }">
 <head>
@@ -13,6 +13,8 @@
 
     <!-- Self-hosted Typography -->
     <link href="/static/css/fonts.css" rel="stylesheet">
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+    <link rel="alternate icon" href="/static/favicon.svg" type="image/svg+xml">
 
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -94,10 +96,11 @@
     {% set brand_mark = brand.mark %}
 
     <div class="flex min-h-screen">
+        <div x-show="sidebarOpen" x-cloak class="fixed inset-0 z-40 bg-slate-900/50 md:hidden" @click="sidebarOpen = false"></div>
         <!-- Sidebar -->
         <aside
             class="fixed inset-y-0 left-0 z-50 flex flex-col bg-slate-900 dark:bg-slate-950 sidebar-transition"
-            :class="sidebarCollapsed ? 'w-20' : 'w-64'"
+            :class="[sidebarCollapsed ? 'w-20' : 'w-64', sidebarOpen ? 'translate-x-0' : '-translate-x-full', 'md:translate-x-0']"
         >
             <!-- Logo -->
             <div class="flex h-16 items-center justify-between px-4 border-b border-slate-800">
@@ -107,7 +110,7 @@
                     </div>
                     <span x-show="!sidebarCollapsed" x-transition class="text-lg font-semibold text-white font-display">Admin</span>
                 </a>
-                <button @click="sidebarCollapsed = !sidebarCollapsed" class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition hidden lg:block">
+                <button @click="sidebarCollapsed = !sidebarCollapsed" class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition hidden md:block">
                     <svg class="h-5 w-5 transition-transform" :class="sidebarCollapsed ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"/>
                     </svg>
@@ -225,12 +228,12 @@
         </aside>
 
         <!-- Main Content -->
-        <main class="flex-1 main-transition" :class="sidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'">
+        <main class="flex-1 main-transition" :class="sidebarCollapsed ? 'md:ml-20' : 'md:ml-64'">
             <!-- Top Header -->
             <header class="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-slate-200 bg-white/80 backdrop-blur px-6 dark:border-slate-800 dark:bg-slate-900/80">
                 <div class="flex items-center gap-4">
                     <!-- Mobile menu button -->
-                    <button @click="sidebarOpen = !sidebarOpen" class="lg:hidden p-2 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800">
+                    <button @click="sidebarOpen = !sidebarOpen" class="md:hidden p-2 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800">
                         <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
                         </svg>

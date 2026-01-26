@@ -181,6 +181,9 @@ class PeriodGuardService(ListResponseMixin):
         if not result.is_allowed:
             raise HTTPException(status_code=400, detail=result.message)
 
+        if result.fiscal_period_id is None:
+            raise HTTPException(status_code=400, detail="Fiscal period not found")
+
         return result.fiscal_period_id
 
     @staticmethod

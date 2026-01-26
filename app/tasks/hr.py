@@ -12,7 +12,7 @@ Handles:
 
 import logging
 from datetime import date, timedelta
-from typing import Optional
+from typing import Any, Optional
 import uuid
 
 from celery import shared_task
@@ -46,7 +46,7 @@ def process_probation_ending_notifications() -> dict:
 
     logger.info("Processing probation ending notifications")
 
-    results = {
+    results: dict[str, Any] = {
         "first_notices_sent": 0,
         "second_notices_sent": 0,
         "final_notices_sent": 0,
@@ -61,7 +61,6 @@ def process_probation_ending_notifications() -> dict:
             select(Employee)
             .where(
                 Employee.status == EmployeeStatus.ACTIVE,
-                Employee.is_active == True,
                 Employee.probation_end_date.isnot(None),
             )
         ).all()
@@ -70,7 +69,10 @@ def process_probation_ending_notifications() -> dict:
 
         for employee in probation_employees:
             try:
-                days_remaining = (employee.probation_end_date - today).days
+                probation_end = employee.probation_end_date
+                if probation_end is None:
+                    continue
+                days_remaining = (probation_end - today).days
 
                 # Skip if probation already ended or too far away
                 if days_remaining < 0 or days_remaining > FIRST_NOTICE_DAYS:
@@ -149,7 +151,7 @@ def process_contract_expiry_notifications() -> dict:
 
     logger.info("Processing contract expiry notifications")
 
-    results = {
+    results: dict[str, Any] = {
         "notifications_sent": 0,
         "errors": [],
     }
@@ -157,13 +159,17 @@ def process_contract_expiry_notifications() -> dict:
     with SessionLocal() as db:
         today = date.today()
 
+        contract_end_attr = getattr(Employee, "contract_end_date", None)
+        if contract_end_attr is None:
+            logger.info("Employee.contract_end_date not available; skipping contract expiry notifications")
+            return results
+
         # Find employees with contract end dates
         contract_employees = db.scalars(
             select(Employee)
             .where(
                 Employee.status == EmployeeStatus.ACTIVE,
-                Employee.is_active == True,
-                Employee.contract_end_date.isnot(None),
+                contract_end_attr.isnot(None),
             )
         ).all()
 
@@ -171,7 +177,10 @@ def process_contract_expiry_notifications() -> dict:
 
         for employee in contract_employees:
             try:
-                days_remaining = (employee.contract_end_date - today).days
+                contract_end = getattr(employee, "contract_end_date", None)
+                if contract_end is None:
+                    continue
+                days_remaining = (contract_end - today).days
 
                 # Skip if contract already ended or too far away
                 if days_remaining < 0 or days_remaining > FIRST_NOTICE_DAYS:
@@ -227,7 +236,7 @@ def process_work_anniversary_notifications() -> dict:
 
     logger.info("Processing work anniversary notifications")
 
-    results = {
+    results: dict[str, Any] = {
         "notifications_sent": 0,
         "milestone_notifications": 0,
         "errors": [],
@@ -242,7 +251,6 @@ def process_work_anniversary_notifications() -> dict:
             select(Employee)
             .where(
                 Employee.status == EmployeeStatus.ACTIVE,
-                Employee.is_active == True,
                 Employee.date_of_joining.isnot(None),
             )
         ).all()
@@ -318,7 +326,7 @@ def process_birthday_notifications() -> dict:
 
     logger.info("Processing birthday notifications")
 
-    results = {
+    results: dict[str, Any] = {
         "notifications_sent": 0,
         "errors": [],
     }
@@ -332,7 +340,6 @@ def process_birthday_notifications() -> dict:
             select(Employee)
             .where(
                 Employee.status == EmployeeStatus.ACTIVE,
-                Employee.is_active == True,
                 Employee.date_of_birth.isnot(None),
             )
         ).all()
@@ -342,6 +349,8 @@ def process_birthday_notifications() -> dict:
         for employee in active_employees:
             try:
                 birthday = employee.date_of_birth
+                if birthday is None:
+                    continue
 
                 # Check if birthday is today or tomorrow
                 this_year_birthday = birthday.replace(year=today.year)
@@ -404,7 +413,7 @@ def process_performance_review_reminders() -> dict:
 
     logger.info("Processing performance review reminders")
 
-    results = {
+    results: dict[str, Any] = {
         "self_assessment_reminders": 0,
         "manager_review_reminders": 0,
         "calibration_reminders": 0,
@@ -529,7 +538,7 @@ def process_certification_expiry_notifications() -> dict:
 
     logger.info("Processing certification expiry notifications")
 
-    results = {
+    results: dict[str, Any] = {
         "notifications_sent": 0,
         "errors": [],
     }
@@ -551,7 +560,10 @@ def process_certification_expiry_notifications() -> dict:
 
         for cert in expiring_certs:
             try:
-                days_remaining = (cert.valid_until - today).days
+                valid_until = cert.valid_until
+                if valid_until is None:
+                    continue
+                days_remaining = (valid_until - today).days
 
                 # Only send on specific days
                 if days_remaining not in [FIRST_NOTICE_DAYS, SECOND_NOTICE_DAYS, FINAL_NOTICE_DAYS]:
@@ -617,7 +629,6 @@ def calculate_hr_analytics(organization_id: str) -> dict:
                 .where(
                     Employee.organization_id == org_id,
                     Employee.status == EmployeeStatus.ACTIVE,
-                    Employee.is_active == True,
                 )
             ) or 0
 
@@ -627,24 +638,25 @@ def calculate_hr_analytics(organization_id: str) -> dict:
                 .where(
                     Employee.organization_id == org_id,
                     Employee.status == EmployeeStatus.ACTIVE,
-                    Employee.is_active == True,
                     Employee.probation_end_date.isnot(None),
                     Employee.probation_end_date >= today,
                 )
             ) or 0
 
             # Get employees with expiring contracts (next 90 days)
-            expiring_contracts = db.scalar(
-                select(func.count(Employee.employee_id))
-                .where(
-                    Employee.organization_id == org_id,
-                    Employee.status == EmployeeStatus.ACTIVE,
-                    Employee.is_active == True,
-                    Employee.contract_end_date.isnot(None),
-                    Employee.contract_end_date >= today,
-                    Employee.contract_end_date <= today + timedelta(days=90),
-                )
-            ) or 0
+            expiring_contracts = 0
+            contract_end_attr = getattr(Employee, "contract_end_date", None)
+            if contract_end_attr is not None:
+                expiring_contracts = db.scalar(
+                    select(func.count(Employee.employee_id))
+                    .where(
+                        Employee.organization_id == org_id,
+                        Employee.status == EmployeeStatus.ACTIVE,
+                        contract_end_attr.isnot(None),
+                        contract_end_attr >= today,
+                        contract_end_attr <= today + timedelta(days=90),
+                    )
+                ) or 0
 
             # Calculate average tenure
             employees_with_joining = db.scalars(
@@ -652,7 +664,6 @@ def calculate_hr_analytics(organization_id: str) -> dict:
                 .where(
                     Employee.organization_id == org_id,
                     Employee.status == EmployeeStatus.ACTIVE,
-                    Employee.is_active == True,
                     Employee.date_of_joining.isnot(None),
                 )
             ).all()

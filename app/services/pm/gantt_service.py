@@ -141,8 +141,6 @@ class GanttService:
                 progress=1.0 if milestone.status == MilestoneStatus.ACHIEVED else 0.0,
                 parent=None,
                 type="milestone",
-                priority=None,
-                status=None,
                 assigned_to=None,
                 project_id=str(project_id),
                 open=True,

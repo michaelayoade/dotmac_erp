@@ -5,7 +5,7 @@ Provides view-focused data for expense web routes.
 """
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
+from typing import Any, Optional
 from uuid import UUID
 
 from sqlalchemy import func
@@ -173,7 +173,7 @@ class ExpenseWebService:
                 "tax_code_id": str(t.tax_code_id),
                 "tax_code": t.tax_code,
                 "description": t.description or "",
-                "rate": float(t.rate) if t.rate else 0,
+                "rate": float(t.tax_rate),
             }
             for t in tax_codes
         ]
@@ -256,7 +256,7 @@ class ExpenseWebService:
 
         payment_methods = [m.value for m in PaymentMethod]
 
-        context = {
+        context: dict[str, Any] = {
             "expense_accounts": expense_account_options,
             "payment_accounts": payment_account_options,
             "tax_codes": tax_code_options,

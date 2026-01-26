@@ -591,7 +591,7 @@ class APPostingAdapter:
         """
         from app.models.finance.gl.fiscal_period import FiscalPeriod
 
-        tax_transaction_ids = []
+        tax_transaction_ids: list[UUID] = []
 
         # Get fiscal period from invoice date
         fiscal_period = (
@@ -629,7 +629,7 @@ class APPostingAdapter:
                     base_amount=base_amount,
                     currency_code=invoice.currency_code,
                     counterparty_name=supplier.legal_name,
-                    counterparty_tax_id=supplier.tax_id,
+                    counterparty_tax_id=supplier.tax_identification_number,
                     exchange_rate=exchange_rate,
                 )
                 tax_transaction_ids.append(tax_txn.transaction_id)
@@ -666,6 +666,7 @@ class APPostingAdapter:
             Transaction ID if created, None otherwise
         """
         from app.models.finance.gl.fiscal_period import FiscalPeriod
+        from app.models.finance.tax.tax_code import TaxCode
         from app.models.finance.tax.tax_transaction import TaxTransactionType
         from app.services.finance.tax.tax_transaction import TaxTransactionInput
 
@@ -687,26 +688,35 @@ class APPostingAdapter:
             # Calculate gross amount (base for WHT)
             gross_amount = payment.gross_amount or (payment.amount + wht_amount)
 
-            tax_txn = tax_transaction_service.record_transaction(
+            tax_code_id = payment.withholding_tax_code_id
+            if not tax_code_id:
+                return None
+
+            tax_code = db.get(TaxCode, tax_code_id)
+            if not tax_code or tax_code.organization_id != organization_id:
+                return None
+
+            tax_txn = tax_transaction_service.create_transaction(
                 db=db,
                 organization_id=organization_id,
                 input=TaxTransactionInput(
-                    tax_code_id=payment.withholding_tax_code_id,
-                    transaction_type=TaxTransactionType.WITHHOLDING,
                     fiscal_period_id=fiscal_period.fiscal_period_id,
+                    tax_code_id=tax_code_id,
+                    jurisdiction_id=tax_code.jurisdiction_id,
+                    transaction_type=TaxTransactionType.WITHHOLDING,
                     transaction_date=payment.payment_date,
-                    base_amount=gross_amount,
-                    tax_amount=wht_amount,
-                    currency_code=payment.currency_code,
-                    exchange_rate=exchange_rate,
-                    functional_currency_base=gross_amount * exchange_rate,
-                    functional_currency_tax=wht_amount * exchange_rate,
-                    source_module="AP",
                     source_document_type="SUPPLIER_PAYMENT",
                     source_document_id=payment.payment_id,
+                    source_document_reference=payment.payment_number,
+                    currency_code=payment.currency_code,
+                    base_amount=gross_amount,
+                    tax_rate=tax_code.tax_rate,
+                    tax_amount=wht_amount,
+                    functional_base_amount=gross_amount * exchange_rate,
+                    functional_tax_amount=wht_amount * exchange_rate,
+                    exchange_rate=exchange_rate,
                     counterparty_name=supplier.legal_name,
-                    counterparty_tax_id=supplier.tax_id,
-                    reference=payment.payment_number,
+                    counterparty_tax_id=supplier.tax_identification_number,
                 ),
             )
             return tax_txn.transaction_id
@@ -760,8 +770,10 @@ class APPostingAdapter:
             # Get GRNI account from organization settings
             from app.models.core_org.organization import Organization
             org = db.get(Organization, organization_id)
-            if org and hasattr(org, 'grni_account_id') and org.grni_account_id:
-                return org.grni_account_id
+            if org and hasattr(org, "grni_account_id"):
+                acc_id: Optional[UUID] = getattr(org, "grni_account_id", None)
+                if acc_id:
+                    return acc_id
             # If no GRNI account configured, fall through to expense routing
 
         # Priority 3: Capitalize flag - use asset account

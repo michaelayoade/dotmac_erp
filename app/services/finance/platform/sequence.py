@@ -6,7 +6,7 @@ fiscal year reset capability.
 """
 
 from datetime import datetime, timezone
-from typing import Optional
+from typing import List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -138,8 +138,10 @@ class SequenceService(ListResponseMixin):
 
         if existing:
             # Update existing sequence
-            existing.prefix = prefix
-            existing.suffix = suffix
+            if prefix is not None:
+                existing.prefix = prefix
+            if suffix is not None:
+                existing.suffix = suffix
             existing.min_digits = min_digits
             existing.fiscal_year_reset = fiscal_year_reset
             db.commit()
@@ -323,7 +325,7 @@ class SequenceService(ListResponseMixin):
         fiscal_year_id: Optional[str] = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> list[NumberingSequence]:
+    ) -> List[NumberingSequence]:
         """
         List numbering sequences.
 

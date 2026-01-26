@@ -225,6 +225,8 @@ class BaseExportService(ABC, Generic[T]):
         self, target_id: uuid.UUID, source_name: Optional[str]
     ) -> None:
         """Update or create sync entity after successful export."""
+        if source_name is None:
+            raise ValueError("source_name is required for sync entity updates")
         sync_entity = self.get_sync_entity_by_target(target_id)
 
         if sync_entity:

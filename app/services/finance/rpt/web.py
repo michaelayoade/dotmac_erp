@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Dict, Optional, cast
 from uuid import UUID
 
 if TYPE_CHECKING:
@@ -71,7 +71,7 @@ def _ifrs_label(category: IFRSCategory) -> str:
         IFRSCategory.EXPENSES: "Expenses",
         IFRSCategory.OTHER_COMPREHENSIVE_INCOME: "Other Comprehensive Income",
     }
-    return label_map.get(category, category.value)
+    return cast(str, label_map.get(category, category.value))
 
 
 def _report_type_label(report_type: ReportType) -> str:
@@ -89,7 +89,7 @@ def _report_type_label(report_type: ReportType) -> str:
         ReportType.REGULATORY: "Regulatory Report",
         ReportType.CUSTOM: "Custom Report",
     }
-    return labels.get(report_type, report_type.value)
+    return cast(str, labels.get(report_type, report_type.value))
 
 
 class ReportsWebService:
@@ -692,7 +692,7 @@ class ReportsWebService:
         )
 
         def cat_amount(code: str) -> Decimal:
-            return balances.get(code, {}).get("amount", Decimal("0"))
+            return cast(Decimal, balances.get(code, {}).get("amount", Decimal("0")))
 
         revenue = cat_amount("REV") + cat_amount("CAT001")
         other_income = cat_amount("CAT015")
@@ -761,7 +761,7 @@ class ReportsWebService:
         )
 
         def cat_amount(code: str) -> Decimal:
-            return balances.get(code, {}).get("amount", Decimal("0"))
+            return cast(Decimal, balances.get(code, {}).get("amount", Decimal("0")))
 
         current_assets = [
             ("Cash and Cash Equivalents", cat_amount("CAT003") + cat_amount("CAT012")),
@@ -1173,7 +1173,7 @@ class ReportsWebService:
             },
         ]
 
-        upcoming_deadlines = []
+        upcoming_deadlines: list[dict[str, Any]] = []
 
         return {
             "start_date": start_date or _format_date(from_date),
@@ -1534,7 +1534,7 @@ class ReportsWebService:
 
         budget_lines = budget_query.all()
 
-        budget_totals = {}
+        budget_totals: dict[UUID, dict[str, Any]] = {}
         for line, budget, account in budget_lines:
             budget_totals.setdefault(account.account_id, {
                 "account_code": account.account_code,

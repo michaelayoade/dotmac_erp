@@ -273,6 +273,13 @@ class ExpenseService:
         self.db.flush()
         return category
 
+    def delete_category(self, org_id: UUID, category_id: UUID) -> ExpenseCategory:
+        """Deactivate an expense category."""
+        category = self.get_category(org_id, category_id)
+        category.is_active = False
+        self.db.flush()
+        return category
+
     # =========================================================================
     # Expense Claims
     # =========================================================================
@@ -1839,6 +1846,7 @@ class ExpenseService:
         """
         from app.models.people.hr.employee import Employee
         from app.models.people.hr.department import Department
+        from app.models.person import Person
 
         today = date.today()
         if not start_date:
@@ -1850,14 +1858,15 @@ class ExpenseService:
         query = (
             self.db.query(
                 Employee.employee_id,
-                Employee.first_name,
-                Employee.last_name,
-                Department.name.label("department_name"),
+                Person.first_name,
+                Person.last_name,
+                Department.department_name.label("department_name"),
                 func.count(ExpenseClaim.claim_id).label("claim_count"),
                 func.sum(ExpenseClaim.total_claimed_amount).label("claimed_amount"),
                 func.sum(ExpenseClaim.total_approved_amount).label("approved_amount"),
             )
             .join(ExpenseClaim, ExpenseClaim.employee_id == Employee.employee_id)
+            .join(Person, Person.id == Employee.person_id)
             .outerjoin(Department, Employee.department_id == Department.department_id)
             .filter(
                 ExpenseClaim.organization_id == org_id,
@@ -1871,7 +1880,12 @@ class ExpenseService:
 
         results = (
             query
-            .group_by(Employee.employee_id, Employee.first_name, Employee.last_name, Department.name)
+            .group_by(
+                Employee.employee_id,
+                Person.first_name,
+                Person.last_name,
+                Department.department_name,
+            )
             .order_by(func.sum(ExpenseClaim.total_claimed_amount).desc())
             .all()
         )
@@ -1920,9 +1934,10 @@ class ExpenseService:
         start_date = end_date - relativedelta(months=months - 1)
 
         # Query monthly aggregates
+        month_bucket = func.date_trunc("month", ExpenseClaim.claim_date)
         results = (
             self.db.query(
-                func.date_trunc("month", ExpenseClaim.claim_date).label("month"),
+                month_bucket.label("month"),
                 func.count(ExpenseClaim.claim_id).label("claim_count"),
                 func.sum(ExpenseClaim.total_claimed_amount).label("claimed_amount"),
                 func.sum(ExpenseClaim.total_approved_amount).label("approved_amount"),
@@ -1932,8 +1947,8 @@ class ExpenseService:
                 ExpenseClaim.claim_date >= start_date,
                 ExpenseClaim.claim_date <= today,
             )
-            .group_by(func.date_trunc("month", ExpenseClaim.claim_date))
-            .order_by(func.date_trunc("month", ExpenseClaim.claim_date))
+            .group_by(month_bucket)
+            .order_by(month_bucket)
             .all()
         )
 

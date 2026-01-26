@@ -243,11 +243,11 @@ class ExpenseService:
         if expense.tax_amount > 0 and expense.tax_code_id:
             from app.models.finance.tax.tax_code import TaxCode
             tax_code = db.get(TaxCode, expense.tax_code_id)
-            if tax_code and tax_code.input_tax_account_id:
+            if tax_code and tax_code.tax_paid_account_id:
                 tax_line = JournalEntryLine(
                     journal_entry_id=journal.journal_entry_id,
                     line_number=line_num,
-                    account_id=tax_code.input_tax_account_id,
+                    account_id=tax_code.tax_paid_account_id,
                     description=f"Input tax - {expense.description}",
                     debit_amount=expense.tax_amount,
                     credit_amount=Decimal("0"),

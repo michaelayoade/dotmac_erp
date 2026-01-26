@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 import json
 import os
-from typing import Optional
+from typing import Any, List, Optional, cast
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -384,7 +384,7 @@ class ReportInstanceService(ListResponseMixin):
             raise HTTPException(status_code=404, detail="Report output not found")
 
         with open(instance.output_file_path, "r", encoding="utf-8") as handle:
-            return json.load(handle)
+            return cast(dict[Any, Any], json.load(handle))
 
     @staticmethod
     def _resolve_definition(
@@ -627,7 +627,7 @@ class ReportInstanceService(ListResponseMixin):
                 ReportInstance.organization_id == coerce_uuid(organization_id)
             )
 
-        return query.order_by(ReportInstance.queued_at).limit(limit).all()
+        return cast(List[ReportInstance], query.order_by(ReportInstance.queued_at).limit(limit).all())
 
     @staticmethod
     def get_generation_statistics(
@@ -811,7 +811,7 @@ class ReportInstanceService(ListResponseMixin):
             )
 
         query = query.order_by(ReportInstance.generated_at.desc())
-        return query.limit(limit).offset(offset).all()
+        return cast(List[ReportInstance], query.limit(limit).offset(offset).all())
 
 
 # Module-level singleton instance

@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
-from typing import Optional
+from typing import List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -457,7 +457,7 @@ class OwnershipService(ListResponseMixin):
         has_control: Optional[bool] = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> list[OwnershipInterest]:
+    ) -> List[OwnershipInterest]:
         """List ownership interests with optional filters."""
         query = db.query(OwnershipInterest)
 

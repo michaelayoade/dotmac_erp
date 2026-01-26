@@ -278,20 +278,6 @@ class AttendanceRecordCheckOut(BaseModel):
     notes: Optional[str] = None
 
 
-class AttendanceRecordCheckIn(BaseModel):
-    """Attendance record check-in request."""
-
-    check_in_time: Optional[datetime] = None
-    notes: Optional[str] = None
-
-
-class AttendanceRecordCheckOut(BaseModel):
-    """Attendance record check-out request."""
-
-    check_out_time: Optional[datetime] = None
-    notes: Optional[str] = None
-
-
 class AttendanceSummary(BaseModel):
     """Attendance summary for a period."""
 

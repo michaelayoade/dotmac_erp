@@ -21,7 +21,7 @@ from app.tasks.sync import (
     sync_single_entity_type,
 )
 from app.templates import templates
-from app.web.deps import WebAuthContext
+from app.web.deps import WebAuthContext, brand_context, org_brand_context
 
 
 class SyncWebService:
@@ -33,12 +33,21 @@ class SyncWebService:
         auth: Optional[WebAuthContext],
         title: str,
         active_tab: str = "dashboard",
+        db: Optional[Session] = None,
     ) -> dict:
         """Build base context for templates."""
+        org_branding = None
+        if db and auth and auth.organization_id:
+            org_branding = org_brand_context(db, auth.organization_id)
         return {
             "request": request,
             "auth": auth,
             "title": title,
+            "page_title": title,
+            "brand": org_branding or brand_context(),
+            "org_branding": org_branding,
+            "user": auth.user if auth else {"name": "Admin", "initials": "AD"},
+            "csrf_token": getattr(request.state, "csrf_token", ""),
             "active_tab": active_tab,
             "active_page": "sync",  # For sidebar highlighting
             "module": "admin",
@@ -65,7 +74,7 @@ class SyncWebService:
         if error_response:
             return error_response
 
-        context = self._base_context(request, auth, "Sync Management", "dashboard")
+        context = self._base_context(request, auth, "Sync Management", "dashboard", db)
 
         # Get organization for current user
         org_id = auth.organization_id if auth else None
@@ -189,7 +198,7 @@ class SyncWebService:
         if error_response:
             return error_response
 
-        context = self._base_context(request, auth, "Sync History", "history")
+        context = self._base_context(request, auth, "Sync History", "history", db)
 
         org_id = auth.organization_id if auth else None
         per_page = 20
@@ -239,7 +248,7 @@ class SyncWebService:
         if error_response:
             return error_response
 
-        context = self._base_context(request, auth, "Sync Detail", "history")
+        context = self._base_context(request, auth, "Sync Detail", "history", db)
 
         org_id = auth.organization_id if auth else None
 
@@ -339,7 +348,7 @@ class SyncWebService:
         if error_response:
             return error_response
 
-        context = self._base_context(request, auth, "ERPNext Integration", "config")
+        context = self._base_context(request, auth, "ERPNext Integration", "config", db)
 
         org_id = auth.organization_id if auth else None
 
@@ -451,7 +460,7 @@ class SyncWebService:
         if error_response:
             return error_response
 
-        context = self._base_context(request, auth, "Sync Entities", "entities")
+        context = self._base_context(request, auth, "Sync Entities", "entities", db)
 
         org_id = auth.organization_id if auth else None
         per_page = 50
