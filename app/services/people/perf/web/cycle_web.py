@@ -5,6 +5,8 @@ Performance Web Service - Cycle, KRA, Template, and Scorecard methods.
 from __future__ import annotations
 
 import logging
+from datetime import date
+from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 
@@ -13,9 +15,11 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.models.people.perf.appraisal_cycle import AppraisalCycleStatus
+from app.models.people.hr import EmployeeStatus
 from app.services.common import PaginationParams, coerce_uuid
 from app.services.people.hr import EmployeeFilters, OrganizationService, DepartmentFilters
 from app.services.people.perf import PerformanceService
+from app.services.performance_automation import PerformanceAutomationService
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
 
@@ -32,6 +36,12 @@ logger = logging.getLogger(__name__)
 
 class CycleWebService:
     """Web service methods for appraisal cycles, KRAs, templates, and scorecards."""
+
+    @staticmethod
+    def _form_text(value: object | None, default: str = "") -> str:
+        if isinstance(value, str):
+            return value.strip()
+        return default
 
     # ─────────────────────────────────────────────────────────────────────────
     # Cycles
@@ -101,22 +111,23 @@ class CycleWebService:
         svc = PerformanceService(db)
 
         try:
+            start_date = parse_date(self._form_text(form_data.get("start_date")))
+            end_date = parse_date(self._form_text(form_data.get("end_date")))
+            if not start_date or not end_date:
+                raise ValueError("Start and end dates are required")
+
             cycle = svc.create_cycle(
                 org_id,
-                cycle_name=form_data.get("cycle_name", ""),
-                cycle_type=form_data.get("cycle_type", "ANNUAL"),
-                year=parse_int(form_data.get("year")),
-                start_date=parse_date(form_data.get("start_date")),
-                end_date=parse_date(form_data.get("end_date")),
-                self_assessment_start=parse_date(form_data.get("self_assessment_start")),
-                self_assessment_end=parse_date(form_data.get("self_assessment_end")),
-                manager_review_start=parse_date(form_data.get("manager_review_start")),
-                manager_review_end=parse_date(form_data.get("manager_review_end")),
-                calibration_start=parse_date(form_data.get("calibration_start")),
-                calibration_end=parse_date(form_data.get("calibration_end")),
-                feedback_start=parse_date(form_data.get("feedback_start")),
-                feedback_end=parse_date(form_data.get("feedback_end")),
-                description=form_data.get("description") or None,
+                cycle_code=self._form_text(form_data.get("cycle_code")),
+                cycle_name=self._form_text(form_data.get("cycle_name")),
+                review_period_start=start_date,
+                review_period_end=end_date,
+                start_date=start_date,
+                end_date=end_date,
+                self_assessment_deadline=parse_date(self._form_text(form_data.get("self_assessment_end"))),
+                manager_review_deadline=parse_date(self._form_text(form_data.get("manager_review_end"))),
+                calibration_deadline=parse_date(self._form_text(form_data.get("calibration_end"))),
+                description=self._form_text(form_data.get("description")) or None,
             )
             db.commit()
             return RedirectResponse(
@@ -211,17 +222,17 @@ class CycleWebService:
                 coerce_uuid(cycle_id),
                 cycle_name=form_data.get("cycle_name", ""),
                 cycle_type=form_data.get("cycle_type", "ANNUAL"),
-                year=parse_int(form_data.get("year")),
-                start_date=parse_date(form_data.get("start_date")),
-                end_date=parse_date(form_data.get("end_date")),
-                self_assessment_start=parse_date(form_data.get("self_assessment_start")),
-                self_assessment_end=parse_date(form_data.get("self_assessment_end")),
-                manager_review_start=parse_date(form_data.get("manager_review_start")),
-                manager_review_end=parse_date(form_data.get("manager_review_end")),
-                calibration_start=parse_date(form_data.get("calibration_start")),
-                calibration_end=parse_date(form_data.get("calibration_end")),
-                feedback_start=parse_date(form_data.get("feedback_start")),
-                feedback_end=parse_date(form_data.get("feedback_end")),
+                year=parse_int(self._form_text(form_data.get("year"))),
+                start_date=parse_date(self._form_text(form_data.get("start_date"))),
+                end_date=parse_date(self._form_text(form_data.get("end_date"))),
+                self_assessment_start=parse_date(self._form_text(form_data.get("self_assessment_start"))),
+                self_assessment_end=parse_date(self._form_text(form_data.get("self_assessment_end"))),
+                manager_review_start=parse_date(self._form_text(form_data.get("manager_review_start"))),
+                manager_review_end=parse_date(self._form_text(form_data.get("manager_review_end"))),
+                calibration_start=parse_date(self._form_text(form_data.get("calibration_start"))),
+                calibration_end=parse_date(self._form_text(form_data.get("calibration_end"))),
+                feedback_start=parse_date(self._form_text(form_data.get("feedback_start"))),
+                feedback_end=parse_date(self._form_text(form_data.get("feedback_end"))),
                 description=form_data.get("description") or None,
             )
             db.commit()
@@ -252,7 +263,11 @@ class CycleWebService:
         svc = PerformanceService(db)
 
         try:
-            svc.activate_cycle(org_id, coerce_uuid(cycle_id))
+            svc.update_cycle(
+                org_id,
+                coerce_uuid(cycle_id),
+                status=AppraisalCycleStatus.ACTIVE,
+            )
             db.commit()
         except Exception:
             db.rollback()
@@ -268,9 +283,18 @@ class CycleWebService:
         """Handle cycle phase advancement."""
         org_id = coerce_uuid(auth.organization_id)
         svc = PerformanceService(db)
+        automation = PerformanceAutomationService(db)
 
         try:
-            svc.advance_cycle_phase(org_id, coerce_uuid(cycle_id))
+            cycle = svc.get_cycle(org_id, coerce_uuid(cycle_id))
+            next_status = {
+                AppraisalCycleStatus.DRAFT: AppraisalCycleStatus.ACTIVE,
+                AppraisalCycleStatus.ACTIVE: AppraisalCycleStatus.REVIEW,
+                AppraisalCycleStatus.REVIEW: AppraisalCycleStatus.CALIBRATION,
+                AppraisalCycleStatus.CALIBRATION: AppraisalCycleStatus.COMPLETED,
+            }.get(cycle.status)
+            if next_status:
+                automation.advance_cycle_phase(cycle, next_status)
             db.commit()
         except Exception:
             db.rollback()
@@ -288,7 +312,11 @@ class CycleWebService:
         svc = PerformanceService(db)
 
         try:
-            svc.cancel_cycle(org_id, coerce_uuid(cycle_id))
+            svc.update_cycle(
+                org_id,
+                coerce_uuid(cycle_id),
+                status=AppraisalCycleStatus.CANCELLED,
+            )
             db.commit()
         except Exception:
             db.rollback()
@@ -407,10 +435,15 @@ class CycleWebService:
         try:
             kra = svc.create_kra(
                 org_id,
-                kra_name=form_data.get("kra_name", ""),
-                description=form_data.get("description") or None,
-                department_id=coerce_uuid(form_data["department_id"]) if form_data.get("department_id") else None,
-                weight=parse_decimal(form_data.get("weight")),
+                kra_code=self._form_text(form_data.get("kra_code")),
+                kra_name=self._form_text(form_data.get("kra_name")),
+                description=self._form_text(form_data.get("description")) or None,
+                department_id=(
+                    coerce_uuid(self._form_text(form_data.get("department_id")))
+                    if self._form_text(form_data.get("department_id"))
+                    else None
+                ),
+                default_weightage=parse_decimal(self._form_text(form_data.get("weight"))) or Decimal("0"),
             )
             db.commit()
             return RedirectResponse(
@@ -499,10 +532,15 @@ class CycleWebService:
             svc.update_kra(
                 org_id,
                 coerce_uuid(kra_id),
-                kra_name=form_data.get("kra_name", ""),
-                description=form_data.get("description") or None,
-                department_id=coerce_uuid(form_data["department_id"]) if form_data.get("department_id") else None,
-                weight=parse_decimal(form_data.get("weight")),
+                kra_code=self._form_text(form_data.get("kra_code")),
+                kra_name=self._form_text(form_data.get("kra_name")),
+                description=self._form_text(form_data.get("description")) or None,
+                department_id=(
+                    coerce_uuid(self._form_text(form_data.get("department_id")))
+                    if self._form_text(form_data.get("department_id"))
+                    else None
+                ),
+                default_weightage=parse_decimal(self._form_text(form_data.get("weight"))) or Decimal("0"),
             )
             db.commit()
             return RedirectResponse(
@@ -534,7 +572,8 @@ class CycleWebService:
         svc = PerformanceService(db)
 
         try:
-            svc.toggle_kra_active(org_id, coerce_uuid(kra_id))
+            kra = svc.get_kra(org_id, coerce_uuid(kra_id))
+            svc.update_kra(org_id, kra.kra_id, is_active=not kra.is_active)
             db.commit()
         except Exception:
             db.rollback()
@@ -657,14 +696,11 @@ class CycleWebService:
         try:
             template = svc.create_template(
                 org_id,
-                template_name=form_data.get("template_name", ""),
-                description=form_data.get("description") or None,
-                department_id=coerce_uuid(form_data["department_id"]) if form_data.get("department_id") else None,
-                rating_scale_max=parse_int(form_data.get("rating_scale_max")) or 5,
-                self_assessment_enabled=form_data.get("self_assessment_enabled") == "true",
-                manager_review_enabled=form_data.get("manager_review_enabled") == "true",
-                peer_feedback_enabled=form_data.get("peer_feedback_enabled") == "true",
-                calibration_enabled=form_data.get("calibration_enabled") == "true",
+                template_code=self._form_text(form_data.get("template_code")),
+                template_name=self._form_text(form_data.get("template_name")),
+                description=self._form_text(form_data.get("description")) or None,
+                department_id=coerce_uuid(form_data["department_id"]) if self._form_text(form_data.get("department_id")) else None,
+                rating_scale_max=parse_int(self._form_text(form_data.get("rating_scale_max"))) or 5,
             )
             db.commit()
             return RedirectResponse(
@@ -755,14 +791,12 @@ class CycleWebService:
             svc.update_template(
                 org_id,
                 coerce_uuid(template_id),
-                template_name=form_data.get("template_name", ""),
-                description=form_data.get("description") or None,
-                department_id=coerce_uuid(form_data["department_id"]) if form_data.get("department_id") else None,
-                rating_scale_max=parse_int(form_data.get("rating_scale_max")) or 5,
-                self_assessment_enabled=form_data.get("self_assessment_enabled") == "true",
-                manager_review_enabled=form_data.get("manager_review_enabled") == "true",
-                peer_feedback_enabled=form_data.get("peer_feedback_enabled") == "true",
-                calibration_enabled=form_data.get("calibration_enabled") == "true",
+                template_name=self._form_text(form_data.get("template_name")),
+                description=self._form_text(form_data.get("description")) or None,
+                department_id=coerce_uuid(form_data["department_id"])
+                if self._form_text(form_data.get("department_id"))
+                else None,
+                rating_scale_max=parse_int(self._form_text(form_data.get("rating_scale_max"))) or 5,
             )
             db.commit()
             return RedirectResponse(
@@ -795,7 +829,12 @@ class CycleWebService:
         svc = PerformanceService(db)
 
         try:
-            svc.toggle_template_active(org_id, coerce_uuid(template_id))
+            template = svc.get_template(org_id, coerce_uuid(template_id))
+            svc.update_template(
+                org_id,
+                template.template_id,
+                is_active=not template.is_active,
+            )
             db.commit()
         except Exception:
             db.rollback()
@@ -883,7 +922,7 @@ class CycleWebService:
         org_svc = OrganizationService(db, org_id)
 
         employees = org_svc.list_employees(
-            EmployeeFilters(is_active=True),
+                EmployeeFilters(status=EmployeeStatus.ACTIVE),
             PaginationParams(limit=500),
         ).items
 
@@ -912,10 +951,14 @@ class CycleWebService:
         svc = PerformanceService(db)
 
         try:
+            period_start = parse_date(self._form_text(form_data.get("period_start"))) or date.today()
+            period_end = parse_date(self._form_text(form_data.get("period_end"))) or period_start
             scorecard = svc.create_scorecard(
                 org_id,
-                employee_id=coerce_uuid(form_data["employee_id"]),
-                cycle_id=coerce_uuid(form_data["cycle_id"]) if form_data.get("cycle_id") else None,
+                employee_id=coerce_uuid(self._form_text(form_data.get("employee_id"))),
+                period_start=period_start,
+                period_end=period_end,
+                period_label=self._form_text(form_data.get("period_label")) or None,
             )
             db.commit()
             return RedirectResponse(
@@ -929,7 +972,10 @@ class CycleWebService:
             context["request"] = request
             context.update({
                 "scorecard": None,
-                "employees": org_svc.list_employees(EmployeeFilters(is_active=True), PaginationParams(limit=500)).items,
+                "employees": org_svc.list_employees(
+                    EmployeeFilters(status=EmployeeStatus.ACTIVE),
+                    PaginationParams(limit=500),
+                ).items,
                 "cycles": svc.list_cycles(org_id, pagination=PaginationParams(limit=50)).items,
                 "form_data": dict(form_data),
                 "error": str(e),
@@ -1006,13 +1052,14 @@ class CycleWebService:
         svc = PerformanceService(db)
 
         try:
+            actual_value = parse_decimal(self._form_text(form_data.get("actual_value")))
+            if actual_value is None:
+                raise ValueError("Actual value is required")
             svc.update_scorecard_item(
                 org_id,
                 coerce_uuid(scorecard_id),
                 coerce_uuid(item_id),
-                actual_value=parse_decimal(form_data.get("actual_value")),
-                rating=parse_int(form_data.get("rating")),
-                comments=form_data.get("comments") or None,
+                actual_value=actual_value,
             )
             db.commit()
             return RedirectResponse(
@@ -1074,10 +1121,7 @@ class CycleWebService:
             svc.finalize_scorecard(
                 org_id,
                 coerce_uuid(scorecard_id),
-                final_score=parse_decimal(form_data.get("final_score")),
-                final_rating=parse_int(form_data.get("final_rating")),
-                manager_comments=form_data.get("manager_comments") or None,
-                finalized_by=auth.user_id,
+                summary=self._form_text(form_data.get("manager_comments")) or None,
             )
             db.commit()
             return RedirectResponse(

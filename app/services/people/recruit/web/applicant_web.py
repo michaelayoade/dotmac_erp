@@ -7,10 +7,10 @@ Provides view-focused data and operations for applicant web routes.
 from __future__ import annotations
 
 import logging
-from typing import Optional
+from typing import Any, Optional
 from uuid import UUID
 
-from fastapi import Request
+from fastapi import Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
@@ -29,6 +29,13 @@ from .base import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _get_form_str(form: Any, key: str, default: str = "") -> str:
+    value = form.get(key, default) if form is not None else default
+    if value is None or isinstance(value, UploadFile):
+        return default
+    return str(value).strip()
 
 
 class ApplicantWebService:
@@ -169,7 +176,7 @@ class ApplicantWebService:
             "country_code": form_data.get("country_code") or None,
             "current_employer": form_data.get("current_employer") or None,
             "current_job_title": form_data.get("current_job_title") or None,
-            "years_of_experience": parse_int(form_data.get("years_of_experience")),
+            "years_of_experience": parse_int(_get_form_str(form_data, "years_of_experience") or None),
             "highest_qualification": form_data.get("highest_qualification") or None,
             "skills": form_data.get("skills") or None,
             "source": form_data.get("source") or None,
@@ -279,7 +286,7 @@ class ApplicantWebService:
         svc = RecruitmentService(db)
 
         try:
-            job_opening_id = form_data.get("job_opening_id")
+            job_opening_id = _get_form_str(form_data, "job_opening_id") or None
             input_kwargs = self.build_applicant_input(dict(form_data))
             applicant = svc.create_applicant(
                 org_id,
@@ -316,8 +323,8 @@ class ApplicantWebService:
         try:
             input_kwargs = self.build_applicant_input(dict(form_data))
             # Include additional fields for update
-            input_kwargs["notes"] = form_data.get("notes") or None
-            input_kwargs["overall_rating"] = parse_int(form_data.get("overall_rating"))
+            input_kwargs["notes"] = _get_form_str(form_data, "notes") or None
+            input_kwargs["overall_rating"] = parse_int(_get_form_str(form_data, "overall_rating") or None)
 
             svc.update_applicant(org_id, coerce_uuid(applicant_id), **input_kwargs)
             db.commit()
@@ -347,8 +354,8 @@ class ApplicantWebService:
         svc = RecruitmentService(db)
 
         try:
-            to_status = form_data.get("to_status")
-            notes = form_data.get("notes")
+            to_status = _get_form_str(form_data, "to_status") or None
+            notes = _get_form_str(form_data, "notes") or None
             status_enum = ApplicantStatus(to_status)
             svc.advance_applicant(org_id, coerce_uuid(applicant_id), status_enum, notes=notes)
             db.commit()
@@ -370,7 +377,7 @@ class ApplicantWebService:
         svc = RecruitmentService(db)
 
         try:
-            reason = form_data.get("reason")
+            reason = _get_form_str(form_data, "reason") or None
             svc.reject_applicant(org_id, coerce_uuid(applicant_id), reason=reason)
             db.commit()
         except Exception:

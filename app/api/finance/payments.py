@@ -112,8 +112,15 @@ class InitializeExpensePaymentRequest(BaseModel):
     """Request to initialize expense reimbursement."""
 
     expense_claim_id: UUID
-    bank_code: str = Field(..., description="Recipient's bank code")
-    account_number: str = Field(..., min_length=10, max_length=10)
+    bank_code: Optional[str] = Field(
+        default=None, description="Recipient's bank code (ignored; claim data is used)"
+    )
+    account_number: Optional[str] = Field(
+        default=None,
+        min_length=10,
+        max_length=10,
+        description="Recipient's bank account number (ignored; claim data is used)",
+    )
 
 
 class ExpensePaymentResponse(BaseModel):
@@ -412,7 +419,7 @@ def initialize_expense_payment(
     Requires:
     - Paystack transfers must be enabled
     - Expense claim must be approved
-    - Bank account details must be valid
+    - Bank account details must be valid (from the expense claim)
     """
     # Check if transfers are enabled
     transfers_enabled = resolve_value(db, SettingDomain.payments, "paystack_transfers_enabled")
@@ -424,13 +431,27 @@ def initialize_expense_payment(
 
     config = get_paystack_config(db, organization_id)
 
+    from app.models.expense.expense_claim import ExpenseClaim
+
+    claim = db.get(ExpenseClaim, request_data.expense_claim_id)
+    if not claim or claim.organization_id != organization_id:
+        raise HTTPException(status_code=404, detail="Expense claim not found")
+
+    recipient_bank_code = claim.recipient_bank_code
+    recipient_account_number = claim.recipient_account_number
+    if not recipient_bank_code or not recipient_account_number:
+        raise HTTPException(
+            status_code=400,
+            detail="Expense claim is missing bank details",
+        )
+
     svc = PaymentService(db, organization_id)
     try:
         intent = svc.create_expense_payment_intent(
             expense_claim_id=request_data.expense_claim_id,
             paystack_config=config,
-            recipient_bank_code=request_data.bank_code,
-            recipient_account_number=request_data.account_number,
+            recipient_bank_code=recipient_bank_code,
+            recipient_account_number=recipient_account_number,
         )
         db.commit()
 

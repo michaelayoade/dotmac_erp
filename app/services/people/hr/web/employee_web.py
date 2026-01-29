@@ -7,10 +7,10 @@ from __future__ import annotations
 
 import logging
 from datetime import date, datetime
-from typing import Optional
+from typing import Any, Optional
 from uuid import UUID
 
-from fastapi import Request
+from fastapi import Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
@@ -299,6 +299,8 @@ class HRWebService:
             except ValueError:
                 pass
 
+        person: Optional[Person] = None
+
         # Check if person with this email already exists
         existing_person = (
             db.query(Person)
@@ -427,6 +429,7 @@ class HRWebService:
             notes=notes or None,
         )
 
+        assert person is not None
         employee = svc.create_employee(person.id, data)
         db.commit()
 
@@ -621,12 +624,7 @@ class HRWebService:
             return RedirectResponse(url=f"/people/hr/employees/{employee_id}", status_code=303)
 
         employee = svc.get_employee(employee_id)
-        context = self.employee_detail_response(
-            request,
-            auth,
-            db,
-            str(employee_id),
-        ).context
+        context = self._employee_detail_context(request, auth, db, employee)
         context.update({
             "employee": employee,
             "error": "Please provide a valid resignation date.",
@@ -664,35 +662,32 @@ class HRWebService:
             return RedirectResponse(url=f"/people/hr/employees/{employee_id}", status_code=303)
 
         employee = svc.get_employee(employee_id)
-        context = self.employee_detail_response(
-            request,
-            auth,
-            db,
-            str(employee_id),
-        ).context
+        context = self._employee_detail_context(request, auth, db, employee)
         context.update({
             "employee": employee,
             "error": "Please provide a valid termination date.",
         })
         return templates.TemplateResponse(request, "people/hr/employee_detail.html", context)
 
-    def employee_detail_response(
+    def _employee_detail_context(
         self,
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        employee_id: str,
-    ) -> HTMLResponse:
-        """Render employee detail page."""
+        employee: Employee,
+    ) -> dict:
+        """Build employee detail page context."""
         org_id = coerce_uuid(auth.organization_id)
-        svc = EmployeeService(db, org_id)
 
-        employee = svc.get_employee(coerce_uuid(employee_id))
         person = db.get(Person, employee.person_id)
         dept = db.get(Department, employee.department_id) if employee.department_id else None
         desig = db.get(Designation, employee.designation_id) if employee.designation_id else None
         grade = db.get(EmployeeGrade, employee.grade_id) if employee.grade_id else None
-        emp_type = db.get(EmploymentType, employee.employment_type_id) if employee.employment_type_id else None
+        emp_type = (
+            db.get(EmploymentType, employee.employment_type_id)
+            if employee.employment_type_id
+            else None
+        )
         manager = None
         if employee.reports_to_id:
             manager_emp = db.scalar(
@@ -706,7 +701,11 @@ class HRWebService:
                 manager_person = db.get(Person, manager_emp.person_id)
                 manager = {
                     "employee_id": manager_emp.employee_id,
-                    "name": f"{manager_person.first_name or ''} {manager_person.last_name or ''}".strip() if manager_person else "",
+                    "name": (
+                        f"{manager_person.first_name or ''} {manager_person.last_name or ''}".strip()
+                        if manager_person
+                        else ""
+                    ),
                 }
 
         credentials = []
@@ -743,10 +742,11 @@ class HRWebService:
 
         # Fetch onboarding record for this employee
         from app.services.people.hr.lifecycle import LifecycleService
+
         lifecycle_svc = LifecycleService(db)
         onboarding = lifecycle_svc.get_onboarding_for_employee(org_id, employee.employee_id)
 
-        context = {
+        return {
             **base_context(request, auth, "Employee Details", "employees"),
             "employee": employee,
             "person": person,
@@ -760,6 +760,20 @@ class HRWebService:
             "tax_profile": tax_profile,
             "onboarding": onboarding,
         }
+
+    def employee_detail_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        employee_id: str,
+    ) -> HTMLResponse:
+        """Render employee detail page."""
+        org_id = coerce_uuid(auth.organization_id)
+        svc = EmployeeService(db, org_id)
+
+        employee = svc.get_employee(coerce_uuid(employee_id))
+        context = self._employee_detail_context(request, auth, db, employee)
 
         return templates.TemplateResponse(
             request,
@@ -901,10 +915,10 @@ class HRWebService:
         )
 
     @staticmethod
-    def _form_str(form: dict, key: str) -> str:
+    def _form_str(form: Any, key: str) -> str:
         """Normalize form value to a trimmed string."""
-        value = form.get(key)
-        if value is None:
+        value = form.get(key) if form is not None else None
+        if value is None or isinstance(value, UploadFile):
             return ""
         return str(value).strip()
 
@@ -986,12 +1000,12 @@ class HRWebService:
             .all()
         )
         user_options = {}
-        for cred, person in user_rows:
-            label = f"{person.name} ({person.email})"
+        for cred, user_person in user_rows:
+            label = f"{user_person.name} ({user_person.email})"
             if cred.username:
                 label = f"{label} - {cred.username}"
-            user_options[str(person.id)] = {
-                "person_id": person.id,
+            user_options[str(user_person.id)] = {
+                "person_id": user_person.id,
                 "label": label,
             }
         if person and str(person.id) not in user_options:
@@ -1110,6 +1124,44 @@ class HRWebService:
         return templates.TemplateResponse(
             request,
             "people/hr/department_form.html",
+            context,
+        )
+
+    def department_detail_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        department_id: str,
+        page: int = 1,
+    ) -> HTMLResponse:
+        """Render department detail page."""
+        org_id = coerce_uuid(auth.organization_id)
+        org_svc = OrganizationService(db, org_id)
+        emp_svc = EmployeeService(db, org_id)
+
+        department = org_svc.get_department(coerce_uuid(department_id))
+        headcount = org_svc.get_department_headcount(department.department_id)
+
+        filters = EmployeeFilters(department_id=department.department_id)
+        pagination = PaginationParams.from_page(page, DEFAULT_PAGE_SIZE)
+        result = emp_svc.list_employees(filters, pagination, eager_load=True)
+
+        context = {
+            **base_context(request, auth, department.department_name, "departments"),
+            "department": department,
+            "headcount": headcount,
+            "employees": result.items,
+            "page": page,
+            "total_pages": result.total_pages,
+            "total": result.total,
+            "has_prev": result.has_prev,
+            "has_next": result.has_next,
+        }
+
+        return templates.TemplateResponse(
+            request,
+            "people/hr/department_detail.html",
             context,
         )
 

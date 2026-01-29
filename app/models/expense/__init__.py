@@ -11,6 +11,11 @@ from app.models.expense.expense_claim import (
     ExpenseClaimItem,
     ExpenseCategory,
 )
+from app.models.expense.expense_claim_action import (
+    ExpenseClaimAction,
+    ExpenseClaimActionType,
+    ExpenseClaimActionStatus,
+)
 from app.models.expense.cash_advance import CashAdvance, CashAdvanceStatus
 from app.models.expense.corporate_card import CorporateCard, CardTransaction, CardTransactionStatus
 from app.models.expense.limit_rule import (
@@ -30,6 +35,9 @@ __all__ = [
     "ExpenseClaimStatus",
     "ExpenseClaimItem",
     "ExpenseCategory",
+    "ExpenseClaimAction",
+    "ExpenseClaimActionType",
+    "ExpenseClaimActionStatus",
     # Cash Advance
     "CashAdvance",
     "CashAdvanceStatus",

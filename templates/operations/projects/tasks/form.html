@@ -14,7 +14,8 @@
     </div>
     <p class="text-sm text-slate-500 dark:text-slate-400">{{ project.project_name }}</p>
 
-    <form method="post" class="rounded-lg border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-800 space-y-6">
+    <form method="post" enctype="multipart/form-data" action="{% if task %}/operations/projects/{{ project.project_code }}/tasks/{{ task.task_code or task.task_id }}{% else %}/operations/projects/{{ project.project_code }}/tasks{% endif %}" class="rounded-lg border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-800 space-y-6">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <!-- Task Name -->
         <div>
             <label for="task_name" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Task Name</label>
@@ -144,93 +145,19 @@
             </div>
         </div>
 
-        <!-- Dependencies Section (only shown when editing existing task) -->
-        {% if task %}
-        <div class="border-t border-slate-200 dark:border-slate-700 pt-6">
-            <h3 class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-4">Task Dependencies</h3>
-
-            <!-- Current Dependencies -->
-            {% if dependencies %}
-            <div class="mb-4">
-                <p class="text-xs text-slate-500 dark:text-slate-400 mb-2">This task depends on:</p>
-                <ul class="space-y-2">
-                    {% for dep in dependencies %}
-                    <li class="flex items-center justify-between rounded-lg bg-slate-50 dark:bg-slate-700/50 px-3 py-2">
-                        <div class="flex items-center gap-2">
-                            <svg class="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
-                            </svg>
-                            <span class="text-sm font-medium text-slate-700 dark:text-slate-300">{{ dep.depends_on_task.task_name }}</span>
-                            <span class="text-xs text-slate-500">({{ dep.dependency_type.value | replace('_', ' ') | title }})</span>
-                        </div>
-                        <form method="post" action="/operations/projects/{{ project.project_code }}/tasks/{{ task.task_code or task.task_id }}/dependencies/{{ dep.depends_on_task_id }}/remove" class="inline">
-                            <button type="submit" class="text-rose-500 hover:text-rose-700 text-xs font-medium">Remove</button>
-                        </form>
-                    </li>
-                    {% endfor %}
-                </ul>
-            </div>
-            {% endif %}
-
-            <!-- Add New Dependency -->
-            <div class="rounded-lg border border-dashed border-slate-300 dark:border-slate-600 p-4">
-                <p class="text-xs text-slate-500 dark:text-slate-400 mb-3">Add a dependency (this task will wait for the selected task):</p>
-                <div class="flex flex-wrap gap-3">
-                    <select id="new_dependency_task" class="flex-1 rounded-lg border-slate-300 text-sm focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
-                        <option value="">Select a task...</option>
-                        {% for t in available_parent_tasks %}
-                        {% if t.task_id != task.task_id %}
-                        <option value="{{ t.task_id }}">{{ t.task_code }} - {{ t.task_name }}</option>
-                        {% endif %}
-                        {% endfor %}
-                    </select>
-                    <select id="new_dependency_type" class="rounded-lg border-slate-300 text-sm focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
-                        <option value="FINISH_TO_START">Finish to Start (default)</option>
-                        <option value="START_TO_START">Start to Start</option>
-                        <option value="FINISH_TO_FINISH">Finish to Finish</option>
-                        <option value="START_TO_FINISH">Start to Finish</option>
-                    </select>
-                    <button type="button" onclick="addDependency()" class="rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200 dark:bg-slate-600 dark:text-slate-200 dark:hover:bg-slate-500 transition-colors">
-                        Add
-                    </button>
-                </div>
-            </div>
+        <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Attachments</label>
+            <input type="file" name="files" multiple
+                   accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.zip"
+                   class="mt-1 block w-full text-sm text-slate-500 dark:text-slate-400
+                          file:mr-4 file:py-2 file:px-4
+                          file:rounded-lg file:border-0
+                          file:text-sm file:font-medium
+                          file:bg-amber-50 file:text-amber-700
+                          hover:file:bg-amber-100
+                          dark:file:bg-amber-900/20 dark:file:text-amber-400">
+            <p class="mt-1 text-xs text-slate-400">Optional. Max 10MB per file.</p>
         </div>
-
-        <script>
-        function addDependency() {
-            const taskSelect = document.getElementById('new_dependency_task');
-            const typeSelect = document.getElementById('new_dependency_type');
-            const taskId = taskSelect.value;
-            const depType = typeSelect.value;
-
-            if (!taskId) {
-                alert('Please select a task');
-                return;
-            }
-
-            // Create a form and submit it
-            const form = document.createElement('form');
-            form.method = 'POST';
-            form.action = '/operations/projects/{{ project.project_code }}/tasks/{{ task.task_code or task.task_id }}/dependencies';
-
-            const taskInput = document.createElement('input');
-            taskInput.type = 'hidden';
-            taskInput.name = 'depends_on_id';
-            taskInput.value = taskId;
-            form.appendChild(taskInput);
-
-            const typeInput = document.createElement('input');
-            typeInput.type = 'hidden';
-            typeInput.name = 'dependency_type';
-            typeInput.value = depType;
-            form.appendChild(typeInput);
-
-            document.body.appendChild(form);
-            form.submit();
-        }
-        </script>
-        {% endif %}
 
         <!-- Actions -->
         <div class="flex justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
@@ -245,4 +172,97 @@
         </div>
     </form>
 </div>
+
+{% if task %}
+<div class="max-w-2xl mx-auto mt-6">
+    <div class="rounded-lg border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-800 space-y-4">
+        <h3 class="text-sm font-medium text-slate-700 dark:text-slate-300">Task Dependencies</h3>
+
+        {% if dependencies %}
+        <div>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mb-2">This task depends on:</p>
+            <ul class="space-y-2">
+                {% for dep in dependencies %}
+                <li class="flex items-center justify-between rounded-lg bg-slate-50 dark:bg-slate-700/50 px-3 py-2">
+                    <div class="flex items-center gap-2">
+                        <svg class="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
+                        </svg>
+                        <span class="text-sm font-medium text-slate-700 dark:text-slate-300">{{ dep.depends_on_task.task_name }}</span>
+                        <span class="text-xs text-slate-500">({{ dep.dependency_type.value | replace('_', ' ') | title }})</span>
+                    </div>
+                    <form method="post" action="/operations/projects/{{ project.project_code }}/tasks/{{ task.task_code or task.task_id }}/dependencies/{{ dep.depends_on_task_id }}/remove" class="inline">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                        <button type="submit" class="text-rose-500 hover:text-rose-700 text-xs font-medium">Remove</button>
+                    </form>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        <div class="rounded-lg border border-dashed border-slate-300 dark:border-slate-600 p-4">
+            <p class="text-xs text-slate-500 dark:text-slate-400 mb-3">Add a dependency (this task will wait for the selected task):</p>
+            <div class="flex flex-wrap gap-3">
+                <select id="new_dependency_task" class="flex-1 rounded-lg border-slate-300 text-sm focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
+                    <option value="">Select a task...</option>
+                    {% for t in available_parent_tasks %}
+                    {% if t.task_id != task.task_id %}
+                    <option value="{{ t.task_id }}">{{ t.task_code }} - {{ t.task_name }}</option>
+                    {% endif %}
+                    {% endfor %}
+                </select>
+                <select id="new_dependency_type" class="rounded-lg border-slate-300 text-sm focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
+                    <option value="FINISH_TO_START">Finish to Start (default)</option>
+                    <option value="START_TO_START">Start to Start</option>
+                    <option value="FINISH_TO_FINISH">Finish to Finish</option>
+                    <option value="START_TO_FINISH">Start to Finish</option>
+                </select>
+                <button type="button" onclick="addDependency()" class="rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200 dark:bg-slate-600 dark:text-slate-200 dark:hover:bg-slate-500 transition-colors">
+                    Add
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function addDependency() {
+    const taskSelect = document.getElementById('new_dependency_task');
+    const typeSelect = document.getElementById('new_dependency_type');
+    const taskId = taskSelect.value;
+    const depType = typeSelect.value;
+
+    if (!taskId) {
+        alert('Please select a task');
+        return;
+    }
+
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '/operations/projects/{{ project.project_code }}/tasks/{{ task.task_code or task.task_id }}/dependencies';
+
+    const csrfInput = document.createElement('input');
+    csrfInput.type = 'hidden';
+    csrfInput.name = 'csrf_token';
+    csrfInput.value = '{{ csrf_token }}';
+    form.appendChild(csrfInput);
+
+    const taskInput = document.createElement('input');
+    taskInput.type = 'hidden';
+    taskInput.name = 'depends_on_id';
+    taskInput.value = taskId;
+    form.appendChild(taskInput);
+
+    const typeInput = document.createElement('input');
+    typeInput.type = 'hidden';
+    typeInput.name = 'dependency_type';
+    typeInput.value = depType;
+    form.appendChild(typeInput);
+
+    document.body.appendChild(form);
+    form.submit();
+}
+</script>
+{% endif %}
 {% endblock %}

@@ -5,9 +5,9 @@ Adapted from DotMac People for the unified ERP platform.
 """
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
-from typing import TYPE_CHECKING, List, Optional, Sequence
+from typing import TYPE_CHECKING, List, Optional, Sequence, TypedDict
 from uuid import UUID
 
 from sqlalchemy import and_, case, delete, func, or_, select
@@ -50,6 +50,23 @@ class LeaveAllocationNotFoundError(LeaveServiceError):
     def __init__(self, allocation_id: UUID):
         self.allocation_id = allocation_id
         super().__init__(f"Leave allocation {allocation_id} not found")
+
+
+class LeaveBalanceEntry(TypedDict):
+    leave_type_name: str
+    allocated: Decimal
+    used: Decimal
+    balance: Decimal
+
+
+class EmployeeLeaveSummary(TypedDict):
+    employee_id: str
+    employee_name: str
+    department_name: str
+    leave_balances: list[LeaveBalanceEntry]
+    total_allocated: Decimal
+    total_used: Decimal
+    total_balance: Decimal
 
 
 class LeaveAllocationExistsError(LeaveServiceError):
@@ -982,6 +999,15 @@ class LeaveService:
                 f"Overlapping leave application exists for period {overlapping.from_date} to {overlapping.to_date}"
             )
 
+        # Check for active disciplinary investigation
+        from app.services.people.discipline import DisciplineService
+
+        discipline_service = DisciplineService(self.db)
+        if discipline_service.has_active_investigation(employee_id):
+            raise LeaveServiceError(
+                "Leave applications are restricted during an active disciplinary investigation"
+            )
+
         application_number = self._next_application_number(org_id)
 
         application = LeaveApplication(
@@ -1080,7 +1106,7 @@ class LeaveService:
 
         application.status = LeaveApplicationStatus.REJECTED
         application.approved_by_id = approver_id
-        application.approval_date = date.today()
+        application.approved_at = datetime.now(timezone.utc)
         application.rejection_reason = reason
 
         self.db.flush()
@@ -1327,7 +1353,7 @@ class LeaveService:
         ).all()
 
         # Organize by employee
-        employees_dict = {}
+        employees_dict: dict[str, EmployeeLeaveSummary] = {}
         for row in results:
             emp_id = str(row.employee_id)
             if emp_id not in employees_dict:

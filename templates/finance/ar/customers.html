@@ -37,7 +37,7 @@
                 ]
             }
         ],
-        base_url="/ar/customers",
+        base_url="/finance/ar/customers",
         placeholder="Search customers by name, code, or tax ID..."
     ) }}
 
@@ -138,14 +138,14 @@
                 {
                     "name": "export",
                     "label": "Export",
-                    "endpoint": "/ar/customers/bulk-export",
+                    "endpoint": "/finance/ar/customers/bulk-export",
                     "icon": bulk_icon_export(),
                     "class": "btn-secondary"
                 },
                 {
                     "name": "activate",
                     "label": "Activate",
-                    "endpoint": "/ar/customers/bulk-activate",
+                    "endpoint": "/finance/ar/customers/bulk-activate",
                     "icon": bulk_icon_activate(),
                     "class": "btn-secondary",
                     "confirm": "Activate selected customers?"
@@ -153,7 +153,7 @@
                 {
                     "name": "deactivate",
                     "label": "Deactivate",
-                    "endpoint": "/ar/customers/bulk-deactivate",
+                    "endpoint": "/finance/ar/customers/bulk-deactivate",
                     "icon": bulk_icon_deactivate(),
                     "class": "btn-secondary",
                     "confirm": "Deactivate selected customers?"
@@ -161,7 +161,7 @@
                 {
                     "name": "delete",
                     "label": "Delete",
-                    "endpoint": "/ar/customers/bulk-delete",
+                    "endpoint": "/finance/ar/customers/bulk-delete",
                     "icon": bulk_icon_delete(),
                     "class": "btn-bulk-danger",
                     "confirm": "Delete selected customers? This action cannot be undone."

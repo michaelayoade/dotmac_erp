@@ -9,7 +9,7 @@ Handles multi-dimensional expense limit enforcement including:
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import TYPE_CHECKING, List, Optional, Tuple
@@ -89,11 +89,7 @@ class EvaluationResult:
     period_spent: Decimal = Decimal("0")
     period_start: Optional[date] = None
     period_end: Optional[date] = None
-    eligible_approvers: List["EligibleApprover"] = None
-
-    def __post_init__(self):
-        if self.eligible_approvers is None:
-            self.eligible_approvers = []
+    eligible_approvers: List["EligibleApprover"] = field(default_factory=list)
 
 
 @dataclass
@@ -956,7 +952,7 @@ class ExpenseLimitService:
         requester: "Employee",
     ) -> List["Employee"]:
         """Find employees who have this approver limit."""
-        from app.models.people.hr.employee import Employee as EmployeeModel
+        from app.models.people.hr.employee import Employee as EmployeeModel, EmployeeStatus
 
         if limit.scope_type == "EMPLOYEE":
             if limit.scope_id:
@@ -972,7 +968,7 @@ class ExpenseLimitService:
                         .where(
                             EmployeeModel.organization_id == org_id,
                             EmployeeModel.grade_id == limit.scope_id,
-                            EmployeeModel.is_active == True,
+                            EmployeeModel.status == EmployeeStatus.ACTIVE,
                         )
                         .limit(20)
                     ).all()
@@ -987,7 +983,7 @@ class ExpenseLimitService:
                         .where(
                             EmployeeModel.organization_id == org_id,
                             EmployeeModel.designation_id == limit.scope_id,
-                            EmployeeModel.is_active == True,
+                            EmployeeModel.status == EmployeeStatus.ACTIVE,
                         )
                         .limit(20)
                     ).all()

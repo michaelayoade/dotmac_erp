@@ -269,6 +269,17 @@ DEFAULT_RATE_LIMITS: dict[str, RateLimitConfig] = {
     "/api/v1/auth/refresh": RateLimitConfig(requests=30, window_seconds=60),
 }
 
+# Note: Careers portal rate limits are handled in-route via check_rate_limit()
+# to allow dynamic org_slug path parameters. The following limits apply:
+# - Job application: 3 per 5 minutes
+# - Resume upload: 5 per minute
+# - Status check request: 3 per minute
+
+# Note: Onboarding portal routes (/onboarding/start/{token}/...) use token-based
+# auth which inherently limits abuse (tokens are unique per employee and expire).
+# The task completion endpoint is the primary action; each task can only be
+# completed once per token, providing natural rate limiting.
+
 
 def _get_client_ip(request: Request) -> str:
     """Extract client IP from request, considering proxies."""

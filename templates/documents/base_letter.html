@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ document_title | default('Document') }}</title>
+    <style>
+        /* Reset and base styles */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            font-size: 11pt;
+            line-height: 1.6;
+            color: #1e293b;
+            background: white;
+        }
+
+        /* Page setup */
+        @page {
+            size: {{ page_size | default('A4') }} {{ page_orientation | default('portrait') }};
+            margin: {{ page_margins.top | default('2cm') }} {{ page_margins.right | default('2cm') }} {{ page_margins.bottom | default('2cm') }} {{ page_margins.left | default('2cm') }};
+
+            @top-center {
+                content: element(running-header);
+            }
+
+            @bottom-center {
+                content: element(running-footer);
+            }
+        }
+
+        .container {
+            max-width: 100%;
+            padding: 0;
+        }
+
+        /* Running header (appears on every page) */
+        .running-header {
+            position: running(running-header);
+            padding-bottom: 10px;
+            border-bottom: 2px solid #0d9488;
+            margin-bottom: 20px;
+        }
+
+        /* Running footer (appears on every page) */
+        .running-footer {
+            position: running(running-footer);
+            padding-top: 10px;
+            border-top: 1px solid #e2e8f0;
+            font-size: 9pt;
+            color: #64748b;
+            text-align: center;
+        }
+
+        /* Letterhead Header */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #0d9488;
+            margin-bottom: 25px;
+        }
+
+        .company-info {
+            flex: 1;
+        }
+
+        .company-logo {
+            max-height: 50px;
+            max-width: 150px;
+            margin-bottom: 8px;
+        }
+
+        .company-name {
+            font-size: 16pt;
+            font-weight: bold;
+            color: #0d9488;
+            margin-bottom: 4px;
+        }
+
+        .company-details {
+            font-size: 9pt;
+            color: #64748b;
+            line-height: 1.4;
+        }
+
+        .document-meta {
+            text-align: right;
+            font-size: 10pt;
+        }
+
+        .document-ref {
+            font-weight: bold;
+            color: #0d9488;
+            margin-bottom: 4px;
+        }
+
+        .document-date {
+            color: #64748b;
+        }
+
+        /* Recipient/addressee section */
+        .addressee {
+            margin-bottom: 25px;
+        }
+
+        .addressee-name {
+            font-weight: bold;
+            margin-bottom: 4px;
+        }
+
+        .addressee-address {
+            color: #64748b;
+            font-size: 10pt;
+        }
+
+        /* Subject line */
+        .subject {
+            margin-bottom: 20px;
+        }
+
+        .subject-label {
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #0d9488;
+            font-size: 10pt;
+        }
+
+        .subject-text {
+            font-weight: bold;
+            font-size: 12pt;
+            margin-top: 4px;
+        }
+
+        /* Salutation */
+        .salutation {
+            margin-bottom: 20px;
+        }
+
+        /* Document content */
+        .content {
+            text-align: justify;
+            margin-bottom: 30px;
+        }
+
+        .content p {
+            margin-bottom: 12px;
+        }
+
+        .content h3 {
+            font-size: 11pt;
+            font-weight: bold;
+            color: #1e293b;
+            margin-top: 20px;
+            margin-bottom: 10px;
+        }
+
+        .content ul, .content ol {
+            margin-bottom: 12px;
+            padding-left: 25px;
+        }
+
+        .content li {
+            margin-bottom: 6px;
+        }
+
+        /* Highlight boxes */
+        .highlight-box {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-left: 4px solid #0d9488;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+
+        .highlight-box-title {
+            font-weight: bold;
+            color: #0d9488;
+            margin-bottom: 8px;
+        }
+
+        /* Tables within content */
+        .content table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+            font-size: 10pt;
+        }
+
+        .content th {
+            background: #f1f5f9;
+            font-weight: 600;
+            text-align: left;
+            padding: 10px 12px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .content td {
+            padding: 10px 12px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .content td.amount {
+            text-align: right;
+            font-family: 'Courier New', monospace;
+        }
+
+        /* Signature section */
+        .signature-section {
+            margin-top: 40px;
+            page-break-inside: avoid;
+        }
+
+        .closing {
+            margin-bottom: 60px;
+        }
+
+        .signature-block {
+            margin-bottom: 30px;
+        }
+
+        .signature-line {
+            border-bottom: 1px solid #1e293b;
+            width: 250px;
+            margin-bottom: 5px;
+        }
+
+        .signature-name {
+            font-weight: bold;
+        }
+
+        .signature-title {
+            font-size: 10pt;
+            color: #64748b;
+        }
+
+        .signature-date {
+            font-size: 9pt;
+            color: #94a3b8;
+            margin-top: 4px;
+        }
+
+        /* Dual signature (employer & employee) */
+        .dual-signature {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 40px;
+        }
+
+        .dual-signature .signature-block {
+            width: 45%;
+        }
+
+        /* Acceptance section */
+        .acceptance-section {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px dashed #cbd5e1;
+        }
+
+        .acceptance-title {
+            font-weight: bold;
+            margin-bottom: 15px;
+        }
+
+        .acceptance-checkbox {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 15px;
+        }
+
+        .checkbox {
+            width: 16px;
+            height: 16px;
+            border: 1px solid #64748b;
+            margin-right: 10px;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+
+        /* Footer */
+        .footer {
+            margin-top: 40px;
+            padding-top: 15px;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        .confidential-notice {
+            text-align: center;
+            font-size: 8pt;
+            color: #94a3b8;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .page-number {
+            text-align: center;
+            font-size: 9pt;
+            color: #64748b;
+            margin-top: 10px;
+        }
+
+        .generation-info {
+            text-align: center;
+            font-size: 7pt;
+            color: #cbd5e1;
+            margin-top: 8px;
+        }
+
+        /* Utilities */
+        .text-right {
+            text-align: right;
+        }
+
+        .text-center {
+            text-align: center;
+        }
+
+        .text-muted {
+            color: #64748b;
+        }
+
+        .font-mono {
+            font-family: 'Courier New', monospace;
+        }
+
+        .font-bold {
+            font-weight: bold;
+        }
+
+        .mt-20 {
+            margin-top: 20px;
+        }
+
+        .mb-20 {
+            margin-bottom: 20px;
+        }
+
+        .underline {
+            text-decoration: underline;
+        }
+
+        /* Custom CSS from template */
+        {# SECURITY NOTE: css_styles should only contain CSS, not HTML/script.
+           WeasyPrint doesn't execute JS, but browser previews could be vulnerable.
+           The document generator validates css_styles contains only safe CSS properties. #}
+        {% if css_styles %}{{ css_styles }}{% endif %}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header / Letterhead -->
+        <div class="header">
+            <div class="company-info">
+                {% if header.logo_url %}
+                <img src="{{ header.logo_url }}" alt="Company Logo" class="company-logo">
+                {% endif %}
+                <div class="company-name">{{ header.company_name | default(organization_name | default('Company Name')) }}</div>
+                <div class="company-details">
+                    {% if header.address %}
+                    {{ header.address }}<br>
+                    {% endif %}
+                    {% if header.phone %}
+                    Tel: {{ header.phone }}<br>
+                    {% endif %}
+                    {% if header.email %}
+                    Email: {{ header.email }}<br>
+                    {% endif %}
+                    {% if header.website %}
+                    Web: {{ header.website }}
+                    {% endif %}
+                </div>
+            </div>
+            <div class="document-meta">
+                {% if document_number %}
+                <div class="document-ref">Ref: {{ document_number }}</div>
+                {% endif %}
+                <div class="document-date">Date: {{ document_date | format_date | default(today | format_date) }}</div>
+            </div>
+        </div>
+
+        <!-- Main content from template -->
+        {{ content | safe }}
+
+        <!-- Footer -->
+        <div class="footer">
+            {% if footer.terms %}
+            <div style="font-size: 8pt; color: #64748b; margin-bottom: 10px;">
+                {{ footer.terms }}
+            </div>
+            {% endif %}
+            <div class="confidential-notice">
+                {{ footer.notice | default('This document is confidential and intended for the named recipient only.') }}
+            </div>
+            <div class="generation-info">
+                Generated on {{ now().strftime('%B %d, %Y at %H:%M') if now is callable else now | format_datetime }}
+            </div>
+        </div>
+    </div>
+</body>
+</html>

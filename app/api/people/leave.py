@@ -234,7 +234,6 @@ def create_holiday_list(
             holiday_date=h.holiday_date,
             holiday_name=h.holiday_name,
             description=h.description,
-            is_public_holiday=h.is_public_holiday,
             is_optional=h.is_optional,
         )
     db.commit()
@@ -299,7 +298,6 @@ def add_holiday(
         holiday_date=payload.holiday_date,
         holiday_name=payload.holiday_name,
         description=payload.description,
-        is_public_holiday=payload.is_public_holiday,
         is_optional=payload.is_optional,
     )
     db.commit()
@@ -505,7 +503,7 @@ def get_employee_leave_balance(
 ):
     """Get leave balance for an employee."""
     svc = LeaveService(db)
-    balances = svc.get_employee_balance(
+    balances = svc.get_employee_balances(
         org_id=organization_id,
         employee_id=employee_id,
         as_of_date=as_of_date or date.today(),
@@ -586,7 +584,6 @@ def create_application(
         leave_type_id=payload.leave_type_id,
         from_date=payload.from_date,
         to_date=payload.to_date,
-        total_days=payload.total_leave_days,
         half_day=payload.half_day,
         half_day_date=payload.half_day_date,
         reason=payload.reason,

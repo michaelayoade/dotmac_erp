@@ -48,6 +48,127 @@ class FAPostingAdapter:
     """
 
     @staticmethod
+    def post_asset_acquisition(
+        db: Session,
+        organization_id: UUID,
+        asset_id: UUID,
+        posting_date: date,
+        posted_by_user_id: UUID,
+        credit_account_id: UUID,
+        description: Optional[str] = None,
+        idempotency_key: Optional[str] = None,
+    ) -> FAPostingResult:
+        """
+        Post an asset acquisition to the general ledger.
+
+        Creates a journal entry:
+        - Debit: Fixed asset account (from asset category)
+        - Credit: Provided clearing/payable/cash account
+        """
+        org_id = coerce_uuid(organization_id)
+        ast_id = coerce_uuid(asset_id)
+        user_id = coerce_uuid(posted_by_user_id)
+        credit_id = coerce_uuid(credit_account_id)
+
+        asset = db.get(Asset, ast_id)
+        if not asset or asset.organization_id != org_id:
+            return FAPostingResult(success=False, message="Asset not found")
+
+        category = db.get(AssetCategory, asset.category_id)
+        if not category or category.organization_id != org_id:
+            return FAPostingResult(success=False, message="Asset category not found")
+
+        amount = asset.acquisition_cost
+        functional_amount = asset.functional_currency_cost or amount
+
+        exchange_rate = Decimal("1.0")
+        if amount and functional_amount:
+            exchange_rate = (functional_amount / amount).quantize(Decimal("0.000001"))
+
+        journal_lines = [
+            JournalLineInput(
+                account_id=category.asset_account_id,
+                debit_amount=amount,
+                credit_amount=Decimal("0"),
+                debit_amount_functional=functional_amount,
+                credit_amount_functional=Decimal("0"),
+                currency_code=asset.currency_code,
+                exchange_rate=exchange_rate,
+                description="Asset acquisition",
+                cost_center_id=asset.cost_center_id,
+                project_id=asset.project_id,
+            ),
+            JournalLineInput(
+                account_id=credit_id,
+                debit_amount=Decimal("0"),
+                credit_amount=amount,
+                debit_amount_functional=Decimal("0"),
+                credit_amount_functional=functional_amount,
+                currency_code=asset.currency_code,
+                exchange_rate=exchange_rate,
+                description="Asset acquisition offset",
+                cost_center_id=asset.cost_center_id,
+                project_id=asset.project_id,
+            ),
+        ]
+
+        functional_currency = org_context_service.get_functional_currency(db, org_id)
+        journal_input = JournalInput(
+            journal_type=JournalType.STANDARD,
+            entry_date=posting_date,
+            posting_date=posting_date,
+            description=description or f"Asset acquisition {asset.asset_number}",
+            reference=f"FA-ACQ-{asset.asset_number}",
+            currency_code=functional_currency,
+            exchange_rate=exchange_rate,
+            lines=journal_lines,
+            source_module="FA",
+            source_document_type="ASSET_ACQUISITION",
+            source_document_id=ast_id,
+        )
+
+        try:
+            journal = JournalService.create_journal(db, org_id, journal_input, user_id)
+            JournalService.submit_journal(db, org_id, journal.journal_entry_id, user_id)
+            JournalService.approve_journal(db, org_id, journal.journal_entry_id, user_id)
+        except HTTPException as e:
+            return FAPostingResult(success=False, message=f"Journal creation failed: {e.detail}")
+
+        if not idempotency_key:
+            idempotency_key = f"{org_id}:FA:ACQ:{ast_id}:post:v1"
+
+        posting_request = PostingRequest(
+            organization_id=org_id,
+            journal_entry_id=journal.journal_entry_id,
+            posting_date=posting_date,
+            idempotency_key=idempotency_key,
+            source_module="FA",
+            posted_by_user_id=user_id,
+        )
+
+        try:
+            posting_result = LedgerPostingService.post_journal_entry(db, posting_request)
+            if not posting_result.success:
+                return FAPostingResult(
+                    success=False,
+                    journal_entry_id=journal.journal_entry_id,
+                    message=f"Ledger posting failed: {posting_result.message}",
+                )
+
+            return FAPostingResult(
+                success=True,
+                journal_entry_id=journal.journal_entry_id,
+                posting_batch_id=posting_result.posting_batch_id,
+                message="Asset acquisition posted successfully",
+            )
+        except Exception as e:
+            return FAPostingResult(
+                success=False,
+                journal_entry_id=journal.journal_entry_id,
+                message=f"Posting error: {str(e)}",
+            )
+
+    @staticmethod
     def post_depreciation_run(
         db: Session,
         organization_id: UUID,

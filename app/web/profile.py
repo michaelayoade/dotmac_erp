@@ -4,7 +4,9 @@ Web routes for user profile pages.
 Provides profile view and edit functionality for authenticated users.
 """
 
-from fastapi import APIRouter, Depends, Request
+from typing import Any
+
+from fastapi import APIRouter, Depends, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
@@ -15,6 +17,13 @@ from app.web.deps import get_db, require_web_auth, WebAuthContext
 
 
 router = APIRouter(tags=["web-profile"])
+
+
+def _get_form_str(form: Any, key: str, default: str = "") -> str:
+    value = form.get(key, default) if form is not None else default
+    if isinstance(value, UploadFile) or value is None:
+        return default
+    return str(value).strip()
 
 
 @router.get("/account/two-factor", response_class=HTMLResponse)
@@ -71,6 +80,19 @@ def _parse_bool(value: str | None, default: bool = False) -> bool:
     return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _clean_name(value: str | None) -> str:
+    cleaned = (value or "").strip()
+    return "" if cleaned.lower() in {"none", "null"} else cleaned
+
+
+def _derive_display_name(first_name: str | None, last_name: str | None, display_name: str | None) -> str | None:
+    display = _clean_name(display_name)
+    if display:
+        return display
+    base_name = f"{_clean_name(first_name)} {_clean_name(last_name)}".strip()
+    return base_name or None
+
+
 @router.post("/profile")
 async def update_profile(
     request: Request,
@@ -81,16 +103,16 @@ async def update_profile(
     if form is None:
         form = await request.form()
 
-    first_name = (form.get("first_name") or "").strip()
-    last_name = (form.get("last_name") or "").strip()
-    display_name = (form.get("display_name") or "").strip()
-    phone = (form.get("phone") or "").strip()
-    bio = (form.get("bio") or "").strip()
+    first_name = _clean_name(_get_form_str(form, "first_name"))
+    last_name = _clean_name(_get_form_str(form, "last_name"))
+    display_name = _clean_name(_get_form_str(form, "display_name"))
+    phone = _get_form_str(form, "phone")
+    bio = _get_form_str(form, "bio")
 
     payload = PersonUpdate(
         first_name=first_name or None,
         last_name=last_name or None,
-        display_name=display_name or None,
+        display_name=_derive_display_name(first_name, last_name, display_name),
         phone=phone or None,
         bio=bio or None,
     )
@@ -109,12 +131,12 @@ async def update_profile_preferences(
     if form is None:
         form = await request.form()
 
-    timezone = (form.get("timezone") or "").strip() or None
-    locale = (form.get("locale") or "").strip() or None
-    preferred_contact_method = (form.get("preferred_contact_method") or "").strip() or None
+    timezone = _get_form_str(form, "timezone") or None
+    locale = _get_form_str(form, "locale") or None
+    preferred_contact_method = _get_form_str(form, "preferred_contact_method") or None
     if preferred_contact_method not in {"email", "phone", "sms", "push", None}:
         preferred_contact_method = None
-    marketing_opt_in = _parse_bool(form.get("marketing_opt_in"), False)
+    marketing_opt_in = _parse_bool(_get_form_str(form, "marketing_opt_in") or None, False)
 
     payload = PersonUpdate(
         timezone=timezone,

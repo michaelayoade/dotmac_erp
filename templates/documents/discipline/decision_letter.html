@@ -1,0 +1,232 @@
+{#
+    Disciplinary Decision Letter Template
+
+    This template is used for communicating the outcome of a disciplinary hearing/investigation.
+    Designed to be wrapped by base_letter.html.
+
+    Context variables available:
+    - case_number
+    - employee_name, employee_code, employee_address
+    - job_title, department_name
+    - investigation_summary, hearing_date, hearing_outcome
+    - decision_summary, decision_date
+    - actions: list of {type, description, effective_date, end_date}
+    - appeal_period_days, appeal_deadline, appeal_instructions
+    - organization_name, organization_address, organization_logo_url
+    - signatory_name, signatory_title
+    - letter_date
+#}
+
+<!-- Header Banner -->
+<div style="text-align: center; margin-bottom: 30px; padding: 15px; background-color: #f0fdf4; border: 2px solid #16a34a;">
+    <h2 style="margin: 0; color: #166534; font-size: 18px; text-transform: uppercase; letter-spacing: 1px;">
+        DISCIPLINARY DECISION NOTIFICATION
+    </h2>
+    {% if case_number %}
+    <p style="margin: 5px 0 0 0; font-size: 12px; color: #22c55e;">Case Reference: {{ case_number }}</p>
+    {% endif %}
+</div>
+
+<!-- Addressee -->
+<div class="addressee">
+    <p class="addressee-name">{{ employee_name }}</p>
+    <p style="font-size: 12px; color: #666;">
+        Employee ID: {{ employee_code }}<br>
+        {% if job_title %}Position: {{ job_title }}{% if department_name %}, {{ department_name }}{% endif %}{% endif %}
+    </p>
+    {% if employee_address %}
+    <p class="addressee-address">{{ employee_address }}</p>
+    {% endif %}
+</div>
+
+<!-- Subject Line -->
+<div class="subject">
+    <p class="subject-label">Subject:</p>
+    <p class="subject-text">Outcome of Disciplinary Proceedings - Case {{ case_number }}</p>
+</div>
+
+<!-- Date -->
+<p style="font-size: 12px; color: #666; margin-bottom: 20px;">Date: {{ letter_date | format_date }}</p>
+
+<!-- Salutation -->
+<div class="salutation">
+    <p>Dear {{ employee_name.split()[0] }},</p>
+</div>
+
+<!-- Main Content -->
+<div class="content">
+    <p>
+        Following the conclusion of the disciplinary process regarding Case {{ case_number }},
+        we are writing to inform you of the decision that has been reached.
+    </p>
+
+    {% if hearing_date %}
+    <!-- Hearing Summary -->
+    <h3>Hearing Details</h3>
+    <table>
+        <tr>
+            <td style="width: 150px;"><strong>Hearing Date:</strong></td>
+            <td>{{ hearing_date | format_date }}</td>
+        </tr>
+        {% if hearing_outcome %}
+        <tr>
+            <td><strong>Proceedings:</strong></td>
+            <td>{{ hearing_outcome }}</td>
+        </tr>
+        {% endif %}
+    </table>
+    {% endif %}
+
+    {% if investigation_summary %}
+    <!-- Investigation Summary -->
+    <h3>Investigation Findings</h3>
+    <div style="margin: 15px 0; padding: 15px; background-color: #f8fafc; border-left: 4px solid #64748b;">
+        <p style="margin: 0; white-space: pre-wrap;">{{ investigation_summary }}</p>
+    </div>
+    {% endif %}
+
+    <!-- Decision -->
+    <h3>Decision</h3>
+    <div style="padding: 15px; background-color: #f0fdf4; border: 1px solid #bbf7d0; margin: 15px 0;">
+        <p style="margin: 0;">
+            After careful consideration of all the evidence, statements, and representations made,
+            the following decision has been reached:
+        </p>
+        <p style="margin: 15px 0 0 0; font-weight: bold; color: #166534; white-space: pre-wrap;">
+            {{ decision_summary }}
+        </p>
+    </div>
+
+    <p style="font-size: 12px; color: #666;">
+        Decision Date: {{ decision_date | format_date }}
+    </p>
+
+    {% if actions %}
+    <!-- Actions Taken -->
+    <h3>Disciplinary Actions</h3>
+    <p>In accordance with the decision above, the following action(s) will be taken:</p>
+    <table style="width: 100%; border-collapse: collapse; margin: 15px 0;">
+        <thead>
+            <tr style="background-color: #f1f5f9;">
+                <th style="padding: 10px; text-align: left; border: 1px solid #e2e8f0;">Action</th>
+                <th style="padding: 10px; text-align: left; border: 1px solid #e2e8f0;">Description</th>
+                <th style="padding: 10px; text-align: left; border: 1px solid #e2e8f0;">Effective From</th>
+                <th style="padding: 10px; text-align: left; border: 1px solid #e2e8f0;">Until</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for action in actions %}
+            <tr>
+                <td style="padding: 10px; border: 1px solid #e2e8f0;">
+                    <span style="font-weight: bold; color: {% if 'TERMINATION' in action.type %}#dc2626{% elif 'FINAL' in action.type %}#ea580c{% elif 'SUSPENSION' in action.type %}#ca8a04{% else %}#2563eb{% endif %};">
+                        {{ action.type | replace('_', ' ') | title }}
+                    </span>
+                </td>
+                <td style="padding: 10px; border: 1px solid #e2e8f0;">{{ action.description or '-' }}</td>
+                <td style="padding: 10px; border: 1px solid #e2e8f0;">{{ action.effective_date if action.effective_date else '-' }}</td>
+                <td style="padding: 10px; border: 1px solid #e2e8f0;">{{ action.end_date if action.end_date else 'Ongoing' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+
+    <!-- Appeal Rights -->
+    <h3>Right to Appeal</h3>
+    <div style="padding: 15px; background-color: #dbeafe; border: 1px solid #93c5fd; margin: 15px 0;">
+        <p style="margin: 0;">
+            You have the right to appeal this decision within <strong>{{ appeal_period_days }} calendar days</strong>
+            of receiving this letter.
+        </p>
+        <p style="margin: 10px 0 0 0;">
+            <strong>Appeal Deadline:</strong> {{ appeal_deadline | format_date }}
+        </p>
+        {% if appeal_instructions %}
+        <p style="margin: 10px 0 0 0;">{{ appeal_instructions }}</p>
+        {% else %}
+        <p style="margin: 10px 0 0 0;">
+            To lodge an appeal, please submit a written statement outlining the grounds for your
+            appeal to the Human Resources Department.
+        </p>
+        {% endif %}
+    </div>
+
+    <!-- Next Steps -->
+    <h3>Next Steps</h3>
+    <p>
+        Please be advised of the following:
+    </p>
+    <ul>
+        <li>The disciplinary action(s) specified above will take effect from the dates indicated.</li>
+        <li>You are expected to comply fully with any conditions or requirements arising from this decision.</li>
+        <li>Any further misconduct may result in more severe disciplinary action.</li>
+        <li>This letter and all related documentation will be placed in your personnel file.</li>
+    </ul>
+
+    <p style="margin-top: 20px;">
+        If you have any questions regarding this decision or the actions to be taken, please do not
+        hesitate to contact the Human Resources Department.
+    </p>
+
+    <p>
+        We trust that you will take this matter seriously and conduct yourself in accordance with
+        company policies going forward.
+    </p>
+</div>
+
+<!-- Signature Section -->
+<div class="signature-section">
+    <p class="closing">Yours sincerely,</p>
+    <div class="signature-block">
+        <div class="signature-line"></div>
+        <p class="signature-name">{{ signatory_name }}</p>
+        <p class="signature-title">{{ signatory_title }}</p>
+        <p class="signature-date">Date: {{ letter_date | format_date }}</p>
+    </div>
+</div>
+
+<!-- CC Section -->
+<div style="margin-top: 20px; font-size: 12px; color: #666;">
+    <p><strong>CC:</strong></p>
+    <ul style="margin: 5px 0; padding-left: 20px;">
+        <li>Personnel File</li>
+        <li>Department Head</li>
+    </ul>
+</div>
+
+<!-- Acknowledgment Section -->
+<div class="acceptance-section" style="margin-top: 40px; padding-top: 20px; border-top: 2px solid #333;">
+    <p class="acceptance-title">ACKNOWLEDGMENT OF RECEIPT</p>
+    <p>
+        I, <strong>{{ employee_name }}</strong>, hereby acknowledge receipt of this Decision
+        Notification dated {{ letter_date | format_date }}. I understand the decision that has
+        been made and the actions that will be taken. I am aware of my right to appeal this
+        decision within {{ appeal_period_days }} calendar days.
+    </p>
+
+    <div class="dual-signature" style="display: flex; justify-content: space-between; margin-top: 30px;">
+        <div class="signature-block" style="width: 45%;">
+            <div class="signature-line" style="border-bottom: 1px solid #333; margin: 30px 0 10px 0;"></div>
+            <p class="signature-name">{{ employee_name }}</p>
+            <p class="signature-title">Employee Signature</p>
+        </div>
+        <div class="signature-block" style="width: 45%;">
+            <div class="signature-line" style="border-bottom: 1px solid #333; margin: 30px 0 10px 0;"></div>
+            <p class="signature-name">Date Received</p>
+        </div>
+    </div>
+
+    <!-- If employee refuses to sign -->
+    <div style="margin-top: 30px; padding: 15px; background-color: #f8fafc; border: 1px dashed #94a3b8;">
+        <p style="font-size: 12px; color: #64748b; margin: 0;">
+            <strong>If employee refuses to sign:</strong>
+        </p>
+        <p style="font-size: 12px; color: #64748b; margin: 10px 0 0 0;">
+            I confirm that this decision notification was delivered to {{ employee_name }} on
+            _____________ (date) and they refused to acknowledge receipt.
+        </p>
+        <div style="margin-top: 20px;">
+            <p style="font-size: 12px;">Witness Name: _________________________ Signature: _________________________</p>
+        </div>
+    </div>
+</div>

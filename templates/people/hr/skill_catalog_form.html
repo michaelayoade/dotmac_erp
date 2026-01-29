@@ -1,0 +1,90 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}{% if skill %}Edit Skill{% else %}Add Skill{% endif %}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr" class="hover:text-teal-600 dark:hover:text-teal-400">HR</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr/skills" class="hover:text-teal-600 dark:hover:text-teal-400">Skills</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">{% if skill %}Edit{% else %}Add{% endif %}</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl">
+    {% if error %}
+    <div class="mb-6 p-4 rounded-lg bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-800">
+        <div class="flex items-center gap-2 text-red-700 dark:text-red-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span>{{ error }}</span>
+        </div>
+    </div>
+    {% endif %}
+
+    <form method="post" action="{% if skill %}/people/hr/skills/{{ skill.skill_id }}/edit{% else %}/people/hr/skills/new{% endif %}" class="space-y-6">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Skill Details</h3>
+            </div>
+            <div class="card-body space-y-4">
+                <div>
+                    <label for="skill_name" class="form-label required">Skill Name</label>
+                    <input type="text" name="skill_name" id="skill_name" required
+                           class="form-input w-full"
+                           value="{{ form_data.skill_name or (skill.skill_name if skill else '') }}"
+                           placeholder="e.g., Python">
+                </div>
+
+                <div>
+                    <label for="category" class="form-label required">Category</label>
+                    <select name="category" id="category" required class="form-select w-full">
+                        <option value="">Select Category</option>
+                        {% for cat in categories %}
+                        <option value="{{ cat.value }}"
+                                {{ 'selected' if (form_data.category == cat.value) or (skill and skill.category.value == cat.value) }}>
+                            {{ cat.value | replace('_', ' ') | title }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label for="description" class="form-label">Description</label>
+                    <textarea name="description" id="description" rows="3"
+                              class="form-input w-full"
+                              placeholder="Describe the skill...">{{ form_data.description or (skill.description if skill else '') }}</textarea>
+                </div>
+
+                <div class="flex items-center gap-2">
+                    <input type="checkbox" name="is_language" id="is_language" value="true"
+                           class="rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+                           {{ 'checked' if form_data.is_language or (skill and skill.is_language) }}>
+                    <label for="is_language" class="text-sm text-slate-700 dark:text-slate-300">Language skill</label>
+                </div>
+
+                {% if skill %}
+                <div class="flex items-center gap-2">
+                    <input type="checkbox" name="is_active" id="is_active" value="true"
+                           class="rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+                           {{ 'checked' if (form_data.is_active is not none and form_data.is_active) or (form_data.is_active is none and skill.is_active) }}>
+                    <label for="is_active" class="text-sm text-slate-700 dark:text-slate-300">Active</label>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="flex items-center gap-3">
+            <button type="submit" class="btn btn-primary">{% if skill %}Update Skill{% else %}Save Skill{% endif %}</button>
+            <a href="/people/hr/skills" class="btn btn-secondary">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

@@ -6,18 +6,20 @@ Provides API-focused handlers for auth flow routes.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from fastapi import HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
-from app.models.auth import Session as AuthSession, SessionStatus, UserCredential
+from app.models.auth import AuthProvider, Session as AuthSession, SessionStatus, UserCredential
 from app.models.person import Person
 from app.schemas.auth_flow import (
     AvatarUploadResponse,
     ForgotPasswordResponse,
     MeResponse,
     PasswordChangeResponse,
+    PasswordResetRequiredRequest,
+    PasswordResetRequiredResponse,
     SessionInfoResponse,
     SessionListResponse,
     SessionRevokeResponse,
@@ -198,6 +200,45 @@ class AuthFlowApiService:
         db.commit()
 
         return PasswordChangeResponse(changed_at=now)
+
+    def reset_password_required(
+        self,
+        payload: PasswordResetRequiredRequest,
+        db: Session,
+    ) -> PasswordResetRequiredResponse:
+        username = payload.username.strip()
+        credential = (
+            db.query(UserCredential)
+            .filter(UserCredential.username == username)
+            .filter(UserCredential.provider == AuthProvider.local)
+            .filter(UserCredential.is_active.is_(True))
+            .first()
+        )
+        if not credential:
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+
+        now = datetime.now(timezone.utc)
+        if credential.locked_until and credential.locked_until > now:
+            raise HTTPException(status_code=403, detail="Account locked")
+
+        if not verify_password(payload.current_password, credential.password_hash):
+            credential.failed_login_attempts += 1
+            if credential.failed_login_attempts >= 5:
+                credential.locked_until = now + timedelta(minutes=15)
+            db.commit()
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+
+        if payload.current_password == payload.new_password:
+            raise HTTPException(status_code=400, detail="New password must be different")
+
+        credential.password_hash = hash_password(payload.new_password)
+        credential.password_updated_at = now
+        credential.must_change_password = False
+        credential.failed_login_attempts = 0
+        credential.locked_until = None
+        db.commit()
+
+        return PasswordResetRequiredResponse(changed_at=now)
 
     def forgot_password(
         self,

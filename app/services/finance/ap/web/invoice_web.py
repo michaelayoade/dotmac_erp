@@ -594,6 +594,10 @@ class InvoiceWebService:
     ) -> HTMLResponse | JSONResponse | RedirectResponse | dict:
         """Handle invoice creation form submission."""
         content_type = request.headers.get("content-type", "")
+        org_id = auth.organization_id
+        user_id = auth.person_id
+        assert org_id is not None
+        assert user_id is not None
 
         if "application/json" in content_type:
             data = await request.json()
@@ -606,9 +610,9 @@ class InvoiceWebService:
 
             invoice = supplier_invoice_service.create_invoice(
                 db=db,
-                organization_id=auth.organization_id,
+                organization_id=org_id,
                 input=input_data,
-                created_by_user_id=auth.person_id,
+                created_by_user_id=user_id,
             )
 
             if "application/json" in content_type:
@@ -685,6 +689,10 @@ class InvoiceWebService:
     ) -> RedirectResponse:
         """Handle invoice attachment upload."""
         try:
+            org_id = auth.organization_id
+            user_id = auth.person_id
+            assert org_id is not None
+            assert user_id is not None
             invoice = supplier_invoice_service.get(db, invoice_id)
             if not invoice or invoice.organization_id != auth.organization_id:
                 return RedirectResponse(
@@ -703,10 +711,10 @@ class InvoiceWebService:
 
             attachment_service.save_file(
                 db=db,
-                organization_id=auth.organization_id,
+                organization_id=org_id,
                 input=input_data,
                 file_content=file.file,
-                uploaded_by=auth.person_id,
+                uploaded_by=user_id,
             )
 
             return RedirectResponse(

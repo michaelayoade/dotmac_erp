@@ -1,0 +1,200 @@
+{#
+    Promotion Letter Template
+
+    This template is used for employee promotions.
+    Designed to be wrapped by base_letter.html.
+
+    Context variables available:
+    - employee_name, employee_first_name, employee_last_name
+    - employee_id, employee_number
+    - current_title, current_department, current_grade
+    - new_title, new_department, new_grade
+    - effective_date
+    - current_salary, new_salary, currency_code, pay_frequency
+    - salary_increase_percentage
+    - new_responsibilities (list)
+    - new_benefits (list)
+    - new_reporting_to
+    - organization_name
+    - signatory_name, signatory_title
+    - letter_date, reference_number
+#}
+
+<!-- Celebration Header -->
+<div style="text-align: center; margin-bottom: 30px; padding: 20px; background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%); border: 2px solid #10b981; border-radius: 8px;">
+    <h2 style="margin: 0; color: #047857; font-size: 20px;">
+        Congratulations on Your Promotion!
+    </h2>
+</div>
+
+<!-- Addressee -->
+<div class="addressee">
+    <p class="addressee-name">{{ employee_name }}</p>
+    {% if employee_number %}
+    <p style="font-size: 12px; color: #666;">Employee ID: {{ employee_number }}</p>
+    {% endif %}
+</div>
+
+<!-- Subject Line -->
+<div class="subject">
+    <p class="subject-label">Subject:</p>
+    <p class="subject-text">Promotion to {{ new_title }}</p>
+</div>
+
+<!-- Reference -->
+{% if reference_number %}
+<p style="font-size: 12px; color: #666; margin-bottom: 20px;">Ref: {{ reference_number }}</p>
+{% endif %}
+
+<!-- Salutation -->
+<div class="salutation">
+    <p>Dear {{ employee_first_name }},</p>
+</div>
+
+<!-- Main Content -->
+<div class="content">
+    <p>
+        We are delighted to inform you that, in recognition of your outstanding performance,
+        dedication, and contributions to <strong>{{ organization_name }}</strong>, you have been
+        promoted to the position of <strong>{{ new_title }}</strong>, effective
+        <strong>{{ effective_date | format_date }}</strong>.
+    </p>
+
+    <!-- Promotion Details -->
+    <h3>Promotion Details</h3>
+    <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+            <tr style="background-color: #f0fdf4;">
+                <th style="padding: 10px; text-align: left; border: 1px solid #86efac; width: 30%;"></th>
+                <th style="padding: 10px; text-align: left; border: 1px solid #86efac; width: 35%;">Current</th>
+                <th style="padding: 10px; text-align: left; border: 1px solid #86efac; width: 35%;">New</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td style="padding: 10px; border: 1px solid #d1fae5;"><strong>Position</strong></td>
+                <td style="padding: 10px; border: 1px solid #d1fae5;">{{ current_title }}</td>
+                <td style="padding: 10px; border: 1px solid #d1fae5; background-color: #f0fdf4;"><strong>{{ new_title }}</strong></td>
+            </tr>
+            {% if new_department and new_department != current_department %}
+            <tr>
+                <td style="padding: 10px; border: 1px solid #d1fae5;"><strong>Department</strong></td>
+                <td style="padding: 10px; border: 1px solid #d1fae5;">{{ current_department }}</td>
+                <td style="padding: 10px; border: 1px solid #d1fae5; background-color: #f0fdf4;"><strong>{{ new_department }}</strong></td>
+            </tr>
+            {% endif %}
+            {% if new_grade %}
+            <tr>
+                <td style="padding: 10px; border: 1px solid #d1fae5;"><strong>Grade</strong></td>
+                <td style="padding: 10px; border: 1px solid #d1fae5;">{{ current_grade | default('--') }}</td>
+                <td style="padding: 10px; border: 1px solid #d1fae5; background-color: #f0fdf4;"><strong>{{ new_grade }}</strong></td>
+            </tr>
+            {% endif %}
+        </tbody>
+    </table>
+
+    {% if new_reporting_to %}
+    <p style="margin-top: 15px;">
+        In your new role, you will report to <strong>{{ new_reporting_to }}</strong>.
+    </p>
+    {% endif %}
+
+    <!-- Compensation -->
+    {% if new_salary %}
+    <h3>Revised Compensation</h3>
+    <div class="highlight-box">
+        <div class="highlight-box-title">New Salary Package</div>
+        <table>
+            <tr>
+                <td><strong>Previous Salary:</strong></td>
+                <td class="amount">{{ currency_code }} {{ current_salary | format_currency }} {{ pay_frequency | lower }}</td>
+            </tr>
+            <tr>
+                <td><strong>New Salary:</strong></td>
+                <td class="amount" style="color: #059669; font-weight: bold;">
+                    {{ currency_code }} {{ new_salary | format_currency }} {{ pay_frequency | lower }}
+                    {% if salary_increase_percentage %}
+                    <span style="font-size: 12px; color: #10b981;">(+{{ salary_increase_percentage }}%)</span>
+                    {% endif %}
+                </td>
+            </tr>
+        </table>
+    </div>
+    <p style="font-size: 12px; color: #64748b;">
+        Your revised salary will be effective from {{ effective_date | format_date }}.
+    </p>
+    {% endif %}
+
+    {% if new_responsibilities %}
+    <!-- New Responsibilities -->
+    <h3>New Responsibilities</h3>
+    <p>Your new role will include the following key responsibilities:</p>
+    <ul>
+        {% for responsibility in new_responsibilities %}
+        <li>{{ responsibility }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    {% if new_benefits %}
+    <!-- Additional Benefits -->
+    <h3>Additional Benefits</h3>
+    <p>Along with your promotion, you will be entitled to:</p>
+    <ul>
+        {% for benefit in new_benefits %}
+        <li>{{ benefit }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    <!-- Expectations -->
+    <h3>Expectations</h3>
+    <p>
+        This promotion reflects our confidence in your abilities and potential.
+        We expect you to continue demonstrating the same level of excellence, take on
+        greater responsibilities, and contribute to the growth and success of our organization.
+    </p>
+
+    <!-- Closing -->
+    <p style="margin-top: 20px;">
+        Please sign and return the duplicate copy of this letter as acceptance of your
+        new position and terms.
+    </p>
+
+    <p>
+        Once again, congratulations on this well-deserved recognition. We look forward to
+        your continued success and growth with us.
+    </p>
+</div>
+
+<!-- Signature Section -->
+<div class="signature-section">
+    <p class="closing">With best wishes,</p>
+    <div class="signature-block">
+        <div class="signature-line"></div>
+        <p class="signature-name">{{ signatory_name }}</p>
+        <p class="signature-title">{{ signatory_title }}</p>
+        <p class="signature-date">Date: {{ letter_date | format_date }}</p>
+    </div>
+</div>
+
+<!-- Acceptance Section -->
+<div class="acceptance-section" style="margin-top: 40px; padding-top: 20px; border-top: 2px solid #10b981;">
+    <p class="acceptance-title" style="color: #047857;">ACCEPTANCE</p>
+    <p>
+        I, <strong>{{ employee_name }}</strong>, accept the promotion to {{ new_title }}
+        and the revised terms as outlined in this letter, effective {{ effective_date | format_date }}.
+    </p>
+
+    <div class="dual-signature" style="display: flex; justify-content: space-between; margin-top: 30px;">
+        <div class="signature-block" style="width: 45%;">
+            <div class="signature-line" style="border-bottom: 1px solid #333; margin: 30px 0 10px 0;"></div>
+            <p class="signature-name">{{ employee_name }}</p>
+            <p class="signature-title">Employee Signature</p>
+        </div>
+        <div class="signature-block" style="width: 45%;">
+            <div class="signature-line" style="border-bottom: 1px solid #333; margin: 30px 0 10px 0;"></div>
+            <p class="signature-name">Date</p>
+        </div>
+    </div>
+</div>

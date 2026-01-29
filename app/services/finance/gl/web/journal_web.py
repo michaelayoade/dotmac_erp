@@ -671,14 +671,16 @@ class JournalWebService:
         lines_json: str,
     ) -> HTMLResponse | RedirectResponse:
         """Handle journal entry creation form submission."""
+        org_id = auth.organization_id
+        assert org_id is not None
         default_currency = currency_code or org_context_service.get_functional_currency(
             db,
-            auth.organization_id,
+            org_id,
         )
 
         entry, error = self.create_journal(
             db,
-            str(auth.organization_id),
+            str(org_id),
             str(auth.user_id),
             journal_type=journal_type,
             fiscal_period_id=fiscal_period_id,
@@ -727,14 +729,16 @@ class JournalWebService:
         lines_json: str,
     ) -> HTMLResponse | RedirectResponse:
         """Handle journal entry update form submission."""
+        org_id = auth.organization_id
+        assert org_id is not None
         default_currency = currency_code or org_context_service.get_functional_currency(
             db,
-            auth.organization_id,
+            org_id,
         )
 
         _, error = self.update_journal(
             db,
-            str(auth.organization_id),
+            str(org_id),
             entry_id=entry_id,
             journal_type=journal_type,
             fiscal_period_id=fiscal_period_id,
@@ -822,7 +826,8 @@ class JournalWebService:
             reversal = JournalService.reverse_entry(
                 db=db,
                 organization_id=coerce_uuid(auth.organization_id),
-                journal_entry_id=coerce_uuid(entry_id),
+                entry_id=coerce_uuid(entry_id),
+                reversal_date=date.today(),
                 reversed_by_user_id=coerce_uuid(auth.user_id),
             )
             return RedirectResponse(

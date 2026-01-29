@@ -15,6 +15,16 @@
 {% block header_actions %}
 <div class="flex items-center gap-2">
     {% if slip.status.value == 'DRAFT' %}
+    <a href="/people/payroll/slips/{{ slip.slip_id }}/edit" class="btn btn-secondary">
+        <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+        </svg>
+        Edit
+    </a>
+    <form action="/people/payroll/slips/{{ slip.slip_id }}/delete" method="post" class="inline" onsubmit="return confirm('Delete this draft slip?');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button type="submit" class="btn btn-danger">Delete</button>
+    </form>
     <form action="/people/payroll/slips/{{ slip.slip_id }}/submit" method="post" class="inline">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <button type="submit" class="btn btn-secondary">
@@ -56,6 +66,7 @@
     </form>
     {% endif %}
 
+
     {% if slip.journal_entry_id %}
     <a href="/finance/gl/journals/{{ slip.journal_entry_id }}" class="btn btn-secondary">
         <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -80,6 +91,16 @@
 {% set current_index = workflow_steps.index(slip.status.value) if slip.status.value in workflow_steps else 0 %}
 
 <div class="space-y-6">
+    {% if error %}
+    <div class="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-900/40 dark:bg-rose-900/20 dark:text-rose-200">
+        {{ error }}
+    </div>
+    {% endif %}
+    {% if success %}
+    <div class="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-900/20 dark:text-emerald-200">
+        {{ success }}
+    </div>
+    {% endif %}
     {# ═══════════════════════════════════════════════════════════════════════
        Workflow Stepper - Visual progress indicator
        ═══════════════════════════════════════════════════════════════════════ #}

@@ -9,7 +9,7 @@ from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
@@ -24,8 +24,11 @@ from app.services.finance.fa import (
     asset_service,
     depreciation_service,
     fa_posting_adapter,
+    asset_disposal_service,
+    DisposalInput,
     AssetInput,
 )
+from app.models.finance.fa.asset_disposal import DisposalType
 
 
 router = APIRouter(
@@ -50,14 +53,14 @@ def get_db():
 class AssetCreate(BaseModel):
     """Create asset request."""
 
-    asset_code: str = Field(max_length=30)
     asset_name: str = Field(max_length=200)
-    asset_category_id: UUID
+    category_id: UUID = Field(alias="asset_category_id")
     acquisition_date: date
     acquisition_cost: Decimal
-    useful_life_months: int
+    currency_code: str = Field(max_length=3)
+    useful_life_months: Optional[int] = None
     residual_value: Decimal = Decimal("0")
-    depreciation_method: str = "STRAIGHT_LINE"
+    depreciation_method: Optional[str] = "STRAIGHT_LINE"
     location_id: Optional[UUID] = None
     cost_center_id: Optional[UUID] = None
     description: Optional[str] = None
@@ -66,13 +69,13 @@ class AssetCreate(BaseModel):
 class AssetRead(BaseModel):
     """Asset response."""
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     asset_id: UUID
     organization_id: UUID
-    asset_code: str
+    asset_number: str = Field(alias="asset_code")
     asset_name: str
-    asset_category_id: UUID
+    category_id: UUID = Field(alias="asset_category_id")
     acquisition_date: date
     acquisition_cost: Decimal
     accumulated_depreciation: Decimal
@@ -87,7 +90,7 @@ class DepreciationRunCreate(BaseModel):
     """Depreciation run request."""
 
     fiscal_period_id: UUID
-    run_date: date
+    description: Optional[str] = None
 
 
 class DepreciationRunRead(BaseModel):
@@ -97,7 +100,8 @@ class DepreciationRunRead(BaseModel):
 
     run_id: UUID
     fiscal_period_id: UUID
-    run_date: date
+    run_number: int
+    run_description: Optional[str] = None
     total_depreciation: Decimal
     assets_processed: int
     status: str
@@ -106,10 +110,19 @@ class DepreciationRunRead(BaseModel):
 class DisposalCreate(BaseModel):
     """Asset disposal request."""
 
+    fiscal_period_id: UUID
     disposal_date: date
     disposal_type: str = Field(max_length=30)
-    proceeds_amount: Decimal = Decimal("0")
+    disposal_proceeds: Decimal = Decimal("0")
+    costs_of_disposal: Decimal = Decimal("0")
+    buyer_name: Optional[str] = None
+    buyer_reference: Optional[str] = None
+    invoice_number: Optional[str] = None
     disposal_reason: Optional[str] = None
+    authorization_reference: Optional[str] = None
+    trade_in_asset_id: Optional[UUID] = None
+    insurance_claim_reference: Optional[str] = None
+    insurance_proceeds: Optional[Decimal] = None
 
 
 class DisposalRead(BaseModel):
@@ -119,11 +132,16 @@ class DisposalRead(BaseModel):
 
     disposal_id: UUID
     asset_id: UUID
+    fiscal_period_id: UUID
     disposal_date: date
     disposal_type: str
+    cost_at_disposal: Decimal
+    accumulated_depreciation_at_disposal: Decimal
     net_book_value_at_disposal: Decimal
-    proceeds_amount: Decimal
-    gain_loss: Decimal
+    disposal_proceeds: Decimal
+    costs_of_disposal: Decimal
+    net_proceeds: Decimal
+    gain_loss_on_disposal: Decimal
 
 
 # =============================================================================
@@ -140,11 +158,11 @@ def create_asset(
 ):
     """Create a new fixed asset."""
     input_data = AssetInput(
-        asset_code=payload.asset_code,
         asset_name=payload.asset_name,
-        asset_category_id=payload.asset_category_id,
+        category_id=payload.category_id,
         acquisition_date=payload.acquisition_date,
         acquisition_cost=payload.acquisition_cost,
+        currency_code=payload.currency_code,
         useful_life_months=payload.useful_life_months,
         residual_value=payload.residual_value,
         depreciation_method=payload.depreciation_method,
@@ -198,16 +216,18 @@ def list_assets(
 def capitalize_asset(
     asset_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    capitalized_by_user_id: UUID = Query(...),
+    in_service_date: Optional[date] = None,
+    depreciation_start_date: Optional[date] = None,
     auth: dict = Depends(require_tenant_permission("fa:assets:capitalize")),
     db: Session = Depends(get_db),
 ):
     """Capitalize an asset (put in service)."""
-    return asset_service.capitalize_asset(
+    return asset_service.activate_asset(
         db=db,
         organization_id=organization_id,
         asset_id=asset_id,
-        capitalized_by_user_id=capitalized_by_user_id,
+        in_service_date=in_service_date,
+        depreciation_start_date=depreciation_start_date,
     )
 
 
@@ -217,22 +237,25 @@ def post_asset_acquisition(
     posting_date: date = Query(...),
     organization_id: UUID = Depends(require_organization_id),
     posted_by_user_id: UUID = Query(...),
-    fiscal_period_id: UUID = Query(...),
+    credit_account_id: UUID = Query(...),
+    description: Optional[str] = None,
     auth: dict = Depends(require_tenant_permission("fa:assets:post")),
     db: Session = Depends(get_db),
 ):
     """Post asset acquisition to GL."""
-    result = fa_posting_adapter.post_acquisition(
+    result = fa_posting_adapter.post_asset_acquisition(
         db=db,
         organization_id=organization_id,
         asset_id=asset_id,
         posting_date=posting_date,
         posted_by_user_id=posted_by_user_id,
+        credit_account_id=credit_account_id,
+        description=description,
     )
     return PostingResultSchema(
         success=result.success,
         journal_entry_id=result.journal_entry_id,
-        entry_number=result.entry_number,
+        entry_number=None,
         message=result.message,
     )
 
@@ -250,12 +273,17 @@ def run_depreciation(
     db: Session = Depends(get_db),
 ):
     """Run depreciation for a fiscal period."""
-    return depreciation_service.run_depreciation(
+    run = depreciation_service.create_depreciation_run(
         db=db,
         organization_id=organization_id,
         fiscal_period_id=payload.fiscal_period_id,
-        run_date=payload.run_date,
-        run_by_user_id=run_by_user_id,
+        created_by_user_id=run_by_user_id,
+        description=payload.description,
+    )
+    return depreciation_service.calculate_run(
+        db=db,
+        organization_id=organization_id,
+        run_id=run.run_id,
     )
 
 
@@ -294,17 +322,17 @@ def post_depreciation(
     db: Session = Depends(get_db),
 ):
     """Post depreciation run to GL."""
-    result = fa_posting_adapter.post_depreciation(
+    result = fa_posting_adapter.post_depreciation_run(
         db=db,
         organization_id=organization_id,
-        depreciation_run_id=run_id,
+        run_id=run_id,
         posting_date=posting_date,
         posted_by_user_id=posted_by_user_id,
     )
     return PostingResultSchema(
         success=result.success,
         journal_entry_id=result.journal_entry_id,
-        entry_number=result.entry_number,
+        entry_number=None,
         message=result.message,
     )
 
@@ -323,15 +351,31 @@ def dispose_asset(
     db: Session = Depends(get_db),
 ):
     """Dispose of a fixed asset."""
-    return asset_service.dispose_asset(
+    try:
+        disposal_type = DisposalType(payload.disposal_type)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    input_data = DisposalInput(
+        asset_id=asset_id,
+        fiscal_period_id=payload.fiscal_period_id,
+        disposal_date=payload.disposal_date,
+        disposal_type=disposal_type,
+        disposal_proceeds=payload.disposal_proceeds,
+        costs_of_disposal=payload.costs_of_disposal,
+        buyer_name=payload.buyer_name,
+        buyer_reference=payload.buyer_reference,
+        invoice_number=payload.invoice_number,
+        disposal_reason=payload.disposal_reason,
+        authorization_reference=payload.authorization_reference,
+        trade_in_asset_id=payload.trade_in_asset_id,
+        insurance_claim_reference=payload.insurance_claim_reference,
+        insurance_proceeds=payload.insurance_proceeds,
+    )
+    return asset_disposal_service.create_disposal(
         db=db,
         organization_id=organization_id,
-        asset_id=asset_id,
-        disposal_date=payload.disposal_date,
-        disposal_type=payload.disposal_type,
-        proceeds_amount=payload.proceeds_amount,
-        disposal_reason=payload.disposal_reason,
-        disposed_by_user_id=disposed_by_user_id,
+        input=input_data,
+        created_by_user_id=disposed_by_user_id,
     )
 
 
@@ -345,7 +389,7 @@ def post_disposal(
     db: Session = Depends(get_db),
 ):
     """Post asset disposal to GL."""
-    result = fa_posting_adapter.post_disposal(
+    result = fa_posting_adapter.post_asset_disposal(
         db=db,
         organization_id=organization_id,
         disposal_id=disposal_id,
@@ -355,6 +399,6 @@ def post_disposal(
     return PostingResultSchema(
         success=result.success,
         journal_entry_id=result.journal_entry_id,
-        entry_number=result.entry_number,
+        entry_number=None,
         message=result.message,
     )

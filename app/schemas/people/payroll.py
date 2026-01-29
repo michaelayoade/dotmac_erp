@@ -254,6 +254,7 @@ class SalarySlipRead(BaseModel):
     bank_name: Optional[str] = None
     bank_account_number: Optional[str] = None
     bank_account_name: Optional[str] = None
+    bank_branch_code: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
 

@@ -17,6 +17,7 @@ from app.models.pm.project_template_task import (
     ProjectTemplateTaskDependency,
 )
 from app.models.pm.time_entry import BillingStatus, TimeEntry
+from app.models.pm.comment import PMComment, PMCommentAttachment, PMCommentType
 
 __all__ = [
     # Task
@@ -38,4 +39,8 @@ __all__ = [
     # Time Entry
     "TimeEntry",
     "BillingStatus",
+    # Comments
+    "PMComment",
+    "PMCommentAttachment",
+    "PMCommentType",
 ]

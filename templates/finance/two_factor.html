@@ -1,9 +1,8 @@
-{% extends "finance/base_finance.html" %}
-
-{% block page_title %}Two-factor authentication{% endblock %}
+{% extends "base.html" %}
 
 {% block content %}
-<div class="max-w-2xl mx-auto space-y-8">
+<div class="px-6 py-8">
+    <div class="max-w-2xl mx-auto space-y-8">
     <!-- Header -->
     <div class="stagger-in" style="animation-delay: 0ms;">
         <a href="/profile" class="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-teal-600 dark:text-slate-400 dark:hover:text-teal-400 mb-4 transition-colors">
@@ -512,4 +511,6 @@ document.getElementById('totp-code')?.addEventListener('keypress', function(e) {
     }
 });
 </script>
+    </div>
+</div>
 {% endblock %}

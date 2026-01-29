@@ -163,7 +163,8 @@ class CustomerWebService:
 
         # Use shared audit service for user names
         audit_service = get_audit_service(db)
-        creator_names = audit_service.get_creator_names(customers)
+        creator_ids = [customer.created_by_user_id for customer in customers if customer.created_by_user_id]
+        creator_names = audit_service.get_user_names_batch(creator_ids)
 
         # Calculate balance trends for sparkline charts
         customer_ids = [c.customer_id for c in customers]
@@ -173,7 +174,9 @@ class CustomerWebService:
             customer_list_view(
                 customer,
                 balance_map.get(customer.customer_id, Decimal("0")),
-                creator_names.get(customer.created_by_user_id),
+                creator_names.get(customer.created_by_user_id)
+                if customer.created_by_user_id
+                else None,
                 balance_trends.get(customer.customer_id),
             )
             for customer in customers
@@ -469,11 +472,13 @@ class CustomerWebService:
         form_data = await request.form()
 
         try:
+            org_id = auth.organization_id
+            assert org_id is not None
             input_data = self.build_customer_input(dict(form_data))
 
             customer_service.create_customer(
                 db=db,
-                organization_id=auth.organization_id,
+                organization_id=org_id,
                 input=input_data,
             )
 
@@ -501,11 +506,13 @@ class CustomerWebService:
         form_data = await request.form()
 
         try:
+            org_id = auth.organization_id
+            assert org_id is not None
             input_data = self.build_customer_input(dict(form_data))
 
             customer_service.update_customer(
                 db=db,
-                organization_id=auth.organization_id,
+                organization_id=org_id,
                 customer_id=UUID(customer_id),
                 input=input_data,
             )
@@ -557,7 +564,11 @@ class CustomerWebService:
     ) -> RedirectResponse:
         """Handle customer attachment upload."""
         try:
-            customer = customer_service.get(db, auth.organization_id, customer_id)
+            org_id = auth.organization_id
+            user_id = auth.person_id
+            assert org_id is not None
+            assert user_id is not None
+            customer = customer_service.get(db, org_id, customer_id)
             if not customer or customer.organization_id != auth.organization_id:
                 return RedirectResponse(
                     url=f"/ar/customers/{customer_id}?error=Customer+not+found",
@@ -575,10 +586,10 @@ class CustomerWebService:
 
             attachment_service.save_file(
                 db=db,
-                organization_id=auth.organization_id,
+                organization_id=org_id,
                 input=input_data,
                 file_content=file.file,
-                uploaded_by=auth.person_id,
+                uploaded_by=user_id,
             )
 
             return RedirectResponse(

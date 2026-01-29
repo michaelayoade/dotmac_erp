@@ -244,6 +244,10 @@ class SalarySlip(Base, AuditMixin, ERPNextSyncMixin, StatusTrackingMixin):
         String(100),
         nullable=True,
     )
+    bank_branch_code: Mapped[Optional[str]] = mapped_column(
+        String(20),
+        nullable=True,
+    )
 
     # Payroll entry link (for bulk processing)
     payroll_entry_id: Mapped[Optional[uuid.UUID]] = mapped_column(

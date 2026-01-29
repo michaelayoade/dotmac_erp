@@ -5,7 +5,7 @@ Builds payroll runs and generates salary slips using SalarySlipService.
 """
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Optional
 from uuid import UUID
@@ -24,7 +24,7 @@ from app.models.people.payroll.salary_structure import (
     SalaryStructureEarning,
 )
 from app.models.people.payroll.salary_slip import SalarySlip, SalarySlipStatus
-from app.services.common import PaginatedResult, PaginationParams
+from app.services.common import PaginatedResult, PaginationParams, coerce_uuid
 from app.services.people.integrations.payroll_gl_adapter import PayrollGLAdapter
 from app.services.people.payroll.salary_slip_service import (
     SalarySlipInput,
@@ -504,6 +504,91 @@ class PayrollService:
 
         return self.generate_salary_slips(org_id, entry_id, created_by_id=created_by_id)
 
+    def submit_payroll_entry(
+        self,
+        org_id: UUID,
+        entry_id: UUID,
+        *,
+        submitted_by: UUID,
+    ) -> PayrollEntry:
+        """Submit payroll entry for approval."""
+        entry = self.get_payroll_entry(org_id, entry_id)
+        slips = list(entry.salary_slips or [])
+        if not slips:
+            raise PayrollServiceError("No salary slips found for this payroll entry")
+
+        for slip in slips:
+            if slip.status != SalarySlipStatus.DRAFT:
+                raise PayrollServiceError(
+                    f"All slips must be DRAFT to submit (found {slip.status.value})"
+                )
+
+        now = datetime.now(timezone.utc)
+        submitted_by_id = coerce_uuid(submitted_by)
+        for slip in slips:
+            slip.status = SalarySlipStatus.SUBMITTED
+            slip.status_changed_at = now
+            slip.status_changed_by_id = submitted_by_id
+
+        entry.status = PayrollEntryStatus.SUBMITTED
+        entry.salary_slips_submitted = True
+        self.db.flush()
+        return entry
+
+    def approve_payroll_entry(
+        self,
+        org_id: UUID,
+        entry_id: UUID,
+        *,
+        approved_by: UUID,
+    ) -> PayrollEntry:
+        """Approve payroll entry."""
+        entry = self.get_payroll_entry(org_id, entry_id)
+        slips = list(entry.salary_slips or [])
+        if not slips:
+            raise PayrollServiceError("No salary slips found for this payroll entry")
+
+        approver_id = coerce_uuid(approved_by)
+        for slip in slips:
+            if slip.status != SalarySlipStatus.SUBMITTED:
+                raise PayrollServiceError(
+                    f"All slips must be SUBMITTED to approve (found {slip.status.value})"
+                )
+            if slip.created_by_id == approver_id:
+                raise PayrollServiceError(
+                    "Segregation of duties: creator cannot approve their own slip"
+                )
+
+        now = datetime.now(timezone.utc)
+        for slip in slips:
+            slip.status = SalarySlipStatus.APPROVED
+            slip.status_changed_at = now
+            slip.status_changed_by_id = approver_id
+
+        try:
+            from app.services.people.payroll.payroll_notifications import (
+                PayrollNotificationService,
+            )
+
+            notification_service = PayrollNotificationService(self.db)
+            for slip in slips:
+                employee = slip.employee or self.db.get(Employee, slip.employee_id)
+                if employee:
+                    notification_service.notify_payslip_posted(
+                        slip, employee, queue_email=True
+                    )
+        except Exception as notify_err:
+            import logging
+            logging.getLogger(__name__).warning(
+                "Payroll approve: failed to notify slips for entry %s: %s",
+                entry_id,
+                notify_err,
+            )
+
+        entry.status = PayrollEntryStatus.APPROVED
+        self.db.flush()
+        return entry
+
     def payout_payroll_entry(
         self,
         org_id: UUID,
@@ -521,6 +606,12 @@ class PayrollService:
         updated = 0
         errors: list[dict] = []
 
+        # Import notification service
+        from app.services.people.payroll.payroll_notifications import (
+            PayrollNotificationService,
+        )
+        notification_service = PayrollNotificationService(self.db)
+
         for slip in slips:
             if slip.status != SalarySlipStatus.APPROVED:
                 errors.append(
@@ -532,6 +623,19 @@ class PayrollService:
             slip.paid_by_id = paid_by_id
             slip.payment_reference = payment_reference
             updated += 1
+
+            # Send payment notification to employee
+            try:
+                employee = slip.employee
+                if employee:
+                    notification_service.notify_payslip_paid(slip, employee)
+            except Exception as notify_err:
+                import logging
+                logging.getLogger(__name__).warning(
+                    "Failed to send payment notification for slip %s: %s",
+                    slip.slip_id,
+                    notify_err,
+                )
 
         self.db.flush()
         return {"updated": updated, "requested": len(slips), "errors": errors}
@@ -550,7 +654,7 @@ class PayrollService:
             payroll_entry_id=entry_id,
             posting_date=posting_date,
             user_id=user_id,
-            consolidated=False,
+            consolidated=True,  # Use single consolidated journal entry per run
         )
         return {"success": result.success, "error": result.error_message}
 
@@ -585,9 +689,18 @@ class PayrollService:
             ).all()
         )
         entry.employee_count = len(slips)
-        entry.total_gross_pay = sum((s.gross_pay or Decimal("0")) for s in slips)
-        entry.total_deductions = sum((s.total_deduction or Decimal("0")) for s in slips)
-        entry.total_net_pay = sum((s.net_pay or Decimal("0")) for s in slips)
+        entry.total_gross_pay = sum(
+            ((s.gross_pay or Decimal("0")) for s in slips),
+            Decimal("0"),
+        )
+        entry.total_deductions = sum(
+            ((s.total_deduction or Decimal("0")) for s in slips),
+            Decimal("0"),
+        )
+        entry.total_net_pay = sum(
+            ((s.net_pay or Decimal("0")) for s in slips),
+            Decimal("0"),
+        )
 
     # =========================================================================
     # Reports
@@ -740,7 +853,12 @@ class PayrollService:
 
         # Calculate percentages
         for dept in departments:
-            dept["percentage"] = round(float(dept["total_net"]) / float(total_net) * 100, 1) if total_net > 0 else 0
+            net_value = dept.get("total_net") or Decimal("0")
+            dept["percentage"] = (
+                round(float(net_value) / float(total_net) * 100, 1)
+                if total_net > 0
+                else 0
+            )
 
         return {
             "start_date": start_date,

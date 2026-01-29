@@ -76,6 +76,31 @@ class InventoryCountService(ListResponseMixin):
     """
 
     @staticmethod
+    def start_count(
+        db: Session,
+        organization_id: UUID,
+        count_id: UUID,
+        started_by_user_id: UUID,
+    ) -> InventoryCount:
+        """Mark a draft count as in progress."""
+        org_id = coerce_uuid(organization_id)
+        cnt_id = coerce_uuid(count_id)
+        _ = coerce_uuid(started_by_user_id)
+
+        count = db.get(InventoryCount, cnt_id)
+        if not count or count.organization_id != org_id:
+            raise HTTPException(status_code=404, detail="Count not found")
+
+        if count.status != CountStatus.DRAFT:
+            raise HTTPException(status_code=400, detail="Count must be in DRAFT status")
+
+        count.status = CountStatus.IN_PROGRESS
+        db.commit()
+        db.refresh(count)
+
+        return count
+
+    @staticmethod
     def create_count(
         db: Session,
         organization_id: UUID,

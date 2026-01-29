@@ -13,7 +13,7 @@ from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Header, Request
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_organization_id, require_tenant_auth
@@ -61,6 +61,13 @@ from app.schemas.expense import (
 )
 from app.services.expense import ExpenseService
 from app.services.common import PaginationParams
+from app.services.finance.platform.idempotency import IdempotencyService
+from app.api.idempotency import (
+    build_request_hash,
+    check_or_reserve_idempotency,
+    build_cached_response,
+    require_idempotency_key,
+)
 
 router = APIRouter(
     prefix="/expenses",
@@ -216,33 +223,81 @@ def list_expense_claims(
 @router.post("/claims", response_model=ExpenseClaimRead, status_code=status.HTTP_201_CREATED)
 def create_expense_claim(
     payload: ExpenseClaimCreate,
+    request: Request,
     organization_id: UUID = Depends(require_organization_id),
     db: Session = Depends(get_db),
+    idempotency_key: str = Header(None, alias="Idempotency-Key"),
 ):
     """Create an expense claim."""
     svc = ExpenseService(db)
+    idempotency_key = require_idempotency_key(idempotency_key)
+    request_hash = build_request_hash(
+        payload,
+        {"organization_id": str(organization_id)},
+    )
+    replay = check_or_reserve_idempotency(
+        db,
+        organization_id=organization_id,
+        idempotency_key=idempotency_key,
+        endpoint=request.url.path,
+        request_hash=request_hash,
+    )
+    if replay:
+        return build_cached_response(replay)
 
     # Convert items to dicts for service
     items_data = None
     if payload.items:
         items_data = [item.model_dump() for item in payload.items]
 
-    claim = svc.create_claim(
-        org_id=organization_id,
-        employee_id=payload.employee_id,
-        claim_date=payload.claim_date,
-        purpose=payload.purpose,
-        expense_period_start=payload.expense_period_start,
-        expense_period_end=payload.expense_period_end,
-        project_id=payload.project_id,
-        task_id=payload.task_id,
-        currency_code=payload.currency_code,
-        cost_center_id=payload.cost_center_id,
-        notes=payload.notes,
-        items=items_data,
-    )
-    db.commit()
-    return ExpenseClaimRead.model_validate(claim)
+    try:
+        claim = svc.create_claim(
+            org_id=organization_id,
+            employee_id=payload.employee_id,
+            claim_date=payload.claim_date,
+            purpose=payload.purpose,
+            expense_period_start=payload.expense_period_start,
+            expense_period_end=payload.expense_period_end,
+            project_id=payload.project_id,
+            task_id=payload.task_id,
+            currency_code=payload.currency_code,
+            cost_center_id=payload.cost_center_id,
+            notes=payload.notes,
+            items=items_data,
+        )
+        db.commit()
+        response = ExpenseClaimRead.model_validate(claim)
+        IdempotencyService.update_response(
+            db=db,
+            organization_id=organization_id,
+            idempotency_key=idempotency_key,
+            endpoint=request.url.path,
+            response_status=status.HTTP_201_CREATED,
+            response_body=response.model_dump(mode="json"),
+        )
+        return response
+    except HTTPException as exc:
+        db.rollback()
+        IdempotencyService.update_response(
+            db=db,
+            organization_id=organization_id,
+            idempotency_key=idempotency_key,
+            endpoint=request.url.path,
+            response_status=exc.status_code,
+            response_body={"detail": exc.detail},
+        )
+        raise
+    except Exception:
+        db.rollback()
+        IdempotencyService.update_response(
+            db=db,
+            organization_id=organization_id,
+            idempotency_key=idempotency_key,
+            endpoint=request.url.path,
+            response_status=500,
+            response_body={"detail": "Internal Server Error"},
+        )
+        raise
 
 
 @router.get("/claims/{claim_id}", response_model=ExpenseClaimRead)
@@ -323,97 +378,342 @@ def remove_claim_item(
 @router.post("/claims/{claim_id}/submit", response_model=ExpenseClaimRead)
 def submit_claim(
     claim_id: UUID,
+    request: Request,
     organization_id: UUID = Depends(require_organization_id),
     db: Session = Depends(get_db),
+    idempotency_key: str = Header(None, alias="Idempotency-Key"),
 ):
     """Submit an expense claim for approval."""
     svc = ExpenseService(db)
-    claim = svc.submit_claim(organization_id, claim_id)
-    db.commit()
-    return ExpenseClaimRead.model_validate(claim)
+    idempotency_key = require_idempotency_key(idempotency_key)
+    request_hash = build_request_hash(
+        None,
+        {"organization_id": str(organization_id), "claim_id": str(claim_id)},
+    )
+    replay = check_or_reserve_idempotency(
+        db,
+        organization_id=organization_id,
+        idempotency_key=idempotency_key,
+        endpoint=request.url.path,
+        request_hash=request_hash,
+    )
+    if replay:
+        return build_cached_response(replay)
+
+    try:
+        result = svc.submit_claim(organization_id, claim_id)
+        claim = result.claim if hasattr(result, "claim") else result
+        db.commit()
+        response = ExpenseClaimRead.model_validate(claim)
+        IdempotencyService.update_response(
+            db=db,
+            organization_id=organization_id,
+            idempotency_key=idempotency_key,
+            endpoint=request.url.path,
+            response_status=status.HTTP_200_OK,
+            response_body=response.model_dump(mode="json"),
+        )
+        return response
+    except HTTPException as exc:
+        db.rollback()
+        IdempotencyService.update_response(
+            db=db,
+            organization_id=organization_id,
+            idempotency_key=idempotency_key,
+            endpoint=request.url.path,
+            response_status=exc.status_code,
+            response_body={"detail": exc.detail},
+        )
+        raise
+    except Exception:
+        db.rollback()
+        IdempotencyService.update_response(
+            db=db,
+            organization_id=organization_id,
+            idempotency_key=idempotency_key,
+            endpoint=request.url.path,
+            response_status=500,
+            response_body={"detail": "Internal Server Error"},
+        )
+        raise
 
 
 @router.post("/claims/{claim_id}/approve", response_model=ExpenseClaimRead)
 def approve_claim(
     claim_id: UUID,
     payload: ExpenseClaimApprovalRequest,
+    request: Request,
     organization_id: UUID = Depends(require_organization_id),
     db: Session = Depends(get_db),
+    idempotency_key: str = Header(None, alias="Idempotency-Key"),
 ):
     """Approve an expense claim."""
     svc = ExpenseService(db)
+    idempotency_key = require_idempotency_key(idempotency_key)
+    request_hash = build_request_hash(
+        payload,
+        {"organization_id": str(organization_id), "claim_id": str(claim_id)},
+    )
+    replay = check_or_reserve_idempotency(
+        db,
+        organization_id=organization_id,
+        idempotency_key=idempotency_key,
+        endpoint=request.url.path,
+        request_hash=request_hash,
+    )
+    if replay:
+        return build_cached_response(replay)
 
     # Convert approved_amounts if provided
     approved_amounts = None
     if payload.approved_amounts:
         approved_amounts = [a.model_dump() for a in payload.approved_amounts]
 
-    claim = svc.approve_claim(
-        org_id=organization_id,
-        claim_id=claim_id,
-        approver_id=payload.approver_id,
-        approved_amounts=approved_amounts,
-        notes=payload.notes,
-    )
-    db.commit()
-    return ExpenseClaimRead.model_validate(claim)
+    try:
+        claim = svc.approve_claim(
+            org_id=organization_id,
+            claim_id=claim_id,
+            approver_id=payload.approver_id,
+            approved_amounts=approved_amounts,
+            notes=payload.notes,
+        )
+        db.commit()
+        response = ExpenseClaimRead.model_validate(claim)
+        IdempotencyService.update_response(
+            db=db,
+            organization_id=organization_id,
+            idempotency_key=idempotency_key,
+            endpoint=request.url.path,
+            response_status=status.HTTP_200_OK,
+            response_body=response.model_dump(mode="json"),
+        )
+        return response
+    except HTTPException as exc:
+        db.rollback()
+        IdempotencyService.update_response(
+            db=db,
+            organization_id=organization_id,
+            idempotency_key=idempotency_key,
+            endpoint=request.url.path,
+            response_status=exc.status_code,
+            response_body={"detail": exc.detail},
+        )
+        raise
+    except Exception:
+        db.rollback()
+        IdempotencyService.update_response(
+            db=db,
+            organization_id=organization_id,
+            idempotency_key=idempotency_key,
+            endpoint=request.url.path,
+            response_status=500,
+            response_body={"detail": "Internal Server Error"},
+        )
+        raise
 
 
 @router.post("/claims/{claim_id}/reject", response_model=ExpenseClaimRead)
 def reject_claim(
     claim_id: UUID,
     payload: ExpenseClaimRejectRequest,
+    request: Request,
     organization_id: UUID = Depends(require_organization_id),
     db: Session = Depends(get_db),
+    idempotency_key: str = Header(None, alias="Idempotency-Key"),
 ):
     """Reject an expense claim."""
     svc = ExpenseService(db)
-    claim = svc.reject_claim(
-        org_id=organization_id,
-        claim_id=claim_id,
-        approver_id=payload.approver_id,
-        reason=payload.reason,
+    idempotency_key = require_idempotency_key(idempotency_key)
+    request_hash = build_request_hash(
+        payload,
+        {"organization_id": str(organization_id), "claim_id": str(claim_id)},
     )
-    db.commit()
-    return ExpenseClaimRead.model_validate(claim)
+    replay = check_or_reserve_idempotency(
+        db,
+        organization_id=organization_id,
+        idempotency_key=idempotency_key,
+        endpoint=request.url.path,
+        request_hash=request_hash,
+    )
+    if replay:
+        return build_cached_response(replay)
+
+    try:
+        claim = svc.reject_claim(
+            org_id=organization_id,
+            claim_id=claim_id,
+            approver_id=payload.approver_id,
+            reason=payload.reason,
+        )
+        db.commit()
+        response = ExpenseClaimRead.model_validate(claim)
+        IdempotencyService.update_response(
+            db=db,
+            organization_id=organization_id,
+            idempotency_key=idempotency_key,
+            endpoint=request.url.path,
+            response_status=status.HTTP_200_OK,
+            response_body=response.model_dump(mode="json"),
+        )
+        return response
+    except HTTPException as exc:
+        db.rollback()
+        IdempotencyService.update_response(
+            db=db,
+            organization_id=organization_id,
+            idempotency_key=idempotency_key,
+            endpoint=request.url.path,
+            response_status=exc.status_code,
+            response_body={"detail": exc.detail},
+        )
+        raise
+    except Exception:
+        db.rollback()
+        IdempotencyService.update_response(
+            db=db,
+            organization_id=organization_id,
+            idempotency_key=idempotency_key,
+            endpoint=request.url.path,
+            response_status=500,
+            response_body={"detail": "Internal Server Error"},
+        )
+        raise
 
 
 @router.post("/claims/{claim_id}/mark-paid", response_model=ExpenseClaimRead)
 def mark_claim_paid(
     claim_id: UUID,
     payload: MarkPaidRequest,
+    request: Request,
     organization_id: UUID = Depends(require_organization_id),
     db: Session = Depends(get_db),
+    idempotency_key: str = Header(None, alias="Idempotency-Key"),
 ):
     """Mark an expense claim as paid."""
     svc = ExpenseService(db)
-    claim = svc.mark_paid(
-        org_id=organization_id,
-        claim_id=claim_id,
-        payment_reference=payload.payment_reference,
-        payment_date=payload.payment_date,
+    idempotency_key = require_idempotency_key(idempotency_key)
+    request_hash = build_request_hash(
+        payload,
+        {"organization_id": str(organization_id), "claim_id": str(claim_id)},
     )
-    db.commit()
-    return ExpenseClaimRead.model_validate(claim)
+    replay = check_or_reserve_idempotency(
+        db,
+        organization_id=organization_id,
+        idempotency_key=idempotency_key,
+        endpoint=request.url.path,
+        request_hash=request_hash,
+    )
+    if replay:
+        return build_cached_response(replay)
+
+    try:
+        claim = svc.mark_paid(
+            org_id=organization_id,
+            claim_id=claim_id,
+            payment_reference=payload.payment_reference,
+            payment_date=payload.payment_date,
+        )
+        db.commit()
+        response = ExpenseClaimRead.model_validate(claim)
+        IdempotencyService.update_response(
+            db=db,
+            organization_id=organization_id,
+            idempotency_key=idempotency_key,
+            endpoint=request.url.path,
+            response_status=status.HTTP_200_OK,
+            response_body=response.model_dump(mode="json"),
+        )
+        return response
+    except HTTPException as exc:
+        db.rollback()
+        IdempotencyService.update_response(
+            db=db,
+            organization_id=organization_id,
+            idempotency_key=idempotency_key,
+            endpoint=request.url.path,
+            response_status=exc.status_code,
+            response_body={"detail": exc.detail},
+        )
+        raise
+    except Exception:
+        db.rollback()
+        IdempotencyService.update_response(
+            db=db,
+            organization_id=organization_id,
+            idempotency_key=idempotency_key,
+            endpoint=request.url.path,
+            response_status=500,
+            response_body={"detail": "Internal Server Error"},
+        )
+        raise
 
 
 @router.post("/claims/{claim_id}/link-advance", response_model=ExpenseClaimRead)
 def link_advance_to_claim(
     claim_id: UUID,
     payload: LinkAdvanceRequest,
+    request: Request,
     organization_id: UUID = Depends(require_organization_id),
     db: Session = Depends(get_db),
+    idempotency_key: str = Header(None, alias="Idempotency-Key"),
 ):
     """Link a cash advance to an expense claim."""
     svc = ExpenseService(db)
-    claim = svc.link_advance(
-        org_id=organization_id,
-        claim_id=claim_id,
-        advance_id=payload.advance_id,
-        amount_to_adjust=payload.amount_to_adjust,
+    idempotency_key = require_idempotency_key(idempotency_key)
+    request_hash = build_request_hash(
+        payload,
+        {"organization_id": str(organization_id), "claim_id": str(claim_id)},
     )
-    db.commit()
-    return ExpenseClaimRead.model_validate(claim)
+    replay = check_or_reserve_idempotency(
+        db,
+        organization_id=organization_id,
+        idempotency_key=idempotency_key,
+        endpoint=request.url.path,
+        request_hash=request_hash,
+    )
+    if replay:
+        return build_cached_response(replay)
+
+    try:
+        claim = svc.link_advance(
+            org_id=organization_id,
+            claim_id=claim_id,
+            advance_id=payload.advance_id,
+            amount_to_adjust=payload.amount_to_adjust,
+        )
+        db.commit()
+        response = ExpenseClaimRead.model_validate(claim)
+        IdempotencyService.update_response(
+            db=db,
+            organization_id=organization_id,
+            idempotency_key=idempotency_key,
+            endpoint=request.url.path,
+            response_status=status.HTTP_200_OK,
+            response_body=response.model_dump(mode="json"),
+        )
+        return response
+    except HTTPException as exc:
+        db.rollback()
+        IdempotencyService.update_response(
+            db=db,
+            organization_id=organization_id,
+            idempotency_key=idempotency_key,
+            endpoint=request.url.path,
+            response_status=exc.status_code,
+            response_body={"detail": exc.detail},
+        )
+        raise
+    except Exception:
+        db.rollback()
+        IdempotencyService.update_response(
+            db=db,
+            organization_id=organization_id,
+            idempotency_key=idempotency_key,
+            endpoint=request.url.path,
+            response_status=500,
+            response_body={"detail": "Internal Server Error"},
+        )
+        raise
 
 
 # =============================================================================

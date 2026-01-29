@@ -1,0 +1,552 @@
+"""
+Document Generator Service.
+
+Cross-cutting service for generating documents from templates.
+Supports PDF, HTML, and email generation using WeasyPrint and Jinja2.
+"""
+
+import hashlib
+import logging
+import os
+import uuid as uuid_module
+from datetime import date, datetime
+from decimal import Decimal
+from pathlib import Path
+from typing import Any, Optional
+
+from jinja2 import FileSystemLoader
+from jinja2.sandbox import SandboxedEnvironment
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.config import settings
+from app.models.finance.automation.document_template import (
+    DocumentTemplate,
+    TemplateType,
+)
+from app.models.finance.automation.generated_document import (
+    DocumentStatus,
+    GeneratedDocument,
+    OutputFormat,
+)
+from app.services.automation.safe_template import (
+    SAFE_FILTERS,
+    SAFE_GLOBALS,
+)
+
+logger = logging.getLogger(__name__)
+
+# Template environment singleton (sandboxed for security)
+_template_env: Optional[SandboxedEnvironment] = None
+
+
+def _get_template_env() -> SandboxedEnvironment:
+    """
+    Get or create the sandboxed Jinja2 template environment.
+
+    Uses SandboxedEnvironment to prevent template injection attacks
+    when rendering file-based templates (base layouts, etc.).
+    """
+    global _template_env
+    if _template_env is None:
+        template_dir = os.path.join(
+            os.path.dirname(
+                os.path.dirname(
+                    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                )
+            ),
+            "templates",
+        )
+        _template_env = SandboxedEnvironment(
+            loader=FileSystemLoader(template_dir),
+            autoescape=True,  # Enable autoescaping for XSS protection
+        )
+        # Add safe custom filters
+        _template_env.filters["format_currency"] = _format_currency
+        _template_env.filters["format_date"] = _format_date
+        _template_env.filters["format_datetime"] = _format_datetime
+        # Include filters from safe_template module
+        _template_env.filters.update(SAFE_FILTERS)
+        # Add safe globals
+        _template_env.globals.update(SAFE_GLOBALS)
+    return _template_env
+
+
+def _format_currency(value: Decimal | float | int | None, decimals: int = 2) -> str:
+    """Format a number as currency with thousands separator."""
+    if value is None:
+        return "0.00"
+    return f"{float(value):,.{decimals}f}"
+
+
+def _format_date(value: date | datetime | None, fmt: str = "%d %B %Y") -> str:
+    """Format a date value."""
+    if value is None:
+        return ""
+    if isinstance(value, datetime):
+        value = value.date()
+    return value.strftime(fmt)
+
+
+def _format_datetime(
+    value: datetime | None, fmt: str = "%d %B %Y at %H:%M"
+) -> str:
+    """Format a datetime value."""
+    if value is None:
+        return ""
+    return value.strftime(fmt)
+
+
+class DocumentGeneratorError(Exception):
+    """Base exception for document generation errors."""
+
+    pass
+
+
+class TemplateNotFoundError(DocumentGeneratorError):
+    """Template not found."""
+
+    pass
+
+
+class PDFGenerationError(DocumentGeneratorError):
+    """PDF generation failed."""
+
+    pass
+
+
+class DocumentGeneratorService:
+    """
+    Cross-cutting service for generating documents from templates.
+
+    Supports:
+    - PDF generation (WeasyPrint)
+    - HTML generation
+    - Email rendering (with subject)
+
+    Tracks all generated documents in the generated_document table
+    for audit trail and retrieval.
+    """
+
+    def __init__(self, db: Session):
+        self.db = db
+        self._generated_docs_dir = Path(
+            getattr(settings, "generated_docs_dir", "uploads/generated_docs")
+        )
+
+    def get_template(
+        self,
+        organization_id: uuid_module.UUID,
+        template_type: TemplateType,
+        template_name: Optional[str] = None,
+    ) -> Optional[DocumentTemplate]:
+        """
+        Get a template by type and optionally name.
+
+        If template_name is not provided, returns the default template
+        for the type, or any active template if no default exists.
+
+        Args:
+            organization_id: Organization UUID
+            template_type: Type of template
+            template_name: Optional specific template name
+
+        Returns:
+            DocumentTemplate or None if not found
+        """
+        stmt = select(DocumentTemplate).where(
+            DocumentTemplate.organization_id == organization_id,
+            DocumentTemplate.template_type == template_type,
+            DocumentTemplate.is_active == True,  # noqa: E712
+        )
+
+        if template_name:
+            stmt = stmt.where(DocumentTemplate.template_name == template_name)
+        else:
+            # Prefer default template
+            stmt = stmt.order_by(DocumentTemplate.is_default.desc())
+
+        return self.db.scalar(stmt)
+
+    def get_default_template(
+        self,
+        organization_id: uuid_module.UUID,
+        template_type: TemplateType,
+    ) -> Optional[DocumentTemplate]:
+        """Get the default template for a type."""
+        stmt = select(DocumentTemplate).where(
+            DocumentTemplate.organization_id == organization_id,
+            DocumentTemplate.template_type == template_type,
+            DocumentTemplate.is_active == True,  # noqa: E712
+            DocumentTemplate.is_default == True,  # noqa: E712
+        )
+        return self.db.scalar(stmt)
+
+    def render_html(
+        self,
+        template: DocumentTemplate,
+        context: dict[str, Any],
+    ) -> str:
+        """
+        Render a template to HTML string.
+
+        The context can include any data needed by the template.
+        Standard filters (format_currency, format_date, etc.) are available.
+
+        Args:
+            template: DocumentTemplate instance
+            context: Dictionary of template variables
+
+        Returns:
+            Rendered HTML string
+        """
+        # Add common context
+        full_context = {
+            "now": datetime.now,
+            "today": date.today(),
+            **context,
+        }
+
+        # If template has header/footer config, add to context
+        if template.header_config:
+            full_context["header"] = template.header_config
+        if template.footer_config:
+            full_context["footer"] = template.footer_config
+
+        return template.render(full_context)
+
+    def render_html_with_base(
+        self,
+        template: DocumentTemplate,
+        context: dict[str, Any],
+        base_template: str = "documents/base_letter.html",
+    ) -> str:
+        """
+        Render template content within a base document template.
+
+        This allows the DocumentTemplate content to be the "body" while
+        using a file-based template for the overall document structure.
+
+        Args:
+            template: DocumentTemplate instance
+            context: Dictionary of template variables
+            base_template: Path to base template file
+
+        Returns:
+            Rendered HTML string with base layout
+        """
+        # First render the content
+        rendered_content = self.render_html(template, context)
+
+        # Then wrap in base template
+        env = _get_template_env()
+        base = env.get_template(base_template)
+
+        # SECURITY: Sanitize CSS to prevent script injection
+        sanitized_css = self._sanitize_css(template.css_styles) if template.css_styles else ""
+
+        full_context = {
+            "content": rendered_content,
+            "css_styles": sanitized_css,
+            "page_size": template.page_size,
+            "page_orientation": template.page_orientation,
+            "page_margins": template.page_margins or {},
+            "header": template.header_config or {},
+            "footer": template.footer_config or {},
+            "now": datetime.now,
+            "today": date.today(),
+            **context,
+        }
+
+        return base.render(full_context)
+
+    def _sanitize_css(self, css: str) -> str:
+        """
+        Sanitize CSS to remove potentially dangerous content.
+
+        Removes:
+        - Script tags and JavaScript URLs
+        - HTML tags
+        - CSS expressions (IE)
+        - Import statements from external URLs
+
+        Args:
+            css: Raw CSS string
+
+        Returns:
+            Sanitized CSS string
+        """
+        import re
+
+        if not css:
+            return ""
+
+        # Remove any HTML tags (including script, style, etc.)
+        css = re.sub(r'<[^>]+>', '', css)
+
+        # Remove JavaScript protocol URLs
+        css = re.sub(r'javascript\s*:', '', css, flags=re.IGNORECASE)
+
+        # Remove CSS expressions (old IE vulnerability)
+        css = re.sub(r'expression\s*\(', '', css, flags=re.IGNORECASE)
+
+        # Remove behavior property (IE)
+        css = re.sub(r'behavior\s*:', '', css, flags=re.IGNORECASE)
+
+        # Remove @import with http/https URLs (allow local imports)
+        css = re.sub(r'@import\s+url\s*\(["\']?https?://[^)]+\)', '', css, flags=re.IGNORECASE)
+
+        # Remove -moz-binding (Firefox XSS vector)
+        css = re.sub(r'-moz-binding\s*:', '', css, flags=re.IGNORECASE)
+
+        return css.strip()
+
+    def generate_pdf(
+        self,
+        organization_id: uuid_module.UUID,
+        template_type: TemplateType,
+        context: dict[str, Any],
+        *,
+        template_name: Optional[str] = None,
+        entity_type: Optional[str] = None,
+        entity_id: Optional[uuid_module.UUID] = None,
+        document_number: Optional[str] = None,
+        document_title: Optional[str] = None,
+        created_by: Optional[uuid_module.UUID] = None,
+        save_record: bool = True,
+        save_file: bool = False,
+        use_base_template: bool = True,
+    ) -> tuple[bytes, Optional[GeneratedDocument]]:
+        """
+        Generate PDF from template.
+
+        Args:
+            organization_id: Organization UUID
+            template_type: Type of template to use
+            context: Template variables
+            template_name: Optional specific template name
+            entity_type: Type of entity (for tracking)
+            entity_id: Entity UUID (for tracking)
+            document_number: Document reference number
+            document_title: Human-readable title
+            created_by: User who initiated generation
+            save_record: Whether to save GeneratedDocument record
+            save_file: Whether to save PDF to file system
+            use_base_template: Whether to wrap content in base template
+
+        Returns:
+            Tuple of (pdf_bytes, generated_document_record)
+
+        Raises:
+            TemplateNotFoundError: If template not found
+            PDFGenerationError: If PDF generation fails
+        """
+        try:
+            from weasyprint import HTML
+        except ImportError:
+            logger.error("WeasyPrint not installed. Run: pip install weasyprint")
+            raise PDFGenerationError("WeasyPrint is required for PDF generation")
+
+        # Get template
+        template = self.get_template(organization_id, template_type, template_name)
+        if not template:
+            raise TemplateNotFoundError(
+                f"No template found for type {template_type.value}"
+            )
+
+        # Render HTML
+        if use_base_template:
+            html_content = self.render_html_with_base(template, context)
+        else:
+            html_content = self.render_html(template, context)
+
+        # Generate PDF
+        try:
+            html = HTML(string=html_content)
+            pdf_bytes: bytes = html.write_pdf()
+        except Exception as e:
+            logger.exception("PDF generation failed for template %s", template.template_id)
+            raise PDFGenerationError(f"PDF generation failed: {e}")
+
+        # Calculate hash
+        content_hash = hashlib.sha256(pdf_bytes).hexdigest()
+
+        # Optionally save to file
+        file_path = None
+        if save_file:
+            file_path = self._save_pdf_file(organization_id, pdf_bytes, document_number)
+
+        # Create record
+        generated_doc = None
+        if save_record and entity_type and entity_id and created_by:
+            generated_doc = GeneratedDocument(
+                organization_id=organization_id,
+                template_id=template.template_id,
+                template_version=template.version,
+                entity_type=entity_type,
+                entity_id=entity_id,
+                document_number=document_number,
+                document_title=document_title or f"{template_type.value} Document",
+                document_date=date.today(),
+                output_format=OutputFormat.PDF,
+                file_path=file_path,
+                file_size_bytes=len(pdf_bytes),
+                content_hash=content_hash,
+                context_snapshot=self._sanitize_context_for_snapshot(context),
+                status=DocumentStatus.DRAFT,
+                created_by=created_by,
+            )
+            self.db.add(generated_doc)
+            self.db.flush()
+            logger.info(
+                "Generated PDF document %s for entity %s/%s",
+                generated_doc.document_id,
+                entity_type,
+                entity_id,
+            )
+
+        return pdf_bytes, generated_doc
+
+    def generate_email(
+        self,
+        organization_id: uuid_module.UUID,
+        template_type: TemplateType,
+        context: dict[str, Any],
+        *,
+        template_name: Optional[str] = None,
+    ) -> tuple[str, str, str]:
+        """
+        Render email content from template.
+
+        Args:
+            organization_id: Organization UUID
+            template_type: Type of email template
+            context: Template variables
+
+        Returns:
+            Tuple of (subject, html_body, from_name)
+
+        Raises:
+            TemplateNotFoundError: If template not found
+        """
+        template = self.get_template(organization_id, template_type, template_name)
+        if not template:
+            raise TemplateNotFoundError(
+                f"No template found for type {template_type.value}"
+            )
+
+        subject = template.render_subject(context)
+        body = self.render_html(template, context)
+        from_name = template.email_from_name or ""
+
+        return subject, body, from_name
+
+    def mark_as_sent(
+        self,
+        document_id: uuid_module.UUID,
+        recipient_email: str,
+    ) -> Optional[GeneratedDocument]:
+        """Mark a generated document as sent."""
+        doc = self.db.get(GeneratedDocument, document_id)
+        if doc:
+            doc.status = DocumentStatus.SENT
+            doc.sent_to = recipient_email
+            doc.sent_at = datetime.now()
+            self.db.flush()
+        return doc
+
+    def mark_as_final(
+        self, document_id: uuid_module.UUID
+    ) -> Optional[GeneratedDocument]:
+        """Mark a generated document as final."""
+        doc = self.db.get(GeneratedDocument, document_id)
+        if doc:
+            doc.status = DocumentStatus.FINAL
+            self.db.flush()
+        return doc
+
+    def supersede_document(
+        self,
+        old_document_id: uuid_module.UUID,
+        new_document_id: uuid_module.UUID,
+    ) -> None:
+        """Mark old document as superseded by new one."""
+        old_doc = self.db.get(GeneratedDocument, old_document_id)
+        if old_doc:
+            old_doc.status = DocumentStatus.SUPERSEDED
+            old_doc.superseded_by = new_document_id
+            self.db.flush()
+
+    def get_documents_for_entity(
+        self,
+        organization_id: uuid_module.UUID,
+        entity_type: str,
+        entity_id: uuid_module.UUID,
+    ) -> list[GeneratedDocument]:
+        """Get all generated documents for an entity."""
+        stmt = select(GeneratedDocument).where(
+            GeneratedDocument.organization_id == organization_id,
+            GeneratedDocument.entity_type == entity_type,
+            GeneratedDocument.entity_id == entity_id,
+        ).order_by(GeneratedDocument.created_at.desc())
+        return list(self.db.scalars(stmt).all())
+
+    def _save_pdf_file(
+        self,
+        organization_id: uuid_module.UUID,
+        pdf_bytes: bytes,
+        document_number: Optional[str] = None,
+    ) -> str:
+        """Save PDF to file system and return relative path."""
+        org_dir = self._generated_docs_dir / str(organization_id)
+        org_dir.mkdir(parents=True, exist_ok=True)
+
+        # Generate filename
+        file_id = str(uuid_module.uuid4())
+        if document_number:
+            safe_number = document_number.replace("/", "-").replace("\\", "-")
+            filename = f"{safe_number}_{file_id}.pdf"
+        else:
+            filename = f"{file_id}.pdf"
+
+        file_path = org_dir / filename
+        file_path.write_bytes(pdf_bytes)
+
+        return f"{organization_id}/{filename}"
+
+    def _sanitize_context_for_snapshot(
+        self, context: dict[str, Any]
+    ) -> dict[str, Any]:
+        """
+        Sanitize context for storage as JSON snapshot.
+
+        Converts non-JSON-serializable values and removes sensitive data.
+        """
+        snapshot: dict[str, Any] = {}
+        sensitive_keys = {"password", "secret", "token", "key", "credential"}
+
+        for key, value in context.items():
+            # Skip sensitive keys
+            if any(s in key.lower() for s in sensitive_keys):
+                continue
+
+            # Convert common types
+            if isinstance(value, (date, datetime)):
+                snapshot[key] = value.isoformat()
+            elif isinstance(value, Decimal):
+                snapshot[key] = str(value)
+            elif isinstance(value, uuid_module.UUID):
+                snapshot[key] = str(value)
+            elif isinstance(value, (str, int, float, bool, type(None))):
+                snapshot[key] = value
+            elif isinstance(value, (list, dict)):
+                # Recursively handle nested structures
+                try:
+                    import json
+                    json.dumps(value)  # Test if serializable
+                    snapshot[key] = value
+                except (TypeError, ValueError):
+                    snapshot[key] = str(value)
+            # Skip complex objects (models, etc.)
+
+        return snapshot

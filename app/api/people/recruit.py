@@ -689,12 +689,17 @@ def decline_offer(
 @router.post("/offers/{offer_id}/convert-to-employee", response_model=dict)
 def convert_to_employee(
     offer_id: UUID,
+    date_of_joining: date = Query(...),
     organization_id: UUID = Depends(require_organization_id),
     db: Session = Depends(get_db),
 ):
     """Convert accepted offer to employee."""
     svc = RecruitmentService(db)
-    employee_id = svc.convert_to_employee(organization_id, offer_id)
+    employee_id = svc.convert_to_employee(
+        organization_id,
+        offer_id,
+        date_of_joining=date_of_joining,
+    )
     db.commit()
     return {
         "message": "Employee created successfully",

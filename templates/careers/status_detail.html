@@ -1,0 +1,137 @@
+{% extends "careers/base_careers.html" %}
+
+{% block title %}Application Status - {{ org_name }}{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-xl px-4 py-16 sm:px-6 lg:px-8">
+    <div class="rounded-xl border border-slate-200 bg-white p-8 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+        <div class="text-center">
+            <h1 class="text-2xl font-bold text-slate-900 dark:text-white">
+                Application Status
+            </h1>
+            <p class="mt-1 text-slate-600 dark:text-slate-400">
+                {{ status.applicant_name }}
+            </p>
+        </div>
+
+        <!-- Status Card -->
+        <div class="mt-8 rounded-lg border border-slate-200 p-6 dark:border-slate-700">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">Application Number</p>
+                    <p class="font-mono font-semibold text-slate-900 dark:text-white">{{ status.application_number }}</p>
+                </div>
+                <div class="text-right">
+                    <p class="text-sm text-slate-500 dark:text-slate-400">Applied On</p>
+                    <p class="font-semibold text-slate-900 dark:text-white">
+                        {{ status.applied_on[:10] if status.applied_on else 'N/A' }}
+                    </p>
+                </div>
+            </div>
+
+            <div class="mt-6">
+                <p class="text-sm text-slate-500 dark:text-slate-400">Position</p>
+                <p class="text-lg font-semibold text-slate-900 dark:text-white">{{ status.job_title }}</p>
+            </div>
+
+            <!-- Status Badge -->
+            <div class="mt-6">
+                <p class="text-sm text-slate-500 dark:text-slate-400">Current Status</p>
+                <div class="mt-2">
+                    {% set status_colors = {
+                        'NEW': 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
+                        'SCREENING': 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300',
+                        'SHORTLISTED': 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300',
+                        'INTERVIEW_SCHEDULED': 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300',
+                        'INTERVIEW_COMPLETED': 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-300',
+                        'SELECTED': 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300',
+                        'OFFER_EXTENDED': 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300',
+                        'OFFER_ACCEPTED': 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300',
+                        'OFFER_DECLINED': 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300',
+                        'HIRED': 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300',
+                        'REJECTED': 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
+                        'WITHDRAWN': 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300',
+                    } %}
+                    <span class="inline-flex items-center rounded-full px-4 py-2 text-sm font-medium {{ status_colors.get(status.status, 'bg-slate-100 text-slate-800') }}">
+                        {% if status.status in ['SELECTED', 'OFFER_EXTENDED', 'OFFER_ACCEPTED', 'HIRED'] %}
+                        <svg class="mr-2 h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                        </svg>
+                        {% elif status.status in ['REJECTED'] %}
+                        <svg class="mr-2 h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+                        </svg>
+                        {% else %}
+                        <svg class="mr-2 h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd"/>
+                        </svg>
+                        {% endif %}
+                        {{ status.status_display }}
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Status Info -->
+        <div class="mt-6 rounded-lg bg-slate-50 p-4 dark:bg-slate-900">
+            {% if status.status == 'NEW' %}
+            <p class="text-sm text-slate-600 dark:text-slate-400">
+                Your application has been received and is awaiting review by our recruitment team.
+            </p>
+            {% elif status.status == 'SCREENING' %}
+            <p class="text-sm text-slate-600 dark:text-slate-400">
+                Our team is currently reviewing your application and qualifications.
+            </p>
+            {% elif status.status == 'SHORTLISTED' %}
+            <p class="text-sm text-slate-600 dark:text-slate-400">
+                Congratulations! You've been shortlisted. We'll be in touch soon to schedule an interview.
+            </p>
+            {% elif status.status == 'INTERVIEW_SCHEDULED' %}
+            <p class="text-sm text-slate-600 dark:text-slate-400">
+                An interview has been scheduled. Please check your email for details.
+            </p>
+            {% elif status.status == 'INTERVIEW_COMPLETED' %}
+            <p class="text-sm text-slate-600 dark:text-slate-400">
+                Thank you for attending the interview. We're currently evaluating all candidates.
+            </p>
+            {% elif status.status == 'SELECTED' %}
+            <p class="text-sm text-slate-600 dark:text-slate-400">
+                Great news! You've been selected. Our team will contact you with an offer soon.
+            </p>
+            {% elif status.status == 'OFFER_EXTENDED' %}
+            <p class="text-sm text-slate-600 dark:text-slate-400">
+                An offer has been extended to you. Please check your email and respond at your earliest convenience.
+            </p>
+            {% elif status.status == 'OFFER_ACCEPTED' %}
+            <p class="text-sm text-slate-600 dark:text-slate-400">
+                Congratulations on accepting our offer! HR will be in touch with onboarding details.
+            </p>
+            {% elif status.status == 'HIRED' %}
+            <p class="text-sm text-slate-600 dark:text-slate-400">
+                Welcome to the team! We look forward to working with you.
+            </p>
+            {% elif status.status == 'REJECTED' %}
+            <p class="text-sm text-slate-600 dark:text-slate-400">
+                We appreciate your interest, but we've decided to move forward with other candidates.
+                We encourage you to apply for future positions.
+            </p>
+            {% elif status.status == 'WITHDRAWN' %}
+            <p class="text-sm text-slate-600 dark:text-slate-400">
+                This application has been withdrawn.
+            </p>
+            {% else %}
+            <p class="text-sm text-slate-600 dark:text-slate-400">
+                Your application is being processed. Please check back later for updates.
+            </p>
+            {% endif %}
+        </div>
+
+        <!-- Actions -->
+        <div class="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
+            <a href="/careers/{{ org_slug }}" class="btn btn-primary">
+                Browse More Jobs
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

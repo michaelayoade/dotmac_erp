@@ -20,6 +20,8 @@ from app.schemas.auth_flow import (
     MfaVerifyRequest,
     PasswordChangeRequest,
     PasswordChangeResponse,
+    PasswordResetRequiredRequest,
+    PasswordResetRequiredResponse,
     RefreshRequest,
     ResetPasswordRequest,
     ResetPasswordResponse,
@@ -315,6 +317,23 @@ def change_password(
     db: Session = Depends(get_db),
 ):
     return auth_flow_api_service.change_password(payload, auth, db)
+
+
+@router.post(
+    "/password/reset-required",
+    response_model=PasswordResetRequiredResponse,
+    status_code=status.HTTP_200_OK,
+    responses={
+        400: {"model": ErrorResponse},
+        401: {"model": ErrorResponse},
+        403: {"model": ErrorResponse},
+    },
+)
+def reset_password_required(
+    payload: PasswordResetRequiredRequest,
+    db: Session = Depends(get_db),
+):
+    return auth_flow_api_service.reset_password_required(payload, db)
 
 
 @router.post(

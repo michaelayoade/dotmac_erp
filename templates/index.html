@@ -241,7 +241,7 @@
             <span class="text-sm font-medium text-primary-700 dark:text-primary-300">{{ content.audit.badge }}</span>
           </div>
           <h2 class="text-3xl lg:text-4xl font-bold text-slate-900 dark:text-white font-display leading-tight">
-            {{ content.audit.title | replace('\n', '<br/>') | safe }}
+            {{ content.audit.title | nl2br }}
           </h2>
           <p class="mt-6 text-lg text-slate-600 dark:text-slate-400 leading-relaxed">
             {{ content.audit.description }}

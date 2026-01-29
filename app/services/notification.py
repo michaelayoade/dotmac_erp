@@ -275,6 +275,187 @@ class NotificationService:
         )
 
     # ========================================================================
+    # Discipline-specific helpers
+    # ========================================================================
+
+    def notify_discipline_query_issued(
+        self,
+        db: Session,
+        organization_id: uuid.UUID,
+        case_id: uuid.UUID,
+        case_number: str,
+        employee_id: uuid.UUID,
+        response_due_date: str,
+        actor_id: Optional[uuid.UUID] = None,
+    ) -> Notification:
+        """Notify employee that a disciplinary query has been issued."""
+        return self.create(
+            db,
+            organization_id=organization_id,
+            recipient_id=employee_id,
+            entity_type=EntityType.DISCIPLINE,
+            entity_id=case_id,
+            notification_type=NotificationType.ALERT,
+            title=f"Disciplinary Query Issued - {case_number}",
+            message=f"A formal query has been issued regarding case {case_number}. Please respond by {response_due_date}.",
+            channel=NotificationChannel.BOTH,
+            action_url=f"/people/self-service/discipline/{case_id}",
+            actor_id=actor_id,
+        )
+
+    def notify_discipline_hearing_scheduled(
+        self,
+        db: Session,
+        organization_id: uuid.UUID,
+        case_id: uuid.UUID,
+        case_number: str,
+        employee_id: uuid.UUID,
+        hearing_date: str,
+        hearing_location: Optional[str] = None,
+        actor_id: Optional[uuid.UUID] = None,
+    ) -> Notification:
+        """Notify employee of scheduled disciplinary hearing."""
+        location_text = f" at {hearing_location}" if hearing_location else ""
+        return self.create(
+            db,
+            organization_id=organization_id,
+            recipient_id=employee_id,
+            entity_type=EntityType.DISCIPLINE,
+            entity_id=case_id,
+            notification_type=NotificationType.ALERT,
+            title=f"Hearing Scheduled - {case_number}",
+            message=f"A disciplinary hearing for case {case_number} has been scheduled for {hearing_date}{location_text}.",
+            channel=NotificationChannel.BOTH,
+            action_url=f"/people/self-service/discipline/{case_id}",
+            actor_id=actor_id,
+        )
+
+    def notify_discipline_decision_made(
+        self,
+        db: Session,
+        organization_id: uuid.UUID,
+        case_id: uuid.UUID,
+        case_number: str,
+        employee_id: uuid.UUID,
+        appeal_deadline: Optional[str] = None,
+        actor_id: Optional[uuid.UUID] = None,
+    ) -> Notification:
+        """Notify employee that a decision has been made on their case."""
+        message = f"A decision has been reached for disciplinary case {case_number}."
+        if appeal_deadline:
+            message += f" You may appeal by {appeal_deadline}."
+        return self.create(
+            db,
+            organization_id=organization_id,
+            recipient_id=employee_id,
+            entity_type=EntityType.DISCIPLINE,
+            entity_id=case_id,
+            notification_type=NotificationType.STATUS_CHANGE,
+            title=f"Decision Made - {case_number}",
+            message=message,
+            channel=NotificationChannel.BOTH,
+            action_url=f"/people/self-service/discipline/{case_id}",
+            actor_id=actor_id,
+        )
+
+    def notify_discipline_case_closed(
+        self,
+        db: Session,
+        organization_id: uuid.UUID,
+        case_id: uuid.UUID,
+        case_number: str,
+        employee_id: uuid.UUID,
+        actor_id: Optional[uuid.UUID] = None,
+    ) -> Notification:
+        """Notify employee that their disciplinary case has been closed."""
+        return self.create(
+            db,
+            organization_id=organization_id,
+            recipient_id=employee_id,
+            entity_type=EntityType.DISCIPLINE,
+            entity_id=case_id,
+            notification_type=NotificationType.INFO,
+            title=f"Case Closed - {case_number}",
+            message=f"Disciplinary case {case_number} has been closed.",
+            channel=NotificationChannel.BOTH,
+            action_url=f"/people/self-service/discipline/{case_id}",
+            actor_id=actor_id,
+        )
+
+    def notify_discipline_response_received(
+        self,
+        db: Session,
+        organization_id: uuid.UUID,
+        case_id: uuid.UUID,
+        case_number: str,
+        hr_recipient_id: uuid.UUID,
+        employee_name: str,
+        actor_id: Optional[uuid.UUID] = None,
+    ) -> Notification:
+        """Notify HR that employee has submitted a response."""
+        return self.create(
+            db,
+            organization_id=organization_id,
+            recipient_id=hr_recipient_id,
+            entity_type=EntityType.DISCIPLINE,
+            entity_id=case_id,
+            notification_type=NotificationType.SUBMITTED,
+            title=f"Response Received - {case_number}",
+            message=f"{employee_name} has submitted a response to disciplinary case {case_number}.",
+            channel=NotificationChannel.IN_APP,
+            action_url=f"/people/hr/discipline/{case_id}",
+            actor_id=actor_id,
+        )
+
+    def notify_discipline_appeal_filed(
+        self,
+        db: Session,
+        organization_id: uuid.UUID,
+        case_id: uuid.UUID,
+        case_number: str,
+        hr_recipient_id: uuid.UUID,
+        employee_name: str,
+        actor_id: Optional[uuid.UUID] = None,
+    ) -> Notification:
+        """Notify HR that employee has filed an appeal."""
+        return self.create(
+            db,
+            organization_id=organization_id,
+            recipient_id=hr_recipient_id,
+            entity_type=EntityType.DISCIPLINE,
+            entity_id=case_id,
+            notification_type=NotificationType.SUBMITTED,
+            title=f"Appeal Filed - {case_number}",
+            message=f"{employee_name} has filed an appeal for disciplinary case {case_number}.",
+            channel=NotificationChannel.BOTH,
+            action_url=f"/people/hr/discipline/{case_id}",
+            actor_id=actor_id,
+        )
+
+    def notify_discipline_response_due_reminder(
+        self,
+        db: Session,
+        organization_id: uuid.UUID,
+        case_id: uuid.UUID,
+        case_number: str,
+        employee_id: uuid.UUID,
+        due_date: str,
+    ) -> Notification:
+        """Remind employee that response is due soon."""
+        return self.create(
+            db,
+            organization_id=organization_id,
+            recipient_id=employee_id,
+            entity_type=EntityType.DISCIPLINE,
+            entity_id=case_id,
+            notification_type=NotificationType.DUE_SOON,
+            title=f"Response Due Soon - {case_number}",
+            message=f"Your response to disciplinary case {case_number} is due on {due_date}. Please respond promptly.",
+            channel=NotificationChannel.BOTH,
+            action_url=f"/people/self-service/discipline/{case_id}",
+        )
+
+    # ========================================================================
     # Query Methods
     # ========================================================================
 

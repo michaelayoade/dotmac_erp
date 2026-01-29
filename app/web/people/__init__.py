@@ -9,6 +9,7 @@ Route structure:
 - /people/payroll/*   - Payroll processing pages
 - /people/leave/*     - Leave management pages
 - /people/attendance/* - Attendance pages
+- /people/scheduling/* - Shift scheduling pages
 - /people/recruit/*   - Recruitment pages
 - /people/training/*  - Training pages
 - /people/perf/*      - Performance pages
@@ -22,6 +23,7 @@ from app.web.people.hr import router as hr_router
 from app.web.people.payroll import router as payroll_router
 from app.web.people.leave import router as leave_router
 from app.web.people.attendance import router as attendance_router
+from app.web.people.scheduling import router as scheduling_router
 from app.web.people.training import router as training_router
 from app.web.people.perf import router as perf_router
 from app.web.people.recruit import router as recruit_router
@@ -45,6 +47,9 @@ router.include_router(leave_router)
 
 # Attendance routes
 router.include_router(attendance_router)
+
+# Scheduling routes
+router.include_router(scheduling_router)
 
 # Recruitment routes
 router.include_router(recruit_router)

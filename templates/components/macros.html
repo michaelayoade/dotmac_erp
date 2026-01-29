@@ -262,7 +262,7 @@
             search=search,
             entity_type="customers",
             filters=[],
-            base_url="/ar/customers",
+            base_url="/finance/ar/customers",
             placeholder="Search customers..."
           ) }}
    ============================================ #}
@@ -427,7 +427,7 @@ if (typeof window.searchAutosuggest === 'undefined') {
             limit: 10
           });
 
-          const response = await fetch(`/api/search/suggestions?${params}`);
+          const response = await fetch(`/api/v1/search/suggestions?${params}`);
           if (response.ok) {
             const data = await response.json();
             this.suggestions = data.suggestions || [];

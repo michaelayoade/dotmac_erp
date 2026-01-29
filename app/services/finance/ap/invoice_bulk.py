@@ -7,7 +7,6 @@ Provides bulk operations for AP (supplier) invoice documents.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import cast
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -98,7 +97,7 @@ class APInvoiceBulkService(BulkActionService[SupplierInvoice]):
             # This would need a join - for now return supplier_id
             return str(entity.supplier_id) if entity.supplier_id else ""
 
-        return cast(str, super()._get_export_value(entity, field_name))
+        return super()._get_export_value(entity, field_name)
 
     def _get_export_filename(self) -> str:
         """Get supplier invoice export filename."""
@@ -119,6 +118,10 @@ class APInvoiceBulkService(BulkActionService[SupplierInvoice]):
         if not entities:
             return BulkActionResult.failure("No invoices found with provided IDs")
 
+        if not self.user_id:
+            return BulkActionResult.failure("User required for approval")
+        user_id = self.user_id
+
         success_count = 0
         failed_count = 0
         errors: list[str] = []
@@ -129,7 +132,7 @@ class APInvoiceBulkService(BulkActionService[SupplierInvoice]):
                     self.db,
                     self.organization_id,
                     invoice.invoice_id,
-                    self.user_id,
+                    user_id,
                 )
                 success_count += 1
             except Exception as e:
@@ -158,6 +161,10 @@ class APInvoiceBulkService(BulkActionService[SupplierInvoice]):
         if not entities:
             return BulkActionResult.failure("No invoices found with provided IDs")
 
+        if not self.user_id:
+            return BulkActionResult.failure("User required for posting")
+        user_id = self.user_id
+
         success_count = 0
         failed_count = 0
         errors: list[str] = []
@@ -168,7 +175,7 @@ class APInvoiceBulkService(BulkActionService[SupplierInvoice]):
                     self.db,
                     self.organization_id,
                     invoice.invoice_id,
-                    self.user_id,
+                    user_id,
                 )
                 success_count += 1
             except Exception as e:

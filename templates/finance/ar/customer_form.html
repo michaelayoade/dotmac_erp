@@ -397,7 +397,7 @@
     </div>
 
     <form method="post"
-          action="{{ '/ar/customers/' ~ customer.customer_id ~ '/edit' if customer else '/ar/customers/new' }}"
+          action="{{ '/finance/ar/customers/' ~ customer.customer_id ~ '/edit' if customer else '/finance/ar/customers/new' }}"
           class="space-y-8">
 
         <!-- Form Result Messages -->
@@ -693,7 +693,7 @@
                 detail: { message: 'Customer saved successfully', type: 'success' }
             }));
             setTimeout(() => {
-                window.location.href = '/ar/customers';
+                window.location.href = '/finance/ar/customers';
             }, 1000);
         } else {
             const response = JSON.parse(evt.detail.xhr.responseText);

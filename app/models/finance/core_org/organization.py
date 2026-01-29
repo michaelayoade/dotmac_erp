@@ -51,6 +51,13 @@ class Organization(Base):
         nullable=False,
         unique=True,
     )
+    slug: Mapped[Optional[str]] = mapped_column(
+        String(50),
+        nullable=True,
+        unique=True,
+        index=True,
+        comment="URL-safe identifier for public pages like careers portal",
+    )
 
     # Legal identity
     legal_name: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -145,6 +152,20 @@ class Organization(Base):
         comment="Attendance mode: MANUAL, BIOMETRIC, GEOFENCED",
     )
 
+    # Payroll GL Account Settings
+    salaries_expense_account_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("gl.account.account_id"),
+        nullable=True,
+        comment="Expense account for total gross salary (debit)",
+    )
+    salary_payable_account_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("gl.account.account_id"),
+        nullable=True,
+        comment="Payable account for net salary owed to employees (credit)",
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -188,10 +209,21 @@ class Organization(Base):
         back_populates="organization",
     )
 
+    # Payroll GL Account relationships
+    salaries_expense_account: Mapped[Optional["Account"]] = relationship(
+        "Account",
+        foreign_keys=[salaries_expense_account_id],
+    )
+    salary_payable_account: Mapped[Optional["Account"]] = relationship(
+        "Account",
+        foreign_keys=[salary_payable_account_id],
+    )
+
 
 # Forward references
 from app.models.finance.core_org.business_unit import BusinessUnit  # noqa: E402
 from app.models.finance.core_org.organization_branding import OrganizationBranding  # noqa: E402
+from app.models.finance.gl.account import Account  # noqa: E402
 from app.models.support.ticket import Ticket  # noqa: E402
 from app.models.support.team import SupportTeam  # noqa: E402
 from app.models.support.category import TicketCategory  # noqa: E402

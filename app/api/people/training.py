@@ -3,7 +3,7 @@ Training Management API Router.
 
 Thin API wrapper for Training Management endpoints. All business logic is in services.
 """
-from datetime import date
+from datetime import date, datetime
 from typing import Optional
 from uuid import UUID
 
@@ -218,8 +218,16 @@ def create_training_event(
         description=payload.description,
         start_date=payload.start_date,
         end_date=payload.end_date,
-        start_time=payload.start_time,
-        end_time=payload.end_time,
+        start_time=(
+            datetime.combine(payload.start_date, payload.start_time)
+            if payload.start_time
+            else None
+        ),
+        end_time=(
+            datetime.combine(payload.end_date, payload.end_time)
+            if payload.end_time
+            else None
+        ),
         event_type=payload.event_type,
         location=payload.location,
         meeting_link=payload.meeting_link,

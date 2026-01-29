@@ -1,0 +1,155 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}{% if is_edit %}Edit{% else %}New{% endif %} Shift Pattern{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a>
+    <span class="mx-2">/</span>
+    <a href="/people/scheduling/patterns" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Shift Patterns</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">{% if is_edit %}Edit{% else %}New{% endif %}</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto space-y-6">
+    <div>
+        <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">{% if is_edit %}Edit{% else %}New{% endif %} Shift Pattern</h1>
+        <p class="text-sm text-slate-500 dark:text-slate-400">Configure shift rotation settings.</p>
+    </div>
+
+    {% if error %}
+    <div class="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 rounded-lg">
+        {{ error }}
+    </div>
+    {% endif %}
+
+    <form method="post" class="card p-6 space-y-6">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+                <label for="pattern_code" class="form-label">Pattern Code <span class="text-red-500">*</span></label>
+                <input type="text" name="pattern_code" id="pattern_code" required maxlength="30"
+                    value="{{ pattern.pattern_code | default('') }}"
+                    placeholder="e.g., DAY-STD, ROT-2WK"
+                    class="form-input w-full">
+            </div>
+            <div>
+                <label for="pattern_name" class="form-label">Pattern Name <span class="text-red-500">*</span></label>
+                <input type="text" name="pattern_name" id="pattern_name" required maxlength="100"
+                    value="{{ pattern.pattern_name | default('') }}"
+                    placeholder="e.g., Standard Day Shift"
+                    class="form-input w-full">
+            </div>
+        </div>
+
+        <div>
+            <label for="description" class="form-label">Description</label>
+            <textarea name="description" id="description" rows="2"
+                placeholder="Optional description"
+                class="form-input w-full">{{ pattern.description | default('') }}</textarea>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+                <label for="rotation_type" class="form-label">Rotation Type <span class="text-red-500">*</span></label>
+                <select name="rotation_type" id="rotation_type" required class="form-select w-full">
+                    {% for rt in rotation_types %}
+                    <option value="{{ rt }}" {% if pattern.rotation_type == rt %}selected{% endif %}>
+                        {% if rt == 'DAY_ONLY' %}Day Only{% elif rt == 'NIGHT_ONLY' %}Night Only{% else %}Rotating{% endif %}
+                    </option>
+                    {% endfor %}
+                </select>
+                <p class="text-xs text-slate-500 mt-1">Day Only/Night Only = Fixed shift. Rotating = Alternates between day and night.</p>
+            </div>
+            <div id="cycle_weeks_container">
+                <label for="cycle_weeks" class="form-label">Cycle Weeks</label>
+                <select name="cycle_weeks" id="cycle_weeks" class="form-select w-full">
+                    <option value="1" {% if pattern.cycle_weeks == 1 %}selected{% endif %}>1 week</option>
+                    <option value="2" {% if pattern.cycle_weeks == 2 %}selected{% endif %}>2 weeks (bi-weekly)</option>
+                    <option value="3" {% if pattern.cycle_weeks == 3 %}selected{% endif %}>3 weeks</option>
+                    <option value="4" {% if pattern.cycle_weeks == 4 %}selected{% endif %}>4 weeks</option>
+                </select>
+                <p class="text-xs text-slate-500 mt-1">For rotating patterns: how often shifts alternate.</p>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+                <label for="day_shift_type_id" class="form-label">Day Shift Type <span class="text-red-500">*</span></label>
+                <select name="day_shift_type_id" id="day_shift_type_id" required class="form-select w-full">
+                    <option value="">Select shift type...</option>
+                    {% for st in shift_types %}
+                    <option value="{{ st.shift_type_id }}" {% if pattern.day_shift_type_id | string == st.shift_type_id | string %}selected{% endif %}>
+                        {{ st.shift_name }} ({{ st.start_time.strftime("%H:%M") }} - {{ st.end_time.strftime("%H:%M") }})
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div id="night_shift_container">
+                <label for="night_shift_type_id" class="form-label">Night Shift Type</label>
+                <select name="night_shift_type_id" id="night_shift_type_id" class="form-select w-full">
+                    <option value="">None (for day-only patterns)</option>
+                    {% for st in shift_types %}
+                    <option value="{{ st.shift_type_id }}" {% if pattern.night_shift_type_id | string == st.shift_type_id | string %}selected{% endif %}>
+                        {{ st.shift_name }} ({{ st.start_time.strftime("%H:%M") }} - {{ st.end_time.strftime("%H:%M") }})
+                    </option>
+                    {% endfor %}
+                </select>
+                <p class="text-xs text-slate-500 mt-1">Required for rotating patterns.</p>
+            </div>
+        </div>
+
+        <div>
+            <label class="form-label">Work Days <span class="text-red-500">*</span></label>
+            <div class="flex flex-wrap gap-4 mt-2">
+                {% for day in work_days_options %}
+                <label class="inline-flex items-center">
+                    <input type="checkbox" name="work_days" value="{{ day }}"
+                        {% if day in (pattern.work_days | default(['MON', 'TUE', 'WED', 'THU', 'FRI'])) %}checked{% endif %}
+                        class="form-checkbox h-4 w-4 text-teal-600 rounded border-slate-300 focus:ring-teal-500">
+                    <span class="ml-2 text-sm text-slate-700 dark:text-slate-300">{{ day }}</span>
+                </label>
+                {% endfor %}
+            </div>
+        </div>
+
+        {% if is_edit %}
+        <div>
+            <label class="inline-flex items-center">
+                <input type="checkbox" name="is_active" {% if pattern.is_active %}checked{% endif %}
+                    class="form-checkbox h-4 w-4 text-teal-600 rounded border-slate-300 focus:ring-teal-500">
+                <span class="ml-2 text-sm text-slate-700 dark:text-slate-300">Active</span>
+            </label>
+        </div>
+        {% endif %}
+
+        <div class="flex justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
+            <a href="/people/scheduling/patterns" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">{% if is_edit %}Update{% else %}Create{% endif %} Pattern</button>
+        </div>
+    </form>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const rotationType = document.getElementById('rotation_type');
+    const cycleWeeksContainer = document.getElementById('cycle_weeks_container');
+    const nightShiftContainer = document.getElementById('night_shift_container');
+
+    function updateVisibility() {
+        const isRotating = rotationType.value === 'ROTATING';
+        cycleWeeksContainer.style.display = isRotating ? 'block' : 'none';
+        nightShiftContainer.querySelector('label').innerHTML = isRotating
+            ? 'Night Shift Type <span class="text-red-500">*</span>'
+            : 'Night Shift Type';
+    }
+
+    rotationType.addEventListener('change', updateVisibility);
+    updateVisibility();
+});
+</script>
+{% endblock %}

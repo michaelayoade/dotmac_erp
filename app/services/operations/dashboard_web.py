@@ -113,7 +113,7 @@ class OperationsDashboardWebService:
             ).order_by(InventoryLot.expiry_date).limit(10).all()
 
             for lot in expiring_lots:
-                lot.item = db.get(Item, lot.item_id)
+                setattr(lot, "item", db.get(Item, lot.item_id))
 
             context["expiring_lots"] = expiring_lots
             context["expiring_lots_count"] = len(expiring_lots)
@@ -125,4 +125,3 @@ class OperationsDashboardWebService:
 
 
 operations_dashboard_web_service = OperationsDashboardWebService()
-

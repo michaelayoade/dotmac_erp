@@ -64,13 +64,14 @@
             <span class="btn-hide-on-load">Approve</span>
         </button>
     </form>
-    <form method="POST" action="/finance/ar/invoices/{{ invoice.invoice_id }}/reject" class="inline">
+    <form method="POST" action="/finance/ar/invoices/{{ invoice.invoice_id }}/cancel"
+          onsubmit="return confirm('Cancel this invoice and return to Draft for editing?');">
         <button type="submit" class="btn btn-secondary btn-loading">
             <span class="btn-spinner"></span>
             <svg class="h-4 w-4 btn-hide-on-load" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
             </svg>
-            <span class="btn-hide-on-load">Reject</span>
+            <span class="btn-hide-on-load">Cancel</span>
         </button>
     </form>
     <form method="POST" action="/finance/ar/invoices/{{ invoice.invoice_id }}/void"
@@ -91,6 +92,16 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
             </svg>
             <span class="btn-hide-on-load">Post to Ledger</span>
+        </button>
+    </form>
+    <form method="POST" action="/finance/ar/invoices/{{ invoice.invoice_id }}/cancel"
+          onsubmit="return confirm('Cancel this invoice and return to Draft for editing?');">
+        <button type="submit" class="btn btn-secondary btn-loading">
+            <span class="btn-spinner"></span>
+            <svg class="h-4 w-4 btn-hide-on-load" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+            <span class="btn-hide-on-load">Cancel</span>
         </button>
     </form>
     <form method="POST" action="/finance/ar/invoices/{{ invoice.invoice_id }}/void"

@@ -502,6 +502,10 @@ class InvoiceWebService:
     ) -> HTMLResponse | JSONResponse | RedirectResponse | dict:
         """Handle invoice creation form submission."""
         content_type = request.headers.get("content-type", "")
+        org_id = auth.organization_id
+        user_id = auth.user_id
+        assert org_id is not None
+        assert user_id is not None
 
         if "application/json" in content_type:
             data = await request.json()
@@ -514,9 +518,9 @@ class InvoiceWebService:
 
             invoice = ar_invoice_service.create_invoice(
                 db=db,
-                organization_id=auth.organization_id,
+                organization_id=org_id,
                 input=input_data,
-                created_by_user_id=auth.user_id,
+                created_by_user_id=user_id,
             )
 
             if "application/json" in content_type:
@@ -593,7 +597,11 @@ class InvoiceWebService:
     ) -> RedirectResponse:
         """Handle invoice attachment upload."""
         try:
-            invoice = ar_invoice_service.get(db, auth.organization_id, invoice_id)
+            org_id = auth.organization_id
+            user_id = auth.person_id
+            assert org_id is not None
+            assert user_id is not None
+            invoice = ar_invoice_service.get(db, org_id, invoice_id)
             if not invoice or invoice.organization_id != auth.organization_id:
                 return RedirectResponse(
                     url=f"/ar/invoices/{invoice_id}?error=Invoice+not+found",
@@ -605,16 +613,16 @@ class InvoiceWebService:
                 entity_id=invoice_id,
                 file_name=file.filename or "unnamed",
                 content_type=file.content_type or "application/octet-stream",
-                category=AttachmentCategory.CUSTOMER_INVOICE,
+                category=AttachmentCategory.INVOICE,
                 description=description,
             )
 
             attachment_service.save_file(
                 db=db,
-                organization_id=auth.organization_id,
+                organization_id=org_id,
                 input=input_data,
                 file_content=file.file,
-                uploaded_by=auth.person_id,
+                uploaded_by=user_id,
             )
 
             return RedirectResponse(

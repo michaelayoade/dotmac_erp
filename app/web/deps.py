@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.db import AsyncSessionLocal, SessionLocal
+from app.db import AsyncSessionLocal, SessionLocal, get_auth_db_session
 from app.models.auth import Session as AuthSession, SessionStatus
 from app.models.person import Person
 from app.models.rbac import Role, PersonRole
@@ -24,6 +24,50 @@ from app.services.auth_flow import decode_access_token
 from app.services.auth_dependencies import is_session_inactive
 from app.services.common import coerce_uuid
 from app.services.finance.branding import BrandingService, CSSGenerator
+
+
+def _get_auth_db_for_sso() -> Session | None:
+    """Get auth database session for SSO validation in web routes.
+
+    When SSO is enabled and this is an SSO client (not provider),
+    returns a session to the shared auth database.
+    """
+    if settings.sso_enabled and not settings.sso_provider_mode:
+        return get_auth_db_session()
+    return None
+
+
+def _validate_session_sso(
+    session_id,
+    person_id,
+    now: datetime,
+    auth_db: Session,
+) -> AuthSession | None:
+    """Validate session against SSO auth database.
+
+    Handles timezone-naive expires_at values (SQLite compatibility).
+    """
+    session = (
+        auth_db.query(AuthSession)
+        .filter(AuthSession.id == session_id)
+        .filter(AuthSession.person_id == person_id)
+        .filter(AuthSession.status == SessionStatus.active)
+        .filter(AuthSession.revoked_at.is_(None))
+        .first()
+    )
+
+    if not session:
+        return None
+
+    # Handle timezone-naive expires_at (SQLite doesn't preserve timezone)
+    expires_at = session.expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+
+    if expires_at <= now:
+        return None
+
+    return session
 
 
 def get_db():
@@ -506,6 +550,7 @@ class WebAuthContext:
         is_authenticated: bool = False,
         person_id: Optional[UUID] = None,
         organization_id: Optional[UUID] = None,
+        employee_id: Optional[UUID] = None,
         user_name: str = "Guest",
         user_initials: str = "GU",
         roles: Optional[list[str]] = None,
@@ -514,6 +559,7 @@ class WebAuthContext:
         self.is_authenticated = is_authenticated
         self.person_id = person_id
         self.organization_id = organization_id
+        self.employee_id = employee_id
         self.user_name = user_name
         self.user_initials = user_initials
         self.roles = roles or []
@@ -662,6 +708,9 @@ def require_web_auth(
     """
     Require authentication for web routes and set tenant context.
 
+    Supports SSO by validating tokens against shared auth database when
+    SSO is enabled and this app is an SSO client.
+
     Checks for JWT in:
     1. Authorization header (Bearer token)
     2. access_token cookie
@@ -693,6 +742,7 @@ def require_web_auth(
         )
 
     try:
+        # Decode token (uses SSO secret when SSO is enabled)
         payload = decode_access_token(db, token)
     except HTTPException:
         raise HTTPException(
@@ -711,23 +761,39 @@ def require_web_auth(
     person_uuid = coerce_uuid(person_id)
     session_uuid = coerce_uuid(session_id)
 
-    # Validate session
-    session = (
-        db.query(AuthSession)
-        .filter(AuthSession.id == session_uuid)
-        .filter(AuthSession.person_id == person_uuid)
-        .filter(AuthSession.status == SessionStatus.active)
-        .filter(AuthSession.revoked_at.is_(None))
-        .filter(AuthSession.expires_at > now)
-        .first()
-    )
+    # SSO: validate session against shared auth database
+    auth_db = _get_auth_db_for_sso()
+    try:
+        if auth_db:
+            # SSO client mode - validate against shared auth database
+            session = _validate_session_sso(session_uuid, person_uuid, now, auth_db)
+        else:
+            # SSO provider or non-SSO mode - validate against local database
+            session = (
+                db.query(AuthSession)
+                .filter(AuthSession.id == session_uuid)
+                .filter(AuthSession.person_id == person_uuid)
+                .filter(AuthSession.status == SessionStatus.active)
+                .filter(AuthSession.revoked_at.is_(None))
+                .filter(AuthSession.expires_at > now)
+                .first()
+            )
 
-    if not session:
-        raise HTTPException(status_code=401, detail="Session expired or invalid")
+        if not session:
+            raise HTTPException(status_code=401, detail="Session expired or invalid")
 
-    # Check for activity timeout (session idle too long)
-    if is_session_inactive(session, now):
-        raise HTTPException(status_code=401, detail="Session expired due to inactivity")
+        # Check for activity timeout (session idle too long)
+        if is_session_inactive(session, now):
+            raise HTTPException(status_code=401, detail="Session expired due to inactivity")
+
+        # Update session activity in auth database
+        if auth_db:
+            session.last_seen_at = now
+            auth_db.commit()
+
+    finally:
+        if auth_db:
+            auth_db.close()
 
     # Get person details
     person = db.get(Person, person_uuid)
@@ -744,7 +810,15 @@ def require_web_auth(
     request.state.actor_id = str(person_id)
 
     # Build user display info
-    user_name = person.name or person.email or "User"
+    def _clean_name(value: Optional[str]) -> str:
+        cleaned = (value or "").strip()
+        return "" if cleaned.lower() in {"none", "null"} else cleaned
+
+    display_name = _clean_name(person.display_name)
+    first_name = _clean_name(person.first_name)
+    last_name = _clean_name(person.last_name)
+    base_name = f"{first_name} {last_name}".strip()
+    user_name = display_name or base_name or _clean_name(person.email) or "User"
     initials = "".join(word[0].upper() for word in user_name.split()[:2]) if user_name else "US"
 
     roles_value = payload.get("roles")
@@ -754,10 +828,19 @@ def require_web_auth(
     roles, scopes = _normalize_roles_scopes(roles, scopes)
     roles = _ensure_admin_role(db, person_uuid, roles)
 
+    # Look up employee_id for the person (may be None if person is not an employee)
+    from sqlalchemy import select
+    from app.models.people.hr.employee import Employee
+    employee = db.scalar(
+        select(Employee).where(Employee.person_id == person_uuid)
+    )
+    employee_id = employee.employee_id if employee else None
+
     return WebAuthContext(
         is_authenticated=True,
         person_id=person_uuid,
         organization_id=organization_id,
+        employee_id=employee_id,
         user_name=user_name,
         user_initials=initials,
         roles=roles,
@@ -772,7 +855,7 @@ def optional_web_auth(
     db: Session = Depends(get_db),
 ) -> WebAuthContext:
     """
-    Optional authentication for web routes.
+    Optional authentication for web routes with SSO support.
 
     Similar to require_web_auth but returns a guest context
     if no valid authentication is provided.
@@ -800,23 +883,39 @@ def optional_web_auth(
     person_uuid = coerce_uuid(person_id)
     session_uuid = coerce_uuid(session_id)
 
-    # Validate session
-    session = (
-        db.query(AuthSession)
-        .filter(AuthSession.id == session_uuid)
-        .filter(AuthSession.person_id == person_uuid)
-        .filter(AuthSession.status == SessionStatus.active)
-        .filter(AuthSession.revoked_at.is_(None))
-        .filter(AuthSession.expires_at > now)
-        .first()
-    )
+    # SSO: validate session against shared auth database
+    auth_db = _get_auth_db_for_sso()
+    try:
+        if auth_db:
+            # SSO client mode - validate against shared auth database
+            session = _validate_session_sso(session_uuid, person_uuid, now, auth_db)
+        else:
+            # SSO provider or non-SSO mode - validate against local database
+            session = (
+                db.query(AuthSession)
+                .filter(AuthSession.id == session_uuid)
+                .filter(AuthSession.person_id == person_uuid)
+                .filter(AuthSession.status == SessionStatus.active)
+                .filter(AuthSession.revoked_at.is_(None))
+                .filter(AuthSession.expires_at > now)
+                .first()
+            )
 
-    if not session:
-        return WebAuthContext(is_authenticated=False)
+        if not session:
+            return WebAuthContext(is_authenticated=False)
 
-    # Check for activity timeout (session idle too long)
-    if is_session_inactive(session, now):
-        return WebAuthContext(is_authenticated=False)
+        # Check for activity timeout (session idle too long)
+        if is_session_inactive(session, now):
+            return WebAuthContext(is_authenticated=False)
+
+        # Update session activity in auth database
+        if auth_db:
+            session.last_seen_at = now
+            auth_db.commit()
+
+    finally:
+        if auth_db:
+            auth_db.close()
 
     # Get person details
     person = db.get(Person, person_uuid)
@@ -833,7 +932,15 @@ def optional_web_auth(
     request.state.actor_id = str(person_id)
 
     # Build user display info
-    user_name = person.name or person.email or "User"
+    def _clean_name(value: Optional[str]) -> str:
+        cleaned = (value or "").strip()
+        return "" if cleaned.lower() in {"none", "null"} else cleaned
+
+    display_name = _clean_name(person.display_name)
+    first_name = _clean_name(person.first_name)
+    last_name = _clean_name(person.last_name)
+    base_name = f"{first_name} {last_name}".strip()
+    user_name = display_name or base_name or _clean_name(person.email) or "User"
     initials = "".join(word[0].upper() for word in user_name.split()[:2]) if user_name else "US"
 
     roles_value = payload.get("roles")
@@ -843,10 +950,19 @@ def optional_web_auth(
     roles, scopes = _normalize_roles_scopes(roles, scopes)
     roles = _ensure_admin_role(db, person_uuid, roles)
 
+    # Look up employee_id for the person (may be None if person is not an employee)
+    from sqlalchemy import select
+    from app.models.people.hr.employee import Employee
+    employee = db.scalar(
+        select(Employee).where(Employee.person_id == person_uuid)
+    )
+    employee_id = employee.employee_id if employee else None
+
     return WebAuthContext(
         is_authenticated=True,
         person_id=person_uuid,
         organization_id=organization_id,
+        employee_id=employee_id,
         user_name=user_name,
         user_initials=initials,
         roles=roles,

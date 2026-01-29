@@ -217,6 +217,12 @@ class EmployeeService:
         if not filters.include_deleted:
             stmt = stmt.where(Employee.is_deleted == False)
 
+        if filters.is_active is not None and not filters.status:
+            if filters.is_active:
+                stmt = stmt.where(Employee.status == EmployeeStatus.ACTIVE)
+            else:
+                stmt = stmt.where(Employee.status != EmployeeStatus.ACTIVE)
+
         if filters.status:
             stmt = stmt.where(Employee.status == filters.status)
 
@@ -256,6 +262,8 @@ class EmployeeService:
                 selectinload(Employee.person),
                 selectinload(Employee.department),
                 selectinload(Employee.designation),
+                selectinload(Employee.employment_type),
+                selectinload(Employee.default_shift_type),
             )
 
         return paginate(

@@ -23,6 +23,7 @@ from fastapi.responses import FileResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.schemas.bulk_actions import BulkActionRequest, BulkExportRequest
+from app.services.common import coerce_uuid
 from app.services.finance.common.attachment import attachment_service
 from app.web.deps import WebAuthContext
 
@@ -66,7 +67,7 @@ from app.services.finance.ar.web.quote_web import QuoteWebService, quote_web_ser
 from app.services.finance.ar.web.sales_order_web import SalesOrderWebService, sales_order_web_service
 
 
-class ARWebService(
+class ARWebService(  # type: ignore[misc]
     CustomerWebService,
     InvoiceWebService,
     ReceiptWebService,
@@ -98,9 +99,13 @@ class ARWebService(
         db: Session,
     ) -> FileResponse | RedirectResponse:
         """Download an attachment file."""
-        attachment = attachment_service.get(db, auth.organization_id, attachment_id)
+        attachment = attachment_service.get(
+            db,
+            coerce_uuid(auth.organization_id),
+            attachment_id,
+        )
 
-        if not attachment or attachment.organization_id != auth.organization_id:
+        if not attachment or attachment.organization_id != coerce_uuid(auth.organization_id):
             return RedirectResponse(url="/finance/ar/invoices?error=Attachment+not+found", status_code=303)
 
         file_path = attachment_service.get_file_path(attachment)
@@ -121,7 +126,11 @@ class ARWebService(
         db: Session,
     ) -> RedirectResponse:
         """Delete an attachment."""
-        attachment = attachment_service.get(db, auth.organization_id, attachment_id)
+        attachment = attachment_service.get(
+            db,
+            coerce_uuid(auth.organization_id),
+            attachment_id,
+        )
 
         if not attachment or attachment.organization_id != auth.organization_id:
             return RedirectResponse(url="/finance/ar/invoices?error=Attachment+not+found", status_code=303)
@@ -159,7 +168,11 @@ class ARWebService(
 
         body = await request.json()
         req = BulkActionRequest(**body)
-        service = get_customer_bulk_service(db, auth.organization_id, auth.user_id)
+        service = get_customer_bulk_service(
+            db,
+            coerce_uuid(auth.organization_id),
+            coerce_uuid(auth.user_id),
+        )
         return await service.bulk_delete(req.ids)
 
     async def bulk_export_customers_response(
@@ -173,7 +186,11 @@ class ARWebService(
 
         body = await request.json()
         req = BulkExportRequest(**body)
-        service = get_customer_bulk_service(db, auth.organization_id, auth.user_id)
+        service = get_customer_bulk_service(
+            db,
+            coerce_uuid(auth.organization_id),
+            coerce_uuid(auth.user_id),
+        )
         return await service.bulk_export(req.ids, req.format)
 
     async def bulk_activate_customers_response(
@@ -187,7 +204,11 @@ class ARWebService(
 
         body = await request.json()
         req = BulkActionRequest(**body)
-        service = get_customer_bulk_service(db, auth.organization_id, auth.user_id)
+        service = get_customer_bulk_service(
+            db,
+            coerce_uuid(auth.organization_id),
+            coerce_uuid(auth.user_id),
+        )
         return await service.bulk_activate(req.ids)
 
     async def bulk_deactivate_customers_response(
@@ -201,7 +222,11 @@ class ARWebService(
 
         body = await request.json()
         req = BulkActionRequest(**body)
-        service = get_customer_bulk_service(db, auth.organization_id, auth.user_id)
+        service = get_customer_bulk_service(
+            db,
+            coerce_uuid(auth.organization_id),
+            coerce_uuid(auth.user_id),
+        )
         return await service.bulk_deactivate(req.ids)
 
     # =====================================================================
@@ -219,7 +244,11 @@ class ARWebService(
 
         body = await request.json()
         req = BulkActionRequest(**body)
-        service = get_ar_invoice_bulk_service(db, auth.organization_id, auth.user_id)
+        service = get_ar_invoice_bulk_service(
+            db,
+            coerce_uuid(auth.organization_id),
+            coerce_uuid(auth.user_id),
+        )
         return await service.bulk_delete(req.ids)
 
     async def bulk_export_invoices_response(
@@ -233,7 +262,11 @@ class ARWebService(
 
         body = await request.json()
         req = BulkExportRequest(**body)
-        service = get_ar_invoice_bulk_service(db, auth.organization_id, auth.user_id)
+        service = get_ar_invoice_bulk_service(
+            db,
+            coerce_uuid(auth.organization_id),
+            coerce_uuid(auth.user_id),
+        )
         return await service.bulk_export(req.ids, req.format)
 
     async def bulk_approve_invoices_response(
@@ -247,7 +280,11 @@ class ARWebService(
 
         body = await request.json()
         req = BulkActionRequest(**body)
-        service = get_ar_invoice_bulk_service(db, auth.organization_id, auth.user_id)
+        service = get_ar_invoice_bulk_service(
+            db,
+            coerce_uuid(auth.organization_id),
+            coerce_uuid(auth.user_id),
+        )
         return await service.bulk_approve(req.ids)
 
     async def bulk_post_invoices_response(
@@ -261,7 +298,11 @@ class ARWebService(
 
         body = await request.json()
         req = BulkActionRequest(**body)
-        service = get_ar_invoice_bulk_service(db, auth.organization_id, auth.user_id)
+        service = get_ar_invoice_bulk_service(
+            db,
+            coerce_uuid(auth.organization_id),
+            coerce_uuid(auth.user_id),
+        )
         return await service.bulk_post(req.ids)
 
     # =====================================================================
@@ -279,7 +320,11 @@ class ARWebService(
 
         body = await request.json()
         req = BulkActionRequest(**body)
-        service = get_ar_receipt_bulk_service(db, auth.organization_id, auth.user_id)
+        service = get_ar_receipt_bulk_service(
+            db,
+            coerce_uuid(auth.organization_id),
+            coerce_uuid(auth.user_id),
+        )
         return await service.bulk_delete(req.ids)
 
     async def bulk_export_receipts_response(
@@ -293,7 +338,11 @@ class ARWebService(
 
         body = await request.json()
         req = BulkExportRequest(**body)
-        service = get_ar_receipt_bulk_service(db, auth.organization_id, auth.user_id)
+        service = get_ar_receipt_bulk_service(
+            db,
+            coerce_uuid(auth.organization_id),
+            coerce_uuid(auth.user_id),
+        )
         return await service.bulk_export(req.ids, req.format)
 
 

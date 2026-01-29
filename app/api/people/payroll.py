@@ -436,31 +436,32 @@ def export_salary_slips(
         offset=0,
     )
 
-    rows = [
-        [
-            "slip_id",
-            "employee_id",
-            "start_date",
-            "end_date",
-            "gross_pay",
-            "total_deduction",
-            "net_pay",
-            "status",
-        ]
-    ]
+    rows = [[
+        "Slip #",
+        "Employee",
+        "Period",
+        "Gross",
+        "Deductions",
+        "Net Pay",
+        "Status",
+        "Bank Name",
+        "Bank Account Number",
+        "Bank Branch Code",
+    ]]
     for slip in slips:
-        rows.append(
-            [
-                str(slip.slip_id),
-                str(slip.employee_id),
-                slip.start_date.isoformat(),
-                slip.end_date.isoformat(),
-                str(slip.gross_pay),
-                str(slip.total_deduction),
-                str(slip.net_pay),
-                slip.status.value,
-            ]
-        )
+        period = f"{slip.start_date.strftime('%b %d')} - {slip.end_date.strftime('%b %d, %Y')}"
+        rows.append([
+            slip.slip_number,
+            slip.employee_name or "",
+            period,
+            f"{slip.gross_pay:,.2f}",
+            f"({slip.total_deduction:,.2f})",
+            f"{slip.net_pay:,.2f}",
+            slip.status.value.title(),
+            slip.bank_name or "",
+            slip.bank_account_number or "",
+            slip.bank_branch_code or "",
+        ])
     return csv_response(rows, "salary_slips.csv")
 
 
@@ -807,13 +808,13 @@ class PAYECalculateRequest(BaseModel):
     """PAYE calculation request."""
 
     gross_monthly: PyDecimal = Field(
-        ..., gt=0, le=MAX_MONTHLY_SALARY, description="Monthly gross salary (max ₦1B)"
+        ..., gt=0, le=float(MAX_MONTHLY_SALARY), description="Monthly gross salary (max ₦1B)"
     )
     basic_monthly: PyDecimal = Field(
-        ..., gt=0, le=MAX_MONTHLY_SALARY, description="Monthly basic salary (max ₦1B)"
+        ..., gt=0, le=float(MAX_MONTHLY_SALARY), description="Monthly basic salary (max ₦1B)"
     )
     annual_rent: Optional[PyDecimal] = Field(
-        None, ge=0, le=MAX_ANNUAL_RENT, description="Annual rent for relief (max ₦100M)"
+        None, ge=0, le=float(MAX_ANNUAL_RENT), description="Annual rent for relief (max ₦100M)"
     )
     rent_verified: bool = Field(False, description="Whether rent documentation is verified")
     pension_rate: Optional[PyDecimal] = Field(None, ge=0, le=1, description="Override pension rate")
@@ -847,6 +848,8 @@ class PAYEBreakdownResponse(BaseModel):
     # Statutory deductions (annual)
     pension_amount: str
     pension_rate: str
+    employer_pension_amount: str
+    employer_pension_rate: str
     nhf_amount: str
     nhf_rate: str
     nhis_amount: str
@@ -863,6 +866,7 @@ class PAYEBreakdownResponse(BaseModel):
     annual_tax: str
     monthly_tax: str
     monthly_pension: str
+    monthly_employer_pension: str
     monthly_nhf: str
     monthly_nhis: str
 

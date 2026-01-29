@@ -26,6 +26,7 @@ from app.web.admin import router as admin_web_router
 from app.web.admin_sync import router as admin_sync_router
 from app.web.profile import router as profile_web_router
 from app.web.people import router as people_web_router
+from app.web.payroll_alias import router as payroll_alias_web_router
 from app.web.operations import router as operations_web_router
 from app.web.notifications import router as notifications_web_router
 from app.web.workflow_tasks import router as workflow_tasks_web_router
@@ -51,9 +52,16 @@ from app.api.expense import router as expense_router
 from app.api.expense_limits import router as expense_limits_router
 from app.api.support import router as support_router
 from app.api.pm import router as pm_router
+from app.api.crm import router as crm_router
+from app.api.crm import webhook_router as crm_webhook_router
+from app.api.careers import router as careers_api_router
+from app.web.careers import router as careers_web_router
+from app.web.onboarding_portal import router as onboarding_portal_router
 from app.db import SessionLocal
 from app.services import audit as audit_service
 from app.api.deps import require_role, require_user_auth, require_tenant_auth
+# Ensure all models are registered with SQLAlchemy metadata at startup.
+import app.models as app_models  # noqa: F401
 from app.models.domain_settings import DomainSetting, SettingDomain
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -87,6 +95,16 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="DotMac ERP API", lifespan=lifespan)
+
+# Redirect legacy AR customers path to web UI (avoid JSON API response)
+@app.get("/ar/customers", include_in_schema=False)
+@app.get("/ar/customers/", include_in_schema=False)
+def ar_customers_redirect(request: Request):
+    query = request.url.query
+    url = "/finance/ar/customers"
+    if query:
+        url = f"{url}?{query}"
+    return RedirectResponse(url=url, status_code=302)
 
 _AUDIT_SETTINGS_CACHE: dict | None = None
 _AUDIT_SETTINGS_CACHE_AT: float | None = None
@@ -246,6 +264,7 @@ app.include_router(finance_web_router, prefix="/finance")
 app.include_router(expense_web_router, prefix="/expense")
 app.include_router(settings_web_router)  # Has its own /settings prefix
 app.include_router(automation_web_router)  # Has its own /automation prefix
+app.include_router(payroll_alias_web_router)
 app.include_router(people_web_router)
 app.include_router(operations_web_router)
 app.include_router(notifications_web_router)
@@ -281,6 +300,18 @@ _include_api_router(support_router, dependencies=[Depends(require_tenant_auth)])
 
 # Project Management (Operations module)
 _include_api_router(pm_router, dependencies=[Depends(require_tenant_auth)])
+
+# CRM Integration (sync from crm.dotmac.io)
+_include_api_router(crm_router, dependencies=[Depends(require_tenant_auth)])
+# CRM webhook router - NO authentication (uses HMAC signature verification)
+_include_api_router(crm_webhook_router)
+
+# Public Careers Portal (no authentication required)
+_include_api_router(careers_api_router)  # API endpoints
+app.include_router(careers_web_router)  # Web UI routes
+
+# Public Onboarding Self-Service Portal (token-based auth, no login required)
+app.include_router(onboarding_portal_router)  # Web UI routes
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 

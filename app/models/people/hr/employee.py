@@ -6,6 +6,7 @@ The central entity linking Person to HR functionality.
 import enum
 import uuid
 from datetime import date, datetime
+from decimal import Decimal
 from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import (
@@ -14,13 +15,14 @@ from sqlalchemy import (
     Enum,
     ForeignKey,
     Index,
+    Numeric,
     String,
     Text,
     UniqueConstraint,
     func,
     text,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -51,6 +53,7 @@ if TYPE_CHECKING:
         EmployeeDependent,
         EmployeeSkill,
     )
+    from app.models.people.discipline.case import DisciplinaryCase
 
 
 class EmployeeStatus(str, enum.Enum):
@@ -72,6 +75,47 @@ class Gender(str, enum.Enum):
     FEMALE = "FEMALE"
     OTHER = "OTHER"
     PREFER_NOT_TO_SAY = "PREFER_NOT_TO_SAY"
+
+
+class MaritalStatus(str, enum.Enum):
+    """Marital status options."""
+
+    SINGLE = "SINGLE"
+    MARRIED = "MARRIED"
+    DIVORCED = "DIVORCED"
+    WIDOWED = "WIDOWED"
+    PREFER_NOT_TO_SAY = "PREFER_NOT_TO_SAY"
+
+
+class BloodGroup(str, enum.Enum):
+    """Blood group options."""
+
+    A_POSITIVE = "A+"
+    A_NEGATIVE = "A-"
+    B_POSITIVE = "B+"
+    B_NEGATIVE = "B-"
+    AB_POSITIVE = "AB+"
+    AB_NEGATIVE = "AB-"
+    O_POSITIVE = "O+"
+    O_NEGATIVE = "O-"
+    UNKNOWN = "UNKNOWN"
+
+
+class AccommodationType(str, enum.Enum):
+    """Accommodation type options."""
+
+    OWNED = "OWNED"
+    RENTED = "RENTED"
+    COMPANY_PROVIDED = "COMPANY_PROVIDED"
+    OTHER = "OTHER"
+
+
+class SalaryMode(str, enum.Enum):
+    """Salary payment mode options."""
+
+    BANK = "BANK"
+    CASH = "CASH"
+    CHEQUE = "CHEQUE"
 
 
 class Employee(Base, AuditMixin, SoftDeleteMixin, ERPNextSyncMixin, VersionMixin):
@@ -149,6 +193,44 @@ class Employee(Base, AuditMixin, SoftDeleteMixin, ERPNextSyncMixin, VersionMixin
     )
     emergency_contact_phone: Mapped[Optional[str]] = mapped_column(
         String(50),
+        nullable=True,
+    )
+
+    # Extended personal information (ERPNext sync fields)
+    marital_status: Mapped[Optional[MaritalStatus]] = mapped_column(
+        Enum(MaritalStatus, name="hr_marital_status"),
+        nullable=True,
+    )
+    blood_group: Mapped[Optional[BloodGroup]] = mapped_column(
+        Enum(BloodGroup, name="hr_blood_group"),
+        nullable=True,
+    )
+
+    # Address information (JSONB for flexible structure)
+    current_address: Mapped[Optional[dict]] = mapped_column(
+        JSONB,
+        nullable=True,
+        comment="Current residential address",
+    )
+    permanent_address: Mapped[Optional[dict]] = mapped_column(
+        JSONB,
+        nullable=True,
+        comment="Permanent address",
+    )
+
+    # Passport information
+    passport_number: Mapped[Optional[str]] = mapped_column(
+        String(50),
+        nullable=True,
+    )
+    passport_valid_upto: Mapped[Optional[date]] = mapped_column(
+        Date,
+        nullable=True,
+    )
+
+    # Housing
+    current_accommodation_type: Mapped[Optional[AccommodationType]] = mapped_column(
+        Enum(AccommodationType, name="hr_accommodation_type"),
         nullable=True,
     )
 
@@ -248,6 +330,18 @@ class Employee(Base, AuditMixin, SoftDeleteMixin, ERPNextSyncMixin, VersionMixin
     bank_branch_code: Mapped[Optional[str]] = mapped_column(
         String(20),
         nullable=True,
+    )
+
+    # Compensation
+    ctc: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(20, 2),
+        nullable=True,
+        comment="Cost to Company (annual)",
+    )
+    salary_mode: Mapped[Optional[SalaryMode]] = mapped_column(
+        Enum(SalaryMode, name="hr_salary_mode"),
+        nullable=True,
+        comment="Salary payment mode (Bank/Cash/Cheque)",
     )
 
     # Notes
@@ -365,6 +459,13 @@ class Employee(Base, AuditMixin, SoftDeleteMixin, ERPNextSyncMixin, VersionMixin
         foreign_keys="[EmployeeSkill.employee_id]",
         back_populates="employee",
         cascade="all, delete-orphan",
+    )
+
+    # Discipline module relationships
+    disciplinary_cases: Mapped[list["DisciplinaryCase"]] = relationship(
+        "DisciplinaryCase",
+        foreign_keys="[DisciplinaryCase.employee_id]",
+        back_populates="employee",
     )
 
     @property

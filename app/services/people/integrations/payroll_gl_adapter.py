@@ -191,6 +191,24 @@ class PayrollGLAdapter:
             slip.journal_entry_id = journal.journal_entry_id
             slip.status = SalarySlipStatus.POSTED
 
+            # Trigger payslip posted notification
+            try:
+                from app.services.people.payroll.payroll_notifications import (
+                    PayrollNotificationService,
+                )
+                notification_service = PayrollNotificationService(db)
+                employee = slip.employee
+                if employee:
+                    notification_service.notify_payslip_posted(
+                        slip, employee, queue_email=True
+                    )
+            except Exception as notify_err:
+                logger.warning(
+                    "Failed to send notification for slip %s: %s",
+                    slip_id,
+                    notify_err,
+                )
+
             db.commit()
 
             logger.info(
@@ -258,9 +276,10 @@ class PayrollGLAdapter:
                 )
 
             if consolidated:
-                # TODO: Implement consolidated posting
-                # For now, fall through to per-slip posting
-                pass
+                # Consolidated posting: ONE journal entry for entire payroll run
+                return PayrollGLAdapter._post_payroll_run_consolidated(
+                    db, org_id, payroll, slips, posting_date, user_id
+                )
 
             # Post each slip individually
             posted_count = 0
@@ -354,6 +373,192 @@ class PayrollGLAdapter:
 
         except Exception as e:
             logger.exception(f"Error reversing salary slip {slip_id}")
+            db.rollback()
+            return GLPostingResult(
+                success=False,
+                error_message=str(e),
+            )
+
+    @staticmethod
+    def _post_payroll_run_consolidated(
+        db: Session,
+        org_id: uuid.UUID,
+        payroll: PayrollEntry,
+        slips: list[SalarySlip],
+        posting_date: date,
+        user_id: uuid.UUID,
+    ) -> GLPostingResult:
+        """
+        Post payroll run as ONE consolidated journal entry.
+
+        Creates:
+        - 1 Debit line: Total gross → org.salaries_expense_account_id
+        - N Credit lines: Deductions grouped by component (PAYE, Pension, NHF, etc.)
+        - 1 Credit line: Total net pay → org.salary_payable_account_id
+        """
+        from app.models.finance.core_org.organization import Organization
+        from app.services.finance.gl.journal import JournalService
+        from app.services.finance.gl import JournalInput, JournalLineInput
+        from app.models.finance.gl.journal_entry import JournalType
+
+        try:
+            # Check if already posted
+            if payroll.journal_entry_id is not None:
+                return GLPostingResult(
+                    success=False,
+                    error_message="Payroll run already posted to GL"
+                )
+
+            # Load organization and validate GL accounts
+            org = db.get(Organization, org_id)
+            if not org:
+                return GLPostingResult(
+                    success=False,
+                    error_message="Organization not found"
+                )
+
+            if not org.salaries_expense_account_id:
+                return GLPostingResult(
+                    success=False,
+                    error_message="Salaries Expense account not configured. Go to Admin > Organizations to set it."
+                )
+            if not org.salary_payable_account_id:
+                return GLPostingResult(
+                    success=False,
+                    error_message="Salary Payable account not configured. Go to Admin > Organizations to set it."
+                )
+
+            # Aggregate totals
+            total_gross = sum(
+                ((slip.gross_pay or Decimal("0")) for slip in slips),
+                Decimal("0"),
+            )
+            total_net = sum(
+                ((slip.net_pay or Decimal("0")) for slip in slips),
+                Decimal("0"),
+            )
+
+            # Group deductions by component to aggregate amounts per liability account
+            # Key: component_id, Value: (component_name, total_amount, liability_account_id)
+            deductions_by_component: dict[uuid.UUID, tuple[str, Decimal, uuid.UUID]] = {}
+
+            for slip in slips:
+                for ded in slip.deductions:
+                    if ded.statistical_component:
+                        continue
+                    comp = ded.component
+                    if not comp or not comp.liability_account_id:
+                        logger.warning(
+                            f"Deduction component {ded.component_id} has no liability account, skipping"
+                        )
+                        continue
+
+                    key = comp.component_id
+                    if key in deductions_by_component:
+                        name, amt, acc_id = deductions_by_component[key]
+                        deductions_by_component[key] = (name, amt + ded.amount, acc_id)
+                    else:
+                        deductions_by_component[key] = (
+                            comp.component_name,
+                            ded.amount,
+                            comp.liability_account_id,
+                        )
+
+            # Build journal lines
+            lines: list[JournalLineInput] = []
+            currency_code = slips[0].currency_code if slips else "NGN"
+            exchange_rate = slips[0].exchange_rate if slips else Decimal("1.0")
+
+            # Period reference for descriptions
+            period_month = payroll.payroll_month or payroll.start_date.month
+            period_year = payroll.payroll_year or payroll.start_date.year
+            period_ref = f"{period_month}/{period_year}"
+
+            # DEBIT: Total Gross to Salaries Expense
+            lines.append(JournalLineInput(
+                account_id=org.salaries_expense_account_id,
+                debit_amount=total_gross,
+                credit_amount=Decimal("0.00"),
+                description=f"Payroll {period_ref} - Salaries Expense ({len(slips)} employees)",
+            ))
+
+            # CREDITS: Each deduction type to its liability account
+            for comp_id, (comp_name, amount, liability_acc_id) in deductions_by_component.items():
+                if amount <= 0:
+                    continue
+                lines.append(JournalLineInput(
+                    account_id=liability_acc_id,
+                    debit_amount=Decimal("0.00"),
+                    credit_amount=amount,
+                    description=f"Payroll {period_ref} - {comp_name}",
+                ))
+
+            # CREDIT: Net Pay to Salary Payable
+            lines.append(JournalLineInput(
+                account_id=org.salary_payable_account_id,
+                debit_amount=Decimal("0.00"),
+                credit_amount=total_net,
+                description=f"Payroll {period_ref} - Net Pay ({len(slips)} employees)",
+            ))
+
+            # Validate debits = credits
+            total_debits = sum(line.debit_amount for line in lines)
+            total_credits = sum(line.credit_amount for line in lines)
+            if total_debits != total_credits:
+                diff = total_debits - total_credits
+                logger.error(
+                    f"Payroll run {payroll.entry_id} is unbalanced: "
+                    f"debits={total_debits}, credits={total_credits}, diff={diff}"
+                )
+                return GLPostingResult(
+                    success=False,
+                    error_message=f"Journal entry would be unbalanced by {diff}. Check deduction configurations."
+                )
+
+            # Create journal entry
+            journal_input = JournalInput(
+                journal_type=JournalType.STANDARD,
+                entry_date=posting_date,
+                posting_date=posting_date,
+                reference=f"PR-{period_year}-{period_month:02d}",
+                description=f"Payroll Run {period_ref} ({len(slips)} employees)",
+                currency_code=currency_code,
+                exchange_rate=exchange_rate,
+                source_module="PAYROLL",
+                source_document_type="PAYROLL_ENTRY",
+                source_document_id=payroll.entry_id,
+                lines=lines,
+            )
+
+            journal = JournalService.create_journal(db, org_id, journal_input, user_id)
+
+            # Link journal to payroll entry
+            payroll.journal_entry_id = journal.journal_entry_id
+            payroll.status = PayrollEntryStatus.POSTED
+
+            # Update all slips to POSTED with same journal reference
+            from datetime import datetime, timezone
+            now = datetime.now(timezone.utc)
+            for slip in slips:
+                slip.status = SalarySlipStatus.POSTED
+                slip.journal_entry_id = journal.journal_entry_id
+                slip.posted_at = now
+                slip.posted_by_id = user_id
+
+            db.commit()
+
+            logger.info(
+                f"Posted payroll run {payroll.entry_id} to GL as consolidated journal {journal.journal_entry_id}: "
+                f"gross={total_gross}, net={total_net}, employees={len(slips)}"
+            )
+
+            return GLPostingResult(
+                success=True,
+                journal_entry_id=journal.journal_entry_id,
+            )
+
+        except Exception as e:
+            logger.exception(f"Error posting consolidated payroll run {payroll.entry_id}")
             db.rollback()
             return GLPostingResult(
                 success=False,

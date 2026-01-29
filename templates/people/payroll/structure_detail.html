@@ -31,7 +31,7 @@
                     {% endif %}
                 </div>
             </div>
-            <div class="flex items-center gap-3">
+            <div class="flex flex-col items-end gap-3">
                 {% if structure.is_active %}
                 <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-600/20 dark:bg-emerald-900/30 dark:text-emerald-400">
                     Active
@@ -41,6 +41,13 @@
                     Inactive
                 </span>
                 {% endif %}
+                <div class="flex items-center gap-2">
+                    <a href="/people/payroll/structures/{{ structure.structure_id }}/edit" class="btn btn-secondary btn-sm">Edit</a>
+                    <form method="post" action="/people/payroll/structures/{{ structure.structure_id }}/delete" onsubmit="return confirm('Delete this structure? If it is in use, it will be deactivated instead.');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                        <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+                    </form>
+                </div>
             </div>
         </div>
 

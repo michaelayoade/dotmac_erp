@@ -2422,6 +2422,31 @@ class ARWebService:
                 status_code=303,
             )
 
+    def cancel_invoice_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        invoice_id: str,
+    ) -> RedirectResponse:
+        """Cancel an invoice, returning to DRAFT for editing."""
+        try:
+            ar_invoice_service.cancel_invoice(
+                db=db,
+                organization_id=auth.organization_id,
+                invoice_id=coerce_uuid(invoice_id),
+                cancelled_by_user_id=auth.user_id,
+            )
+            return RedirectResponse(
+                url=f"/finance/ar/invoices/{invoice_id}?success=Invoice+cancelled.+You+can+now+edit+it.",
+                status_code=303,
+            )
+        except Exception as e:
+            return RedirectResponse(
+                url=f"/finance/ar/invoices/{invoice_id}?error={str(e)}",
+                status_code=303,
+            )
+
     def list_receipts_response(
         self,
         request: Request,

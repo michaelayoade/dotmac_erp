@@ -20,7 +20,15 @@ from app.models.people.hr.department import Department
 from app.models.people.hr.designation import Designation
 from app.models.people.hr.employment_type import EmploymentType
 from app.models.people.hr.employee_grade import EmployeeGrade
-from app.models.people.hr.employee import Employee, EmployeeStatus, Gender
+from app.models.people.hr.employee import (
+    AccommodationType,
+    BloodGroup,
+    Employee,
+    EmployeeStatus,
+    Gender,
+    MaritalStatus,
+    SalaryMode,
+)
 from app.models.person import Person
 from app.services.erpnext.mappings.hr import (
     DepartmentMapping,
@@ -542,6 +550,42 @@ class EmployeeSyncService(BaseSyncService[Employee]):
             except ValueError:
                 gender = Gender.PREFER_NOT_TO_SAY
 
+        # Map marital status
+        marital_status = None
+        marital_str = data.get("marital_status")
+        if marital_str:
+            try:
+                marital_status = MaritalStatus(marital_str)
+            except ValueError:
+                pass
+
+        # Map blood group
+        blood_group = None
+        blood_str = data.get("blood_group")
+        if blood_str:
+            try:
+                blood_group = BloodGroup(blood_str)
+            except ValueError:
+                blood_group = BloodGroup.UNKNOWN
+
+        # Map accommodation type
+        accommodation_type = None
+        accommodation_str = data.get("current_accommodation_type")
+        if accommodation_str:
+            try:
+                accommodation_type = AccommodationType(accommodation_str)
+            except ValueError:
+                accommodation_type = AccommodationType.OTHER
+
+        # Map salary mode
+        salary_mode = None
+        salary_mode_str = data.get("salary_mode")
+        if salary_mode_str:
+            try:
+                salary_mode = SalaryMode(salary_mode_str)
+            except ValueError:
+                salary_mode = SalaryMode.BANK
+
         employee = Employee(
             organization_id=self.organization_id,
             person_id=person_id,
@@ -558,6 +602,18 @@ class EmployeeSyncService(BaseSyncService[Employee]):
             status=status,
             bank_name=data.get("bank_name"),
             bank_account_number=data.get("bank_account_number"),
+            bank_branch_code=data.get("bank_branch_code"),
+            bank_account_name=data.get("bank_account_name"),
+            # Extended fields
+            current_address=data.get("current_address"),
+            permanent_address=data.get("permanent_address"),
+            marital_status=marital_status,
+            blood_group=blood_group,
+            passport_number=data.get("passport_number"),
+            passport_valid_upto=data.get("passport_valid_upto"),
+            current_accommodation_type=accommodation_type,
+            ctc=data.get("ctc"),
+            salary_mode=salary_mode,
             # created_by_id not set for synced records
         )
         return employee
@@ -603,6 +659,8 @@ class EmployeeSyncService(BaseSyncService[Employee]):
         entity.date_of_leaving = data.get("date_of_leaving")
         entity.bank_name = data.get("bank_name")
         entity.bank_account_number = data.get("bank_account_number")
+        entity.bank_branch_code = data.get("bank_branch_code")
+        entity.bank_account_name = data.get("bank_account_name")
 
         # Update status
         status_str = data.get("status", "ACTIVE")
@@ -610,6 +668,50 @@ class EmployeeSyncService(BaseSyncService[Employee]):
             entity.status = EmployeeStatus(status_str)
         except ValueError:
             pass
+
+        # Update extended fields
+        if data.get("current_address") is not None:
+            entity.current_address = data.get("current_address")
+        if data.get("permanent_address") is not None:
+            entity.permanent_address = data.get("permanent_address")
+        if data.get("passport_number") is not None:
+            entity.passport_number = data.get("passport_number")
+        if data.get("passport_valid_upto") is not None:
+            entity.passport_valid_upto = data.get("passport_valid_upto")
+        if data.get("ctc") is not None:
+            entity.ctc = data.get("ctc")
+
+        # Update marital status
+        marital_str = data.get("marital_status")
+        if marital_str:
+            try:
+                entity.marital_status = MaritalStatus(marital_str)
+            except ValueError:
+                pass
+
+        # Update blood group
+        blood_str = data.get("blood_group")
+        if blood_str:
+            try:
+                entity.blood_group = BloodGroup(blood_str)
+            except ValueError:
+                entity.blood_group = BloodGroup.UNKNOWN
+
+        # Update accommodation type
+        accommodation_str = data.get("current_accommodation_type")
+        if accommodation_str:
+            try:
+                entity.current_accommodation_type = AccommodationType(accommodation_str)
+            except ValueError:
+                entity.current_accommodation_type = AccommodationType.OTHER
+
+        # Update salary mode
+        salary_mode_str = data.get("salary_mode")
+        if salary_mode_str:
+            try:
+                entity.salary_mode = SalaryMode(salary_mode_str)
+            except ValueError:
+                entity.salary_mode = SalaryMode.BANK
 
         # updated_by_id not set for synced records
         return entity

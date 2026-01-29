@@ -21,6 +21,7 @@ from fastapi import Request
 from sqlalchemy.orm import Session
 
 from app.schemas.bulk_actions import BulkActionRequest, BulkExportRequest
+from app.services.common import coerce_uuid
 from app.web.deps import WebAuthContext
 
 from app.services.finance.gl.web.base import (
@@ -78,7 +79,11 @@ class GLWebService(AccountWebService, JournalWebService, LedgerWebService, Perio
 
         body = await request.json()
         req = BulkActionRequest(**body)
-        service = get_account_bulk_service(db, auth.organization_id, auth.user_id)
+        service = get_account_bulk_service(
+            db,
+            coerce_uuid(auth.organization_id),
+            coerce_uuid(auth.user_id),
+        )
         return await service.bulk_delete(req.ids)
 
     async def bulk_export_accounts_response(
@@ -92,7 +97,11 @@ class GLWebService(AccountWebService, JournalWebService, LedgerWebService, Perio
 
         body = await request.json()
         req = BulkExportRequest(**body)
-        service = get_account_bulk_service(db, auth.organization_id, auth.user_id)
+        service = get_account_bulk_service(
+            db,
+            coerce_uuid(auth.organization_id),
+            coerce_uuid(auth.user_id),
+        )
         return await service.bulk_export(req.ids, req.format)
 
     async def bulk_activate_accounts_response(
@@ -106,7 +115,11 @@ class GLWebService(AccountWebService, JournalWebService, LedgerWebService, Perio
 
         body = await request.json()
         req = BulkActionRequest(**body)
-        service = get_account_bulk_service(db, auth.organization_id, auth.user_id)
+        service = get_account_bulk_service(
+            db,
+            coerce_uuid(auth.organization_id),
+            coerce_uuid(auth.user_id),
+        )
         return await service.bulk_activate(req.ids)
 
     async def bulk_deactivate_accounts_response(
@@ -120,7 +133,11 @@ class GLWebService(AccountWebService, JournalWebService, LedgerWebService, Perio
 
         body = await request.json()
         req = BulkActionRequest(**body)
-        service = get_account_bulk_service(db, auth.organization_id, auth.user_id)
+        service = get_account_bulk_service(
+            db,
+            coerce_uuid(auth.organization_id),
+            coerce_uuid(auth.user_id),
+        )
         return await service.bulk_deactivate(req.ids)
 
     # =====================================================================
@@ -138,7 +155,11 @@ class GLWebService(AccountWebService, JournalWebService, LedgerWebService, Perio
 
         body = await request.json()
         req = BulkActionRequest(**body)
-        service = get_journal_bulk_service(db, auth.organization_id, auth.user_id)
+        service = get_journal_bulk_service(
+            db,
+            coerce_uuid(auth.organization_id),
+            coerce_uuid(auth.user_id),
+        )
         return await service.bulk_delete(req.ids)
 
     async def bulk_export_journals_response(
@@ -152,7 +173,11 @@ class GLWebService(AccountWebService, JournalWebService, LedgerWebService, Perio
 
         body = await request.json()
         req = BulkExportRequest(**body)
-        service = get_journal_bulk_service(db, auth.organization_id, auth.user_id)
+        service = get_journal_bulk_service(
+            db,
+            coerce_uuid(auth.organization_id),
+            coerce_uuid(auth.user_id),
+        )
         return await service.bulk_export(req.ids, req.format)
 
     async def bulk_approve_journals_response(
@@ -166,7 +191,11 @@ class GLWebService(AccountWebService, JournalWebService, LedgerWebService, Perio
 
         body = await request.json()
         req = BulkActionRequest(**body)
-        service = get_journal_bulk_service(db, auth.organization_id, auth.user_id)
+        service = get_journal_bulk_service(
+            db,
+            coerce_uuid(auth.organization_id),
+            coerce_uuid(auth.user_id),
+        )
         return await service.bulk_approve(req.ids)
 
     async def bulk_post_journals_response(
@@ -180,7 +209,11 @@ class GLWebService(AccountWebService, JournalWebService, LedgerWebService, Perio
 
         body = await request.json()
         req = BulkActionRequest(**body)
-        service = get_journal_bulk_service(db, auth.organization_id, auth.user_id)
+        service = get_journal_bulk_service(
+            db,
+            coerce_uuid(auth.organization_id),
+            coerce_uuid(auth.user_id),
+        )
         return await service.bulk_post(req.ids)
 
 

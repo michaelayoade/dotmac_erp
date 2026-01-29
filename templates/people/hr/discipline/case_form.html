@@ -1,0 +1,132 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}New Disciplinary Case{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr/discipline" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Disciplinary Cases</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">New Case</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto space-y-6">
+    <!-- Header -->
+    <div class="flex items-center gap-4">
+        <div class="w-12 h-12 rounded-full bg-gradient-to-br from-red-400 to-rose-500 flex items-center justify-center text-white">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+            </svg>
+        </div>
+        <div>
+            <h1 class="text-xl font-semibold text-slate-900 dark:text-white">New Disciplinary Case</h1>
+            <p class="text-sm text-slate-500 dark:text-slate-400">Record a policy violation and start the disciplinary process</p>
+        </div>
+    </div>
+
+    <form method="post" action="/people/hr/discipline/new" class="space-y-6">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+
+        <!-- Employee Selection -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Employee Information</h3>
+            </div>
+            <div class="card-body space-y-4">
+                <div>
+                    <label for="employee_id" class="label required">Employee</label>
+                    <select id="employee_id" name="employee_id" class="input" required>
+                        <option value="">Select Employee</option>
+                        {% for emp in employees %}
+                        <option value="{{ emp.employee_id }}">{{ emp.full_name }} ({{ emp.employee_number }})</option>
+                        {% endfor %}
+                    </select>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Select the employee involved in the violation</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Violation Details -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Violation Details</h3>
+            </div>
+            <div class="card-body space-y-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label for="violation_type" class="label required">Violation Type</label>
+                        <select id="violation_type" name="violation_type" class="input" required>
+                            <option value="">Select Type</option>
+                            {% for v in violation_types %}
+                            <option value="{{ v }}">{{ v | replace('_', ' ') | title }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label for="severity" class="label required">Severity</label>
+                        <select id="severity" name="severity" class="input" required>
+                            <option value="">Select Severity</option>
+                            {% for s in severities %}
+                            <option value="{{ s }}">{{ s | title }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label for="subject" class="label required">Subject</label>
+                    <input type="text" id="subject" name="subject" class="input" required placeholder="Brief description of the violation">
+                </div>
+
+                <div>
+                    <label for="description" class="label">Description</label>
+                    <textarea id="description" name="description" class="input" rows="4" placeholder="Detailed description of the incident..."></textarea>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label for="incident_date" class="label">Incident Date</label>
+                        <input type="date" id="incident_date" name="incident_date" class="input">
+                    </div>
+                    <div>
+                        <label for="reported_by_id" class="label">Reported By</label>
+                        <select id="reported_by_id" name="reported_by_id" class="input">
+                            <option value="">Select Reporter</option>
+                            {% for emp in employees %}
+                            <option value="{{ emp.employee_id }}">{{ emp.full_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Info Banner -->
+        <div class="p-4 rounded-lg bg-blue-50 border border-blue-200 dark:bg-blue-900/20 dark:border-blue-800">
+            <div class="flex items-start gap-3">
+                <svg class="w-5 h-5 text-blue-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <div class="text-sm text-blue-700 dark:text-blue-300">
+                    <p class="font-medium">Case Creation</p>
+                    <p class="text-blue-600 dark:text-blue-400 mt-1">The case will be created in DRAFT status. You can then issue a formal query to the employee from the case detail page.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex items-center justify-end gap-3">
+            <a href="/people/hr/discipline" class="btn btn-ghost">Cancel</a>
+            <button type="submit" class="btn btn-primary">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                </svg>
+                Create Case
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

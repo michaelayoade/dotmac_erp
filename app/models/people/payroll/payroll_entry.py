@@ -29,6 +29,7 @@ from app.models.people.base import AuditMixin, ERPNextSyncMixin, StatusTrackingM
 from app.models.people.payroll.salary_structure import PayrollFrequency
 
 if TYPE_CHECKING:
+    from app.models.finance.gl.journal_entry import JournalEntry
     from app.models.people.hr.department import Department
     from app.models.people.payroll.salary_slip import SalarySlip
 
@@ -168,6 +169,14 @@ class PayrollEntry(Base, AuditMixin, ERPNextSyncMixin, StatusTrackingMixin):
         default=False,
     )
 
+    # GL Integration (consolidated posting)
+    journal_entry_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("gl.journal_entry.journal_entry_id"),
+        nullable=True,
+        comment="Consolidated GL entry for entire payroll run",
+    )
+
     # Notes
     notes: Mapped[Optional[str]] = mapped_column(
         Text,
@@ -193,6 +202,10 @@ class PayrollEntry(Base, AuditMixin, ERPNextSyncMixin, StatusTrackingMixin):
         "SalarySlip",
         foreign_keys="SalarySlip.payroll_entry_id",
         back_populates="payroll_entry",
+    )
+    journal_entry: Mapped[Optional["JournalEntry"]] = relationship(
+        "JournalEntry",
+        foreign_keys=[journal_entry_id],
     )
 
     @property

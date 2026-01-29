@@ -11,9 +11,17 @@ from decimal import Decimal
 from typing import Optional
 
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
-from app.models.people.exp import ExpenseClaim, ExpenseClaimItem, ExpenseClaimStatus
+from app.models.people.exp import (
+    ExpenseClaim,
+    ExpenseClaimItem,
+    ExpenseClaimStatus,
+    ExpenseClaimAction,
+    ExpenseClaimActionType,
+    ExpenseClaimActionStatus,
+)
 from app.models.people.hr import Employee
 
 logger = logging.getLogger(__name__)
@@ -88,6 +96,29 @@ class ExpenseAPAdapter:
                     error_message="Expense claim already has an associated invoice"
                 )
 
+            action_key = f"EXPENSE:{claim_id}:{ExpenseClaimActionType.CREATE_SUPPLIER_INVOICE.value}:v1"
+            action_stmt = (
+                insert(ExpenseClaimAction)
+                .values(
+                    organization_id=org_id,
+                    claim_id=claim_id,
+                    action_type=ExpenseClaimActionType.CREATE_SUPPLIER_INVOICE,
+                    action_key=action_key,
+                    status=ExpenseClaimActionStatus.STARTED,
+                )
+                .on_conflict_do_nothing(
+                    index_elements=["organization_id", "claim_id", "action_type"],
+                )
+            )
+            action_result = db.execute(action_stmt)
+            db.flush()
+            if (action_result.rowcount or 0) == 0:
+                return APPostingResult(
+                    success=True,
+                    supplier_invoice_id=claim.supplier_invoice_id,
+                    error_message=None,
+                )
+
             # Get the employee
             employee = db.get(Employee, claim.employee_id)
             if not employee:
@@ -99,10 +130,11 @@ class ExpenseAPAdapter:
             # Import AP services (deferred to avoid circular imports)
             from app.services.finance.ap.supplier import SupplierService
             from app.services.finance.ap.supplier_invoice import SupplierInvoiceService
+            from app.models.finance.ap.supplier_invoice import SupplierInvoiceType
             from app.services.finance.ap import (
                 SupplierInput,
                 SupplierInvoiceInput,
-                SupplierInvoiceLineInput,
+                InvoiceLineInput,
             )
 
             # Get or create employee as internal supplier
@@ -126,12 +158,11 @@ class ExpenseAPAdapter:
                     )
                     continue
 
-                lines.append(SupplierInvoiceLineInput(
+                lines.append(InvoiceLineInput(
                     expense_account_id=expense_account_id,
                     description=item.description,
                     quantity=Decimal("1"),
                     unit_price=item.approved_amount or item.claimed_amount,
-                    amount=item.approved_amount or item.claimed_amount,
                     cost_center_id=item.cost_center_id or claim.cost_center_id,
                 ))
 
@@ -144,12 +175,14 @@ class ExpenseAPAdapter:
             # Create the supplier invoice
             invoice_input = SupplierInvoiceInput(
                 supplier_id=supplier.supplier_id,
+                invoice_type=SupplierInvoiceType.STANDARD,
                 invoice_date=posting_date,
+                received_date=posting_date,
                 due_date=posting_date,  # Expense reimbursements typically due immediately
                 currency_code=claim.currency_code,
-                reference_number=claim.claim_number,
-                description=f"Expense Reimbursement: {claim.purpose}",
+                supplier_invoice_number=claim.claim_number,
                 lines=lines,
+                correlation_id=action_key,
             )
 
             invoice = SupplierInvoiceService.create_invoice(
@@ -160,6 +193,15 @@ class ExpenseAPAdapter:
             claim.supplier_invoice_id = invoice.invoice_id
 
             # Commit changes
+            action_record = db.execute(
+                select(ExpenseClaimAction).where(
+                    ExpenseClaimAction.organization_id == org_id,
+                    ExpenseClaimAction.claim_id == claim_id,
+                    ExpenseClaimAction.action_type == ExpenseClaimActionType.CREATE_SUPPLIER_INVOICE,
+                )
+            ).scalar_one_or_none()
+            if action_record:
+                action_record.status = ExpenseClaimActionStatus.COMPLETED
             db.commit()
 
             logger.info(
@@ -172,6 +214,19 @@ class ExpenseAPAdapter:
             )
 
         except Exception as e:
+            try:
+                action_record = db.execute(
+                    select(ExpenseClaimAction).where(
+                        ExpenseClaimAction.organization_id == org_id,
+                        ExpenseClaimAction.claim_id == claim_id,
+                        ExpenseClaimAction.action_type == ExpenseClaimActionType.CREATE_SUPPLIER_INVOICE,
+                    )
+                ).scalar_one_or_none()
+                if action_record:
+                    action_record.status = ExpenseClaimActionStatus.FAILED
+                    db.commit()
+            except Exception:
+                db.rollback()
             logger.exception(f"Error creating AP invoice for claim {claim_id}")
             db.rollback()
             return APPostingResult(
@@ -191,7 +246,7 @@ class ExpenseAPAdapter:
 
         Internal suppliers are used for expense reimbursements.
         """
-        from app.models.finance.ap.supplier import Supplier
+        from app.models.finance.ap.supplier import Supplier, SupplierType
         from app.services.finance.ap.supplier import SupplierService
         from app.services.finance.ap import SupplierInput
 
@@ -216,15 +271,13 @@ class ExpenseAPAdapter:
         supplier_input = SupplierInput(
             supplier_code=supplier_code,
             supplier_name=supplier_name,
-            supplier_type="INTERNAL",
-            is_internal=True,
+            supplier_type=SupplierType.VENDOR,
             email=person.email if person else None,
             payment_terms_days=0,  # Immediate payment
-            notes=f"Internal supplier for employee {employee.employee_code}",
         )
 
         supplier = SupplierService.create_supplier(
-            db, org_id, supplier_input, user_id
+            db, org_id, supplier_input
         )
 
         logger.info(
@@ -258,10 +311,12 @@ class ExpenseAPAdapter:
             from app.services.finance.ap.ap_posting_adapter import APPostingAdapter
 
             # Post the invoice
+            posting_date = claim.claim_date or date.today()
             result = APPostingAdapter.post_invoice(
                 db,
                 org_id,
                 claim.supplier_invoice_id,
+                posting_date,
                 user_id,
             )
 
@@ -273,7 +328,7 @@ class ExpenseAPAdapter:
             return APPostingResult(
                 success=result.success,
                 supplier_invoice_id=claim.supplier_invoice_id,
-                error_message=result.error_message if not result.success else None,
+                error_message=None if result.success else result.message,
             )
 
         except Exception as e:

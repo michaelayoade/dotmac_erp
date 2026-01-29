@@ -759,12 +759,15 @@ class BankingWebService:
 
         payee_list = []
         for p in payees:
+            default_account_id = p.default_account_id
             payee_list.append({
                 "payee_id": str(p.payee_id),
                 "payee_name": p.payee_name,
                 "payee_type": p.payee_type.value if p.payee_type else "",
                 "name_patterns": p.name_patterns or "",
-                "default_account": account_map.get(p.default_account_id, ""),
+                "default_account": account_map.get(default_account_id, "")
+                if default_account_id
+                else "",
                 "match_count": p.match_count,
                 "last_matched": _format_date(p.last_matched_at) if p.last_matched_at else "Never",
             })
@@ -879,13 +882,16 @@ class BankingWebService:
 
         rule_list = []
         for r in rules:
+            target_account_id = r.target_account_id
             rule_list.append({
                 "rule_id": str(r.rule_id),
                 "rule_name": r.rule_name,
                 "description": r.description or "",
                 "rule_type": r.rule_type.value if r.rule_type else "",
                 "action": r.action.value if r.action else "",
-                "target_account": account_map.get(r.target_account_id, ""),
+                "target_account": account_map.get(target_account_id, "")
+                if target_account_id
+                else "",
                 "priority": r.priority,
                 "auto_apply": r.auto_apply,
                 "is_active": r.is_active,

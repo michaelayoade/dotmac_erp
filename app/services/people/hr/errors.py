@@ -84,6 +84,10 @@ __all__ = [
     "PromotionNotFoundError",
     "TransferNotFoundError",
     "LifecycleStatusError",
+    # Onboarding errors
+    "ChecklistTemplateNotFoundError",
+    "ActivityNotFoundError",
+    "InvalidSelfServiceTokenError",
 ]
 
 
@@ -896,3 +900,47 @@ class LifecycleStatusError(ConflictError):
         super().__init__(message)
         self.current_status = current_status
         self.operation = operation
+
+
+# ==============================================================================
+# Onboarding Errors
+# ==============================================================================
+
+
+class ChecklistTemplateNotFoundError(NotFoundError):
+    """Raised when checklist template is not found."""
+
+    def __init__(
+        self, template_id: "uuid.UUID | None" = None, message: str | None = None
+    ) -> None:
+        if message is None:
+            message = (
+                f"Checklist template not found: {template_id}"
+                if template_id
+                else "Checklist template not found"
+            )
+        super().__init__(message)
+        self.template_id = template_id
+
+
+class ActivityNotFoundError(NotFoundError):
+    """Raised when onboarding activity is not found."""
+
+    def __init__(
+        self, activity_id: "uuid.UUID | None" = None, message: str | None = None
+    ) -> None:
+        if message is None:
+            message = (
+                f"Activity not found: {activity_id}"
+                if activity_id
+                else "Activity not found"
+            )
+        super().__init__(message)
+        self.activity_id = activity_id
+
+
+class InvalidSelfServiceTokenError(ValidationError):
+    """Raised when self-service token is invalid or expired."""
+
+    def __init__(self, message: str = "Invalid or expired self-service token") -> None:
+        super().__init__(message)

@@ -5,12 +5,13 @@ Adapted from DotMac People for the unified ERP platform.
 """
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import TYPE_CHECKING, List, Optional
 from uuid import UUID
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, func, or_, select, text
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.people.exp import (
@@ -23,6 +24,9 @@ from app.models.people.exp import (
     ExpenseClaim,
     ExpenseClaimItem,
     ExpenseClaimStatus,
+    ExpenseClaimAction,
+    ExpenseClaimActionType,
+    ExpenseClaimActionStatus,
 )
 from app.services.common import PaginatedResult, PaginationParams
 
@@ -30,6 +34,8 @@ if TYPE_CHECKING:
     from app.web.deps import WebAuthContext
 
 __all__ = ["ExpenseService"]
+
+STALE_ACTION_MINUTES = 5
 
 
 class ExpenseServiceError(Exception):
@@ -91,17 +97,10 @@ class ExpenseClaimStatusError(ExpenseServiceError):
 CLAIM_STATUS_TRANSITIONS = {
     ExpenseClaimStatus.DRAFT: {
         ExpenseClaimStatus.SUBMITTED,
-        ExpenseClaimStatus.CANCELLED,
     },
     ExpenseClaimStatus.SUBMITTED: {
         ExpenseClaimStatus.APPROVED,
         ExpenseClaimStatus.REJECTED,
-        ExpenseClaimStatus.DRAFT,  # Return for corrections
-    },
-    ExpenseClaimStatus.PENDING_APPROVAL: {
-        ExpenseClaimStatus.APPROVED,
-        ExpenseClaimStatus.REJECTED,
-        ExpenseClaimStatus.DRAFT,  # Return for corrections
     },
     ExpenseClaimStatus.APPROVED: {
         ExpenseClaimStatus.PAID,
@@ -130,6 +129,84 @@ class ExpenseService:
     ) -> None:
         self.db = db
         self.ctx = ctx
+
+    @staticmethod
+    def _action_key(claim_id: UUID, action: ExpenseClaimActionType) -> str:
+        return f"EXPENSE:{claim_id}:{action.value}:v1"
+
+    def _begin_action(
+        self,
+        org_id: UUID,
+        claim_id: UUID,
+        action: ExpenseClaimActionType,
+    ) -> bool:
+        action_key = self._action_key(claim_id, action)
+        stmt = (
+            insert(ExpenseClaimAction)
+            .values(
+                organization_id=org_id,
+                claim_id=claim_id,
+                action_type=action,
+                action_key=action_key,
+                status=ExpenseClaimActionStatus.STARTED,
+            )
+            .on_conflict_do_nothing(
+                index_elements=["organization_id", "claim_id", "action_type"],
+            )
+        )
+        result = self.db.execute(stmt)
+        self.db.flush()
+        if (result.rowcount or 0) > 0:
+            return True
+
+        existing = self.db.scalar(
+            select(ExpenseClaimAction).where(
+                ExpenseClaimAction.organization_id == org_id,
+                ExpenseClaimAction.claim_id == claim_id,
+                ExpenseClaimAction.action_type == action,
+            )
+        )
+        if not existing:
+            return False
+        if existing.status == ExpenseClaimActionStatus.FAILED:
+            existing.status = ExpenseClaimActionStatus.STARTED
+            self.db.flush()
+            return True
+        if existing.status == ExpenseClaimActionStatus.STARTED:
+            if existing.created_at:
+                age = datetime.now(timezone.utc) - existing.created_at
+                if age > timedelta(minutes=STALE_ACTION_MINUTES):
+                    # Allow retry if previous action got stuck.
+                    self.db.flush()
+                    return True
+        return False
+
+    def _set_action_status(
+        self,
+        org_id: UUID,
+        claim_id: UUID,
+        action: ExpenseClaimActionType,
+        status: "ExpenseClaimActionStatus",
+    ) -> None:
+        record = self.db.scalar(
+            select(ExpenseClaimAction).where(
+                ExpenseClaimAction.organization_id == org_id,
+                ExpenseClaimAction.claim_id == claim_id,
+                ExpenseClaimAction.action_type == action,
+            )
+        )
+        if record:
+            record.status = status
+            self.db.flush()
+
+    def _next_claim_number(self) -> str:
+        if self.db.bind and self.db.bind.dialect.name == "postgresql":
+            seq = self.db.scalar(text("select nextval('expense.expense_claim_number_seq')"))
+            return f"EXP-{date.today().year}-{int(seq):05d}"
+        count = self.db.scalar(
+            select(func.count(ExpenseClaim.claim_id))
+        ) or 0
+        return f"EXP-{date.today().year}-{count + 1:05d}"
 
     # =========================================================================
     # Expense Categories
@@ -239,6 +316,13 @@ class ExpenseService:
         self.db.flush()
         return category
 
+    def delete_category(self, org_id: UUID, category_id: UUID) -> ExpenseCategory:
+        """Deactivate an expense category."""
+        category = self.get_category(org_id, category_id)
+        category.is_active = False
+        self.db.flush()
+        return category
+
     # =========================================================================
     # Expense Claims
     # =========================================================================
@@ -332,13 +416,11 @@ class ExpenseService:
         items: Optional[List[dict]] = None,
     ) -> ExpenseClaim:
         """Create a new expense claim."""
-        # Generate claim number
-        count = self.db.scalar(
-            select(func.count(ExpenseClaim.claim_id)).where(
-                ExpenseClaim.organization_id == org_id
-            )
-        ) or 0
-        claim_number = f"EXP-{date.today().year}-{count + 1:05d}"
+        if not recipient_bank_code or not recipient_account_number:
+            raise ExpenseServiceError("Bank details are required for expense claims")
+
+        # Generate claim number via DB sequence (concurrency-safe)
+        claim_number = self._next_claim_number()
 
         claim = ExpenseClaim(
             organization_id=org_id,
@@ -475,6 +557,13 @@ class ExpenseService:
         """Submit an expense claim for approval."""
         claim = self.get_claim(org_id, claim_id)
 
+        if claim.status in {
+            ExpenseClaimStatus.SUBMITTED,
+            ExpenseClaimStatus.APPROVED,
+            ExpenseClaimStatus.PAID,
+        }:
+            return claim
+
         if claim.status != ExpenseClaimStatus.DRAFT:
             raise ExpenseClaimStatusError(
                 claim.status.value, ExpenseClaimStatus.SUBMITTED.value
@@ -483,9 +572,28 @@ class ExpenseService:
         if not claim.items:
             raise ExpenseServiceError("Cannot submit claim with no items")
 
-        claim.status = ExpenseClaimStatus.SUBMITTED
-        self.db.flush()
-        return claim
+        action_started = self._begin_action(org_id, claim_id, ExpenseClaimActionType.SUBMIT)
+        if not action_started:
+            return claim
+
+        try:
+            claim.status = ExpenseClaimStatus.SUBMITTED
+            self.db.flush()
+            self._set_action_status(
+                org_id,
+                claim_id,
+                ExpenseClaimActionType.SUBMIT,
+                ExpenseClaimActionStatus.COMPLETED,
+            )
+            return claim
+        except Exception:
+            self._set_action_status(
+                org_id,
+                claim_id,
+                ExpenseClaimActionType.SUBMIT,
+                ExpenseClaimActionStatus.FAILED,
+            )
+            raise
 
     def approve_claim(
         self,
@@ -499,36 +607,54 @@ class ExpenseService:
         """Approve an expense claim."""
         claim = self.get_claim(org_id, claim_id)
 
-        if claim.status not in {
-            ExpenseClaimStatus.SUBMITTED,
-            ExpenseClaimStatus.PENDING_APPROVAL,
-        }:
+        if claim.status in {ExpenseClaimStatus.APPROVED, ExpenseClaimStatus.PAID}:
+            return claim
+
+        if claim.status != ExpenseClaimStatus.SUBMITTED:
             raise ExpenseClaimStatusError(
                 claim.status.value, ExpenseClaimStatus.APPROVED.value
             )
 
-        claim.status = ExpenseClaimStatus.APPROVED
-        claim.approver_id = approver_id
-        claim.approved_on = date.today()
+        if not self._begin_action(org_id, claim_id, ExpenseClaimActionType.APPROVE):
+            return claim
 
-        # Set approved amounts (default to claimed amounts)
-        total_approved = Decimal("0")
-        if approved_amounts:
-            for approval in approved_amounts:
-                item = self.db.get(ExpenseClaimItem, approval["item_id"])
-                if item and item.claim_id == claim_id:
-                    item.approved_amount = approval["approved_amount"]
-                    total_approved += approval["approved_amount"]
-        else:
-            for item in claim.items:
-                item.approved_amount = item.claimed_amount
-                total_approved += item.claimed_amount
+        try:
+            claim.status = ExpenseClaimStatus.APPROVED
+            claim.approver_id = approver_id
+            claim.approved_on = date.today()
 
-        claim.total_approved_amount = total_approved
-        claim.net_payable_amount = total_approved - claim.advance_adjusted
+            # Set approved amounts (default to claimed amounts)
+            total_approved = Decimal("0")
+            if approved_amounts:
+                for approval in approved_amounts:
+                    item = self.db.get(ExpenseClaimItem, approval["item_id"])
+                    if item and item.claim_id == claim_id:
+                        item.approved_amount = approval["approved_amount"]
+                        total_approved += approval["approved_amount"]
+            else:
+                for item in claim.items:
+                    item.approved_amount = item.claimed_amount
+                    total_approved += item.claimed_amount
 
-        self.db.flush()
-        return claim
+            claim.total_approved_amount = total_approved
+            claim.net_payable_amount = total_approved - claim.advance_adjusted
+
+            self.db.flush()
+            self._set_action_status(
+                org_id,
+                claim_id,
+                ExpenseClaimActionType.APPROVE,
+                ExpenseClaimActionStatus.COMPLETED,
+            )
+            return claim
+        except Exception:
+            self._set_action_status(
+                org_id,
+                claim_id,
+                ExpenseClaimActionType.APPROVE,
+                ExpenseClaimActionStatus.FAILED,
+            )
+            raise
 
     def reject_claim(
         self,
@@ -541,21 +667,39 @@ class ExpenseService:
         """Reject an expense claim."""
         claim = self.get_claim(org_id, claim_id)
 
-        if claim.status not in {
-            ExpenseClaimStatus.SUBMITTED,
-            ExpenseClaimStatus.PENDING_APPROVAL,
-        }:
+        if claim.status == ExpenseClaimStatus.REJECTED:
+            return claim
+
+        if claim.status != ExpenseClaimStatus.SUBMITTED:
             raise ExpenseClaimStatusError(
                 claim.status.value, ExpenseClaimStatus.REJECTED.value
             )
 
-        claim.status = ExpenseClaimStatus.REJECTED
-        claim.approver_id = approver_id
-        claim.approved_on = date.today()
-        claim.rejection_reason = reason
+        if not self._begin_action(org_id, claim_id, ExpenseClaimActionType.REJECT):
+            return claim
 
-        self.db.flush()
-        return claim
+        try:
+            claim.status = ExpenseClaimStatus.REJECTED
+            claim.approver_id = approver_id
+            claim.approved_on = date.today()
+            claim.rejection_reason = reason
+
+            self.db.flush()
+            self._set_action_status(
+                org_id,
+                claim_id,
+                ExpenseClaimActionType.REJECT,
+                ExpenseClaimActionStatus.COMPLETED,
+            )
+            return claim
+        except Exception:
+            self._set_action_status(
+                org_id,
+                claim_id,
+                ExpenseClaimActionType.REJECT,
+                ExpenseClaimActionStatus.FAILED,
+            )
+            raise
 
     def update_claim(
         self,
@@ -572,6 +716,9 @@ class ExpenseService:
         for key, value in kwargs.items():
             if value is not None and hasattr(claim, key):
                 setattr(claim, key, value)
+
+        if not claim.recipient_bank_code or not claim.recipient_account_number:
+            raise ExpenseServiceError("Bank details are required for expense claims")
 
         self.db.flush()
         return claim
@@ -682,17 +829,38 @@ class ExpenseService:
         """Mark an expense claim as paid."""
         claim = self.get_claim(org_id, claim_id)
 
+        if claim.status == ExpenseClaimStatus.PAID:
+            return claim
+
         if claim.status != ExpenseClaimStatus.APPROVED:
             raise ExpenseClaimStatusError(
                 claim.status.value, ExpenseClaimStatus.PAID.value
             )
 
-        claim.status = ExpenseClaimStatus.PAID
-        claim.paid_on = payment_date or date.today()
-        claim.payment_reference = payment_reference
+        if not self._begin_action(org_id, claim_id, ExpenseClaimActionType.MARK_PAID):
+            return claim
 
-        self.db.flush()
-        return claim
+        try:
+            claim.status = ExpenseClaimStatus.PAID
+            claim.paid_on = payment_date or date.today()
+            claim.payment_reference = payment_reference
+
+            self.db.flush()
+            self._set_action_status(
+                org_id,
+                claim_id,
+                ExpenseClaimActionType.MARK_PAID,
+                ExpenseClaimActionStatus.COMPLETED,
+            )
+            return claim
+        except Exception:
+            self._set_action_status(
+                org_id,
+                claim_id,
+                ExpenseClaimActionType.MARK_PAID,
+                ExpenseClaimActionStatus.FAILED,
+            )
+            raise
 
     def link_advance(
         self,
@@ -708,14 +876,32 @@ class ExpenseService:
         if claim.status not in {ExpenseClaimStatus.DRAFT, ExpenseClaimStatus.SUBMITTED}:
             raise ExpenseClaimStatusError(claim.status.value, "link advance")
 
-        claim.cash_advance_id = advance_id
-        claim.advance_adjusted = amount_to_adjust
+        if not self._begin_action(org_id, claim_id, ExpenseClaimActionType.LINK_ADVANCE):
+            return claim
 
-        if claim.total_approved_amount:
-            claim.net_payable_amount = claim.total_approved_amount - amount_to_adjust
+        try:
+            claim.cash_advance_id = advance_id
+            claim.advance_adjusted = amount_to_adjust
 
-        self.db.flush()
-        return claim
+            if claim.total_approved_amount:
+                claim.net_payable_amount = claim.total_approved_amount - amount_to_adjust
+
+            self.db.flush()
+            self._set_action_status(
+                org_id,
+                claim_id,
+                ExpenseClaimActionType.LINK_ADVANCE,
+                ExpenseClaimActionStatus.COMPLETED,
+            )
+            return claim
+        except Exception:
+            self._set_action_status(
+                org_id,
+                claim_id,
+                ExpenseClaimActionType.LINK_ADVANCE,
+                ExpenseClaimActionStatus.FAILED,
+            )
+            raise
 
     # =========================================================================
     # Cash Advances

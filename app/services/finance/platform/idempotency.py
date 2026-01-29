@@ -12,6 +12,7 @@ from uuid import UUID
 from fastapi import HTTPException
 from sqlalchemy import and_, delete
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 
 from app.models.finance.platform.idempotency_record import IdempotencyRecord
 from app.services.common import coerce_uuid
@@ -128,6 +129,91 @@ class IdempotencyService(ListResponseMixin):
         )
 
         db.add(record)
+        db.commit()
+        db.refresh(record)
+        return record
+
+    @staticmethod
+    def reserve(
+        db: Session,
+        organization_id: UUID,
+        idempotency_key: str,
+        endpoint: str,
+        request_hash: str,
+        *,
+        ttl_hours: int = 24,
+    ) -> IdempotencyRecord:
+        """
+        Reserve an idempotency key before any side effects.
+
+        Stores a placeholder response so retries can be served deterministically.
+        """
+        try:
+            return IdempotencyService.store_response(
+                db=db,
+                organization_id=organization_id,
+                idempotency_key=idempotency_key,
+                endpoint=endpoint,
+                request_hash=request_hash,
+                response_status=202,
+                response_body={"detail": "Request in progress"},
+                ttl_hours=ttl_hours,
+            )
+        except IntegrityError:
+            db.rollback()
+            # Another request reserved the key; validate and return existing
+            record = IdempotencyService.check(
+                db=db,
+                organization_id=organization_id,
+                idempotency_key=idempotency_key,
+                endpoint=endpoint,
+                request_hash=request_hash,
+            )
+            if record is None:
+                raise
+            return record
+
+    @staticmethod
+    def update_response(
+        db: Session,
+        organization_id: UUID,
+        idempotency_key: str,
+        endpoint: str,
+        response_status: int,
+        response_body: Optional[dict[str, Any]] = None,
+    ) -> IdempotencyRecord:
+        """
+        Update the cached response for an existing idempotency key.
+        """
+        org_id = coerce_uuid(organization_id)
+        record = (
+            db.query(IdempotencyRecord)
+            .filter(
+                and_(
+                    IdempotencyRecord.organization_id == org_id,
+                    IdempotencyRecord.idempotency_key == idempotency_key,
+                    IdempotencyRecord.endpoint == endpoint,
+                )
+            )
+            .first()
+        )
+
+        if record is None:
+            # Fallback: create a record if it doesn't exist
+            record = IdempotencyService.store_response(
+                db=db,
+                organization_id=organization_id,
+                idempotency_key=idempotency_key,
+                endpoint=endpoint,
+                request_hash="",
+                response_status=response_status,
+                response_body=response_body,
+                ttl_hours=IdempotencyService.DEFAULT_TTL_HOURS,
+            )
+            return record
+
+        record.response_status = response_status
+        record.response_body = response_body
         db.commit()
         db.refresh(record)
         return record

@@ -172,7 +172,7 @@ def approve_expense_claim(
 @router.post("/claims/{claim_id}/reject")
 def reject_expense_claim(
     claim_id: str,
-    reason: str = Form(...),
+    reason: Optional[str] = Form(None),
     auth: WebAuthContext = Depends(require_expense_access),
     db: Session = Depends(get_db),
 ):

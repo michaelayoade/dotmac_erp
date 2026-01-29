@@ -5,7 +5,7 @@ Bank accounts, statements, and reconciliation API endpoints.
 All endpoints are tenant-scoped via require_tenant_auth.
 """
 
-from datetime import date
+from datetime import date, datetime
 from typing import List, Optional
 from uuid import UUID
 
@@ -257,7 +257,12 @@ def get_bank_account_gl_balance(
     if not existing or existing.organization_id != organization_id:
         raise HTTPException(status_code=404, detail="Bank account not found")
 
-    balance = bank_account_service.get_gl_balance(db, organization_id, bank_account_id, as_of_date)
+    as_of_datetime = (
+        datetime.combine(as_of_date, datetime.min.time()) if as_of_date else None
+    )
+    balance = bank_account_service.get_gl_balance(
+        db, organization_id, bank_account_id, as_of_datetime
+    )
     return {"bank_account_id": bank_account_id, "as_of_date": as_of_date, "balance": balance}
 
 

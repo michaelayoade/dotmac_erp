@@ -1,0 +1,235 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}{{ employee.first_name if employee else 'Employee' }}'s Onboarding{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr/onboarding" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Onboarding</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr/onboarding/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Employees</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">{{ employee.first_name if employee else 'Employee' }}</span>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<div class="flex items-center gap-3">
+    {% if employee %}
+    <a href="/people/hr/employees/{{ employee.employee_id }}" class="btn btn-secondary">
+        View Employee
+    </a>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+    {# Employee Info & Progress Card #}
+    <div class="card">
+        <div class="card-body">
+            <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+                {# Employee Info #}
+                <div class="flex items-center gap-4">
+                    <div class="flex h-16 w-16 items-center justify-center rounded-full bg-teal-100 text-teal-600 dark:bg-teal-900/30 dark:text-teal-400 text-xl font-bold">
+                        {{ employee.first_name[0] if employee and employee.first_name else '?' }}{{ employee.last_name[0] if employee and employee.last_name else '?' }}
+                    </div>
+                    <div>
+                        <h2 class="text-xl font-semibold text-slate-900 dark:text-white">
+                            {{ employee.first_name if employee else 'Unknown' }} {{ employee.last_name if employee else '' }}
+                        </h2>
+                        <p class="text-slate-500 dark:text-slate-400">
+                            {{ employee.job_title if employee and employee.job_title else 'New Employee' }}
+                        </p>
+                        <div class="flex items-center gap-3 mt-1">
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                                {% if onboarding.status.value == 'COMPLETED' %}
+                                bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300
+                                {% elif onboarding.status.value == 'IN_PROGRESS' %}
+                                bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300
+                                {% elif onboarding.status.value == 'CANCELLED' %}
+                                bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300
+                                {% else %}
+                                bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300
+                                {% endif %}">
+                                {{ onboarding.status.value | replace('_', ' ') | title }}
+                            </span>
+                            {% if onboarding.date_of_joining %}
+                            <span class="text-sm text-slate-500 dark:text-slate-400">
+                                Start: {{ onboarding.date_of_joining.strftime('%b %d, %Y') }}
+                            </span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                {# Progress #}
+                <div class="flex items-center gap-6">
+                    {# Progress Ring #}
+                    <div class="relative h-24 w-24">
+                        <svg class="h-24 w-24 -rotate-90 transform" viewBox="0 0 100 100">
+                            <circle
+                                class="text-slate-200 dark:text-slate-700"
+                                stroke-width="8"
+                                stroke="currentColor"
+                                fill="transparent"
+                                r="42"
+                                cx="50"
+                                cy="50"
+                            />
+                            <circle
+                                class="{% if progress.percentage == 100 %}text-emerald-500{% elif progress.percentage > 50 %}text-teal-500{% else %}text-amber-500{% endif %}"
+                                stroke-width="8"
+                                stroke-linecap="round"
+                                stroke="currentColor"
+                                fill="transparent"
+                                r="42"
+                                cx="50"
+                                cy="50"
+                                stroke-dasharray="264"
+                                stroke-dashoffset="{{ 264 - (264 * progress.percentage / 100) }}"
+                            />
+                        </svg>
+                        <span class="absolute inset-0 flex items-center justify-center text-lg font-bold text-slate-900 dark:text-white">
+                            {{ progress.percentage }}%
+                        </span>
+                    </div>
+                    <div>
+                        <p class="text-2xl font-bold text-slate-900 dark:text-white">
+                            {{ progress.completed }}/{{ progress.total }}
+                        </p>
+                        <p class="text-sm text-slate-500 dark:text-slate-400">Tasks Completed</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# Tasks by Category #}
+    {% for category_key, category_activities in categories.items() %}
+    <div class="card">
+        <div class="card-header flex items-center gap-3">
+            {% if category_key == 'PRE_BOARDING' %}
+            <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                </svg>
+            </div>
+            {% elif category_key == 'DAY_ONE' %}
+            <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
+                </svg>
+            </div>
+            {% elif category_key == 'FIRST_WEEK' %}
+            <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                </svg>
+            </div>
+            {% else %}
+            <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+            </div>
+            {% endif %}
+            <h2 class="card-title">{{ category_labels.get(category_key, category_key) }}</h2>
+            <span class="ml-auto text-sm text-slate-500 dark:text-slate-400">
+                {{ category_activities | selectattr('activity_status', 'in', ['COMPLETED', 'SKIPPED']) | list | length }}/{{ category_activities | length }}
+            </span>
+        </div>
+        <div class="divide-y divide-slate-200 dark:divide-slate-700">
+            {% for activity in category_activities %}
+            <div class="p-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                <div class="flex items-start gap-4">
+                    {# Status Icon/Toggle #}
+                    <form method="post" action="/people/hr/onboarding/employees/{{ onboarding.onboarding_id }}/activities/{{ activity.activity_id }}/toggle">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                        <button type="submit"
+                                class="flex h-8 w-8 items-center justify-center rounded-full transition-colors
+                                    {% if activity.activity_status in ['COMPLETED', 'SKIPPED'] %}
+                                    bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-900/50
+                                    {% else %}
+                                    bg-slate-100 text-slate-400 dark:bg-slate-700 dark:text-slate-500 hover:bg-teal-100 hover:text-teal-600 dark:hover:bg-teal-900/30 dark:hover:text-teal-400
+                                    {% endif %}"
+                                title="{% if activity.activity_status in ['COMPLETED', 'SKIPPED'] %}Mark as incomplete{% else %}Mark as complete{% endif %}">
+                            {% if activity.activity_status in ['COMPLETED', 'SKIPPED'] %}
+                            <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                            </svg>
+                            {% else %}
+                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                            </svg>
+                            {% endif %}
+                        </button>
+                    </form>
+
+                    {# Activity Details #}
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-2">
+                            <p class="font-medium text-slate-900 dark:text-white {% if activity.activity_status in ['COMPLETED', 'SKIPPED'] %}line-through text-slate-500 dark:text-slate-400{% endif %}">
+                                {{ activity.activity_name }}
+                            </p>
+                            {% if activity.requires_document %}
+                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                                <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                                </svg>
+                                Upload
+                            </span>
+                            {% endif %}
+                            {% if activity.assigned_to_employee %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300">
+                                Self-service
+                            </span>
+                            {% endif %}
+                        </div>
+                        <div class="mt-1 flex flex-wrap items-center gap-3 text-sm text-slate-500 dark:text-slate-400">
+                            {% if activity.assignee_role %}
+                            <span>Assigned to: {{ activity.assignee_role }}</span>
+                            {% endif %}
+                            {% if activity.due_date %}
+                            <span class="{% if activity.due_date < now().date() and activity.activity_status not in ['COMPLETED', 'SKIPPED'] %}text-rose-600 dark:text-rose-400{% endif %}">
+                                Due: {{ activity.due_date.strftime('%b %d') }}
+                            </span>
+                            {% endif %}
+                            {% if activity.completed_on %}
+                            <span class="text-emerald-600 dark:text-emerald-400">
+                                Completed: {{ activity.completed_on.strftime('%b %d, %Y') }}
+                            </span>
+                            {% endif %}
+                        </div>
+                        {% if activity.completion_notes %}
+                        <p class="mt-2 text-sm text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 rounded p-2">
+                            <strong>Notes:</strong> {{ activity.completion_notes }}
+                        </p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+
+    {# Empty State if no activities #}
+    {% if not categories %}
+    <div class="card p-12 text-center">
+        <svg class="mx-auto h-16 w-16 text-slate-300 dark:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+        </svg>
+        <h3 class="mt-4 text-lg font-medium text-slate-900 dark:text-white">No tasks defined</h3>
+        <p class="mt-2 text-slate-500 dark:text-slate-400">
+            This onboarding doesn't have any tasks. Consider adding a checklist template.
+        </p>
+    </div>
+    {% endif %}
+
+</div>
+{% endblock %}

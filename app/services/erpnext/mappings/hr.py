@@ -43,6 +43,55 @@ GENDER_MAP = {
 }
 
 
+# ERPNext Marital Status to DotMac MaritalStatus
+MARITAL_STATUS_MAP = {
+    "Single": "SINGLE",
+    "Married": "MARRIED",
+    "Divorced": "DIVORCED",
+    "Widowed": "WIDOWED",
+    "Prefer not to say": "PREFER_NOT_TO_SAY",
+}
+
+
+# ERPNext Blood Group to DotMac BloodGroup
+BLOOD_GROUP_MAP = {
+    "A+": "A+",
+    "A-": "A-",
+    "B+": "B+",
+    "B-": "B-",
+    "AB+": "AB+",
+    "AB-": "AB-",
+    "O+": "O+",
+    "O-": "O-",
+    "A Positive": "A+",
+    "A Negative": "A-",
+    "B Positive": "B+",
+    "B Negative": "B-",
+    "AB Positive": "AB+",
+    "AB Negative": "AB-",
+    "O Positive": "O+",
+    "O Negative": "O-",
+}
+
+
+# ERPNext Accommodation Type (ht field) to DotMac AccommodationType
+ACCOMMODATION_TYPE_MAP = {
+    "Owned": "OWNED",
+    "Rented": "RENTED",
+    "Company Provided": "COMPANY_PROVIDED",
+    "Other": "OTHER",
+}
+
+
+# ERPNext Salary Mode to DotMac SalaryMode
+SALARY_MODE_MAP = {
+    "Bank": "BANK",
+    "Cash": "CASH",
+    "Cheque": "CHEQUE",
+    "Check": "CHEQUE",  # Alternative spelling
+}
+
+
 def map_employee_status(value: Any) -> str:
     """Map ERPNext employee status."""
     if not value:
@@ -55,6 +104,50 @@ def map_gender(value: Any) -> str:
     if not value:
         return "PREFER_NOT_TO_SAY"
     return GENDER_MAP.get(str(value), "OTHER")
+
+
+def map_marital_status(value: Any) -> str | None:
+    """Map ERPNext marital status."""
+    if not value:
+        return None
+    return MARITAL_STATUS_MAP.get(str(value))
+
+
+def map_blood_group(value: Any) -> str | None:
+    """Map ERPNext blood group."""
+    if not value:
+        return None
+    return BLOOD_GROUP_MAP.get(str(value), "UNKNOWN")
+
+
+def map_accommodation_type(value: Any) -> str | None:
+    """Map ERPNext accommodation type (ht field)."""
+    if not value:
+        return None
+    return ACCOMMODATION_TYPE_MAP.get(str(value), "OTHER")
+
+
+def map_salary_mode(value: Any) -> str | None:
+    """Map ERPNext salary mode."""
+    if not value:
+        return None
+    return SALARY_MODE_MAP.get(str(value), "BANK")
+
+
+def parse_address_to_json(value: Any) -> dict | None:
+    """Parse ERPNext address text to JSON structure.
+
+    ERPNext typically sends addresses as text. We store them in a flexible
+    JSONB format that can accommodate various structures.
+    """
+    if not value:
+        return None
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        # Store as raw text in a structured format
+        return {"raw": value.strip()}
+    return None
 
 
 class DepartmentMapping(DocTypeMapping):
@@ -393,6 +486,18 @@ class EmployeeMapping(DocTypeMapping):
                     required=False,
                     transformer=lambda v: clean_string(v, 30),
                 ),
+                FieldMapping(
+                    source="branch",  # ERPNext bank branch field
+                    target="bank_branch_code",
+                    required=False,
+                    transformer=lambda v: clean_string(v, 20),
+                ),
+                FieldMapping(
+                    source="custom_name_on_account",  # ERPNext account holder name
+                    target="bank_account_name",
+                    required=False,
+                    transformer=lambda v: clean_string(v, 100),
+                ),
                 # Cost center (for later resolution)
                 FieldMapping(
                     source="cost_center",
@@ -409,6 +514,61 @@ class EmployeeMapping(DocTypeMapping):
                     target="_source_modified",
                     required=False,
                     transformer=parse_datetime,
+                ),
+                # Extended fields for ERPNext sync
+                FieldMapping(
+                    source="current_address",
+                    target="current_address",
+                    required=False,
+                    transformer=parse_address_to_json,
+                ),
+                FieldMapping(
+                    source="permanent_address",
+                    target="permanent_address",
+                    required=False,
+                    transformer=parse_address_to_json,
+                ),
+                FieldMapping(
+                    source="marital_status",
+                    target="marital_status",
+                    required=False,
+                    transformer=map_marital_status,
+                ),
+                FieldMapping(
+                    source="blood_group",
+                    target="blood_group",
+                    required=False,
+                    transformer=map_blood_group,
+                ),
+                FieldMapping(
+                    source="passport_number",
+                    target="passport_number",
+                    required=False,
+                    transformer=lambda v: clean_string(v, 50),
+                ),
+                FieldMapping(
+                    source="valid_upto",  # ERPNext name for passport validity
+                    target="passport_valid_upto",
+                    required=False,
+                    transformer=parse_date,
+                ),
+                FieldMapping(
+                    source="ht",  # ERPNext name for house type / accommodation
+                    target="current_accommodation_type",
+                    required=False,
+                    transformer=map_accommodation_type,
+                ),
+                FieldMapping(
+                    source="ctc",
+                    target="ctc",
+                    required=False,
+                    transformer=parse_decimal,
+                ),
+                FieldMapping(
+                    source="salary_mode",
+                    target="salary_mode",
+                    required=False,
+                    transformer=map_salary_mode,
                 ),
             ],
             unique_key="name",

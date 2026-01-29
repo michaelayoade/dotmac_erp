@@ -7,14 +7,16 @@ Template response helpers for the support/helpdesk module.
 from __future__ import annotations
 
 import logging
+from urllib.parse import quote
 from datetime import date
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 from uuid import UUID
 
-from fastapi import HTTPException, Request
+from fastapi import HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
+from sqlalchemy.exc import DataError, IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.support.ticket import Ticket, TicketPriority, TicketStatus
@@ -425,6 +427,16 @@ class SupportWebService:
         # Get employees for assignment dropdown
         employees = self._get_employees_for_dropdown(db, org_id)
 
+        # Get attachments (split ticket vs comment attachments)
+        all_attachments = attachment_service.list_attachments(db, ticket.ticket_id)
+        ticket_attachments = []
+        comment_attachments: Dict[str, List[Any]] = {}
+        for att in all_attachments:
+            if att.comment_id:
+                comment_attachments.setdefault(str(att.comment_id), []).append(att)
+            else:
+                ticket_attachments.append(att)
+
         # Get activity timeline
         activity = comment_service.get_activity_timeline(db, ticket.ticket_id, limit=50)
         activity_timeline = self._format_activity_timeline(activity)
@@ -442,6 +454,8 @@ class SupportWebService:
             "linked_tasks": linked_tasks,
             "activity_timeline": activity_timeline,
             "sla": sla_data,
+            "attachments": ticket_attachments,
+            "comment_attachments": comment_attachments,
         }
 
         return templates.TemplateResponse(
@@ -527,7 +541,8 @@ class SupportWebService:
         contact_email: Optional[str] = None,
         contact_phone: Optional[str] = None,
         contact_address: Optional[str] = None,
-    ) -> RedirectResponse:
+        files: Optional[list[UploadFile]] = None,
+    ) -> HTMLResponse | RedirectResponse:
         """Create a new ticket and redirect to detail page."""
         org_id = coerce_uuid(auth.organization_id)
         user_id = coerce_uuid(auth.user_id)
@@ -558,6 +573,17 @@ class SupportWebService:
                 contact_address=contact_address,
             )
 
+            upload_files = [f for f in (files or []) if getattr(f, "filename", None)]
+            for file in upload_files:
+                attachment_service.save_file(
+                    db,
+                    ticket_id=ticket.ticket_id,
+                    filename=file.filename or "unnamed",
+                    file_data=file.file,
+                    content_type=file.content_type or "application/octet-stream",
+                    uploaded_by_id=user_id,
+                )
+
             db.commit()
 
             return RedirectResponse(
@@ -568,9 +594,28 @@ class SupportWebService:
         except Exception as e:
             db.rollback()
             logger.exception("Failed to create ticket")
-            return self.ticket_form_response(
-                request, auth, db, error=str(e)
+            error = self._format_ticket_error(e)
+            return RedirectResponse(
+                url=f"/operations/support/tickets/new?error={quote(error)}",
+                status_code=303,
             )
+
+    @staticmethod
+    def _format_ticket_error(exc: Exception) -> str:
+        """Return a user-friendly error message for ticket actions."""
+        if isinstance(exc, HTTPException):
+            detail = getattr(exc, "detail", None)
+            return detail or "Unable to create ticket. Please check your input."
+        if isinstance(exc, IntegrityError):
+            message = str(getattr(exc, "orig", exc))
+            if "uq_ticket_org_number" in message:
+                return "Ticket number already exists. Please try again."
+            if "foreign key" in message.lower():
+                return "Some selected references are invalid. Please reselect and try again."
+            return "Ticket could not be created due to a data conflict. Please try again."
+        if isinstance(exc, DataError):
+            return "Some fields have invalid values or are too long. Please review and try again."
+        return "Ticket could not be created. Please check your input and try again."
 
     def update_ticket_response(
         self,
@@ -591,7 +636,8 @@ class SupportWebService:
         contact_email: Optional[str] = None,
         contact_phone: Optional[str] = None,
         contact_address: Optional[str] = None,
-    ) -> RedirectResponse:
+        files: Optional[list[UploadFile]] = None,
+    ) -> HTMLResponse | RedirectResponse:
         """Update a ticket and redirect to detail page."""
         org_id = coerce_uuid(auth.organization_id)
         user_id = coerce_uuid(auth.user_id)
@@ -623,6 +669,17 @@ class SupportWebService:
                 return RedirectResponse(
                     url="/operations/support/tickets",
                     status_code=303,
+                )
+
+            upload_files = [f for f in (files or []) if getattr(f, "filename", None)]
+            for file in upload_files:
+                attachment_service.save_file(
+                    db,
+                    ticket_id=ticket.ticket_id,
+                    filename=file.filename or "unnamed",
+                    file_data=file.file,
+                    content_type=file.content_type or "application/octet-stream",
+                    uploaded_by_id=user_id,
                 )
 
             db.commit()
@@ -765,6 +822,39 @@ class SupportWebService:
 
         return RedirectResponse(
             url=f"{self._ticket_url(ticket_ref)}?error=archive_failed",
+            status_code=303,
+        )
+
+    def delete_ticket_response(
+        self,
+        request: Request,
+        auth: "WebAuthContext",
+        db: Session,
+        ticket_id: str,
+    ) -> RedirectResponse:
+        """Hard delete a ticket."""
+        org_id = coerce_uuid(auth.organization_id)
+        user_id = coerce_uuid(auth.user_id)
+        ticket_ref = self._resolve_ticket_ref(db, org_id, ticket_id)
+        if not ticket_ref:
+            return RedirectResponse(
+                url="/operations/support/tickets",
+                status_code=303,
+            )
+
+        success, error = ticket_service.delete_ticket(
+            db, org_id, ticket_ref.ticket_id, user_id, hard_delete=True
+        )
+
+        if success:
+            db.commit()
+            return RedirectResponse(
+                url="/operations/support/tickets?deleted=success",
+                status_code=303,
+            )
+
+        return RedirectResponse(
+            url=f"{self._ticket_url(ticket_ref)}?error=delete_failed",
             status_code=303,
         )
 
@@ -1141,7 +1231,7 @@ class SupportWebService:
             request, "operations/support/aging_report.html", context
         )
 
-    def _format_sla_status(self, sla_status) -> Dict[str, Any]:
+    def _format_sla_status(self, sla_status) -> Optional[Dict[str, Any]]:
         """Format SLA status for template display."""
         from app.services.support.sla import TicketSLAStatus
 
@@ -1354,6 +1444,7 @@ class SupportWebService:
                     "type": "comment" if activity.comment_type == CommentType.COMMENT else "internal_note",
                     "content": activity.content,
                     "is_internal": activity.is_internal,
+                    "comment_id": str(activity.comment_id),
                     "author_name": author_name or "Unknown",
                     "created_at": activity.created_at.strftime("%b %d, %Y %H:%M") if activity.created_at else "",
                     "icon": config["icon"],
@@ -1369,14 +1460,14 @@ class SupportWebService:
         organization_id: UUID,
     ) -> List[Dict[str, Any]]:
         """Get projects for dropdown selection."""
-        from app.models.finance.core_org.project import Project
+        from app.models.finance.core_org.project import Project, ProjectStatus
 
         try:
             results = db.execute(
                 select(Project)
                 .where(
                     Project.organization_id == organization_id,
-                    Project.is_active == True,
+                    Project.status == ProjectStatus.ACTIVE,
                 )
                 .order_by(Project.project_code)
             ).scalars().all()

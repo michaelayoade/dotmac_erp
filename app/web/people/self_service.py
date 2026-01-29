@@ -32,6 +32,41 @@ def _safe_form_text(value: object | None, default: str = "") -> str:
     return default
 
 
+def _safe_form_float(value: object | None) -> Optional[float]:
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        value = value.strip()
+        if not value:
+            return None
+        try:
+            return float(value)
+        except ValueError:
+            return None
+    return None
+
+
+def _coerce_iso_date(value: object | None, field_name: str) -> Optional[date]:
+    if isinstance(value, date):
+        return value
+    if isinstance(value, str) and value.strip():
+        try:
+            return date.fromisoformat(value)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=422,
+                detail=[
+                    {
+                        "type": "value_error.date",
+                        "loc": ["body", field_name],
+                        "msg": "Invalid date format (expected YYYY-MM-DD)",
+                        "input": value,
+                    }
+                ],
+            ) from exc
+    return None
+
+
 @router.get("/attendance", response_class=HTMLResponse)
 def my_attendance(
     request: Request,
@@ -44,14 +79,19 @@ def my_attendance(
 
 
 @router.post("/attendance/check-in")
-def my_check_in(
+async def my_check_in(
+    request: Request,
     auth: WebAuthContext = Depends(require_self_service_access),
     db: Session = Depends(get_db),
-    notes: Optional[str] = Form(default=None),
-    latitude: Optional[float] = Form(default=None),
-    longitude: Optional[float] = Form(default=None),
 ) -> RedirectResponse:
     """Check in for the current employee."""
+    form = getattr(request.state, "csrf_form", None)
+    if form is None:
+        form = await request.form()
+
+    notes = _safe_form_text(form.get("notes")) or None
+    latitude = _safe_form_float(form.get("latitude"))
+    longitude = _safe_form_float(form.get("longitude"))
     return self_service_web_service.check_in_response(
         auth,
         db,
@@ -62,14 +102,19 @@ def my_check_in(
 
 
 @router.post("/attendance/check-out")
-def my_check_out(
+async def my_check_out(
+    request: Request,
     auth: WebAuthContext = Depends(require_self_service_access),
     db: Session = Depends(get_db),
-    notes: Optional[str] = Form(default=None),
-    latitude: Optional[float] = Form(default=None),
-    longitude: Optional[float] = Form(default=None),
 ) -> RedirectResponse:
     """Check out for the current employee."""
+    form = getattr(request.state, "csrf_form", None)
+    if form is None:
+        form = await request.form()
+
+    notes = _safe_form_text(form.get("notes")) or None
+    latitude = _safe_form_float(form.get("latitude"))
+    longitude = _safe_form_float(form.get("longitude"))
     return self_service_web_service.check_out_response(
         auth,
         db,
@@ -120,16 +165,78 @@ def cancel_leave(
 
 
 @router.post("/leave/apply")
-def apply_leave(
+async def apply_leave(
+    request: Request,
     auth: WebAuthContext = Depends(require_self_service_access),
     db: Session = Depends(get_db),
-    leave_type_id: str = Form(...),
-    from_date: date = Form(...),
-    to_date: date = Form(...),
+    leave_type_id: Optional[str] = Form(default=None),
+    from_date: Optional[date] = Form(default=None),
+    to_date: Optional[date] = Form(default=None),
     half_day: Optional[str] = Form(default=None),
     reason: Optional[str] = Form(default=None),
 ) -> RedirectResponse:
     """Submit a leave application for the current employee."""
+    if leave_type_id is None or from_date is None or to_date is None:
+        content_type = (request.headers.get("content-type") or "").lower()
+        if "application/json" in content_type:
+            try:
+                payload = await request.json()
+            except Exception:
+                payload = {}
+            if leave_type_id is None:
+                leave_type_id = payload.get("leave_type_id")
+            if from_date is None:
+                from_date = _coerce_iso_date(payload.get("from_date"), "from_date")
+            if to_date is None:
+                to_date = _coerce_iso_date(payload.get("to_date"), "to_date")
+            if half_day is None and "half_day" in payload:
+                half_day_value = payload.get("half_day")
+                if isinstance(half_day_value, bool):
+                    half_day = "on" if half_day_value else None
+                elif half_day_value is not None:
+                    half_day = str(half_day_value)
+            if reason is None and "reason" in payload:
+                reason = payload.get("reason")
+        else:
+            form = getattr(request.state, "csrf_form", None)
+            if form is None:
+                try:
+                    form = await request.form()
+                except Exception:
+                    form = None
+            if form is not None:
+                if leave_type_id is None:
+                    leave_type_id = _safe_form_text(form.get("leave_type_id")) or None
+                if from_date is None:
+                    from_date = _coerce_iso_date(form.get("from_date"), "from_date")
+                if to_date is None:
+                    to_date = _coerce_iso_date(form.get("to_date"), "to_date")
+                if half_day is None:
+                    half_day = _safe_form_text(form.get("half_day")) or None
+                if reason is None:
+                    reason = _safe_form_text(form.get("reason")) or None
+
+    missing_fields: list[str] = []
+    if not leave_type_id:
+        missing_fields.append("leave_type_id")
+    if not from_date:
+        missing_fields.append("from_date")
+    if not to_date:
+        missing_fields.append("to_date")
+    if missing_fields:
+        raise HTTPException(
+            status_code=422,
+            detail=[
+                {
+                    "type": "missing",
+                    "loc": ["body", field],
+                    "msg": "Field required",
+                    "input": None,
+                }
+                for field in missing_fields
+            ],
+        )
+
     return self_service_web_service.leave_apply_response(
         auth,
         db,
@@ -177,6 +284,28 @@ def my_expenses(
 ):
     """Self-service expenses page."""
     return self_service_web_service.expenses_response(request, auth, db)
+
+
+@router.get("/tickets", response_class=HTMLResponse)
+def my_tickets(
+    request: Request,
+    auth: WebAuthContext = Depends(require_self_service_access),
+    page: int = Query(default=1, ge=1),
+    db: Session = Depends(get_db),
+):
+    """Self-service tickets page."""
+    return self_service_web_service.tickets_response(request, auth, db, page=page)
+
+
+@router.get("/tasks", response_class=HTMLResponse)
+def my_tasks(
+    request: Request,
+    auth: WebAuthContext = Depends(require_self_service_access),
+    page: int = Query(default=1, ge=1),
+    db: Session = Depends(get_db),
+):
+    """Self-service tasks page."""
+    return self_service_web_service.tasks_response(request, auth, db, page=page)
 
 
 @router.post("/expenses/claims")
@@ -415,4 +544,77 @@ def reject_team_expense(
         db,
         claim_id=claim_id,
         reason=reason,
+    )
+
+
+# =============================================================================
+# Discipline Self-Service Routes
+# =============================================================================
+
+
+@router.get("/discipline", response_class=HTMLResponse)
+def my_discipline_cases(
+    request: Request,
+    include_closed: bool = Query(default=False),
+    auth: WebAuthContext = Depends(require_self_service_access),
+    db: Session = Depends(get_db),
+):
+    """Self-service discipline cases page - view my disciplinary cases."""
+    return self_service_web_service.discipline_cases_response(
+        request, auth, db, include_closed=include_closed
+    )
+
+
+@router.get("/discipline/{case_id}", response_class=HTMLResponse)
+def my_discipline_case_detail(
+    case_id: UUID,
+    request: Request,
+    auth: WebAuthContext = Depends(require_self_service_access),
+    db: Session = Depends(get_db),
+):
+    """View details of a specific disciplinary case."""
+    return self_service_web_service.discipline_case_detail_response(
+        request, auth, db, case_id=case_id
+    )
+
+
+@router.post("/discipline/{case_id}/respond")
+async def submit_discipline_response(
+    case_id: UUID,
+    request: Request,
+    auth: WebAuthContext = Depends(require_self_service_access),
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    """Submit employee response to a disciplinary query."""
+    form = getattr(request.state, "csrf_form", None)
+    if form is None:
+        form = await request.form()
+
+    response_text = _safe_form_text(form.get("response_text"))
+    if not response_text:
+        raise HTTPException(status_code=400, detail="Response text is required")
+
+    return self_service_web_service.discipline_submit_response(
+        auth, db, case_id=case_id, response_text=response_text
+    )
+
+
+@router.post("/discipline/{case_id}/appeal")
+async def file_discipline_appeal(
+    case_id: UUID,
+    request: Request,
+    auth: WebAuthContext = Depends(require_self_service_access),
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    """File an appeal against a disciplinary decision."""
+    form = getattr(request.state, "csrf_form", None)
+    if form is None:
+        form = await request.form()
+
+    appeal_reason = _safe_form_text(form.get("appeal_reason"))
+    if not appeal_reason:
+        raise HTTPException(status_code=400, detail="Appeal reason is required")
+
+    return self_service_web_service.discipline_file_appeal_response(
+        auth, db, case_id=case_id, appeal_reason=appeal_reason
     )

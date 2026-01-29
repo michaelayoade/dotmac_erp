@@ -134,6 +134,8 @@ class PaymentWebService:
                 "page_title": f"Reimburse {expense_claim.claim_number}",
                 "expense_claim": expense_claim,
                 "employee": employee,
+                "claim_bank_code": expense_claim.recipient_bank_code or "",
+                "claim_account_number": expense_claim.recipient_account_number or "",
                 "can_reimburse": can_reimburse,
                 "paystack_enabled": bool(paystack_enabled),
                 "transfers_enabled": bool(transfers_enabled),

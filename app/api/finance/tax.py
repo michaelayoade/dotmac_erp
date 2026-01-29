@@ -9,7 +9,7 @@ from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
@@ -17,7 +17,8 @@ from app.api.deps import require_organization_id, require_tenant_auth
 from app.services.auth_dependencies import require_tenant_permission
 from app.api.finance.utils import parse_enum
 from app.db import SessionLocal
-from app.models.finance.tax.tax_code import TaxType
+from app.models.finance.tax.tax_code import TaxCode, TaxType
+from app.models.finance.tax.deferred_tax_basis import DifferenceType
 from app.models.finance.tax.tax_period import TaxPeriodStatus, TaxPeriodFrequency
 from app.models.finance.tax.tax_return import TaxReturnStatus, TaxReturnType
 from app.models.finance.tax.tax_transaction import TaxTransactionType
@@ -35,8 +36,8 @@ from app.services.finance.tax import (
     TaxTransactionInput,
     DeferredTaxBasisInput,
     TaxReconciliationInput,
-    ReconciliationLine,
 )
+from app.services.finance.platform.org_context import org_context_service
 
 
 router = APIRouter(
@@ -209,14 +210,25 @@ class SingleLineTaxRequest(BaseModel):
 class TaxTransactionCreate(BaseModel):
     """Create tax transaction request."""
 
+    fiscal_period_id: UUID
     tax_code_id: UUID
+    transaction_type: Optional[str] = None
     transaction_date: date
-    base_amount: Decimal
-    tax_amount: Decimal
     source_document_type: str = Field(max_length=30)
     source_document_id: UUID
-    is_input_tax: bool = True
-    description: Optional[str] = None
+    source_document_line_id: Optional[UUID] = None
+    source_document_reference: Optional[str] = None
+    counterparty_type: Optional[str] = None
+    counterparty_id: Optional[UUID] = None
+    counterparty_name: Optional[str] = None
+    counterparty_tax_id: Optional[str] = None
+    currency_code: Optional[str] = None
+    exchange_rate: Optional[Decimal] = None
+    base_amount: Decimal
+    tax_amount: Decimal
+    is_input_tax: Optional[bool] = None
+    tax_return_period: Optional[str] = None
+    tax_return_box: Optional[str] = None
 
 
 class TaxTransactionRead(BaseModel):
@@ -250,13 +262,21 @@ class TaxReturnSummaryRead(BaseModel):
 class DeferredTaxBasisCreate(BaseModel):
     """Create deferred tax basis request."""
 
-    asset_liability_type: str = Field(max_length=30)
-    item_description: str = Field(max_length=200)
-    reference_id: Optional[UUID] = None
-    reference_type: Optional[str] = None
-    accounting_basis: Decimal
-    tax_basis: Decimal
+    basis_code: str = Field(max_length=50)
+    basis_name: str = Field(max_length=200)
+    jurisdiction_id: UUID
+    difference_type: str = Field(max_length=30)
+    source_type: str = Field(max_length=50)
     applicable_tax_rate: Decimal
+    description: Optional[str] = None
+    source_id: Optional[UUID] = None
+    gl_account_id: Optional[UUID] = None
+    accounting_base: Decimal = Decimal("0")
+    tax_base: Decimal = Decimal("0")
+    is_recognized: bool = True
+    recognition_probability: Optional[Decimal] = None
+    expected_reversal_year: Optional[int] = None
+    is_current_year_reversal: bool = False
 
 
 class DeferredTaxBasisRead(BaseModel):
@@ -266,13 +286,18 @@ class DeferredTaxBasisRead(BaseModel):
 
     basis_id: UUID
     organization_id: UUID
-    asset_liability_type: str
-    item_description: str
-    accounting_basis: Decimal
-    tax_basis: Decimal
+    jurisdiction_id: UUID
+    basis_code: str
+    basis_name: str
+    difference_type: str
+    source_type: str
+    accounting_base: Decimal
+    tax_base: Decimal
     temporary_difference: Decimal
-    deferred_tax_asset: Decimal
-    deferred_tax_liability: Decimal
+    deferred_tax_amount: Decimal
+    is_asset: bool
+    applicable_tax_rate: Decimal
+    is_recognized: bool
 
 
 class DeferredTaxSummaryRead(BaseModel):
@@ -288,18 +313,22 @@ class DeferredTaxSummaryRead(BaseModel):
 class TaxReconciliationCreate(BaseModel):
     """Create tax reconciliation request."""
 
-    fiscal_year_id: UUID
-    accounting_profit: Decimal
-    lines: list["ReconciliationLineCreate"]
-
-
-class ReconciliationLineCreate(BaseModel):
-    """Reconciliation line input."""
-
-    line_type: str = Field(max_length=30)
-    description: str = Field(max_length=200)
-    amount: Decimal
-    is_permanent: bool = False
+    fiscal_period_id: UUID
+    jurisdiction_id: UUID
+    profit_before_tax: Decimal
+    current_tax_expense: Decimal
+    deferred_tax_expense: Decimal
+    permanent_differences: Decimal = Decimal("0")
+    non_deductible_expenses: Decimal = Decimal("0")
+    non_taxable_income: Decimal = Decimal("0")
+    rate_differential_on_foreign_income: Decimal = Decimal("0")
+    tax_credits_utilized: Decimal = Decimal("0")
+    change_in_unrecognized_dta: Decimal = Decimal("0")
+    effect_of_tax_rate_change: Decimal = Decimal("0")
+    prior_year_adjustments: Decimal = Decimal("0")
+    other_reconciling_items: Decimal = Decimal("0")
+    other_items_description: Optional[str] = None
+    notes: Optional[str] = None
 
 
 class TaxReconciliationRead(BaseModel):
@@ -309,10 +338,12 @@ class TaxReconciliationRead(BaseModel):
 
     reconciliation_id: UUID
     organization_id: UUID
-    fiscal_year_id: UUID
-    accounting_profit: Decimal
-    taxable_income: Decimal
+    fiscal_period_id: UUID
+    jurisdiction_id: UUID
+    profit_before_tax: Decimal
     current_tax_expense: Decimal
+    deferred_tax_expense: Decimal
+    total_tax_expense: Decimal
     effective_tax_rate: Decimal
 
 
@@ -399,10 +430,14 @@ def create_tax_code(
     db: Session = Depends(get_db),
 ):
     """Create a new tax code."""
+    try:
+        tax_type_value = TaxType(payload.tax_type)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     input_data = TaxCodeInput(
         tax_code=payload.tax_code,
         tax_name=payload.tax_name,
-        tax_type=parse_enum(TaxType, payload.tax_type),
+        tax_type=tax_type_value,
         jurisdiction_id=payload.jurisdiction_id,
         tax_rate=payload.rate,
         effective_from=payload.effective_date,
@@ -439,7 +474,7 @@ def list_tax_codes(
     codes = tax_code_service.list(
         db=db,
         organization_id=str(organization_id),
-        tax_type=tax_type,
+        tax_type=parse_enum(TaxType, tax_type),
         jurisdiction_id=str(jurisdiction_id) if jurisdiction_id else None,
         is_active=is_active,
         limit=limit,
@@ -606,21 +641,75 @@ def create_tax_transaction(
     db: Session = Depends(get_db),
 ):
     """Create a tax transaction."""
+    tax_code = db.get(TaxCode, payload.tax_code_id)
+    if not tax_code or tax_code.organization_id != organization_id:
+        raise HTTPException(status_code=404, detail="Tax code not found")
+
+    tx_type = (
+        parse_enum(TaxTransactionType, payload.transaction_type)
+        if payload.transaction_type
+        else None
+    )
+    if tx_type is None:
+        if payload.is_input_tax is None:
+            tx_type = TaxTransactionType.INPUT
+        else:
+            tx_type = TaxTransactionType.INPUT if payload.is_input_tax else TaxTransactionType.OUTPUT
+
+    exchange_rate = payload.exchange_rate or Decimal("1.0")
+    functional_base = (payload.base_amount * exchange_rate).quantize(
+        Decimal("0.01")
+    )
+    functional_tax = (payload.tax_amount * exchange_rate).quantize(
+        Decimal("0.01")
+    )
+
+    recoverable = Decimal("0")
+    non_recoverable = Decimal("0")
+    if tx_type == TaxTransactionType.INPUT:
+        if tax_code.is_recoverable:
+            recoverable = (payload.tax_amount * tax_code.recovery_rate).quantize(
+                Decimal("0.01")
+            )
+            non_recoverable = payload.tax_amount - recoverable
+        else:
+            recoverable = Decimal("0")
+            non_recoverable = payload.tax_amount
+
+    currency_code = payload.currency_code or org_context_service.get_functional_currency(
+        db, organization_id
+    )
+
     input_data = TaxTransactionInput(
+        fiscal_period_id=payload.fiscal_period_id,
         tax_code_id=payload.tax_code_id,
+        jurisdiction_id=tax_code.jurisdiction_id,
+        transaction_type=tx_type,
         transaction_date=payload.transaction_date,
-        base_amount=payload.base_amount,
-        tax_amount=payload.tax_amount,
         source_document_type=payload.source_document_type,
         source_document_id=payload.source_document_id,
-        is_input_tax=payload.is_input_tax,
-        description=payload.description,
+        source_document_line_id=payload.source_document_line_id,
+        source_document_reference=payload.source_document_reference,
+        counterparty_type=payload.counterparty_type,
+        counterparty_id=payload.counterparty_id,
+        counterparty_name=payload.counterparty_name,
+        counterparty_tax_id=payload.counterparty_tax_id,
+        currency_code=currency_code,
+        base_amount=payload.base_amount,
+        tax_rate=tax_code.tax_rate,
+        tax_amount=payload.tax_amount,
+        exchange_rate=exchange_rate,
+        functional_base_amount=functional_base,
+        functional_tax_amount=functional_tax,
+        recoverable_amount=recoverable,
+        non_recoverable_amount=non_recoverable,
+        tax_return_period=payload.tax_return_period,
+        tax_return_box=payload.tax_return_box,
     )
     return tax_transaction_service.create_transaction(
         db=db,
         organization_id=organization_id,
         input=input_data,
-        created_by_user_id=created_by_user_id,
     )
 
 
@@ -696,20 +785,32 @@ def create_deferred_tax_basis(
     db: Session = Depends(get_db),
 ):
     """Create a deferred tax basis record."""
+    try:
+        diff_type = DifferenceType(payload.difference_type)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     input_data = DeferredTaxBasisInput(
-        asset_liability_type=payload.asset_liability_type,
-        item_description=payload.item_description,
-        reference_id=payload.reference_id,
-        reference_type=payload.reference_type,
-        accounting_basis=payload.accounting_basis,
-        tax_basis=payload.tax_basis,
+        basis_code=payload.basis_code,
+        basis_name=payload.basis_name,
+        jurisdiction_id=payload.jurisdiction_id,
+        difference_type=diff_type,
+        source_type=payload.source_type,
         applicable_tax_rate=payload.applicable_tax_rate,
+        description=payload.description,
+        source_id=payload.source_id,
+        gl_account_id=payload.gl_account_id,
+        accounting_base=payload.accounting_base,
+        tax_base=payload.tax_base,
+        is_recognized=payload.is_recognized,
+        recognition_probability=payload.recognition_probability,
+        expected_reversal_year=payload.expected_reversal_year,
+        is_current_year_reversal=payload.is_current_year_reversal,
     )
     return deferred_tax_service.create_basis(
         db=db,
         organization_id=organization_id,
         input=input_data,
-        created_by_user_id=created_by_user_id,
     )
 
 
@@ -746,10 +847,9 @@ def calculate_deferred_taxes(
     db: Session = Depends(get_db),
 ):
     """Calculate deferred tax assets and liabilities."""
-    return deferred_tax_service.calculate_deferred_taxes(
+    return deferred_tax_service.get_summary(
         db=db,
-        organization_id=str(organization_id),
-        as_of_date=as_of_date,
+        organization_id=organization_id,
     )
 
 
@@ -781,41 +881,50 @@ def create_tax_reconciliation(
     db: Session = Depends(get_db),
 ):
     """Create a tax reconciliation."""
-    lines = [
-        ReconciliationLine(
-            line_type=line.line_type,
-            description=line.description,
-            amount=line.amount,
-            is_permanent=line.is_permanent,
-        )
-        for line in payload.lines
-    ]
     input_data = TaxReconciliationInput(
-        fiscal_year_id=payload.fiscal_year_id,
-        accounting_profit=payload.accounting_profit,
-        lines=lines,
+        fiscal_period_id=payload.fiscal_period_id,
+        jurisdiction_id=payload.jurisdiction_id,
+        profit_before_tax=payload.profit_before_tax,
+        current_tax_expense=payload.current_tax_expense,
+        deferred_tax_expense=payload.deferred_tax_expense,
+        permanent_differences=payload.permanent_differences,
+        non_deductible_expenses=payload.non_deductible_expenses,
+        non_taxable_income=payload.non_taxable_income,
+        rate_differential_on_foreign_income=payload.rate_differential_on_foreign_income,
+        tax_credits_utilized=payload.tax_credits_utilized,
+        change_in_unrecognized_dta=payload.change_in_unrecognized_dta,
+        effect_of_tax_rate_change=payload.effect_of_tax_rate_change,
+        prior_year_adjustments=payload.prior_year_adjustments,
+        other_reconciling_items=payload.other_reconciling_items,
+        other_items_description=payload.other_items_description,
+        notes=payload.notes,
     )
     return tax_reconciliation_service.create_reconciliation(
         db=db,
         organization_id=organization_id,
         input=input_data,
-        created_by_user_id=created_by_user_id,
+        prepared_by_user_id=created_by_user_id,
     )
 
 
-@router.get("/reconciliation/{fiscal_year_id}", response_model=TaxReconciliationRead)
+@router.get("/reconciliation/{fiscal_period_id}", response_model=TaxReconciliationRead)
 def get_tax_reconciliation(
-    fiscal_year_id: UUID,
+    fiscal_period_id: UUID,
+    jurisdiction_id: UUID = Query(...),
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("tax:reconciliation:read")),
     db: Session = Depends(get_db),
 ):
-    """Get tax reconciliation for a fiscal year."""
-    return tax_reconciliation_service.get_by_fiscal_year(
+    """Get tax reconciliation for a fiscal period and jurisdiction."""
+    reconciliation = tax_reconciliation_service.get_by_period_jurisdiction(
         db=db,
         organization_id=str(organization_id),
-        fiscal_year_id=str(fiscal_year_id),
+        fiscal_period_id=str(fiscal_period_id),
+        jurisdiction_id=str(jurisdiction_id),
     )
+    if not reconciliation:
+        raise HTTPException(status_code=404, detail="Tax reconciliation not found")
+    return reconciliation
 
 
 # =============================================================================
@@ -842,7 +951,7 @@ def post_tax_transaction(
     return PostingResultSchema(
         success=result.success,
         journal_entry_id=result.journal_entry_id,
-        entry_number=result.entry_number,
+        entry_number=None,
         message=result.message,
     )
 
@@ -850,7 +959,7 @@ def post_tax_transaction(
 @router.post("/deferred/post", response_model=PostingResultSchema)
 def post_deferred_tax_movement(
     organization_id: UUID = Depends(require_organization_id),
-    fiscal_period_id: UUID = Query(...),
+    movement_id: UUID = Query(...),
     posting_date: date = Query(...),
     posted_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("tax:deferred:post")),
@@ -860,14 +969,14 @@ def post_deferred_tax_movement(
     result = tax_posting_adapter.post_deferred_tax_movement(
         db=db,
         organization_id=organization_id,
-        fiscal_period_id=fiscal_period_id,
+        movement_id=movement_id,
         posting_date=posting_date,
         posted_by_user_id=posted_by_user_id,
     )
     return PostingResultSchema(
         success=result.success,
         journal_entry_id=result.journal_entry_id,
-        entry_number=result.entry_number,
+        entry_number=None,
         message=result.message,
     )
 
@@ -882,11 +991,12 @@ from app.services.finance.tax import tax_period_service, TaxPeriodInput
 class TaxPeriodCreate(BaseModel):
     """Create tax period request."""
     jurisdiction_id: UUID
-    tax_type: str = Field(max_length=30)
-    period_start: date
-    period_end: date
+    period_name: str = Field(max_length=30)
+    frequency: str = Field(max_length=20)
+    start_date: date
+    end_date: date
     due_date: date
-    description: Optional[str] = None
+    fiscal_period_id: Optional[UUID] = None
 
 
 class TaxPeriodRead(BaseModel):
@@ -895,12 +1005,15 @@ class TaxPeriodRead(BaseModel):
     period_id: UUID
     organization_id: UUID
     jurisdiction_id: UUID
-    tax_type: str
-    period_start: date
-    period_end: date
+    fiscal_period_id: Optional[UUID] = None
+    period_name: str
+    frequency: str
+    start_date: date
+    end_date: date
     due_date: date
     status: str
-    is_extended: bool
+    is_extension_filed: bool
+    extended_due_date: Optional[date] = None
 
 
 @router.post("/periods", response_model=TaxPeriodRead, status_code=status.HTTP_201_CREATED)
@@ -911,13 +1024,17 @@ def create_tax_period(
     db: Session = Depends(get_db),
 ):
     """Create a new tax period."""
+    frequency_value = parse_enum(TaxPeriodFrequency, payload.frequency)
+    if frequency_value is None:
+        raise HTTPException(status_code=400, detail="Invalid tax period frequency")
     input_data = TaxPeriodInput(
         jurisdiction_id=payload.jurisdiction_id,
-        tax_type=payload.tax_type,
-        period_start=payload.period_start,
-        period_end=payload.period_end,
+        period_name=payload.period_name,
+        frequency=frequency_value,
+        start_date=payload.start_date,
+        end_date=payload.end_date,
         due_date=payload.due_date,
-        description=payload.description,
+        fiscal_period_id=payload.fiscal_period_id,
     )
     return tax_period_service.create_period(db, organization_id, input_data)
 
@@ -981,8 +1098,11 @@ def generate_tax_periods(
     db: Session = Depends(get_db),
 ):
     """Auto-generate tax periods for a year."""
+    frequency_value = parse_enum(TaxPeriodFrequency, frequency)
+    if frequency_value is None:
+        raise HTTPException(status_code=400, detail="Invalid tax period frequency")
     periods = tax_period_service.generate_periods(
-        db, organization_id, jurisdiction_id, year, frequency, due_date_offset_days
+        db, organization_id, jurisdiction_id, year, frequency_value, due_date_offset_days
     )
     return ListResponse(items=periods, count=len(periods), limit=len(periods), offset=0)
 
@@ -1008,13 +1128,10 @@ from app.services.finance.tax import tax_return_service, TaxReturnInput
 
 class TaxReturnCreate(BaseModel):
     """Create tax return request."""
-    period_id: UUID
+    tax_period_id: UUID
+    jurisdiction_id: UUID
     return_type: str = Field(max_length=30)
-    gross_revenue: Decimal = Decimal("0")
-    taxable_income: Decimal = Decimal("0")
-    tax_credits: Decimal = Decimal("0")
-    withholding_paid: Decimal = Decimal("0")
-    notes: Optional[str] = None
+    adjustments: Decimal = Decimal("0")
 
 
 class TaxReturnRead(BaseModel):
@@ -1022,14 +1139,16 @@ class TaxReturnRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     return_id: UUID
     organization_id: UUID
-    period_id: UUID
+    tax_period_id: UUID
+    jurisdiction_id: UUID
     return_type: str
     status: str
-    gross_revenue: Decimal
-    taxable_income: Decimal
-    tax_liability: Decimal
-    tax_due: Decimal
-    is_amended: bool
+    total_output_tax: Decimal
+    total_input_tax: Decimal
+    net_tax_payable: Decimal
+    adjustments: Decimal
+    final_amount: Decimal
+    is_amendment: bool
 
 
 @router.post("/returns", response_model=TaxReturnRead, status_code=status.HTTP_201_CREATED)
@@ -1041,14 +1160,14 @@ def prepare_tax_return(
     db: Session = Depends(get_db),
 ):
     """Prepare a new tax return."""
+    return_type_value = parse_enum(TaxReturnType, payload.return_type)
+    if return_type_value is None:
+        raise HTTPException(status_code=400, detail="Invalid return type")
     input_data = TaxReturnInput(
-        period_id=payload.period_id,
-        return_type=payload.return_type,
-        gross_revenue=payload.gross_revenue,
-        taxable_income=payload.taxable_income,
-        tax_credits=payload.tax_credits,
-        withholding_paid=payload.withholding_paid,
-        notes=payload.notes,
+        tax_period_id=payload.tax_period_id,
+        jurisdiction_id=payload.jurisdiction_id,
+        return_type=return_type_value,
+        adjustments=payload.adjustments,
     )
     return tax_return_service.prepare_return(db, organization_id, input_data, prepared_by_user_id)
 
@@ -1118,15 +1237,15 @@ def file_tax_return(
 def record_return_payment(
     return_id: UUID,
     payment_date: date = Query(...),
-    payment_amount: Decimal = Query(...),
     payment_reference: Optional[str] = None,
+    journal_entry_id: Optional[UUID] = None,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("tax:returns:payment")),
     db: Session = Depends(get_db),
 ):
     """Record a tax payment for a return."""
     return tax_return_service.record_payment(
-        db, organization_id, return_id, payment_date, payment_amount, payment_reference
+        db, organization_id, return_id, payment_date, payment_reference, journal_entry_id
     )
 
 
@@ -1134,8 +1253,7 @@ def record_return_payment(
 def amend_tax_return(
     return_id: UUID,
     amendment_reason: str = Query(...),
-    taxable_income: Optional[Decimal] = None,
-    tax_credits: Optional[Decimal] = None,
+    adjustments: Decimal = Query(...),
     organization_id: UUID = Depends(require_organization_id),
     prepared_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("tax:returns:amend")),
@@ -1144,5 +1262,5 @@ def amend_tax_return(
     """Create an amended tax return."""
     return tax_return_service.create_amendment(
         db, organization_id, return_id, amendment_reason,
-        taxable_income, tax_credits, prepared_by_user_id
+        adjustments, prepared_by_user_id
     )

@@ -78,6 +78,24 @@ def edit_department_form(
     return hr_web_service.department_form_response(request, auth, db, department_id)
 
 
+@router.get("/departments/{department_id}", response_class=HTMLResponse)
+def view_department(
+    request: Request,
+    department_id: str,
+    page: int = Query(default=1, ge=1),
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Department detail page."""
+    return hr_web_service.department_detail_response(
+        request,
+        auth,
+        db,
+        department_id,
+        page,
+    )
+
+
 @router.post("/departments/new")
 async def create_department(
     request: Request,

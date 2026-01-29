@@ -136,6 +136,7 @@ class EmployeeFilters:
     """Filters for listing employees."""
 
     status: Optional[Union[EmploymentStatus, str]] = None
+    is_active: Optional[bool] = None
     department_id: Optional[uuid.UUID] = None
     designation_id: Optional[uuid.UUID] = None
     reports_to_id: Optional[uuid.UUID] = None

@@ -163,6 +163,21 @@ class PasswordChangeResponse(BaseModel):
     changed_at: datetime
 
 
+class PasswordResetRequiredRequest(BaseModel):
+    username: str = Field(min_length=1, max_length=150)
+    current_password: str = Field(min_length=1, max_length=255)
+    new_password: str = Field(min_length=8, max_length=255)
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_new_password(cls, v: str) -> str:
+        return validate_password_strength(v)
+
+
+class PasswordResetRequiredResponse(BaseModel):
+    changed_at: datetime
+
+
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
 

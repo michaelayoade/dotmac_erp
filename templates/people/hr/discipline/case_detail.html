@@ -1,0 +1,634 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}Case {{ case.case_number }}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr/discipline" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Disciplinary Cases</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">{{ case.case_number }}</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    {% if request.query_params.get('success') %}
+    <div class="p-4 rounded-lg bg-green-50 border border-green-200 dark:bg-green-900/20 dark:border-green-800">
+        <div class="flex items-center gap-2 text-green-700 dark:text-green-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+            </svg>
+            <span>{{ request.query_params.get('success') | replace('_', ' ') | title }}</span>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="grid gap-6 lg:grid-cols-3">
+        <!-- Main Content -->
+        <div class="lg:col-span-2 space-y-6">
+            <!-- Header Card -->
+            <div class="card">
+                <div class="card-body">
+                    <div class="flex items-start justify-between">
+                        <div class="flex items-center gap-4">
+                            <div class="w-14 h-14 rounded-full bg-gradient-to-br from-red-400 to-rose-500 flex items-center justify-center text-white">
+                                <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <h2 class="text-xl font-semibold text-slate-900 dark:text-white">{{ case.case_number }}</h2>
+                                <p class="text-sm text-slate-500 dark:text-slate-400">{{ case.subject }}</p>
+                            </div>
+                        </div>
+                        {% set status_colors = {
+                            'DRAFT': 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
+                            'QUERY_ISSUED': 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
+                            'RESPONSE_RECEIVED': 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300',
+                            'HEARING_SCHEDULED': 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300',
+                            'HEARING_COMPLETED': 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300',
+                            'DECISION_MADE': 'bg-teal-100 text-teal-700 dark:bg-teal-900 dark:text-teal-300',
+                            'APPEAL_FILED': 'bg-pink-100 text-pink-700 dark:bg-pink-900 dark:text-pink-300',
+                            'APPEAL_DECIDED': 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300',
+                            'CLOSED': 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
+                            'WITHDRAWN': 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
+                        } %}
+                        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium {{ status_colors.get(case.status.value, 'bg-slate-100 text-slate-700') }}">
+                            {{ case.status.value | replace('_', ' ') | title }}
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Employee Info -->
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="font-medium text-slate-900 dark:text-white">Employee</h3>
+                </div>
+                <div class="card-body">
+                    <div class="flex items-center gap-4">
+                        <div class="w-12 h-12 rounded-full bg-gradient-to-br from-teal-400 to-cyan-500 flex items-center justify-center text-white text-lg font-bold">
+                            {{ case.employee.full_name[0] if case.employee else '?' }}
+                        </div>
+                        <div>
+                            <a href="/people/hr/employees/{{ case.employee.employee_id }}" class="text-lg font-semibold text-slate-900 dark:text-white hover:text-teal-600 dark:hover:text-teal-400">
+                                {{ case.employee.full_name if case.employee else '-' }}
+                            </a>
+                            <p class="text-sm text-slate-500 dark:text-slate-400">
+                                {{ case.employee.employee_number if case.employee else '' }}
+                                {% if case.employee and case.employee.designation %}
+                                &bull; {{ case.employee.designation.designation_name }}
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Violation Details -->
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="font-medium text-slate-900 dark:text-white">Violation Details</h3>
+                </div>
+                <div class="card-body space-y-4">
+                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                        <div>
+                            <label class="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider">Type</label>
+                            <p class="text-sm font-medium text-slate-900 dark:text-white mt-1">{{ case.violation_type.value | replace('_', ' ') | title if case.violation_type else '-' }}</p>
+                        </div>
+                        <div>
+                            <label class="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider">Severity</label>
+                            {% set severity_colors = {
+                                'LOW': 'text-blue-600 dark:text-blue-400',
+                                'MEDIUM': 'text-yellow-600 dark:text-yellow-400',
+                                'HIGH': 'text-orange-600 dark:text-orange-400',
+                                'CRITICAL': 'text-red-600 dark:text-red-400'
+                            } %}
+                            <p class="text-sm font-medium mt-1 {{ severity_colors.get(case.severity.value, 'text-slate-900') }}">{{ case.severity.value | title if case.severity else '-' }}</p>
+                        </div>
+                        <div>
+                            <label class="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider">Incident Date</label>
+                            <p class="text-sm font-medium text-slate-900 dark:text-white mt-1">{{ case.incident_date.strftime("%b %d, %Y") if case.incident_date else '-' }}</p>
+                        </div>
+                    </div>
+                    {% if case.description %}
+                    <div>
+                        <label class="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider">Description</label>
+                        <p class="text-sm text-slate-600 dark:text-slate-400 mt-1 whitespace-pre-wrap">{{ case.description }}</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Query Details (if issued) -->
+            {% if case.query_text %}
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="font-medium text-slate-900 dark:text-white">Query Issued</h3>
+                </div>
+                <div class="card-body space-y-4">
+                    <div class="p-4 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+                        <p class="text-sm text-blue-700 dark:text-blue-300 whitespace-pre-wrap">{{ case.query_text }}</p>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                            <label class="text-slate-500 dark:text-slate-400">Issued On</label>
+                            <p class="text-slate-900 dark:text-white">{{ case.query_issued_date.strftime("%b %d, %Y") if case.query_issued_date else '-' }}</p>
+                        </div>
+                        <div>
+                            <label class="text-slate-500 dark:text-slate-400">Response Due</label>
+                            <p class="text-slate-900 dark:text-white">{{ case.response_due_date.strftime("%b %d, %Y") if case.response_due_date else '-' }}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Employee Responses -->
+            {% if case.responses %}
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="font-medium text-slate-900 dark:text-white">Employee Responses</h3>
+                </div>
+                <div class="card-body space-y-4">
+                    {% for response in case.responses %}
+                    <div class="p-4 rounded-lg border border-slate-200 dark:border-slate-700">
+                        <div class="flex items-start justify-between mb-2">
+                            <span class="text-xs text-slate-500 dark:text-slate-400">{{ response.created_at.strftime("%b %d, %Y %H:%M") if response.created_at else '' }}</span>
+                            {% if response.acknowledged_at %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300">
+                                Acknowledged
+                            </span>
+                            {% else %}
+                            <form method="post" action="/people/hr/discipline/{{ case.case_id }}/responses/{{ response.response_id }}/acknowledge" class="inline">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                                <button type="submit" class="text-xs text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300">
+                                    Mark as Acknowledged
+                                </button>
+                            </form>
+                            {% endif %}
+                        </div>
+                        <p class="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap">{{ response.response_text }}</p>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Hearing Details -->
+            {% if case.hearing_date %}
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="font-medium text-slate-900 dark:text-white">Hearing</h3>
+                </div>
+                <div class="card-body space-y-4">
+                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
+                        <div>
+                            <label class="text-slate-500 dark:text-slate-400">Date & Time</label>
+                            <p class="text-slate-900 dark:text-white">{{ case.hearing_date.strftime("%b %d, %Y %H:%M") if case.hearing_date else '-' }}</p>
+                        </div>
+                        <div>
+                            <label class="text-slate-500 dark:text-slate-400">Location</label>
+                            <p class="text-slate-900 dark:text-white">{{ case.hearing_location or '-' }}</p>
+                        </div>
+                        <div>
+                            <label class="text-slate-500 dark:text-slate-400">Panel Chair</label>
+                            <p class="text-slate-900 dark:text-white">{{ case.panel_chair.full_name if case.panel_chair else '-' }}</p>
+                        </div>
+                    </div>
+                    {% if case.hearing_notes %}
+                    <div>
+                        <label class="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider">Hearing Notes</label>
+                        <div class="mt-2 p-4 rounded-lg bg-slate-50 dark:bg-slate-800">
+                            <p class="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap">{{ case.hearing_notes }}</p>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Decision -->
+            {% if case.decision_summary %}
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="font-medium text-slate-900 dark:text-white">Decision</h3>
+                </div>
+                <div class="card-body space-y-4">
+                    <div class="p-4 rounded-lg bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-800">
+                        <p class="text-sm text-teal-700 dark:text-teal-300 whitespace-pre-wrap">{{ case.decision_summary }}</p>
+                    </div>
+                    <div class="text-sm">
+                        <label class="text-slate-500 dark:text-slate-400">Decision Date</label>
+                        <p class="text-slate-900 dark:text-white">{{ case.decision_date.strftime("%b %d, %Y") if case.decision_date else '-' }}</p>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Actions Taken -->
+            {% if case.actions %}
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="font-medium text-slate-900 dark:text-white">Disciplinary Actions</h3>
+                </div>
+                <div class="card-body">
+                    <div class="space-y-3">
+                        {% for action in case.actions %}
+                        <div class="p-4 rounded-lg border border-slate-200 dark:border-slate-700">
+                            <div class="flex items-start justify-between">
+                                <div>
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300">
+                                        {{ action.action_type.value | replace('_', ' ') | title }}
+                                    </span>
+                                    {% if action.description %}
+                                    <p class="text-sm text-slate-600 dark:text-slate-400 mt-2">{{ action.description }}</p>
+                                    {% endif %}
+                                </div>
+                                <div class="text-right text-xs text-slate-500 dark:text-slate-400">
+                                    <div>Effective: {{ action.effective_date.strftime("%b %d, %Y") if action.effective_date else '-' }}</div>
+                                    {% if action.end_date %}
+                                    <div>Until: {{ action.end_date.strftime("%b %d, %Y") }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Documents -->
+            <div class="card">
+                <div class="card-header flex items-center justify-between">
+                    <h3 class="font-medium text-slate-900 dark:text-white">Documents</h3>
+                    {% if case.status.value not in ['CLOSED', 'WITHDRAWN'] %}
+                    <button type="button" onclick="document.getElementById('uploadDocModal').classList.remove('hidden')" class="text-sm text-teal-600 hover:text-teal-700 dark:text-teal-400">
+                        + Upload
+                    </button>
+                    {% endif %}
+                </div>
+                <div class="card-body">
+                    {% if case.documents %}
+                    <div class="space-y-2">
+                        {% for doc in case.documents %}
+                        <div class="flex items-center justify-between p-3 rounded-lg bg-slate-50 dark:bg-slate-800">
+                            <div class="flex items-center gap-3">
+                                <div class="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-blue-600 dark:text-blue-400">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <p class="text-sm font-medium text-slate-900 dark:text-white">{{ doc.title or doc.file_name }}</p>
+                                    <p class="text-xs text-slate-500 dark:text-slate-400">
+                                        {{ doc.document_type.value | replace('_', ' ') | title }}
+                                        {% if doc.file_size %}
+                                        &bull; {{ (doc.file_size / 1024) | round(1) }} KB
+                                        {% endif %}
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <a href="/people/hr/discipline/{{ case.case_id }}/documents/{{ doc.document_id }}/download"
+                                   class="text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300"
+                                   title="Download">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                                    </svg>
+                                </a>
+                                {% if case.status.value not in ['CLOSED', 'WITHDRAWN'] %}
+                                <form method="post" action="/people/hr/discipline/{{ case.case_id }}/documents/{{ doc.document_id }}/delete" onsubmit="return confirm('Delete this document?');" class="inline">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                                    <button type="submit" class="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300" title="Delete">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                        </svg>
+                                    </button>
+                                </form>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <p class="text-sm text-slate-500 dark:text-slate-400">No documents uploaded yet.</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Witnesses -->
+            {% if case.witnesses %}
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="font-medium text-slate-900 dark:text-white">Witnesses</h3>
+                </div>
+                <div class="card-body">
+                    <div class="space-y-2">
+                        {% for witness in case.witnesses %}
+                        <div class="flex items-center gap-3 p-3 rounded-lg bg-slate-50 dark:bg-slate-800">
+                            <div class="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-400">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                                </svg>
+                            </div>
+                            <div>
+                                {% if witness.employee %}
+                                <p class="text-sm font-medium text-slate-900 dark:text-white">{{ witness.employee.full_name }}</p>
+                                <p class="text-xs text-slate-500 dark:text-slate-400">Employee</p>
+                                {% else %}
+                                <p class="text-sm font-medium text-slate-900 dark:text-white">{{ witness.external_name }}</p>
+                                <p class="text-xs text-slate-500 dark:text-slate-400">{{ witness.external_contact or 'External' }}</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Sidebar -->
+        <div class="space-y-6">
+            <!-- Timeline -->
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="font-medium text-slate-900 dark:text-white">Timeline</h4>
+                </div>
+                <div class="card-body">
+                    <div class="space-y-3 text-sm">
+                        <div class="flex justify-between">
+                            <span class="text-slate-500 dark:text-slate-400">Reported</span>
+                            <span class="text-slate-700 dark:text-slate-300">{{ case.reported_date.strftime("%b %d, %Y") if case.reported_date else "-" }}</span>
+                        </div>
+                        {% if case.query_issued_date %}
+                        <div class="flex justify-between">
+                            <span class="text-slate-500 dark:text-slate-400">Query Issued</span>
+                            <span class="text-slate-700 dark:text-slate-300">{{ case.query_issued_date.strftime("%b %d, %Y") }}</span>
+                        </div>
+                        {% endif %}
+                        {% if case.hearing_date %}
+                        <div class="flex justify-between">
+                            <span class="text-slate-500 dark:text-slate-400">Hearing</span>
+                            <span class="text-slate-700 dark:text-slate-300">{{ case.hearing_date.strftime("%b %d, %Y") }}</span>
+                        </div>
+                        {% endif %}
+                        {% if case.decision_date %}
+                        <div class="flex justify-between">
+                            <span class="text-slate-500 dark:text-slate-400">Decision</span>
+                            <span class="text-slate-700 dark:text-slate-300">{{ case.decision_date.strftime("%b %d, %Y") }}</span>
+                        </div>
+                        {% endif %}
+                        {% if case.closed_date %}
+                        <div class="flex justify-between">
+                            <span class="text-slate-500 dark:text-slate-400">Closed</span>
+                            <span class="text-slate-700 dark:text-slate-300">{{ case.closed_date.strftime("%b %d, %Y") }}</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Workflow Actions -->
+            {% if case.status.value not in ['CLOSED', 'WITHDRAWN'] %}
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="font-medium text-slate-900 dark:text-white">Actions</h4>
+                </div>
+                <div class="card-body space-y-4">
+                    <!-- Issue Query (from DRAFT) -->
+                    {% if case.status.value == 'DRAFT' %}
+                    <form method="post" action="/people/hr/discipline/{{ case.case_id }}/issue-query" class="space-y-3">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                        <div>
+                            <label class="label required">Query Text</label>
+                            <textarea name="query_text" class="input" rows="3" required placeholder="Formal query to the employee..."></textarea>
+                        </div>
+                        <div>
+                            <label class="label required">Response Due</label>
+                            <input type="date" name="response_due_date" class="input" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-full">Issue Query</button>
+                    </form>
+                    {% endif %}
+
+                    <!-- Schedule Hearing (from QUERY_ISSUED or RESPONSE_RECEIVED) -->
+                    {% if case.status.value in ['QUERY_ISSUED', 'RESPONSE_RECEIVED'] %}
+                    <form method="post" action="/people/hr/discipline/{{ case.case_id }}/schedule-hearing" class="space-y-3">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                        <div>
+                            <label class="label required">Hearing Date & Time</label>
+                            <input type="datetime-local" name="hearing_date" class="input" required>
+                        </div>
+                        <div>
+                            <label class="label">Location</label>
+                            <input type="text" name="hearing_location" class="input" placeholder="Meeting room, etc.">
+                        </div>
+                        <div>
+                            <label class="label">Panel Chair</label>
+                            <select name="panel_chair_id" class="input">
+                                <option value="">Select Chair</option>
+                                {% for emp in employees %}
+                                <option value="{{ emp.employee_id }}">{{ emp.full_name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-full">Schedule Hearing</button>
+                    </form>
+                    {% endif %}
+
+                    <!-- Record Hearing Notes (from HEARING_SCHEDULED) -->
+                    {% if case.status.value == 'HEARING_SCHEDULED' %}
+                    <form method="post" action="/people/hr/discipline/{{ case.case_id }}/record-hearing" class="space-y-3">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                        <div>
+                            <label class="label required">Hearing Notes</label>
+                            <textarea name="hearing_notes" class="input" rows="4" required placeholder="Summary of the hearing..."></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-full">Record Hearing</button>
+                    </form>
+                    {% endif %}
+
+                    <!-- Record Decision (from HEARING_COMPLETED) -->
+                    {% if case.status.value == 'HEARING_COMPLETED' %}
+                    <form method="post" action="/people/hr/discipline/{{ case.case_id }}/decision" class="space-y-3">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                        <div>
+                            <label class="label required">Decision Summary</label>
+                            <textarea name="decision_summary" class="input" rows="3" required placeholder="Decision and reasoning..."></textarea>
+                        </div>
+                        <div>
+                            <label class="label">Action Type</label>
+                            <select name="action_type" class="input">
+                                <option value="">No Action</option>
+                                {% for a in action_types %}
+                                <option value="{{ a }}">{{ a | replace('_', ' ') | title }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div>
+                            <label class="label">Action Description</label>
+                            <textarea name="action_description" class="input" rows="2" placeholder="Details of the action..."></textarea>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="label">Effective Date</label>
+                                <input type="date" name="effective_date" class="input">
+                            </div>
+                            <div>
+                                <label class="label">End Date</label>
+                                <input type="date" name="end_date" class="input">
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-full">Record Decision</button>
+                    </form>
+                    {% endif %}
+
+                    <!-- Close Case (from DECISION_MADE or APPEAL_DECIDED) -->
+                    {% if case.status.value in ['DECISION_MADE', 'APPEAL_DECIDED'] %}
+                    <form method="post" action="/people/hr/discipline/{{ case.case_id }}/close">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                        <button type="submit" class="btn btn-success w-full">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                            </svg>
+                            Close Case
+                        </button>
+                    </form>
+                    {% endif %}
+
+                    <hr class="border-slate-200 dark:border-slate-700">
+
+                    <!-- Add Witness -->
+                    <details class="group">
+                        <summary class="flex items-center justify-between cursor-pointer text-sm font-medium text-slate-700 dark:text-slate-300">
+                            <span>Add Witness</span>
+                            <svg class="w-4 h-4 transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                            </svg>
+                        </summary>
+                        <form method="post" action="/people/hr/discipline/{{ case.case_id }}/witnesses" class="mt-3 space-y-3">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                            <div>
+                                <label class="label">Employee Witness</label>
+                                <select name="employee_id" class="input">
+                                    <option value="">Select Employee</option>
+                                    {% for emp in employees %}
+                                    <option value="{{ emp.employee_id }}">{{ emp.full_name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 text-center">- OR -</p>
+                            <div>
+                                <label class="label">External Name</label>
+                                <input type="text" name="external_name" class="input" placeholder="External witness name">
+                            </div>
+                            <div>
+                                <label class="label">Contact</label>
+                                <input type="text" name="external_contact" class="input" placeholder="Phone or email">
+                            </div>
+                            <button type="submit" class="btn btn-secondary w-full">Add Witness</button>
+                        </form>
+                    </details>
+
+                    <hr class="border-slate-200 dark:border-slate-700">
+
+                    <!-- Withdraw Case -->
+                    <form method="post" action="/people/hr/discipline/{{ case.case_id }}/withdraw" onsubmit="return confirm('Are you sure you want to withdraw this case?')">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                        <button type="submit" class="btn btn-ghost text-red-600 dark:text-red-400 w-full">
+                            Withdraw Case
+                        </button>
+                    </form>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Quick Links -->
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="font-medium text-slate-900 dark:text-white">Quick Links</h4>
+                </div>
+                <div class="card-body space-y-2">
+                    {% if case.employee %}
+                    <a href="/people/hr/employees/{{ case.employee.employee_id }}" class="btn btn-secondary w-full justify-start">
+                        <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                        </svg>
+                        View Employee
+                    </a>
+                    {% endif %}
+                    <a href="/people/hr/discipline" class="btn btn-ghost w-full justify-start">
+                        <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/>
+                        </svg>
+                        All Cases
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Upload Document Modal -->
+<div id="uploadDocModal" class="hidden fixed inset-0 z-50 overflow-y-auto">
+    <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:p-0">
+        <!-- Overlay -->
+        <div class="fixed inset-0 bg-slate-500 bg-opacity-75 dark:bg-slate-900 dark:bg-opacity-75 transition-opacity" onclick="document.getElementById('uploadDocModal').classList.add('hidden')"></div>
+
+        <!-- Modal Content -->
+        <div class="relative inline-block align-bottom bg-white dark:bg-slate-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+            <form method="post" action="/people/hr/discipline/{{ case.case_id }}/documents" enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                <div class="bg-white dark:bg-slate-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                    <h3 class="text-lg font-medium text-slate-900 dark:text-white mb-4">Upload Document</h3>
+
+                    <div class="space-y-4">
+                        <div>
+                            <label class="label required">Document Type</label>
+                            <select name="document_type" class="input" required>
+                                <option value="">Select Type...</option>
+                                <option value="EVIDENCE">Evidence</option>
+                                <option value="QUERY_LETTER">Query Letter</option>
+                                <option value="EMPLOYEE_RESPONSE">Employee Response</option>
+                                <option value="WITNESS_STATEMENT">Witness Statement</option>
+                                <option value="HEARING_MINUTES">Hearing Minutes</option>
+                                <option value="DECISION_LETTER">Decision Letter</option>
+                                <option value="APPEAL_LETTER">Appeal Letter</option>
+                                <option value="APPEAL_DECISION">Appeal Decision</option>
+                                <option value="WARNING_LETTER">Warning Letter</option>
+                                <option value="TERMINATION_LETTER">Termination Letter</option>
+                                <option value="OTHER">Other</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="label required">File</label>
+                            <input type="file" name="file" class="input" required accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.gif,.txt,.csv">
+                            <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Max 10MB. Allowed: PDF, Word, Excel, Images, Text</p>
+                        </div>
+
+                        <div>
+                            <label class="label">Title</label>
+                            <input type="text" name="title" class="input" placeholder="Document title (optional)">
+                        </div>
+
+                        <div>
+                            <label class="label">Description</label>
+                            <textarea name="description" class="input" rows="2" placeholder="Brief description (optional)"></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-slate-50 dark:bg-slate-700/50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse gap-2">
+                    <button type="submit" class="btn btn-primary w-full sm:w-auto">Upload</button>
+                    <button type="button" onclick="document.getElementById('uploadDocModal').classList.add('hidden')" class="btn btn-secondary w-full sm:w-auto mt-2 sm:mt-0">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

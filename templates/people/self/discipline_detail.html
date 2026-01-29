@@ -1,0 +1,345 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}Case {{ case.case_number }}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/self/attendance" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Self Service</a>
+    <span class="mx-2">/</span>
+    <a href="/people/self/discipline" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Discipline</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">{{ case.case_number }}</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    {# Success messages #}
+    {% if request.query_params.get('success') == 'response_submitted' %}
+    <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+        <div class="flex items-center gap-3">
+            <svg class="h-5 w-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <p class="text-green-800 dark:text-green-200">Your response has been submitted successfully.</p>
+        </div>
+    </div>
+    {% elif request.query_params.get('success') == 'appeal_filed' %}
+    <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+        <div class="flex items-center gap-3">
+            <svg class="h-5 w-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <p class="text-green-800 dark:text-green-200">Your appeal has been filed successfully.</p>
+        </div>
+    </div>
+    {% endif %}
+
+    {# Header #}
+    <div class="flex flex-wrap items-start justify-between gap-4">
+        <div>
+            <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">{{ case.case_number }}</h1>
+            <p class="text-lg text-slate-600 dark:text-slate-400 mt-1">{{ case.subject }}</p>
+        </div>
+        {% set status = case.status.value if case.status is defined and case.status.value is defined else case.status %}
+        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium
+            {% if status == 'QUERY_ISSUED' %}
+                bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400
+            {% elif status == 'CLOSED' or status == 'WITHDRAWN' %}
+                bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300
+            {% elif status == 'DECISION_MADE' %}
+                bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400
+            {% else %}
+                bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400
+            {% endif %}">
+            {{ status | replace('_', ' ') | title }}
+        </span>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {# Main Content #}
+        <div class="lg:col-span-2 space-y-6">
+            {# Query Letter #}
+            {% if case.query_text %}
+            <div class="card">
+                <div class="p-6">
+                    <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Query</h2>
+                    <div class="prose dark:prose-invert max-w-none text-slate-600 dark:text-slate-300">
+                        {{ case.query_text | sanitize_html }}
+                    </div>
+                    {% if case.query_issued_date %}
+                    <p class="mt-4 text-sm text-slate-500 dark:text-slate-400">
+                        Issued: {{ case.query_issued_date }}
+                        {% if case.response_due_date %}
+                        | Response due: {{ case.response_due_date }}
+                        {% endif %}
+                    </p>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+
+            {# Response Form (if can respond) #}
+            {% if can_respond %}
+            <div class="card border-2 border-amber-300 dark:border-amber-700">
+                <div class="p-6">
+                    <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Submit Your Response</h2>
+                    <form action="/people/self/discipline/{{ case.case_id }}/respond" method="POST">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <div class="space-y-4">
+                            <div>
+                                <label for="response_text" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                                    Your Response <span class="text-red-500">*</span>
+                                </label>
+                                <textarea
+                                    id="response_text"
+                                    name="response_text"
+                                    rows="6"
+                                    required
+                                    class="w-full rounded-lg border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white shadow-sm focus:border-teal-500 focus:ring-teal-500"
+                                    placeholder="Please provide your detailed response to the query..."></textarea>
+                                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                                    Provide a clear and factual response addressing all points raised in the query.
+                                </p>
+                            </div>
+                            <div class="flex justify-end">
+                                <button type="submit" class="btn btn-primary">
+                                    Submit Response
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            {% endif %}
+
+            {# Previous Responses #}
+            {% if case.responses %}
+            <div class="card">
+                <div class="p-6">
+                    <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Your Responses</h2>
+                    <div class="space-y-4">
+                        {% for response in case.responses %}
+                        <div class="border-l-4 border-teal-500 pl-4 py-2">
+                            <div class="prose dark:prose-invert max-w-none text-slate-600 dark:text-slate-300 text-sm">
+                                {{ response.response_text }}
+                            </div>
+                            <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                                Submitted: {{ response.submitted_at.strftime('%Y-%m-%d %H:%M') }}
+                                {% if response.is_appeal_response %}
+                                <span class="ml-2 text-purple-600 dark:text-purple-400">(Appeal Response)</span>
+                                {% endif %}
+                            </p>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            {# Decision #}
+            {% if case.decision_summary %}
+            <div class="card">
+                <div class="p-6">
+                    <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Decision</h2>
+                    <div class="prose dark:prose-invert max-w-none text-slate-600 dark:text-slate-300">
+                        {{ case.decision_summary | sanitize_html }}
+                    </div>
+                    {% if case.decision_date %}
+                    <p class="mt-4 text-sm text-slate-500 dark:text-slate-400">
+                        Decision date: {{ case.decision_date }}
+                    </p>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+
+            {# Actions Taken #}
+            {% if case.actions %}
+            <div class="card">
+                <div class="p-6">
+                    <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Actions</h2>
+                    <div class="space-y-3">
+                        {% for action in case.actions if action.is_active %}
+                        {% set action_type = action.action_type.value if action.action_type is defined and action.action_type.value is defined else action.action_type %}
+                        <div class="flex items-start gap-3 p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
+                            <div class="flex-shrink-0">
+                                {% if 'WARNING' in action_type %}
+                                <span class="inline-flex items-center justify-center h-8 w-8 rounded-full bg-yellow-100 dark:bg-yellow-900/30">
+                                    <svg class="h-5 w-5 text-yellow-600 dark:text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                                    </svg>
+                                </span>
+                                {% elif 'SUSPENSION' in action_type %}
+                                <span class="inline-flex items-center justify-center h-8 w-8 rounded-full bg-orange-100 dark:bg-orange-900/30">
+                                    <svg class="h-5 w-5 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+                                    </svg>
+                                </span>
+                                {% elif action_type == 'TERMINATION' %}
+                                <span class="inline-flex items-center justify-center h-8 w-8 rounded-full bg-red-100 dark:bg-red-900/30">
+                                    <svg class="h-5 w-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                    </svg>
+                                </span>
+                                {% else %}
+                                <span class="inline-flex items-center justify-center h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-900/30">
+                                    <svg class="h-5 w-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                    </svg>
+                                </span>
+                                {% endif %}
+                            </div>
+                            <div class="flex-1">
+                                <p class="font-medium text-slate-900 dark:text-white">
+                                    {{ action_type | replace('_', ' ') | title }}
+                                </p>
+                                {% if action.description %}
+                                <p class="text-sm text-slate-600 dark:text-slate-400 mt-1">{{ action.description }}</p>
+                                {% endif %}
+                                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                                    Effective: {{ action.effective_date }}
+                                    {% if action.end_date %} - {{ action.end_date }}{% endif %}
+                                </p>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            {# Appeal Form (if can appeal) #}
+            {% if can_appeal %}
+            <div class="card border-2 border-purple-300 dark:border-purple-700">
+                <div class="p-6">
+                    <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-2">File an Appeal</h2>
+                    <p class="text-sm text-slate-500 dark:text-slate-400 mb-4">
+                        You have until {{ case.appeal_deadline }} to file an appeal against this decision.
+                    </p>
+                    <form action="/people/self/discipline/{{ case.case_id }}/appeal" method="POST">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <div class="space-y-4">
+                            <div>
+                                <label for="appeal_reason" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                                    Reason for Appeal <span class="text-red-500">*</span>
+                                </label>
+                                <textarea
+                                    id="appeal_reason"
+                                    name="appeal_reason"
+                                    rows="4"
+                                    required
+                                    class="w-full rounded-lg border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white shadow-sm focus:border-teal-500 focus:ring-teal-500"
+                                    placeholder="Explain why you believe the decision should be reconsidered..."></textarea>
+                            </div>
+                            <div class="flex justify-end">
+                                <button type="submit" class="btn btn-secondary">
+                                    File Appeal
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            {% endif %}
+
+            {# Appeal Decision #}
+            {% if case.appeal_decision %}
+            <div class="card">
+                <div class="p-6">
+                    <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Appeal Decision</h2>
+                    <div class="prose dark:prose-invert max-w-none text-slate-600 dark:text-slate-300">
+                        {{ case.appeal_decision | sanitize_html }}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        {# Sidebar #}
+        <div class="space-y-6">
+            {# Case Details Card #}
+            <div class="card">
+                <div class="p-6">
+                    <h3 class="text-sm font-semibold text-slate-900 dark:text-white uppercase tracking-wider mb-4">Case Details</h3>
+                    <dl class="space-y-3">
+                        <div>
+                            <dt class="text-xs text-slate-500 dark:text-slate-400">Violation Type</dt>
+                            {% set violation = case.violation_type.value if case.violation_type is defined and case.violation_type.value is defined else case.violation_type %}
+                            <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ violation | replace('_', ' ') | title }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-xs text-slate-500 dark:text-slate-400">Severity</dt>
+                            {% set severity = case.severity.value if case.severity is defined and case.severity.value is defined else case.severity %}
+                            <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ severity | title }}</dd>
+                        </div>
+                        {% if case.incident_date %}
+                        <div>
+                            <dt class="text-xs text-slate-500 dark:text-slate-400">Incident Date</dt>
+                            <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ case.incident_date }}</dd>
+                        </div>
+                        {% endif %}
+                        <div>
+                            <dt class="text-xs text-slate-500 dark:text-slate-400">Reported Date</dt>
+                            <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ case.reported_date }}</dd>
+                        </div>
+                        {% if case.hearing_date %}
+                        <div>
+                            <dt class="text-xs text-slate-500 dark:text-slate-400">Hearing Date</dt>
+                            <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ case.hearing_date.strftime('%Y-%m-%d %H:%M') }}</dd>
+                        </div>
+                        {% endif %}
+                        {% if case.hearing_location %}
+                        <div>
+                            <dt class="text-xs text-slate-500 dark:text-slate-400">Hearing Location</dt>
+                            <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ case.hearing_location }}</dd>
+                        </div>
+                        {% endif %}
+                    </dl>
+                </div>
+            </div>
+
+            {# Important Dates #}
+            <div class="card">
+                <div class="p-6">
+                    <h3 class="text-sm font-semibold text-slate-900 dark:text-white uppercase tracking-wider mb-4">Important Dates</h3>
+                    <div class="space-y-3">
+                        {% if case.response_due_date and status == 'QUERY_ISSUED' %}
+                        <div class="flex items-center gap-3 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
+                            <svg class="h-5 w-5 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            <div>
+                                <p class="text-xs text-amber-600 dark:text-amber-400">Response Due</p>
+                                <p class="text-sm font-medium text-amber-800 dark:text-amber-200">{{ case.response_due_date }}</p>
+                            </div>
+                        </div>
+                        {% endif %}
+                        {% if case.appeal_deadline and status == 'DECISION_MADE' %}
+                        <div class="flex items-center gap-3 p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
+                            <svg class="h-5 w-5 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            <div>
+                                <p class="text-xs text-purple-600 dark:text-purple-400">Appeal Deadline</p>
+                                <p class="text-sm font-medium text-purple-800 dark:text-purple-200">{{ case.appeal_deadline }}</p>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            {# Back Link #}
+            <a href="/people/self/discipline" class="btn btn-secondary w-full">
+                <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                </svg>
+                Back to Cases
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

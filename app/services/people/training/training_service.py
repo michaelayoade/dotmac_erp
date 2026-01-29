@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any, List, Optional, Sequence
+from typing import TYPE_CHECKING, Any, List, Optional, Sequence, TypedDict
 from uuid import UUID
 
 from sqlalchemy import and_, case, func, or_, select
@@ -49,6 +49,30 @@ class TrainingEventNotFoundError(TrainingServiceError):
     def __init__(self, event_id: UUID):
         self.event_id = event_id
         super().__init__(f"Training event {event_id} not found")
+
+
+class ProgramRatingData(TypedDict):
+    program_id: UUID
+    program_code: str
+    program_name: str
+    ratings: list[float]
+
+
+class ProgramSummary(TypedDict):
+    program_id: UUID
+    program_code: str
+    program_name: str
+    response_count: int
+    average_rating: float
+
+
+class EventRatingData(TypedDict):
+    event_id: UUID
+    event_name: str
+    program_name: str
+    end_date: date
+    response_count: int
+    average_rating: float
 
 
 class TrainingAttendeeNotFoundError(TrainingServiceError):
@@ -1093,8 +1117,8 @@ class TrainingService:
         all_ratings = []
 
         # Program ratings
-        program_ratings = {}
-        event_list = []
+        program_ratings: dict[UUID, ProgramRatingData] = {}
+        event_list: list[EventRatingData] = []
 
         for event in events:
             event_ratings = []
@@ -1129,7 +1153,7 @@ class TrainingService:
                     program_ratings[program_id]["ratings"].extend(event_ratings)
 
         # Calculate program averages
-        programs_list = []
+        programs_list: list[ProgramSummary] = []
         for p in program_ratings.values():
             if p["ratings"]:
                 avg = round(sum(p["ratings"]) / len(p["ratings"]), 1)

@@ -56,7 +56,11 @@ class SyncWebService:
             "sync_phases": SYNC_PHASES,
         }
 
-    def _require_admin(self, request: Request, auth: Optional[WebAuthContext]) -> Optional[HTMLResponse]:
+    def _require_admin(
+        self,
+        request: Request,
+        auth: Optional[WebAuthContext],
+    ) -> Optional[HTMLResponse | RedirectResponse]:
         """Check if user is admin, return error response if not."""
         if not auth or not auth.is_authenticated:
             return RedirectResponse(url="/login?next=/admin/sync", status_code=302)
@@ -68,7 +72,7 @@ class SyncWebService:
         request: Request,
         db: Session,
         auth: Optional[WebAuthContext],
-    ) -> HTMLResponse:
+    ) -> HTMLResponse | RedirectResponse:
         """Render sync dashboard page."""
         error_response = self._require_admin(request, auth)
         if error_response:
@@ -113,13 +117,14 @@ class SyncWebService:
                 doctype = row.source_doctype
                 if doctype not in stats_by_doctype:
                     stats_by_doctype[doctype] = {"total": 0, "synced": 0, "failed": 0, "skipped": 0}
-                stats_by_doctype[doctype]["total"] += row.count
+                count = int(getattr(row, "count"))
+                stats_by_doctype[doctype]["total"] += count
                 if row.sync_status == SyncStatus.SYNCED:
-                    stats_by_doctype[doctype]["synced"] = row.count
+                    stats_by_doctype[doctype]["synced"] = count
                 elif row.sync_status == SyncStatus.FAILED:
-                    stats_by_doctype[doctype]["failed"] = row.count
+                    stats_by_doctype[doctype]["failed"] = count
                 elif row.sync_status == SyncStatus.SKIPPED:
-                    stats_by_doctype[doctype]["skipped"] = row.count
+                    stats_by_doctype[doctype]["skipped"] = count
 
             context["entity_stats"] = stats_by_doctype
         else:
@@ -192,7 +197,7 @@ class SyncWebService:
         auth: Optional[WebAuthContext],
         page: int = 1,
         status: str = "",
-    ) -> HTMLResponse:
+    ) -> HTMLResponse | RedirectResponse:
         """Render sync history list page."""
         error_response = self._require_admin(request, auth)
         if error_response:
@@ -242,7 +247,7 @@ class SyncWebService:
         db: Session,
         auth: Optional[WebAuthContext],
         history_id: str,
-    ) -> HTMLResponse:
+    ) -> HTMLResponse | RedirectResponse:
         """Render sync history detail page."""
         error_response = self._require_admin(request, auth)
         if error_response:
@@ -291,7 +296,7 @@ class SyncWebService:
         auth: Optional[WebAuthContext],
         sync_type: str,
         entity_types: Optional[list[str]] = None,
-    ) -> RedirectResponse:
+    ) -> HTMLResponse | RedirectResponse:
         """Trigger a sync operation."""
         error_response = self._require_admin(request, auth)
         if error_response:
@@ -342,7 +347,7 @@ class SyncWebService:
         request: Request,
         db: Session,
         auth: Optional[WebAuthContext],
-    ) -> HTMLResponse:
+    ) -> HTMLResponse | RedirectResponse:
         """Render integration configuration page."""
         error_response = self._require_admin(request, auth)
         if error_response:
@@ -381,7 +386,7 @@ class SyncWebService:
         api_secret: str,
         company: str,
         is_active: bool,
-    ) -> RedirectResponse:
+    ) -> HTMLResponse | RedirectResponse:
         """Save integration configuration."""
         error_response = self._require_admin(request, auth)
         if error_response:
@@ -454,7 +459,7 @@ class SyncWebService:
         doctype: str = "",
         status: str = "",
         page: int = 1,
-    ) -> HTMLResponse:
+    ) -> HTMLResponse | RedirectResponse:
         """Render entity sync status page."""
         error_response = self._require_admin(request, auth)
         if error_response:
@@ -529,7 +534,7 @@ class SyncWebService:
         request: Request,
         db: Session,
         auth: Optional[WebAuthContext],
-    ) -> RedirectResponse:
+    ) -> HTMLResponse | RedirectResponse:
         """Test ERPNext connection and redirect with result."""
         error_response = self._require_admin(request, auth)
         if error_response:

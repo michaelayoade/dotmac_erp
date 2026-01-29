@@ -25,7 +25,7 @@
     </div>
     {% endif %}
 
-    <form action="/people/payroll/slips/new" method="post" class="card">
+    <form action="{% if slip %}/people/payroll/slips/{{ slip.slip_id }}/edit{% else %}/people/payroll/slips/new{% endif %}" method="post" class="card">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <div class="p-6 border-b border-slate-200 dark:border-slate-700">
             <h2 class="text-lg font-semibold text-slate-900 dark:text-white">
@@ -43,7 +43,10 @@
                 <select name="employee_id" id="employee_id" required class="form-select w-full">
                     <option value="">Select an employee...</option>
                     {% for emp in employees %}
-                    <option value="{{ emp.employee_id }}">{{ emp.employee_code }} - {{ emp.full_name }}</option>
+                    <option value="{{ emp.employee_id }}"
+                        {% if (slip and slip.employee_id == emp.employee_id) or (not slip and form_data.get('employee_id') == emp.employee_id | string) %}selected{% endif %}>
+                        {{ emp.employee_code }} - {{ emp.full_name }}
+                    </option>
                     {% endfor %}
                 </select>
                 <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
@@ -55,18 +58,21 @@
             <div class="grid grid-cols-2 gap-4">
                 <div>
                     <label for="start_date" class="form-label">Period Start <span class="text-red-500">*</span></label>
-                    <input type="date" name="start_date" id="start_date" required class="form-input w-full">
+                    <input type="date" name="start_date" id="start_date" required class="form-input w-full"
+                        value="{{ slip.start_date.strftime('%Y-%m-%d') if slip else form_data.get('start_date', '') }}">
                 </div>
                 <div>
                     <label for="end_date" class="form-label">Period End <span class="text-red-500">*</span></label>
-                    <input type="date" name="end_date" id="end_date" required class="form-input w-full">
+                    <input type="date" name="end_date" id="end_date" required class="form-input w-full"
+                        value="{{ slip.end_date.strftime('%Y-%m-%d') if slip else form_data.get('end_date', '') }}">
                 </div>
             </div>
 
             {# Posting Date #}
             <div>
                 <label for="posting_date" class="form-label">Posting Date</label>
-                <input type="date" name="posting_date" id="posting_date" class="form-input w-full">
+                <input type="date" name="posting_date" id="posting_date" class="form-input w-full"
+                    value="{{ slip.posting_date.strftime('%Y-%m-%d') if slip and slip.posting_date else form_data.get('posting_date', '') }}">
                 <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
                     Leave blank to use period end date.
                 </p>
@@ -80,31 +86,41 @@
                         <label for="total_working_days" class="form-label text-xs">Total Days</label>
                         <input type="number" name="total_working_days" id="total_working_days"
                             step="0.5" min="0" placeholder="Auto"
+                            value="{{ slip.total_working_days if slip else form_data.get('total_working_days', '') }}"
                             class="form-input w-full">
                     </div>
                     <div>
                         <label for="absent_days" class="form-label text-xs">Absent Days</label>
                         <input type="number" name="absent_days" id="absent_days"
-                            step="0.5" min="0" value="0"
+                            step="0.5" min="0"
+                            value="{{ slip.absent_days if slip else form_data.get('absent_days', '0') }}"
                             class="form-input w-full">
                     </div>
                     <div>
                         <label for="leave_without_pay" class="form-label text-xs">LWP Days</label>
                         <input type="number" name="leave_without_pay" id="leave_without_pay"
-                            step="0.5" min="0" value="0"
+                            step="0.5" min="0"
+                            value="{{ slip.leave_without_pay if slip else form_data.get('leave_without_pay', '0') }}"
                             class="form-input w-full">
                     </div>
                 </div>
             </div>
         </div>
 
-        <div class="px-6 py-4 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-700 flex items-center justify-end gap-3">
+        <div class="px-6 py-4 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between gap-3">
+            {% if slip %}
+            <button type="submit" formaction="/people/payroll/slips/{{ slip.slip_id }}/delete" formmethod="post" onclick="return confirm('Delete this draft slip?');" class="btn btn-danger">
+                Delete Slip
+            </button>
+            {% else %}
+            <span></span>
+            {% endif %}
             <a href="/people/payroll/slips" class="btn btn-secondary">Cancel</a>
             <button type="submit" class="btn btn-primary">
                 <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
                 </svg>
-                Generate Slip
+                {% if slip %}Update{% else %}Generate{% endif %} Slip
             </button>
         </div>
     </form>

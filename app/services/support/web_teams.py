@@ -5,7 +5,7 @@ Handles team management template responses.
 """
 
 import logging
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, TypedDict
 
 from fastapi import Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -17,6 +17,19 @@ from app.models.people.hr import Employee, EmployeeStatus
 from app.services.common import coerce_uuid
 from app.services.support.team import team_service
 from app.templates import templates
+
+
+class TeamMemberSummary(TypedDict):
+    member_id: str
+    employee_id: str
+    employee_code: str
+    full_name: str
+    role: str
+    is_available: bool
+    assigned_count: int
+    assignment_weight: int
+    workload_percent: int
+    weight_percent: int
 
 if TYPE_CHECKING:
     from app.web.deps import WebAuthContext
@@ -225,7 +238,7 @@ class TeamWebService:
         stats = team_service.get_team_stats(db, tid)
 
         # Format members for display with workload data
-        members = []
+        members: list[TeamMemberSummary] = []
         total_assigned = 0
         total_weight = 0
         max_assigned = 0
@@ -246,19 +259,21 @@ class TeamWebService:
                     "is_available": member.is_available,
                     "assigned_count": member.assigned_count,
                     "assignment_weight": member.assignment_weight,
+                    "workload_percent": 0,
+                    "weight_percent": 0,
                 })
 
         # Calculate workload percentages for visualization
-        for member in members:
+        for member_summary in members:
             if max_assigned > 0:
-                member["workload_percent"] = int((member["assigned_count"] / max_assigned) * 100)
+                member_summary["workload_percent"] = int((member_summary["assigned_count"] / max_assigned) * 100)
             else:
-                member["workload_percent"] = 0
+                member_summary["workload_percent"] = 0
 
             if total_weight > 0:
-                member["weight_percent"] = int((member["assignment_weight"] / total_weight) * 100)
+                member_summary["weight_percent"] = int((member_summary["assignment_weight"] / total_weight) * 100)
             else:
-                member["weight_percent"] = int(100 / len(members)) if members else 0
+                member_summary["weight_percent"] = int(100 / len(members)) if members else 0
 
         # Get employees not in team for adding
         available_employees = self._get_employees_not_in_team(db, org_id, tid)

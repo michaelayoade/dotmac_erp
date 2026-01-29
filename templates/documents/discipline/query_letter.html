@@ -1,0 +1,202 @@
+{#
+    Query (Show Cause) Letter Template
+
+    This template is used for formal disciplinary queries/show cause notices.
+    Designed to be wrapped by base_letter.html.
+
+    Context variables available:
+    - case_number, case_date
+    - employee_name, employee_code, employee_address
+    - job_title, department_name
+    - violation_type, violation_severity, incident_date, incident_description
+    - policy_violated
+    - query_text, response_due_date, response_instructions
+    - organization_name, organization_address, organization_logo_url
+    - signatory_name, signatory_title
+    - letter_date
+#}
+
+<!-- Header Banner -->
+<div style="text-align: center; margin-bottom: 30px; padding: 15px; background-color: #dbeafe; border: 2px solid #2563eb;">
+    <h2 style="margin: 0; color: #1e40af; font-size: 18px; text-transform: uppercase; letter-spacing: 1px;">
+        SHOW CAUSE NOTICE
+    </h2>
+    {% if case_number %}
+    <p style="margin: 5px 0 0 0; font-size: 12px; color: #3b82f6;">Case Reference: {{ case_number }}</p>
+    {% endif %}
+</div>
+
+<!-- Addressee -->
+<div class="addressee">
+    <p class="addressee-name">{{ employee_name }}</p>
+    <p style="font-size: 12px; color: #666;">
+        Employee ID: {{ employee_code }}<br>
+        {% if job_title %}Position: {{ job_title }}{% if department_name %}, {{ department_name }}{% endif %}{% endif %}
+    </p>
+    {% if employee_address %}
+    <p class="addressee-address">{{ employee_address }}</p>
+    {% endif %}
+</div>
+
+<!-- Subject Line -->
+<div class="subject">
+    <p class="subject-label">Subject:</p>
+    <p class="subject-text">Show Cause Notice - Alleged {{ violation_type | replace('_', ' ') | title }}</p>
+</div>
+
+<!-- Date -->
+<p style="font-size: 12px; color: #666; margin-bottom: 20px;">Date: {{ letter_date | format_date }}</p>
+
+<!-- Salutation -->
+<div class="salutation">
+    <p>Dear {{ employee_name.split()[0] }},</p>
+</div>
+
+<!-- Main Content -->
+<div class="content">
+    <p>
+        It has come to our attention that you may have committed an act that constitutes a violation
+        of company policies and/or your conditions of employment. This letter serves as a formal
+        request for you to provide an explanation regarding the following matter.
+    </p>
+
+    <!-- Incident Details -->
+    <h3>Details of Alleged Violation</h3>
+    <table>
+        <tr>
+            <td style="width: 150px;"><strong>Incident Date:</strong></td>
+            <td>{{ incident_date | format_date }}</td>
+        </tr>
+        <tr>
+            <td><strong>Violation Type:</strong></td>
+            <td>{{ violation_type | replace('_', ' ') | title }}</td>
+        </tr>
+        <tr>
+            <td><strong>Severity:</strong></td>
+            <td>
+                <span style="color: {% if violation_severity == 'CRITICAL' %}#dc2626{% elif violation_severity == 'MAJOR' %}#ea580c{% elif violation_severity == 'MODERATE' %}#ca8a04{% else %}#2563eb{% endif %}; font-weight: bold;">
+                    {{ violation_severity | title }}
+                </span>
+            </td>
+        </tr>
+        {% if policy_violated %}
+        <tr>
+            <td><strong>Policy Reference:</strong></td>
+            <td>{{ policy_violated }}</td>
+        </tr>
+        {% endif %}
+    </table>
+
+    <!-- Allegations -->
+    <h3>Nature of Allegations</h3>
+    <div style="margin: 20px 0; padding: 15px; background-color: #fef3c7; border-left: 4px solid #d97706;">
+        <p style="margin: 0; white-space: pre-wrap;">{{ query_text }}</p>
+    </div>
+
+    {% if incident_description %}
+    <!-- Additional Context -->
+    <h3>Background Information</h3>
+    <p>{{ incident_description }}</p>
+    {% endif %}
+
+    <!-- Response Requirements -->
+    <h3>Required Response</h3>
+    <div style="padding: 15px; background-color: #f0fdf4; border: 1px solid #bbf7d0; margin: 15px 0;">
+        <p style="margin: 0;">
+            You are hereby required to submit a written response to the above allegations no later than:
+        </p>
+        <p style="margin: 15px 0 0 0; font-size: 16px; font-weight: bold; color: #166534;">
+            {{ response_due_date | format_date }}
+        </p>
+    </div>
+
+    <p>
+        Your response should address each of the allegations raised above. You may provide any
+        relevant documents, evidence, or witness information that you believe supports your
+        explanation.
+    </p>
+
+    {% if response_instructions %}
+    <div style="margin: 15px 0; padding: 15px; background-color: #f8fafc; border-left: 4px solid #64748b;">
+        <p style="margin: 0;"><strong>Submission Instructions:</strong></p>
+        <p style="margin: 10px 0 0 0;">{{ response_instructions }}</p>
+    </div>
+    {% endif %}
+
+    <!-- Consequences Notice -->
+    <h3>Important Notice</h3>
+    <div style="padding: 15px; background-color: #fef2f2; border: 1px solid #fecaca; margin: 15px 0;">
+        <p style="margin: 0; color: #dc2626;">
+            <strong>Please Note:</strong> Failure to respond by the stipulated date may result in
+            a decision being made based on the available evidence without your input. If the
+            allegations are substantiated, appropriate disciplinary action will be taken in
+            accordance with company policy, which may include termination of employment.
+        </p>
+    </div>
+
+    <!-- Rights -->
+    <h3>Your Rights</h3>
+    <p>You have the following rights during this process:</p>
+    <ul>
+        <li>To receive a copy of any evidence that will be used in this investigation</li>
+        <li>To be accompanied by a colleague or union representative during any formal meetings</li>
+        <li>To respond to all allegations before any decision is made</li>
+        <li>To appeal any decision that may be taken against you</li>
+    </ul>
+
+    <p style="margin-top: 20px;">
+        Should you require any clarification regarding this matter, please do not hesitate to
+        contact the Human Resources Department.
+    </p>
+
+    <p>
+        We urge you to treat this matter with the seriousness it deserves.
+    </p>
+</div>
+
+<!-- Signature Section -->
+<div class="signature-section">
+    <p class="closing">Yours sincerely,</p>
+    <div class="signature-block">
+        <div class="signature-line"></div>
+        <p class="signature-name">{{ signatory_name }}</p>
+        <p class="signature-title">{{ signatory_title }}</p>
+        <p class="signature-date">Date: {{ letter_date | format_date }}</p>
+    </div>
+</div>
+
+<!-- Acknowledgment Section -->
+<div class="acceptance-section" style="margin-top: 40px; padding-top: 20px; border-top: 2px solid #333;">
+    <p class="acceptance-title">ACKNOWLEDGMENT OF RECEIPT</p>
+    <p>
+        I, <strong>{{ employee_name }}</strong>, hereby acknowledge receipt of this Show Cause Notice
+        dated {{ letter_date | format_date }}. I understand that I am required to submit my written
+        response by {{ response_due_date | format_date }}.
+    </p>
+
+    <div class="dual-signature" style="display: flex; justify-content: space-between; margin-top: 30px;">
+        <div class="signature-block" style="width: 45%;">
+            <div class="signature-line" style="border-bottom: 1px solid #333; margin: 30px 0 10px 0;"></div>
+            <p class="signature-name">{{ employee_name }}</p>
+            <p class="signature-title">Employee Signature</p>
+        </div>
+        <div class="signature-block" style="width: 45%;">
+            <div class="signature-line" style="border-bottom: 1px solid #333; margin: 30px 0 10px 0;"></div>
+            <p class="signature-name">Date Received</p>
+        </div>
+    </div>
+
+    <!-- If employee refuses to sign -->
+    <div style="margin-top: 30px; padding: 15px; background-color: #f8fafc; border: 1px dashed #94a3b8;">
+        <p style="font-size: 12px; color: #64748b; margin: 0;">
+            <strong>If employee refuses to sign:</strong>
+        </p>
+        <p style="font-size: 12px; color: #64748b; margin: 10px 0 0 0;">
+            I confirm that this notice was delivered to {{ employee_name }} on _____________ (date)
+            and they refused to acknowledge receipt.
+        </p>
+        <div style="margin-top: 20px;">
+            <p style="font-size: 12px;">Witness Name: _________________________ Signature: _________________________</p>
+        </div>
+    </div>
+</div>

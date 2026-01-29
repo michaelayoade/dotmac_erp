@@ -65,23 +65,41 @@ tests/
 | People/Payroll | `app/services/people/payroll/` | Salary, payslips |
 | People/Leave | `app/services/people/leave/` | Leave management |
 | People/Recruit | `app/services/people/recruit/` | Job postings, applications |
+| People/Discipline | `app/services/people/discipline/` | Policy violations, queries, hearings |
 | Operations/PM | `app/services/pm/` | Projects, tasks, time entries |
 | Expense | `app/services/expense/` | Expense claims and approvals |
 
 ### Key Patterns
 
 **Service Layer Pattern**: ALL business logic in services, never in routes or tasks.
+
+**CRITICAL RULE**: API routes (`app/api/`) and web routes (`app/web/`) are **thin wrappers only**.
+- NO database queries in routes (no `select()`, `db.query()`, `db.add()`)
+- NO business logic in routes (no conditionals, calculations, validations)
+- Routes ONLY: parse request → call service → return response
+- ALL logic lives in `app/services/`
+
 ```python
 # CORRECT: Route delegates to service
 @router.post("/invoices")
-async def create_invoice(data: InvoiceCreate, db: Session = Depends(get_db)):
-    return invoice_service.create(db, data)
+def create_invoice(data: InvoiceCreate, db: Session = Depends(get_db)):
+    service = InvoiceService(db)
+    return service.create(data)
+
+# CORRECT: Web route delegates to service
+@router.get("/invoices")
+def list_invoices(request: Request, db: Session = Depends(get_db)):
+    service = InvoiceService(db)
+    invoices = service.list_for_org(get_org_id(request))
+    return templates.TemplateResponse("invoices.html", {"invoices": invoices})
 
 # WRONG: Logic in route handler
 @router.post("/invoices")
-async def create_invoice(data: InvoiceCreate, db: Session = Depends(get_db)):
+def create_invoice(data: InvoiceCreate, db: Session = Depends(get_db)):
     invoice = Invoice(**data.dict())  # Don't do this
-    db.add(invoice)
+    db.add(invoice)                   # Don't do this
+    if invoice.amount > 10000:        # Don't do this
+        send_approval_email(...)      # Don't do this
 ```
 
 **Background Tasks Pattern**: Tasks orchestrate, services do the work.
@@ -196,6 +214,46 @@ invoices = db.scalars(select(Invoice).where(Invoice.status == "OPEN")).all()
 - Always review auto-generated migrations before running
 - Test migrations on a copy of prod data structure
 - Naming: `YYYYMMDD_description.py`
+
+## Discipline Module
+
+The Discipline module handles employee policy violations, queries, and disciplinary actions.
+
+### Core Entities
+| Entity | Description |
+|--------|-------------|
+| `DisciplinaryCase` | Main case record (violation type, status, dates) |
+| `CaseWitness` | Witnesses linked to a case |
+| `CaseAction` | Actions taken (warning, suspension, termination) |
+| `CaseDocument` | Evidence and response documents |
+| `CaseResponse` | Employee responses to queries |
+
+### Workflow States
+```
+DRAFT → QUERY_ISSUED → RESPONSE_RECEIVED → HEARING_SCHEDULED →
+HEARING_COMPLETED → DECISION_MADE → APPEAL_FILED → APPEAL_DECIDED → CLOSED
+```
+
+### Module Integrations
+| Integration | Purpose |
+|-------------|---------|
+| **Performance** | Link violations to appraisals, affect ratings |
+| **Payroll** | Unpaid suspension deductions |
+| **Leave** | Block leave during investigation |
+| **Lifecycle** | Trigger termination workflow |
+| **Training** | Mandatory training as corrective action |
+| **Notifications** | Alert employee on queries, status changes |
+
+### Service Structure
+```
+app/services/people/discipline/
+├── __init__.py
+├── discipline_service.py      # Core case management
+├── case_action_service.py     # Action recording
+├── case_response_service.py   # Employee responses
+└── web/
+    └── discipline_web.py      # Web route helpers (thin)
+```
 
 ## Environment Variables
 

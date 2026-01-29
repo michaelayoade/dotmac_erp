@@ -542,6 +542,10 @@ class CreditNoteWebService:
     ) -> HTMLResponse | JSONResponse | RedirectResponse | dict:
         """Handle credit note creation form submission."""
         content_type = request.headers.get("content-type", "")
+        org_id = auth.organization_id
+        user_id = auth.user_id
+        assert org_id is not None
+        assert user_id is not None
 
         if "application/json" in content_type:
             data = await request.json()
@@ -554,9 +558,9 @@ class CreditNoteWebService:
 
             credit_note = ar_invoice_service.create_invoice(
                 db=db,
-                organization_id=auth.organization_id,
+                organization_id=org_id,
                 input=input_data,
-                created_by_user_id=auth.user_id,
+                created_by_user_id=user_id,
             )
 
             if "application/json" in content_type:
@@ -633,7 +637,11 @@ class CreditNoteWebService:
     ) -> RedirectResponse:
         """Handle credit note attachment upload."""
         try:
-            credit_note = ar_invoice_service.get(db, auth.organization_id, credit_note_id)
+            org_id = auth.organization_id
+            user_id = auth.person_id
+            assert org_id is not None
+            assert user_id is not None
+            credit_note = ar_invoice_service.get(db, org_id, credit_note_id)
             if not credit_note or credit_note.organization_id != auth.organization_id:
                 return RedirectResponse(
                     url=f"/ar/credit-notes/{credit_note_id}?error=Credit+note+not+found",
@@ -651,10 +659,10 @@ class CreditNoteWebService:
 
             attachment_service.save_file(
                 db=db,
-                organization_id=auth.organization_id,
+                organization_id=org_id,
                 input=input_data,
                 file_content=file.file,
-                uploaded_by=auth.person_id,
+                uploaded_by=user_id,
             )
 
             return RedirectResponse(

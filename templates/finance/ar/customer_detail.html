@@ -170,7 +170,7 @@
     </div>
 
     <!-- Attachments -->
-    {% set upload_url = "/ar/customers/" ~ customer.customer_id ~ "/attachments" %}
+{% set upload_url = "/finance/ar/customers/" ~ customer.customer_id ~ "/attachments" %}
     {% set delete_base_url = "/ar/attachments" %}
     {% include "finance/partials/_attachments.html" %}
 </div>

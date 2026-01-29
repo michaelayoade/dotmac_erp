@@ -49,9 +49,12 @@ def logout_page(
     next: str = Query(default="/login"),
 ):
     """
-    Log out the user by clearing cookies and redirecting to login.
+    Log out the user by revoking session and clearing cookies.
+
+    For SSO: revokes session in shared database so logout propagates
+    across all apps.
     """
-    return auth_web_service.logout_response(next)
+    return auth_web_service.logout_response(request, next)
 
 
 @router.get("/forgot-password", response_class=HTMLResponse)
@@ -75,3 +78,14 @@ def reset_password_page(
     Display the reset password page.
     """
     return auth_web_service.reset_password_response(request, token, auth)
+
+
+@router.get("/reset-password-required", response_class=HTMLResponse)
+def reset_password_required_page(
+    request: Request,
+    auth: WebAuthContext = Depends(optional_web_auth),
+):
+    """
+    Display the required password reset page (after first login).
+    """
+    return auth_web_service.reset_password_required_response(request, auth)

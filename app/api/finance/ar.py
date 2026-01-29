@@ -8,7 +8,7 @@ from datetime import date
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_organization_id, require_tenant_auth
@@ -28,7 +28,11 @@ from app.schemas.finance.ar import (
 )
 from app.schemas.finance.common import ListResponse, PostingResultSchema
 from app.models.finance.ar.customer import CustomerType
-from app.models.finance.ar.invoice import InvoiceType
+from app.config import settings
+from app.models.finance.ar.invoice import InvoiceType, InvoiceStatus
+from app.models.finance.ar.customer_payment import PaymentMethod, PaymentStatus
+from app.models.finance.ar.contract import ContractType, ContractStatus
+from app.models.finance.ar.performance_obligation import SatisfactionPattern
 from app.services.finance.ar import (
     customer_service,
     ar_invoice_service,
@@ -80,7 +84,7 @@ def create_customer(
         tax_id=payload.tax_id,  # Template-friendly name
         payment_terms_days=payload.payment_terms_days,  # Template-friendly name
         credit_limit=payload.credit_limit,
-        currency_code=payload.currency_code,
+        currency_code=settings.default_functional_currency_code,
         default_revenue_account_id=payload.default_revenue_account_id,
         default_receivable_account_id=payload.default_receivable_account_id,  # Template-friendly name
     )
@@ -210,11 +214,17 @@ def list_ar_invoices(
     db: Session = Depends(get_db),
 ):
     """List AR invoices with filters."""
+    status_value = None
+    if status:
+        try:
+            status_value = InvoiceStatus(status)
+        except ValueError:
+            status_value = None
     invoices = ar_invoice_service.list(
         db=db,
         organization_id=str(organization_id),
         customer_id=str(customer_id) if customer_id else None,
-        status=status,
+        status=status_value,
         from_date=from_date,
         to_date=to_date,
         limit=limit,
@@ -234,7 +244,6 @@ def post_ar_invoice(
     posting_date: date = Query(...),
     organization_id: UUID = Depends(require_organization_id),
     posted_by_user_id: UUID = Query(...),
-    fiscal_period_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("ar:invoices:post")),
     db: Session = Depends(get_db),
 ):
@@ -243,14 +252,13 @@ def post_ar_invoice(
         db=db,
         organization_id=organization_id,
         invoice_id=invoice_id,
-        fiscal_period_id=fiscal_period_id,
         posting_date=posting_date,
         posted_by_user_id=posted_by_user_id,
     )
     return PostingResultSchema(
         success=result.success,
         journal_entry_id=result.journal_entry_id,
-        entry_number=result.entry_number,
+        entry_number=None,
         message=result.message,
     )
 
@@ -275,18 +283,24 @@ def create_ar_receipt(
         )
         for alloc in payload.allocations
     ]
+    total_amount = sum((alloc.amount for alloc in allocations), Decimal("0"))
+    try:
+        payment_method = PaymentMethod(payload.payment_method)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid payment method") from exc
 
     input_data = CustomerPaymentInput(
         customer_id=payload.customer_id,
-        receipt_date=payload.receipt_date,
-        payment_method=payload.payment_method,
+        payment_date=payload.receipt_date,
+        payment_method=payment_method,
         bank_account_id=payload.bank_account_id,
         currency_code=payload.currency_code,
-        reference_number=payload.reference_number,
+        amount=total_amount,
+        reference=payload.reference_number,
         allocations=allocations,
     )
 
-    return customer_payment_service.create_receipt(
+    return customer_payment_service.create_payment(
         db=db,
         organization_id=organization_id,
         input=input_data,
@@ -317,11 +331,17 @@ def list_ar_receipts(
     db: Session = Depends(get_db),
 ):
     """List AR receipts with filters."""
+    status_value = None
+    if status:
+        try:
+            status_value = PaymentStatus(status)
+        except ValueError:
+            status_value = None
     receipts = customer_payment_service.list(
         db=db,
         organization_id=str(organization_id),
         customer_id=str(customer_id) if customer_id else None,
-        status=status,
+        status=status_value,
         from_date=from_date,
         to_date=to_date,
         limit=limit,
@@ -341,23 +361,21 @@ def post_ar_receipt(
     posting_date: date = Query(...),
     organization_id: UUID = Depends(require_organization_id),
     posted_by_user_id: UUID = Query(...),
-    fiscal_period_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("ar:receipts:post")),
     db: Session = Depends(get_db),
 ):
     """Post an AR receipt to the GL."""
-    result = ar_posting_adapter.post_receipt(
+    result = ar_posting_adapter.post_payment(
         db=db,
         organization_id=organization_id,
-        receipt_id=receipt_id,
-        fiscal_period_id=fiscal_period_id,
+        payment_id=receipt_id,
         posting_date=posting_date,
         posted_by_user_id=posted_by_user_id,
     )
     return PostingResultSchema(
         success=result.success,
         journal_entry_id=result.journal_entry_id,
-        entry_number=result.entry_number,
+        entry_number=None,
         message=result.message,
     )
 
@@ -455,15 +473,20 @@ def create_credit_note(
         )
         for line in payload.lines
     ]
-
-    return ar_invoice_service.create_credit_note(
+    input_data = ARInvoiceInput(
+        customer_id=payload.customer_id,
+        invoice_type=InvoiceType.CREDIT_NOTE,
+        invoice_date=payload.credit_date,
+        due_date=payload.credit_date,
+        currency_code=settings.default_functional_currency_code,
+        lines=lines,
+        notes=payload.reason,
+        correlation_id=str(payload.original_invoice_id) if payload.original_invoice_id else None,
+    )
+    return ar_invoice_service.create_invoice(
         db=db,
         organization_id=organization_id,
-        customer_id=payload.customer_id,
-        original_invoice_id=payload.original_invoice_id,
-        credit_date=payload.credit_date,
-        reason=payload.reason,
-        lines=lines,
+        input=input_data,
         created_by_user_id=created_by_user_id,
     )
 
@@ -489,6 +512,14 @@ class PerformanceObligationCreate(BaseModel):
     recognition_method: str = "OVER_TIME"  # OVER_TIME or POINT_IN_TIME
     measure_type: Optional[str] = "OUTPUT"  # INPUT or OUTPUT
     total_units: Optional[Decimal] = None
+    revenue_account_id: UUID
+    ssp_determination_method: str = "STANDALONE"
+    is_distinct: bool = True
+    over_time_method: Optional[str] = None
+    progress_measure: Optional[str] = None
+    expected_completion_date: Optional[date] = None
+    contract_asset_account_id: Optional[UUID] = None
+    contract_liability_account_id: Optional[UUID] = None
 
 
 class ContractCreate(BaseModel):
@@ -502,6 +533,7 @@ class ContractCreate(BaseModel):
     currency_code: str = Field(max_length=3)
     description: Optional[str] = None
     performance_obligations: list[PerformanceObligationCreate] = []
+    contract_type: str = "STANDARD"
 
 
 class ContractRead(BaseModel):
@@ -547,15 +579,36 @@ def create_contract(
     db: Session = Depends(get_db),
 ):
     """Create an IFRS 15 revenue contract."""
+    obligations = []
+    for obligation in payload.performance_obligations:
+        try:
+            pattern = SatisfactionPattern(obligation.recognition_method)
+        except ValueError:
+            pattern = SatisfactionPattern.OVER_TIME
+        obligations.append(
+            PerformanceObligationInput(
+                description=obligation.description,
+                satisfaction_pattern=pattern,
+                standalone_selling_price=obligation.standalone_price,
+                ssp_determination_method=obligation.ssp_determination_method,
+                revenue_account_id=obligation.revenue_account_id,
+                is_distinct=obligation.is_distinct,
+                over_time_method=obligation.over_time_method,
+                progress_measure=obligation.progress_measure or obligation.measure_type,
+                expected_completion_date=obligation.expected_completion_date,
+                contract_asset_account_id=obligation.contract_asset_account_id,
+                contract_liability_account_id=obligation.contract_liability_account_id,
+            )
+        )
     input_data = ContractInput(
         customer_id=payload.customer_id,
-        contract_number=payload.contract_number,
-        contract_date=payload.contract_date,
+        contract_name=payload.contract_number,
+        contract_type=ContractType(payload.contract_type),
         start_date=payload.start_date,
         end_date=payload.end_date,
-        total_transaction_price=payload.total_transaction_price,
         currency_code=payload.currency_code,
-        description=payload.description,
+        total_contract_value=payload.total_transaction_price,
+        obligations=obligations,
     )
     return contract_service.create_contract(db, organization_id, input_data, created_by_user_id)
 
@@ -577,11 +630,17 @@ def list_contracts(
     db: Session = Depends(get_db),
 ):
     """List IFRS 15 contracts with filters."""
+    status_value = None
+    if status:
+        try:
+            status_value = ContractStatus(status)
+        except ValueError:
+            status_value = None
     contracts = contract_service.list(
         db=db,
         organization_id=str(organization_id),
         customer_id=str(customer_id) if customer_id else None,
-        status=status,
+        status=status_value,
         limit=limit,
         offset=offset,
     )
@@ -609,12 +668,22 @@ def add_performance_obligation(
     db: Session = Depends(get_db),
 ):
     """Add a performance obligation to a contract."""
+    try:
+        pattern = SatisfactionPattern(payload.recognition_method)
+    except ValueError:
+        pattern = SatisfactionPattern.OVER_TIME
     input_data = PerformanceObligationInput(
         description=payload.description,
-        standalone_price=payload.standalone_price,
-        recognition_method=payload.recognition_method,
-        measure_type=payload.measure_type,
-        total_units=payload.total_units,
+        satisfaction_pattern=pattern,
+        standalone_selling_price=payload.standalone_price,
+        ssp_determination_method=payload.ssp_determination_method,
+        revenue_account_id=payload.revenue_account_id,
+        is_distinct=payload.is_distinct,
+        over_time_method=payload.over_time_method,
+        progress_measure=payload.progress_measure or payload.measure_type,
+        expected_completion_date=payload.expected_completion_date,
+        contract_asset_account_id=payload.contract_asset_account_id,
+        contract_liability_account_id=payload.contract_liability_account_id,
     )
     contract_service.add_performance_obligation(db, organization_id, contract_id, input_data)
     return contract_service.get(db, str(contract_id))
@@ -631,12 +700,12 @@ def update_contract_progress(
     """Update progress and recognize revenue."""
     input_data = ProgressUpdateInput(
         obligation_id=payload.obligation_id,
-        update_date=payload.update_date,
-        fiscal_period_id=payload.fiscal_period_id,
-        measure_type=payload.measure_type,
-        units_delivered=payload.units_delivered,
-        percentage_complete=payload.percentage_complete,
+        event_date=payload.update_date,
+        progress_percentage=payload.percentage_complete or Decimal("0"),
+        measurement_details={
+            "measure_type": payload.measure_type,
+            "units_delivered": str(payload.units_delivered) if payload.units_delivered else None,
+            "fiscal_period_id": str(payload.fiscal_period_id),
+        },
     )
     return contract_service.update_progress(db, organization_id, input_data, posted_by_user_id)
-
-

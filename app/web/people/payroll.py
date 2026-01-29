@@ -47,6 +47,16 @@ def new_component_form(
     """New salary component form."""
     return payroll_web_service.component_new_form_response(request, auth, db)
 
+@router.get("/components/{component_id}/edit", response_class=HTMLResponse)
+def edit_component_form(
+    request: Request,
+    component_id: str,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Edit salary component form."""
+    return payroll_web_service.component_edit_form_response(request, auth, db, component_id)
+
 
 @router.post("/components/new")
 async def create_component(
@@ -56,6 +66,26 @@ async def create_component(
 ):
     """Create new salary component."""
     return await payroll_web_service.create_component_response(request, auth, db)
+
+@router.post("/components/{component_id}/edit")
+async def update_component(
+    request: Request,
+    component_id: str,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Update salary component."""
+    return await payroll_web_service.update_component_response(request, auth, db, component_id)
+
+
+@router.post("/components/{component_id}/delete")
+def delete_component(
+    component_id: str,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Delete salary component."""
+    return payroll_web_service.delete_component_response(auth, db, component_id)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -74,6 +104,18 @@ def list_salary_slips(
 ):
     """Salary slip list page."""
     return payroll_web_service.list_slips_response(request, auth, db, search, status, page)
+
+
+@router.get("/slips/export")
+def export_salary_slips(
+    request: Request,
+    search: Optional[str] = None,
+    status: Optional[str] = None,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Export salary slips to CSV."""
+    return payroll_web_service.export_slips_response(request, auth, db, search, status)
 
 
 @router.get("/slips/new", response_class=HTMLResponse)
@@ -107,6 +149,17 @@ def view_slip(
     return payroll_web_service.slip_detail_response(request, auth, db, slip_id)
 
 
+@router.get("/slips/{slip_id}/edit", response_class=HTMLResponse)
+def edit_slip_form(
+    request: Request,
+    slip_id: str,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Edit salary slip form."""
+    return payroll_web_service.slip_edit_form_response(request, auth, db, slip_id)
+
+
 @router.post("/slips/{slip_id}/submit")
 def submit_slip(
     slip_id: str,
@@ -138,6 +191,27 @@ def post_slip(
     return payroll_web_service.post_slip_response(auth, db, slip_id, posting_date)
 
 
+@router.post("/slips/{slip_id}/edit")
+async def update_slip(
+    request: Request,
+    slip_id: str,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Update salary slip."""
+    return await payroll_web_service.update_slip_response(request, auth, db, slip_id)
+
+
+@router.post("/slips/{slip_id}/delete")
+def delete_slip(
+    slip_id: str,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Delete salary slip."""
+    return payroll_web_service.delete_slip_response(auth, db, slip_id)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Salary Structures
 # ─────────────────────────────────────────────────────────────────────────────
@@ -164,6 +238,16 @@ def new_structure_form(
     """New salary structure form."""
     return payroll_web_service.structure_new_form_response(request, auth, db)
 
+@router.get("/structures/{structure_id}/edit", response_class=HTMLResponse)
+def edit_structure_form(
+    request: Request,
+    structure_id: str,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Edit salary structure form."""
+    return payroll_web_service.structure_edit_form_response(request, auth, db, structure_id)
+
 
 @router.post("/structures/new")
 async def create_structure(
@@ -174,6 +258,25 @@ async def create_structure(
     """Create new salary structure."""
     return await payroll_web_service.create_structure_response(request, auth, db)
 
+@router.post("/structures/{structure_id}/edit")
+async def update_structure(
+    request: Request,
+    structure_id: str,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Update salary structure."""
+    return await payroll_web_service.update_structure_response(request, auth, db, structure_id)
+
+
+@router.post("/structures/{structure_id}/delete")
+def delete_structure(
+    structure_id: str,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Delete salary structure."""
+    return payroll_web_service.delete_structure_response(auth, db, structure_id)
 
 @router.get("/structures/{structure_id}", response_class=HTMLResponse)
 def view_structure(
@@ -195,12 +298,16 @@ def view_structure(
 def list_assignments(
     request: Request,
     search: Optional[str] = None,
+    bulk_created: Optional[int] = None,
+    bulk_skipped: Optional[int] = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
     """Salary assignments list page."""
-    return payroll_web_service.list_assignments_response(request, auth, db, search, page)
+    return payroll_web_service.list_assignments_response(
+        request, auth, db, search, page, bulk_created, bulk_skipped
+    )
 
 
 @router.get("/assignments/new", response_class=HTMLResponse)
@@ -222,6 +329,26 @@ async def create_assignment(
 ):
     """Create salary structure assignment."""
     return await payroll_web_service.create_assignment_response(request, auth, db)
+
+
+@router.get("/assignments/bulk", response_class=HTMLResponse)
+def bulk_assignment_form(
+    request: Request,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Bulk salary assignment form."""
+    return payroll_web_service.assignment_bulk_form_response(request, auth, db)
+
+
+@router.post("/assignments/bulk")
+async def create_bulk_assignment(
+    request: Request,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Create bulk salary structure assignments."""
+    return await payroll_web_service.create_assignment_bulk_response(request, auth, db)
 
 
 @router.get("/assignments/{assignment_id}/edit", response_class=HTMLResponse)
@@ -255,6 +382,16 @@ def end_assignment(
 ):
     """End salary structure assignment."""
     return payroll_web_service.end_assignment_response(auth, db, assignment_id, end_date)
+
+
+@router.post("/assignments/{assignment_id}/delete")
+def delete_assignment(
+    assignment_id: str,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Delete salary structure assignment."""
+    return payroll_web_service.delete_assignment_response(auth, db, assignment_id)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -415,11 +552,12 @@ def report_tax_summary(
 def report_trends(
     request: Request,
     year: Optional[int] = None,
+    months: Optional[int] = 12,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
     """Payroll trends report."""
-    return payroll_web_service.trends_report_response(request, auth, db, year)
+    return payroll_web_service.trends_report_response(request, auth, db, year, months)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

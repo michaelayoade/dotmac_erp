@@ -114,6 +114,10 @@ class ARInvoiceBulkService(BulkActionService[Invoice]):
         if not entities:
             return BulkActionResult.failure("No invoices found with provided IDs")
 
+        if not self.user_id:
+            return BulkActionResult.failure("User required for approval")
+        user_id = self.user_id
+
         success_count = 0
         failed_count = 0
         errors: list[str] = []
@@ -124,7 +128,7 @@ class ARInvoiceBulkService(BulkActionService[Invoice]):
                     self.db,
                     self.organization_id,
                     invoice.invoice_id,
-                    self.user_id,
+                    user_id,
                 )
                 success_count += 1
             except Exception as e:
@@ -153,6 +157,10 @@ class ARInvoiceBulkService(BulkActionService[Invoice]):
         if not entities:
             return BulkActionResult.failure("No invoices found with provided IDs")
 
+        if not self.user_id:
+            return BulkActionResult.failure("User required for posting")
+        user_id = self.user_id
+
         success_count = 0
         failed_count = 0
         errors: list[str] = []
@@ -163,7 +171,7 @@ class ARInvoiceBulkService(BulkActionService[Invoice]):
                     self.db,
                     self.organization_id,
                     invoice.invoice_id,
-                    self.user_id,
+                    user_id,
                 )
                 success_count += 1
             except Exception as e:

@@ -1,6 +1,7 @@
 import os
 import sys
 import uuid
+from contextlib import asynccontextmanager, contextmanager
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 from types import ModuleType
@@ -8,7 +9,7 @@ from types import ModuleType
 import pytest
 from fastapi.testclient import TestClient
 from jose import jwt
-from sqlalchemy import create_engine, String, TypeDecorator
+from sqlalchemy import create_engine, String, TypeDecorator, Text
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 from sqlalchemy.pool import StaticPool
 from sqlalchemy import dialects
@@ -38,6 +39,7 @@ class SQLiteUUID(TypeDecorator):
 # This is done BEFORE any app model imports so they use the patched version
 import sqlalchemy.dialects.postgresql as pg_dialect
 _original_uuid = pg_dialect.UUID
+_original_jsonb = getattr(pg_dialect, "JSONB", None)
 
 
 class PatchedUUID(SQLiteUUID):
@@ -53,11 +55,33 @@ class PatchedUUID(SQLiteUUID):
 pg_dialect.UUID = PatchedUUID
 
 
+class PatchedJSONB(Text):
+    """Patched JSONB that uses TEXT storage for SQLite."""
+    cache_ok = True
+
+
+if _original_jsonb is not None:
+    pg_dialect.JSONB = PatchedJSONB
+
+
 # Create a test engine BEFORE any app imports
 _test_engine = create_engine(
     "sqlite+pysqlite:///:memory:",
     connect_args={"check_same_thread": False},
     poolclass=StaticPool,
+    execution_options={
+        "schema_translate_map": {
+            "expense": None,
+            "platform": None,
+            "gl": None,
+            "ap": None,
+            "core_org": None,
+            "hr": None,
+            "pm": None,
+            "support": None,
+            "automation": None,
+        }
+    },
 )
 
 
@@ -88,6 +112,17 @@ mock_db_module.SessionLocal = _TestSessionLocal
 mock_db_module.AsyncSessionLocal = _MockAsyncSessionLocal
 mock_db_module.get_engine = lambda: _test_engine
 mock_db_module.get_async_session_local = lambda: _TestSessionLocal
+mock_db_module.get_auth_db_session = lambda: _TestSessionLocal()
+mock_db_module.get_auth_db = lambda: _TestSessionLocal()
+
+def _get_db_session():
+    db = _TestSessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+mock_db_module.get_db_session = _get_db_session
 
 # Also mock app.config to prevent .env loading
 mock_config_module = ModuleType('app.config')
@@ -117,6 +152,12 @@ def _noop_disable_bypass_sync(db):
     pass
 
 
+@contextmanager
+def _noop_tenant_context_sync(db, organization_id):
+    """No-op tenant context for SQLite."""
+    yield
+
+
 # No-op async RLS functions for SQLite
 async def _noop_set_org_async(db, organization_id):
     """No-op for SQLite: PostgreSQL RLS not available."""
@@ -138,15 +179,23 @@ async def _noop_disable_bypass_async(db):
     pass
 
 
+@asynccontextmanager
+async def _noop_tenant_context(db, organization_id):
+    """No-op tenant context for SQLite."""
+    yield
+
+
 # Assign mock functions to the module
 mock_rls_module.set_current_organization_sync = _noop_set_org_sync
 mock_rls_module.clear_organization_context_sync = _noop_clear_org_sync
 mock_rls_module.enable_rls_bypass_sync = _noop_enable_bypass_sync
 mock_rls_module.disable_rls_bypass_sync = _noop_disable_bypass_sync
+mock_rls_module.tenant_context_sync = _noop_tenant_context_sync
 mock_rls_module.set_current_organization = _noop_set_org_async
 mock_rls_module.clear_organization_context = _noop_clear_org_async
 mock_rls_module.enable_rls_bypass = _noop_enable_bypass_async
 mock_rls_module.disable_rls_bypass = _noop_disable_bypass_async
+mock_rls_module.tenant_context = _noop_tenant_context
 
 
 class MockSettings:
@@ -172,6 +221,15 @@ class MockSettings:
     landing_cta_primary = "Start trial"
     landing_cta_secondary = "View sample reports"
     landing_content_json = None
+    # Resume upload settings
+    resume_upload_dir = "uploads/resumes"
+    resume_max_size_bytes = 5 * 1024 * 1024
+    resume_allowed_extensions = ".pdf,.doc,.docx"
+    # CAPTCHA settings
+    captcha_site_key = None
+    captcha_secret_key = None
+    # App URL
+    app_url = "http://localhost:8000"
 
 
 mock_config_module.settings = MockSettings()
@@ -193,8 +251,13 @@ from app.models.person import Person
 from app.models.auth import UserCredential, Session as AuthSession, SessionStatus, ApiKey, MFAMethod
 from app.models.rbac import Role, Permission, RolePermission, PersonRole
 from app.models.audit import AuditEvent, AuditActorType
-from app.models.domain_settings import DomainSetting, SettingDomain
+from app.models.domain_settings import DomainSetting, DomainSettingHistory, SettingDomain
 from app.models.scheduler import ScheduledTask, ScheduleType
+from app.models.expense import ExpenseClaim, ExpenseClaimItem, ExpenseCategory, ExpenseClaimAction
+# IdempotencyRecord uses PostgreSQL-specific defaults; omit from default SQLite tables.
+from app.models.finance.platform import IdempotencyRecord
+# Import discipline models to resolve Employee relationship
+from app.models.people.discipline import DisciplinaryCase  # noqa: F401
 
 # List of tables that are SQLite-compatible (public schema models only)
 # IFRS models use PostgreSQL-specific types (JSONB, ARRAY) that SQLite doesn't support
@@ -210,15 +273,32 @@ SQLITE_COMPATIBLE_TABLES = [
     PersonRole.__table__,
     AuditEvent.__table__,
     DomainSetting.__table__,
+    DomainSettingHistory.__table__,
     ScheduledTask.__table__,
+    ExpenseCategory.__table__,
+    ExpenseClaim.__table__,
+    ExpenseClaimItem.__table__,
+    ExpenseClaimAction.__table__,
 ]
 
-# Create only SQLite-compatible tables
-try:
-    TestBase.metadata.create_all(_test_engine, tables=SQLITE_COMPATIBLE_TABLES)
-except Exception as e:
-    import warnings
-    warnings.warn(f"Could not create test tables: {e}")
+# Create only SQLite-compatible tables, tolerating per-table failures
+import warnings
+def _strip_sqlite_server_defaults(tables):
+    for table in tables:
+        for column in table.columns:
+            default = column.server_default
+            if default is None:
+                continue
+            default_text = str(getattr(default, "arg", default)).lower()
+            if "gen_random_uuid" in default_text or "uuid_generate" in default_text:
+                column.server_default = None
+
+_strip_sqlite_server_defaults(SQLITE_COMPATIBLE_TABLES)
+for table in SQLITE_COMPATIBLE_TABLES:
+    try:
+        table.create(_test_engine, checkfirst=True)
+    except Exception as e:
+        warnings.warn(f"Could not create test table {table.name}: {e}")
 
 # Re-export Base for compatibility
 Base = TestBase
@@ -306,10 +386,10 @@ def client(db_session):
     seed_scheduler_settings(db_session)
 
     # Mock the app startup seeding to avoid duplicate seeding
-    with patch('app.main.seed_auth_settings'), \
-         patch('app.main.seed_audit_settings'), \
-         patch('app.main.seed_scheduler_settings'), \
-         patch('app.main.SessionLocal', return_value=MagicMock()):
+    with patch('app.main.seed_auth_settings', create=True), \
+         patch('app.main.seed_audit_settings', create=True), \
+         patch('app.main.seed_scheduler_settings', create=True), \
+         patch('app.main.SessionLocal', return_value=MagicMock(), create=True):
         with TestClient(app, raise_server_exceptions=False) as test_client:
             yield test_client
 

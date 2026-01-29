@@ -3,8 +3,12 @@ import os
 import smtplib
 import socket
 import ssl
+from email.mime.application import MIMEApplication
+from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from email import encoders
+from typing import Optional
 
 from sqlalchemy.orm import Session
 
@@ -161,10 +165,27 @@ def send_email(
     subject: str,
     body_html: str,
     body_text: str | None = None,
+    attachments: Optional[list[tuple[str, bytes, str]]] = None,
 ) -> bool:
-    """Send an email using SMTP settings from database or environment."""
+    """
+    Send an email using SMTP settings from database or environment.
+
+    Args:
+        db: Database session (optional, for retrieving SMTP settings)
+        to_email: Recipient email address
+        subject: Email subject
+        body_html: HTML body content
+        body_text: Plain text body content (optional)
+        attachments: List of attachments as (filename, data, mime_type) tuples
+                    Example: [("payslip.pdf", pdf_bytes, "application/pdf")]
+
+    Returns:
+        True if email was sent successfully, False otherwise
+    """
     config = _get_smtp_config(db)
-    msg = MIMEMultipart("alternative")
+
+    # Use mixed multipart to support both alternative content and attachments
+    msg = MIMEMultipart("mixed")
     msg["Subject"] = subject
     msg["From"] = f"{config['from_name']} <{config['from_email']}>"
     msg["To"] = to_email
@@ -173,9 +194,30 @@ def send_email(
     if config.get("reply_to"):
         msg["Reply-To"] = config["reply_to"]
 
+    # Create alternative part for text/html body
+    msg_alternative = MIMEMultipart("alternative")
     if body_text:
-        msg.attach(MIMEText(body_text, "plain"))
-    msg.attach(MIMEText(body_html, "html"))
+        msg_alternative.attach(MIMEText(body_text, "plain"))
+    msg_alternative.attach(MIMEText(body_html, "html"))
+    msg.attach(msg_alternative)
+
+    # Add attachments if provided
+    if attachments:
+        for filename, data, mime_type in attachments:
+            maintype, subtype = mime_type.split("/", 1) if "/" in mime_type else ("application", "octet-stream")
+            attachment_part: MIMEBase
+            if maintype == "application" and subtype == "pdf":
+                attachment_part = MIMEApplication(data, _subtype=subtype)
+            else:
+                attachment_part = MIMEBase(maintype, subtype)
+                attachment_part.set_payload(data)
+                encoders.encode_base64(attachment_part)
+            attachment_part.add_header(
+                "Content-Disposition",
+                "attachment",
+                filename=filename,
+            )
+            msg.attach(attachment_part)
 
     server: smtplib.SMTP | smtplib.SMTP_SSL | None = None
     timeout_seconds = 10

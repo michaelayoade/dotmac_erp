@@ -1,0 +1,143 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}Bulk Salary Assignment{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a>
+    <span class="mx-2">/</span>
+    <a href="/people/payroll/structures" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Payroll</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">Bulk Assignment</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+    <div class="card">
+        <div class="card-header">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Bulk Salary Structure Assignment</h2>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                Assign a single salary structure to multiple employees based on filters.
+            </p>
+        </div>
+
+        {% if error %}
+        <div class="mx-6 mt-4 rounded-lg bg-rose-50 dark:bg-rose-900/30 border border-rose-200 dark:border-rose-800 p-4">
+            <div class="flex">
+                <svg class="h-5 w-5 text-rose-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clip-rule="evenodd" />
+                </svg>
+                <div class="ml-3">
+                    <p class="text-sm font-medium text-rose-800 dark:text-rose-200">{{ error }}</p>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <form method="post" class="card-body space-y-6">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label for="department_id" class="form-label">Department (optional)</label>
+                    <select name="department_id" id="department_id" class="form-select">
+                        <option value="">All Departments</option>
+                        {% for dept in departments %}
+                        <option value="{{ dept.department_id }}"
+                                {% if form_data.department_id == dept.department_id | string %}selected{% endif %}>
+                            {{ dept.department_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label for="designation_id" class="form-label">Designation (optional)</label>
+                    <select name="designation_id" id="designation_id" class="form-select">
+                        <option value="">All Designations</option>
+                        {% for desig in designations %}
+                        <option value="{{ desig.designation_id }}"
+                                {% if form_data.designation_id == desig.designation_id | string %}selected{% endif %}>
+                            {{ desig.designation_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div>
+                <label for="structure_id" class="form-label">Salary Structure <span class="text-red-500">*</span></label>
+                <select name="structure_id" id="structure_id" required class="form-select">
+                    <option value="">Select a salary structure</option>
+                    {% for structure in structures %}
+                    <option value="{{ structure.structure_id }}"
+                            {% if form_data.structure_id == structure.structure_id | string %}selected{% endif %}>
+                        {{ structure.structure_name }} ({{ structure.payroll_frequency.value }})
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div>
+                <label for="from_date" class="form-label">From Date <span class="text-red-500">*</span></label>
+                <input type="date" name="from_date" id="from_date" required
+                       value="{{ form_data.from_date or default_from_date }}"
+                       class="form-input">
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">All assignments will become effective on this date.</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label for="base" class="form-label">Base Pay</label>
+                    <div class="relative">
+                        <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 text-sm">NGN</span>
+                        <input type="number" name="base" id="base" step="0.01" min="0"
+                               value="{{ form_data.base or '0' }}"
+                               class="form-input pl-12 font-mono">
+                    </div>
+                </div>
+                <div>
+                    <label for="variable" class="form-label">Variable Pay</label>
+                    <div class="relative">
+                        <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 text-sm">NGN</span>
+                        <input type="number" name="variable" id="variable" step="0.01" min="0"
+                               value="{{ form_data.variable or '0' }}"
+                               class="form-input pl-12 font-mono">
+                    </div>
+                </div>
+            </div>
+
+            <div>
+                <label for="income_tax_slab" class="form-label">Income Tax Slab</label>
+                <input type="text" name="income_tax_slab" id="income_tax_slab"
+                       value="{{ form_data.income_tax_slab or '' }}"
+                       placeholder="e.g., NTA 2025 Band 3"
+                       class="form-input">
+            </div>
+
+            <div class="rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-4">
+                <div class="flex gap-3">
+                    <svg class="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <div class="text-sm text-blue-700 dark:text-blue-300">
+                        <p class="font-medium">Bulk assignment behavior</p>
+                        <ul class="mt-1 space-y-1 text-blue-600 dark:text-blue-400 text-xs">
+                            <li>Employees are filtered by department and/or designation</li>
+                            <li>Employees with an active assignment on the selected date are skipped</li>
+                            <li>Assignments are created with no end date</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-end gap-2 pt-4 border-t border-slate-200 dark:border-slate-700">
+                <a href="/people/payroll/assignments" class="btn btn-secondary">Cancel</a>
+                <button type="submit" class="btn btn-primary">Create Assignments</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

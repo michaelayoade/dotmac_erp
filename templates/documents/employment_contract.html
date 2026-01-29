@@ -1,0 +1,271 @@
+{#
+    Employment Contract Template
+
+    This template is used for formal employment contracts.
+    Designed to be wrapped by base_letter.html.
+
+    Context variables available:
+    - employee_name, employee_first_name, employee_last_name
+    - employee_address, employee_id_number, employee_tax_number
+    - job_title, designation_name, department_name, location
+    - employment_type, reporting_to
+    - base_salary, currency_code, pay_frequency, annual_salary
+    - allowances (list of {name, amount})
+    - deductions (list of {name, description})
+    - start_date, probation_months, notice_period_days
+    - work_hours_per_week, work_days, overtime_policy
+    - leave_entitlement, sick_leave_days
+    - confidentiality_clause, non_compete_clause, ip_assignment_clause
+    - organization_name, organization_address, organization_registration_number
+    - signatory_name, signatory_title
+    - contract_date, contract_number
+#}
+
+<!-- Contract Header -->
+<div class="contract-header" style="text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 20px;">
+    <h1 style="font-size: 24px; font-weight: bold; margin-bottom: 5px;">EMPLOYMENT CONTRACT</h1>
+    <p style="font-size: 12px; color: #666;">Contract Reference: {{ contract_number }}</p>
+</div>
+
+<!-- Parties -->
+<div class="content">
+    <h3>1. PARTIES TO THIS AGREEMENT</h3>
+    <p>This Employment Contract ("Contract") is entered into on <strong>{{ contract_date | format_date }}</strong> between:</p>
+
+    <table style="margin: 20px 0;">
+        <tr>
+            <td style="width: 120px;"><strong>EMPLOYER:</strong></td>
+            <td>
+                {{ organization_name }}<br>
+                {% if organization_registration_number %}Registration No: {{ organization_registration_number }}<br>{% endif %}
+                {{ organization_address }}
+            </td>
+        </tr>
+    </table>
+
+    <p style="text-align: center; margin: 10px 0;"><strong>AND</strong></p>
+
+    <table style="margin: 20px 0;">
+        <tr>
+            <td style="width: 120px;"><strong>EMPLOYEE:</strong></td>
+            <td>
+                {{ employee_name }}<br>
+                {% if employee_id_number %}ID Number: {{ employee_id_number }}<br>{% endif %}
+                {% if employee_address %}{{ employee_address }}{% endif %}
+            </td>
+        </tr>
+    </table>
+
+    <!-- Position Details -->
+    <h3>2. POSITION AND DUTIES</h3>
+    <table>
+        <tr>
+            <td><strong>Position Title:</strong></td>
+            <td>{{ job_title }}</td>
+        </tr>
+        {% if department_name %}
+        <tr>
+            <td><strong>Department:</strong></td>
+            <td>{{ department_name }}</td>
+        </tr>
+        {% endif %}
+        {% if location %}
+        <tr>
+            <td><strong>Work Location:</strong></td>
+            <td>{{ location }}</td>
+        </tr>
+        {% endif %}
+        {% if reporting_to %}
+        <tr>
+            <td><strong>Reports To:</strong></td>
+            <td>{{ reporting_to }}</td>
+        </tr>
+        {% endif %}
+        <tr>
+            <td><strong>Employment Type:</strong></td>
+            <td>{{ employment_type | replace("_", " ") | title }}</td>
+        </tr>
+    </table>
+
+    <p style="margin-top: 15px;">
+        The Employee shall perform such duties as are customarily associated with the position
+        and any other duties reasonably assigned by the Employer from time to time.
+    </p>
+
+    <!-- Commencement and Duration -->
+    <h3>3. COMMENCEMENT AND DURATION</h3>
+    <table>
+        <tr>
+            <td><strong>Start Date:</strong></td>
+            <td>{{ start_date | format_date }}</td>
+        </tr>
+        <tr>
+            <td><strong>Probation Period:</strong></td>
+            <td>{{ probation_months }} month{% if probation_months != 1 %}s{% endif %} from the start date</td>
+        </tr>
+    </table>
+    <p style="margin-top: 15px;">
+        During the probation period, either party may terminate this contract with
+        {{ probation_notice_days | default(7) }} days written notice. Upon successful completion
+        of probation, the Employee will be confirmed in the position.
+    </p>
+
+    <!-- Remuneration -->
+    <h3>4. REMUNERATION</h3>
+    <div class="highlight-box">
+        <div class="highlight-box-title">Monthly Salary</div>
+        <table>
+            <tr>
+                <td><strong>Basic Salary:</strong></td>
+                <td class="amount">{{ currency_code }} {{ base_salary | format_currency }} {{ pay_frequency | lower }}</td>
+            </tr>
+            {% if annual_salary and pay_frequency != 'ANNUAL' %}
+            <tr>
+                <td><strong>Annual Equivalent:</strong></td>
+                <td class="amount">{{ currency_code }} {{ annual_salary | format_currency }} per annum</td>
+            </tr>
+            {% endif %}
+        </table>
+    </div>
+
+    {% if allowances %}
+    <p style="margin-top: 15px;"><strong>Allowances:</strong></p>
+    <table>
+        {% for allowance in allowances %}
+        <tr>
+            <td>{{ allowance.name }}:</td>
+            <td class="amount">{{ currency_code }} {{ allowance.amount | format_currency }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+    {% endif %}
+
+    <p style="margin-top: 15px;">
+        Salary shall be paid on or before the last working day of each month, subject to
+        applicable statutory deductions including but not limited to income tax and social security contributions.
+    </p>
+
+    <!-- Working Hours -->
+    <h3>5. WORKING HOURS</h3>
+    <table>
+        {% if work_hours_per_week %}
+        <tr>
+            <td><strong>Working Hours:</strong></td>
+            <td>{{ work_hours_per_week }} hours per week</td>
+        </tr>
+        {% endif %}
+        {% if work_days %}
+        <tr>
+            <td><strong>Working Days:</strong></td>
+            <td>{{ work_days }}</td>
+        </tr>
+        {% endif %}
+    </table>
+    {% if overtime_policy %}
+    <p style="margin-top: 15px;"><strong>Overtime:</strong> {{ overtime_policy }}</p>
+    {% endif %}
+
+    <!-- Leave Entitlements -->
+    <h3>6. LEAVE ENTITLEMENTS</h3>
+    <table>
+        <tr>
+            <td><strong>Annual Leave:</strong></td>
+            <td>{{ leave_entitlement | default(21) }} working days per annum</td>
+        </tr>
+        <tr>
+            <td><strong>Sick Leave:</strong></td>
+            <td>{{ sick_leave_days | default(10) }} days per annum (with medical certificate)</td>
+        </tr>
+    </table>
+    <p style="margin-top: 15px;">
+        Leave entitlements are subject to the Employer's leave policy and applicable labor laws.
+    </p>
+
+    <!-- Termination -->
+    <h3>7. TERMINATION</h3>
+    <p>
+        After completion of the probation period, either party may terminate this contract by giving
+        <strong>{{ notice_period_days }} days</strong> written notice, or payment in lieu of notice.
+    </p>
+    <p style="margin-top: 10px;">
+        The Employer reserves the right to terminate employment immediately without notice or payment
+        in lieu for gross misconduct, including but not limited to:
+    </p>
+    <ul>
+        <li>Fraud, dishonesty, or theft</li>
+        <li>Gross negligence or dereliction of duty</li>
+        <li>Serious breach of company policies</li>
+        <li>Criminal conduct affecting employment</li>
+    </ul>
+
+    {% if confidentiality_clause %}
+    <!-- Confidentiality -->
+    <h3>8. CONFIDENTIALITY</h3>
+    <p>{{ confidentiality_clause }}</p>
+    {% else %}
+    <h3>8. CONFIDENTIALITY</h3>
+    <p>
+        The Employee agrees to maintain strict confidentiality of all proprietary information,
+        trade secrets, client data, and business information of the Employer, both during and
+        after the term of employment.
+    </p>
+    {% endif %}
+
+    {% if ip_assignment_clause %}
+    <!-- Intellectual Property -->
+    <h3>9. INTELLECTUAL PROPERTY</h3>
+    <p>{{ ip_assignment_clause }}</p>
+    {% endif %}
+
+    {% if non_compete_clause %}
+    <!-- Non-Compete -->
+    <h3>10. NON-COMPETE</h3>
+    <p>{{ non_compete_clause }}</p>
+    {% endif %}
+
+    <!-- General Provisions -->
+    <h3>{{ 11 if non_compete_clause else (10 if ip_assignment_clause else 9) }}. GENERAL PROVISIONS</h3>
+    <p>
+        This Contract constitutes the entire agreement between the parties. Any modifications
+        must be made in writing and signed by both parties. This Contract is governed by the
+        laws of the jurisdiction where the Employer operates.
+    </p>
+</div>
+
+<!-- Signature Section -->
+<div class="signature-section" style="margin-top: 40px;">
+    <p><strong>IN WITNESS WHEREOF</strong>, the parties have executed this Contract as of the date first written above.</p>
+
+    <div class="dual-signature" style="display: flex; justify-content: space-between; margin-top: 40px;">
+        <div class="signature-block" style="width: 45%;">
+            <p style="margin-bottom: 5px;"><strong>FOR THE EMPLOYER:</strong></p>
+            <div class="signature-line" style="border-bottom: 1px solid #333; margin: 40px 0 10px 0;"></div>
+            <p class="signature-name">{{ signatory_name }}</p>
+            <p class="signature-title">{{ signatory_title }}</p>
+            <p style="margin-top: 15px;">Date: ____________________</p>
+        </div>
+        <div class="signature-block" style="width: 45%;">
+            <p style="margin-bottom: 5px;"><strong>EMPLOYEE:</strong></p>
+            <div class="signature-line" style="border-bottom: 1px solid #333; margin: 40px 0 10px 0;"></div>
+            <p class="signature-name">{{ employee_name }}</p>
+            <p class="signature-title">Employee Signature</p>
+            <p style="margin-top: 15px;">Date: ____________________</p>
+        </div>
+    </div>
+</div>
+
+<!-- Witness Section (optional) -->
+{% if require_witness %}
+<div class="witness-section" style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd;">
+    <p><strong>WITNESS:</strong></p>
+    <table style="margin-top: 20px;">
+        <tr>
+            <td style="width: 100px;">Name:</td>
+            <td style="border-bottom: 1px solid #333; width: 200px;"></td>
+            <td style="width: 50px;"></td>
+            <td style="width: 80px;">Signature:</td>
+            <td style="border-bottom: 1px solid #333; width: 200px;"></td>
+        </tr>
+    </table>
+</div>
+{% endif %}

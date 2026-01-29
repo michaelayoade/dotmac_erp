@@ -1437,6 +1437,7 @@ class AttendanceService:
         Returns list of employees with their attendance metrics.
         """
         from app.models.people.hr import Employee, Department
+        from app.models.person import Person
 
         today = date.today()
         if not start_date:

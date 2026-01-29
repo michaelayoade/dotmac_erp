@@ -10,7 +10,7 @@ import json
 import logging
 from datetime import date, datetime, timedelta
 from decimal import Decimal
-from typing import Optional, cast
+from typing import Optional
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 def _customer_display_name(customer: Customer | None) -> str:
     if not customer:
         return "-"
-    return cast(str, customer.trading_name or customer.legal_name)
+    return customer.trading_name or customer.legal_name or "-"
 
 
 def _customer_email(customer: Customer | None) -> str | None:

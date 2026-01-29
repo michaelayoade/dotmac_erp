@@ -29,7 +29,8 @@ from app.db import Base
 
 class TemplateType(str, enum.Enum):
     """Types of document templates."""
-    # Document templates
+
+    # === Finance Documents ===
     INVOICE = "INVOICE"
     CREDIT_NOTE = "CREDIT_NOTE"
     QUOTE = "QUOTE"
@@ -39,13 +40,47 @@ class TemplateType(str, enum.Enum):
     RECEIPT = "RECEIPT"
     STATEMENT = "STATEMENT"
     PAYMENT_RECEIPT = "PAYMENT_RECEIPT"
-    # Email templates
+
+    # === Finance Email Templates ===
     EMAIL_INVOICE = "EMAIL_INVOICE"
     EMAIL_QUOTE = "EMAIL_QUOTE"
     EMAIL_REMINDER = "EMAIL_REMINDER"
     EMAIL_OVERDUE = "EMAIL_OVERDUE"
     EMAIL_PAYMENT = "EMAIL_PAYMENT"
     EMAIL_NOTIFICATION = "EMAIL_NOTIFICATION"
+
+    # === HR Documents ===
+    OFFER_LETTER = "OFFER_LETTER"
+    EMPLOYMENT_CONTRACT = "EMPLOYMENT_CONTRACT"
+    APPOINTMENT_LETTER = "APPOINTMENT_LETTER"
+    CONFIRMATION_LETTER = "CONFIRMATION_LETTER"
+    PROMOTION_LETTER = "PROMOTION_LETTER"
+    TRANSFER_LETTER = "TRANSFER_LETTER"
+    TERMINATION_LETTER = "TERMINATION_LETTER"
+    RESIGNATION_ACCEPTANCE = "RESIGNATION_ACCEPTANCE"
+    EXPERIENCE_LETTER = "EXPERIENCE_LETTER"
+    RELIEVING_LETTER = "RELIEVING_LETTER"
+    WARNING_LETTER = "WARNING_LETTER"
+    SHOW_CAUSE_NOTICE = "SHOW_CAUSE_NOTICE"
+    SALARY_REVISION_LETTER = "SALARY_REVISION_LETTER"
+    BONUS_LETTER = "BONUS_LETTER"
+
+    # === HR Email Templates ===
+    EMAIL_OFFER = "EMAIL_OFFER"
+    EMAIL_ONBOARDING = "EMAIL_ONBOARDING"
+    EMAIL_INTERVIEW_INVITE = "EMAIL_INTERVIEW_INVITE"
+    EMAIL_APPLICATION_RECEIVED = "EMAIL_APPLICATION_RECEIVED"
+    EMAIL_APPLICATION_STATUS = "EMAIL_APPLICATION_STATUS"
+    EMAIL_REJECTION = "EMAIL_REJECTION"
+
+    # === Payroll Documents ===
+    PAYSLIP = "PAYSLIP"
+    TAX_CERTIFICATE = "TAX_CERTIFICATE"
+    BANK_LETTER = "BANK_LETTER"
+
+    # === Project Management Documents ===
+    PROJECT_PROPOSAL = "PROJECT_PROPOSAL"
+    PROJECT_REPORT = "PROJECT_REPORT"
 
 
 class DocumentTemplate(Base):
@@ -181,17 +216,27 @@ class DocumentTemplate(Base):
     )
 
     def render(self, context: dict[str, Any]) -> str:
-        """Render the template with the given context."""
-        from jinja2 import Template
+        """
+        Render the template with the given context.
 
-        template = Template(self.template_content)
+        Uses a sandboxed Jinja2 environment to prevent template injection attacks.
+        """
+        from app.services.automation.safe_template import get_sandboxed_environment
+
+        env = get_sandboxed_environment()
+        template = env.from_string(self.template_content)
         return template.render(**context)
 
     def render_subject(self, context: dict[str, Any]) -> str:
-        """Render the email subject with the given context."""
+        """
+        Render the email subject with the given context.
+
+        Uses a sandboxed Jinja2 environment to prevent template injection attacks.
+        """
         if not self.email_subject:
             return ""
-        from jinja2 import Template
+        from app.services.automation.safe_template import get_sandboxed_environment
 
-        template = Template(self.email_subject)
+        env = get_sandboxed_environment()
+        template = env.from_string(self.email_subject)
         return template.render(**context)

@@ -153,7 +153,8 @@ class SupplierWebService:
 
         # Use shared audit service for user names
         audit_service = get_audit_service(db)
-        creator_names = audit_service.get_creator_names(suppliers)
+        creator_ids = [supplier.created_by_user_id for supplier in suppliers if supplier.created_by_user_id]
+        creator_names = audit_service.get_user_names_batch(creator_ids)
 
         # Calculate balance trends for sparkline charts
         supplier_ids = [s.supplier_id for s in suppliers]
@@ -163,7 +164,9 @@ class SupplierWebService:
             supplier_list_view(
                 supplier,
                 balance_map.get(supplier.supplier_id, Decimal("0")),
-                creator_names.get(supplier.created_by_user_id),
+                creator_names.get(supplier.created_by_user_id)
+                if supplier.created_by_user_id
+                else None,
                 balance_trends.get(supplier.supplier_id),
             )
             for supplier in suppliers
@@ -494,11 +497,13 @@ class SupplierWebService:
         form_data = await request.form()
 
         try:
+            org_id = auth.organization_id
+            assert org_id is not None
             input_data = self.build_supplier_input(dict(form_data))
 
             supplier_service.create_supplier(
                 db=db,
-                organization_id=auth.organization_id,
+                organization_id=org_id,
                 input=input_data,
             )
 
@@ -526,11 +531,13 @@ class SupplierWebService:
         form_data = await request.form()
 
         try:
+            org_id = auth.organization_id
+            assert org_id is not None
             input_data = self.build_supplier_input(dict(form_data))
 
             supplier_service.update_supplier(
                 db=db,
-                organization_id=auth.organization_id,
+                organization_id=org_id,
                 supplier_id=UUID(supplier_id),
                 input=input_data,
             )
@@ -582,7 +589,11 @@ class SupplierWebService:
     ) -> RedirectResponse:
         """Handle supplier attachment upload."""
         try:
-            supplier = supplier_service.get(db, auth.organization_id, supplier_id)
+            org_id = auth.organization_id
+            user_id = auth.person_id
+            assert org_id is not None
+            assert user_id is not None
+            supplier = supplier_service.get(db, org_id, supplier_id)
             if not supplier or supplier.organization_id != auth.organization_id:
                 return RedirectResponse(
                     url=f"/finance/ap/suppliers/{supplier_id}?error=Supplier+not+found",
@@ -600,10 +611,10 @@ class SupplierWebService:
 
             attachment_service.save_file(
                 db=db,
-                organization_id=auth.organization_id,
+                organization_id=org_id,
                 input=input_data,
                 file_content=file.file,
-                uploaded_by=auth.person_id,
+                uploaded_by=user_id,
             )
 
             return RedirectResponse(

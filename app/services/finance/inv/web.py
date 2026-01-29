@@ -732,9 +732,11 @@ class InventoryWebService:
         db: Session,
     ) -> HTMLResponse | RedirectResponse:
         try:
+            org_id = auth.organization_id
+            assert org_id is not None
             resolved_currency = currency_code or org_context_service.get_functional_currency(
                 db,
-                auth.organization_id,
+                org_id,
             )
 
             input_data = ItemInput(
@@ -762,7 +764,7 @@ class InventoryWebService:
                 is_saleable=is_saleable,
             )
 
-            item_service.create_item(db, auth.organization_id, input_data)
+            item_service.create_item(db, org_id, input_data)
             return RedirectResponse(url="/operations/inv/items", status_code=303)
 
         except Exception as e:
@@ -827,9 +829,11 @@ class InventoryWebService:
         try:
             if not item_name or not category_id:
                 raise ValueError("Item name and category are required.")
+            org_id = auth.organization_id
+            assert org_id is not None
             resolved_currency = currency_code or org_context_service.get_functional_currency(
                 db,
-                auth.organization_id,
+                org_id,
             )
 
             updates = {
@@ -856,7 +860,7 @@ class InventoryWebService:
                 "is_saleable": is_saleable,
             }
 
-            item_service.update_item(db, auth.organization_id, UUID(item_id), updates)
+            item_service.update_item(db, org_id, UUID(item_id), updates)
             return RedirectResponse(url=f"/operations/inv/items/{item_id}", status_code=303)
 
         except Exception as e:
@@ -1059,6 +1063,8 @@ class InventoryWebService:
         db: Session,
     ) -> HTMLResponse | RedirectResponse:
         try:
+            org_id = auth.organization_id
+            assert org_id is not None
             input_data = ItemCategoryInput(
                 category_code=category_code,
                 category_name=category_name,
@@ -1071,7 +1077,7 @@ class InventoryWebService:
                 purchase_variance_account_id=UUID(purchase_variance_account_id) if purchase_variance_account_id else None,
             )
 
-            item_category_service.create_category(db, auth.organization_id, input_data)
+            item_category_service.create_category(db, org_id, input_data)
             return RedirectResponse(url="/operations/inv/categories", status_code=303)
 
         except Exception as e:
@@ -1097,6 +1103,8 @@ class InventoryWebService:
         db: Session,
     ) -> HTMLResponse | RedirectResponse:
         try:
+            org_id = auth.organization_id
+            assert org_id is not None
             updates = {
                 "category_name": category_name,
                 "inventory_account_id": UUID(inventory_account_id),
@@ -1108,7 +1116,7 @@ class InventoryWebService:
                 "purchase_variance_account_id": UUID(purchase_variance_account_id) if purchase_variance_account_id else None,
             }
 
-            item_category_service.update_category(db, auth.organization_id, UUID(category_id), updates)
+            item_category_service.update_category(db, org_id, UUID(category_id), updates)
             return RedirectResponse(url="/operations/inv/categories", status_code=303)
 
         except Exception as e:
@@ -1125,12 +1133,14 @@ class InventoryWebService:
         db: Session,
     ) -> RedirectResponse:
         try:
+            org_id = auth.organization_id
+            assert org_id is not None
             category = item_category_service.get(db, category_id)
             if category.is_active:
-                item_category_service.deactivate_category(db, auth.organization_id, UUID(category_id))
+                item_category_service.deactivate_category(db, org_id, UUID(category_id))
             else:
                 # Reactivate
-                item_category_service.update_category(db, auth.organization_id, UUID(category_id), {"is_active": True})
+                item_category_service.update_category(db, org_id, UUID(category_id), {"is_active": True})
         except Exception:
             pass  # Just redirect back
         return RedirectResponse(url="/operations/inv/categories", status_code=303)
@@ -1194,7 +1204,7 @@ class InventoryWebService:
         """Build context for warehouse form (create/edit)."""
         org_id = coerce_uuid(organization_id)
 
-        context = {
+        context: dict[str, Optional[Warehouse]] = {
             "warehouse": None,
         }
 
@@ -1326,6 +1336,8 @@ class InventoryWebService:
         db: Session,
     ) -> HTMLResponse | RedirectResponse:
         try:
+            org_id = auth.organization_id
+            assert org_id is not None
             # Build address dict
             address = None
             if any([address_line1, address_city, address_state, address_country]):
@@ -1352,7 +1364,7 @@ class InventoryWebService:
                 is_transit=is_transit,
             )
 
-            warehouse_service.create_warehouse(db, auth.organization_id, input_data)
+            warehouse_service.create_warehouse(db, org_id, input_data)
             return RedirectResponse(url="/operations/inv/warehouses", status_code=303)
 
         except Exception as e:
@@ -1385,6 +1397,8 @@ class InventoryWebService:
         db: Session,
     ) -> HTMLResponse | RedirectResponse:
         try:
+            org_id = auth.organization_id
+            assert org_id is not None
             # Build address dict
             address = None
             if any([address_line1, address_city, address_state, address_country]):
@@ -1410,7 +1424,7 @@ class InventoryWebService:
                 "is_transit": is_transit,
             }
 
-            warehouse_service.update_warehouse(db, auth.organization_id, UUID(warehouse_id), updates)
+            warehouse_service.update_warehouse(db, org_id, UUID(warehouse_id), updates)
             return RedirectResponse(url="/operations/inv/warehouses", status_code=303)
 
         except Exception as e:
@@ -1427,12 +1441,14 @@ class InventoryWebService:
         db: Session,
     ) -> RedirectResponse:
         try:
+            org_id = auth.organization_id
+            assert org_id is not None
             warehouse = warehouse_service.get(db, warehouse_id)
             if warehouse.is_active:
-                warehouse_service.deactivate_warehouse(db, auth.organization_id, UUID(warehouse_id))
+                warehouse_service.deactivate_warehouse(db, org_id, UUID(warehouse_id))
             else:
                 # Reactivate
-                warehouse_service.update_warehouse(db, auth.organization_id, UUID(warehouse_id), {"is_active": True})
+                warehouse_service.update_warehouse(db, org_id, UUID(warehouse_id), {"is_active": True})
         except Exception:
             pass  # Just redirect back
         return RedirectResponse(url="/operations/inv/warehouses", status_code=303)
@@ -1452,30 +1468,86 @@ class InventoryWebService:
     def create_transaction_response(
         request: Request,
         auth: WebAuthContext,
+        transaction_type: str,
+        item_id: str,
+        warehouse_id: str,
+        quantity: str,
+        unit_cost: str,
+        transaction_date: str,
+        reference: Optional[str],
+        notes: Optional[str],
+        lot_number: Optional[str],
         db: Session,
     ) -> HTMLResponse | RedirectResponse:
         return InventoryTransactionWebService.create_transaction_response(
-            request, auth, db
+            request,
+            auth,
+            transaction_type,
+            item_id,
+            warehouse_id,
+            quantity,
+            unit_cost,
+            transaction_date,
+            reference,
+            notes,
+            lot_number,
+            db,
         )
 
     @staticmethod
     def create_transfer_response(
         request: Request,
         auth: WebAuthContext,
+        item_id: str,
+        from_warehouse_id: str,
+        to_warehouse_id: str,
+        quantity: str,
+        transaction_date: str,
+        reference: Optional[str],
+        notes: Optional[str],
+        lot_number: Optional[str],
         db: Session,
     ) -> RedirectResponse:
         return InventoryTransactionWebService.create_transfer_response(
-            request, auth, db
+            request,
+            auth,
+            item_id,
+            from_warehouse_id,
+            to_warehouse_id,
+            quantity,
+            transaction_date,
+            reference,
+            notes,
+            lot_number,
+            db,
         )
 
     @staticmethod
     def create_adjustment_response(
         request: Request,
         auth: WebAuthContext,
+        item_id: str,
+        warehouse_id: str,
+        quantity: str,
+        unit_cost: str,
+        transaction_date: str,
+        adjustment_type: str,
+        reason: str,
+        reference: Optional[str],
         db: Session,
     ) -> RedirectResponse:
         return InventoryTransactionWebService.create_adjustment_response(
-            request, auth, db
+            request,
+            auth,
+            item_id,
+            warehouse_id,
+            quantity,
+            unit_cost,
+            transaction_date,
+            adjustment_type,
+            reason,
+            reference,
+            db,
         )
 
 
@@ -1615,6 +1687,18 @@ class InventoryTransactionWebService:
         from datetime import datetime
 
         org_id = auth.organization_id
+        user_id = auth.user_id
+        assert org_id is not None
+        assert user_id is not None
+        user_id = auth.user_id
+        assert org_id is not None
+        assert user_id is not None
+        user_id = auth.user_id
+        assert org_id is not None
+        assert user_id is not None
+        user_id = auth.user_id
+        assert org_id is not None
+        assert user_id is not None
 
         try:
             # Parse inputs
@@ -1655,11 +1739,11 @@ class InventoryTransactionWebService:
 
             if transaction_type == "RECEIPT":
                 InventoryTransactionService.create_receipt(
-                    db, org_id, txn_input, auth.user_id
+                    db, org_id, txn_input, user_id
                 )
             else:
                 InventoryTransactionService.create_issue(
-                    db, org_id, txn_input, auth.user_id
+                    db, org_id, txn_input, user_id
                 )
 
             return RedirectResponse(url="/operations/inv/transactions", status_code=303)
@@ -1687,6 +1771,9 @@ class InventoryTransactionWebService:
         from datetime import datetime
 
         org_id = auth.organization_id
+        user_id = auth.user_id
+        assert org_id is not None
+        assert user_id is not None
 
         try:
             qty = Decimal(quantity)
@@ -1728,7 +1815,7 @@ class InventoryTransactionWebService:
                 db=db,
                 organization_id=org_id,
                 input=txn_input,
-                created_by_user_id=auth.user_id,
+                created_by_user_id=user_id,
             )
 
             return RedirectResponse(url="/operations/inv/transactions", status_code=303)
@@ -1760,6 +1847,9 @@ class InventoryTransactionWebService:
         from datetime import datetime
 
         org_id = auth.organization_id
+        user_id = auth.user_id
+        assert org_id is not None
+        assert user_id is not None
 
         try:
             qty = Decimal(quantity)
@@ -1795,7 +1885,7 @@ class InventoryTransactionWebService:
             )
 
             InventoryTransactionService.create_adjustment(
-                db, org_id, txn_input, auth.user_id
+                db, org_id, txn_input, user_id
             )
 
             return RedirectResponse(url="/operations/inv/transactions", status_code=303)

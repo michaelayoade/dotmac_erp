@@ -14,7 +14,7 @@
 
 {% block content %}
 <div class="max-w-2xl mx-auto">
-    <form action="/people/payroll/components/new" method="post" class="card">
+    <form action="{% if component %}/people/payroll/components/{{ component.component_id }}/edit{% else %}/people/payroll/components/new{% endif %}" method="post" class="card">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <div class="p-6 border-b border-slate-200 dark:border-slate-700">
             <h2 class="text-lg font-semibold text-slate-900 dark:text-white">
@@ -31,7 +31,7 @@
                 <div>
                     <label for="component_code" class="form-label">Code <span class="text-red-500">*</span></label>
                     <input type="text" name="component_code" id="component_code" required
-                        value="{{ component.component_code if component else '' }}"
+                        value="{{ component.component_code if component else form_data.get('component_code', '') }}"
                         placeholder="BASIC"
                         class="form-input w-full font-mono uppercase">
                     <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Unique identifier (e.g., BASIC, HRA, PAYE)</p>
@@ -40,7 +40,7 @@
                     <label for="component_type" class="form-label">Type <span class="text-red-500">*</span></label>
                     <select name="component_type" id="component_type" required class="form-select w-full">
                         {% for t in component_types %}
-                        <option value="{{ t }}" {% if component and component.component_type.value == t %}selected{% endif %}>{{ t | title }}</option>
+                        <option value="{{ t }}" {% if (component and component.component_type.value == t) or (not component and form_data.get('component_type') == t) %}selected{% endif %}>{{ t | title }}</option>
                         {% endfor %}
                     </select>
                 </div>
@@ -50,14 +50,14 @@
                 <div>
                     <label for="component_name" class="form-label">Name <span class="text-red-500">*</span></label>
                     <input type="text" name="component_name" id="component_name" required
-                        value="{{ component.component_name if component else '' }}"
+                        value="{{ component.component_name if component else form_data.get('component_name', '') }}"
                         placeholder="Basic Salary"
                         class="form-input w-full">
                 </div>
                 <div>
                     <label for="abbr" class="form-label">Abbreviation</label>
                     <input type="text" name="abbr" id="abbr"
-                        value="{{ component.abbr if component else '' }}"
+                        value="{{ component.abbr if component else form_data.get('abbr', '') }}"
                         placeholder="BS"
                         class="form-input w-full">
                     <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Short form for payslips</p>
@@ -67,7 +67,7 @@
             <div>
                 <label for="description" class="form-label">Description</label>
                 <textarea name="description" id="description" rows="2" class="form-input w-full"
-                    placeholder="Optional description...">{{ component.description if component else '' }}</textarea>
+                    placeholder="Optional description...">{{ component.description if component else form_data.get('description', '') }}</textarea>
             </div>
 
             {# GL Account Mapping #}
@@ -84,7 +84,7 @@
                         <select name="expense_account_id" id="expense_account_id" class="form-select w-full">
                             <option value="">Select expense account...</option>
                             {% for acc in expense_accounts %}
-                            <option value="{{ acc.account_id }}" {% if component and component.expense_account_id == acc.account_id %}selected{% endif %}>
+                            <option value="{{ acc.account_id }}" {% if (component and component.expense_account_id == acc.account_id) or (not component and form_data.get('expense_account_id') == acc.account_id | string) %}selected{% endif %}>
                                 {{ acc.account_code }} - {{ acc.account_name }}
                             </option>
                             {% endfor %}
@@ -96,7 +96,7 @@
                         <select name="liability_account_id" id="liability_account_id" class="form-select w-full">
                             <option value="">Select liability account...</option>
                             {% for acc in liability_accounts %}
-                            <option value="{{ acc.account_id }}" {% if component and component.liability_account_id == acc.account_id %}selected{% endif %}>
+                            <option value="{{ acc.account_id }}" {% if (component and component.liability_account_id == acc.account_id) or (not component and form_data.get('liability_account_id') == acc.account_id | string) %}selected{% endif %}>
                                 {{ acc.account_code }} - {{ acc.account_name }}
                             </option>
                             {% endfor %}
@@ -113,7 +113,7 @@
                 <div class="space-y-3">
                     <label class="flex items-center gap-3">
                         <input type="checkbox" name="is_tax_applicable" value="true"
-                            {% if component and component.is_tax_applicable %}checked{% endif %}
+                            {% if (component and component.is_tax_applicable) or (not component and form_data.get('is_tax_applicable')) %}checked{% endif %}
                             class="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500">
                         <span class="text-sm text-slate-700 dark:text-slate-300">Tax Applicable</span>
                         <span class="text-xs text-slate-500 dark:text-slate-400">Include in taxable income calculation</span>
@@ -121,7 +121,7 @@
 
                     <label class="flex items-center gap-3">
                         <input type="checkbox" name="is_statutory" value="true"
-                            {% if component and component.is_statutory %}checked{% endif %}
+                            {% if (component and component.is_statutory) or (not component and form_data.get('is_statutory')) %}checked{% endif %}
                             class="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500">
                         <span class="text-sm text-slate-700 dark:text-slate-300">Statutory Deduction</span>
                         <span class="text-xs text-slate-500 dark:text-slate-400">Government-mandated (PAYE, Pension, etc.)</span>
@@ -129,7 +129,7 @@
 
                     <label class="flex items-center gap-3">
                         <input type="checkbox" name="depends_on_payment_days" value="true"
-                            {% if (not component) or (component and component.depends_on_payment_days) %}checked{% endif %}
+                            {% if (component and component.depends_on_payment_days) or (not component and form_data.get('depends_on_payment_days', True)) %}checked{% endif %}
                             class="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500">
                         <span class="text-sm text-slate-700 dark:text-slate-300">Pro-rate on Payment Days</span>
                         <span class="text-xs text-slate-500 dark:text-slate-400">Adjust based on actual working days</span>
@@ -138,7 +138,14 @@
             </div>
         </div>
 
-        <div class="px-6 py-4 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-700 flex items-center justify-end gap-3">
+        <div class="px-6 py-4 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between gap-3">
+            {% if component %}
+            <button type="submit" formaction="/people/payroll/components/{{ component.component_id }}/delete" formmethod="post" onclick="return confirm('Delete this component? If it is in use, it will be deactivated instead.');" class="btn btn-danger">
+                Delete Component
+            </button>
+            {% else %}
+            <span></span>
+            {% endif %}
             <a href="/people/payroll/components" class="btn btn-secondary">Cancel</a>
             <button type="submit" class="btn btn-primary">
                 <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

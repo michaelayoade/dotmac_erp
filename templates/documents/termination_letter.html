@@ -1,0 +1,310 @@
+{#
+    Termination Letter Template
+
+    This template is used for employment termination notices.
+    Designed to be wrapped by base_letter.html.
+
+    Context variables available:
+    - employee_name, employee_first_name, employee_last_name
+    - employee_id, employee_number, job_title, department_name
+    - termination_type: PERFORMANCE, MISCONDUCT, REDUNDANCY, PROBATION_FAIL, MEDICAL
+    - termination_date, last_working_day, notice_period_days
+    - with_immediate_effect: true/false
+    - reason_summary
+    - detailed_reasons (list of specific reasons)
+    - previous_warnings (list of {date, type, description})
+    - final_settlement_items (list of {item, amount, type: payment/deduction})
+    - outstanding_items (list of company property to return)
+    - handover_instructions
+    - benefits_continuation
+    - severance_details
+    - garden_leave: true/false
+    - organization_name
+    - signatory_name, signatory_title
+    - letter_date, reference_number
+#}
+
+<!-- Termination Type Header -->
+{% set termination_labels = {
+    'PERFORMANCE': 'Termination of Employment - Performance',
+    'MISCONDUCT': 'Termination of Employment - Misconduct',
+    'REDUNDANCY': 'Notice of Redundancy',
+    'PROBATION_FAIL': 'Termination During Probation',
+    'MEDICAL': 'Termination - Medical Incapacity'
+} %}
+
+<div style="text-align: center; margin-bottom: 30px; padding: 15px; background-color: #fef2f2; border: 2px solid #dc2626;">
+    <h2 style="margin: 0; color: #dc2626; font-size: 16px;">
+        {{ termination_labels.get(termination_type, 'NOTICE OF TERMINATION') }}
+    </h2>
+    {% if reference_number %}
+    <p style="margin: 5px 0 0 0; font-size: 12px; color: #666;">Reference: {{ reference_number }}</p>
+    {% endif %}
+</div>
+
+<!-- Classification Notice -->
+<div style="font-size: 11px; color: #dc2626; text-align: right; margin-bottom: 20px;">
+    <strong>CONFIDENTIAL - ADDRESSEE ONLY</strong>
+</div>
+
+<!-- Addressee -->
+<div class="addressee">
+    <p class="addressee-name">{{ employee_name }}</p>
+    <p style="font-size: 12px; color: #666;">
+        Employee ID: {{ employee_number }}<br>
+        Position: {{ job_title }}{% if department_name %}, {{ department_name }}{% endif %}
+    </p>
+</div>
+
+<!-- Subject Line -->
+<div class="subject">
+    <p class="subject-label">Subject:</p>
+    <p class="subject-text">Termination of Employment</p>
+</div>
+
+<!-- Salutation -->
+<div class="salutation">
+    <p>Dear {{ employee_first_name }},</p>
+</div>
+
+<!-- Main Content -->
+<div class="content">
+    <!-- Opening Statement -->
+    {% if with_immediate_effect %}
+    <p>
+        We regret to inform you that your employment with <strong>{{ organization_name }}</strong>
+        is hereby terminated <strong>with immediate effect</strong> as of <strong>{{ termination_date | format_date }}</strong>.
+    </p>
+    {% else %}
+    <p>
+        We regret to inform you that your employment with <strong>{{ organization_name }}</strong>
+        will be terminated effective <strong>{{ termination_date | format_date }}</strong>.
+    </p>
+    {% endif %}
+
+    <!-- Reason for Termination -->
+    <h3>Reason for Termination</h3>
+    {% if reason_summary %}
+    <p>{{ reason_summary }}</p>
+    {% endif %}
+
+    {% if detailed_reasons %}
+    <p>Specifically, this decision is based on:</p>
+    <ul>
+        {% for reason in detailed_reasons %}
+        <li>{{ reason }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    {% if previous_warnings and termination_type in ['PERFORMANCE', 'MISCONDUCT'] %}
+    <!-- Previous Disciplinary Actions -->
+    <h3>Previous Disciplinary Actions</h3>
+    <p>Despite previous warnings, there has been insufficient improvement:</p>
+    <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+        <thead>
+            <tr style="background-color: #f1f5f9;">
+                <th style="padding: 8px; text-align: left; border: 1px solid #e2e8f0;">Date</th>
+                <th style="padding: 8px; text-align: left; border: 1px solid #e2e8f0;">Type</th>
+                <th style="padding: 8px; text-align: left; border: 1px solid #e2e8f0;">Issue</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for warning in previous_warnings %}
+            <tr>
+                <td style="padding: 8px; border: 1px solid #e2e8f0;">{{ warning.date | format_date }}</td>
+                <td style="padding: 8px; border: 1px solid #e2e8f0;">{{ warning.type }}</td>
+                <td style="padding: 8px; border: 1px solid #e2e8f0;">{{ warning.description }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+
+    <!-- Notice Period / Last Working Day -->
+    <h3>Notice Period and Last Working Day</h3>
+    {% if with_immediate_effect %}
+    <p>
+        Due to the nature of this termination, no notice period applies.
+        Your last working day is <strong>{{ termination_date | format_date }}</strong>.
+    </p>
+    {% elif garden_leave %}
+    <p>
+        You are not required to attend work during your notice period. You will remain
+        employed until your termination date and will receive your regular salary during this time.
+        Your last day of employment is <strong>{{ termination_date | format_date }}</strong>.
+    </p>
+    {% else %}
+    <p>
+        As per your employment contract, you are entitled to {{ notice_period_days }} days notice.
+        Your last working day will be <strong>{{ last_working_day | format_date }}</strong>.
+    </p>
+    {% endif %}
+
+    {% if handover_instructions %}
+    <!-- Handover Requirements -->
+    <h3>Handover Requirements</h3>
+    <p>{{ handover_instructions }}</p>
+    {% endif %}
+
+    {% if outstanding_items %}
+    <!-- Company Property -->
+    <h3>Return of Company Property</h3>
+    <p>Please return the following company property by your last working day:</p>
+    <ul>
+        {% for item in outstanding_items %}
+        <li>{{ item }}</li>
+        {% endfor %}
+    </ul>
+    <p style="font-size: 12px; color: #64748b;">
+        Failure to return company property may result in deductions from your final settlement.
+    </p>
+    {% endif %}
+
+    {% if final_settlement_items %}
+    <!-- Final Settlement -->
+    <h3>Final Settlement</h3>
+    <p>Your final settlement will include:</p>
+    <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+            <tr style="background-color: #f1f5f9;">
+                <th style="padding: 8px; text-align: left; border: 1px solid #e2e8f0;">Item</th>
+                <th style="padding: 8px; text-align: right; border: 1px solid #e2e8f0;">Amount</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% set total_payments = namespace(value=0) %}
+            {% set total_deductions = namespace(value=0) %}
+            {% for item in final_settlement_items %}
+            <tr>
+                <td style="padding: 8px; border: 1px solid #e2e8f0;">
+                    {{ item.item }}
+                    {% if item.type == 'deduction' %}<span style="color: #dc2626;">(Deduction)</span>{% endif %}
+                </td>
+                <td style="padding: 8px; text-align: right; border: 1px solid #e2e8f0;">
+                    {% if item.type == 'deduction' %}
+                    <span style="color: #dc2626;">-{{ currency_code }} {{ item.amount | format_currency }}</span>
+                    {% set total_deductions.value = total_deductions.value + item.amount %}
+                    {% else %}
+                    {{ currency_code }} {{ item.amount | format_currency }}
+                    {% set total_payments.value = total_payments.value + item.amount %}
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr style="background-color: #f8fafc; font-weight: bold;">
+                <td style="padding: 8px; border: 1px solid #e2e8f0;">Net Settlement</td>
+                <td style="padding: 8px; text-align: right; border: 1px solid #e2e8f0;">
+                    {{ currency_code }} {{ (total_payments.value - total_deductions.value) | format_currency }}
+                </td>
+            </tr>
+        </tfoot>
+    </table>
+    <p style="font-size: 12px; color: #64748b; margin-top: 10px;">
+        *Final amounts may be adjusted based on pending claims and deductions.
+    </p>
+    {% endif %}
+
+    {% if severance_details %}
+    <!-- Severance Package -->
+    <h3>Severance Package</h3>
+    <p>{{ severance_details }}</p>
+    {% endif %}
+
+    {% if benefits_continuation %}
+    <!-- Benefits -->
+    <h3>Benefits Continuation</h3>
+    <p>{{ benefits_continuation }}</p>
+    {% endif %}
+
+    <!-- Right to Appeal -->
+    {% if termination_type not in ['PROBATION_FAIL', 'REDUNDANCY'] %}
+    <h3>Right to Appeal</h3>
+    <p>
+        You have the right to appeal this decision within {{ appeal_period_days | default(5) }} working days
+        of receiving this letter. Appeals should be submitted in writing to
+        {{ appeal_to | default('the Human Resources Director') }}.
+    </p>
+    {% endif %}
+
+    <!-- Exit Requirements -->
+    <h3>Exit Requirements</h3>
+    <p>Before your departure, please ensure:</p>
+    <ul>
+        <li>Complete all pending work and handover documentation</li>
+        <li>Return all company property including ID badge, keys, equipment, and documents</li>
+        <li>Clear any outstanding advances or loans</li>
+        <li>Schedule an exit interview with Human Resources</li>
+        <li>Update your forwarding address for final correspondence</li>
+    </ul>
+
+    <!-- Closing -->
+    <p style="margin-top: 25px;">
+        {% if termination_type == 'REDUNDANCY' %}
+        We understand this is difficult news and appreciate your contributions to the organization.
+        Our HR team will assist you with any transition support services available.
+        {% else %}
+        If you have any questions regarding this notice or your final settlement,
+        please contact the Human Resources Department.
+        {% endif %}
+    </p>
+</div>
+
+<!-- Signature Section -->
+<div class="signature-section">
+    <p class="closing">Yours sincerely,</p>
+    <div class="signature-block">
+        <div class="signature-line"></div>
+        <p class="signature-name">{{ signatory_name }}</p>
+        <p class="signature-title">{{ signatory_title }}</p>
+        <p class="signature-date">Date: {{ letter_date | format_date }}</p>
+    </div>
+</div>
+
+<!-- CC Section -->
+<div style="margin-top: 20px; font-size: 12px; color: #666;">
+    <p><strong>CC:</strong></p>
+    <ul style="margin: 5px 0; padding-left: 20px;">
+        <li>Human Resources Department</li>
+        <li>Payroll Department</li>
+        <li>Employee Personnel File</li>
+    </ul>
+</div>
+
+<!-- Acknowledgment Section -->
+<div class="acceptance-section" style="margin-top: 40px; padding-top: 20px; border-top: 2px solid #333;">
+    <p class="acceptance-title">ACKNOWLEDGMENT OF RECEIPT</p>
+    <p>
+        I, <strong>{{ employee_name }}</strong>, acknowledge that I have received this
+        termination notice dated {{ letter_date | format_date }}. I understand that my
+        employment will end on {{ termination_date | format_date }}.
+    </p>
+
+    <div class="dual-signature" style="display: flex; justify-content: space-between; margin-top: 30px;">
+        <div class="signature-block" style="width: 45%;">
+            <div class="signature-line" style="border-bottom: 1px solid #333; margin: 30px 0 10px 0;"></div>
+            <p class="signature-name">{{ employee_name }}</p>
+            <p class="signature-title">Employee Signature</p>
+        </div>
+        <div class="signature-block" style="width: 45%;">
+            <div class="signature-line" style="border-bottom: 1px solid #333; margin: 30px 0 10px 0;"></div>
+            <p class="signature-name">Date</p>
+        </div>
+    </div>
+
+    <!-- Witness if employee refuses to sign -->
+    <div style="margin-top: 30px; padding: 15px; background-color: #f8fafc; border: 1px dashed #94a3b8;">
+        <p style="font-size: 12px; color: #64748b; margin: 0;">
+            <strong>If employee refuses to sign:</strong>
+        </p>
+        <p style="font-size: 12px; color: #64748b; margin: 10px 0 0 0;">
+            I confirm that this termination notice was delivered to {{ employee_name }} on _____________ (date)
+            and they refused to acknowledge receipt.
+        </p>
+        <div style="margin-top: 20px;">
+            <p style="font-size: 12px;">Witness Name: _________________________ Signature: _________________________</p>
+        </div>
+    </div>
+</div>

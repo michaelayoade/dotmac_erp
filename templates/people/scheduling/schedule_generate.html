@@ -1,0 +1,83 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}Generate Shift Schedule{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a>
+    <span class="mx-2">/</span>
+    <a href="/people/scheduling/schedules" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Schedules</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">Generate</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto space-y-6">
+    <div>
+        <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">Generate Shift Schedule</h1>
+        <p class="text-sm text-slate-500 dark:text-slate-400">Create monthly shift schedules from pattern assignments.</p>
+    </div>
+
+    {% if error %}
+    <div class="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 rounded-lg">
+        {{ error }}
+    </div>
+    {% endif %}
+
+    {% if result %}
+    <div class="bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 px-4 py-3 rounded-lg">
+        <h3 class="font-semibold">Schedule Generated Successfully</h3>
+        <ul class="mt-2 text-sm space-y-1">
+            <li>Month: <strong>{{ result.year_month }}</strong></li>
+            <li>Schedules Created: <strong>{{ result.schedules_created }}</strong></li>
+            <li>Employees Scheduled: <strong>{{ result.employees_scheduled }}</strong></li>
+            <li>Skipped (On Leave): <strong>{{ result.skipped_on_leave }}</strong></li>
+        </ul>
+        <a href="/people/scheduling/schedules?department_id={{ result.department_id }}&year_month={{ result.year_month }}" class="btn btn-primary mt-4">
+            View Schedule
+        </a>
+    </div>
+    {% endif %}
+
+    <form method="post" class="card p-6 space-y-6">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+                <label for="department_id" class="form-label">Department <span class="text-red-500">*</span></label>
+                <select name="department_id" id="department_id" required class="form-select w-full">
+                    <option value="">Select department...</option>
+                    {% for dept in departments %}
+                    <option value="{{ dept.department_id }}">{{ dept.department_name }}</option>
+                    {% endfor %}
+                </select>
+                <p class="text-xs text-slate-500 mt-1">Generate schedules for all employees with pattern assignments in this department.</p>
+            </div>
+            <div>
+                <label for="year_month" class="form-label">Month <span class="text-red-500">*</span></label>
+                <input type="month" name="year_month" id="year_month" required value="{{ year_month }}"
+                    class="form-input w-full">
+                <p class="text-xs text-slate-500 mt-1">The month to generate schedules for.</p>
+            </div>
+        </div>
+
+        <div class="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-4">
+            <h3 class="font-medium text-slate-900 dark:text-white mb-2">What happens when you generate:</h3>
+            <ul class="text-sm text-slate-600 dark:text-slate-400 space-y-1 list-disc list-inside">
+                <li>A shift schedule entry is created for each work day for each assigned employee</li>
+                <li>Employees on approved leave are automatically skipped</li>
+                <li>Rotating patterns alternate based on cycle weeks and week offset</li>
+                <li>Schedules are created in <strong>DRAFT</strong> status for review</li>
+                <li>You can publish the schedule when ready to notify employees</li>
+            </ul>
+        </div>
+
+        <div class="flex justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
+            <a href="/people/scheduling/schedules" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">Generate Schedule</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

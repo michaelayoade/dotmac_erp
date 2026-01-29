@@ -1,0 +1,144 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}Onboarding Templates{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr/onboarding" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Onboarding</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">Templates</span>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<a href="/people/hr/onboarding/templates/new" class="btn btn-primary group">
+    <svg class="h-4 w-4 mr-1.5 transition-transform group-hover:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+    </svg>
+    New Template
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+    {% if templates %}
+    <div class="card overflow-hidden">
+        <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+            <thead class="bg-slate-50 dark:bg-slate-800/50">
+                <tr>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                        Template
+                    </th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                        Type
+                    </th>
+                    <th scope="col" class="px-6 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                        Items
+                    </th>
+                    <th scope="col" class="px-6 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                        Status
+                    </th>
+                    <th scope="col" class="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                        Actions
+                    </th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-200 dark:divide-slate-700 bg-white dark:bg-slate-800">
+                {% for tpl in templates %}
+                <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+                    <td class="px-6 py-4">
+                        <div class="flex items-center gap-3">
+                            <div class="flex h-10 w-10 items-center justify-center rounded-lg
+                                {% if tpl.template_type.value == 'ONBOARDING' %}
+                                bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400
+                                {% else %}
+                                bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400
+                                {% endif %}">
+                                {% if tpl.template_type.value == 'ONBOARDING' %}
+                                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/>
+                                </svg>
+                                {% else %}
+                                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+                                </svg>
+                                {% endif %}
+                            </div>
+                            <div>
+                                <a href="/people/hr/onboarding/templates/{{ tpl.template_id }}" class="font-medium text-slate-900 dark:text-white hover:text-teal-600 dark:hover:text-teal-400">
+                                    {{ tpl.template_name }}
+                                </a>
+                                <p class="text-sm text-slate-500 dark:text-slate-400">{{ tpl.template_code }}</p>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4">
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                            {% if tpl.template_type.value == 'ONBOARDING' %}
+                            bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300
+                            {% else %}
+                            bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300
+                            {% endif %}">
+                            {{ tpl.template_type.value | replace('_', ' ') | title }}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 text-center">
+                        <span class="text-sm text-slate-600 dark:text-slate-300">
+                            {{ item_counts.get(tpl.template_id, 0) }} tasks
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 text-center">
+                        {% if tpl.is_active %}
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300">
+                            Active
+                        </span>
+                        {% else %}
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300">
+                            Inactive
+                        </span>
+                        {% endif %}
+                    </td>
+                    <td class="px-6 py-4 text-right">
+                        <div class="flex items-center justify-end gap-2">
+                            <a href="/people/hr/onboarding/templates/{{ tpl.template_id }}"
+                               class="p-2 text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 transition-colors"
+                               title="View">
+                                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                                </svg>
+                            </a>
+                            <a href="/people/hr/onboarding/templates/{{ tpl.template_id }}/edit"
+                               class="p-2 text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 transition-colors"
+                               title="Edit">
+                                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                                </svg>
+                            </a>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="card p-12 text-center">
+        <svg class="mx-auto h-16 w-16 text-slate-300 dark:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+        </svg>
+        <h3 class="mt-4 text-lg font-medium text-slate-900 dark:text-white">No templates yet</h3>
+        <p class="mt-2 text-slate-500 dark:text-slate-400">Get started by creating your first onboarding template.</p>
+        <a href="/people/hr/onboarding/templates/new" class="btn btn-primary mt-6">
+            Create Template
+        </a>
+    </div>
+    {% endif %}
+
+</div>
+{% endblock %}

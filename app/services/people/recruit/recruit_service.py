@@ -919,8 +919,28 @@ class RecruitmentService:
         offer_id: UUID,
         *,
         date_of_joining: date,
+        create_onboarding: bool = True,
+        onboarding_template_id: UUID | None = None,
+        buddy_employee_id: UUID | None = None,
+        manager_id: UUID | None = None,
+        send_welcome_email: bool = True,
     ) -> UUID:
-        """Convert an accepted offer to an employee record."""
+        """
+        Convert an accepted offer to an employee record.
+
+        Args:
+            org_id: Organization UUID
+            offer_id: Job offer UUID
+            date_of_joining: Employee start date
+            create_onboarding: If True, automatically create an onboarding record
+            onboarding_template_id: Specific template to use (uses default if None)
+            buddy_employee_id: Assigned buddy/mentor for onboarding
+            manager_id: Manager for onboarding approvals (defaults to reports_to)
+            send_welcome_email: If True, send welcome email with portal link
+
+        Returns:
+            UUID of the created employee
+        """
         from app.services.people.hr import EmployeeService
 
         offer = self.get_job_offer(org_id, offer_id)
@@ -986,6 +1006,39 @@ class RecruitmentService:
                 opening.positions_filled += 1
 
         self.db.flush()
+
+        # Auto-create onboarding record
+        onboarding_id = None
+        if create_onboarding:
+            from app.services.people.hr.onboarding import OnboardingService
+
+            onboarding_service = OnboardingService(self.db)
+
+            # Use manager_id from parameter, or fall back to reports_to
+            effective_manager_id = manager_id or employee.reports_to_id
+
+            onboarding = onboarding_service.create_onboarding_from_template(
+                org_id,
+                employee_id=employee.employee_id,
+                template_id=onboarding_template_id,
+                date_of_joining=date_of_joining,
+                department_id=offer.department_id,
+                designation_id=offer.designation_id,
+                job_applicant_id=applicant.applicant_id,
+                job_offer_id=offer.offer_id,
+                buddy_employee_id=buddy_employee_id,
+                manager_id=effective_manager_id,
+                generate_self_service_token=send_welcome_email,
+            )
+            onboarding_id = onboarding.onboarding_id
+
+            # Queue welcome email task
+            if send_welcome_email and onboarding.self_service_token:
+                from app.tasks.hr import send_welcome_email as send_welcome_email_task
+
+                # Use delay() to queue the task asynchronously
+                send_welcome_email_task.delay(str(onboarding_id))
+
         return employee.employee_id
 
     # =========================================================================

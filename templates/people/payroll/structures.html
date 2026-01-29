@@ -47,8 +47,8 @@
     {% if structures %}
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {% for struct in structures %}
-        <a href="/people/payroll/structures/{{ struct.structure_id }}" class="card p-5 group hover:shadow-lg hover:border-teal-200 dark:hover:border-teal-800 transition-all">
-            <div class="flex items-start justify-between">
+        <div class="card p-5 group hover:shadow-lg hover:border-teal-200 dark:hover:border-teal-800 transition-all">
+            <div class="flex items-start justify-between gap-3">
                 <div class="flex items-center gap-3">
                     <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-lime-500 to-emerald-600 text-white shadow-lg shadow-lime-500/25">
                         <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -56,19 +56,28 @@
                         </svg>
                     </div>
                     <div>
-                        <h3 class="font-semibold text-slate-900 dark:text-white group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors">{{ struct.structure_name }}</h3>
+                        <a href="/people/payroll/structures/{{ struct.structure_id }}" class="font-semibold text-slate-900 dark:text-white group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors">{{ struct.structure_name }}</a>
                         <p class="text-xs font-mono text-slate-500 dark:text-slate-400">{{ struct.structure_code }}</p>
                     </div>
                 </div>
-                {% if struct.is_active %}
-                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-600/20 dark:bg-emerald-900/30 dark:text-emerald-400">
-                    Active
-                </span>
-                {% else %}
-                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">
-                    Inactive
-                </span>
-                {% endif %}
+                <div class="flex flex-col items-end gap-2">
+                    {% if struct.is_active %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-600/20 dark:bg-emerald-900/30 dark:text-emerald-400">
+                        Active
+                    </span>
+                    {% else %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+                        Inactive
+                    </span>
+                    {% endif %}
+                    <div class="flex items-center gap-2">
+                        <a href="/people/payroll/structures/{{ struct.structure_id }}/edit" class="btn btn-secondary btn-sm">Edit</a>
+                        <form method="post" action="/people/payroll/structures/{{ struct.structure_id }}/delete" onsubmit="return confirm('Delete this structure? If it is in use, it will be deactivated instead.');">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                            <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+                        </form>
+                    </div>
+                </div>
             </div>
 
             {% if struct.description %}
@@ -86,7 +95,7 @@
                     </span>
                 </div>
             </div>
-        </a>
+        </div>
         {% endfor %}
     </div>
 

@@ -627,7 +627,7 @@ class ReportInstanceService(ListResponseMixin):
                 ReportInstance.organization_id == coerce_uuid(organization_id)
             )
 
-        return cast(List[ReportInstance], query.order_by(ReportInstance.queued_at).limit(limit).all())
+        return query.order_by(ReportInstance.queued_at).limit(limit).all()
 
     @staticmethod
     def get_generation_statistics(
@@ -811,7 +811,7 @@ class ReportInstanceService(ListResponseMixin):
             )
 
         query = query.order_by(ReportInstance.generated_at.desc())
-        return cast(List[ReportInstance], query.limit(limit).offset(offset).all())
+        return query.limit(limit).offset(offset).all()
 
 
 # Module-level singleton instance

@@ -7,13 +7,14 @@ Handles comment-related template responses.
 import logging
 from typing import TYPE_CHECKING, Optional
 
-from fastapi import Request
+from fastapi import Request, UploadFile
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.services.common import coerce_uuid
 from app.services.support.comment import comment_service
 from app.services.support.ticket import ticket_service
+from app.services.support.attachment import attachment_service
 
 if TYPE_CHECKING:
     from app.web.deps import WebAuthContext
@@ -32,6 +33,7 @@ class CommentWebService:
         ticket_id: str,
         content: str,
         is_internal: bool = False,
+        files: Optional[list[UploadFile]] = None,
     ) -> RedirectResponse:
         """Add a comment to a ticket."""
         org_id = coerce_uuid(auth.organization_id)
@@ -47,13 +49,26 @@ class CommentWebService:
             )
 
         try:
-            comment_service.add_comment(
+            comment = comment_service.add_comment(
                 db,
                 ticket_id=tid,
                 author_id=user_id,
                 content=content,
                 is_internal=is_internal,
             )
+            upload_files = [f for f in (files or []) if getattr(f, "filename", None)]
+            for file in upload_files:
+                attachment, error = attachment_service.save_file(
+                    db,
+                    ticket_id=tid,
+                    filename=file.filename or "unnamed",
+                    file_data=file.file,
+                    content_type=file.content_type or "application/octet-stream",
+                    uploaded_by_id=user_id,
+                    comment_id=comment.comment_id,
+                )
+                if error or not attachment:
+                    logger.warning("Failed to attach file to comment: %s", error or "unknown error")
             db.commit()
         except Exception as e:
             db.rollback()

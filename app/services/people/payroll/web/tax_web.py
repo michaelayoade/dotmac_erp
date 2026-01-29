@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -19,6 +19,13 @@ from app.services.common import coerce_uuid
 from app.services.people.payroll.paye_calculator import PAYECalculator
 from app.templates import templates
 from app.web.deps import base_context, WebAuthContext
+
+
+def _get_form_str(form: Any, key: str, default: str = "") -> str:
+    value = form.get(key, default) if form is not None else default
+    if isinstance(value, UploadFile) or value is None:
+        return default
+    return str(value).strip()
 
 from .base import (
     DEFAULT_PAGE_SIZE,
@@ -47,7 +54,7 @@ class TaxWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-    ) -> HTMLResponse:
+    ) -> HTMLResponse | RedirectResponse:
         """Render tax bands list page."""
         org_id = coerce_uuid(auth.organization_id)
 
@@ -135,7 +142,7 @@ class TaxWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-    ) -> HTMLResponse:
+    ) -> HTMLResponse | RedirectResponse:
         """Render PAYE tax calculator form."""
         org_id = coerce_uuid(auth.organization_id)
 
@@ -160,7 +167,7 @@ class TaxWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-    ) -> HTMLResponse:
+    ) -> HTMLResponse | RedirectResponse:
         """Calculate PAYE tax."""
         org_id = coerce_uuid(auth.organization_id)
 
@@ -224,7 +231,7 @@ class TaxWebService:
         auth: WebAuthContext,
         db: Session,
         page: int = 1,
-    ) -> HTMLResponse:
+    ) -> HTMLResponse | RedirectResponse:
         """Render tax profiles list page."""
         org_id = coerce_uuid(auth.organization_id)
         per_page = DEFAULT_PAGE_SIZE
@@ -261,7 +268,7 @@ class TaxWebService:
         auth: WebAuthContext,
         db: Session,
         employee_id: Optional[str] = None,
-    ) -> HTMLResponse:
+    ) -> HTMLResponse | RedirectResponse:
         """Render new tax profile form."""
         org_id = coerce_uuid(auth.organization_id)
 
@@ -307,7 +314,7 @@ class TaxWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-    ) -> HTMLResponse:
+    ) -> HTMLResponse | RedirectResponse:
         """Create new tax profile."""
         org_id = coerce_uuid(auth.organization_id)
 
@@ -366,7 +373,7 @@ class TaxWebService:
         auth: WebAuthContext,
         db: Session,
         employee_id: str,
-    ) -> HTMLResponse:
+    ) -> HTMLResponse | RedirectResponse:
         """Render tax profile detail page."""
         org_id = coerce_uuid(auth.organization_id)
         e_id = parse_uuid(employee_id)
@@ -402,7 +409,7 @@ class TaxWebService:
         auth: WebAuthContext,
         db: Session,
         employee_id: str,
-    ) -> HTMLResponse:
+    ) -> HTMLResponse | RedirectResponse:
         """Render edit tax profile form."""
         org_id = coerce_uuid(auth.organization_id)
         e_id = parse_uuid(employee_id)
@@ -446,7 +453,7 @@ class TaxWebService:
         auth: WebAuthContext,
         db: Session,
         employee_id: str,
-    ) -> HTMLResponse:
+    ) -> HTMLResponse | RedirectResponse:
         """Update tax profile."""
         org_id = coerce_uuid(auth.organization_id)
         e_id = parse_uuid(employee_id)
@@ -472,14 +479,14 @@ class TaxWebService:
             form = await request.form()
 
         try:
-            profile.tin = (form.get("tin") or "").strip() or None
-            profile.annual_rent = parse_decimal(form.get("annual_rent")) or Decimal("0")
-            profile.rent_receipt_verified = parse_bool(form.get("rent_receipt_verified"), False)
-            profile.pension_rate = parse_decimal(form.get("pension_rate")) or Decimal("0.08")
-            profile.nhf_rate = parse_decimal(form.get("nhf_rate")) or Decimal("0.025")
-            profile.nhis_rate = parse_decimal(form.get("nhis_rate")) or Decimal("0")
-            profile.voluntary_pension = parse_decimal(form.get("voluntary_pension")) or Decimal("0")
-            profile.life_insurance = parse_decimal(form.get("life_insurance")) or Decimal("0")
+            profile.tin = _get_form_str(form, "tin") or None
+            profile.annual_rent = parse_decimal(_get_form_str(form, "annual_rent") or None) or Decimal("0")
+            profile.rent_receipt_verified = parse_bool(
+                _get_form_str(form, "rent_receipt_verified") or None, False
+            )
+            profile.pension_rate = parse_decimal(_get_form_str(form, "pension_rate") or None) or Decimal("0.08")
+            profile.nhf_rate = parse_decimal(_get_form_str(form, "nhf_rate") or None) or Decimal("0.025")
+            profile.nhis_rate = parse_decimal(_get_form_str(form, "nhis_rate") or None) or Decimal("0")
 
             db.commit()
             return RedirectResponse(url=f"/people/payroll/tax/profiles/{employee_id}", status_code=303)
@@ -488,7 +495,10 @@ class TaxWebService:
             db.rollback()
 
             employee = db.get(Employee, e_id)
-            context = base_context(request, auth, f"Edit Tax Profile - {employee.full_name}", "payroll", db=db)
+            employee_name = employee.full_name if employee else "Employee"
+            context = base_context(
+                request, auth, f"Edit Tax Profile - {employee_name}", "payroll", db=db
+            )
             context["request"] = request
             context.update({
                 "profile": profile,
@@ -509,7 +519,7 @@ class TaxWebService:
         db: Session,
         error: str,
         form_data: dict,
-    ) -> HTMLResponse:
+    ) -> HTMLResponse | RedirectResponse:
         """Render tax profile form with error."""
         org_id = coerce_uuid(auth.organization_id)
 

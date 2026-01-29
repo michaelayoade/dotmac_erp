@@ -14,6 +14,9 @@ from app.models.expense import (
     CorporateCard,
     CardTransaction,
     CardTransactionStatus,
+    ExpenseClaimAction,
+    ExpenseClaimActionType,
+    ExpenseClaimActionStatus,
 )
 
 __all__ = [
@@ -26,4 +29,7 @@ __all__ = [
     "CorporateCard",
     "CardTransaction",
     "CardTransactionStatus",
+    "ExpenseClaimAction",
+    "ExpenseClaimActionType",
+    "ExpenseClaimActionStatus",
 ]

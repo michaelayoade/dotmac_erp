@@ -8,10 +8,11 @@ appraisals, feedback, goals/KPIs, cycles, KRAs, templates, scorecards, and repor
 from __future__ import annotations
 
 import logging
-from typing import Optional
+from decimal import Decimal
+from typing import Any, Optional
 from uuid import UUID
 
-from fastapi import Request
+from fastapi import Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
@@ -22,6 +23,13 @@ from app.services.people.hr import EmployeeFilters, OrganizationService, Departm
 from app.services.people.perf import PerformanceService
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
+
+
+def _get_form_str(form: Any, key: str, default: str = "") -> str:
+    value = form.get(key, default) if form is not None else default
+    if isinstance(value, UploadFile) or value is None:
+        return default
+    return str(value).strip()
 
 from .base import (
     logger,
@@ -129,12 +137,24 @@ class PerfWebService:
         svc = PerformanceService(db)
 
         try:
+            employee_id = _get_form_str(form_data, "employee_id")
+            cycle_id = _get_form_str(form_data, "cycle_id")
+            manager_id = _get_form_str(form_data, "manager_id")
+            template_id = _get_form_str(form_data, "template_id")
+
+            if not employee_id:
+                raise ValueError("Employee is required")
+            if not cycle_id:
+                raise ValueError("Cycle is required")
+            if not manager_id:
+                raise ValueError("Manager is required")
+
             appraisal = svc.create_appraisal(
                 org_id,
-                employee_id=coerce_uuid(form_data["employee_id"]),
-                cycle_id=coerce_uuid(form_data["cycle_id"]) if form_data.get("cycle_id") else None,
-                manager_id=coerce_uuid(form_data["manager_id"]) if form_data.get("manager_id") else None,
-                template_id=coerce_uuid(form_data["template_id"]) if form_data.get("template_id") else None,
+                employee_id=coerce_uuid(employee_id),
+                cycle_id=coerce_uuid(cycle_id),
+                manager_id=coerce_uuid(manager_id),
+                template_id=coerce_uuid(template_id) if template_id else None,
             )
             db.commit()
             return RedirectResponse(
@@ -222,10 +242,11 @@ class PerfWebService:
         svc = PerformanceService(db)
 
         try:
+            manager_id = _get_form_str(form_data, "manager_id")
             svc.update_appraisal(
                 org_id,
                 coerce_uuid(appraisal_id),
-                manager_id=coerce_uuid(form_data["manager_id"]) if form_data.get("manager_id") else None,
+                manager_id=coerce_uuid(manager_id) if manager_id else None,
             )
             db.commit()
             return RedirectResponse(
@@ -258,7 +279,11 @@ class PerfWebService:
         svc = PerformanceService(db)
 
         try:
-            svc.cancel_appraisal(org_id, coerce_uuid(appraisal_id))
+            svc.update_appraisal(
+                org_id,
+                coerce_uuid(appraisal_id),
+                status=AppraisalStatus.CANCELLED,
+            )
             db.commit()
         except Exception:
             db.rollback()
@@ -276,7 +301,11 @@ class PerfWebService:
         svc = PerformanceService(db)
 
         try:
-            svc.start_self_assessment(org_id, coerce_uuid(appraisal_id))
+            svc.update_appraisal(
+                org_id,
+                coerce_uuid(appraisal_id),
+                status=AppraisalStatus.SELF_ASSESSMENT,
+            )
             db.commit()
         except Exception:
             db.rollback()
@@ -321,14 +350,17 @@ class PerfWebService:
         svc = PerformanceService(db)
 
         try:
+            self_rating = parse_int(_get_form_str(form_data, "self_rating") or None)
+            if self_rating is None:
+                raise ValueError("Self rating is required")
             svc.submit_self_assessment(
                 org_id,
                 coerce_uuid(appraisal_id),
-                self_rating=parse_int(form_data.get("self_rating")),
-                self_comments=form_data.get("self_comments") or None,
-                achievements=form_data.get("achievements") or None,
-                challenges=form_data.get("challenges") or None,
-                development_needs=form_data.get("development_needs") or None,
+                self_overall_rating=self_rating,
+                self_summary=_get_form_str(form_data, "self_comments") or None,
+                achievements=_get_form_str(form_data, "achievements") or None,
+                challenges=_get_form_str(form_data, "challenges") or None,
+                development_needs=_get_form_str(form_data, "development_needs") or None,
             )
             db.commit()
             return RedirectResponse(
@@ -385,14 +417,29 @@ class PerfWebService:
         svc = PerformanceService(db)
 
         try:
+            manager_rating = parse_int(_get_form_str(form_data, "manager_rating") or None)
+            if manager_rating is None:
+                raise ValueError("Manager rating is required")
+
+            manager_summary = _get_form_str(form_data, "manager_comments") or None
+            strengths = _get_form_str(form_data, "strengths") or None
+            areas_for_improvement = _get_form_str(form_data, "areas_for_improvement") or None
+
+            if strengths or areas_for_improvement:
+                extra_parts = []
+                if strengths:
+                    extra_parts.append(f"Strengths: {strengths}")
+                if areas_for_improvement:
+                    extra_parts.append(f"Areas for improvement: {areas_for_improvement}")
+                extra_text = "\n".join(extra_parts)
+                manager_summary = f"{manager_summary}\n\n{extra_text}" if manager_summary else extra_text
+
             svc.submit_manager_review(
                 org_id,
                 coerce_uuid(appraisal_id),
-                manager_rating=parse_int(form_data.get("manager_rating")),
-                manager_comments=form_data.get("manager_comments") or None,
-                strengths=form_data.get("strengths") or None,
-                areas_for_improvement=form_data.get("areas_for_improvement") or None,
-                recommendations=form_data.get("recommendations") or None,
+                manager_overall_rating=manager_rating,
+                manager_summary=manager_summary,
+                manager_recommendations=_get_form_str(form_data, "recommendations") or None,
             )
             db.commit()
             return RedirectResponse(
@@ -449,12 +496,15 @@ class PerfWebService:
         svc = PerformanceService(db)
 
         try:
-            svc.calibrate_appraisal(
+            final_rating = parse_int(_get_form_str(form_data, "final_rating") or None)
+            if final_rating is None:
+                raise ValueError("Final rating is required")
+            svc.submit_calibration(
                 org_id,
                 coerce_uuid(appraisal_id),
-                final_rating=parse_int(form_data.get("final_rating")),
-                calibration_notes=form_data.get("calibration_notes") or None,
-                calibrated_by=auth.user_id,
+                calibrated_rating=final_rating,
+                calibration_notes=_get_form_str(form_data, "calibration_notes") or None,
+                rating_label=_get_form_str(form_data, "rating_label") or None,
             )
             db.commit()
             return RedirectResponse(
@@ -502,12 +552,14 @@ class PerfWebService:
 
         context = base_context(request, auth, "360° Feedback", "perf", db=db)
         context["request"] = request
+        success = request.query_params.get("success")
         context.update({
             "feedback_list": result.items,
             "appraisal_id": appraisal_id,
             "feedback_type": feedback_type,
             "submitted": submitted,
             "feedback_types": FEEDBACK_TYPES,
+            "success": success,
             "page": result.page,
             "total_pages": result.total_pages,
             "total": result.total,
@@ -559,15 +611,23 @@ class PerfWebService:
         form_data = await request.form()
         org_id = coerce_uuid(auth.organization_id)
         svc = PerformanceService(db)
-        appraisal_id = form_data.get("appraisal_id")
+        appraisal_id = _get_form_str(form_data, "appraisal_id")
+        feedback_from_id = _get_form_str(form_data, "feedback_from_id")
+        feedback_type = _get_form_str(form_data, "feedback_type")
 
         try:
+            if not appraisal_id:
+                raise ValueError("Appraisal is required")
+            if not feedback_from_id:
+                raise ValueError("Feedback recipient is required")
+            if not feedback_type:
+                raise ValueError("Feedback type is required")
             svc.request_feedback(
                 org_id,
                 appraisal_id=coerce_uuid(appraisal_id),
-                feedback_from_id=coerce_uuid(form_data["feedback_from_id"]),
-                feedback_type=form_data.get("feedback_type"),
-                is_anonymous=form_data.get("is_anonymous") == "true",
+                feedback_from_id=coerce_uuid(feedback_from_id),
+                feedback_type=feedback_type,
+                is_anonymous=_get_form_str(form_data, "is_anonymous") == "true",
             )
             db.commit()
             return RedirectResponse(
@@ -664,10 +724,10 @@ class PerfWebService:
             svc.submit_feedback(
                 org_id,
                 coerce_uuid(feedback_id),
-                overall_rating=parse_int(form_data.get("overall_rating")),
-                strengths=form_data.get("strengths") or None,
-                areas_for_improvement=form_data.get("areas_for_improvement") or None,
-                general_comments=form_data.get("general_comments") or None,
+                overall_rating=parse_int(_get_form_str(form_data, "overall_rating") or None),
+                strengths=_get_form_str(form_data, "strengths") or None,
+                areas_for_improvement=_get_form_str(form_data, "areas_for_improvement") or None,
+                general_comments=_get_form_str(form_data, "general_comments") or None,
             )
             db.commit()
             return RedirectResponse(
@@ -759,6 +819,7 @@ class PerfWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
+        employee_id: Optional[str] = None,
     ) -> HTMLResponse:
         """Render new KPI form."""
         org_id = coerce_uuid(auth.organization_id)
@@ -779,7 +840,7 @@ class PerfWebService:
             "employees": employees,
             "kras": kras,
             "measurement_types": KPI_MEASUREMENT_TYPES,
-            "form_data": {},
+            "form_data": {"employee_id": employee_id} if employee_id else {},
             "error": None,
         })
         return templates.TemplateResponse(request, "people/perf/kpi_form.html", context)
@@ -796,17 +857,38 @@ class PerfWebService:
         svc = PerformanceService(db)
 
         try:
+            employee_id = _get_form_str(form_data, "employee_id")
+            if not employee_id:
+                raise ValueError("Employee is required")
+            kpi_name = _get_form_str(form_data, "title")
+            if not kpi_name:
+                raise ValueError("KPI title is required")
+            period_start = parse_date(_get_form_str(form_data, "period_start") or None)
+            period_end = parse_date(_get_form_str(form_data, "period_end") or None)
+            if period_start is None:
+                raise ValueError("Period start is required")
+            if period_end is None:
+                raise ValueError("Period end is required")
+            target_value = parse_decimal(_get_form_str(form_data, "target_value") or None)
+            if target_value is None:
+                raise ValueError("Target value is required")
+            weightage = parse_decimal(_get_form_str(form_data, "weightage") or None) or Decimal("0")
             kpi = svc.create_kpi(
                 org_id,
-                employee_id=coerce_uuid(form_data["employee_id"]),
-                kra_id=coerce_uuid(form_data["kra_id"]) if form_data.get("kra_id") else None,
-                title=form_data.get("title", ""),
-                description=form_data.get("description") or None,
-                measurement_type=form_data.get("measurement_type", "PERCENTAGE"),
-                target_value=parse_decimal(form_data.get("target_value")),
-                weight=parse_decimal(form_data.get("weight")),
-                start_date=parse_date(form_data.get("start_date")),
-                end_date=parse_date(form_data.get("end_date")),
+                employee_id=coerce_uuid(employee_id),
+                kra_id=coerce_uuid(_get_form_str(form_data, "kra_id"))
+                if _get_form_str(form_data, "kra_id")
+                else None,
+                kpi_name=kpi_name,
+                description=_get_form_str(form_data, "description") or None,
+                period_start=period_start,
+                period_end=period_end,
+                target_value=target_value,
+                unit_of_measure=_get_form_str(form_data, "unit_of_measure") or None,
+                threshold_value=parse_decimal(_get_form_str(form_data, "threshold_value") or None),
+                stretch_value=parse_decimal(_get_form_str(form_data, "stretch_value") or None),
+                weightage=weightage,
+                notes=_get_form_str(form_data, "notes") or None,
             )
             db.commit()
             return RedirectResponse(
@@ -845,7 +927,7 @@ class PerfWebService:
         except Exception:
             return RedirectResponse(url="/people/perf/goals", status_code=303)
 
-        context = base_context(request, auth, kpi.title, "perf", db=db)
+        context = base_context(request, auth, kpi.kpi_name, "perf", db=db)
         context["request"] = request
         context.update({
             "kpi": kpi,
@@ -871,7 +953,7 @@ class PerfWebService:
         except Exception:
             return RedirectResponse(url="/people/perf/goals", status_code=303)
 
-        context = base_context(request, auth, f"Edit {kpi.title}", "perf", db=db)
+        context = base_context(request, auth, f"Edit {kpi.kpi_name}", "perf", db=db)
         context["request"] = request
         context.update({
             "kpi": kpi,
@@ -896,17 +978,25 @@ class PerfWebService:
         svc = PerformanceService(db)
 
         try:
+            kpi_name = _get_form_str(form_data, "title")
+            period_start = parse_date(_get_form_str(form_data, "period_start") or None)
+            period_end = parse_date(_get_form_str(form_data, "period_end") or None)
             svc.update_kpi(
                 org_id,
                 coerce_uuid(kpi_id),
-                kra_id=coerce_uuid(form_data["kra_id"]) if form_data.get("kra_id") else None,
-                title=form_data.get("title", ""),
-                description=form_data.get("description") or None,
-                measurement_type=form_data.get("measurement_type", "PERCENTAGE"),
-                target_value=parse_decimal(form_data.get("target_value")),
-                weight=parse_decimal(form_data.get("weight")),
-                start_date=parse_date(form_data.get("start_date")),
-                end_date=parse_date(form_data.get("end_date")),
+                kra_id=coerce_uuid(_get_form_str(form_data, "kra_id"))
+                if _get_form_str(form_data, "kra_id")
+                else None,
+                kpi_name=kpi_name or None,
+                description=_get_form_str(form_data, "description") or None,
+                period_start=period_start,
+                period_end=period_end,
+                target_value=parse_decimal(_get_form_str(form_data, "target_value") or None),
+                unit_of_measure=_get_form_str(form_data, "unit_of_measure") or None,
+                threshold_value=parse_decimal(_get_form_str(form_data, "threshold_value") or None),
+                stretch_value=parse_decimal(_get_form_str(form_data, "stretch_value") or None),
+                weightage=parse_decimal(_get_form_str(form_data, "weightage") or None),
+                notes=_get_form_str(form_data, "notes") or None,
             )
             db.commit()
             return RedirectResponse(
@@ -917,7 +1007,7 @@ class PerfWebService:
             db.rollback()
             org_svc = OrganizationService(db, org_id)
             kpi = svc.get_kpi(org_id, coerce_uuid(kpi_id))
-            context = base_context(request, auth, f"Edit {kpi.title}", "perf", db=db)
+            context = base_context(request, auth, f"Edit {kpi.kpi_name}", "perf", db=db)
             context["request"] = request
             context.update({
                 "kpi": kpi,
@@ -942,11 +1032,14 @@ class PerfWebService:
         svc = PerformanceService(db)
 
         try:
+            actual_value = parse_decimal(_get_form_str(form_data, "actual_value") or None)
+            if actual_value is None:
+                raise ValueError("Actual value is required")
             svc.update_kpi_progress(
                 org_id,
                 coerce_uuid(kpi_id),
-                actual_value=parse_decimal(form_data.get("actual_value")),
-                progress_notes=form_data.get("progress_notes") or None,
+                actual_value=actual_value,
+                notes=_get_form_str(form_data, "progress_notes") or None,
             )
             db.commit()
         except Exception:

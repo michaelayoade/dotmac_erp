@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 from uuid import UUID
@@ -510,6 +510,10 @@ class PurchaseOrderWebService:
             data = dict(form_data)
 
         try:
+            org_id = auth.organization_id
+            user_id = auth.person_id
+            assert org_id is not None
+            assert user_id is not None
             lines_data = data.get("lines", [])
             if isinstance(lines_data, str):
                 lines_data = json.loads(lines_data)
@@ -546,7 +550,7 @@ class PurchaseOrderWebService:
 
             currency_code = data.get("currency_code") or org_context_service.get_functional_currency(
                 db,
-                auth.organization_id,
+                org_id,
             )
 
             input_data = PurchaseOrderInput(
@@ -560,9 +564,9 @@ class PurchaseOrderWebService:
 
             po = purchase_order_service.create_po(
                 db=db,
-                organization_id=auth.organization_id,
+                organization_id=org_id,
                 input=input_data,
-                created_by_user_id=auth.person_id,
+                created_by_user_id=user_id,
             )
 
             logger.info(
@@ -598,11 +602,15 @@ class PurchaseOrderWebService:
     ) -> HTMLResponse | RedirectResponse:
         """Handle purchase order submission for approval."""
         try:
+            org_id = auth.organization_id
+            user_id = auth.person_id
+            assert org_id is not None
+            assert user_id is not None
             purchase_order_service.submit_for_approval(
                 db=db,
-                organization_id=auth.organization_id,
+                organization_id=org_id,
                 po_id=UUID(po_id),
-                submitted_by_user_id=auth.person_id,
+                submitted_by_user_id=user_id,
             )
             logger.info(
                 "submit_purchase_order_response: submitted PO %s for approval",
@@ -634,11 +642,15 @@ class PurchaseOrderWebService:
     ) -> HTMLResponse | RedirectResponse:
         """Handle purchase order approval."""
         try:
+            org_id = auth.organization_id
+            user_id = auth.person_id
+            assert org_id is not None
+            assert user_id is not None
             purchase_order_service.approve_po(
                 db=db,
-                organization_id=auth.organization_id,
+                organization_id=org_id,
                 po_id=UUID(po_id),
-                approved_by_user_id=auth.person_id,
+                approved_by_user_id=user_id,
             )
             logger.info(
                 "approve_purchase_order_response: approved PO %s",
@@ -670,9 +682,11 @@ class PurchaseOrderWebService:
     ) -> HTMLResponse | RedirectResponse:
         """Handle purchase order cancellation."""
         try:
+            org_id = auth.organization_id
+            assert org_id is not None
             purchase_order_service.cancel_po(
                 db=db,
-                organization_id=auth.organization_id,
+                organization_id=org_id,
                 po_id=UUID(po_id),
             )
             logger.info(
@@ -706,6 +720,10 @@ class PurchaseOrderWebService:
     ) -> RedirectResponse:
         """Handle purchase order attachment upload."""
         try:
+            org_id = auth.organization_id
+            user_id = auth.person_id
+            assert org_id is not None
+            assert user_id is not None
             po = purchase_order_service.get(db, po_id)
             if not po or po.organization_id != auth.organization_id:
                 return RedirectResponse(
@@ -724,10 +742,10 @@ class PurchaseOrderWebService:
 
             attachment_service.save_file(
                 db=db,
-                organization_id=auth.organization_id,
+                organization_id=org_id,
                 input=input_data,
                 file_content=file.file,
-                uploaded_by=auth.person_id,
+                uploaded_by=user_id,
             )
 
             logger.info(

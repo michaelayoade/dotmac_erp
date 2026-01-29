@@ -113,7 +113,7 @@
                                value="{{ assignment.base if assignment else '0' }}"
                                class="form-input pl-12 font-mono">
                     </div>
-                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Monthly base salary amount</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Base variable used in formulas (e.g., 300000)</p>
                 </div>
                 <div>
                     <label for="variable" class="form-label">Variable Pay</label>
@@ -123,7 +123,7 @@
                                value="{{ assignment.variable if assignment else '0' }}"
                                class="form-input pl-12 font-mono">
                     </div>
-                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Variable component (bonuses, etc.)</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Bonuses, commissions, or other variable pay</p>
                 </div>
             </div>
 
@@ -157,16 +157,25 @@
 
             {# Actions #}
             <div class="flex items-center justify-between pt-4 border-t border-slate-200 dark:border-slate-700">
-                {% if assignment %}
-                <a href="/people/hr/employees/{{ assignment.employee_id }}" class="btn btn-secondary">Cancel</a>
-                {% elif selected_employee %}
-                <a href="/people/hr/employees/{{ selected_employee.employee_id }}" class="btn btn-secondary">Cancel</a>
-                {% else %}
-                <a href="/people/payroll/structures" class="btn btn-secondary">Cancel</a>
-                {% endif %}
-                <button type="submit" class="btn btn-primary">
-                    {% if assignment %}Save Changes{% else %}Assign Structure{% endif %}
-                </button>
+                <div class="flex items-center gap-2">
+                    {% if assignment %}
+                    <button type="submit" formaction="/people/payroll/assignments/{{ assignment.assignment_id }}/delete" formmethod="post" onclick="return confirm('Delete this assignment?');" class="btn btn-danger">
+                        Delete
+                    </button>
+                    {% endif %}
+                </div>
+                <div class="flex items-center gap-2">
+                    {% if assignment %}
+                    <a href="/people/hr/employees/{{ assignment.employee_id }}" class="btn btn-secondary">Cancel</a>
+                    {% elif selected_employee %}
+                    <a href="/people/hr/employees/{{ selected_employee.employee_id }}" class="btn btn-secondary">Cancel</a>
+                    {% else %}
+                    <a href="/people/payroll/structures" class="btn btn-secondary">Cancel</a>
+                    {% endif %}
+                    <button type="submit" class="btn btn-primary">
+                        {% if assignment %}Save Changes{% else %}Assign Structure{% endif %}
+                    </button>
+                </div>
             </div>
         </form>
     </div>

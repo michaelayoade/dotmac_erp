@@ -993,20 +993,20 @@ class TaxWebService:
             is_inclusive = _safe_form_text(form.get("is_inclusive")) == "true"
             is_recoverable = _safe_form_text(form.get("is_recoverable")) == "true"
 
-            recovery_rate_pct = form.get("recovery_rate", "100")
+            recovery_rate_pct = _safe_form_text(form.get("recovery_rate", "100"))
             recovery_rate = Decimal(recovery_rate_pct) / Decimal("100") if is_recoverable else Decimal("0")
 
-            applies_to_sales = form.get("applies_to_sales") == "true"
-            applies_to_purchases = form.get("applies_to_purchases") == "true"
+            applies_to_sales = _safe_form_text(form.get("applies_to_sales")) == "true"
+            applies_to_purchases = _safe_form_text(form.get("applies_to_purchases")) == "true"
 
             # Parse optional fields
-            tax_return_box = form.get("tax_return_box", "").strip() or None
-            reporting_code = form.get("reporting_code", "").strip() or None
+            tax_return_box = _safe_form_text(form.get("tax_return_box")).strip() or None
+            reporting_code = _safe_form_text(form.get("reporting_code")).strip() or None
 
             # Parse GL account IDs
-            tax_collected_account_id = form.get("tax_collected_account_id") or None
-            tax_paid_account_id = form.get("tax_paid_account_id") or None
-            tax_expense_account_id = form.get("tax_expense_account_id") or None
+            tax_collected_account_id = _safe_form_text(form.get("tax_collected_account_id")) or None
+            tax_paid_account_id = _safe_form_text(form.get("tax_paid_account_id")) or None
+            tax_expense_account_id = _safe_form_text(form.get("tax_expense_account_id")) or None
 
             # Validation
             if not tax_code_str:
@@ -1061,7 +1061,7 @@ class TaxWebService:
         tax_code_id: str,
         db: Session,
         error: Optional[str] = None,
-    ) -> HTMLResponse:
+    ) -> HTMLResponse | RedirectResponse:
         """Display edit tax code form."""
         org_id = coerce_uuid(auth.organization_id)
 
@@ -1091,48 +1091,48 @@ class TaxWebService:
                 return RedirectResponse(url="/finance/tax/codes", status_code=303)
 
             # Parse form data
-            tax_code_str = form.get("tax_code", "").strip()
-            tax_name = form.get("tax_name", "").strip()
-            tax_type_str = form.get("tax_type", "")
-            jurisdiction_id_str = form.get("jurisdiction_id", "")
-            description = form.get("description", "").strip() or None
+            tax_code_str = _safe_form_text(form.get("tax_code")).strip()
+            tax_name = _safe_form_text(form.get("tax_name")).strip()
+            tax_type_str = _safe_form_text(form.get("tax_type"))
+            jurisdiction_id_str = _safe_form_text(form.get("jurisdiction_id"))
+            description = _safe_form_text(form.get("description")).strip() or None
 
             # Parse rate based on rate type
-            rate_type = form.get("rate_type", "percentage")
+            rate_type = _safe_form_text(form.get("rate_type", "percentage"))
             if rate_type == "percentage":
-                rate_percentage = form.get("tax_rate_percentage", "0")
+                rate_percentage = _safe_form_text(form.get("tax_rate_percentage", "0"))
                 new_tax_rate = Decimal(rate_percentage) / Decimal("100")
             else:
-                rate_fixed = form.get("tax_rate_fixed", "0")
+                rate_fixed = _safe_form_text(form.get("tax_rate_fixed", "0"))
                 new_tax_rate = Decimal(rate_fixed)
 
             # Parse dates
-            effective_from_str = form.get("effective_from", "")
+            effective_from_str = _safe_form_text(form.get("effective_from"))
             effective_from = date.fromisoformat(effective_from_str) if effective_from_str else date.today()
 
-            effective_to_str = form.get("effective_to", "")
+            effective_to_str = _safe_form_text(form.get("effective_to"))
             effective_to = date.fromisoformat(effective_to_str) if effective_to_str else None
 
             # Parse booleans
-            is_compound = form.get("is_compound") == "true"
-            is_inclusive = form.get("is_inclusive") == "true"
-            is_recoverable = form.get("is_recoverable") == "true"
-            is_active = form.get("is_active") == "true"
+            is_compound = _safe_form_text(form.get("is_compound")) == "true"
+            is_inclusive = _safe_form_text(form.get("is_inclusive")) == "true"
+            is_recoverable = _safe_form_text(form.get("is_recoverable")) == "true"
+            is_active = _safe_form_text(form.get("is_active")) == "true"
 
-            recovery_rate_pct = form.get("recovery_rate", "100")
+            recovery_rate_pct = _safe_form_text(form.get("recovery_rate", "100"))
             recovery_rate = Decimal(recovery_rate_pct) / Decimal("100") if is_recoverable else Decimal("0")
 
-            applies_to_sales = form.get("applies_to_sales") == "true"
-            applies_to_purchases = form.get("applies_to_purchases") == "true"
+            applies_to_sales = _safe_form_text(form.get("applies_to_sales")) == "true"
+            applies_to_purchases = _safe_form_text(form.get("applies_to_purchases")) == "true"
 
             # Parse optional fields
-            tax_return_box = form.get("tax_return_box", "").strip() or None
-            reporting_code = form.get("reporting_code", "").strip() or None
+            tax_return_box = _safe_form_text(form.get("tax_return_box")).strip() or None
+            reporting_code = _safe_form_text(form.get("reporting_code")).strip() or None
 
             # Parse GL account IDs
-            tax_collected_account_id = form.get("tax_collected_account_id") or None
-            tax_paid_account_id = form.get("tax_paid_account_id") or None
-            tax_expense_account_id = form.get("tax_expense_account_id") or None
+            tax_collected_account_id = _safe_form_text(form.get("tax_collected_account_id")) or None
+            tax_paid_account_id = _safe_form_text(form.get("tax_paid_account_id")) or None
+            tax_expense_account_id = _safe_form_text(form.get("tax_expense_account_id")) or None
 
             # Validation
             if not tax_code_str:

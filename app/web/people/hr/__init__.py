@@ -9,6 +9,7 @@ This package provides HTML template routes for HR functionality:
 - skills: Skills catalog management
 - competencies: Competency framework management
 - job_descriptions: Job description management
+- discipline: Disciplinary case management
 """
 
 from fastapi import APIRouter
@@ -21,6 +22,9 @@ from .employee_extended import router as employee_extended_router
 from .skills import router as skills_router
 from .competencies import router as competencies_router
 from .job_descriptions import router as job_descriptions_router
+from .discipline import router as discipline_router
+from .onboarding_admin import router as onboarding_admin_router
+from .handbook import router as handbook_router
 
 # Main HR router that includes all sub-routers
 router = APIRouter(prefix="/hr", tags=["hr-web"])
@@ -34,3 +38,6 @@ router.include_router(employee_extended_router)
 router.include_router(skills_router)
 router.include_router(competencies_router)
 router.include_router(job_descriptions_router)
+router.include_router(discipline_router)
+router.include_router(onboarding_admin_router)
+router.include_router(handbook_router)

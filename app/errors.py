@@ -88,6 +88,36 @@ def register_error_handlers(app) -> None:
 
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(request: Request, exc: RequestValidationError):
+        if _is_html_request(request):
+            errors = exc.errors()
+            message = "Please check the form and try again."
+            if errors:
+                field = errors[0].get("loc", [])
+                field_name = field[-1] if field else None
+                if field_name == "subject":
+                    message = "Subject is required."
+                elif field_name == "project_name":
+                    message = "Project name is required."
+                elif field_name == "status":
+                    message = "Status is required."
+            path = request.url.path
+            if request.method == "POST":
+                if path == "/operations/support/tickets":
+                    return RedirectResponse(
+                        url=f"/operations/support/tickets/new?error={quote(message)}",
+                        status_code=303,
+                    )
+                if path in {"/operations/projects", "/operations/projects/new"}:
+                    return RedirectResponse(
+                        url=f"/operations/projects/new?error={quote(message)}",
+                        status_code=303,
+                    )
+            return templates.TemplateResponse(
+                request,
+                "errors/400.html",
+                {"message": message},
+                status_code=400,
+            )
         return JSONResponse(
             status_code=422,
             content=_error_payload(

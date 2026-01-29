@@ -6,7 +6,7 @@ HTML template routes for helpdesk/support ticket management.
 
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Form, Query, Request
+from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
@@ -117,44 +117,43 @@ def new_ticket_form(
     db: Session = Depends(get_db),
 ):
     """New ticket form page."""
-    return support_web_service.ticket_form_response(request, auth, db)
+    error = request.query_params.get("error")
+    return support_web_service.ticket_form_response(request, auth, db, error=error)
 
 
 @router.post("/tickets")
-def create_ticket(
+async def create_ticket(
     request: Request,
     auth: WebAuthContext = Depends(require_operations_access),
-    subject: str = Form(...),
-    description: Optional[str] = Form(default=None),
-    priority: str = Form(default="MEDIUM"),
-    raised_by_email: Optional[str] = Form(default=None),
-    assigned_to_id: Optional[str] = Form(default=None),
-    project_id: Optional[str] = Form(default=None),
-    customer_id: Optional[str] = Form(default=None),
-    category_id: Optional[str] = Form(default=None),
-    team_id: Optional[str] = Form(default=None),
-    opening_date: Optional[str] = Form(default=None),
-    contact_email: Optional[str] = Form(default=None),
-    contact_phone: Optional[str] = Form(default=None),
-    contact_address: Optional[str] = Form(default=None),
     db: Session = Depends(get_db),
 ):
     """Create a new support ticket."""
+    form = getattr(request.state, "csrf_form", None)
+    if form is None:
+        form = await request.form()
+    subject_raw = form.get("subject")
+    subject = str(subject_raw).strip() if subject_raw is not None else ""
+    if not subject:
+        return support_web_service.ticket_form_response(
+            request, auth, db, error="Subject is required."
+        )
+    files = form.getlist("files") if hasattr(form, "getlist") else []
     return support_web_service.create_ticket_response(
         request, auth, db,
         subject=subject,
-        description=description,
-        priority=priority,
-        raised_by_email=raised_by_email,
-        assigned_to_id=assigned_to_id if assigned_to_id else None,
-        project_id=project_id if project_id else None,
-        customer_id=customer_id if customer_id else None,
-        category_id=category_id if category_id else None,
-        team_id=team_id if team_id else None,
-        opening_date=opening_date if opening_date else None,
-        contact_email=contact_email if contact_email else None,
-        contact_phone=contact_phone if contact_phone else None,
-        contact_address=contact_address if contact_address else None,
+        description=(form.get("description") or None),
+        priority=(form.get("priority") or "MEDIUM"),
+        raised_by_email=(form.get("raised_by_email") or None),
+        assigned_to_id=(form.get("assigned_to_id") or None),
+        project_id=(form.get("project_id") or None),
+        customer_id=(form.get("customer_id") or None),
+        category_id=(form.get("category_id") or None),
+        team_id=(form.get("team_id") or None),
+        opening_date=(form.get("opening_date") or None),
+        contact_email=(form.get("contact_email") or None),
+        contact_phone=(form.get("contact_phone") or None),
+        contact_address=(form.get("contact_address") or None),
+        files=files,
     )
 
 
@@ -202,6 +201,7 @@ def update_ticket(
     contact_email: Optional[str] = Form(default=None),
     contact_phone: Optional[str] = Form(default=None),
     contact_address: Optional[str] = Form(default=None),
+    files: list[UploadFile] = File(default=None),
     db: Session = Depends(get_db),
 ):
     """Update a ticket."""
@@ -219,6 +219,7 @@ def update_ticket(
         contact_email=contact_email,
         contact_phone=contact_phone,
         contact_address=contact_address,
+        files=files,
     )
 
 
@@ -247,10 +248,20 @@ def assign_ticket(
     request: Request,
     ticket_id: str,
     auth: WebAuthContext = Depends(require_operations_access),
-    assigned_to_id: str = Form(...),
+    assigned_to_id: Optional[str] = Form(default=None),
     db: Session = Depends(get_db),
 ):
     """Assign ticket to an employee."""
+    form_data = getattr(request.state, "csrf_form", None)
+    if form_data:
+        assigned_to_id = (form_data.get("assigned_to_id") or assigned_to_id or "").strip()
+
+    if not assigned_to_id:
+        return RedirectResponse(
+            url=f"/operations/support/tickets/{ticket_id}?error=no_assignee_selected",
+            status_code=303,
+        )
+
     return support_web_service.assign_ticket_response(
         request, auth, db, ticket_id, assigned_to_id
     )
@@ -279,6 +290,24 @@ def archive_ticket(
 ):
     """Archive (soft delete) a ticket."""
     return support_web_service.archive_ticket_response(
+        request, auth, db, ticket_id
+    )
+
+
+@router.post("/tickets/{ticket_id}/delete")
+def delete_ticket(
+    request: Request,
+    ticket_id: str,
+    auth: WebAuthContext = Depends(require_operations_access),
+    db: Session = Depends(get_db),
+):
+    """Hard delete a ticket."""
+    if not auth.is_admin:
+        return RedirectResponse(
+            url=f"/operations/support/tickets/{ticket_id}?error=forbidden",
+            status_code=303,
+        )
+    return support_web_service.delete_ticket_response(
         request, auth, db, ticket_id
     )
 
@@ -326,11 +355,12 @@ def add_comment(
     auth: WebAuthContext = Depends(require_operations_access),
     content: str = Form(...),
     is_internal: bool = Form(default=False),
+    files: list[UploadFile] = File(default=None),
     db: Session = Depends(get_db),
 ):
     """Add a comment to a ticket."""
     return support_web_service.add_comment_response(
-        request, auth, db, ticket_id, content, is_internal
+        request, auth, db, ticket_id, content, is_internal, files
     )
 
 

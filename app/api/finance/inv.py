@@ -16,6 +16,8 @@ from sqlalchemy.orm import Session
 from app.api.deps import require_organization_id, require_tenant_auth
 from app.services.auth_dependencies import require_tenant_permission
 from app.services.feature_flags import require_feature, FEATURE_INVENTORY
+from app.api.finance.utils import parse_enum
+from app.models.finance.inv.inventory_transaction import TransactionType
 from app.config import settings
 from app.db import SessionLocal
 from app.schemas.finance.common import ListResponse, PostingResultSchema
@@ -431,7 +433,7 @@ def list_inventory_transactions(
         organization_id=str(organization_id),
         item_id=str(item_id) if item_id else None,
         warehouse_id=str(warehouse_id) if warehouse_id else None,
-        transaction_type=transaction_type,
+        transaction_type=parse_enum(TransactionType, transaction_type),
         start_date=start_date,
         end_date=end_date,
         limit=limit,
@@ -465,7 +467,7 @@ def post_inventory_transaction(
     return PostingResultSchema(
         success=result.success,
         journal_entry_id=result.journal_entry_id,
-        entry_number=result.entry_number,
+        entry_number=None,
         message=result.message,
     )
 

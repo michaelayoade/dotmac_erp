@@ -1,0 +1,154 @@
+{% extends "careers/base_careers.html" %}
+
+{% block title %}{{ job.job_title }} - Careers at {{ org_name }}{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-4xl px-4 py-12 sm:px-6 lg:px-8">
+    <!-- Back link -->
+    <a href="/careers/{{ org_slug }}" class="mb-6 inline-flex items-center text-sm font-medium text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white">
+        <svg class="mr-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+        </svg>
+        Back to all jobs
+    </a>
+
+    <div class="rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+        <!-- Header -->
+        <div class="border-b border-slate-200 p-6 dark:border-slate-700 sm:p-8">
+            <div class="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                    <div class="mb-2 flex flex-wrap items-center gap-2">
+                        <span class="inline-flex items-center rounded-full bg-primary-50 px-3 py-1 text-sm font-medium text-primary-700 dark:bg-primary-900/30 dark:text-primary-300">
+                            {{ job.employment_type | replace('_', ' ') | title }}
+                        </span>
+                        {% if job.is_remote %}
+                        <span class="inline-flex items-center rounded-full bg-emerald-50 px-3 py-1 text-sm font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+                            Remote Available
+                        </span>
+                        {% endif %}
+                    </div>
+                    <h1 class="text-2xl font-bold text-slate-900 dark:text-white sm:text-3xl">
+                        {{ job.job_title }}
+                    </h1>
+                    {% if job.department %}
+                    <p class="mt-1 text-lg text-slate-600 dark:text-slate-400">
+                        {{ job.department.department_name }}
+                    </p>
+                    {% endif %}
+                </div>
+                <a href="/careers/{{ org_slug }}/apply/{{ job.job_code }}" class="btn btn-primary">
+                    Apply Now
+                </a>
+            </div>
+
+            <!-- Meta info -->
+            <div class="mt-6 flex flex-wrap gap-6 text-sm text-slate-500 dark:text-slate-400">
+                {% if job.location %}
+                <span class="flex items-center gap-2">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+                    </svg>
+                    {{ job.location }}
+                </span>
+                {% endif %}
+                {% if job.posted_on %}
+                <span class="flex items-center gap-2">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                    </svg>
+                    Posted {{ job.posted_on.strftime('%B %d, %Y') }}
+                </span>
+                {% endif %}
+                {% if job.closes_on %}
+                <span class="flex items-center gap-2">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    Apply by {{ job.closes_on.strftime('%B %d, %Y') }}
+                </span>
+                {% endif %}
+                {% if job.positions_remaining > 1 %}
+                <span class="flex items-center gap-2">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+                    </svg>
+                    {{ job.positions_remaining }} position{{ 's' if job.positions_remaining > 1 else '' }} available
+                </span>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Content -->
+        <div class="p-6 sm:p-8">
+            {% if job.description %}
+            <div class="prose prose-slate max-w-none dark:prose-invert">
+                <h2>About the Role</h2>
+                <div class="whitespace-pre-wrap">{{ job.description }}</div>
+            </div>
+            {% endif %}
+
+            {% if job.required_skills or job.preferred_skills %}
+            <div class="mt-8">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Skills & Qualifications</h2>
+
+                {% if job.required_skills %}
+                <div class="mt-4">
+                    <h3 class="text-sm font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Required</h3>
+                    <div class="mt-2 flex flex-wrap gap-2">
+                        {% for skill in job.required_skills.split(',') %}
+                        <span class="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700 dark:bg-slate-700 dark:text-slate-300">
+                            {{ skill.strip() }}
+                        </span>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if job.preferred_skills %}
+                <div class="mt-4">
+                    <h3 class="text-sm font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Nice to Have</h3>
+                    <div class="mt-2 flex flex-wrap gap-2">
+                        {% for skill in job.preferred_skills.split(',') %}
+                        <span class="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700 dark:bg-slate-700 dark:text-slate-300">
+                            {{ skill.strip() }}
+                        </span>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            {% if job.education_requirements %}
+            <div class="mt-8">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Education</h2>
+                <p class="mt-2 text-slate-600 dark:text-slate-400">{{ job.education_requirements }}</p>
+            </div>
+            {% endif %}
+
+            {% if job.min_experience_years %}
+            <div class="mt-8">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Experience</h2>
+                <p class="mt-2 text-slate-600 dark:text-slate-400">
+                    Minimum {{ job.min_experience_years }} year{{ 's' if job.min_experience_years > 1 else '' }} of relevant experience
+                </p>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Apply CTA -->
+        <div class="border-t border-slate-200 p-6 dark:border-slate-700 sm:p-8">
+            <div class="flex flex-col items-center justify-between gap-4 sm:flex-row">
+                <div>
+                    <p class="font-medium text-slate-900 dark:text-white">Ready to apply?</p>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">Join our team and make an impact.</p>
+                </div>
+                <a href="/careers/{{ org_slug }}/apply/{{ job.job_code }}" class="btn btn-primary w-full sm:w-auto">
+                    Apply for this Position
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

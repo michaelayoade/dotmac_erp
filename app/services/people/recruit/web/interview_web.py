@@ -8,10 +8,10 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 from uuid import UUID
 
-from fastapi import Request
+from fastapi import Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
@@ -34,6 +34,13 @@ from .base import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _get_form_str(form: Any, key: str, default: str = "") -> str:
+    value = form.get(key, default) if form is not None else default
+    if value is None or isinstance(value, UploadFile):
+        return default
+    return str(value).strip()
 
 
 class InterviewWebService:
@@ -347,7 +354,7 @@ class InterviewWebService:
         svc = RecruitmentService(db)
 
         try:
-            reason = form_data.get("reason")
+            reason = _get_form_str(form_data, "reason") or None
             svc.cancel_interview(org_id, coerce_uuid(interview_id), reason=reason)
             db.commit()
         except Exception:
@@ -371,7 +378,7 @@ class InterviewWebService:
             svc.update_interview(
                 org_id,
                 coerce_uuid(interview_id),
-                rating=parse_int(form_data.get("rating")),
+                rating=parse_int(_get_form_str(form_data, "rating") or None),
                 recommendation=form_data.get("recommendation") or None,
                 feedback=form_data.get("feedback") or None,
                 strengths=form_data.get("strengths") or None,

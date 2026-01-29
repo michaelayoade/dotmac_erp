@@ -8,6 +8,7 @@ general ledger, integrating People payroll with Finance GL.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Optional
@@ -29,6 +30,11 @@ from app.services.common import coerce_uuid
 from app.services.finance.gl.journal import JournalService, JournalInput, JournalLineInput
 from app.services.finance.gl.ledger_posting import LedgerPostingService, PostingRequest
 from app.models.finance.gl.journal_entry import JournalType
+
+logger = logging.getLogger(__name__)
+
+# Component code for employer pension contribution deduction line.
+EMPLOYER_PENSION_COMPONENT_CODE = "PENSION_EMPLOYER"
 
 
 @dataclass
@@ -174,7 +180,7 @@ class PayrollGLAdapter:
 
         # Credit lines: Liability accounts (deductions)
         for deduction in slip.deductions:
-            if deduction.statistical_component or deduction.do_not_include_in_total:
+            if deduction.statistical_component:
                 continue  # Skip statistical components
 
             # Get liability account from component
@@ -184,6 +190,11 @@ class PayrollGLAdapter:
                     success=False,
                     message=f"No liability account for deduction component: {deduction.component_name}",
                 )
+            if (
+                deduction.do_not_include_in_total
+                and component.component_code != EMPLOYER_PENSION_COMPONENT_CODE
+            ):
+                continue  # Skip excluded items except employer pension
 
             functional_amount = deduction.amount * exchange_rate
 
@@ -365,9 +376,14 @@ class PayrollGLAdapter:
         entry_id: UUID,
         posting_date: date,
         posted_by_user_id: UUID,
-    ) -> list[PayrollPostingResult]:
+    ) -> PayrollPostingResult:
         """
-        Post all approved salary slips in a payroll entry.
+        Post payroll run as ONE consolidated journal entry.
+
+        Creates:
+        - 1 Debit line: Total gross -> salaries_expense_account_id
+        - N Credit lines: Deductions grouped by component (PAYE, Pension, NHF, etc.)
+        - 1 Credit line: Total net pay -> salary_payable_account_id
 
         Args:
             db: Database session
@@ -377,58 +393,216 @@ class PayrollGLAdapter:
             posted_by_user_id: User posting
 
         Returns:
-            List of PayrollPostingResult for each slip
+            PayrollPostingResult with outcome
         """
+        from sqlalchemy import select
+        from sqlalchemy.orm import selectinload
+
+        from app.models.finance.core_org.organization import Organization
         from app.models.people.payroll.payroll_entry import PayrollEntry, PayrollEntryStatus
 
         org_id = coerce_uuid(organization_id)
         e_id = coerce_uuid(entry_id)
+        user_id = coerce_uuid(posted_by_user_id)
 
-        # Load payroll entry
+        # 1. Load and validate payroll entry
         entry = db.get(PayrollEntry, e_id)
         if not entry or entry.organization_id != org_id:
-            return [PayrollPostingResult(success=False, message="Payroll entry not found")]
+            return PayrollPostingResult(success=False, message="Payroll entry not found")
 
         if entry.status != PayrollEntryStatus.APPROVED:
-            return [PayrollPostingResult(
+            return PayrollPostingResult(
                 success=False,
                 message=f"Payroll entry must be APPROVED to post (current: {entry.status.value})",
-            )]
+            )
 
-        # Get all approved slips for this entry
-        slips = (
-            db.query(SalarySlip)
-            .filter(
+        if entry.journal_entry_id:
+            return PayrollPostingResult(
+                success=False,
+                message="Payroll entry has already been posted",
+            )
+
+        # 2. Load organization and validate GL accounts
+        org = db.get(Organization, org_id)
+        if not org:
+            return PayrollPostingResult(success=False, message="Organization not found")
+
+        if not org.salaries_expense_account_id:
+            return PayrollPostingResult(
+                success=False,
+                message="Salaries Expense account not configured. Go to Admin > Organizations to set it.",
+            )
+        if not org.salary_payable_account_id:
+            return PayrollPostingResult(
+                success=False,
+                message="Salary Payable account not configured. Go to Admin > Organizations to set it.",
+            )
+
+        # 3. Get all approved slips with deductions eagerly loaded
+        slips = db.scalars(
+            select(SalarySlip)
+            .options(
+                selectinload(SalarySlip.deductions).selectinload(SalarySlipDeduction.component)
+            )
+            .where(
                 SalarySlip.payroll_entry_id == e_id,
                 SalarySlip.status == SalarySlipStatus.APPROVED,
             )
-            .all()
-        )
+        ).all()
 
         if not slips:
-            return [PayrollPostingResult(
+            return PayrollPostingResult(
                 success=False,
                 message="No approved salary slips found in payroll entry",
-            )]
-
-        # Post each slip
-        results = []
-        for slip in slips:
-            result = PayrollGLAdapter.post_salary_slip(
-                db=db,
-                organization_id=org_id,
-                slip_id=slip.slip_id,
-                posting_date=posting_date,
-                posted_by_user_id=posted_by_user_id,
             )
-            results.append(result)
 
-        # Update entry status if all slips posted successfully
-        if all(r.success for r in results):
-            entry.status = PayrollEntryStatus.POSTED
-            db.commit()
+        # 4. Aggregate totals
+        total_gross = sum((slip.gross_pay for slip in slips), Decimal("0"))
+        total_net = sum((slip.net_pay for slip in slips), Decimal("0"))
 
-        return results
+        # Group deductions by component (to get liability account)
+        # Key: component_id, Value: (component_name, total_amount, liability_account_id)
+        deductions_by_component: dict[UUID, tuple[str, Decimal, UUID]] = {}
+
+        for slip in slips:
+            for ded in slip.deductions:
+                if ded.statistical_component:
+                    continue
+                comp = ded.component
+                if not comp or not comp.liability_account_id:
+                    continue
+                # Skip deductions marked as do_not_include_in_total
+                # except employer pension which we still want to post
+                if (
+                    ded.do_not_include_in_total
+                    and comp.component_code != EMPLOYER_PENSION_COMPONENT_CODE
+                ):
+                    continue
+
+                key = comp.component_id
+                if key in deductions_by_component:
+                    name, amt, acc_id = deductions_by_component[key]
+                    deductions_by_component[key] = (name, amt + ded.amount, acc_id)
+                else:
+                    deductions_by_component[key] = (
+                        comp.component_name,
+                        ded.amount,
+                        comp.liability_account_id,
+                    )
+
+        # 5. Build journal lines
+        journal_lines: list[JournalLineInput] = []
+        currency_code = slips[0].currency_code
+        exchange_rate = slips[0].exchange_rate or Decimal("1.0")
+
+        # Period reference for descriptions
+        period_ref = f"{entry.payroll_month or entry.start_date.month}/{entry.payroll_year or entry.start_date.year}"
+
+        # Debit: Total Gross to Salaries Expense
+        journal_lines.append(
+            JournalLineInput(
+                account_id=org.salaries_expense_account_id,
+                debit_amount=total_gross,
+                credit_amount=Decimal("0"),
+                debit_amount_functional=total_gross * exchange_rate,
+                credit_amount_functional=Decimal("0"),
+                description=f"Payroll {period_ref} - Salaries Expense",
+            )
+        )
+
+        # Credits: Each deduction type
+        for comp_id, (comp_name, amount, liability_acc_id) in deductions_by_component.items():
+            if amount <= 0:
+                continue
+            journal_lines.append(
+                JournalLineInput(
+                    account_id=liability_acc_id,
+                    debit_amount=Decimal("0"),
+                    credit_amount=amount,
+                    debit_amount_functional=Decimal("0"),
+                    credit_amount_functional=amount * exchange_rate,
+                    description=f"Payroll {period_ref} - {comp_name}",
+                )
+            )
+
+        # Credit: Net Pay to Salary Payable
+        journal_lines.append(
+            JournalLineInput(
+                account_id=org.salary_payable_account_id,
+                debit_amount=Decimal("0"),
+                credit_amount=total_net,
+                debit_amount_functional=Decimal("0"),
+                credit_amount_functional=total_net * exchange_rate,
+                description=f"Payroll {period_ref} - Net Pay",
+            )
+        )
+
+        # 6. Create journal entry
+        journal_input = JournalInput(
+            journal_type=JournalType.STANDARD,
+            entry_date=entry.posting_date or posting_date,
+            posting_date=posting_date,
+            description=f"Payroll Run {period_ref} ({len(slips)} employees)",
+            reference=f"PR-{entry.payroll_year or entry.start_date.year}-{(entry.payroll_month or entry.start_date.month):02d}",
+            currency_code=currency_code,
+            exchange_rate=exchange_rate,
+            lines=journal_lines,
+            source_module="PAYROLL",
+            source_document_type="PAYROLL_ENTRY",
+            source_document_id=e_id,
+        )
+
+        try:
+            journal = JournalService.create_journal(db, org_id, journal_input, user_id)
+            JournalService.submit_journal(db, org_id, journal.journal_entry_id, user_id)
+            JournalService.approve_journal(db, org_id, journal.journal_entry_id, user_id)
+        except HTTPException as e:
+            return PayrollPostingResult(
+                success=False,
+                message=f"Journal creation failed: {e.detail}",
+            )
+
+        # 7. Post to ledger
+        idempotency_key = f"{org_id}:PAYROLL_ENTRY:{e_id}:consolidated:v1"
+        posting_result = LedgerPostingService.post_journal_entry(
+            db,
+            PostingRequest(
+                organization_id=org_id,
+                journal_entry_id=journal.journal_entry_id,
+                posting_date=posting_date,
+                idempotency_key=idempotency_key,
+                source_module="PAYROLL",
+                posted_by_user_id=user_id,
+            ),
+        )
+
+        if not posting_result.success:
+            return PayrollPostingResult(
+                success=False,
+                journal_entry_id=journal.journal_entry_id,
+                message=f"Ledger posting failed: {posting_result.message}",
+            )
+
+        # 8. Update all slips to POSTED
+        now = datetime.now(timezone.utc)
+        for slip in slips:
+            slip.status = SalarySlipStatus.POSTED
+            slip.journal_entry_id = journal.journal_entry_id
+            slip.posted_at = now
+            slip.posted_by_id = user_id
+
+        # 9. Update payroll entry to POSTED
+        entry.status = PayrollEntryStatus.POSTED
+        entry.journal_entry_id = journal.journal_entry_id
+
+        db.commit()
+
+        return PayrollPostingResult(
+            success=True,
+            journal_entry_id=journal.journal_entry_id,
+            posting_batch_id=posting_result.posting_batch_id,
+            message=f"Posted: Gross {total_gross:,.2f} | Net {total_net:,.2f} ({len(slips)} employees)",
+        )
 
 
 # Module-level singleton instance

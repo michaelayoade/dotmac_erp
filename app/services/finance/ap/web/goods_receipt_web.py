@@ -7,7 +7,7 @@ Provides view-focused data and operations for AP goods receipt web routes.
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 from uuid import UUID
@@ -493,6 +493,10 @@ class GoodsReceiptWebService:
             data = dict(form_data)
 
         try:
+            org_id = auth.organization_id
+            user_id = auth.person_id
+            assert org_id is not None
+            assert user_id is not None
             lines_data = data.get("lines", [])
             if isinstance(lines_data, str):
                 lines_data = json.loads(lines_data)
@@ -527,9 +531,9 @@ class GoodsReceiptWebService:
 
             receipt = goods_receipt_service.create_receipt(
                 db=db,
-                organization_id=auth.organization_id,
+                organization_id=org_id,
                 input=input_data,
-                received_by_user_id=auth.person_id,
+                received_by_user_id=user_id,
             )
 
             logger.info(
@@ -569,9 +573,11 @@ class GoodsReceiptWebService:
     ) -> HTMLResponse | RedirectResponse:
         """Handle starting inspection for a goods receipt."""
         try:
+            org_id = auth.organization_id
+            assert org_id is not None
             goods_receipt_service.start_inspection(
                 db=db,
-                organization_id=auth.organization_id,
+                organization_id=org_id,
                 receipt_id=UUID(receipt_id),
             )
             logger.info(
@@ -604,9 +610,11 @@ class GoodsReceiptWebService:
     ) -> HTMLResponse | RedirectResponse:
         """Handle accepting all items in a goods receipt."""
         try:
+            org_id = auth.organization_id
+            assert org_id is not None
             goods_receipt_service.accept_all(
                 db=db,
-                organization_id=auth.organization_id,
+                organization_id=org_id,
                 receipt_id=UUID(receipt_id),
             )
             logger.info(
@@ -640,6 +648,10 @@ class GoodsReceiptWebService:
     ) -> RedirectResponse:
         """Handle goods receipt attachment upload."""
         try:
+            org_id = auth.organization_id
+            user_id = auth.person_id
+            assert org_id is not None
+            assert user_id is not None
             receipt = goods_receipt_service.get(db, receipt_id)
             if not receipt or receipt.organization_id != auth.organization_id:
                 return RedirectResponse(
@@ -658,10 +670,10 @@ class GoodsReceiptWebService:
 
             attachment_service.save_file(
                 db=db,
-                organization_id=auth.organization_id,
+                organization_id=org_id,
                 input=input_data,
                 file_content=file.file,
-                uploaded_by=auth.person_id,
+                uploaded_by=user_id,
             )
 
             logger.info(

@@ -9,10 +9,10 @@ from __future__ import annotations
 import logging
 from datetime import date
 from decimal import Decimal
-from typing import Optional
+from typing import Any, Optional
 from uuid import UUID
 
-from fastapi import Request
+from fastapi import Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
@@ -35,6 +35,13 @@ from .base import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _get_form_str(form: Any, key: str, default: str = "") -> str:
+    value = form.get(key, default) if form is not None else default
+    if value is None or isinstance(value, UploadFile):
+        return default
+    return str(value).strip()
 
 
 class OfferWebService:
@@ -387,7 +394,7 @@ class OfferWebService:
         svc = RecruitmentService(db)
 
         try:
-            reason = form_data.get("reason")
+            reason = _get_form_str(form_data, "reason") or None
             svc.decline_offer(org_id, coerce_uuid(offer_id), reason=reason)
             db.commit()
         except Exception:

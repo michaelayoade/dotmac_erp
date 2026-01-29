@@ -8,7 +8,7 @@ from datetime import date
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_organization_id, require_tenant_auth
@@ -27,7 +27,9 @@ from app.schemas.finance.ap import (
 )
 from app.schemas.finance.common import ListResponse, PostingResultSchema
 from app.models.finance.ap.supplier import SupplierType
-from app.models.finance.ap.supplier_invoice import SupplierInvoiceType
+from app.models.finance.ap.supplier_invoice import SupplierInvoiceType, SupplierInvoiceStatus
+from app.models.finance.ap.purchase_order import POStatus
+from app.models.finance.ap.supplier_payment import APPaymentMethod, APPaymentStatus
 from app.services.finance.ap import (
     supplier_service,
     supplier_invoice_service,
@@ -208,11 +210,17 @@ def list_ap_invoices(
     db: Session = Depends(get_db),
 ):
     """List AP invoices with filters."""
+    status_value = None
+    if status:
+        try:
+            status_value = SupplierInvoiceStatus(status)
+        except ValueError:
+            status_value = None
     invoices = supplier_invoice_service.list(
         db=db,
         organization_id=str(organization_id),
         supplier_id=str(supplier_id) if supplier_id else None,
-        status=status,
+        status=status_value,
         from_date=from_date,
         to_date=to_date,
         limit=limit,
@@ -266,7 +274,6 @@ def post_ap_invoice(
     posting_date: date = Query(...),
     organization_id: UUID = Depends(require_organization_id),
     posted_by_user_id: UUID = Query(...),
-    fiscal_period_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("ap:invoices:post")),
     db: Session = Depends(get_db),
 ):
@@ -275,14 +282,13 @@ def post_ap_invoice(
         db=db,
         organization_id=organization_id,
         invoice_id=invoice_id,
-        fiscal_period_id=fiscal_period_id,
         posting_date=posting_date,
         posted_by_user_id=posted_by_user_id,
     )
     return PostingResultSchema(
         success=result.success,
         journal_entry_id=result.journal_entry_id,
-        entry_number=result.entry_number,
+        entry_number=None,
         message=result.message,
     )
 
@@ -307,14 +313,21 @@ def create_ap_payment(
         )
         for alloc in payload.allocations
     ]
+    total_amount = sum((alloc.amount for alloc in allocations), Decimal("0"))
+
+    try:
+        payment_method = APPaymentMethod(payload.payment_method)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid payment method") from exc
 
     input_data = SupplierPaymentInput(
         supplier_id=payload.supplier_id,
         payment_date=payload.payment_date,
-        payment_method=payload.payment_method,
+        payment_method=payment_method,
         bank_account_id=payload.bank_account_id,
         currency_code=payload.currency_code,
-        reference_number=payload.reference_number,
+        amount=total_amount,
+        reference=payload.reference_number,
         allocations=allocations,
     )
 
@@ -349,11 +362,17 @@ def list_ap_payments(
     db: Session = Depends(get_db),
 ):
     """List AP payments with filters."""
+    status_value = None
+    if status:
+        try:
+            status_value = APPaymentStatus(status)
+        except ValueError:
+            status_value = None
     payments = supplier_payment_service.list(
         db=db,
         organization_id=str(organization_id),
         supplier_id=str(supplier_id) if supplier_id else None,
-        status=status,
+        status=status_value,
         from_date=from_date,
         to_date=to_date,
         limit=limit,
@@ -373,7 +392,6 @@ def post_ap_payment(
     posting_date: date = Query(...),
     organization_id: UUID = Depends(require_organization_id),
     posted_by_user_id: UUID = Query(...),
-    fiscal_period_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("ap:payments:post")),
     db: Session = Depends(get_db),
 ):
@@ -382,14 +400,13 @@ def post_ap_payment(
         db=db,
         organization_id=organization_id,
         payment_id=payment_id,
-        fiscal_period_id=fiscal_period_id,
         posting_date=posting_date,
         posted_by_user_id=posted_by_user_id,
     )
     return PostingResultSchema(
         success=result.success,
         journal_entry_id=result.journal_entry_id,
-        entry_number=result.entry_number,
+        entry_number=None,
         message=result.message,
     )
 
@@ -529,7 +546,7 @@ def create_purchase_order(
         po_date=payload.po_date,
         expected_delivery_date=payload.expected_delivery_date,
         currency_code=payload.currency_code,
-        description=payload.description,
+        terms_and_conditions=payload.description,
         lines=lines,
     )
     return purchase_order_service.create_po(db, organization_id, input_data, created_by_user_id)
@@ -552,11 +569,17 @@ def list_purchase_orders(
     db: Session = Depends(get_db),
 ):
     """List purchase orders with filters."""
+    status_value = None
+    if status:
+        try:
+            status_value = POStatus(status)
+        except ValueError:
+            status_value = None
     pos = purchase_order_service.list(
         db=db,
         organization_id=str(organization_id),
         supplier_id=str(supplier_id) if supplier_id else None,
-        status=status,
+        status=status_value,
         limit=limit,
         offset=offset,
     )
@@ -602,6 +625,10 @@ def cancel_purchase_order(
 # Goods Receipts
 # =============================================================================
 
+from app.config import settings
+from app.models.finance.ap.goods_receipt import ReceiptStatus
+from app.models.finance.ap.payment_batch import APBatchStatus
+from app.models.finance.banking.bank_account import BankAccount
 from app.services.finance.ap import goods_receipt_service, GoodsReceiptInput, GRLineInput
 
 
@@ -643,16 +670,17 @@ def create_goods_receipt(
     db: Session = Depends(get_db),
 ):
     """Create a goods receipt against a PO."""
-    lines = [
-        GRLineInput(
-            po_line_id=line.po_line_id,
-            item_id=line.item_id,
-            quantity_received=line.quantity_received,
-            unit_cost=line.unit_cost,
-            warehouse_id=line.warehouse_id,
+    lines: list[GRLineInput] = []
+    for line in payload.lines:
+        if not line.po_line_id:
+            raise HTTPException(status_code=400, detail="po_line_id required for each line")
+        lines.append(
+            GRLineInput(
+                po_line_id=line.po_line_id,
+                quantity_received=line.quantity_received,
+                location_id=line.warehouse_id,
+            )
         )
-        for line in payload.lines
-    ]
     input_data = GoodsReceiptInput(
         po_id=payload.po_id,
         receipt_date=payload.receipt_date,
@@ -679,11 +707,17 @@ def list_goods_receipts(
     db: Session = Depends(get_db),
 ):
     """List goods receipts with filters."""
+    status_value = None
+    if status:
+        try:
+            status_value = ReceiptStatus(status)
+        except ValueError:
+            status_value = None
     receipts = goods_receipt_service.list(
         db=db,
         organization_id=str(organization_id),
         po_id=str(po_id) if po_id else None,
-        status=status,
+        status=status_value,
         limit=limit,
         offset=offset,
     )
@@ -759,12 +793,18 @@ def create_payment_batch(
     db: Session = Depends(get_db),
 ):
     """Create a new payment batch."""
+    bank_account = db.get(BankAccount, payload.bank_account_id)
+    currency_code = (
+        bank_account.currency_code
+        if bank_account
+        else settings.default_functional_currency_code
+    )
     input_data = PaymentBatchInput(
-        batch_name=payload.batch_name,
-        payment_date=payload.payment_date,
+        batch_date=payload.payment_date,
         bank_account_id=payload.bank_account_id,
         payment_method=payload.payment_method,
-        description=payload.description,
+        currency_code=currency_code,
+        payments=[],
     )
     return payment_batch_service.create_batch(db, organization_id, input_data, created_by_user_id)
 
@@ -785,10 +825,16 @@ def list_payment_batches(
     db: Session = Depends(get_db),
 ):
     """List payment batches with filters."""
+    status_value = None
+    if status:
+        try:
+            status_value = APBatchStatus(status)
+        except ValueError:
+            status_value = None
     batches = payment_batch_service.list(
         db=db,
         organization_id=str(organization_id),
-        status=status,
+        status=status_value,
         limit=limit,
         offset=offset,
     )

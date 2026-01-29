@@ -80,6 +80,10 @@ class OperationsInventoryWebService:
     ) -> HTMLResponse | RedirectResponse:
         """Create new material request."""
         form = await request.form()
+        org_id = auth.organization_id
+        user_id = auth.user_id
+        assert org_id is not None
+        assert user_id is not None
 
         request_type = _safe_form_text(form.get("request_type", "PURCHASE"))
         schedule_date = _safe_form_text(form.get("schedule_date")) or None
@@ -97,8 +101,8 @@ class OperationsInventoryWebService:
         try:
             mr = material_request_web_service.create_from_form(
                 db=db,
-                organization_id=auth.organization_id,
-                user_id=auth.user_id,
+                organization_id=org_id,
+                user_id=user_id,
                 request_type=request_type,
                 schedule_date=schedule_date,
                 default_warehouse_id=default_warehouse_id,
@@ -188,15 +192,19 @@ class OperationsInventoryWebService:
     ) -> HTMLResponse | RedirectResponse:
         """Update material request."""
         form = await request.form()
+        org_id = auth.organization_id
+        user_id = auth.user_id
+        assert org_id is not None
+        assert user_id is not None
 
-        request_type = form.get("request_type", "PURCHASE")
-        schedule_date = form.get("schedule_date") or None
-        default_warehouse_id = form.get("default_warehouse_id") or None
-        requested_by_id = form.get("requested_by_id") or None
-        remarks = form.get("remarks") or None
+        request_type = _safe_form_text(form.get("request_type", "PURCHASE"))
+        schedule_date = _safe_form_text(form.get("schedule_date")) or None
+        default_warehouse_id = _safe_form_text(form.get("default_warehouse_id")) or None
+        requested_by_id = _safe_form_text(form.get("requested_by_id")) or None
+        remarks = _safe_form_text(form.get("remarks")) or None
 
         # Parse items from JSON
-        items_json = form.get("items_json", "[]")
+        items_json = _safe_form_text(form.get("items_json", "[]"))
         try:
             items = json.loads(items_json) if items_json else []
         except json.JSONDecodeError:
@@ -205,8 +213,8 @@ class OperationsInventoryWebService:
         try:
             mr = material_request_web_service.update_from_form(
                 db=db,
-                organization_id=auth.organization_id,
-                user_id=auth.user_id,
+                organization_id=org_id,
+                user_id=user_id,
                 request_id=request_id,
                 request_type=request_type,
                 schedule_date=schedule_date,
@@ -234,10 +242,14 @@ class OperationsInventoryWebService:
     ) -> RedirectResponse:
         """Submit material request."""
         try:
+            org_id = auth.organization_id
+            user_id = auth.user_id
+            assert org_id is not None
+            assert user_id is not None
             material_request_web_service.submit_request(
                 db=db,
-                organization_id=auth.organization_id,
-                user_id=auth.user_id,
+                organization_id=org_id,
+                user_id=user_id,
                 request_id=request_id,
             )
             db.commit()
@@ -253,10 +265,14 @@ class OperationsInventoryWebService:
     ) -> RedirectResponse:
         """Cancel material request."""
         try:
+            org_id = auth.organization_id
+            user_id = auth.user_id
+            assert org_id is not None
+            assert user_id is not None
             material_request_web_service.cancel_request(
                 db=db,
-                organization_id=auth.organization_id,
-                user_id=auth.user_id,
+                organization_id=org_id,
+                user_id=user_id,
                 request_id=request_id,
             )
             db.commit()
@@ -347,20 +363,24 @@ class OperationsInventoryWebService:
         from app.models.finance.inv.inventory_transaction import InventoryTransaction
 
         try:
+            org_id = auth.organization_id
+            user_id = auth.user_id
+            assert org_id is not None
+            assert user_id is not None
             txn_uuid = UUID_Type(transaction_id)
             txn = (
                 db.query(InventoryTransaction)
                 .filter(
                     InventoryTransaction.transaction_id == txn_uuid,
-                    InventoryTransaction.organization_id == auth.organization_id,
+                    InventoryTransaction.organization_id == org_id,
                 )
                 .first()
             )
 
-            if txn and not txn.is_reversed:
+            if txn and not bool(getattr(txn, "is_reversed", False)):
                 # Create reversal transaction
                 reversal = InventoryTransaction(
-                    organization_id=auth.organization_id,
+                    organization_id=org_id,
                     transaction_type=txn.transaction_type,
                     transaction_date=datetime.now(),
                     fiscal_period_id=txn.fiscal_period_id,
@@ -374,14 +394,14 @@ class OperationsInventoryWebService:
                     reference=f"REV-{txn.reference or txn.transaction_id}",
                     source_document_type="REVERSAL",
                     source_document_id=txn.transaction_id,
-                    created_by_user_id=auth.user_id,
+                    created_by_user_id=user_id,
                 )
                 db.add(reversal)
 
                 # Mark original as reversed
-                txn.is_reversed = True
-                txn.reversed_at = datetime.now()
-                txn.reversed_by_id = reversal.transaction_id
+                setattr(txn, "is_reversed", True)
+                setattr(txn, "reversed_at", datetime.now())
+                setattr(txn, "reversed_by_id", reversal.transaction_id)
 
                 db.commit()
 
@@ -518,21 +538,38 @@ class OperationsInventoryWebService:
         from uuid import UUID as UUID_Type
 
         form = await request.form()
+        org_id = auth.organization_id
+        user_id = auth.user_id
+        assert org_id is not None
+        assert user_id is not None
 
         try:
+            count_number = _safe_form_text(form.get("count_number"))
+            count_date_str = _safe_form_text(form.get("count_date"))
+            fiscal_period_id_str = _safe_form_text(form.get("fiscal_period_id"))
+            warehouse_id_str = _safe_form_text(form.get("warehouse_id"))
+            category_id_str = _safe_form_text(form.get("category_id"))
+
+            if not count_number:
+                raise ValueError("Count number is required")
+            if not count_date_str:
+                raise ValueError("Count date is required")
+            if not fiscal_period_id_str:
+                raise ValueError("Fiscal period is required")
+
             count_input = CountInput(
-                count_number=form.get("count_number"),
-                count_date=datetime.strptime(form.get("count_date"), "%Y-%m-%d").date(),
-                fiscal_period_id=UUID_Type(form.get("fiscal_period_id")),
-                count_description=form.get("count_description") or None,
-                warehouse_id=UUID_Type(form.get("warehouse_id")) if form.get("warehouse_id") else None,
-                category_id=UUID_Type(form.get("category_id")) if form.get("category_id") else None,
-                is_full_count=form.get("is_full_count") is not None,
-                is_cycle_count=form.get("is_cycle_count") is not None,
+                count_number=count_number,
+                count_date=datetime.strptime(count_date_str, "%Y-%m-%d").date(),
+                fiscal_period_id=UUID_Type(fiscal_period_id_str),
+                count_description=_safe_form_text(form.get("count_description")) or None,
+                warehouse_id=UUID_Type(warehouse_id_str) if warehouse_id_str else None,
+                category_id=UUID_Type(category_id_str) if category_id_str else None,
+                is_full_count=_safe_form_text(form.get("is_full_count")) != "",
+                is_cycle_count=_safe_form_text(form.get("is_cycle_count")) != "",
             )
 
             count = InventoryCountService.create_count(
-                db, auth.organization_id, count_input, auth.user_id
+                db, org_id, count_input, user_id
             )
             db.commit()
 
@@ -606,8 +643,12 @@ class OperationsInventoryWebService:
         from uuid import UUID as UUID_Type
 
         try:
+            org_id = auth.organization_id
+            user_id = auth.user_id
+            assert org_id is not None
+            assert user_id is not None
             count_uuid = UUID_Type(count_id)
-            InventoryCountService.start_count(db, auth.organization_id, count_uuid, auth.user_id)
+            InventoryCountService.start_count(db, org_id, count_uuid, user_id)
             db.commit()
         except Exception:
             db.rollback()
@@ -625,8 +666,10 @@ class OperationsInventoryWebService:
         from uuid import UUID as UUID_Type
 
         try:
+            org_id = auth.organization_id
+            assert org_id is not None
             count_uuid = UUID_Type(count_id)
-            InventoryCountService.complete_count(db, auth.organization_id, count_uuid, auth.user_id)
+            InventoryCountService.complete_count(db, org_id, count_uuid)
             db.commit()
         except Exception:
             db.rollback()
@@ -644,8 +687,12 @@ class OperationsInventoryWebService:
         from uuid import UUID as UUID_Type
 
         try:
+            org_id = auth.organization_id
+            user_id = auth.user_id
+            assert org_id is not None
+            assert user_id is not None
             count_uuid = UUID_Type(count_id)
-            InventoryCountService.post_adjustments(db, auth.organization_id, count_uuid, auth.user_id)
+            InventoryCountService.post_count(db, org_id, count_uuid, user_id)
             db.commit()
         except Exception:
             db.rollback()
@@ -751,23 +798,32 @@ class OperationsInventoryWebService:
         from uuid import UUID as UUID_Type
 
         form = await request.form()
+        org_id = auth.organization_id
+        assert org_id is not None
 
         try:
+            bom_code = _safe_form_text(form.get("bom_code"))
+            bom_name = _safe_form_text(form.get("bom_name"))
+            item_id_str = _safe_form_text(form.get("item_id"))
+            output_quantity_str = _safe_form_text(form.get("output_quantity")) or "1"
+            output_uom = _safe_form_text(form.get("output_uom")) or "EACH"
+            bom_type = BOMType(_safe_form_text(form.get("bom_type")) or "ASSEMBLY")
+
             bom_input = BOMInput(
-                bom_code=form.get("bom_code"),
-                bom_name=form.get("bom_name"),
-                item_id=UUID_Type(form.get("item_id")),
-                output_quantity=Decimal(form.get("output_quantity") or "1"),
-                output_uom=form.get("output_uom") or "EACH",
-                bom_type=BOMType(form.get("bom_type") or "ASSEMBLY"),
-                description=form.get("description") or None,
-                is_default=form.get("is_default") is not None,
+                bom_code=bom_code,
+                bom_name=bom_name,
+                item_id=UUID_Type(item_id_str),
+                output_quantity=Decimal(output_quantity_str),
+                output_uom=output_uom,
+                bom_type=bom_type,
+                description=_safe_form_text(form.get("description")) or None,
+                is_default=_safe_form_text(form.get("is_default")) != "",
             )
 
-            bom = BOMService.create_bom(db, auth.organization_id, bom_input)
+            bom = BOMService.create_bom(db, org_id, bom_input)
 
             # Parse and add components from JSON
-            components_json = form.get("components_json", "[]")
+            components_json = _safe_form_text(form.get("components_json", "[]"))
             try:
                 components = json.loads(components_json) if components_json else []
                 for idx, comp in enumerate(components):
@@ -779,7 +835,7 @@ class OperationsInventoryWebService:
                             scrap_percent=Decimal(str(comp.get("scrap_percent", 0))),
                             line_number=idx + 1,
                         )
-                        BOMService.add_component(db, auth.organization_id, bom.bom_id, comp_input)
+                        BOMService.add_component(db, org_id, bom.bom_id, comp_input)
             except json.JSONDecodeError:
                 pass
 
@@ -977,34 +1033,42 @@ class OperationsInventoryWebService:
         from uuid import UUID as UUID_Type
 
         form = await request.form()
+        org_id = auth.organization_id
+        assert org_id is not None
 
         try:
             effective_from = None
             effective_to = None
-            if form.get("effective_from"):
-                effective_from = datetime.strptime(form.get("effective_from"), "%Y-%m-%d").date()
-            if form.get("effective_to"):
-                effective_to = datetime.strptime(form.get("effective_to"), "%Y-%m-%d").date()
+            effective_from_str = _safe_form_text(form.get("effective_from"))
+            effective_to_str = _safe_form_text(form.get("effective_to"))
+            if effective_from_str:
+                effective_from = datetime.strptime(effective_from_str, "%Y-%m-%d").date()
+            if effective_to_str:
+                effective_to = datetime.strptime(effective_to_str, "%Y-%m-%d").date()
+
+            price_list_name = _safe_form_text(form.get("price_list_name"))
+            price_list_code = _safe_form_text(form.get("price_list_code")) or (
+                price_list_name[:20].upper().replace(" ", "_") if price_list_name else ""
+            )
+            currency_code = _safe_form_text(form.get("currency_code"))
+            markup_percentage = _safe_form_text(form.get("markup_percentage"))
 
             pl_input = PriceListInput(
-                price_list_code=form.get("price_list_code")
-                or form.get("price_list_name")[:20].upper().replace(" ", "_"),
-                price_list_name=form.get("price_list_name"),
-                price_list_type=PriceListType(form.get("price_list_type") or "SALES"),
-                currency_code=form.get("currency_code"),
-                description=form.get("description") or None,
+                price_list_code=price_list_code,
+                price_list_name=price_list_name,
+                price_list_type=PriceListType(_safe_form_text(form.get("price_list_type")) or "SALES"),
+                currency_code=currency_code,
+                description=_safe_form_text(form.get("description")) or None,
                 effective_from=effective_from,
                 effective_to=effective_to,
-                markup_percent=Decimal(form.get("markup_percentage"))
-                if form.get("markup_percentage")
-                else None,
-                is_default=form.get("is_default") is not None,
+                markup_percent=Decimal(markup_percentage) if markup_percentage else None,
+                is_default=_safe_form_text(form.get("is_default")) != "",
             )
 
-            price_list = PriceListService.create_price_list(db, auth.organization_id, pl_input)
+            price_list = PriceListService.create_price_list(db, org_id, pl_input)
 
             # Parse and add items from JSON
-            items_json = form.get("items_json", "[]")
+            items_json = _safe_form_text(form.get("items_json", "[]"))
             try:
                 items = json.loads(items_json) if items_json else []
                 for item in items:
@@ -1012,14 +1076,14 @@ class OperationsInventoryWebService:
                         item_input = PriceListItemInput(
                             item_id=UUID_Type(item["item_id"]),
                             unit_price=Decimal(str(item["price"])),
-                            currency_code=form.get("currency_code"),
+                            currency_code=currency_code,
                             min_quantity=Decimal(str(item.get("min_quantity", 1))),
                             discount_percent=Decimal(str(item.get("discount_percent", 0)))
                             if item.get("discount_percent")
                             else None,
                         )
-                        PriceListService.add_item(
-                            db, auth.organization_id, price_list.price_list_id, item_input
+                        PriceListService.add_item_price(
+                            db, org_id, price_list.price_list_id, item_input
                         )
             except json.JSONDecodeError:
                 pass
@@ -1087,8 +1151,12 @@ class OperationsInventoryWebService:
 
         # Load related data
         for lot in lots:
-            lot.item = db.get(Item, lot.item_id)
-            lot.warehouse = db.get(Warehouse, lot.warehouse_id) if lot.warehouse_id else None
+            setattr(lot, "item", db.get(Item, lot.item_id))
+            setattr(
+                lot,
+                "warehouse",
+                db.get(Warehouse, lot.warehouse_id) if lot.warehouse_id else None,
+            )
 
         # Stats
         now = datetime.now().date()
@@ -1177,8 +1245,12 @@ class OperationsInventoryWebService:
         if not lot:
             return RedirectResponse("/operations/inv/lots", status_code=302)
 
-        lot.item = db.get(Item, lot.item_id)
-        lot.warehouse = db.get(Warehouse, lot.warehouse_id) if lot.warehouse_id else None
+        setattr(lot, "item", db.get(Item, lot.item_id))
+        setattr(
+            lot,
+            "warehouse",
+            db.get(Warehouse, lot.warehouse_id) if lot.warehouse_id else None,
+        )
 
         # Get transaction history for this lot
         transactions = (
@@ -1254,6 +1326,8 @@ class OperationsInventoryWebService:
         from uuid import UUID as UUID_Type
 
         context = base_context(request, auth, "Stock on Hand", "inv_reports")
+        org_id = auth.organization_id
+        assert org_id is not None
         limit = 100
         offset = (page - 1) * limit
 
@@ -1264,7 +1338,7 @@ class OperationsInventoryWebService:
 
         # Get all items with inventory tracking
         items_query = db.query(Item).filter(
-            Item.organization_id == auth.organization_id,
+            Item.organization_id == org_id,
             Item.is_active == True,
             Item.track_inventory == True,
         )
@@ -1285,12 +1359,17 @@ class OperationsInventoryWebService:
         for item in items:
             try:
                 summary = inventory_balance_service.get_item_stock_summary(
-                    db, auth.organization_id, item.item_id
+                    db, org_id, item.item_id
                 )
 
-                on_hand = summary.total_on_hand or Decimal("0")
-                reserved = summary.total_reserved or Decimal("0")
-                available = summary.total_available or Decimal("0")
+                if summary:
+                    on_hand = summary.total_on_hand or Decimal("0")
+                    reserved = summary.total_reserved or Decimal("0")
+                    available = summary.total_available or Decimal("0")
+                else:
+                    on_hand = Decimal("0")
+                    reserved = Decimal("0")
+                    available = Decimal("0")
                 unit_cost = item.average_cost or item.standard_cost or Decimal("0")
                 item_value = on_hand * unit_cost
 

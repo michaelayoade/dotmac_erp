@@ -19,6 +19,15 @@
     </svg>
     Edit
 </a>
+{% if user and user.is_admin %}
+<form method="post" action="/people/hr/employees/bulk-delete" class="inline-block">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="employee_ids" value="{{ employee.employee_id }}">
+    <button type="submit" class="btn btn-danger" onclick="return confirm('Delete this employee? This will archive the record.');">
+        Delete
+    </button>
+</form>
+{% endif %}
 {% endblock %}
 
 {% block content %}

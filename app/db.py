@@ -1,4 +1,5 @@
 from contextlib import contextmanager
+from functools import lru_cache
 from typing import Generator
 
 from sqlalchemy import create_engine
@@ -67,6 +68,108 @@ def get_async_engine():
 
 
 SessionLocal = sessionmaker(bind=get_engine(), autoflush=False, autocommit=False)
+
+
+# ---------------------------------------------------------------------------
+# Shared Auth Database Session (for SSO)
+# ---------------------------------------------------------------------------
+# When SSO is enabled and this app is an SSO client (not provider),
+# auth queries are made against the shared auth database on the SSO provider.
+
+# Lazy initialization - only create engine when actually needed
+_auth_engine = None
+_auth_session_local = None
+
+
+def get_auth_engine():
+    """Get engine for shared auth database (lazy initialization).
+
+    For SSO Provider (App #1): Uses main DATABASE_URL
+    For SSO Clients (App #2, #3): Uses AUTH_DATABASE_URL
+
+    The auth engine is used for validating sessions and tokens against
+    the shared auth database that lives on the SSO provider.
+
+    Engine is created lazily on first use to avoid startup failures
+    when the auth database is temporarily unavailable.
+    """
+    global _auth_engine
+    if _auth_engine is not None:
+        return _auth_engine
+
+    url = settings.auth_database_url or settings.database_url
+
+    # Build connect_args for SSL and timeouts
+    connect_args: dict = {}
+    if settings.db_statement_timeout_ms > 0:
+        connect_args["options"] = f"-c statement_timeout={settings.db_statement_timeout_ms}"
+
+    # Require SSL when connecting to remote auth database
+    if settings.auth_database_url and "postgresql" in settings.auth_database_url:
+        connect_args["sslmode"] = "require"
+
+    _auth_engine = create_engine(
+        url,
+        pool_pre_ping=True,
+        pool_size=3,  # Smaller pool for auth queries
+        max_overflow=5,
+        pool_timeout=settings.db_pool_timeout,
+        pool_recycle=settings.db_pool_recycle,
+        connect_args=connect_args if connect_args else {},
+    )
+    return _auth_engine
+
+
+def _get_auth_session_maker():
+    """Get auth session maker (lazy initialization)."""
+    global _auth_session_local
+    if _auth_session_local is not None:
+        return _auth_session_local
+
+    _auth_session_local = sessionmaker(
+        bind=get_auth_engine(),
+        autoflush=False,
+        autocommit=False,
+    )
+    return _auth_session_local
+
+
+class _AuthSessionLocalProxy:
+    """Proxy for lazy auth session creation.
+
+    Delays engine/sessionmaker creation until first use.
+    """
+
+    def __call__(self):
+        return _get_auth_session_maker()()
+
+
+# Alias for consistent naming with SessionLocal
+AuthSessionLocal = _AuthSessionLocalProxy()
+
+
+def get_auth_db():
+    """Dependency for auth database session.
+
+    Use this when validating tokens/sessions against the shared auth database
+    in SSO client mode.
+    """
+    db = _get_auth_session_maker()()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+def get_auth_db_session() -> Session:
+    """Get a direct auth database session (not a generator).
+
+    Use this in non-dependency contexts where you need a session directly.
+    Caller is responsible for closing the session.
+    """
+    session: Session = _get_auth_session_maker()()
+    return session
+
 
 # Lazy initialization of async session
 _async_session_local = None

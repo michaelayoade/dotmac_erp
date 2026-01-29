@@ -14,6 +14,7 @@ from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
+from app.config import settings as app_settings
 from app.models.auth import (
     AuthProvider,
     MFAMethod,
@@ -94,6 +95,18 @@ def _setting_value(db: Session | None, key: str) -> str | None:
 
 
 def _jwt_secret(db: Session | None) -> str:
+    """Get JWT secret for token signing/verification.
+
+    When SSO is enabled, uses SSO_JWT_SECRET for cross-app token validation.
+    Falls back to JWT_SECRET for single-app deployments.
+    """
+    # Use SSO secret when SSO is enabled
+    if app_settings.sso_enabled and app_settings.sso_jwt_secret:
+        secret = resolve_secret(app_settings.sso_jwt_secret, db)
+        if secret:
+            return secret
+
+    # Fall back to standard JWT secret
     secret = _env_value("JWT_SECRET") or _setting_value(db, "jwt_secret")
     secret = resolve_secret(secret, db)
     if not secret:
@@ -195,8 +208,17 @@ def _refresh_cookie_samesite(db: Session | None) -> str:
     """Get refresh cookie SameSite attribute.
 
     Defaults to 'strict' for production security to prevent CSRF attacks.
-    Use 'lax' only if cross-site navigation is required.
+    When SSO is enabled with cross-domain cookies, defaults to 'lax' to
+    allow cookies to be sent on cross-origin redirects.
     """
+    # SSO requires 'lax' for cross-app redirects to work
+    if app_settings.sso_enabled and app_settings.sso_cookie_domain:
+        explicit = _env_value("REFRESH_COOKIE_SAMESITE") or _setting_value(
+            db, "refresh_cookie_samesite"
+        )
+        # If explicitly set, use that value; otherwise default to 'lax' for SSO
+        return explicit or "lax"
+
     return (
         _env_value("REFRESH_COOKIE_SAMESITE")
         or _setting_value(db, "refresh_cookie_samesite")
@@ -205,6 +227,15 @@ def _refresh_cookie_samesite(db: Session | None) -> str:
 
 
 def _refresh_cookie_domain(db: Session | None) -> str | None:
+    """Get cookie domain for refresh token.
+
+    When SSO is enabled, uses SSO_COOKIE_DOMAIN (e.g., ".company.com")
+    to share cookies across all apps under the same parent domain.
+    """
+    # Use SSO cookie domain when SSO is enabled
+    if app_settings.sso_enabled and app_settings.sso_cookie_domain:
+        return app_settings.sso_cookie_domain
+
     return _env_value("REFRESH_COOKIE_DOMAIN") or _setting_value(
         db, "refresh_cookie_domain"
     )
@@ -865,6 +896,22 @@ class AuthFlow(ListResponseMixin):
             "domain": _refresh_cookie_domain(db),
             "path": _refresh_cookie_path(db),
             "max_age": _refresh_ttl_days(db) * 24 * 60 * 60,
+        }
+
+    @staticmethod
+    def access_cookie_settings(db: Session | None = None):
+        """Get access token cookie settings.
+
+        Used for setting access_token cookie with SSO-aware domain.
+        """
+        return {
+            "key": "access_token",
+            "httponly": True,
+            "secure": _refresh_cookie_secure(db),
+            "samesite": _refresh_cookie_samesite(db),
+            "domain": _refresh_cookie_domain(db),
+            "path": "/",
+            "max_age": _access_ttl_minutes(db) * 60,
         }
 
     @staticmethod

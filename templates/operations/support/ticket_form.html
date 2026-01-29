@@ -29,7 +29,7 @@
     </div>
     {% endif %}
 
-    <form method="post" action="{{ '/operations/support/tickets/' + ticket.ticket_number if ticket else '/operations/support/tickets' }}" class="card p-6 space-y-6">
+    <form method="post" enctype="multipart/form-data" action="{{ '/operations/support/tickets/' + ticket.ticket_number if ticket else '/operations/support/tickets' }}" class="card p-6 space-y-6">
 
         {# Ticket Number (shown only for edit) #}
         {% if ticket %}
@@ -165,6 +165,21 @@
                 </option>
                 {% endfor %}
             </select>
+        </div>
+
+        {# Attachments #}
+        <div>
+            <label class="form-label">Attachments</label>
+            <input type="file" name="files" multiple
+                   accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.zip"
+                   class="block w-full text-sm text-slate-500 dark:text-slate-400
+                          file:mr-4 file:py-2 file:px-4
+                          file:rounded-lg file:border-0
+                          file:text-sm file:font-medium
+                          file:bg-amber-50 file:text-amber-700
+                          hover:file:bg-amber-100
+                          dark:file:bg-amber-900/20 dark:file:text-amber-400">
+            <p class="mt-1 text-xs text-slate-400">Max 10MB per file. Images, PDFs, Office docs, or ZIP files.</p>
         </div>
 
         {# Actions #}

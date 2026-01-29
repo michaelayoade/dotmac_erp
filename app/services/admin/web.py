@@ -23,6 +23,7 @@ from app.models.domain_settings import DomainSetting, SettingDomain, SettingValu
 from app.config import settings
 from app.models.finance.core_org.organization import Organization
 from app.models.person import Person, PersonStatus
+from app.models.people.hr.employee import Employee
 from app.models.rbac import Permission, PersonRole, Role, RolePermission
 from app.models.scheduler import ScheduleType, ScheduledTask
 from app.services.auth_flow import hash_password
@@ -203,6 +204,19 @@ def _parse_flag(value: bool | str | None) -> bool:
     if not value:
         return False
     return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _clean_name(value: str | None) -> str:
+    cleaned = (value or "").strip()
+    return "" if cleaned.lower() in {"none", "null"} else cleaned
+
+
+def _derive_display_name(first_name: str | None, last_name: str | None, display_name: str | None) -> str | None:
+    display = _clean_name(display_name)
+    if display:
+        return display
+    base_name = f"{_clean_name(first_name)} {_clean_name(last_name)}".strip()
+    return base_name or None
 
 
 def _parse_person_status(value: Optional[str]) -> Optional[PersonStatus]:
@@ -437,7 +451,7 @@ class AdminWebService:
                 "id": str(person.id),
                 "first_name": person.first_name,
                 "last_name": person.last_name,
-                "display_name": person.display_name,
+                "display_name": _clean_name(person.display_name),
                 "email": person.email,
                 "phone": person.phone,
                 "email_verified": person.email_verified,
@@ -464,7 +478,7 @@ class AdminWebService:
             "id": user_id,
             "first_name": payload.get("first_name", ""),
             "last_name": payload.get("last_name", ""),
-            "display_name": payload.get("display_name", ""),
+            "display_name": _clean_name(payload.get("display_name")),
             "email": payload.get("email", ""),
             "phone": payload.get("phone", ""),
             "email_verified": _parse_flag(payload.get("email_verified")),
@@ -519,11 +533,12 @@ class AdminWebService:
 
         try:
             person_status = PersonStatus(status) if status else PersonStatus.active
+            derived_display_name = _derive_display_name(first_name, last_name, display_name)
 
             person = Person(
                 first_name=first_name,
                 last_name=last_name,
-                display_name=display_name if display_name else None,
+                display_name=derived_display_name,
                 email=email,
                 phone=phone if phone else None,
                 organization_id=coerce_uuid(organization_id),
@@ -615,10 +630,11 @@ class AdminWebService:
 
         try:
             person_status = PersonStatus(status) if status else PersonStatus.active
+            derived_display_name = _derive_display_name(first_name, last_name, display_name)
 
             person.first_name = first_name
             person.last_name = last_name
-            person.display_name = display_name if display_name else None
+            person.display_name = derived_display_name
             person.email = email
             person.phone = phone if phone else None
             person.organization_id = coerce_uuid(organization_id)
@@ -672,6 +688,18 @@ class AdminWebService:
             raise HTTPException(status_code=404, detail="User not found")
 
         try:
+            employee = (
+                db.query(Employee)
+                .filter(Employee.person_id == person.id)
+                .filter(Employee.is_deleted.is_(False))
+                .first()
+            )
+            if employee:
+                return (
+                    "Cannot delete user linked to an employee. "
+                    "Delete the employee record first."
+                )
+
             # Delete related records
             db.query(PersonRole).filter(PersonRole.person_id == person.id).delete()
             db.query(UserCredential).filter(UserCredential.person_id == person.id).delete()
@@ -1510,6 +1538,13 @@ class AdminWebService:
                     "is_active": org.is_active,
                     "user_count": user_count,
                     "subsidiaries_count": subsidiaries_count,
+                    # Payroll GL account settings
+                    "salaries_expense_account_id": (
+                        str(org.salaries_expense_account_id) if org.salaries_expense_account_id else ""
+                    ),
+                    "salary_payable_account_id": (
+                        str(org.salary_payable_account_id) if org.salary_payable_account_id else ""
+                    ),
                 }
 
                 # Remove current org from parent list to prevent self-reference
@@ -1517,12 +1552,67 @@ class AdminWebService:
                     p for p in parent_org_list if p["id"] != str(org.organization_id)
                 ]
 
+        # Load GL accounts for payroll settings (expense and liability accounts)
+        expense_accounts = []
+        liability_accounts = []
+        if organization_id:
+            from app.models.finance.gl.account import Account
+            from app.models.finance.gl.account_category import AccountCategory, IFRSCategory
+
+            org_uuid = coerce_uuid(organization_id)
+
+            # Get expense accounts (IFRS category = EXPENSES)
+            expense_accts = (
+                db.query(Account)
+                .join(AccountCategory, Account.category_id == AccountCategory.category_id)
+                .filter(
+                    Account.organization_id == org_uuid,
+                    Account.is_active.is_(True),
+                    Account.is_posting_allowed.is_(True),
+                    AccountCategory.ifrs_category == IFRSCategory.EXPENSES,
+                )
+                .order_by(Account.account_code)
+                .all()
+            )
+            expense_accounts = [
+                {
+                    "account_id": str(a.account_id),
+                    "account_code": a.account_code,
+                    "account_name": a.account_name,
+                }
+                for a in expense_accts
+            ]
+
+            # Get liability accounts (IFRS category = LIABILITIES)
+            liability_accts = (
+                db.query(Account)
+                .join(AccountCategory, Account.category_id == AccountCategory.category_id)
+                .filter(
+                    Account.organization_id == org_uuid,
+                    Account.is_active.is_(True),
+                    Account.is_posting_allowed.is_(True),
+                    AccountCategory.ifrs_category == IFRSCategory.LIABILITIES,
+                )
+                .order_by(Account.account_code)
+                .all()
+            )
+            liability_accounts = [
+                {
+                    "account_id": str(a.account_id),
+                    "account_code": a.account_code,
+                    "account_name": a.account_name,
+                }
+                for a in liability_accts
+            ]
+
         return {
             "organization_data": organization_data,
             "parent_organizations": parent_org_list,
             "consolidation_methods": consolidation_methods,
             "default_functional_currency_code": default_functional_currency_code,
             "default_presentation_currency_code": default_presentation_currency_code,
+            "expense_accounts": expense_accounts,
+            "liability_accounts": liability_accounts,
         }
 
     @staticmethod
@@ -1629,6 +1719,8 @@ class AdminWebService:
         consolidation_method: str = "",
         ownership_percentage: str = "",
         is_active: bool = True,
+        salaries_expense_account_id: str = "",
+        salary_payable_account_id: str = "",
     ) -> tuple[Optional[Organization], Optional[str]]:
         """Update an existing organization. Returns (organization, error)."""
         from datetime import date as date_type
@@ -1676,6 +1768,15 @@ class AdminWebService:
             if parent_organization_id:
                 parent_org_id = coerce_uuid(parent_organization_id)
 
+            # Parse payroll GL account IDs
+            salaries_exp_acc_id = None
+            if salaries_expense_account_id:
+                salaries_exp_acc_id = coerce_uuid(salaries_expense_account_id)
+
+            salary_pay_acc_id = None
+            if salary_payable_account_id:
+                salary_pay_acc_id = coerce_uuid(salary_payable_account_id)
+
             org.organization_code = organization_code
             org.legal_name = legal_name
             org.trading_name = trading_name if trading_name else None
@@ -1695,6 +1796,8 @@ class AdminWebService:
             org.consolidation_method = consol_method
             org.ownership_percentage = ownership_pct
             org.is_active = is_active
+            org.salaries_expense_account_id = salaries_exp_acc_id
+            org.salary_payable_account_id = salary_pay_acc_id
 
             db.commit()
             return org, None
@@ -2669,7 +2772,10 @@ class AdminWebService:
             return auth_or_redirect
         error = self.delete_user(db, user_id)
         if error:
-            raise HTTPException(status_code=400, detail=error)
+            return RedirectResponse(
+                url=f"/admin/users?{urlencode({'error': error})}",
+                status_code=302,
+            )
         return RedirectResponse(url="/admin/users?deleted=1", status_code=302)
 
     def roles_response(
@@ -3167,14 +3273,14 @@ class AdminWebService:
             presentation_currency_code=presentation_currency_code,
             fiscal_year_end_month=fiscal_year_end_month,
             fiscal_year_end_day=fiscal_year_end_day,
-            trading_name=trading_name or None,
-            registration_number=registration_number or None,
-            tax_identification_number=tax_identification_number or None,
-            incorporation_date=incorporation_date or None,
-            jurisdiction_country_code=jurisdiction_country_code or None,
-            parent_organization_id=parent_organization_id or None,
-            consolidation_method=consolidation_method or None,
-            ownership_percentage=ownership_percentage or None,
+            trading_name=trading_name or "",
+            registration_number=registration_number or "",
+            tax_identification_number=tax_identification_number or "",
+            incorporation_date=incorporation_date or "",
+            jurisdiction_country_code=jurisdiction_country_code or "",
+            parent_organization_id=parent_organization_id or "",
+            consolidation_method=consolidation_method or "",
+            ownership_percentage=ownership_percentage or "",
             is_active=is_active == "1",
         )
 
@@ -3254,6 +3360,8 @@ class AdminWebService:
         consolidation_method: str,
         ownership_percentage: str,
         is_active: str,
+        salaries_expense_account_id: str = "",
+        salary_payable_account_id: str = "",
     ) -> HTMLResponse | RedirectResponse:
         auth_or_redirect = self._require_admin_web_auth(request, auth)
         if isinstance(auth_or_redirect, RedirectResponse):
@@ -3267,15 +3375,17 @@ class AdminWebService:
             presentation_currency_code=presentation_currency_code,
             fiscal_year_end_month=fiscal_year_end_month,
             fiscal_year_end_day=fiscal_year_end_day,
-            trading_name=trading_name or None,
-            registration_number=registration_number or None,
-            tax_identification_number=tax_identification_number or None,
-            incorporation_date=incorporation_date or None,
-            jurisdiction_country_code=jurisdiction_country_code or None,
-            parent_organization_id=parent_organization_id or None,
-            consolidation_method=consolidation_method or None,
-            ownership_percentage=ownership_percentage or None,
+            trading_name=trading_name or "",
+            registration_number=registration_number or "",
+            tax_identification_number=tax_identification_number or "",
+            incorporation_date=incorporation_date or "",
+            jurisdiction_country_code=jurisdiction_country_code or "",
+            parent_organization_id=parent_organization_id or "",
+            consolidation_method=consolidation_method or "",
+            ownership_percentage=ownership_percentage or "",
             is_active=is_active == "1",
+            salaries_expense_account_id=salaries_expense_account_id or "",
+            salary_payable_account_id=salary_payable_account_id or "",
         )
 
         context = self.organization_form_context(db, org_id)

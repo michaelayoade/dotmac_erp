@@ -87,6 +87,8 @@ class PAYEBreakdown:
     # Statutory deductions (annual)
     pension_amount: Decimal
     pension_rate: Decimal
+    employer_pension_amount: Decimal
+    employer_pension_rate: Decimal
     nhf_amount: Decimal
     nhf_rate: Decimal
     nhis_amount: Decimal
@@ -107,6 +109,7 @@ class PAYEBreakdown:
     # Monthly amounts
     monthly_tax: Decimal = Decimal("0")
     monthly_pension: Decimal = Decimal("0")
+    monthly_employer_pension: Decimal = Decimal("0")
     monthly_nhf: Decimal = Decimal("0")
     monthly_nhis: Decimal = Decimal("0")
 
@@ -131,6 +134,8 @@ class PAYEBreakdown:
             "annual_rent": str(self.annual_rent),
             "pension_amount": str(self.pension_amount),
             "pension_rate": str(self.pension_rate),
+            "employer_pension_amount": str(self.employer_pension_amount),
+            "employer_pension_rate": str(self.employer_pension_rate),
             "nhf_amount": str(self.nhf_amount),
             "nhf_rate": str(self.nhf_rate),
             "nhis_amount": str(self.nhis_amount),
@@ -141,6 +146,7 @@ class PAYEBreakdown:
             "annual_tax": str(self.annual_tax),
             "monthly_tax": str(self.monthly_tax),
             "monthly_pension": str(self.monthly_pension),
+            "monthly_employer_pension": str(self.monthly_employer_pension),
             "monthly_nhf": str(self.monthly_nhf),
             "monthly_nhis": str(self.monthly_nhis),
             "effective_rate": str(self.effective_rate),
@@ -181,6 +187,7 @@ class PAYECalculator:
     RENT_RELIEF_RATE = Decimal("0.20")  # 20%
     RENT_RELIEF_MAX = Decimal("500000")  # ₦500,000 per year
     DEFAULT_PENSION_RATE = Decimal("0.08")  # 8%
+    DEFAULT_EMPLOYER_PENSION_RATE = Decimal("0.10")  # 10%
     DEFAULT_NHF_RATE = Decimal("0.025")  # 2.5%
     DEFAULT_NHIS_RATE = Decimal("0")  # Variable
     MONTHS_PER_YEAR = Decimal("12")
@@ -234,6 +241,7 @@ class PAYECalculator:
         annual_rent: Optional[Decimal] = None,
         rent_verified: bool = False,
         pension_rate: Optional[Decimal] = None,
+        employer_pension_rate: Optional[Decimal] = None,
         nhf_rate: Optional[Decimal] = None,
         nhis_rate: Optional[Decimal] = None,
         as_of_date: Optional[date] = None,
@@ -270,6 +278,11 @@ class PAYECalculator:
             if pension_rate is not None
             else (profile.pension_rate if profile else self.DEFAULT_PENSION_RATE)
         )
+        _employer_pension_rate = (
+            employer_pension_rate
+            if employer_pension_rate is not None
+            else self.DEFAULT_EMPLOYER_PENSION_RATE
+        )
         _nhf_rate = (
             nhf_rate
             if nhf_rate is not None
@@ -298,6 +311,7 @@ class PAYECalculator:
 
         # Calculate statutory deductions (based on basic salary)
         pension_amount = annual_basic * _pension_rate
+        employer_pension_amount = annual_basic * _employer_pension_rate
         nhf_amount = annual_basic * _nhf_rate
         nhis_amount = annual_basic * _nhis_rate
         total_statutory = pension_amount + nhf_amount + nhis_amount
@@ -351,6 +365,9 @@ class PAYECalculator:
         monthly_pension = (pension_amount / self.MONTHS_PER_YEAR).quantize(
             Decimal("0.01"), rounding=ROUND_HALF_UP
         )
+        monthly_employer_pension = (employer_pension_amount / self.MONTHS_PER_YEAR).quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP
+        )
         monthly_nhf = (nhf_amount / self.MONTHS_PER_YEAR).quantize(
             Decimal("0.01"), rounding=ROUND_HALF_UP
         )
@@ -371,6 +388,8 @@ class PAYECalculator:
             annual_rent=_annual_rent,
             pension_amount=pension_amount,
             pension_rate=_pension_rate,
+            employer_pension_amount=employer_pension_amount,
+            employer_pension_rate=_employer_pension_rate,
             nhf_amount=nhf_amount,
             nhf_rate=_nhf_rate,
             nhis_amount=nhis_amount,
@@ -383,6 +402,7 @@ class PAYECalculator:
             annual_tax=annual_tax,
             monthly_tax=monthly_tax,
             monthly_pension=monthly_pension,
+            monthly_employer_pension=monthly_employer_pension,
             monthly_nhf=monthly_nhf,
             monthly_nhis=monthly_nhis,
             effective_rate=effective_rate,

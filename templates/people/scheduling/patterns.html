@@ -1,0 +1,126 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}Shift Patterns{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a>
+    <span class="mx-2">/</span>
+    <a href="/people/scheduling" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Scheduling</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">Shift Patterns</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">Shift Patterns</h1>
+            <p class="text-sm text-slate-500 dark:text-slate-400">Configure shift rotation patterns for scheduling.</p>
+        </div>
+        <div class="flex gap-2">
+            <a href="/people/scheduling/assignments" class="btn btn-secondary">Assignments</a>
+            <a href="/people/scheduling/schedules" class="btn btn-secondary">Schedules</a>
+            <a href="/people/scheduling/patterns/new" class="btn btn-primary">Add Pattern</a>
+        </div>
+    </div>
+
+    <div class="card">
+        <form method="get" class="p-4">
+            <div class="flex flex-wrap gap-4 items-end">
+                <div class="flex-1 min-w-[200px] max-w-md">
+                    <label for="search" class="form-label">Search</label>
+                    <input type="text" name="search" id="search" value="{{ search | default('') }}"
+                        placeholder="Search by code or name"
+                        class="form-input w-full">
+                </div>
+                <div class="w-40">
+                    <label for="is_active" class="form-label">Status</label>
+                    <select name="is_active" id="is_active" class="form-select w-full">
+                        <option value="">All</option>
+                        <option value="true" {% if is_active == "true" %}selected{% endif %}>Active</option>
+                        <option value="false" {% if is_active == "false" %}selected{% endif %}>Inactive</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-secondary h-10">Filter</button>
+            </div>
+        </form>
+    </div>
+
+    {% if patterns %}
+    <div class="card overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+                <thead>
+                    <tr class="bg-slate-50 dark:bg-slate-800/50">
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Code</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Name</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Rotation</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Day Shift</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Night Shift</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Work Days</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Status</th>
+                        <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                    {% for pattern in patterns %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                        <td class="px-4 py-3 text-sm font-mono text-slate-700 dark:text-slate-300">{{ pattern.pattern_code }}</td>
+                        <td class="px-4 py-3 text-sm text-slate-900 dark:text-white">{{ pattern.pattern_name }}</td>
+                        <td class="px-4 py-3 text-sm">
+                            {% if pattern.rotation_type == 'DAY_ONLY' %}
+                            <span class="inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">Day Only</span>
+                            {% elif pattern.rotation_type == 'NIGHT_ONLY' %}
+                            <span class="inline-flex rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">Night Only</span>
+                            {% else %}
+                            <span class="inline-flex rounded-full bg-teal-50 px-2.5 py-1 text-xs font-medium text-teal-700 dark:bg-teal-900/30 dark:text-teal-300">Rotating ({{ pattern.cycle_weeks }}w)</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">{{ pattern.day_shift_name }}</td>
+                        <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">{{ pattern.night_shift_name }}</td>
+                        <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">{{ pattern.work_days | join(', ') }}</td>
+                        <td class="px-4 py-3">
+                            {% if pattern.is_active %}
+                            <span class="inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">Active</span>
+                            {% else %}
+                            <span class="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-300">Inactive</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-right">
+                            <a href="/people/scheduling/patterns/{{ pattern.shift_pattern_id }}/edit" class="text-sm text-teal-600 hover:text-teal-700 dark:text-teal-400">Edit</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% else %}
+    <div class="card p-8 text-center">
+        <p class="text-slate-500 dark:text-slate-400">No shift patterns found.</p>
+        <a href="/people/scheduling/patterns/new" class="btn btn-primary mt-4">Create First Pattern</a>
+    </div>
+    {% endif %}
+
+    {% if total_pages > 1 %}
+    <div class="flex items-center justify-between">
+        <p class="text-sm text-slate-500 dark:text-slate-400">
+            Showing page <span class="font-medium text-slate-700 dark:text-slate-300">{{ page }}</span> of
+            <span class="font-medium text-slate-700 dark:text-slate-300">{{ total_pages }}</span>
+        </p>
+        <div class="flex gap-2">
+            {% if has_prev %}
+            <a href="?page={{ page - 1 }}&search={{ search | default('') }}&is_active={{ is_active | default('') }}" class="btn btn-secondary btn-sm">Previous</a>
+            {% endif %}
+            {% if has_next %}
+            <a href="?page={{ page + 1 }}&search={{ search | default('') }}&is_active={{ is_active | default('') }}" class="btn btn-secondary btn-sm">Next</a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

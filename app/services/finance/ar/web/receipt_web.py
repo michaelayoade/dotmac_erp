@@ -607,6 +607,10 @@ class ReceiptWebService:
     ) -> HTMLResponse | JSONResponse | RedirectResponse | dict:
         """Handle receipt creation form submission."""
         content_type = request.headers.get("content-type", "")
+        org_id = auth.organization_id
+        user_id = auth.user_id
+        assert org_id is not None
+        assert user_id is not None
 
         if "application/json" in content_type:
             data = await request.json()
@@ -619,9 +623,9 @@ class ReceiptWebService:
 
             receipt = customer_payment_service.create_payment(
                 db=db,
-                organization_id=auth.organization_id,
+                organization_id=org_id,
                 input=input_data,
-                created_by_user_id=auth.user_id,
+                created_by_user_id=user_id,
             )
 
             if "application/json" in content_type:
@@ -697,6 +701,10 @@ class ReceiptWebService:
     ) -> HTMLResponse | JSONResponse | RedirectResponse | dict:
         """Handle receipt update form submission."""
         content_type = request.headers.get("content-type", "")
+        org_id = auth.organization_id
+        user_id = auth.user_id
+        assert org_id is not None
+        assert user_id is not None
 
         if "application/json" in content_type:
             data = await request.json()
@@ -709,10 +717,10 @@ class ReceiptWebService:
 
             customer_payment_service.update_payment(
                 db=db,
-                organization_id=auth.organization_id,
+                organization_id=org_id,
                 payment_id=UUID(receipt_id),
                 input=input_data,
-                updated_by_user_id=auth.user_id,
+                updated_by_user_id=user_id,
             )
 
             if "application/json" in content_type:
@@ -773,6 +781,10 @@ class ReceiptWebService:
     ) -> RedirectResponse:
         """Handle receipt attachment upload."""
         try:
+            org_id = auth.organization_id
+            user_id = auth.person_id
+            assert org_id is not None
+            assert user_id is not None
             receipt = customer_payment_service.get(db, receipt_id)
             if not receipt or receipt.organization_id != auth.organization_id:
                 return RedirectResponse(
@@ -791,10 +803,10 @@ class ReceiptWebService:
 
             attachment_service.save_file(
                 db=db,
-                organization_id=auth.organization_id,
+                organization_id=org_id,
                 input=input_data,
                 file_content=file.file,
-                uploaded_by=auth.person_id,
+                uploaded_by=user_id,
             )
 
             return RedirectResponse(

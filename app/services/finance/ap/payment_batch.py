@@ -451,7 +451,10 @@ class PaymentBatchService(ListResponseMixin):
             supplier = db.query(Supplier).filter(
                 Supplier.supplier_id == payment.supplier_id
             ).first()
-            supplier_name = supplier.name if supplier else "Unknown"
+            if supplier:
+                supplier_name = supplier.trading_name or supplier.legal_name
+            else:
+                supplier_name = "Unknown"
 
             file_lines.append(
                 f"PAYMENT,{payment.payment_number},{supplier_name},{payment.amount},{payment.reference or ''}"
@@ -502,12 +505,11 @@ class PaymentBatchService(ListResponseMixin):
         if not batch:
             raise HTTPException(status_code=404, detail="Payment batch not found")
 
-        return cast(
-            List[SupplierPayment],
+        return (
             db.query(SupplierPayment)
             .filter(SupplierPayment.payment_batch_id == batch_id)
             .order_by(SupplierPayment.payment_number)
-            .all(),
+            .all()
         )
 
     @staticmethod
@@ -558,10 +560,7 @@ class PaymentBatchService(ListResponseMixin):
         if to_date:
             query = query.filter(APPaymentBatch.batch_date <= to_date)
 
-        return cast(
-            List[APPaymentBatch],
-            query.order_by(APPaymentBatch.batch_date.desc()).offset(offset).limit(limit).all(),
-        )
+        return query.order_by(APPaymentBatch.batch_date.desc()).offset(offset).limit(limit).all()
 
 
 # Module-level instance

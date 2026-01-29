@@ -178,7 +178,12 @@ class ExpenseClaimsWebService:
         svc = ExpenseService(db)
 
         try:
-            svc.submit_claim(org_id, claim_uuid)
+            result = svc.submit_claim(org_id, claim_uuid)
+            if not result.success:
+                return RedirectResponse(
+                    f"/expense/claims/{claim_id}?error=submit_in_progress",
+                    status_code=303,
+                )
             db.commit()
         except ExpenseClaimStatusError:
             return RedirectResponse(f"/expense/claims/{claim_id}?error=invalid_status", status_code=303)
@@ -221,7 +226,13 @@ class ExpenseClaimsWebService:
 
         svc = ExpenseService(db)
         try:
-            svc.approve_claim(org_id, claim_uuid, approver_id=approver_id)
+            claim = svc.approve_claim(org_id, claim_uuid, approver_id=approver_id)
+            if claim.status != ExpenseClaimStatus.APPROVED:
+                db.rollback()
+                return RedirectResponse(
+                    f"/expense/claims/{claim_id}?error=approve_in_progress",
+                    status_code=303,
+                )
             db.commit()
         except ExpenseClaimStatusError:
             db.rollback()
@@ -239,7 +250,7 @@ class ExpenseClaimsWebService:
     @staticmethod
     def reject_claim_response(
         claim_id: str,
-        reason: str,
+        reason: str | None,
         auth: WebAuthContext,
         db: Session,
     ) -> RedirectResponse:
@@ -263,8 +274,20 @@ class ExpenseClaimsWebService:
         approver_id = approver.employee_id if approver else None
 
         svc = ExpenseService(db)
+        rejection_reason = (reason or "").strip() or "Rejected"
         try:
-            svc.reject_claim(org_id, claim_uuid, approver_id=approver_id, reason=reason)
+            claim = svc.reject_claim(
+                org_id,
+                claim_uuid,
+                approver_id=approver_id,
+                reason=rejection_reason,
+            )
+            if claim.status != ExpenseClaimStatus.REJECTED:
+                db.rollback()
+                return RedirectResponse(
+                    f"/expense/claims/{claim_id}?error=reject_in_progress",
+                    status_code=303,
+                )
             db.commit()
         except ExpenseClaimStatusError:
             db.rollback()

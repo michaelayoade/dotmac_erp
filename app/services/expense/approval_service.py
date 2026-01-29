@@ -142,7 +142,7 @@ class ExpenseApprovalService:
         Returns:
             ApprovalChain with all required approval steps
         """
-        from app.models.people.hr.employee import Employee
+        from app.models.people.hr.employee import Employee, EmployeeStatus
 
         org_id = claim.organization_id
         claim_amount = claim.total_approved_amount or claim.total_claimed_amount
@@ -268,7 +268,7 @@ class ExpenseApprovalService:
 
         Returns True if the claim amount exceeds the approver's authority.
         """
-        from app.models.people.hr.employee import Employee
+        from app.models.people.hr.employee import Employee, EmployeeStatus
 
         approver = self.db.get(Employee, approver_id)
         if not approver:
@@ -300,7 +300,7 @@ class ExpenseApprovalService:
         Returns:
             New approver ID if escalation successful, None otherwise
         """
-        from app.models.people.hr.employee import Employee
+        from app.models.people.hr.employee import Employee, EmployeeStatus
 
         org_id = claim.organization_id
 
@@ -336,7 +336,7 @@ class ExpenseApprovalService:
                 .where(
                     Employee.organization_id == org_id,
                     Grade.rank >= min_rank,
-                    Employee.is_active == True,
+                    Employee.status == EmployeeStatus.ACTIVE,
                     Employee.employee_id != current_approver_id,
                 )
                 .order_by(Grade.rank)
@@ -539,7 +539,7 @@ class ExpenseApprovalService:
         exclude_ids: set,
     ) -> List[tuple]:
         """Get approvers through escalation chain."""
-        from app.models.people.hr.employee import Employee as EmployeeModel
+        from app.models.people.hr.employee import Employee as EmployeeModel, EmployeeStatus
 
         result = []
 
@@ -549,7 +549,10 @@ class ExpenseApprovalService:
             if not current.reports_to_id:
                 break
             if current.reports_to_id in exclude_ids:
-                current = self.db.get(EmployeeModel, current.reports_to_id)
+                next_employee = self.db.get(EmployeeModel, current.reports_to_id)
+                if not next_employee:
+                    break
+                current = next_employee
                 continue
 
             manager = self.db.get(EmployeeModel, current.reports_to_id)
@@ -579,7 +582,7 @@ class ExpenseApprovalService:
         needed: int,
     ) -> List[tuple]:
         """Get additional approvers for multi-approval requirements."""
-        from app.models.people.hr.employee import Employee as EmployeeModel
+        from app.models.people.hr.employee import Employee as EmployeeModel, EmployeeStatus
 
         result = []
 
@@ -592,7 +595,7 @@ class ExpenseApprovalService:
                 ExpenseApproverLimit.is_active == True,
                 ExpenseApproverLimit.scope_type == "EMPLOYEE",
                 ExpenseApproverLimit.max_approval_amount >= amount,
-                EmployeeModel.is_active == True,
+                EmployeeModel.status == EmployeeStatus.ACTIVE,
                 ~EmployeeModel.employee_id.in_(exclude_ids),
                 EmployeeModel.employee_id != employee.employee_id,
             )
@@ -611,7 +614,7 @@ class ExpenseApprovalService:
         amount: Decimal,
     ) -> List[tuple]:
         """Get fallback approvers when no specific chain is available."""
-        from app.models.people.hr.employee import Employee as EmployeeModel
+        from app.models.people.hr.employee import Employee as EmployeeModel, EmployeeStatus
 
         result = []
 
@@ -624,7 +627,7 @@ class ExpenseApprovalService:
                 ExpenseApproverLimit.is_active == True,
                 ExpenseApproverLimit.scope_type == "EMPLOYEE",
                 ExpenseApproverLimit.max_approval_amount >= amount,
-                EmployeeModel.is_active == True,
+                EmployeeModel.status == EmployeeStatus.ACTIVE,
             )
             .order_by(ExpenseApproverLimit.max_approval_amount)
             .limit(3)

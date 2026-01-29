@@ -1,0 +1,219 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}HR Documents{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">HR</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">Handbook & Policies</span>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<a href="/people/hr/handbook/new" class="btn btn-primary">
+    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+    </svg>
+    Upload Document
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+    {# Filters #}
+    <div class="card">
+        <div class="card-body">
+            <form method="get" class="flex flex-wrap items-center gap-4">
+                <div class="flex items-center gap-2">
+                    <label for="category" class="text-sm font-medium text-slate-700 dark:text-slate-300">Category:</label>
+                    <select id="category"
+                            name="category"
+                            onchange="this.form.submit()"
+                            class="rounded-lg border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white shadow-sm focus:border-teal-500 focus:ring-teal-500 text-sm">
+                        <option value="">All Categories</option>
+                        {% for cat in categories %}
+                        <option value="{{ cat.value }}" {% if category_filter == cat.value %}selected{% endif %}>
+                            {{ cat.value | replace('_', ' ') | title }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="flex items-center gap-2">
+                    <label for="status" class="text-sm font-medium text-slate-700 dark:text-slate-300">Status:</label>
+                    <select id="status"
+                            name="status"
+                            onchange="this.form.submit()"
+                            class="rounded-lg border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white shadow-sm focus:border-teal-500 focus:ring-teal-500 text-sm">
+                        <option value="">All Statuses</option>
+                        {% for st in statuses %}
+                        <option value="{{ st.value }}" {% if status_filter == st.value %}selected{% endif %}>
+                            {{ st.value | replace('_', ' ') | title }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="flex-1">
+                    <input type="text"
+                           name="search"
+                           value="{{ search or '' }}"
+                           placeholder="Search documents..."
+                           class="w-full max-w-xs rounded-lg border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white shadow-sm focus:border-teal-500 focus:ring-teal-500 text-sm">
+                </div>
+                {% if category_filter or status_filter or search %}
+                <a href="/people/hr/handbook" class="text-sm text-teal-600 hover:text-teal-700 dark:text-teal-400">
+                    Clear filters
+                </a>
+                {% endif %}
+            </form>
+        </div>
+    </div>
+
+    {# Documents List #}
+    {% if documents %}
+    <div class="card overflow-hidden">
+        <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+            <thead class="bg-slate-50 dark:bg-slate-800/50">
+                <tr>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                        Document
+                    </th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                        Category
+                    </th>
+                    <th scope="col" class="px-6 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                        Version
+                    </th>
+                    <th scope="col" class="px-6 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                        Acknowledgments
+                    </th>
+                    <th scope="col" class="px-6 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                        Status
+                    </th>
+                    <th scope="col" class="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                        Actions
+                    </th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-200 dark:divide-slate-700 bg-white dark:bg-slate-800">
+                {% for doc in documents %}
+                <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+                    <td class="px-6 py-4">
+                        <div class="flex items-center gap-3">
+                            <div class="flex h-10 w-10 items-center justify-center rounded-lg
+                                {% if doc.category.value == 'HANDBOOK' %}bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400
+                                {% elif doc.category.value == 'POLICY' %}bg-violet-100 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400
+                                {% elif doc.category.value == 'CODE_OF_CONDUCT' %}bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400
+                                {% elif doc.category.value == 'SAFETY' %}bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400
+                                {% else %}bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400{% endif %}">
+                                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <a href="/people/hr/handbook/{{ doc.document_id }}" class="font-medium text-slate-900 dark:text-white hover:text-teal-600 dark:hover:text-teal-400">
+                                    {{ doc.title }}
+                                </a>
+                                <p class="text-sm text-slate-500 dark:text-slate-400">
+                                    {{ doc.document_code }}
+                                    {% if doc.effective_date %}
+                                    <span class="mx-1">&middot;</span>
+                                    Effective: {{ doc.effective_date.strftime('%b %d, %Y') }}
+                                    {% endif %}
+                                </p>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4">
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                            {% if doc.category.value == 'HANDBOOK' %}bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300
+                            {% elif doc.category.value == 'POLICY' %}bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-300
+                            {% elif doc.category.value == 'CODE_OF_CONDUCT' %}bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300
+                            {% elif doc.category.value == 'SAFETY' %}bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300
+                            {% else %}bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300{% endif %}">
+                            {{ doc.category.value | replace('_', ' ') | title }}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 text-center">
+                        <span class="text-sm font-medium text-slate-900 dark:text-white">v{{ doc.version }}</span>
+                    </td>
+                    <td class="px-6 py-4 text-center">
+                        {% if doc.requires_acknowledgment and doc.document_id in stats_map %}
+                        {% set stats = stats_map[doc.document_id] %}
+                        <div class="inline-flex items-center gap-2">
+                            <div class="w-16 bg-slate-200 dark:bg-slate-700 rounded-full h-2">
+                                <div class="h-2 rounded-full {% if stats.percentage == 100 %}bg-emerald-500{% elif stats.percentage > 50 %}bg-teal-500{% else %}bg-amber-500{% endif %}"
+                                     style="width: {{ stats.percentage }}%"></div>
+                            </div>
+                            <span class="text-xs text-slate-600 dark:text-slate-300">{{ stats.percentage }}%</span>
+                        </div>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                            {{ stats.acknowledged_count }}/{{ stats.total_employees }}
+                        </p>
+                        {% else %}
+                        <span class="text-xs text-slate-400 dark:text-slate-500">N/A</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-6 py-4 text-center">
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                            {% if doc.status.value == 'ACTIVE' %}bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300
+                            {% elif doc.status.value == 'DRAFT' %}bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300
+                            {% elif doc.status.value == 'SUPERSEDED' %}bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300
+                            {% else %}bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300{% endif %}">
+                            {{ doc.status.value | replace('_', ' ') | title }}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 text-right">
+                        <div class="flex justify-end gap-2">
+                            <a href="/people/hr/handbook/{{ doc.document_id }}/download"
+                               class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                               title="Download">
+                                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                                </svg>
+                            </a>
+                            <a href="/people/hr/handbook/{{ doc.document_id }}"
+                               class="text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300 text-sm font-medium">
+                                View
+                            </a>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="card p-12 text-center">
+        <svg class="mx-auto h-16 w-16 text-slate-300 dark:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+        </svg>
+        <h3 class="mt-4 text-lg font-medium text-slate-900 dark:text-white">No documents found</h3>
+        <p class="mt-2 text-slate-500 dark:text-slate-400">
+            {% if category_filter or status_filter or search %}
+            No documents match your filters.
+            <a href="/people/hr/handbook" class="text-teal-600 hover:text-teal-700 dark:text-teal-400">Clear filters</a>
+            {% else %}
+            Upload your first HR document to get started.
+            {% endif %}
+        </p>
+        {% if not category_filter and not status_filter and not search %}
+        <div class="mt-6">
+            <a href="/people/hr/handbook/new" class="btn btn-primary">
+                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                </svg>
+                Upload Document
+            </a>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+</div>
+{% endblock %}

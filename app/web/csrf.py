@@ -65,7 +65,13 @@ def _origin_matches_request(request: Request, origin_value: str) -> bool:
     for request_host, request_port in _request_host_candidates(request):
         if not request_host:
             continue
-        if origin_host.lower() == request_host.lower() and origin_port == request_port:
+        if origin_host.lower() != request_host.lower():
+            continue
+        if origin_port == request_port:
+            return True
+        if origin_port is None or request_port is None:
+            return True
+        if origin_port in (80, 443) and request_port in (80, 443):
             return True
     return False
 
@@ -80,6 +86,7 @@ def _should_enforce_csrf(request: Request) -> bool:
     CSRF protection is required when:
     1. The request uses a non-safe HTTP method (POST, PUT, DELETE, PATCH)
     2. The request uses cookie-based authentication
+    3. The request is to a public portal that uses URL-based token auth
 
     CSRF protection is NOT required when:
     1. The request uses safe HTTP methods (GET, HEAD, OPTIONS, TRACE)
@@ -88,9 +95,23 @@ def _should_enforce_csrf(request: Request) -> bool:
     The key insight is that CSRF attacks exploit the browser's automatic cookie
     sending behavior. Bearer tokens must be explicitly added via JavaScript,
     which cross-origin scripts cannot do due to same-origin policy.
+
+    For public portals (onboarding, careers), we enforce CSRF even without
+    auth cookies because the URL token acts as authentication.
     """
     if request.method in _SAFE_METHODS:
         return False
+
+    # Public portals that use URL-based token authentication need CSRF protection
+    # even without auth cookies, because the token in the URL acts as auth
+    portal_paths = [
+        "/onboarding/",
+        "/careers/",
+    ]
+    path = request.url.path
+    is_portal_request = any(path.startswith(p) for p in portal_paths)
+    if is_portal_request:
+        return True
 
     # Check if this is a pure Bearer token request (no cookies involved)
     # Bearer token requests are inherently CSRF-safe
@@ -133,6 +154,7 @@ async def _extract_csrf_token(request: Request) -> str | None:
 async def csrf_middleware(request: Request, call_next: RequestResponseEndpoint) -> Response:
     csrf_cookie = request.cookies.get(CSRF_COOKIE_NAME) or ""
     request.state.csrf_token = csrf_cookie
+    set_csrf_cookie = False
 
     if request.method in _SAFE_METHODS:
         if not csrf_cookie:
@@ -153,15 +175,32 @@ async def csrf_middleware(request: Request, call_next: RequestResponseEndpoint) 
     if not _should_enforce_csrf(request):
         return await call_next(request)
 
+    request_token = None
     if not csrf_cookie:
-        raise HTTPException(status_code=400, detail="Missing CSRF token")
+        request_token = await _extract_csrf_token(request)
+        if not request_token:
+            raise HTTPException(status_code=400, detail="Missing CSRF token")
+        csrf_cookie = request_token
+        request.state.csrf_token = csrf_cookie
+        set_csrf_cookie = True
 
     origin = request.headers.get("origin") or request.headers.get("referer")
     if not origin or origin == "null" or not _origin_matches_request(request, origin):
         raise HTTPException(status_code=400, detail="Invalid CSRF origin")
 
-    request_token = await _extract_csrf_token(request)
+    if request_token is None:
+        request_token = await _extract_csrf_token(request)
     if not request_token or request_token != csrf_cookie:
         raise HTTPException(status_code=400, detail="Invalid CSRF token")
 
-    return await call_next(request)
+    response = await call_next(request)
+    if set_csrf_cookie:
+        response.set_cookie(
+            CSRF_COOKIE_NAME,
+            csrf_cookie,
+            httponly=True,
+            secure=_is_secure_request(request),
+            samesite="Lax",
+            path="/",
+        )
+    return response

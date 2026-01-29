@@ -24,6 +24,7 @@ from fastapi.responses import FileResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.schemas.bulk_actions import BulkActionRequest, BulkExportRequest
+from app.services.common import coerce_uuid
 from app.services.finance.common.attachment import attachment_service
 from app.web.deps import WebAuthContext
 
@@ -98,7 +99,11 @@ class APWebService(
         db: Session,
     ) -> FileResponse | RedirectResponse:
         """Download an attachment file."""
-        attachment = attachment_service.get(db, auth.organization_id, attachment_id)
+        attachment = attachment_service.get(
+            db,
+            coerce_uuid(auth.organization_id),
+            attachment_id,
+        )
 
         if not attachment or attachment.organization_id != auth.organization_id:
             return RedirectResponse(url="/finance/ap/invoices?error=Attachment+not+found", status_code=303)
@@ -121,7 +126,11 @@ class APWebService(
         db: Session,
     ) -> RedirectResponse:
         """Delete an attachment."""
-        attachment = attachment_service.get(db, auth.organization_id, attachment_id)
+        attachment = attachment_service.get(
+            db,
+            coerce_uuid(auth.organization_id),
+            attachment_id,
+        )
 
         if not attachment or attachment.organization_id != auth.organization_id:
             return RedirectResponse(url="/finance/ap/invoices?error=Attachment+not+found", status_code=303)
@@ -129,7 +138,7 @@ class APWebService(
         entity_type = attachment.entity_type
         entity_id = attachment.entity_id
 
-        attachment_service.delete(db, attachment_id, auth.organization_id)
+        attachment_service.delete(db, attachment_id, coerce_uuid(auth.organization_id))
 
         redirect_map = {
             "SUPPLIER_INVOICE": f"/finance/ap/invoices/{entity_id}",
@@ -160,7 +169,11 @@ class APWebService(
 
         body = await request.json()
         req = BulkActionRequest(**body)
-        service = get_supplier_bulk_service(db, auth.organization_id, auth.user_id)
+        service = get_supplier_bulk_service(
+            db,
+            coerce_uuid(auth.organization_id),
+            coerce_uuid(auth.user_id),
+        )
         return await service.bulk_delete(req.ids)
 
     async def bulk_export_suppliers_response(
@@ -174,7 +187,11 @@ class APWebService(
 
         body = await request.json()
         req = BulkExportRequest(**body)
-        service = get_supplier_bulk_service(db, auth.organization_id, auth.user_id)
+        service = get_supplier_bulk_service(
+            db,
+            coerce_uuid(auth.organization_id),
+            coerce_uuid(auth.user_id),
+        )
         return await service.bulk_export(req.ids, req.format)
 
     async def bulk_activate_suppliers_response(
@@ -188,7 +205,11 @@ class APWebService(
 
         body = await request.json()
         req = BulkActionRequest(**body)
-        service = get_supplier_bulk_service(db, auth.organization_id, auth.user_id)
+        service = get_supplier_bulk_service(
+            db,
+            coerce_uuid(auth.organization_id),
+            coerce_uuid(auth.user_id),
+        )
         return await service.bulk_activate(req.ids)
 
     async def bulk_deactivate_suppliers_response(
@@ -202,7 +223,11 @@ class APWebService(
 
         body = await request.json()
         req = BulkActionRequest(**body)
-        service = get_supplier_bulk_service(db, auth.organization_id, auth.user_id)
+        service = get_supplier_bulk_service(
+            db,
+            coerce_uuid(auth.organization_id),
+            coerce_uuid(auth.user_id),
+        )
         return await service.bulk_deactivate(req.ids)
 
     # =====================================================================
@@ -220,7 +245,11 @@ class APWebService(
 
         body = await request.json()
         req = BulkActionRequest(**body)
-        service = get_ap_invoice_bulk_service(db, auth.organization_id, auth.user_id)
+        service = get_ap_invoice_bulk_service(
+            db,
+            coerce_uuid(auth.organization_id),
+            coerce_uuid(auth.user_id),
+        )
         return await service.bulk_delete(req.ids)
 
     async def bulk_export_invoices_response(
@@ -234,7 +263,11 @@ class APWebService(
 
         body = await request.json()
         req = BulkExportRequest(**body)
-        service = get_ap_invoice_bulk_service(db, auth.organization_id, auth.user_id)
+        service = get_ap_invoice_bulk_service(
+            db,
+            coerce_uuid(auth.organization_id),
+            coerce_uuid(auth.user_id),
+        )
         return await service.bulk_export(req.ids, req.format)
 
     async def bulk_approve_invoices_response(
@@ -248,7 +281,11 @@ class APWebService(
 
         body = await request.json()
         req = BulkActionRequest(**body)
-        service = get_ap_invoice_bulk_service(db, auth.organization_id, auth.user_id)
+        service = get_ap_invoice_bulk_service(
+            db,
+            coerce_uuid(auth.organization_id),
+            coerce_uuid(auth.user_id),
+        )
         return await service.bulk_approve(req.ids)
 
     async def bulk_post_invoices_response(
@@ -262,7 +299,11 @@ class APWebService(
 
         body = await request.json()
         req = BulkActionRequest(**body)
-        service = get_ap_invoice_bulk_service(db, auth.organization_id, auth.user_id)
+        service = get_ap_invoice_bulk_service(
+            db,
+            coerce_uuid(auth.organization_id),
+            coerce_uuid(auth.user_id),
+        )
         return await service.bulk_post(req.ids)
 
     # =====================================================================
@@ -280,7 +321,11 @@ class APWebService(
 
         body = await request.json()
         req = BulkActionRequest(**body)
-        service = get_ap_payment_bulk_service(db, auth.organization_id, auth.user_id)
+        service = get_ap_payment_bulk_service(
+            db,
+            coerce_uuid(auth.organization_id),
+            coerce_uuid(auth.user_id),
+        )
         return await service.bulk_delete(req.ids)
 
     async def bulk_export_payments_response(
@@ -294,7 +339,11 @@ class APWebService(
 
         body = await request.json()
         req = BulkExportRequest(**body)
-        service = get_ap_payment_bulk_service(db, auth.organization_id, auth.user_id)
+        service = get_ap_payment_bulk_service(
+            db,
+            coerce_uuid(auth.organization_id),
+            coerce_uuid(auth.user_id),
+        )
         return await service.bulk_export(req.ids, req.format)
 
 

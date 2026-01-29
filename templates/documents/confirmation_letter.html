@@ -1,0 +1,167 @@
+{#
+    Probation Confirmation Letter Template
+
+    This template is used when an employee successfully completes probation.
+    Designed to be wrapped by base_letter.html.
+
+    Context variables available:
+    - employee_name, employee_first_name, employee_last_name
+    - employee_id, employee_number
+    - job_title, department_name, location
+    - start_date, probation_end_date, confirmation_date
+    - base_salary, currency_code, pay_frequency (if salary changes on confirmation)
+    - new_benefits (list of new benefits upon confirmation)
+    - organization_name, organization_address
+    - signatory_name, signatory_title
+    - letter_date, reference_number
+#}
+
+<!-- Addressee -->
+<div class="addressee">
+    <p class="addressee-name">{{ employee_name }}</p>
+    {% if employee_number %}
+    <p style="font-size: 12px; color: #666;">Employee ID: {{ employee_number }}</p>
+    {% endif %}
+</div>
+
+<!-- Subject Line -->
+<div class="subject">
+    <p class="subject-label">Subject:</p>
+    <p class="subject-text">Confirmation of Employment</p>
+</div>
+
+<!-- Reference -->
+{% if reference_number %}
+<p style="font-size: 12px; color: #666; margin-bottom: 20px;">Ref: {{ reference_number }}</p>
+{% endif %}
+
+<!-- Salutation -->
+<div class="salutation">
+    <p>Dear {{ employee_first_name }},</p>
+</div>
+
+<!-- Main Content -->
+<div class="content">
+    <p>
+        We are pleased to inform you that you have successfully completed your probationary period
+        with <strong>{{ organization_name }}</strong>.
+    </p>
+
+    <p>
+        Based on your performance evaluation and feedback from your supervisors, we are delighted
+        to confirm your appointment as a permanent employee effective
+        <strong>{{ confirmation_date | format_date }}</strong>.
+    </p>
+
+    <!-- Employment Details -->
+    <h3>Employment Details</h3>
+    <table>
+        <tr>
+            <td><strong>Position:</strong></td>
+            <td>{{ job_title }}</td>
+        </tr>
+        {% if department_name %}
+        <tr>
+            <td><strong>Department:</strong></td>
+            <td>{{ department_name }}</td>
+        </tr>
+        {% endif %}
+        <tr>
+            <td><strong>Date of Joining:</strong></td>
+            <td>{{ start_date | format_date }}</td>
+        </tr>
+        <tr>
+            <td><strong>Probation Completed:</strong></td>
+            <td>{{ probation_end_date | format_date }}</td>
+        </tr>
+        <tr>
+            <td><strong>Confirmation Date:</strong></td>
+            <td>{{ confirmation_date | format_date }}</td>
+        </tr>
+    </table>
+
+    {% if base_salary %}
+    <!-- Revised Compensation (if applicable) -->
+    <h3>Compensation</h3>
+    <div class="highlight-box">
+        <div class="highlight-box-title">Confirmed Salary</div>
+        <table>
+            <tr>
+                <td><strong>Basic Salary:</strong></td>
+                <td class="amount">{{ currency_code }} {{ base_salary | format_currency }} {{ pay_frequency | lower }}</td>
+            </tr>
+        </table>
+    </div>
+    {% if salary_revision_note %}
+    <p style="font-size: 12px; color: #666;">{{ salary_revision_note }}</p>
+    {% endif %}
+    {% endif %}
+
+    {% if new_benefits %}
+    <!-- New Benefits -->
+    <h3>Benefits Upon Confirmation</h3>
+    <p>As a confirmed employee, you are now entitled to the following additional benefits:</p>
+    <ul>
+        {% for benefit in new_benefits %}
+        <li>{{ benefit }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    <!-- Terms -->
+    <h3>Terms of Permanent Employment</h3>
+    <p>Your permanent employment will be governed by the following terms:</p>
+    <ul>
+        <li>Notice period: {{ notice_period_days | default(30) }} days (as per your employment contract)</li>
+        <li>All other terms and conditions of your original employment contract remain in effect</li>
+        <li>You are expected to continue adhering to company policies and procedures</li>
+    </ul>
+
+    <!-- Acknowledgment -->
+    <p style="margin-top: 20px;">
+        During your probation, you have demonstrated commitment, professionalism, and the
+        skills required for your role. We appreciate your contributions and look forward to
+        your continued success and growth within the organization.
+    </p>
+
+    <p>
+        Please sign and return the duplicate copy of this letter as acknowledgment of your
+        confirmation.
+    </p>
+
+    <p>
+        Congratulations once again on your confirmation. We wish you a rewarding career with us.
+    </p>
+</div>
+
+<!-- Signature Section -->
+<div class="signature-section">
+    <p class="closing">Yours sincerely,</p>
+    <div class="signature-block">
+        <div class="signature-line"></div>
+        <p class="signature-name">{{ signatory_name }}</p>
+        <p class="signature-title">{{ signatory_title }}</p>
+        <p class="signature-date">Date: {{ letter_date | format_date }}</p>
+    </div>
+</div>
+
+<!-- Acknowledgment Section -->
+<div class="acceptance-section" style="margin-top: 40px; padding-top: 20px; border-top: 2px solid #333;">
+    <p class="acceptance-title">ACKNOWLEDGMENT</p>
+    <p>
+        I, <strong>{{ employee_name }}</strong>, acknowledge receipt of this confirmation letter
+        and accept the terms of my permanent employment with {{ organization_name }}.
+    </p>
+
+    <div class="dual-signature" style="display: flex; justify-content: space-between; margin-top: 30px;">
+        <div class="signature-block" style="width: 45%;">
+            <div class="signature-line" style="border-bottom: 1px solid #333; margin: 30px 0 10px 0;"></div>
+            <p class="signature-name">{{ employee_name }}</p>
+            <p class="signature-title">Employee Signature</p>
+        </div>
+        <div class="signature-block" style="width: 45%;">
+            <div class="signature-line" style="border-bottom: 1px solid #333; margin: 30px 0 10px 0;"></div>
+            <p class="signature-name">Date</p>
+        </div>
+    </div>
+</div>

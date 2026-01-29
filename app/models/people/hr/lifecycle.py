@@ -2,20 +2,42 @@
 Employee lifecycle models - HR Schema.
 
 Tracks onboarding, separation, promotions, and transfers.
+
+Supports:
+- Self-service onboarding portal with token-based access
+- Task assignments with due dates and document collection
+- Progress tracking and automated reminders
 """
 from __future__ import annotations
 
 import enum
 import uuid
 from datetime import date, datetime
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import Date, Enum, ForeignKey, Index, Integer, String, Text, func, text
+from sqlalchemy import (
+    Boolean,
+    Date,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
 from app.models.people.base import AuditMixin, ERPNextSyncMixin
+
+if TYPE_CHECKING:
+    from app.models.finance.core_org import Organization
+    from app.models.people.hr.checklist_template import ChecklistTemplate, ChecklistTemplateItem
+    from app.models.people.hr.employee import Employee
 
 
 class BoardingStatus(str, enum.Enum):
@@ -24,6 +46,18 @@ class BoardingStatus(str, enum.Enum):
     PENDING = "PENDING"
     IN_PROGRESS = "IN_PROGRESS"
     COMPLETED = "COMPLETED"
+    CANCELLED = "CANCELLED"
+
+
+class ActivityStatus(str, enum.Enum):
+    """Status for onboarding/separation activities."""
+
+    PENDING = "PENDING"
+    IN_PROGRESS = "IN_PROGRESS"
+    AWAITING_DOCUMENT = "AWAITING_DOCUMENT"
+    COMPLETED = "COMPLETED"
+    SKIPPED = "SKIPPED"
+    BLOCKED = "BLOCKED"
 
 
 class SeparationType(str, enum.Enum):
@@ -39,12 +73,21 @@ class SeparationType(str, enum.Enum):
 
 
 class EmployeeOnboarding(Base, AuditMixin, ERPNextSyncMixin):
-    """Employee onboarding record."""
+    """
+    Employee onboarding record.
+
+    Tracks the onboarding process for a new employee, including:
+    - Checklist activities from a template
+    - Self-service portal access
+    - Progress tracking
+    - Assigned buddy/mentor
+    """
 
     __tablename__ = "employee_onboarding"
     __table_args__ = (
         Index("idx_onboarding_status", "organization_id", "status"),
         Index("idx_onboarding_employee", "organization_id", "employee_id"),
+        Index("idx_onboarding_self_service_token", "self_service_token", unique=True),
         {"schema": "hr"},
     )
 
@@ -95,19 +138,99 @@ class EmployeeOnboarding(Base, AuditMixin, ERPNextSyncMixin):
     created_at: Mapped[datetime] = mapped_column(nullable=False, server_default=func.now())
     updated_at: Mapped[Optional[datetime]] = mapped_column(nullable=True, onupdate=func.now())
 
+    # --- New fields for enhanced onboarding ---
+
+    # Link to checklist template used
+    template_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("hr.checklist_template.template_id"),
+        nullable=True,
+        comment="Checklist template used for this onboarding",
+    )
+
+    # Self-service portal access
+    self_service_token: Mapped[Optional[str]] = mapped_column(
+        String(100),
+        nullable=True,
+        comment="Token for new hire self-service portal access",
+    )
+    self_service_token_expires: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="Token expiry timestamp",
+    )
+    self_service_email_sent: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        comment="Whether welcome email with portal link has been sent",
+    )
+
+    # Completion tracking
+    expected_completion_date: Mapped[Optional[date]] = mapped_column(
+        Date,
+        nullable=True,
+        comment="Target date for completing all onboarding tasks",
+    )
+    actual_completion_date: Mapped[Optional[date]] = mapped_column(
+        Date,
+        nullable=True,
+        comment="Date when onboarding was marked complete",
+    )
+    progress_percentage: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        comment="Calculated progress (0-100)",
+    )
+
+    # Buddy/mentor assignment
+    buddy_employee_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("hr.employee.employee_id"),
+        nullable=True,
+        comment="Assigned buddy/mentor for the new employee",
+    )
+
+    # Manager for approvals
+    manager_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("hr.employee.employee_id"),
+        nullable=True,
+        comment="Direct manager for approvals and notifications",
+    )
+
+    # Relationships
     activities: Mapped[list["EmployeeOnboardingActivity"]] = relationship(
         "EmployeeOnboardingActivity",
         back_populates="onboarding",
         cascade="all, delete-orphan",
     )
+    template: Mapped[Optional["ChecklistTemplate"]] = relationship(
+        "ChecklistTemplate",
+        foreign_keys=[template_id],
+    )
+    employee: Mapped[Optional["Employee"]] = relationship(
+        "Employee",
+        foreign_keys=[employee_id],
+    )
+    organization: Mapped[Optional["Organization"]] = relationship(
+        "Organization",
+        foreign_keys=[organization_id],
+    )
 
 
 class EmployeeOnboardingActivity(Base):
-    """Onboarding activity/task."""
+    """
+    Onboarding activity/task.
+
+    Represents a specific task in an employee's onboarding checklist.
+    Can be assigned to HR, manager, IT, or the employee themselves (self-service).
+    """
 
     __tablename__ = "employee_onboarding_activity"
     __table_args__ = (
         Index("idx_onboarding_activity_onboarding", "onboarding_id"),
+        Index("idx_onboarding_activity_assignee", "assignee_id"),
+        Index("idx_onboarding_activity_due_date", "due_date", "activity_status"),
         {"schema": "hr"},
     )
 
@@ -128,7 +251,91 @@ class EmployeeOnboardingActivity(Base):
     completed_on: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     sequence: Mapped[int] = mapped_column(Integer, default=0)
 
+    # --- New fields for enhanced onboarding ---
+
+    # Link to template item (for tracking which template item created this)
+    template_item_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("hr.checklist_template_item.item_id"),
+        nullable=True,
+        comment="Template item this activity was created from",
+    )
+
+    # Task category/phase
+    category: Mapped[Optional[str]] = mapped_column(
+        String(30),
+        nullable=True,
+        comment="Task category: PRE_BOARDING, DAY_ONE, FIRST_WEEK, FIRST_MONTH, ONGOING",
+    )
+
+    # Due date and status tracking
+    due_date: Mapped[Optional[date]] = mapped_column(
+        Date,
+        nullable=True,
+        comment="Task deadline",
+    )
+    activity_status: Mapped[Optional[str]] = mapped_column(
+        String(30),
+        nullable=True,
+        comment="Activity status: PENDING, IN_PROGRESS, AWAITING_DOCUMENT, COMPLETED, SKIPPED, BLOCKED",
+    )
+    is_overdue: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        comment="Whether task is past due date",
+    )
+
+    # Assignment
+    assignee_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("public.person.person_id"),
+        nullable=True,
+        comment="Specific person assigned to this task",
+    )
+    assigned_to_employee: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        comment="True if this is a self-service task for the new employee",
+    )
+
+    # Document collection
+    requires_document: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        comment="Whether document upload is required",
+    )
+    document_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+        comment="FK to uploaded document (if requires_document)",
+    )
+
+    # Completion tracking
+    completed_by: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("public.person.person_id"),
+        nullable=True,
+        comment="Person who completed this task",
+    )
+    completion_notes: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+        comment="Notes added when completing the task",
+    )
+
+    # Reminder tracking
+    reminder_sent_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="Timestamp of last reminder sent",
+    )
+
+    # Relationships
     onboarding: Mapped["EmployeeOnboarding"] = relationship(back_populates="activities")
+    template_item: Mapped[Optional["ChecklistTemplateItem"]] = relationship(
+        "ChecklistTemplateItem",
+        foreign_keys=[template_item_id],
+    )
 
 
 class EmployeeSeparation(Base, AuditMixin, ERPNextSyncMixin):

@@ -9,7 +9,9 @@ from datetime import date, datetime
 from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import (
+    Boolean,
     Date,
+    DateTime,
     Enum,
     ForeignKey,
     Index,
@@ -190,6 +192,25 @@ class JobApplicant(Base, AuditMixin, StatusTrackingMixin, ERPNextSyncMixin):
     notes: Mapped[Optional[str]] = mapped_column(
         Text,
         nullable=True,
+    )
+
+    # Email verification for status tracking (public careers portal)
+    email_verified: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        server_default=text("false"),
+        comment="Whether applicant email has been verified for status tracking",
+    )
+    verification_token: Mapped[Optional[str]] = mapped_column(
+        String(100),
+        nullable=True,
+        index=True,
+        comment="Token for verifying email to check application status",
+    )
+    verification_token_expires: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="Expiration time for verification token",
     )
 
     # Timestamps

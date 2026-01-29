@@ -10,9 +10,10 @@ from typing import Optional
 from datetime import date, timedelta
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, UploadFile
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import DataError, IntegrityError
 
 from app.services.common import coerce_uuid, ConflictError, NotFoundError, ValidationError, PaginationParams
 from app.templates import templates
@@ -41,6 +42,23 @@ def _safe_date(value: str) -> Optional[date]:
         return None
 
 
+def _format_project_error(exc: Exception) -> str:
+    """Return a user-friendly error message for project actions."""
+    if isinstance(exc, HTTPException):
+        detail = getattr(exc, "detail", None)
+        return detail or "Unable to save project. Please check your input."
+    if isinstance(exc, IntegrityError):
+        message = str(getattr(exc, "orig", exc))
+        if "uq_project_code" in message:
+            return "Project code already exists. Please choose a different code."
+        if "foreign key" in message.lower():
+            return "Some selected references are invalid. Please reselect and try again."
+        return "Project could not be saved due to a data conflict. Please try again."
+    if isinstance(exc, DataError):
+        return "Some fields have invalid values or are too long. Please review and try again."
+    return "Project could not be saved. Please check your input and try again."
+
+
 def _safe_form_text(value: object) -> str:
     """Normalize form values to text for safe parsing."""
     if value is None:
@@ -52,6 +70,13 @@ def _safe_form_text(value: object) -> str:
     return str(value)
 
 
+def _normalize_uploads(files: Optional[list[UploadFile]]) -> list[UploadFile]:
+    """Return only real uploaded files with filenames."""
+    if not files:
+        return []
+    return [f for f in files if getattr(f, "filename", None)]
+
+
 def _safe_decimal(value: str, default: Optional[Decimal] = None) -> Optional[Decimal]:
     """Safely parse a decimal string, returning default if invalid."""
     if not value or not value.strip():
@@ -60,6 +85,15 @@ def _safe_decimal(value: str, default: Optional[Decimal] = None) -> Optional[Dec
         return Decimal(value.strip())
     except Exception:
         return default
+
+
+def _build_pm_comment_attachment_map(links) -> dict[str, list]:
+    """Group PM comment attachment links by comment_id."""
+    mapping: dict[str, list] = {}
+    for link in links or []:
+        key = str(link.comment_id)
+        mapping.setdefault(key, []).append(link.attachment)
+    return mapping
 
 
 def _project_type_duration_days(project_type):
@@ -466,6 +500,7 @@ def new_project_form(
         "priorities": [p.value for p in ProjectPriority],
         "customers": customers,
         "project_templates": _get_project_templates(db, org_id),
+        "error": request.query_params.get("error"),
     }
 
     return templates.TemplateResponse("operations/projects/form.html", context)
@@ -934,6 +969,7 @@ def create_global_task(
     assigned_to_id: str = Form(default=""),
     ticket_id: str = Form(default=""),
     parent_task_id: str = Form(default=""),
+    files: list[UploadFile] = File(default=None),
     db: Session = Depends(get_db),
 ):
     """Create a new task from the global task form."""
@@ -975,6 +1011,22 @@ def create_global_task(
         }
     )
 
+    upload_files = _normalize_uploads(files)
+    if upload_files:
+        from app.services.pm.attachment import project_attachment_service
+
+        for file in upload_files:
+            project_attachment_service.save_file(
+                db,
+                organization_id=org_id,
+                entity_type="TASK",
+                entity_id=task.task_id,
+                filename=file.filename or "unnamed",
+                file_data=file.file,
+                content_type=file.content_type or "application/octet-stream",
+                uploaded_by_id=coerce_uuid(auth.user_id),
+            )
+
     db.commit()
     return RedirectResponse(
         url=f"/operations/projects/tasks?project_id={task.project_id}",
@@ -991,6 +1043,8 @@ def project_dashboard(
     """Project dashboard/detail page."""
     from app.models.finance.core_org.project import Project
     from sqlalchemy import select
+    from app.services.pm.attachment import project_attachment_service
+    from app.services.pm.comment import comment_service
 
     org_id = coerce_uuid(auth.organization_id)
     project = _resolve_project_ref(db, org_id, project_id)
@@ -1021,24 +1075,137 @@ def project_dashboard(
             "shipping_address": (project.customer.shipping_address or {}).get("address", ""),
         }
 
+    comments = comment_service.list_comments(
+        db,
+        organization_id=org_id,
+        entity_type="PROJECT",
+        entity_id=project.project_id,
+        include_internal=True,
+    )
+    comment_links = comment_service.list_comment_attachments(
+        db, [c.comment_id for c in comments]
+    )
+    comment_attachment_map = _build_pm_comment_attachment_map(comment_links)
+    comment_attachment_ids = {link.attachment_id for link in comment_links}
+
+    all_attachments = project_attachment_service.list_attachments(
+        db, org_id, "PROJECT", project.project_id
+    )
+    project_attachments = [
+        att for att in all_attachments if att.attachment_id not in comment_attachment_ids
+    ]
+
     context = {
         "request": request,
         **base_context(request, auth, project.project_name, "projects", db=db),
         "project": project,
         "dashboard": dashboard_data,
         "customer_info": customer_info,
+        "comments": comments,
+        "comment_attachments": comment_attachment_map,
+        "attachments": project_attachments,
     }
 
     return templates.TemplateResponse("operations/projects/detail.html", context)
 
 
+@router.post("/{project_id}/comments", response_class=RedirectResponse)
+async def add_project_comment(
+    request: Request,
+    project_id: str,
+    auth: WebAuthContext = Depends(require_operations_access),
+    content: str = Form(...),
+    is_internal: bool = Form(default=False),
+    files: list[UploadFile] = File(default=None),
+    db: Session = Depends(get_db),
+):
+    """Add a comment to a project."""
+    from app.services.pm.attachment import project_attachment_service
+    from app.services.pm.comment import comment_service
+    from app.models.pm.comment import PMCommentAttachment
+
+    org_id = coerce_uuid(auth.organization_id)
+    user_id = coerce_uuid(auth.user_id)
+    project = _resolve_project_ref(db, org_id, project_id)
+    if not project:
+        return RedirectResponse(url="/operations/projects", status_code=303)
+
+    upload_files = _normalize_uploads(files)
+    attachment_errors = []
+
+    try:
+        comment = comment_service.add_comment(
+            db,
+            organization_id=org_id,
+            entity_type="PROJECT",
+            entity_id=project.project_id,
+            author_id=user_id,
+            content=content,
+            is_internal=is_internal,
+        )
+
+        for file in upload_files:
+            attachment, error = project_attachment_service.save_file(
+                db,
+                organization_id=org_id,
+                entity_type="PROJECT",
+                entity_id=project.project_id,
+                filename=file.filename or "unnamed",
+                file_data=file.file,
+                content_type=file.content_type or "application/octet-stream",
+                uploaded_by_id=user_id,
+            )
+            if error or not attachment:
+                attachment_errors.append(error or "Upload failed")
+                continue
+            db.add(PMCommentAttachment(
+                comment_id=comment.comment_id,
+                attachment_id=attachment.attachment_id,
+            ))
+
+        db.commit()
+    except Exception:
+        db.rollback()
+        attachment_errors.append("Comment upload failed")
+
+    base_url = _project_url(project)
+    if attachment_errors:
+        base_url += "?warning=Some+attachments+failed+to+upload"
+    return RedirectResponse(url=base_url + "#comments", status_code=303)
+
+
+@router.post("/{project_id}/comments/{comment_id}/delete", response_class=RedirectResponse)
+def delete_project_comment(
+    request: Request,
+    project_id: str,
+    comment_id: str,
+    auth: WebAuthContext = Depends(require_operations_access),
+    db: Session = Depends(get_db),
+):
+    """Delete a project comment."""
+    from app.services.pm.comment import comment_service
+
+    org_id = coerce_uuid(auth.organization_id)
+    project = _resolve_project_ref(db, org_id, project_id)
+    if not project:
+        return RedirectResponse(url="/operations/projects", status_code=303)
+
+    try:
+        comment_service.delete_comment(db, coerce_uuid(comment_id))
+        db.commit()
+    except Exception:
+        db.rollback()
+
+    return RedirectResponse(url=_project_url(project) + "#comments", status_code=303)
+
 @router.post("", response_class=RedirectResponse)
 @router.post("/", response_class=RedirectResponse)
-def create_project(
+@router.post("/new", response_class=RedirectResponse)
+async def create_project(
     request: Request,
     auth: WebAuthContext = Depends(require_operations_access),
     project_code: str = Form(default=""),
-    project_name: str = Form(...),
+    project_name: str = Form(default=""),
     description: str = Form(default=""),
     status: str = Form(default="PLANNING"),
     project_type: str = Form(default=""),
@@ -1049,9 +1216,11 @@ def create_project(
     end_date: str = Form(default=""),
     budget_amount: str = Form(default=""),
     percent_complete: str = Form(default="0"),
+    files: list[UploadFile] = File(default=None),
     db: Session = Depends(get_db),
 ):
     """Create a new project."""
+    import logging
     from app.models.finance.core_org.project import Project, ProjectStatus, ProjectType, ProjectPriority
     from app.models.finance.core_config import SequenceType
     from app.services.finance.common.numbering import SyncNumberingService
@@ -1059,6 +1228,73 @@ def create_project(
     from sqlalchemy import select
 
     org_id = coerce_uuid(auth.organization_id)
+
+    # Prefer CSRF-parsed form data when available (middleware may consume body).
+    form_data = getattr(request.state, "csrf_form", None)
+    if form_data is None:
+        form_data = await request.form()
+    if form_data:
+        project_code = _safe_form_text(form_data.get("project_code") or project_code)
+        project_name = _safe_form_text(form_data.get("project_name") or project_name)
+        description = _safe_form_text(form_data.get("description") or description)
+        status = _safe_form_text(form_data.get("status") or status)
+        project_type = _safe_form_text(form_data.get("project_type") or project_type)
+        project_priority = _safe_form_text(form_data.get("project_priority") or project_priority)
+        project_template_id = _safe_form_text(form_data.get("project_template_id") or project_template_id)
+        customer_id = _safe_form_text(form_data.get("customer_id") or customer_id)
+        start_date = _safe_form_text(form_data.get("start_date") or start_date)
+        end_date = _safe_form_text(form_data.get("end_date") or end_date)
+        budget_amount = _safe_form_text(form_data.get("budget_amount") or budget_amount)
+        percent_complete = _safe_form_text(form_data.get("percent_complete") or percent_complete)
+
+    if not project_name or not project_name.strip():
+        logging.getLogger(__name__).warning(
+            "Project create missing name. Content-Type=%s Form keys=%s",
+            request.headers.get("content-type"),
+            list(form_data.keys()) if form_data else [],
+        )
+        customers = db.scalars(
+            select(Customer)
+            .where(Customer.organization_id == org_id, Customer.is_active == True)
+            .order_by(Customer.trading_name)
+        ).all()
+        allowed_project_types = [
+            ProjectType.FIBER_OPTICS_INSTALLATION,
+            ProjectType.AIR_FIBER_INSTALLATION,
+            ProjectType.CABLE_RERUN,
+            ProjectType.FIBER_OPTICS_RELOCATION,
+            ProjectType.AIR_FIBER_RELOCATION,
+        ]
+        context = {
+            "request": request,
+            **base_context(request, auth, "New Project", "projects", db=db),
+            "project": None,
+            "statuses": [s.value for s in ProjectStatus],
+            "project_types": [t.value for t in allowed_project_types],
+            "priorities": [p.value for p in ProjectPriority],
+            "customers": customers,
+            "project_templates": _get_project_templates(db, org_id),
+            "error": "Project name is required.",
+            "form_data": {
+                "project_code": project_code,
+                "project_name": project_name,
+                "description": description,
+                "status": status,
+                "project_type": project_type,
+                "project_priority": project_priority,
+                "project_template_id": project_template_id,
+                "customer_id": customer_id,
+                "start_date": start_date,
+                "end_date": end_date,
+                "budget_amount": budget_amount,
+                "percent_complete": percent_complete,
+            },
+        }
+        return templates.TemplateResponse(
+            "operations/projects/form.html",
+            context,
+            status_code=400,
+        )
 
     project_code_value = project_code.strip() if project_code else ""
     if not project_code_value:
@@ -1163,38 +1399,96 @@ def create_project(
     duration_days = _project_type_duration_days(project_type_enum)
     end_date_value = start_date_value + timedelta(days=duration_days) if duration_days else None
 
-    project = Project(
-        organization_id=org_id,
-        project_code=project_code_value,
-        project_name=project_name.strip(),
-        description=description.strip() if description else None,
-        status=ProjectStatus(status),
-        project_type=project_type_enum,
-        project_priority=ProjectPriority(project_priority) if project_priority else ProjectPriority.MEDIUM,
-        project_template_id=coerce_uuid(project_template_id) if project_template_id else None,
-        customer_id=coerce_uuid(customer_id) if customer_id else None,
-        start_date=start_date_value,
-        end_date=end_date_value,
-        budget_amount=_safe_decimal(budget_amount),
-        percent_complete=_safe_decimal(percent_complete, Decimal("0")),
-    )
+    try:
+        project = Project(
+            organization_id=org_id,
+            project_code=project_code_value,
+            project_name=project_name.strip(),
+            description=description.strip() if description else None,
+            status=ProjectStatus(status),
+            project_type=project_type_enum,
+            project_priority=ProjectPriority(project_priority) if project_priority else ProjectPriority.MEDIUM,
+            project_template_id=coerce_uuid(project_template_id) if project_template_id else None,
+            customer_id=coerce_uuid(customer_id) if customer_id else None,
+            start_date=start_date_value,
+            end_date=end_date_value,
+            budget_amount=_safe_decimal(budget_amount),
+            percent_complete=_safe_decimal(percent_complete, Decimal("0")),
+        )
 
-    db.add(project)
-    db.flush()
+        db.add(project)
+        db.flush()
 
-    if project.project_template_id:
-        _apply_project_template(db, org_id, project, project.project_template_id)
+        if project.project_template_id:
+            _apply_project_template(db, org_id, project, project.project_template_id)
 
-    db.commit()
+        upload_files = _normalize_uploads(files)
+        if upload_files:
+            from app.services.pm.attachment import project_attachment_service
 
-    return RedirectResponse(
-        url=_project_url(project),
-        status_code=303,
-    )
+            for file in upload_files:
+                project_attachment_service.save_file(
+                    db,
+                    organization_id=org_id,
+                    entity_type="PROJECT",
+                    entity_id=project.project_id,
+                    filename=file.filename or "unnamed",
+                    file_data=file.file,
+                    content_type=file.content_type or "application/octet-stream",
+                    uploaded_by_id=coerce_uuid(auth.user_id),
+                )
+
+        db.commit()
+
+        return RedirectResponse(url=_project_url(project), status_code=303)
+    except Exception as exc:
+        db.rollback()
+        customers = db.scalars(
+            select(Customer)
+            .where(Customer.organization_id == org_id, Customer.is_active == True)
+            .order_by(Customer.trading_name)
+        ).all()
+        allowed_project_types = [
+            ProjectType.FIBER_OPTICS_INSTALLATION,
+            ProjectType.AIR_FIBER_INSTALLATION,
+            ProjectType.CABLE_RERUN,
+            ProjectType.FIBER_OPTICS_RELOCATION,
+            ProjectType.AIR_FIBER_RELOCATION,
+        ]
+        context = {
+            "request": request,
+            **base_context(request, auth, "New Project", "projects", db=db),
+            "project": None,
+            "statuses": [s.value for s in ProjectStatus],
+            "project_types": [t.value for t in allowed_project_types],
+            "priorities": [p.value for p in ProjectPriority],
+            "customers": customers,
+            "project_templates": _get_project_templates(db, org_id),
+            "error": _format_project_error(exc),
+            "form_data": {
+                "project_code": project_code,
+                "project_name": project_name,
+                "description": description,
+                "status": status,
+                "project_type": project_type_value,
+                "project_priority": project_priority,
+                "project_template_id": project_template_id,
+                "customer_id": customer_id,
+                "start_date": start_date,
+                "end_date": end_date,
+                "budget_amount": budget_amount,
+                "percent_complete": percent_complete,
+            },
+        }
+        return templates.TemplateResponse(
+            "operations/projects/form.html",
+            context,
+            status_code=400,
+        )
 
 
 @router.post("/{project_id}", response_class=RedirectResponse)
-def update_project(
+async def update_project(
     request: Request,
     project_id: str,
     auth: WebAuthContext = Depends(require_operations_access),
@@ -1208,6 +1502,7 @@ def update_project(
     end_date: str = Form(default=""),
     budget_amount: str = Form(default=""),
     percent_complete: str = Form(default="0"),
+    files: list[UploadFile] = File(default=None),
     db: Session = Depends(get_db),
 ):
     """Update an existing project."""
@@ -1215,6 +1510,22 @@ def update_project(
     from sqlalchemy import select
 
     org_id = coerce_uuid(auth.organization_id)
+
+    # Prefer CSRF-parsed form data when available (middleware may consume body).
+    form_data = getattr(request.state, "csrf_form", None)
+    if form_data is None:
+        form_data = await request.form()
+    if form_data:
+        project_name = _safe_form_text(form_data.get("project_name") or project_name)
+        description = _safe_form_text(form_data.get("description") or description)
+        status = _safe_form_text(form_data.get("status") or status)
+        project_type = _safe_form_text(form_data.get("project_type") or project_type)
+        project_priority = _safe_form_text(form_data.get("project_priority") or project_priority)
+        customer_id = _safe_form_text(form_data.get("customer_id") or customer_id)
+        start_date = _safe_form_text(form_data.get("start_date") or start_date)
+        end_date = _safe_form_text(form_data.get("end_date") or end_date)
+        budget_amount = _safe_form_text(form_data.get("budget_amount") or budget_amount)
+        percent_complete = _safe_form_text(form_data.get("percent_complete") or percent_complete)
     project = _resolve_project_ref(db, org_id, project_id)
 
     if not project:
@@ -1230,6 +1541,22 @@ def update_project(
     project.end_date = _safe_date(end_date)
     project.budget_amount = _safe_decimal(budget_amount)
     project.percent_complete = _safe_decimal(percent_complete, Decimal("0"))
+
+    upload_files = _normalize_uploads(files)
+    if upload_files:
+        from app.services.pm.attachment import project_attachment_service
+
+        for file in upload_files:
+            project_attachment_service.save_file(
+                db,
+                organization_id=org_id,
+                entity_type="PROJECT",
+                entity_id=project.project_id,
+                filename=file.filename or "unnamed",
+                file_data=file.file,
+                content_type=file.content_type or "application/octet-stream",
+                uploaded_by_id=coerce_uuid(auth.user_id),
+            )
 
     db.commit()
 
@@ -1358,6 +1685,9 @@ def task_detail(
     db: Session = Depends(get_db),
 ):
     """Task detail page."""
+    from app.services.pm.attachment import project_attachment_service
+    from app.services.pm.comment import comment_service
+
     org_id = coerce_uuid(auth.organization_id)
 
     project = _resolve_project_ref(db, org_id, project_id)
@@ -1402,6 +1732,25 @@ def task_detail(
         params=PaginationParams(offset=0, limit=10),
     )
 
+    comments = comment_service.list_comments(
+        db,
+        organization_id=org_id,
+        entity_type="TASK",
+        entity_id=task_uuid,
+        include_internal=True,
+    )
+    comment_links = comment_service.list_comment_attachments(
+        db, [c.comment_id for c in comments]
+    )
+    comment_attachment_map = _build_pm_comment_attachment_map(comment_links)
+    comment_attachment_ids = {link.attachment_id for link in comment_links}
+    all_attachments = project_attachment_service.list_attachments(
+        db, org_id, "TASK", task_uuid
+    )
+    task_attachments = [
+        att for att in all_attachments if att.attachment_id not in comment_attachment_ids
+    ]
+
     context = {
         "request": request,
         **base_context(request, auth, task.task_name, "tasks", db=db),
@@ -1411,11 +1760,216 @@ def task_detail(
         "dependencies": dependencies,
         "dependents": dependents,
         "time_entries": time_entries.items,
+        "comments": comments,
+        "comment_attachments": comment_attachment_map,
+        "attachments": task_attachments,
     }
 
     return templates.TemplateResponse("operations/projects/tasks/detail.html", context)
 
 
+@router.post("/{project_id}/tasks/{task_id}/comments", response_class=RedirectResponse)
+async def add_task_comment(
+    request: Request,
+    project_id: str,
+    task_id: str,
+    auth: WebAuthContext = Depends(require_operations_access),
+    content: str = Form(...),
+    is_internal: bool = Form(default=False),
+    files: list[UploadFile] = File(default=None),
+    db: Session = Depends(get_db),
+):
+    """Add a comment to a task."""
+    from app.services.pm.attachment import project_attachment_service
+    from app.services.pm.comment import comment_service
+    from app.models.pm.comment import PMCommentAttachment
+
+    org_id = coerce_uuid(auth.organization_id)
+    user_id = coerce_uuid(auth.user_id)
+    project = _resolve_project_ref(db, org_id, project_id)
+    if not project:
+        return RedirectResponse(url="/operations/projects", status_code=303)
+    task = _resolve_task_ref(db, org_id, project.project_id, task_id)
+    if not task:
+        return RedirectResponse(url=f"/operations/projects/{project.project_code}/tasks", status_code=303)
+
+    upload_files = _normalize_uploads(files)
+    attachment_errors = []
+
+    try:
+        comment = comment_service.add_comment(
+            db,
+            organization_id=org_id,
+            entity_type="TASK",
+            entity_id=task.task_id,
+            author_id=user_id,
+            content=content,
+            is_internal=is_internal,
+        )
+
+        for file in upload_files:
+            attachment, error = project_attachment_service.save_file(
+                db,
+                organization_id=org_id,
+                entity_type="TASK",
+                entity_id=task.task_id,
+                filename=file.filename or "unnamed",
+                file_data=file.file,
+                content_type=file.content_type or "application/octet-stream",
+                uploaded_by_id=user_id,
+            )
+            if error or not attachment:
+                attachment_errors.append(error or "Upload failed")
+                continue
+            db.add(PMCommentAttachment(
+                comment_id=comment.comment_id,
+                attachment_id=attachment.attachment_id,
+            ))
+
+        db.commit()
+    except Exception:
+        db.rollback()
+        attachment_errors.append("Comment upload failed")
+
+    base_url = f"/operations/projects/{project.project_code}/tasks/{task.task_code or task.task_id}"
+    if attachment_errors:
+        base_url += "?warning=Some+attachments+failed+to+upload"
+    return RedirectResponse(url=base_url + "#comments", status_code=303)
+
+
+@router.post("/{project_id}/tasks/{task_id}/comments/{comment_id}/delete", response_class=RedirectResponse)
+def delete_task_comment(
+    request: Request,
+    project_id: str,
+    task_id: str,
+    comment_id: str,
+    auth: WebAuthContext = Depends(require_operations_access),
+    db: Session = Depends(get_db),
+):
+    """Delete a task comment."""
+    from app.services.pm.comment import comment_service
+
+    org_id = coerce_uuid(auth.organization_id)
+    project = _resolve_project_ref(db, org_id, project_id)
+    if not project:
+        return RedirectResponse(url="/operations/projects", status_code=303)
+    task = _resolve_task_ref(db, org_id, project.project_id, task_id)
+    if not task:
+        return RedirectResponse(url=f"/operations/projects/{project.project_code}/tasks", status_code=303)
+
+    try:
+        comment_service.delete_comment(db, coerce_uuid(comment_id))
+        db.commit()
+    except Exception:
+        db.rollback()
+
+    base_url = f"/operations/projects/{project.project_code}/tasks/{task.task_code or task.task_id}"
+    return RedirectResponse(url=base_url + "#comments", status_code=303)
+
+
+@router.get("/{project_id}/tasks/{task_id}/attachments/{attachment_id}/download")
+def download_task_attachment(
+    request: Request,
+    project_id: str,
+    task_id: str,
+    attachment_id: str,
+    auth: WebAuthContext = Depends(require_operations_access),
+    db: Session = Depends(get_db),
+):
+    """Download a task attachment."""
+    from app.services.pm.attachment import project_attachment_service
+
+    org_id = coerce_uuid(auth.organization_id)
+    project = _resolve_project_ref(db, org_id, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    task = _resolve_task_ref(db, org_id, project.project_id, task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    attachment = project_attachment_service.get_attachment(
+        db, org_id, coerce_uuid(attachment_id)
+    )
+    if not attachment or attachment.entity_type != "TASK" or attachment.entity_id != task.task_id:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+
+    file_path = project_attachment_service.get_file_path(
+        db, org_id, coerce_uuid(attachment_id)
+    )
+    if not file_path:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    return FileResponse(
+        path=str(file_path),
+        filename=attachment.file_name,
+        media_type=attachment.content_type,
+    )
+
+
+@router.post("/{project_id}/tasks/{task_id}/attachments", response_class=RedirectResponse)
+async def upload_task_attachment(
+    request: Request,
+    project_id: str,
+    task_id: str,
+    auth: WebAuthContext = Depends(require_operations_access),
+    files: list[UploadFile] = File(default=None),
+    db: Session = Depends(get_db),
+):
+    """Upload attachments to a task."""
+    from app.services.pm.attachment import project_attachment_service
+
+    org_id = coerce_uuid(auth.organization_id)
+    user_id = coerce_uuid(auth.user_id)
+    project = _resolve_project_ref(db, org_id, project_id)
+    if not project:
+        return RedirectResponse(url="/operations/projects", status_code=303)
+    task = _resolve_task_ref(db, org_id, project.project_id, task_id)
+    if not task:
+        return RedirectResponse(url=f"/operations/projects/{project.project_code}/tasks", status_code=303)
+
+    upload_files = _normalize_uploads(files)
+    for file in upload_files:
+        project_attachment_service.save_file(
+            db,
+            organization_id=org_id,
+            entity_type="TASK",
+            entity_id=task.task_id,
+            filename=file.filename or "unnamed",
+            file_data=file.file,
+            content_type=file.content_type or "application/octet-stream",
+            uploaded_by_id=user_id,
+        )
+    db.commit()
+
+    base_url = f"/operations/projects/{project.project_code}/tasks/{task.task_code or task.task_id}"
+    return RedirectResponse(url=base_url + "#attachments", status_code=303)
+
+
+@router.post("/{project_id}/tasks/{task_id}/attachments/{attachment_id}/delete", response_class=RedirectResponse)
+def delete_task_attachment(
+    request: Request,
+    project_id: str,
+    task_id: str,
+    attachment_id: str,
+    auth: WebAuthContext = Depends(require_operations_access),
+    db: Session = Depends(get_db),
+):
+    """Delete a task attachment."""
+    from app.services.pm.attachment import project_attachment_service
+
+    org_id = coerce_uuid(auth.organization_id)
+    project = _resolve_project_ref(db, org_id, project_id)
+    if not project:
+        return RedirectResponse(url="/operations/projects", status_code=303)
+    task = _resolve_task_ref(db, org_id, project.project_id, task_id)
+    if not task:
+        return RedirectResponse(url=f"/operations/projects/{project.project_code}/tasks", status_code=303)
+
+    project_attachment_service.delete_attachment(db, org_id, coerce_uuid(attachment_id))
+    db.commit()
+
+    base_url = f"/operations/projects/{project.project_code}/tasks/{task.task_code or task.task_id}"
+    return RedirectResponse(url=base_url + "#attachments", status_code=303)
 @router.get("/{project_id}/tasks/new", response_class=HTMLResponse)
 def new_task_form(
     request: Request,
@@ -1480,6 +2034,7 @@ def create_task(
     start_date: str = Form(default=""),
     due_date: str = Form(default=""),
     estimated_hours: str = Form(default=""),
+    files: list[UploadFile] = File(default=None),
     db: Session = Depends(get_db),
 ):
     """Create a new task."""
@@ -1516,6 +2071,22 @@ def create_task(
         "due_date": _safe_date(due_date),
         "estimated_hours": _safe_decimal(estimated_hours),
     })
+
+    upload_files = _normalize_uploads(files)
+    if upload_files:
+        from app.services.pm.attachment import project_attachment_service
+
+        for file in upload_files:
+            project_attachment_service.save_file(
+                db,
+                organization_id=org_id,
+                entity_type="TASK",
+                entity_id=task.task_id,
+                filename=file.filename or "unnamed",
+                file_data=file.file,
+                content_type=file.content_type or "application/octet-stream",
+                uploaded_by_id=coerce_uuid(auth.user_id),
+            )
 
     db.commit()
 
@@ -1601,10 +2172,10 @@ def update_task(
     project_id: str,
     task_id: str,
     auth: WebAuthContext = Depends(require_operations_access),
-    task_name: str = Form(...),
+    task_name: Optional[str] = Form(default=None),
     description: str = Form(default=""),
-    status: str = Form(...),
-    priority: str = Form(...),
+    status: Optional[str] = Form(default=None),
+    priority: Optional[str] = Form(default=None),
     parent_task_id: str = Form(default=""),
     assigned_to_id: str = Form(default=""),
     ticket_id: str = Form(default=""),
@@ -1613,6 +2184,7 @@ def update_task(
     estimated_hours: str = Form(default=""),
     actual_hours: str = Form(default=""),
     progress_percent: str = Form(default="0"),
+    files: list[UploadFile] = File(default=None),
     db: Session = Depends(get_db),
 ):
     """Update an existing task."""
@@ -1629,12 +2201,25 @@ def update_task(
     task_uuid = task.task_id
     _ensure_task_code(db, org_id, task)
 
+    form_data = getattr(request.state, "csrf_form", None)
+    if form_data:
+        assigned_to_id = (form_data.get("assigned_to_id") or assigned_to_id or "").strip()
+        parent_task_id = (form_data.get("parent_task_id") or parent_task_id or "").strip()
+        ticket_id = (form_data.get("ticket_id") or ticket_id or "").strip()
+        task_name = (form_data.get("task_name") or task_name or "").strip() or None
+        status = (form_data.get("status") or status or None)
+        priority = (form_data.get("priority") or priority or None)
+
+    task_name_value = task_name.strip() if task_name else task.task_name
+    status_value = status or task.status.value
+    priority_value = priority or task.priority.value
+
     try:
         services["task"].update_task(task_uuid, {
-            "task_name": task_name.strip(),
+            "task_name": task_name_value,
             "description": description.strip() if description else None,
-            "status": TaskStatus(status),
-            "priority": TaskPriority(priority),
+            "status": TaskStatus(status_value),
+            "priority": TaskPriority(priority_value),
             "parent_task_id": coerce_uuid(parent_task_id) if parent_task_id else None,
             "assigned_to_id": coerce_uuid(assigned_to_id) if assigned_to_id else None,
             "ticket_id": coerce_uuid(ticket_id) if ticket_id else None,
@@ -1644,6 +2229,22 @@ def update_task(
             "actual_hours": _safe_decimal(actual_hours, Decimal("0")),
             "progress_percent": int(progress_percent) if progress_percent and progress_percent.isdigit() else 0,
         })
+
+        upload_files = _normalize_uploads(files)
+        if upload_files:
+            from app.services.pm.attachment import project_attachment_service
+
+            for file in upload_files:
+                project_attachment_service.save_file(
+                    db,
+                    organization_id=org_id,
+                    entity_type="TASK",
+                    entity_id=task_uuid,
+                    filename=file.filename or "unnamed",
+                    file_data=file.file,
+                    content_type=file.content_type or "application/octet-stream",
+                    uploaded_by_id=coerce_uuid(auth.user_id),
+                )
         db.commit()
     except NotFoundError:
         pass
@@ -3026,7 +3627,9 @@ async def upload_project_attachment(
     file = form.get("file")
     description = form.get("description", "")
 
-    if not file or not hasattr(file, "file"):
+    from fastapi import UploadFile
+
+    if not isinstance(file, UploadFile):
         return RedirectResponse(
             url=f"/operations/projects/{project.project_code}/attachments?error=No+file+provided",
             status_code=303,
@@ -3047,7 +3650,10 @@ async def upload_project_attachment(
     if error:
         db.rollback()
         return RedirectResponse(
-            url=f"/operations/projects/{project.project_code}/attachments?error={error.replace(' ', '+')}",
+            url=(
+                f"/operations/projects/{project.project_code}/attachments"
+                f"?error={(error or 'Failed to delete attachment').replace(' ', '+')}"
+            ),
             status_code=303,
         )
 
@@ -3122,7 +3728,10 @@ def delete_project_attachment(
     if not success:
         db.rollback()
         return RedirectResponse(
-            url=f"/operations/projects/{project.project_code}/attachments?error={error.replace(' ', '+')}",
+            url=(
+                f"/operations/projects/{project.project_code}/attachments"
+                f"?error={(error or 'Failed to delete attachment').replace(' ', '+')}"
+            ),
             status_code=303,
         )
 

@@ -12,13 +12,20 @@ from datetime import date, datetime, timezone
 from typing import Optional
 from uuid import UUID
 
+import calendar
+import logging
+import uuid as uuid_lib
+
 from fastapi import HTTPException
 from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
 from app.models.finance.gl.fiscal_period import FiscalPeriod, PeriodStatus
+from app.models.finance.gl.fiscal_year import FiscalYear
 from app.services.common import coerce_uuid
 from app.services.response import ListResponseMixin
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -80,12 +87,15 @@ class PeriodGuardService(ListResponseMixin):
         )
 
         if not period:
-            return PeriodGuardResult(
-                is_allowed=False,
-                fiscal_period_id=None,
-                period_status=None,
-                message=f"No fiscal period found for date {posting_date}",
-            )
+            # Auto-create period on demand
+            period = PeriodGuardService._ensure_period_exists(db, org_id, posting_date)
+            if not period:
+                return PeriodGuardResult(
+                    is_allowed=False,
+                    fiscal_period_id=None,
+                    period_status=None,
+                    message=f"Failed to create fiscal period for date {posting_date}",
+                )
 
         # Check if this is an adjustment period
         if period.is_adjustment_period and not allow_adjustment:
@@ -149,6 +159,87 @@ class PeriodGuardService(ListResponseMixin):
             message="Period is open for posting",
             reopen_session_id=period.last_reopen_session_id if period.status == PeriodStatus.REOPENED else None,
         )
+
+    @staticmethod
+    def _ensure_period_exists(
+        db: Session,
+        organization_id: UUID,
+        target_date: date,
+    ) -> Optional[FiscalPeriod]:
+        """
+        Ensure a fiscal period exists for the given date, creating if necessary.
+
+        Creates fiscal year and monthly period on-demand with OPEN status.
+
+        Args:
+            db: Database session
+            organization_id: Organization scope
+            target_date: Date that needs a period
+
+        Returns:
+            FiscalPeriod (existing or newly created), or None on failure
+        """
+        org_id = coerce_uuid(organization_id)
+        year = target_date.year
+        month = target_date.month
+
+        # Check if period already exists (race condition guard)
+        existing = (
+            db.query(FiscalPeriod)
+            .filter(
+                and_(
+                    FiscalPeriod.organization_id == org_id,
+                    FiscalPeriod.start_date <= target_date,
+                    FiscalPeriod.end_date >= target_date,
+                )
+            )
+            .first()
+        )
+        if existing:
+            return existing
+
+        # Get or create fiscal year
+        fiscal_year = (
+            db.query(FiscalYear)
+            .filter(
+                FiscalYear.organization_id == org_id,
+                FiscalYear.year_code == str(year),
+            )
+            .first()
+        )
+
+        if not fiscal_year:
+            logger.info("Auto-creating fiscal year %s for org %s", year, org_id)
+            fiscal_year = FiscalYear(
+                fiscal_year_id=uuid_lib.uuid4(),
+                organization_id=org_id,
+                year_code=str(year),
+                year_name=f"Fiscal Year {year}",
+                start_date=date(year, 1, 1),
+                end_date=date(year, 12, 31),
+            )
+            db.add(fiscal_year)
+            db.flush()
+
+        # Create the monthly period
+        month_name = calendar.month_name[month]
+        _, last_day = calendar.monthrange(year, month)
+
+        logger.info("Auto-creating fiscal period %s %s for org %s", month_name, year, org_id)
+        period = FiscalPeriod(
+            fiscal_period_id=uuid_lib.uuid4(),
+            organization_id=org_id,
+            fiscal_year_id=fiscal_year.fiscal_year_id,
+            period_number=month,
+            period_name=f"{month_name} {year}",
+            start_date=date(year, month, 1),
+            end_date=date(year, month, last_day),
+            status=PeriodStatus.OPEN,  # Auto-created periods are OPEN
+        )
+        db.add(period)
+        db.flush()
+
+        return period
 
     @staticmethod
     def require_open_period(

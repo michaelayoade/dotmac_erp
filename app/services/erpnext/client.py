@@ -1062,8 +1062,20 @@ class ERPNextClient:
                 "prefered_email",
                 "bank_name",
                 "bank_ac_no",
+                "branch",  # Bank branch
+                "custom_name_on_account",  # Account holder name
                 "company",
                 "modified",
+                # Extended fields for ERPNext sync (some fields may be restricted)
+                "current_address",
+                "permanent_address",
+                "marital_status",
+                "blood_group",
+                "passport_number",
+                "valid_upto",  # ERPNext name for passport_valid_upto
+                # "ht",  # Restricted: ERPNext name for current_accommodation_type
+                "ctc",
+                "salary_mode",
             ],
             order_by="employee_name asc",
         )

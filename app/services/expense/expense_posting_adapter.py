@@ -15,7 +15,9 @@ from uuid import UUID
 import uuid as uuid_lib
 
 from fastapi import HTTPException
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
+from sqlalchemy.dialects.postgresql import insert
 
 from app.models.expense.cash_advance import CashAdvance, CashAdvanceStatus
 from app.models.expense.expense_claim import (
@@ -23,6 +25,11 @@ from app.models.expense.expense_claim import (
     ExpenseClaimItem,
     ExpenseClaimStatus,
     ExpenseCategory,
+)
+from app.models.expense.expense_claim_action import (
+    ExpenseClaimAction,
+    ExpenseClaimActionType,
+    ExpenseClaimActionStatus,
 )
 from app.models.finance.ap.supplier import Supplier, SupplierType
 from app.models.finance.ap.supplier_invoice import (
@@ -66,6 +73,76 @@ class ExpensePostingAdapter:
 
     # Default account codes (fallback if org settings not configured)
     DEFAULT_EMPLOYEE_PAYABLE_ACCOUNT_CODE = "2110"  # Current Liabilities - Accrued Expenses
+
+    @staticmethod
+    def _action_key(claim_id: UUID, action: ExpenseClaimActionType) -> str:
+        return f"EXPENSE:{claim_id}:{action.value}:v1"
+
+    @staticmethod
+    def _next_invoice_number(db: Session) -> str:
+        if db.bind and db.bind.dialect.name == "postgresql":
+            seq = db.scalar(
+                text("select nextval('expense.expense_supplier_invoice_number_seq')")
+            )
+            return f"EXP-INV-{date.today().year}-{int(seq):05d}"
+        count = db.scalar(select(func.count(SupplierInvoice.invoice_id))) or 0
+        return f"EXP-INV-{date.today().year}-{count + 1:05d}"
+
+    @staticmethod
+    def _try_record_action(
+        db: Session,
+        org_id: UUID,
+        claim_id: UUID,
+        action: ExpenseClaimActionType,
+    ) -> bool:
+        action_key = ExpensePostingAdapter._action_key(claim_id, action)
+        stmt = (
+            insert(ExpenseClaimAction)
+            .values(
+                organization_id=org_id,
+                claim_id=claim_id,
+                action_type=action,
+                action_key=action_key,
+                status=ExpenseClaimActionStatus.STARTED,
+            )
+            .on_conflict_do_nothing(
+                index_elements=["organization_id", "claim_id", "action_type"],
+            )
+        )
+        result = db.execute(stmt)
+        db.flush()
+        if (result.rowcount or 0) > 0:
+            return True
+
+        existing = db.query(ExpenseClaimAction).filter(
+            ExpenseClaimAction.organization_id == org_id,
+            ExpenseClaimAction.claim_id == claim_id,
+            ExpenseClaimAction.action_type == action,
+        ).first()
+        if not existing:
+            return False
+        if existing.status == ExpenseClaimActionStatus.FAILED:
+            existing.status = ExpenseClaimActionStatus.STARTED
+            db.flush()
+            return True
+        return False
+
+    @staticmethod
+    def _set_action_status(
+        db: Session,
+        org_id: UUID,
+        claim_id: UUID,
+        action: ExpenseClaimActionType,
+        status: ExpenseClaimActionStatus,
+    ) -> None:
+        record = db.query(ExpenseClaimAction).filter(
+            ExpenseClaimAction.organization_id == org_id,
+            ExpenseClaimAction.claim_id == claim_id,
+            ExpenseClaimAction.action_type == action,
+        ).first()
+        if record:
+            record.status = status
+            db.flush()
 
     @staticmethod
     def post_expense_claim(
@@ -125,6 +202,19 @@ class ExpensePostingAdapter:
                 success=True,
                 journal_entry_id=claim.journal_entry_id,
                 message="Expense claim already posted (idempotent)",
+            )
+
+        action_started = ExpensePostingAdapter._try_record_action(
+            db,
+            org_id,
+            c_id,
+            ExpenseClaimActionType.POST_GL,
+        )
+        if not action_started:
+            return ExpensePostingResult(
+                success=True,
+                journal_entry_id=claim.journal_entry_id,
+                message="Expense claim posting already initiated (idempotent)",
             )
 
         # Load items
@@ -218,6 +308,13 @@ class ExpensePostingAdapter:
             JournalService.approve_journal(db, org_id, journal.journal_entry_id, user_id)
 
         except HTTPException as e:
+            ExpensePostingAdapter._set_action_status(
+                db,
+                org_id,
+                c_id,
+                ExpenseClaimActionType.POST_GL,
+                ExpenseClaimActionStatus.FAILED,
+            )
             return ExpensePostingResult(
                 success=False, message=f"Journal creation failed: {e.detail}"
             )
@@ -229,7 +326,9 @@ class ExpensePostingAdapter:
         posting_batch_id = None
         if auto_post:
             if not idempotency_key:
-                idempotency_key = f"{org_id}:EXPENSE:{c_id}:post:v1"
+                idempotency_key = ExpensePostingAdapter._action_key(
+                    c_id, ExpenseClaimActionType.POST_GL
+                )
 
             posting_request = PostingRequest(
                 organization_id=org_id,
@@ -245,6 +344,13 @@ class ExpensePostingAdapter:
                 posting_result = LedgerPostingService.post_journal_entry(db, posting_request)
 
                 if not posting_result.success:
+                    ExpensePostingAdapter._set_action_status(
+                        db,
+                        org_id,
+                        c_id,
+                        ExpenseClaimActionType.POST_GL,
+                        ExpenseClaimActionStatus.FAILED,
+                    )
                     return ExpensePostingResult(
                         success=False,
                         journal_entry_id=journal.journal_entry_id,
@@ -254,6 +360,13 @@ class ExpensePostingAdapter:
                 posting_batch_id = posting_result.batch_id
 
             except Exception as e:
+                ExpensePostingAdapter._set_action_status(
+                    db,
+                    org_id,
+                    c_id,
+                    ExpenseClaimActionType.POST_GL,
+                    ExpenseClaimActionStatus.FAILED,
+                )
                 return ExpensePostingResult(
                     success=False,
                     journal_entry_id=journal.journal_entry_id,
@@ -262,6 +375,13 @@ class ExpensePostingAdapter:
 
         db.flush()
 
+        ExpensePostingAdapter._set_action_status(
+            db,
+            org_id,
+            c_id,
+            ExpenseClaimActionType.POST_GL,
+            ExpenseClaimActionStatus.COMPLETED,
+        )
         return ExpensePostingResult(
             success=True,
             journal_entry_id=journal.journal_entry_id,
@@ -298,107 +418,142 @@ class ExpensePostingAdapter:
         c_id = coerce_uuid(claim_id)
         user_id = coerce_uuid(created_by_user_id)
 
-        # Load claim
-        claim = db.get(ExpenseClaim, c_id)
-        if not claim or claim.organization_id != org_id:
-            return ExpensePostingResult(success=False, message="Expense claim not found")
+        action_started = False
+        try:
+            # Load claim
+            claim = db.get(ExpenseClaim, c_id)
+            if not claim or claim.organization_id != org_id:
+                return ExpensePostingResult(success=False, message="Expense claim not found")
 
-        if claim.status != ExpenseClaimStatus.APPROVED:
-            return ExpensePostingResult(
-                success=False,
-                message=f"Expense claim must be APPROVED (current: {claim.status.value})",
+            if claim.status != ExpenseClaimStatus.APPROVED:
+                return ExpensePostingResult(
+                    success=False,
+                    message=f"Expense claim must be APPROVED (current: {claim.status.value})",
+                )
+
+            # Check if already has invoice
+            if claim.supplier_invoice_id:
+                return ExpensePostingResult(
+                    success=True,
+                    supplier_invoice_id=claim.supplier_invoice_id,
+                    message="Supplier invoice already exists (idempotent)",
+                )
+
+            action_started = ExpensePostingAdapter._try_record_action(
+                db,
+                org_id,
+                c_id,
+                ExpenseClaimActionType.CREATE_SUPPLIER_INVOICE,
             )
+            if not action_started:
+                return ExpensePostingResult(
+                    success=True,
+                    supplier_invoice_id=claim.supplier_invoice_id,
+                    message="Supplier invoice creation already initiated (idempotent)",
+                )
 
-        # Check if already has invoice
-        if claim.supplier_invoice_id:
+            # Get or create supplier for employee
+            supplier = None
+            if supplier_id:
+                supplier = db.get(Supplier, supplier_id)
+
+            if not supplier:
+                # Try to find/create supplier for employee
+                supplier = ExpensePostingAdapter._get_or_create_employee_supplier(
+                    db, org_id, claim.employee, user_id
+                )
+
+            if not supplier:
+                ExpensePostingAdapter._set_action_status(
+                    db,
+                    org_id,
+                    c_id,
+                    ExpenseClaimActionType.CREATE_SUPPLIER_INVOICE,
+                    ExpenseClaimActionStatus.FAILED,
+                )
+                return ExpensePostingResult(
+                    success=False,
+                    message="Could not determine supplier for expense claim",
+                )
+
+            # Generate invoice number
+            invoice_number = ExpensePostingAdapter._next_invoice_number(db)
+
+            # Create supplier invoice
+            invoice = SupplierInvoice(
+                organization_id=org_id,
+                supplier_id=supplier.supplier_id,
+                invoice_number=invoice_number,
+                supplier_invoice_number=claim.claim_number,
+                invoice_type=SupplierInvoiceType.STANDARD,
+                invoice_date=claim.claim_date,
+                due_date=claim.claim_date,  # Immediate payment expected
+                currency_code=claim.currency_code,
+                exchange_rate=Decimal("1.0"),
+                subtotal_amount=claim.total_approved_amount or claim.total_claimed_amount,
+                tax_amount=Decimal("0"),
+                total_amount=claim.total_approved_amount or claim.total_claimed_amount,
+                functional_currency_amount=claim.total_approved_amount or claim.total_claimed_amount,
+                amount_paid=Decimal("0"),
+                amount_due=claim.total_approved_amount or claim.total_claimed_amount,
+                status=SupplierInvoiceStatus.DRAFT,
+                ap_control_account_id=supplier.ap_control_account_id,
+                description=f"Expense Reimbursement: {claim.purpose}",
+                internal_notes=f"Created from expense claim {claim.claim_number}",
+                created_by_user_id=user_id,
+                correlation_id=ExpensePostingAdapter._action_key(
+                    c_id, ExpenseClaimActionType.CREATE_SUPPLIER_INVOICE
+                ),
+            )
+            db.add(invoice)
+            db.flush()
+
+            # Create invoice lines from claim items
+            for idx, item in enumerate(claim.items, start=1):
+                account_id = ExpensePostingAdapter._determine_expense_account(db, org_id, item)
+
+                line = SupplierInvoiceLine(
+                    organization_id=org_id,
+                    invoice_id=invoice.invoice_id,
+                    line_number=idx,
+                    description=item.description,
+                    quantity=Decimal("1"),
+                    unit_price=item.approved_amount or item.claimed_amount,
+                    line_amount=item.approved_amount or item.claimed_amount,
+                    tax_amount=Decimal("0"),
+                    expense_account_id=account_id,
+                    cost_center_id=item.cost_center_id or claim.cost_center_id,
+                    project_id=claim.project_id,
+                )
+                db.add(line)
+
+            # Link claim to invoice
+            claim.supplier_invoice_id = invoice.invoice_id
+
+            db.flush()
+
+            ExpensePostingAdapter._set_action_status(
+                db,
+                org_id,
+                c_id,
+                ExpenseClaimActionType.CREATE_SUPPLIER_INVOICE,
+                ExpenseClaimActionStatus.COMPLETED,
+            )
             return ExpensePostingResult(
                 success=True,
-                supplier_invoice_id=claim.supplier_invoice_id,
-                message="Supplier invoice already exists (idempotent)",
+                supplier_invoice_id=invoice.invoice_id,
+                message="Supplier invoice created from expense claim",
             )
-
-        # Get or create supplier for employee
-        supplier = None
-        if supplier_id:
-            supplier = db.get(Supplier, supplier_id)
-
-        if not supplier:
-            # Try to find/create supplier for employee
-            supplier = ExpensePostingAdapter._get_or_create_employee_supplier(
-                db, org_id, claim.employee, user_id
-            )
-
-        if not supplier:
-            return ExpensePostingResult(
-                success=False,
-                message="Could not determine supplier for expense claim",
-            )
-
-        # Generate invoice number
-        from sqlalchemy import func, select
-        count = db.scalar(
-            select(func.count(SupplierInvoice.invoice_id)).where(
-                SupplierInvoice.organization_id == org_id
-            )
-        ) or 0
-        invoice_number = f"EXP-INV-{date.today().year}-{count + 1:05d}"
-
-        # Create supplier invoice
-        invoice = SupplierInvoice(
-            organization_id=org_id,
-            supplier_id=supplier.supplier_id,
-            invoice_number=invoice_number,
-            supplier_invoice_number=claim.claim_number,
-            invoice_type=SupplierInvoiceType.STANDARD,
-            invoice_date=claim.claim_date,
-            due_date=claim.claim_date,  # Immediate payment expected
-            currency_code=claim.currency_code,
-            exchange_rate=Decimal("1.0"),
-            subtotal_amount=claim.total_approved_amount or claim.total_claimed_amount,
-            tax_amount=Decimal("0"),
-            total_amount=claim.total_approved_amount or claim.total_claimed_amount,
-            functional_currency_amount=claim.total_approved_amount or claim.total_claimed_amount,
-            amount_paid=Decimal("0"),
-            amount_due=claim.total_approved_amount or claim.total_claimed_amount,
-            status=SupplierInvoiceStatus.DRAFT,
-            ap_control_account_id=supplier.ap_control_account_id,
-            description=f"Expense Reimbursement: {claim.purpose}",
-            internal_notes=f"Created from expense claim {claim.claim_number}",
-            created_by_user_id=user_id,
-            correlation_id=str(uuid_lib.uuid4()),
-        )
-        db.add(invoice)
-        db.flush()
-
-        # Create invoice lines from claim items
-        for idx, item in enumerate(claim.items, start=1):
-            account_id = ExpensePostingAdapter._determine_expense_account(db, org_id, item)
-
-            line = SupplierInvoiceLine(
-                organization_id=org_id,
-                invoice_id=invoice.invoice_id,
-                line_number=idx,
-                description=item.description,
-                quantity=Decimal("1"),
-                unit_price=item.approved_amount or item.claimed_amount,
-                line_amount=item.approved_amount or item.claimed_amount,
-                tax_amount=Decimal("0"),
-                expense_account_id=account_id,
-                cost_center_id=item.cost_center_id or claim.cost_center_id,
-                project_id=claim.project_id,
-            )
-            db.add(line)
-
-        # Link claim to invoice
-        claim.supplier_invoice_id = invoice.invoice_id
-
-        db.flush()
-
-        return ExpensePostingResult(
-            success=True,
-            supplier_invoice_id=invoice.invoice_id,
-            message="Supplier invoice created from expense claim",
-        )
+        except Exception:
+            if action_started:
+                ExpensePostingAdapter._set_action_status(
+                    db,
+                    org_id,
+                    c_id,
+                    ExpenseClaimActionType.CREATE_SUPPLIER_INVOICE,
+                    ExpenseClaimActionStatus.FAILED,
+                )
+            raise
 
     @staticmethod
     def post_cash_advance(

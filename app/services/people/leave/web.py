@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
-from typing import Optional
+from typing import Any, Optional, cast
 from uuid import UUID
 
-from fastapi import Request
+from fastapi import Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
@@ -45,9 +45,16 @@ class LeaveWebService:
         if not value:
             return None
         try:
-            return coerce_uuid(value)
+            return cast(UUID, coerce_uuid(value))
         except Exception:
             return None
+
+    @staticmethod
+    def _get_form_str(form: Any, key: str, default: str = "") -> str:
+        value = form.get(key, default) if form is not None else default
+        if isinstance(value, UploadFile) or value is None:
+            return default
+        return str(value).strip()
 
     @staticmethod
     def _get_employees(db: Session, org_id: UUID) -> list:
@@ -276,8 +283,8 @@ class LeaveWebService:
         org_id = coerce_uuid(auth.organization_id)
         svc = LeaveService(db, auth)
 
-        leave_type_code = (form.get("leave_type_code") or "").strip()
-        leave_type_name = (form.get("leave_type_name") or "").strip()
+        leave_type_code = LeaveWebService._get_form_str(form, "leave_type_code")
+        leave_type_name = LeaveWebService._get_form_str(form, "leave_type_name")
 
         if not leave_type_code or not leave_type_name:
             context = base_context(request, auth, "New Leave Type", "leave", db=db)
@@ -286,13 +293,13 @@ class LeaveWebService:
             return templates.TemplateResponse(request, "people/leave/leave_type_form.html", context)
 
         try:
-            max_days = form.get("max_days_per_year")
-            max_continuous = form.get("max_continuous_days")
-            max_carry = form.get("max_carry_forward_days")
-            carry_forward_expiry = form.get("carry_forward_expiry_months")
-            encash_threshold = form.get("encashment_threshold_days")
-            applicable_after_days = form.get("applicable_after_days")
-            max_optional_leaves = form.get("max_optional_leaves")
+            max_days = LeaveWebService._get_form_str(form, "max_days_per_year")
+            max_continuous = LeaveWebService._get_form_str(form, "max_continuous_days")
+            max_carry = LeaveWebService._get_form_str(form, "max_carry_forward_days")
+            carry_forward_expiry = LeaveWebService._get_form_str(form, "carry_forward_expiry_months")
+            encash_threshold = LeaveWebService._get_form_str(form, "encashment_threshold_days")
+            applicable_after_days = LeaveWebService._get_form_str(form, "applicable_after_days")
+            max_optional_leaves = LeaveWebService._get_form_str(form, "max_optional_leaves")
 
             svc.create_leave_type(
                 org_id,
@@ -300,19 +307,19 @@ class LeaveWebService:
                 leave_type_name=leave_type_name,
                 max_days_per_year=Decimal(max_days) if max_days else None,
                 max_continuous_days=int(max_continuous) if max_continuous else None,
-                allow_carry_forward=form.get("allow_carry_forward") == "true",
+                allow_carry_forward=LeaveWebService._get_form_str(form, "allow_carry_forward") == "true",
                 max_carry_forward_days=Decimal(max_carry) if max_carry else None,
                 carry_forward_expiry_months=int(carry_forward_expiry) if carry_forward_expiry else None,
-                allow_encashment=form.get("allow_encashment") == "true",
+                allow_encashment=LeaveWebService._get_form_str(form, "allow_encashment") == "true",
                 encashment_threshold_days=Decimal(encash_threshold) if encash_threshold else None,
-                is_lwp=form.get("is_lwp") == "true",
-                is_optional=form.get("is_optional") == "true",
-                is_compensatory=form.get("is_compensatory") == "true",
-                include_holidays=form.get("include_holidays") == "true",
+                is_lwp=LeaveWebService._get_form_str(form, "is_lwp") == "true",
+                is_optional=LeaveWebService._get_form_str(form, "is_optional") == "true",
+                is_compensatory=LeaveWebService._get_form_str(form, "is_compensatory") == "true",
+                include_holidays=LeaveWebService._get_form_str(form, "include_holidays") == "true",
                 applicable_after_days=int(applicable_after_days) if applicable_after_days else 0,
                 max_optional_leaves=int(max_optional_leaves) if max_optional_leaves else None,
-                is_active=form.get("is_active") == "true",
-                description=(form.get("description") or "").strip() or None,
+                is_active=LeaveWebService._get_form_str(form, "is_active") == "true",
+                description=LeaveWebService._get_form_str(form, "description") or None,
             )
             db.commit()
             return RedirectResponse("/people/leave/types", status_code=303)
@@ -358,33 +365,33 @@ class LeaveWebService:
         svc = LeaveService(db, auth)
 
         try:
-            max_days = form.get("max_days_per_year")
-            max_continuous = form.get("max_continuous_days")
-            max_carry = form.get("max_carry_forward_days")
-            carry_forward_expiry = form.get("carry_forward_expiry_months")
-            encash_threshold = form.get("encashment_threshold_days")
-            applicable_after_days = form.get("applicable_after_days")
-            max_optional_leaves = form.get("max_optional_leaves")
+            max_days = LeaveWebService._get_form_str(form, "max_days_per_year")
+            max_continuous = LeaveWebService._get_form_str(form, "max_continuous_days")
+            max_carry = LeaveWebService._get_form_str(form, "max_carry_forward_days")
+            carry_forward_expiry = LeaveWebService._get_form_str(form, "carry_forward_expiry_months")
+            encash_threshold = LeaveWebService._get_form_str(form, "encashment_threshold_days")
+            applicable_after_days = LeaveWebService._get_form_str(form, "applicable_after_days")
+            max_optional_leaves = LeaveWebService._get_form_str(form, "max_optional_leaves")
 
             svc.update_leave_type(
                 org_id,
                 coerce_uuid(leave_type_id),
-                leave_type_name=(form.get("leave_type_name") or "").strip(),
+                leave_type_name=LeaveWebService._get_form_str(form, "leave_type_name"),
                 max_days_per_year=Decimal(max_days) if max_days else None,
                 max_continuous_days=int(max_continuous) if max_continuous else None,
-                allow_carry_forward=form.get("allow_carry_forward") == "true",
+                allow_carry_forward=LeaveWebService._get_form_str(form, "allow_carry_forward") == "true",
                 max_carry_forward_days=Decimal(max_carry) if max_carry else None,
                 carry_forward_expiry_months=int(carry_forward_expiry) if carry_forward_expiry else None,
-                allow_encashment=form.get("allow_encashment") == "true",
+                allow_encashment=LeaveWebService._get_form_str(form, "allow_encashment") == "true",
                 encashment_threshold_days=Decimal(encash_threshold) if encash_threshold else None,
-                is_lwp=form.get("is_lwp") == "true",
-                is_optional=form.get("is_optional") == "true",
-                is_compensatory=form.get("is_compensatory") == "true",
-                include_holidays=form.get("include_holidays") == "true",
+                is_lwp=LeaveWebService._get_form_str(form, "is_lwp") == "true",
+                is_optional=LeaveWebService._get_form_str(form, "is_optional") == "true",
+                is_compensatory=LeaveWebService._get_form_str(form, "is_compensatory") == "true",
+                include_holidays=LeaveWebService._get_form_str(form, "include_holidays") == "true",
                 applicable_after_days=int(applicable_after_days) if applicable_after_days else None,
                 max_optional_leaves=int(max_optional_leaves) if max_optional_leaves else None,
-                is_active=form.get("is_active") == "true",
-                description=(form.get("description") or "").strip() or None,
+                is_active=LeaveWebService._get_form_str(form, "is_active") == "true",
+                description=LeaveWebService._get_form_str(form, "description") or None,
             )
             db.commit()
             return RedirectResponse("/people/leave/types", status_code=303)
@@ -427,11 +434,11 @@ class LeaveWebService:
         org_id = coerce_uuid(auth.organization_id)
         svc = LeaveService(db, auth)
 
-        employee_id = (form.get("employee_id") or "").strip()
-        leave_type_id = (form.get("leave_type_id") or "").strip()
-        from_date_str = (form.get("from_date") or "").strip()
-        to_date_str = (form.get("to_date") or "").strip()
-        new_leaves = (form.get("new_leaves_allocated") or "").strip()
+        employee_id = LeaveWebService._get_form_str(form, "employee_id")
+        leave_type_id = LeaveWebService._get_form_str(form, "leave_type_id")
+        from_date_str = LeaveWebService._get_form_str(form, "from_date")
+        to_date_str = LeaveWebService._get_form_str(form, "to_date")
+        new_leaves = LeaveWebService._get_form_str(form, "new_leaves_allocated")
 
         if not all([employee_id, leave_type_id, from_date_str, to_date_str, new_leaves]):
             context = base_context(request, auth, "New Leave Allocation", "leave", db=db)
@@ -442,7 +449,7 @@ class LeaveWebService:
             return templates.TemplateResponse(request, "people/leave/allocation_form.html", context)
 
         try:
-            carry_forward = form.get("carry_forward_leaves") or "0"
+            carry_forward = LeaveWebService._get_form_str(form, "carry_forward_leaves") or "0"
             svc.create_allocation(
                 org_id,
                 employee_id=coerce_uuid(employee_id),
@@ -451,7 +458,7 @@ class LeaveWebService:
                 to_date=date.fromisoformat(to_date_str),
                 new_leaves_allocated=Decimal(new_leaves),
                 carry_forward_leaves=Decimal(carry_forward),
-                notes=(form.get("notes") or "").strip() or None,
+                notes=LeaveWebService._get_form_str(form, "notes") or None,
             )
             db.commit()
             return RedirectResponse("/people/leave/allocations", status_code=303)
@@ -551,10 +558,10 @@ class LeaveWebService:
         svc = LeaveService(db, auth)
 
         try:
-            new_leaves = form.get("new_leaves_allocated") or "0"
-            carry_forward = form.get("carry_forward_leaves") or "0"
-            from_date_str = form.get("from_date") or ""
-            to_date_str = form.get("to_date") or ""
+            new_leaves = LeaveWebService._get_form_str(form, "new_leaves_allocated") or "0"
+            carry_forward = LeaveWebService._get_form_str(form, "carry_forward_leaves") or "0"
+            from_date_str = LeaveWebService._get_form_str(form, "from_date")
+            to_date_str = LeaveWebService._get_form_str(form, "to_date")
 
             svc.update_allocation(
                 org_id,
@@ -563,7 +570,7 @@ class LeaveWebService:
                 to_date=date.fromisoformat(to_date_str) if to_date_str else None,
                 new_leaves_allocated=Decimal(new_leaves),
                 carry_forward_leaves=Decimal(carry_forward),
-                notes=(form.get("notes") or "").strip() or None,
+                notes=LeaveWebService._get_form_str(form, "notes") or None,
             )
             db.commit()
             return RedirectResponse(f"/people/leave/allocations/{allocation_id}", status_code=303)
@@ -585,15 +592,26 @@ class LeaveWebService:
         allocation_id: str,
         auth: WebAuthContext,
         db: Session,
-    ) -> None:
+    ) -> RedirectResponse:
         """Delete an allocation."""
+        from urllib.parse import quote
+
         org_id = coerce_uuid(auth.organization_id)
         svc = LeaveService(db, auth)
         try:
             svc.delete_allocation(org_id, coerce_uuid(allocation_id))
             db.commit()
+            success_msg = quote("Allocation deleted successfully")
+            return RedirectResponse(
+                url=f"/people/leave/allocations?success={success_msg}",
+                status_code=303,
+            )
         except LeaveServiceError:
-            pass
+            error_msg = quote("Unable to delete allocation")
+            return RedirectResponse(
+                url=f"/people/leave/allocations?error={error_msg}",
+                status_code=303,
+            )
 
     async def encash_allocation_response(
         self,
@@ -609,8 +627,8 @@ class LeaveWebService:
         if form is None:
             form = await request.form()
 
-        days_to_encash = (form.get("days_to_encash") or "").strip()
-        notes = (form.get("encash_notes") or "").strip()
+        days_to_encash = LeaveWebService._get_form_str(form, "days_to_encash")
+        notes = LeaveWebService._get_form_str(form, "encash_notes")
 
         org_id = coerce_uuid(auth.organization_id)
         alloc_id = coerce_uuid(allocation_id)
@@ -690,12 +708,12 @@ class LeaveWebService:
             form = await request.form()
 
         employee_ids = form.getlist("employee_ids")
-        leave_type_id = (form.get("leave_type_id") or "").strip()
-        from_date_str = (form.get("from_date") or "").strip()
-        to_date_str = (form.get("to_date") or "").strip()
-        new_leaves = (form.get("new_leaves_allocated") or "0").strip()
-        carry_forward = (form.get("carry_forward_leaves") or "0").strip()
-        notes = (form.get("notes") or "").strip() or None
+        leave_type_id = LeaveWebService._get_form_str(form, "leave_type_id")
+        from_date_str = LeaveWebService._get_form_str(form, "from_date")
+        to_date_str = LeaveWebService._get_form_str(form, "to_date")
+        new_leaves = LeaveWebService._get_form_str(form, "new_leaves_allocated") or "0"
+        carry_forward = LeaveWebService._get_form_str(form, "carry_forward_leaves") or "0"
+        notes = LeaveWebService._get_form_str(form, "notes") or None
 
         if not employee_ids:
             return RedirectResponse(
@@ -775,10 +793,10 @@ class LeaveWebService:
         org_id = coerce_uuid(auth.organization_id)
         svc = LeaveService(db, auth)
 
-        employee_id = (form.get("employee_id") or "").strip()
-        leave_type_id = (form.get("leave_type_id") or "").strip()
-        from_date_str = (form.get("from_date") or "").strip()
-        to_date_str = (form.get("to_date") or "").strip()
+        employee_id = LeaveWebService._get_form_str(form, "employee_id")
+        leave_type_id = LeaveWebService._get_form_str(form, "leave_type_id")
+        from_date_str = LeaveWebService._get_form_str(form, "from_date")
+        to_date_str = LeaveWebService._get_form_str(form, "to_date")
 
         if not all([employee_id, leave_type_id, from_date_str, to_date_str]):
             context = base_context(request, auth, "New Leave Application", "leave", db=db)
@@ -789,8 +807,8 @@ class LeaveWebService:
             return templates.TemplateResponse(request, "people/leave/application_form.html", context)
 
         try:
-            half_day = form.get("half_day") == "true"
-            half_day_date_str = (form.get("half_day_date") or "").strip()
+            half_day = LeaveWebService._get_form_str(form, "half_day") == "true"
+            half_day_date_str = LeaveWebService._get_form_str(form, "half_day_date")
 
             employee = db.get(Employee, coerce_uuid(employee_id))
             leave_approver_id = None
@@ -805,7 +823,7 @@ class LeaveWebService:
                 to_date=date.fromisoformat(to_date_str),
                 half_day=half_day,
                 half_day_date=date.fromisoformat(half_day_date_str) if half_day_date_str else None,
-                reason=(form.get("reason") or "").strip() or None,
+                reason=LeaveWebService._get_form_str(form, "reason") or None,
                 leave_approver_id=leave_approver_id,
             )
             db.commit()
@@ -899,10 +917,10 @@ class LeaveWebService:
         svc = LeaveService(db, auth)
 
         try:
-            from_date_str = form.get("from_date") or ""
-            to_date_str = form.get("to_date") or ""
-            half_day = form.get("half_day") == "true"
-            half_day_date_str = (form.get("half_day_date") or "").strip()
+            from_date_str = LeaveWebService._get_form_str(form, "from_date")
+            to_date_str = LeaveWebService._get_form_str(form, "to_date")
+            half_day = LeaveWebService._get_form_str(form, "half_day") == "true"
+            half_day_date_str = LeaveWebService._get_form_str(form, "half_day_date")
 
             svc.update_application(
                 org_id,
@@ -911,7 +929,7 @@ class LeaveWebService:
                 to_date=date.fromisoformat(to_date_str) if to_date_str else None,
                 half_day=half_day,
                 half_day_date=date.fromisoformat(half_day_date_str) if half_day_date_str else None,
-                reason=(form.get("reason") or "").strip() or None,
+                reason=LeaveWebService._get_form_str(form, "reason") or None,
             )
             db.commit()
             return RedirectResponse(f"/people/leave/applications/{application_id}", status_code=303)
@@ -990,7 +1008,7 @@ class LeaveWebService:
                 org_id,
                 coerce_uuid(application_id),
                 approver_id=approver_id,
-                reason=(form.get("reason") or "Rejected").strip(),
+                reason=LeaveWebService._get_form_str(form, "reason") or "Rejected",
             )
             db.commit()
         except LeaveServiceError:
@@ -1037,10 +1055,10 @@ class LeaveWebService:
         org_id = coerce_uuid(auth.organization_id)
         svc = LeaveService(db, auth)
 
-        list_code = (form.get("list_code") or "").strip()
-        list_name = (form.get("list_name") or "").strip()
-        from_date_str = (form.get("from_date") or "").strip()
-        to_date_str = (form.get("to_date") or "").strip()
+        list_code = LeaveWebService._get_form_str(form, "list_code")
+        list_name = LeaveWebService._get_form_str(form, "list_name")
+        from_date_str = LeaveWebService._get_form_str(form, "from_date")
+        to_date_str = LeaveWebService._get_form_str(form, "to_date")
 
         if not all([list_code, list_name, from_date_str, to_date_str]):
             context = base_context(request, auth, "New Holiday List", "leave", db=db)
@@ -1053,15 +1071,15 @@ class LeaveWebService:
             holidays = []
             i = 0
             while True:
-                holiday_date = form.get(f"holidays[{i}][holiday_date]")
-                holiday_name = form.get(f"holidays[{i}][holiday_name]")
+                holiday_date = LeaveWebService._get_form_str(form, f"holidays[{i}][holiday_date]")
+                holiday_name = LeaveWebService._get_form_str(form, f"holidays[{i}][holiday_name]")
                 if not holiday_date or not holiday_name:
                     break
                 holidays.append(
                     {
                         "holiday_date": date.fromisoformat(holiday_date),
                         "holiday_name": holiday_name.strip(),
-                        "is_optional": form.get(f"holidays[{i}][is_optional]") == "on",
+                        "is_optional": LeaveWebService._get_form_str(form, f"holidays[{i}][is_optional]") == "on",
                     }
                 )
                 i += 1
@@ -1075,7 +1093,7 @@ class LeaveWebService:
                 year=from_date.year,
                 from_date=from_date,
                 to_date=to_date,
-                description=(form.get("description") or "").strip() or None,
+                description=LeaveWebService._get_form_str(form, "description") or None,
                 holidays=holidays if holidays else None,
             )
             db.commit()
@@ -1141,20 +1159,20 @@ class LeaveWebService:
         svc = LeaveService(db, auth)
 
         try:
-            from_date_str = form.get("from_date") or ""
-            to_date_str = form.get("to_date") or ""
+            from_date_str = LeaveWebService._get_form_str(form, "from_date")
+            to_date_str = LeaveWebService._get_form_str(form, "to_date")
             holidays = []
             i = 0
             while True:
-                holiday_date = form.get(f"holidays[{i}][holiday_date]")
-                holiday_name = form.get(f"holidays[{i}][holiday_name]")
+                holiday_date = LeaveWebService._get_form_str(form, f"holidays[{i}][holiday_date]")
+                holiday_name = LeaveWebService._get_form_str(form, f"holidays[{i}][holiday_name]")
                 if not holiday_date or not holiday_name:
                     break
                 holidays.append(
                     {
                         "holiday_date": date.fromisoformat(holiday_date),
                         "holiday_name": holiday_name.strip(),
-                        "is_optional": form.get(f"holidays[{i}][is_optional]") == "on",
+                        "is_optional": LeaveWebService._get_form_str(form, f"holidays[{i}][is_optional]") == "on",
                     }
                 )
                 i += 1
@@ -1162,11 +1180,11 @@ class LeaveWebService:
             svc.update_holiday_list(
                 org_id,
                 coerce_uuid(holiday_list_id),
-                list_name=(form.get("list_name") or "").strip(),
+                list_name=LeaveWebService._get_form_str(form, "list_name"),
                 from_date=date.fromisoformat(from_date_str) if from_date_str else None,
                 to_date=date.fromisoformat(to_date_str) if to_date_str else None,
-                description=(form.get("description") or "").strip() or None,
-                is_active=form.get("is_active") == "true",
+                description=LeaveWebService._get_form_str(form, "description") or None,
+                is_active=LeaveWebService._get_form_str(form, "is_active") == "true",
                 holidays=holidays,
             )
             db.commit()
@@ -1387,7 +1405,7 @@ class LeaveWebService:
             form = await request.form()
 
         application_ids = form.getlist("application_ids")
-        rejection_reason = (form.get("rejection_reason") or "").strip() or "Rejected"
+        rejection_reason = LeaveWebService._get_form_str(form, "rejection_reason") or "Rejected"
 
         if not application_ids:
             return RedirectResponse(

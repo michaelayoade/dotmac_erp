@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import date as date_type
-from typing import Any, Optional
+from typing import Any, Optional, cast
 from urllib.parse import quote
 from uuid import UUID
 
@@ -141,7 +141,10 @@ class LifecycleWebService:
         if form is None:
             form = await request.form()
 
-        completed = LifecycleWebService._parse_bool(form.get("completed"), True)
+        completed = LifecycleWebService._parse_bool(
+            LifecycleWebService._form_str(form, "completed"),
+            True,
+        )
 
         org_id = coerce_uuid(auth.organization_id)
         lifecycle_svc = LifecycleService(db)
@@ -184,7 +187,10 @@ class LifecycleWebService:
 
         username = LifecycleWebService._form_str(form, "username")
         password = LifecycleWebService._form_str(form, "password")
-        must_change = LifecycleWebService._parse_bool(form.get("must_change_password"), False)
+        must_change = LifecycleWebService._parse_bool(
+            LifecycleWebService._form_str(form, "must_change_password"),
+            False,
+        )
 
         org_id = coerce_uuid(auth.organization_id)
         svc = EmployeeService(db, org_id)
@@ -200,9 +206,10 @@ class LifecycleWebService:
             return RedirectResponse(url=f"/people/hr/employees/{employee_id}", status_code=303)
         except ValidationError as exc:
             db.rollback()
-            context = hr_web_service.employee_detail_response(
+            response = hr_web_service.employee_detail_response(
                 request, auth, db, str(employee_id)
-            ).context
+            )
+            context = cast(Any, response).context
             context["user_access_error"] = str(exc)
             return templates.TemplateResponse(
                 request, "people/hr/employee_detail.html", context
@@ -221,9 +228,10 @@ class LifecycleWebService:
 
         person_id = LifecycleWebService._form_str(form, "person_id")
         if not person_id:
-            context = hr_web_service.employee_detail_response(
+            response = hr_web_service.employee_detail_response(
                 request, auth, db, str(employee_id)
-            ).context
+            )
+            context = cast(Any, response).context
             context["user_access_error"] = "Person ID is required."
             return templates.TemplateResponse(
                 request, "people/hr/employee_detail.html", context
@@ -235,9 +243,10 @@ class LifecycleWebService:
         try:
             person_uuid = coerce_uuid(person_id, raise_http=False)
         except Exception:
-            context = hr_web_service.employee_detail_response(
+            response = hr_web_service.employee_detail_response(
                 request, auth, db, str(employee_id)
-            ).context
+            )
+            context = cast(Any, response).context
             context["user_access_error"] = "Invalid Person ID."
             return templates.TemplateResponse(
                 request, "people/hr/employee_detail.html", context
@@ -249,9 +258,10 @@ class LifecycleWebService:
             return RedirectResponse(url=f"/people/hr/employees/{employee_id}", status_code=303)
         except ValidationError as exc:
             db.rollback()
-            context = hr_web_service.employee_detail_response(
+            response = hr_web_service.employee_detail_response(
                 request, auth, db, str(employee_id)
-            ).context
+            )
+            context = cast(Any, response).context
             context["user_access_error"] = str(exc)
             return templates.TemplateResponse(
                 request, "people/hr/employee_detail.html", context
@@ -501,7 +511,7 @@ class LifecycleWebService:
                 employee.department_id = coerce_uuid(new_department_id)
 
         if new_reports_to_id:
-            current_manager = employee.reports_to.full_name if employee.reports_to else "-"
+            current_manager = employee.manager.full_name if employee.manager else "-"
             new_manager = db.get(Employee, coerce_uuid(new_reports_to_id))
             if new_manager:
                 details.append({
@@ -669,7 +679,7 @@ class LifecycleWebService:
                 employee.designation_id = coerce_uuid(new_designation_id)
 
         if new_reports_to_id:
-            current_manager = employee.reports_to.full_name if employee.reports_to else "-"
+            current_manager = employee.manager.full_name if employee.manager else "-"
             new_manager = db.get(Employee, coerce_uuid(new_reports_to_id))
             if new_manager:
                 details.append({
@@ -680,13 +690,24 @@ class LifecycleWebService:
                 employee.reports_to_id = coerce_uuid(new_reports_to_id)
 
         if new_branch:
-            current_branch = employee.branch or "-"
+            current_branch = (
+                employee.assigned_location.location_name if employee.assigned_location else "-"
+            )
             details.append({
                 "property_name": "Branch",
                 "current_value": current_branch,
                 "new_value": new_branch,
             })
-            employee.branch = new_branch
+            from app.models.finance.core_org.location import Location
+
+            new_location = db.scalar(
+                select(Location).where(
+                    Location.organization_id == org_id,
+                    Location.location_name == new_branch,
+                )
+            )
+            if new_location:
+                employee.assigned_location_id = new_location.location_id
 
         lifecycle_svc.create_transfer(
             org_id,
@@ -729,4 +750,3 @@ class LifecycleWebService:
 
 
 lifecycle_web_service = LifecycleWebService()
-

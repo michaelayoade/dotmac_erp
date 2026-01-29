@@ -9,7 +9,7 @@ from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
@@ -50,22 +50,48 @@ def get_db():
 class LeaseContractCreate(BaseModel):
     """Create lease contract request."""
 
-    lease_code: str = Field(max_length=30)
     lease_name: str = Field(max_length=200)
     lessor_name: str = Field(max_length=200)
+    classification: str = "OPERATING"
     asset_description: str
-    lease_type: str = "OPERATING"
     commencement_date: date
     end_date: date
-    lease_term_months: int
     currency_code: str = Field(max_length=3)
-    base_rent_amount: Decimal
     payment_frequency: str = "MONTHLY"
-    discount_rate: Decimal
-    rou_asset_account_id: Optional[UUID] = None
-    lease_liability_account_id: Optional[UUID] = None
-    interest_expense_account_id: Optional[UUID] = None
-    depreciation_expense_account_id: Optional[UUID] = None
+    base_payment_amount: Decimal
+    incremental_borrowing_rate: Decimal
+    lease_liability_account_id: UUID
+    interest_expense_account_id: UUID
+    rou_asset_account_id: UUID
+    depreciation_expense_account_id: UUID
+    description: Optional[str] = None
+    lessor_supplier_id: Optional[UUID] = None
+    external_reference: Optional[str] = None
+    is_lessee: bool = True
+    payment_timing: str = "ADVANCE"
+    has_renewal_option: bool = False
+    renewal_option_term_months: Optional[int] = None
+    renewal_reasonably_certain: bool = False
+    has_purchase_option: bool = False
+    purchase_option_price: Optional[Decimal] = None
+    purchase_reasonably_certain: bool = False
+    has_termination_option: bool = False
+    termination_penalty: Optional[Decimal] = None
+    has_variable_payments: bool = False
+    variable_payment_basis: Optional[str] = None
+    is_index_linked: bool = False
+    index_type: Optional[str] = None
+    index_base_value: Optional[Decimal] = None
+    residual_value_guarantee: Decimal = Decimal("0")
+    implicit_rate_known: bool = False
+    implicit_rate: Optional[Decimal] = None
+    initial_direct_costs: Decimal = Decimal("0")
+    lease_incentives_received: Decimal = Decimal("0")
+    restoration_obligation: Decimal = Decimal("0")
+    asset_category_id: Optional[UUID] = None
+    location_id: Optional[UUID] = None
+    cost_center_id: Optional[UUID] = None
+    project_id: Optional[UUID] = None
 
 
 class LeaseContractRead(BaseModel):
@@ -128,11 +154,13 @@ class LeaseScheduleRead(BaseModel):
 class LeaseModificationCreate(BaseModel):
     """Lease modification request."""
 
+    fiscal_period_id: UUID
     modification_date: date
+    effective_date: Optional[date] = None
     modification_type: str = Field(max_length=30)
-    new_lease_term_months: Optional[int] = None
-    new_base_rent_amount: Optional[Decimal] = None
-    new_discount_rate: Optional[Decimal] = None
+    new_lease_payments: Optional[Decimal] = None
+    revised_discount_rate: Optional[Decimal] = None
+    revised_lease_term_months: Optional[int] = None
     reason: Optional[str] = None
 
 
@@ -149,25 +177,55 @@ def create_lease_contract(
     db: Session = Depends(get_db),
 ):
     """Create a new lease contract."""
+    classification_value = parse_enum(LeaseClassification, payload.classification)
+    if classification_value is None:
+        raise HTTPException(status_code=400, detail="Invalid lease classification")
+
     input_data = LeaseContractInput(
-        lease_code=payload.lease_code,
         lease_name=payload.lease_name,
         lessor_name=payload.lessor_name,
-        asset_description=payload.asset_description,
-        lease_type=payload.lease_type,
+        classification=classification_value,
         commencement_date=payload.commencement_date,
         end_date=payload.end_date,
-        lease_term_months=payload.lease_term_months,
         currency_code=payload.currency_code,
-        base_rent_amount=payload.base_rent_amount,
         payment_frequency=payload.payment_frequency,
-        discount_rate=payload.discount_rate,
-        rou_asset_account_id=payload.rou_asset_account_id,
+        base_payment_amount=payload.base_payment_amount,
+        incremental_borrowing_rate=payload.incremental_borrowing_rate,
+        asset_description=payload.asset_description,
         lease_liability_account_id=payload.lease_liability_account_id,
         interest_expense_account_id=payload.interest_expense_account_id,
+        rou_asset_account_id=payload.rou_asset_account_id,
         depreciation_expense_account_id=payload.depreciation_expense_account_id,
+        description=payload.description,
+        lessor_supplier_id=payload.lessor_supplier_id,
+        external_reference=payload.external_reference,
+        is_lessee=payload.is_lessee,
+        payment_timing=payload.payment_timing,
+        has_renewal_option=payload.has_renewal_option,
+        renewal_option_term_months=payload.renewal_option_term_months,
+        renewal_reasonably_certain=payload.renewal_reasonably_certain,
+        has_purchase_option=payload.has_purchase_option,
+        purchase_option_price=payload.purchase_option_price,
+        purchase_reasonably_certain=payload.purchase_reasonably_certain,
+        has_termination_option=payload.has_termination_option,
+        termination_penalty=payload.termination_penalty,
+        has_variable_payments=payload.has_variable_payments,
+        variable_payment_basis=payload.variable_payment_basis,
+        is_index_linked=payload.is_index_linked,
+        index_type=payload.index_type,
+        index_base_value=payload.index_base_value,
+        residual_value_guarantee=payload.residual_value_guarantee,
+        implicit_rate_known=payload.implicit_rate_known,
+        implicit_rate=payload.implicit_rate,
+        initial_direct_costs=payload.initial_direct_costs,
+        lease_incentives_received=payload.lease_incentives_received,
+        restoration_obligation=payload.restoration_obligation,
+        asset_category_id=payload.asset_category_id,
+        location_id=payload.location_id,
+        cost_center_id=payload.cost_center_id,
+        project_id=payload.project_id,
     )
-    return lease_contract_service.create_lease(
+    return lease_contract_service.create_contract(
         db=db,
         organization_id=organization_id,
         input=input_data,
@@ -221,16 +279,30 @@ def commence_lease(
     lease_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     commenced_by_user_id: UUID = Query(...),
+    lease_liability_account_id: UUID = Query(...),
+    interest_expense_account_id: UUID = Query(...),
+    rou_asset_account_id: UUID = Query(...),
+    depreciation_expense_account_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("lease:contracts:commence")),
     db: Session = Depends(get_db),
 ):
     """Commence a lease (activate)."""
-    return lease_contract_service.commence_lease(
+    lease_contract_service.approve_contract(
         db=db,
         organization_id=organization_id,
         lease_id=lease_id,
-        commenced_by_user_id=commenced_by_user_id,
+        approved_by_user_id=commenced_by_user_id,
     )
+    contract, _, _ = lease_contract_service.activate_contract(
+        db=db,
+        organization_id=organization_id,
+        lease_id=lease_id,
+        lease_liability_account_id=lease_liability_account_id,
+        interest_expense_account_id=interest_expense_account_id,
+        rou_asset_account_id=rou_asset_account_id,
+        depreciation_expense_account_id=depreciation_expense_account_id,
+    )
+    return contract
 
 
 @router.post("/contracts/{lease_id}/terminate", response_model=LeaseContractRead)
@@ -238,19 +310,17 @@ def terminate_lease(
     lease_id: UUID,
     termination_date: date = Query(...),
     organization_id: UUID = Depends(require_organization_id),
-    terminated_by_user_id: UUID = Query(...),
     reason: Optional[str] = None,
     auth: dict = Depends(require_tenant_permission("lease:contracts:terminate")),
     db: Session = Depends(get_db),
 ):
     """Terminate a lease early."""
-    return lease_contract_service.terminate_lease(
+    return lease_contract_service.terminate_contract(
         db=db,
         organization_id=organization_id,
         lease_id=lease_id,
         termination_date=termination_date,
-        terminated_by_user_id=terminated_by_user_id,
-        reason=reason,
+        termination_reason=reason,
     )
 
 
@@ -267,11 +337,31 @@ def calculate_lease(
     db: Session = Depends(get_db),
 ):
     """Calculate initial lease values (ROU asset, liability)."""
-    return lease_calculation_service.calculate_initial_values(
-        db=db,
-        organization_id=organization_id,
+    contract = lease_contract_service.get(db, str(lease_id))
+    liability = lease_calculation_service.calculate_initial_liability(db, contract)
+    rou_asset_value = (
+        liability.total_liability
+        + contract.initial_direct_costs
+        - contract.lease_incentives_received
+        + contract.restoration_obligation
+    )
+    try:
+        monthly_depreciation = lease_calculation_service.calculate_rou_depreciation(
+            db=db,
+            lease_id=lease_id,
+            periods=1,
+        )
+    except HTTPException:
+        monthly_depreciation = Decimal("0")
+
+    return LeaseCalculationRead(
         lease_id=lease_id,
         calculation_date=calculation_date,
+        present_value_payments=liability.total_liability,
+        initial_direct_costs=contract.initial_direct_costs,
+        rou_asset_value=rou_asset_value,
+        lease_liability=liability.total_liability,
+        monthly_depreciation=monthly_depreciation,
     )
 
 
@@ -283,10 +373,31 @@ def get_lease_schedule(
     db: Session = Depends(get_db),
 ):
     """Get lease amortization schedule."""
-    return lease_calculation_service.get_amortization_schedule(
-        db=db,
-        organization_id=str(organization_id),
-        lease_id=str(lease_id),
+    contract = lease_contract_service.get(db, str(lease_id))
+    schedule = lease_calculation_service.generate_amortization_schedule(db=db, lease_id=lease_id)
+    lines = [
+        LeaseScheduleLineRead(
+            period_number=entry.period,
+            payment_date=entry.payment_date,
+            payment_amount=entry.payment_amount,
+            interest_expense=entry.interest_expense,
+            principal_reduction=entry.principal_reduction,
+            opening_liability=entry.opening_balance,
+            closing_liability=entry.closing_balance,
+        )
+        for entry in schedule
+    ]
+    total_payments = sum((line.payment_amount for line in lines), Decimal("0"))
+    total_interest = sum((line.interest_expense for line in lines), Decimal("0"))
+    total_principal = sum((line.principal_reduction for line in lines), Decimal("0"))
+
+    return LeaseScheduleRead(
+        lease_id=lease_id,
+        lease_code=contract.lease_number,
+        total_payments=total_payments,
+        total_interest=total_interest,
+        total_principal=total_principal,
+        lines=lines,
     )
 
 
@@ -314,7 +425,7 @@ def post_initial_recognition(
     return PostingResultSchema(
         success=result.success,
         journal_entry_id=result.journal_entry_id,
-        entry_number=result.entry_number,
+        entry_number=None,
         message=result.message,
     )
 
@@ -341,7 +452,7 @@ def post_interest_accrual(
     return PostingResultSchema(
         success=result.success,
         journal_entry_id=result.journal_entry_id,
-        entry_number=result.entry_number,
+        entry_number=None,
         message=result.message,
     )
 
@@ -370,7 +481,7 @@ def post_lease_payment(
     return PostingResultSchema(
         success=result.success,
         journal_entry_id=result.journal_entry_id,
-        entry_number=result.entry_number,
+        entry_number=None,
         message=result.message,
     )
 
@@ -397,7 +508,7 @@ def post_rou_depreciation(
     return PostingResultSchema(
         success=result.success,
         journal_entry_id=result.journal_entry_id,
-        entry_number=result.entry_number,
+        entry_number=None,
         message=result.message,
     )
 
@@ -406,7 +517,17 @@ def post_rou_depreciation(
 # Lease Modifications
 # =============================================================================
 
-@router.post("/contracts/{lease_id}/modify", response_model=LeaseContractRead)
+class ModificationResultRead(BaseModel):
+    """Modification result response."""
+    success: bool
+    modification_id: Optional[UUID] = None
+    liability_adjustment: Decimal = Decimal("0")
+    rou_asset_adjustment: Decimal = Decimal("0")
+    gain_loss: Decimal = Decimal("0")
+    message: str = ""
+
+
+@router.post("/contracts/{lease_id}/modify", response_model=ModificationResultRead)
 def modify_lease(
     lease_id: UUID,
     payload: LeaseModificationCreate,
@@ -416,17 +537,29 @@ def modify_lease(
     db: Session = Depends(get_db),
 ):
     """Modify an existing lease."""
-    return lease_contract_service.modify_lease(
-        db=db,
-        organization_id=organization_id,
+    effective_date = payload.effective_date or payload.modification_date
+    input_data = ModificationInput(
         lease_id=lease_id,
+        fiscal_period_id=payload.fiscal_period_id,
         modification_date=payload.modification_date,
-        modification_type=payload.modification_type,
-        new_lease_term_months=payload.new_lease_term_months,
-        new_base_rent_amount=payload.new_base_rent_amount,
-        new_discount_rate=payload.new_discount_rate,
-        reason=payload.reason,
-        modified_by_user_id=modified_by_user_id,
+        effective_date=effective_date,
+        modification_type=ModificationType(payload.modification_type),
+        description=payload.reason,
+        is_separate_lease=False,
+        new_lease_payments=payload.new_lease_payments,
+        revised_discount_rate=payload.revised_discount_rate,
+        revised_lease_term_months=payload.revised_lease_term_months,
+    )
+    result = lease_modification_service.process_modification(
+        db, organization_id, input_data, modified_by_user_id
+    )
+    return ModificationResultRead(
+        success=result.success,
+        modification_id=result.modification.modification_id if result.modification else None,
+        liability_adjustment=result.liability_adjustment,
+        rou_asset_adjustment=result.rou_asset_adjustment,
+        gain_loss=result.gain_loss,
+        message=result.message,
     )
 
 
@@ -452,16 +585,6 @@ class FullModificationCreate(BaseModel):
     new_lease_payments: Optional[Decimal] = None
     revised_discount_rate: Optional[Decimal] = None
     revised_lease_term_months: Optional[int] = None
-
-
-class ModificationResultRead(BaseModel):
-    """Modification result response."""
-    success: bool
-    modification_id: Optional[UUID] = None
-    liability_adjustment: Decimal = Decimal("0")
-    rou_asset_adjustment: Decimal = Decimal("0")
-    gain_loss: Decimal = Decimal("0")
-    message: str = ""
 
 
 class LeaseModificationRead(BaseModel):

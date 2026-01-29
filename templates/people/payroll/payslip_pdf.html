@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payslip - {{ slip.slip_number }}</title>
+    <style>
+        /* Reset and base styles */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            font-size: 10pt;
+            line-height: 1.4;
+            color: #1e293b;
+            background: white;
+        }
+
+        /* Page setup */
+        @page {
+            size: A4;
+            margin: 1.5cm;
+        }
+
+        .container {
+            max-width: 100%;
+            padding: 0;
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #0d9488;
+            margin-bottom: 20px;
+        }
+
+        .company-info {
+            flex: 1;
+        }
+
+        .company-name {
+            font-size: 16pt;
+            font-weight: bold;
+            color: #0d9488;
+            margin-bottom: 4px;
+        }
+
+        .company-address {
+            font-size: 9pt;
+            color: #64748b;
+        }
+
+        .document-info {
+            text-align: right;
+        }
+
+        .document-title {
+            font-size: 14pt;
+            font-weight: bold;
+            color: #1e293b;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .document-number {
+            font-size: 11pt;
+            color: #0d9488;
+            font-weight: 600;
+            margin-top: 4px;
+        }
+
+        .document-period {
+            font-size: 9pt;
+            color: #64748b;
+            margin-top: 4px;
+        }
+
+        /* Employee section */
+        .employee-section {
+            display: flex;
+            justify-content: space-between;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+
+        .employee-details {
+            flex: 2;
+        }
+
+        .employee-name {
+            font-size: 12pt;
+            font-weight: bold;
+            color: #1e293b;
+            margin-bottom: 4px;
+        }
+
+        .employee-meta {
+            font-size: 9pt;
+            color: #64748b;
+        }
+
+        .employee-meta span {
+            display: inline-block;
+            margin-right: 15px;
+        }
+
+        .work-days {
+            text-align: right;
+        }
+
+        .work-days-label {
+            font-size: 8pt;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .work-days-value {
+            font-size: 14pt;
+            font-weight: bold;
+            color: #1e293b;
+        }
+
+        .work-days-value span {
+            color: #94a3b8;
+            font-weight: normal;
+        }
+
+        /* Tables container */
+        .tables-container {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .table-section {
+            flex: 1;
+        }
+
+        .table-title {
+            font-size: 10pt;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 8px 12px;
+            margin-bottom: 0;
+            border-radius: 4px 4px 0 0;
+        }
+
+        .earnings-title {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .deductions-title {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        /* Tables */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 9pt;
+        }
+
+        th {
+            background: #f1f5f9;
+            font-weight: 600;
+            text-align: left;
+            padding: 8px 12px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        th:last-child {
+            text-align: right;
+        }
+
+        td {
+            padding: 8px 12px;
+            border-bottom: 1px solid #f1f5f9;
+        }
+
+        td:last-child {
+            text-align: right;
+            font-family: 'Courier New', monospace;
+        }
+
+        .abbr {
+            color: #94a3b8;
+            font-size: 8pt;
+            margin-left: 4px;
+        }
+
+        .table-total {
+            background: #f8fafc;
+            font-weight: bold;
+        }
+
+        .table-total td {
+            border-top: 2px solid #e2e8f0;
+            border-bottom: none;
+        }
+
+        .earnings-total td:last-child {
+            color: #059669;
+        }
+
+        .deductions-total td:last-child {
+            color: #dc2626;
+        }
+
+        /* Summary section */
+        .summary-section {
+            background: linear-gradient(135deg, #0d9488 0%, #14b8a6 100%);
+            color: white;
+            border-radius: 6px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .summary-grid {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+        }
+
+        .summary-breakdown {
+            flex: 1;
+        }
+
+        .summary-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 6px;
+            font-size: 10pt;
+        }
+
+        .summary-row.net-pay {
+            font-size: 11pt;
+            font-weight: bold;
+            border-top: 1px solid rgba(255,255,255,0.3);
+            padding-top: 8px;
+            margin-top: 8px;
+        }
+
+        .summary-highlight {
+            text-align: right;
+        }
+
+        .net-pay-label {
+            font-size: 9pt;
+            opacity: 0.9;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .net-pay-amount {
+            font-size: 24pt;
+            font-weight: bold;
+            font-family: 'Courier New', monospace;
+        }
+
+        /* Payment details */
+        .payment-section {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .payment-box {
+            flex: 1;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 12px;
+        }
+
+        .payment-box-title {
+            font-size: 8pt;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #64748b;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        .payment-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 9pt;
+            margin-bottom: 4px;
+        }
+
+        .payment-label {
+            color: #64748b;
+        }
+
+        .payment-value {
+            color: #1e293b;
+            font-weight: 500;
+        }
+
+        /* Footer */
+        .footer {
+            margin-top: 30px;
+            padding-top: 15px;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        .confidential-notice {
+            text-align: center;
+            font-size: 8pt;
+            color: #94a3b8;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .generation-info {
+            text-align: center;
+            font-size: 7pt;
+            color: #cbd5e1;
+            margin-top: 8px;
+        }
+
+        /* Utilities */
+        .text-right {
+            text-align: right;
+        }
+
+        .text-muted {
+            color: #64748b;
+        }
+
+        .font-mono {
+            font-family: 'Courier New', monospace;
+        }
+
+        /* Empty state */
+        .empty-row {
+            color: #94a3b8;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div class="company-info">
+                <div class="company-name">{{ organization_name }}</div>
+                {% if organization_address %}
+                <div class="company-address">{{ organization_address }}</div>
+                {% endif %}
+            </div>
+            <div class="document-info">
+                <div class="document-title">Salary Slip</div>
+                <div class="document-number">{{ slip.slip_number }}</div>
+                <div class="document-period">
+                    {{ pay_period_start.strftime('%B %d') }} &ndash; {{ pay_period_end.strftime('%B %d, %Y') }}
+                </div>
+            </div>
+        </div>
+
+        <!-- Employee Section -->
+        <div class="employee-section">
+            <div class="employee-details">
+                <div class="employee-name">{{ employee_name }}</div>
+                <div class="employee-meta">
+                    <span>ID: {{ employee_code }}</span>
+                    {% if department_name %}
+                    <span>Dept: {{ department_name }}</span>
+                    {% endif %}
+                    {% if designation_name %}
+                    <span>Role: {{ designation_name }}</span>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="work-days">
+                <div class="work-days-label">Working Days</div>
+                <div class="work-days-value">
+                    {{ payment_days | format_currency(0) }}
+                    <span>/ {{ total_working_days | format_currency(0) }}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Earnings & Deductions Tables -->
+        <div class="tables-container">
+            <!-- Earnings -->
+            <div class="table-section">
+                <div class="table-title earnings-title">Earnings</div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Description</th>
+                            <th>Amount ({{ currency_code }})</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for earning in earnings %}
+                        <tr>
+                            <td>
+                                {{ earning.component_name }}
+                                {% if earning.abbr %}<span class="abbr">({{ earning.abbr }})</span>{% endif %}
+                            </td>
+                            <td>{{ earning.amount | format_currency }}</td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="2" class="empty-row">No earnings recorded</td>
+                        </tr>
+                        {% endfor %}
+                        <tr class="table-total earnings-total">
+                            <td><strong>Total Earnings</strong></td>
+                            <td><strong>{{ gross_pay | format_currency }}</strong></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Deductions -->
+            <div class="table-section">
+                <div class="table-title deductions-title">Deductions</div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Description</th>
+                            <th>Amount ({{ currency_code }})</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for deduction in deductions %}
+                        <tr>
+                            <td>
+                                {{ deduction.component_name }}
+                                {% if deduction.abbr %}<span class="abbr">({{ deduction.abbr }})</span>{% endif %}
+                            </td>
+                            <td>({{ deduction.amount | format_currency }})</td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="2" class="empty-row">No deductions recorded</td>
+                        </tr>
+                        {% endfor %}
+                        <tr class="table-total deductions-total">
+                            <td><strong>Total Deductions</strong></td>
+                            <td><strong>({{ total_deduction | format_currency }})</strong></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Summary Section -->
+        <div class="summary-section">
+            <div class="summary-grid">
+                <div class="summary-breakdown">
+                    <div class="summary-row">
+                        <span>Gross Pay</span>
+                        <span class="font-mono">{{ gross_pay | format_currency }}</span>
+                    </div>
+                    <div class="summary-row">
+                        <span>Total Deductions</span>
+                        <span class="font-mono">({{ total_deduction | format_currency }})</span>
+                    </div>
+                    <div class="summary-row net-pay">
+                        <span>Net Pay</span>
+                        <span class="font-mono">{{ net_pay | format_currency }}</span>
+                    </div>
+                </div>
+                <div class="summary-highlight">
+                    <div class="net-pay-label">Net Pay</div>
+                    <div class="net-pay-amount">{{ currency_code }} {{ net_pay | format_currency }}</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Payment Details -->
+        {% if bank_name or slip.status.value == 'PAID' %}
+        <div class="payment-section">
+            {% if bank_name %}
+            <div class="payment-box">
+                <div class="payment-box-title">Bank Details</div>
+                <div class="payment-row">
+                    <span class="payment-label">Bank</span>
+                    <span class="payment-value">{{ bank_name }}</span>
+                </div>
+                {% if bank_account_number %}
+                <div class="payment-row">
+                    <span class="payment-label">Account No.</span>
+                    <span class="payment-value font-mono">{{ bank_account_number }}</span>
+                </div>
+                {% endif %}
+                {% if bank_account_name %}
+                <div class="payment-row">
+                    <span class="payment-label">Account Name</span>
+                    <span class="payment-value">{{ bank_account_name }}</span>
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            {% if slip.status.value == 'PAID' and slip.paid_at %}
+            <div class="payment-box">
+                <div class="payment-box-title">Payment Status</div>
+                <div class="payment-row">
+                    <span class="payment-label">Status</span>
+                    <span class="payment-value" style="color: #059669; font-weight: bold;">PAID</span>
+                </div>
+                <div class="payment-row">
+                    <span class="payment-label">Paid On</span>
+                    <span class="payment-value">{{ slip.paid_at.strftime('%B %d, %Y') }}</span>
+                </div>
+                {% if slip.payment_reference %}
+                <div class="payment-row">
+                    <span class="payment-label">Reference</span>
+                    <span class="payment-value font-mono">{{ slip.payment_reference }}</span>
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- Footer -->
+        <div class="footer">
+            <div class="confidential-notice">
+                This is a computer-generated document. No signature required.
+                <br>
+                Confidential &mdash; For Employee Use Only
+            </div>
+            <div class="generation-info">
+                Generated on {{ now().strftime('%B %d, %Y at %H:%M') if now is defined else '' }}
+            </div>
+        </div>
+    </div>
+</body>
+</html>

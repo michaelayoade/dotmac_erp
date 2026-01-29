@@ -134,6 +134,20 @@ from app.models.people.exp import (
     CardTransactionStatus,
 )
 
+# Discipline Models
+from app.models.people.discipline import (
+    DisciplinaryCase,
+    CaseStatus,
+    ViolationType,
+    SeverityLevel,
+    CaseWitness,
+    CaseAction,
+    ActionType,
+    CaseDocument,
+    DocumentType as DisciplineDocumentType,
+    CaseResponse,
+)
+
 __all__ = [
     # Base mixins
     "PeopleBaseMixin",
@@ -221,4 +235,15 @@ __all__ = [
     "CorporateCard",
     "CardTransaction",
     "CardTransactionStatus",
+    # Discipline
+    "DisciplinaryCase",
+    "CaseStatus",
+    "ViolationType",
+    "SeverityLevel",
+    "CaseWitness",
+    "CaseAction",
+    "ActionType",
+    "CaseDocument",
+    "DisciplineDocumentType",
+    "CaseResponse",
 ]

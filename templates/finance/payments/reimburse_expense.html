@@ -106,7 +106,7 @@
         <form id="reimbursementForm" class="space-y-4">
             <div>
                 <label for="bank_code" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Bank</label>
-                <select id="bank_code" name="bank_code" required
+                <select id="bank_code" name="bank_code" required disabled
                         class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 shadow-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                     <option value="">Loading banks...</option>
                 </select>
@@ -114,8 +114,9 @@
 
             <div>
                 <label for="account_number" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Account Number</label>
-                <input type="text" id="account_number" name="account_number" required
+                <input type="text" id="account_number" name="account_number" required disabled
                        maxlength="10" pattern="[0-9]{10}" placeholder="Enter 10-digit account number"
+                       value="{{ claim_account_number }}"
                        class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 shadow-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
             </div>
 
@@ -175,12 +176,15 @@ let accountVerified = false;
 let verifiedBankCode = null;
 let verifiedAccountNumber = null;
 let verifiedAccountName = null;
+const presetBankCode = '{{ claim_bank_code }}';
+const presetAccountNumber = '{{ claim_account_number }}';
 
 // Load banks on page load
 document.addEventListener('DOMContentLoaded', loadBanks);
 
 async function loadBanks() {
     const select = document.getElementById('bank_code');
+    const accountInput = document.getElementById('account_number');
     try {
         const response = await fetch('/api/v1/payments/banks', {
             headers: {
@@ -197,6 +201,15 @@ async function loadBanks() {
             opt.textContent = bank.name;
             select.appendChild(opt);
         });
+
+        if (presetBankCode) {
+            select.value = presetBankCode;
+        }
+        if (presetAccountNumber) {
+            accountInput.value = presetAccountNumber;
+        }
+        select.disabled = true;
+        accountInput.disabled = true;
     } catch (error) {
         console.error('Error loading banks:', error);
         select.innerHTML = '<option value="">Failed to load banks</option>';

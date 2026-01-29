@@ -53,7 +53,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="space-y-6">
+<div class="space-y-6" x-data="attachmentPreview()">
 
     <!-- Quick Links -->
     <div class="flex flex-wrap gap-2">
@@ -366,5 +366,188 @@
         <p class="mt-2 text-sm text-slate-600 dark:text-slate-400 whitespace-pre-line">{{ project.description }}</p>
     </div>
     {% endif %}
+
+    <!-- Attachments -->
+    <div class="rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800" id="attachments">
+        <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 px-6 py-4">
+            <h3 class="text-lg font-medium text-slate-900 dark:text-white">
+                Attachments
+                {% if attachments %}
+                <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300">
+                    {{ attachments|length }}
+                </span>
+                {% endif %}
+            </h3>
+        </div>
+        <div class="p-6 space-y-4">
+            <form method="post" enctype="multipart/form-data" action="/operations/projects/{{ project.project_code }}/attachments" class="space-y-3">
+                <div>
+                    <input type="file" name="file"
+                           accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.zip"
+                           class="block w-full text-sm text-slate-500 dark:text-slate-400
+                                  file:mr-4 file:py-2 file:px-4
+                                  file:rounded-lg file:border-0
+                                  file:text-sm file:font-medium
+                                  file:bg-amber-50 file:text-amber-700
+                                  hover:file:bg-amber-100
+                                  dark:file:bg-amber-900/20 dark:file:text-amber-400">
+                    <p class="mt-1 text-xs text-slate-400">Attach files to this project (optional).</p>
+                </div>
+                <button type="submit" class="btn btn-secondary btn-sm">Upload</button>
+            </form>
+
+            {% if attachments %}
+            <div class="divide-y divide-slate-100 dark:divide-slate-800">
+                {% for att in attachments %}
+                <div class="py-3 flex items-center justify-between gap-4">
+                    <div class="flex items-center gap-3">
+                        {% if att.content_type and att.content_type.startswith('image/') %}
+                        <button type="button" class="h-10 w-10 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700"
+                                @click.prevent="openPreview('/operations/projects/{{ project.project_code }}/attachments/{{ att.attachment_id }}/download', '{{ att.file_name }}', '/operations/projects/{{ project.project_code }}/attachments/{{ att.attachment_id }}/download')">
+                            <img src="/operations/projects/{{ project.project_code }}/attachments/{{ att.attachment_id }}/download" alt="{{ att.file_name }}" class="h-full w-full object-cover">
+                        </button>
+                        {% else %}
+                        <div class="h-10 w-10 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500">
+                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                            </svg>
+                        </div>
+                        {% endif %}
+                        <div>
+                            <p class="text-sm font-medium text-slate-900 dark:text-white">{{ att.file_name }}</p>
+                            <p class="text-xs text-slate-500 dark:text-slate-400">{{ (att.file_size / 1024)|round(1) }} KB</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        {% if att.content_type and att.content_type.startswith('image/') %}
+                        <button type="button" class="btn btn-ghost btn-sm"
+                                @click.prevent="openPreview('/operations/projects/{{ project.project_code }}/attachments/{{ att.attachment_id }}/download', '{{ att.file_name }}', '/operations/projects/{{ project.project_code }}/attachments/{{ att.attachment_id }}/download')">
+                            View
+                        </button>
+                        {% endif %}
+                        <a href="/operations/projects/{{ project.project_code }}/attachments/{{ att.attachment_id }}/download" class="btn btn-secondary btn-sm">Download</a>
+                        <form method="post" action="/operations/projects/{{ project.project_code }}/attachments/{{ att.attachment_id }}/delete"
+                              onsubmit="return confirm('Delete this attachment?');">
+                            <button type="submit" class="btn btn-ghost btn-sm text-rose-600">Delete</button>
+                        </form>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="text-sm text-slate-500 dark:text-slate-400">No attachments yet.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Comments -->
+    <div class="rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800" id="comments">
+        <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 px-6 py-4">
+            <h3 class="text-lg font-medium text-slate-900 dark:text-white">Comments</h3>
+        </div>
+        <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+            <form method="post" enctype="multipart/form-data" action="/operations/projects/{{ project.project_code }}/comments" class="space-y-3">
+                <textarea name="content" required rows="2" class="form-input w-full" placeholder="Add a comment..."></textarea>
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                        <input type="checkbox" name="is_internal" value="true" class="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500">
+                        <span>Internal note (staff only)</span>
+                    </label>
+                    <input type="file" name="files" multiple
+                           accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.zip"
+                           class="block text-sm text-slate-500 dark:text-slate-400
+                                  file:mr-4 file:py-2 file:px-4
+                                  file:rounded-lg file:border-0
+                                  file:text-sm file:font-medium
+                                  file:bg-amber-50 file:text-amber-700
+                                  hover:file:bg-amber-100
+                                  dark:file:bg-amber-900/20 dark:file:text-amber-400">
+                    <button type="submit" class="btn btn-primary btn-sm">Add Comment</button>
+                </div>
+            </form>
+        </div>
+        {% if comments %}
+        <div class="divide-y divide-slate-100 dark:divide-slate-800">
+            {% for comment in comments %}
+            <div class="px-6 py-4 {% if comment.is_internal %}bg-amber-50/40 dark:bg-amber-900/10{% endif %}">
+                <div class="flex items-center justify-between">
+                    {% set author_name = (comment.author.first_name or '') ~ ' ' ~ (comment.author.last_name or '') if comment.author else 'Unknown' %}
+                    <div class="text-sm font-medium text-slate-900 dark:text-white">
+                        {{ author_name.strip() or 'Unknown' }}
+                    </div>
+                    <div class="text-xs text-slate-500 dark:text-slate-400">{{ comment.created_at.strftime('%b %d, %Y %H:%M') if comment.created_at else '' }}</div>
+                </div>
+                <div class="mt-2 text-sm text-slate-700 dark:text-slate-300 whitespace-pre-line">{{ comment.content }}</div>
+                {% set comment_files = comment_attachments.get(comment.comment_id|string, []) %}
+                {% if comment_files %}
+                <div class="mt-3 flex flex-wrap gap-2">
+                    {% for att in comment_files %}
+                    <div class="flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 px-2 py-1">
+                        {% if att.content_type and att.content_type.startswith('image/') %}
+                        <button type="button" class="h-8 w-8 rounded overflow-hidden border border-slate-200 dark:border-slate-700"
+                                @click.prevent="openPreview('/operations/projects/{{ project.project_code }}/attachments/{{ att.attachment_id }}/download', '{{ att.file_name }}', '/operations/projects/{{ project.project_code }}/attachments/{{ att.attachment_id }}/download')">
+                            <img src="/operations/projects/{{ project.project_code }}/attachments/{{ att.attachment_id }}/download" alt="{{ att.file_name }}" class="h-full w-full object-cover">
+                        </button>
+                        {% else %}
+                        <div class="h-8 w-8 rounded bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500">
+                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                            </svg>
+                        </div>
+                        {% endif %}
+                        <div class="min-w-0">
+                            <p class="text-xs font-medium text-slate-700 dark:text-slate-300 truncate max-w-[140px]">{{ att.file_name }}</p>
+                        </div>
+                        <a href="/operations/projects/{{ project.project_code }}/attachments/{{ att.attachment_id }}/download" class="text-xs text-amber-600 hover:text-amber-700">Download</a>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="px-6 py-6 text-sm text-slate-500 dark:text-slate-400">No comments yet.</div>
+        {% endif %}
+    </div>
 </div>
+
+<div x-show="previewOpen" x-cloak class="fixed inset-0 z-50 flex items-center justify-center">
+    <div class="absolute inset-0 bg-black/70" @click="closePreview()"></div>
+    <div class="relative bg-white dark:bg-slate-900 rounded-xl shadow-xl max-w-4xl w-full mx-6 p-4">
+        <div class="flex items-center justify-between mb-3">
+            <div class="text-sm font-medium text-slate-800 dark:text-slate-200 truncate" x-text="previewName"></div>
+            <div class="flex items-center gap-2">
+                <a :href="previewDownloadUrl" class="btn btn-secondary btn-sm">Download</a>
+                <button type="button" class="btn btn-ghost btn-sm" @click="closePreview()">Close</button>
+            </div>
+        </div>
+        <div class="max-h-[70vh] overflow-auto flex justify-center">
+            <img :src="previewSrc" :alt="previewName" class="max-h-[70vh] rounded-lg">
+        </div>
+    </div>
+</div>
+
+<script>
+function attachmentPreview() {
+    return {
+        previewOpen: false,
+        previewSrc: '',
+        previewName: '',
+        previewDownloadUrl: '',
+        openPreview(src, name, downloadUrl) {
+            this.previewSrc = src;
+            this.previewName = name || 'Attachment';
+            this.previewDownloadUrl = downloadUrl || src;
+            this.previewOpen = true;
+        },
+        closePreview() {
+            this.previewOpen = false;
+            this.previewSrc = '';
+            this.previewName = '';
+            this.previewDownloadUrl = '';
+        }
+    }
+}
+</script>
 {% endblock %}

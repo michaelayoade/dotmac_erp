@@ -735,6 +735,56 @@ class ARInvoiceService(ListResponseMixin):
         return invoice
 
     @staticmethod
+    def cancel_invoice(
+        db: Session,
+        organization_id: UUID,
+        invoice_id: UUID,
+        cancelled_by_user_id: UUID,
+        reason: Optional[str] = None,
+    ) -> Invoice:
+        """
+        Cancel an invoice, returning it to DRAFT status for editing.
+
+        Only SUBMITTED or APPROVED invoices can be cancelled.
+        Posted invoices must be voided instead.
+
+        Args:
+            db: Database session
+            organization_id: Organization scope
+            invoice_id: Invoice to cancel
+            cancelled_by_user_id: User cancelling
+            reason: Optional reason for cancellation
+
+        Returns:
+            Updated invoice in DRAFT status
+        """
+        org_id = coerce_uuid(organization_id)
+        inv_id = coerce_uuid(invoice_id)
+
+        invoice = db.get(Invoice, inv_id)
+        if not invoice or invoice.organization_id != org_id:
+            raise HTTPException(status_code=404, detail="Invoice not found")
+
+        cancellable = [InvoiceStatus.SUBMITTED, InvoiceStatus.APPROVED]
+
+        if invoice.status not in cancellable:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot cancel invoice with status '{invoice.status.value}'. Only SUBMITTED or APPROVED invoices can be cancelled.",
+            )
+
+        invoice.status = InvoiceStatus.DRAFT
+        invoice.posting_status = "PENDING"
+        # Clear approval fields
+        invoice.approved_by_user_id = None
+        invoice.approved_at = None
+
+        db.commit()
+        db.refresh(invoice)
+
+        return invoice
+
+    @staticmethod
     def mark_overdue(
         db: Session,
         organization_id: UUID,

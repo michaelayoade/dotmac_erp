@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
-from typing import TYPE_CHECKING, List, Optional, Sequence
+from typing import TYPE_CHECKING, List, Optional, Sequence, TypedDict
 from uuid import UUID
 
 from sqlalchemy import and_, func, or_, select, false
@@ -986,7 +986,8 @@ class PerformanceService:
 
         # Calculate overall score
         total_weighted = sum(
-            s.weighted_score or Decimal("0") for s in appraisal.kra_scores
+            ((s.weighted_score or Decimal("0")) for s in appraisal.kra_scores),
+            Decimal("0"),
         )
         appraisal.final_score = total_weighted
 
@@ -1165,20 +1166,34 @@ class PerformanceService:
             raise PerformanceServiceError("Scorecard is already finalized")
 
         # Calculate perspective scores
-        perspectives = {"FINANCIAL": [], "CUSTOMER": [], "PROCESS": [], "LEARNING": []}
+        perspectives: dict[str, list[Decimal]] = {
+            "FINANCIAL": [],
+            "CUSTOMER": [],
+            "PROCESS": [],
+            "LEARNING": [],
+        }
 
         for item in scorecard.items:
             if item.perspective in perspectives and item.weighted_score:
                 perspectives[item.perspective].append(item.weighted_score)
 
-        scorecard.financial_score = sum(perspectives["FINANCIAL"]) if perspectives["FINANCIAL"] else None
-        scorecard.customer_score = sum(perspectives["CUSTOMER"]) if perspectives["CUSTOMER"] else None
-        scorecard.process_score = sum(perspectives["PROCESS"]) if perspectives["PROCESS"] else None
-        scorecard.learning_score = sum(perspectives["LEARNING"]) if perspectives["LEARNING"] else None
+        scorecard.financial_score = (
+            sum(perspectives["FINANCIAL"], Decimal("0")) if perspectives["FINANCIAL"] else None
+        )
+        scorecard.customer_score = (
+            sum(perspectives["CUSTOMER"], Decimal("0")) if perspectives["CUSTOMER"] else None
+        )
+        scorecard.process_score = (
+            sum(perspectives["PROCESS"], Decimal("0")) if perspectives["PROCESS"] else None
+        )
+        scorecard.learning_score = (
+            sum(perspectives["LEARNING"], Decimal("0")) if perspectives["LEARNING"] else None
+        )
 
         # Calculate overall score
         all_weighted = sum(
-            item.weighted_score or Decimal("0") for item in scorecard.items
+            ((item.weighted_score or Decimal("0")) for item in scorecard.items),
+            Decimal("0"),
         )
         scorecard.overall_score = all_weighted
 
@@ -1450,6 +1465,8 @@ class PerformanceService:
         self,
         org_id: UUID,
         *,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
         department_id: Optional[UUID] = None,
     ) -> dict:
         """Get KPI achievement rates report.
@@ -1470,6 +1487,10 @@ class PerformanceService:
                 )
             )
             filters.append(KPI.employee_id.in_(subquery))
+        if start_date:
+            filters.append(KPI.period_start >= start_date)
+        if end_date:
+            filters.append(KPI.period_end <= end_date)
 
         # Status breakdown
         status_results = self.db.execute(
@@ -1488,12 +1509,12 @@ class PerformanceService:
                 "percentage": round(count / total_kpis * 100, 1) if total_kpis > 0 else 0,
             })
 
-        # Achievement statistics for completed KPIs
+        # Achievement statistics for achieved KPIs
         completed_kpis = self.db.scalars(
             select(KPI)
             .where(
                 *filters,
-                KPI.status == KPIStatus.COMPLETED,
+                KPI.status == KPIStatus.ACHIEVED,
                 KPI.target_value.isnot(None),
                 KPI.actual_value.isnot(None),
             )
@@ -1504,6 +1525,8 @@ class PerformanceService:
         partial = 0
 
         for kpi in completed_kpis:
+            if kpi.actual_value is None or kpi.target_value is None:
+                continue
             if kpi.actual_value >= kpi.target_value:
                 if kpi.actual_value > kpi.target_value:
                     exceeded += 1
@@ -1522,14 +1545,22 @@ class PerformanceService:
         }
 
         # Top performing KPIs (by achievement percentage)
-        top_kpis = []
+        class TopKPIEntry(TypedDict):
+            kpi_id: UUID
+            kpi_title: str
+            employee_id: UUID
+            achievement_percentage: float
+
+        top_kpis: list[TopKPIEntry] = []
         for kpi in completed_kpis:
-            if kpi.target_value and kpi.target_value > 0:
+            if kpi.target_value is None or kpi.actual_value is None:
+                continue
+            if kpi.target_value > 0:
                 achievement_pct = float(kpi.actual_value / kpi.target_value * 100)
                 if achievement_pct >= 100:
                     top_kpis.append({
                         "kpi_id": kpi.kpi_id,
-                        "kpi_title": kpi.kpi_title,
+                        "kpi_title": kpi.kpi_name,
                         "employee_id": kpi.employee_id,
                         "achievement_percentage": round(achievement_pct, 1),
                     })
@@ -1546,11 +1577,25 @@ class PerformanceService:
     def get_performance_trends_report(
         self,
         org_id: UUID,
+        *,
+        department_id: Optional[UUID] = None,
     ) -> dict:
         """Get performance trends across cycles.
 
         Returns historical performance data by appraisal cycle.
         """
+        from app.models.people.hr import Employee
+
+        employee_subquery = None
+        if department_id:
+            employee_subquery = (
+                select(Employee.employee_id)
+                .where(
+                    Employee.department_id == department_id,
+                    Employee.organization_id == org_id,
+                )
+            )
+
         # Get all cycles with their statistics
         cycles = self.db.scalars(
             select(AppraisalCycle)
@@ -1563,25 +1608,27 @@ class PerformanceService:
 
         for cycle in cycles:
             # Get stats for this cycle
+            base_filters = [
+                Appraisal.organization_id == org_id,
+                Appraisal.cycle_id == cycle.cycle_id,
+            ]
+            if employee_subquery is not None:
+                base_filters.append(Appraisal.employee_id.in_(employee_subquery))
+
             total = self.db.scalar(
-                select(func.count(Appraisal.appraisal_id)).where(
-                    Appraisal.organization_id == org_id,
-                    Appraisal.cycle_id == cycle.cycle_id,
-                )
+                select(func.count(Appraisal.appraisal_id)).where(*base_filters)
             ) or 0
 
             completed = self.db.scalar(
                 select(func.count(Appraisal.appraisal_id)).where(
-                    Appraisal.organization_id == org_id,
-                    Appraisal.cycle_id == cycle.cycle_id,
+                    *base_filters,
                     Appraisal.status == AppraisalStatus.COMPLETED,
                 )
             ) or 0
 
             avg_rating = self.db.scalar(
                 select(func.avg(Appraisal.final_rating)).where(
-                    Appraisal.organization_id == org_id,
-                    Appraisal.cycle_id == cycle.cycle_id,
+                    *base_filters,
                     Appraisal.final_rating.isnot(None),
                 )
             )

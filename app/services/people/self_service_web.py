@@ -17,7 +17,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
-from app.models.people.exp import ExpenseClaim, ExpenseClaimStatus
+from app.models.people.exp import ExpenseClaim, ExpenseClaimStatus, ExpenseClaimItem
 from app.models.people.hr.employee import Employee
 from app.models.people.leave import LeaveApplication, LeaveApplicationStatus
 from app.models.people.payroll.salary_slip import SalarySlip, SalarySlipStatus
@@ -37,7 +37,11 @@ class SelfServiceWebService:
     """View service for employee self-service pages."""
 
     @staticmethod
-    def _get_employee_id(db: Session, org_id: UUID, person_id: UUID) -> UUID:
+    def _get_employee_id(
+        db: Session, org_id: Optional[UUID], person_id: Optional[UUID]
+    ) -> UUID:
+        if org_id is None or person_id is None:
+            raise HTTPException(status_code=403, detail="Missing organization or person context")
         employee = (
             db.query(Employee)
             .filter(Employee.organization_id == org_id)
@@ -68,11 +72,13 @@ class SelfServiceWebService:
     @staticmethod
     def _has_team_approvals(
         db: Session,
-        org_id: UUID,
-        person_id: UUID,
+        org_id: Optional[UUID],
+        person_id: Optional[UUID],
         *,
         employee_id: Optional[UUID] = None,
     ) -> bool:
+        if org_id is None or person_id is None:
+            return False
         try:
             manager_employee_id = employee_id or SelfServiceWebService._get_employee_id(
                 db, org_id, person_id
@@ -126,13 +132,13 @@ class SelfServiceWebService:
     def _get_projects_for_dropdown(db: Session, org_id: UUID) -> list:
         """Get active projects for expense linking."""
         try:
-            from app.models.finance.core_org.project import Project
+            from app.models.finance.core_org.project import Project, ProjectStatus
 
             projects = db.execute(
                 select(Project)
                 .where(
                     Project.organization_id == org_id,
-                    Project.is_active == True,
+                    Project.status == ProjectStatus.ACTIVE,
                 )
                 .order_by(Project.project_code)
             ).scalars().all()
@@ -176,6 +182,113 @@ class SelfServiceWebService:
             ]
         except Exception:
             return []
+
+    def tickets_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        *,
+        page: int = 1,
+    ) -> HTMLResponse:
+        org_id = coerce_uuid(auth.organization_id)
+        person_id = coerce_uuid(auth.person_id)
+        try:
+            employee_id = self._get_employee_id(db, org_id, person_id)
+        except HTTPException as exc:
+            if exc.status_code == 404:
+                return self._employee_required_response(
+                    request,
+                    auth,
+                    db,
+                    "My Tickets",
+                    "self-tickets",
+                    detail=exc.detail,
+                )
+            raise
+
+        from app.services.support.ticket import ticket_service
+
+        per_page = 20
+        tickets, total = ticket_service.list_tickets(
+            db,
+            org_id,
+            assigned_to_id=employee_id,
+            page=page,
+            per_page=per_page,
+        )
+        total_pages = (total + per_page - 1) // per_page
+
+        context = base_context(request, auth, "My Tickets", "self-tickets", db=db)
+        context.update(
+            {
+                "tickets": tickets,
+                "page": page,
+                "total": total,
+                "total_pages": total_pages,
+                "has_prev": page > 1,
+                "has_next": page < total_pages,
+            }
+        )
+        context["has_team_approvals"] = self._has_team_approvals(
+            db, org_id, person_id, employee_id=employee_id
+        )
+        context["can_team_leave"] = context["has_team_approvals"]
+        context["can_team_expenses"] = context["has_team_approvals"]
+        return templates.TemplateResponse(request, "people/self/tickets.html", context)
+
+    def tasks_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        *,
+        page: int = 1,
+    ) -> HTMLResponse:
+        org_id = coerce_uuid(auth.organization_id)
+        person_id = coerce_uuid(auth.person_id)
+        try:
+            employee_id = self._get_employee_id(db, org_id, person_id)
+        except HTTPException as exc:
+            if exc.status_code == 404:
+                return self._employee_required_response(
+                    request,
+                    auth,
+                    db,
+                    "My Tasks",
+                    "self-tasks",
+                    detail=exc.detail,
+                )
+            raise
+
+        from app.services.pm.task_service import TaskService
+
+        per_page = 20
+        svc = TaskService(db, org_id)
+        result = svc.list_tasks(
+            assigned_to_id=employee_id,
+            params=PaginationParams(offset=(page - 1) * per_page, limit=per_page),
+        )
+        total = result.total
+        total_pages = (total + per_page - 1) // per_page
+
+        context = base_context(request, auth, "My Tasks", "self-tasks", db=db)
+        context.update(
+            {
+                "tasks": result.items,
+                "page": page,
+                "total": total,
+                "total_pages": total_pages,
+                "has_prev": page > 1,
+                "has_next": page < total_pages,
+            }
+        )
+        context["has_team_approvals"] = self._has_team_approvals(
+            db, org_id, person_id, employee_id=employee_id
+        )
+        context["can_team_leave"] = context["has_team_approvals"]
+        context["can_team_expenses"] = context["has_team_approvals"]
+        return templates.TemplateResponse(request, "people/self/tasks.html", context)
 
     def attendance_response(
         self,
@@ -811,7 +924,7 @@ class SelfServiceWebService:
             query = (
                 select(ExpenseClaim)
                 .options(
-                    joinedload(ExpenseClaim.items).joinedload("category"),
+                    joinedload(ExpenseClaim.items).joinedload(ExpenseClaimItem.category),
                     joinedload(ExpenseClaim.employee),
                 )
                 .where(
@@ -1092,6 +1205,183 @@ class SelfServiceWebService:
         context["can_team_leave"] = context["has_team_approvals"]
         context["can_team_expenses"] = context["has_team_approvals"]
         return templates.TemplateResponse(request, "people/self/payslip_detail.html", context)
+
+    # =========================================================================
+    # Discipline Self-Service
+    # =========================================================================
+
+    def discipline_cases_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        *,
+        include_closed: bool = False,
+    ) -> HTMLResponse:
+        """Self-service disciplinary cases list."""
+        org_id = auth.organization_id
+        person_id = auth.person_id
+
+        try:
+            employee_id = self._get_employee_id(db, org_id, person_id)
+        except HTTPException:
+            return self._employee_required_response(
+                request, auth, db, "Discipline", "self-discipline"
+            )
+
+        from app.services.people.discipline import DisciplineService
+
+        discipline_service = DisciplineService(db)
+        cases = discipline_service.list_employee_cases(
+            employee_id, include_closed=include_closed
+        )
+
+        # Mark cases that need response
+        for case in cases:
+            setattr(
+                case,
+                "has_pending_response",
+                case.status.value == "QUERY_ISSUED" and case.response_due_date is not None,
+            )
+
+        context = base_context(request, auth, "Discipline", "self-discipline", db=db)
+        context.update(
+            {
+                "cases": cases,
+                "include_closed": include_closed,
+            }
+        )
+        context["has_team_approvals"] = self._has_team_approvals(
+            db, org_id, person_id, employee_id=employee_id
+        )
+        context["can_team_leave"] = context["has_team_approvals"]
+        context["can_team_expenses"] = context["has_team_approvals"]
+        return templates.TemplateResponse(request, "people/self/discipline.html", context)
+
+    def discipline_case_detail_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        *,
+        case_id: UUID,
+    ) -> HTMLResponse:
+        """Self-service disciplinary case detail view."""
+        org_id = auth.organization_id
+        person_id = auth.person_id
+
+        try:
+            employee_id = self._get_employee_id(db, org_id, person_id)
+        except HTTPException:
+            return self._employee_required_response(
+                request, auth, db, "Discipline", "self-discipline"
+            )
+
+        from app.services.people.discipline import DisciplineService
+        from app.models.people.discipline import CaseStatus
+
+        discipline_service = DisciplineService(db)
+        try:
+            case = discipline_service.get_case_detail(case_id)
+        except Exception:
+            raise HTTPException(status_code=404, detail="Case not found")
+
+        # Verify this is the employee's own case
+        if case.employee_id != employee_id:
+            raise HTTPException(status_code=403, detail="Forbidden")
+
+        # Determine what actions are available
+        can_respond = case.status == CaseStatus.QUERY_ISSUED
+        can_appeal = (
+            case.status == CaseStatus.DECISION_MADE
+            and case.appeal_deadline is not None
+            and date.today() <= case.appeal_deadline
+        )
+
+        context = base_context(
+            request, auth, f"Case {case.case_number}", "self-discipline", db=db
+        )
+        context.update(
+            {
+                "case": case,
+                "can_respond": can_respond,
+                "can_appeal": can_appeal,
+            }
+        )
+        context["has_team_approvals"] = self._has_team_approvals(
+            db, org_id, person_id, employee_id=employee_id
+        )
+        context["can_team_leave"] = context["has_team_approvals"]
+        context["can_team_expenses"] = context["has_team_approvals"]
+        return templates.TemplateResponse(
+            request, "people/self/discipline_detail.html", context
+        )
+
+    def discipline_submit_response(
+        self,
+        auth: WebAuthContext,
+        db: Session,
+        *,
+        case_id: UUID,
+        response_text: str,
+    ) -> RedirectResponse:
+        """Submit employee response to disciplinary query."""
+        org_id = auth.organization_id
+        person_id = auth.person_id
+
+        employee_id = self._get_employee_id(db, org_id, person_id)
+
+        from app.services.people.discipline import DisciplineService
+        from app.schemas.people.discipline import CaseResponseCreate
+
+        discipline_service = DisciplineService(db)
+        case = discipline_service.get_case_or_404(case_id)
+
+        # Verify this is the employee's own case
+        if case.employee_id != employee_id:
+            raise HTTPException(status_code=403, detail="Forbidden")
+
+        response_data = CaseResponseCreate(response_text=response_text)
+        discipline_service.record_response(case_id, response_data)
+        db.commit()
+
+        return RedirectResponse(
+            url=f"/people/self/discipline/{case_id}?success=response_submitted",
+            status_code=303,
+        )
+
+    def discipline_file_appeal_response(
+        self,
+        auth: WebAuthContext,
+        db: Session,
+        *,
+        case_id: UUID,
+        appeal_reason: str,
+    ) -> RedirectResponse:
+        """File an appeal against disciplinary decision."""
+        org_id = auth.organization_id
+        person_id = auth.person_id
+
+        employee_id = self._get_employee_id(db, org_id, person_id)
+
+        from app.services.people.discipline import DisciplineService
+        from app.schemas.people.discipline import FileAppealRequest
+
+        discipline_service = DisciplineService(db)
+        case = discipline_service.get_case_or_404(case_id)
+
+        # Verify this is the employee's own case
+        if case.employee_id != employee_id:
+            raise HTTPException(status_code=403, detail="Forbidden")
+
+        appeal_data = FileAppealRequest(appeal_reason=appeal_reason)
+        discipline_service.file_appeal(case_id, appeal_data)
+        db.commit()
+
+        return RedirectResponse(
+            url=f"/people/self/discipline/{case_id}?success=appeal_filed",
+            status_code=303,
+        )
 
 
 self_service_web_service = SelfServiceWebService()

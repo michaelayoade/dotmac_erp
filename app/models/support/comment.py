@@ -103,7 +103,7 @@ class TicketComment(Base):
     # Author
     author_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("public.people.id"),  # Cross-schema FK needs full path
+        ForeignKey("people.id"),
         nullable=True,
         comment="Person who created the comment (null for system)",
     )

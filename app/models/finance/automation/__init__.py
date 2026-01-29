@@ -34,6 +34,11 @@ from app.models.finance.automation.document_template import (
     DocumentTemplate,
     TemplateType,
 )
+from app.models.finance.automation.generated_document import (
+    DocumentStatus,
+    GeneratedDocument,
+    OutputFormat,
+)
 
 __all__ = [
     # Recurring
@@ -57,4 +62,8 @@ __all__ = [
     # Document Templates
     "DocumentTemplate",
     "TemplateType",
+    # Generated Documents
+    "GeneratedDocument",
+    "DocumentStatus",
+    "OutputFormat",
 ]

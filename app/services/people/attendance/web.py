@@ -8,11 +8,11 @@ from __future__ import annotations
 
 from datetime import date, datetime, time
 from decimal import Decimal
-from typing import Optional
+from typing import Any, Optional, cast
 from uuid import UUID
 from urllib.parse import quote
 
-from fastapi import Request
+from fastapi import Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
@@ -41,25 +41,25 @@ class AttendanceWebService:
         if not value:
             return None
         try:
-            return coerce_uuid(value)
+            return cast(UUID, coerce_uuid(value))
         except Exception:
             return None
 
     @staticmethod
     def _parse_decimal(value: Optional[str]) -> Optional[Decimal]:
-        if value in (None, ""):
+        if value is None or value == "":
             return None
         try:
-            return Decimal(value)
+            return Decimal(str(value))
         except Exception:
             return None
 
     @staticmethod
     def _parse_int(value: Optional[str], default: int = 0) -> int:
-        if value in (None, ""):
+        if value is None or value == "":
             return default
         try:
-            return int(value)
+            return int(str(value))
         except ValueError:
             return default
 
@@ -72,6 +72,13 @@ class AttendanceWebService:
         if value is None:
             return default
         return value.lower() in {"1", "true", "on", "yes"}
+
+    @staticmethod
+    def _get_form_str(form: Any, key: str, default: str = "") -> str:
+        value = form.get(key, default) if form is not None else default
+        if isinstance(value, UploadFile) or value is None:
+            return default
+        return str(value).strip()
 
     @staticmethod
     def _shift_form_context(shift_type: Optional[dict] = None) -> dict:
@@ -216,9 +223,9 @@ class AttendanceWebService:
             form = await request.form()
 
         employee_ids = form.getlist("employee_ids")
-        attendance_date_str = (form.get("attendance_date") or "").strip()
-        status_str = (form.get("status") or "").strip()
-        shift_type_id = (form.get("shift_type_id") or "").strip()
+        attendance_date_str = AttendanceWebService._get_form_str(form, "attendance_date")
+        status_str = AttendanceWebService._get_form_str(form, "status")
+        shift_type_id = AttendanceWebService._get_form_str(form, "shift_type_id")
 
         if not employee_ids:
             return RedirectResponse(
@@ -367,13 +374,13 @@ class AttendanceWebService:
         if form is None:
             form = await request.form()
 
-        employee_id = (form.get("employee_id") or "").strip()
-        attendance_date = (form.get("attendance_date") or "").strip()
-        status = (form.get("status") or "").strip()
-        shift_type_id = (form.get("shift_type_id") or "").strip()
-        check_in = (form.get("check_in") or "").strip()
-        check_out = (form.get("check_out") or "").strip()
-        remarks = (form.get("remarks") or "").strip()
+        employee_id = AttendanceWebService._get_form_str(form, "employee_id")
+        attendance_date = AttendanceWebService._get_form_str(form, "attendance_date")
+        status = AttendanceWebService._get_form_str(form, "status")
+        shift_type_id = AttendanceWebService._get_form_str(form, "shift_type_id")
+        check_in = AttendanceWebService._get_form_str(form, "check_in")
+        check_out = AttendanceWebService._get_form_str(form, "check_out")
+        remarks = AttendanceWebService._get_form_str(form, "remarks")
 
         form_data = {
             "employee_id": employee_id,
@@ -477,20 +484,20 @@ class AttendanceWebService:
         form = getattr(request.state, "csrf_form", None)
         if form is None:
             form = await request.form()
-        shift_code = (form.get("shift_code") or "").strip()
-        shift_name = (form.get("shift_name") or "").strip()
-        start_time = (form.get("start_time") or "").strip()
-        end_time = (form.get("end_time") or "").strip()
-        working_hours = (form.get("working_hours") or "").strip()
-        description = (form.get("description") or "").strip()
-        late_entry_grace_period = (form.get("late_entry_grace_period") or "").strip()
-        early_exit_grace_period = (form.get("early_exit_grace_period") or "").strip()
-        enable_half_day = form.get("enable_half_day")
-        half_day_threshold_hours = (form.get("half_day_threshold_hours") or "").strip()
-        enable_overtime = form.get("enable_overtime")
-        overtime_threshold_hours = (form.get("overtime_threshold_hours") or "").strip()
-        break_duration_minutes = (form.get("break_duration_minutes") or "").strip()
-        is_active = form.get("is_active")
+        shift_code = AttendanceWebService._get_form_str(form, "shift_code")
+        shift_name = AttendanceWebService._get_form_str(form, "shift_name")
+        start_time = AttendanceWebService._get_form_str(form, "start_time")
+        end_time = AttendanceWebService._get_form_str(form, "end_time")
+        working_hours = AttendanceWebService._get_form_str(form, "working_hours")
+        description = AttendanceWebService._get_form_str(form, "description")
+        late_entry_grace_period = AttendanceWebService._get_form_str(form, "late_entry_grace_period")
+        early_exit_grace_period = AttendanceWebService._get_form_str(form, "early_exit_grace_period")
+        enable_half_day = AttendanceWebService._get_form_str(form, "enable_half_day")
+        half_day_threshold_hours = AttendanceWebService._get_form_str(form, "half_day_threshold_hours")
+        enable_overtime = AttendanceWebService._get_form_str(form, "enable_overtime")
+        overtime_threshold_hours = AttendanceWebService._get_form_str(form, "overtime_threshold_hours")
+        break_duration_minutes = AttendanceWebService._get_form_str(form, "break_duration_minutes")
+        is_active = AttendanceWebService._get_form_str(form, "is_active")
 
         svc = AttendanceService(db)
         org_id = coerce_uuid(auth.organization_id)
@@ -597,20 +604,20 @@ class AttendanceWebService:
         form = getattr(request.state, "csrf_form", None)
         if form is None:
             form = await request.form()
-        shift_code = (form.get("shift_code") or "").strip()
-        shift_name = (form.get("shift_name") or "").strip()
-        start_time = (form.get("start_time") or "").strip()
-        end_time = (form.get("end_time") or "").strip()
-        working_hours = (form.get("working_hours") or "").strip()
-        description = (form.get("description") or "").strip()
-        late_entry_grace_period = (form.get("late_entry_grace_period") or "").strip()
-        early_exit_grace_period = (form.get("early_exit_grace_period") or "").strip()
-        enable_half_day = form.get("enable_half_day")
-        half_day_threshold_hours = (form.get("half_day_threshold_hours") or "").strip()
-        enable_overtime = form.get("enable_overtime")
-        overtime_threshold_hours = (form.get("overtime_threshold_hours") or "").strip()
-        break_duration_minutes = (form.get("break_duration_minutes") or "").strip()
-        is_active = form.get("is_active")
+        shift_code = AttendanceWebService._get_form_str(form, "shift_code")
+        shift_name = AttendanceWebService._get_form_str(form, "shift_name")
+        start_time = AttendanceWebService._get_form_str(form, "start_time")
+        end_time = AttendanceWebService._get_form_str(form, "end_time")
+        working_hours = AttendanceWebService._get_form_str(form, "working_hours")
+        description = AttendanceWebService._get_form_str(form, "description")
+        late_entry_grace_period = AttendanceWebService._get_form_str(form, "late_entry_grace_period")
+        early_exit_grace_period = AttendanceWebService._get_form_str(form, "early_exit_grace_period")
+        enable_half_day = AttendanceWebService._get_form_str(form, "enable_half_day")
+        half_day_threshold_hours = AttendanceWebService._get_form_str(form, "half_day_threshold_hours")
+        enable_overtime = AttendanceWebService._get_form_str(form, "enable_overtime")
+        overtime_threshold_hours = AttendanceWebService._get_form_str(form, "overtime_threshold_hours")
+        break_duration_minutes = AttendanceWebService._get_form_str(form, "break_duration_minutes")
+        is_active = AttendanceWebService._get_form_str(form, "is_active")
 
         form_data = {
             "shift_code": shift_code,
@@ -971,4 +978,3 @@ class AttendanceWebService:
 
 
 attendance_web_service = AttendanceWebService()
-

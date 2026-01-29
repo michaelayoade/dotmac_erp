@@ -121,7 +121,7 @@
                 </div>
                 <div class="card-body">
                     <div class="prose prose-sm dark:prose-invert max-w-none">
-                        {{ jd.key_responsibilities | replace('\n', '<br>') | safe }}
+                        {{ jd.key_responsibilities | nl2br }}
                     </div>
                 </div>
             </div>

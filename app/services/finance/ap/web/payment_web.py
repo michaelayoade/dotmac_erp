@@ -577,6 +577,10 @@ class PaymentWebService:
     ) -> HTMLResponse | JSONResponse | RedirectResponse | dict:
         """Handle payment creation form submission."""
         content_type = request.headers.get("content-type", "")
+        org_id = auth.organization_id
+        user_id = auth.person_id
+        assert org_id is not None
+        assert user_id is not None
 
         if "application/json" in content_type:
             data = await request.json()
@@ -589,9 +593,9 @@ class PaymentWebService:
 
             payment = supplier_payment_service.create_payment(
                 db=db,
-                organization_id=auth.organization_id,
+                organization_id=org_id,
                 input=input_data,
-                created_by_user_id=auth.person_id,
+                created_by_user_id=user_id,
             )
 
             if "application/json" in content_type:
@@ -701,16 +705,18 @@ class PaymentWebService:
         db: Session,
     ) -> HTMLResponse:
         """Render new payment batch form."""
+        org_id = auth.organization_id
+        assert org_id is not None
         bank_accounts = bank_account_service.list(
             db=db,
-            organization_id=auth.organization_id,
+            organization_id=org_id,
             status=BankAccountStatus.active,
             limit=200,
         )
         invoices = (
             db.query(SupplierInvoice, Supplier)
             .join(Supplier, SupplierInvoice.supplier_id == Supplier.supplier_id)
-            .filter(SupplierInvoice.organization_id == auth.organization_id)
+            .filter(SupplierInvoice.organization_id == org_id)
             .order_by(SupplierInvoice.invoice_date.desc())
             .limit(50)
             .all()
@@ -746,6 +752,10 @@ class PaymentWebService:
     ) -> RedirectResponse:
         """Handle payment attachment upload."""
         try:
+            org_id = auth.organization_id
+            user_id = auth.person_id
+            assert org_id is not None
+            assert user_id is not None
             payment = supplier_payment_service.get(db, payment_id)
             if not payment or payment.organization_id != auth.organization_id:
                 return RedirectResponse(
@@ -764,10 +774,10 @@ class PaymentWebService:
 
             attachment_service.save_file(
                 db=db,
-                organization_id=auth.organization_id,
+                organization_id=org_id,
                 input=input_data,
                 file_content=file.file,
-                uploaded_by=auth.person_id,
+                uploaded_by=user_id,
             )
 
             return RedirectResponse(

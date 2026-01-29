@@ -18,7 +18,7 @@ from app.services.auth_dependencies import require_tenant_permission
 from app.db import SessionLocal
 from app.schemas.finance.common import ListResponse, PostingResultSchema
 from app.models.finance.cons.consolidation_run import ConsolidationStatus
-from app.models.finance.cons.elimination_entry import EliminationType
+from app.models.finance.cons.elimination_entry import EliminationEntry, EliminationType
 from app.models.finance.cons.legal_entity import ConsolidationMethod, EntityType
 from app.services.finance.cons import (
     legal_entity_service,
@@ -843,10 +843,15 @@ def post_elimination_entry(
     db: Session = Depends(get_db),
 ):
     """Post elimination entry to GL."""
+    entry = db.get(EliminationEntry, elimination_id)
+    if not entry:
+        raise HTTPException(status_code=404, detail="Elimination entry not found")
+
     result = cons_posting_adapter.post_elimination_entry(
         db=db,
-        organization_id=organization_id,
-        elimination_id=elimination_id,
+        group_id=organization_id,
+        run_id=entry.consolidation_run_id,
+        entry_id=elimination_id,
         posting_date=posting_date,
         posted_by_user_id=posted_by_user_id,
     )
@@ -868,15 +873,18 @@ def post_all_eliminations(
     db: Session = Depends(get_db),
 ):
     """Post all elimination entries for a run to GL."""
-    result = cons_posting_adapter.post_all_eliminations(
+    results = cons_posting_adapter.post_all_eliminations(
         db=db,
-        organization_id=organization_id,
+        group_id=organization_id,
         run_id=run_id,
         posting_date=posting_date,
         posted_by_user_id=posted_by_user_id,
     )
+    successes = sum(1 for r in results if r.success)
+    total = len(results)
+    message = "Posted eliminations" if successes == total else "Some eliminations failed"
     return {
-        "success": result.success,
-        "entries_posted": result.entries_posted,
-        "message": result.message,
+        "success": successes == total and total > 0,
+        "entries_posted": successes,
+        "message": message,
     }

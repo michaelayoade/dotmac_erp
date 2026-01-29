@@ -29,8 +29,11 @@ from .employee_types import (
     TerminationData,
 )
 from .errors import (
+    ActivityNotFoundError,
+    ChecklistTemplateNotFoundError,
     CircularDepartmentError,
     DepartmentNotFoundError,
+    InvalidSelfServiceTokenError,
     LocationNotFoundError,
     DesignationNotFoundError,
     EmployeeAlreadyExistsError,
@@ -43,6 +46,7 @@ from .errors import (
 )
 from .organization import OrganizationService
 from .lifecycle import LifecycleService
+from .onboarding import OnboardingService
 from .employee_extended import (
     EmployeeDocumentService,
     EmployeeQualificationService,
@@ -86,6 +90,7 @@ __all__ = [
     "EmployeeService",
     "OrganizationService",
     "LifecycleService",
+    "OnboardingService",
     "EmployeeDocumentService",
     "EmployeeQualificationService",
     "EmployeeCertificationService",
@@ -141,4 +146,8 @@ __all__ = [
     # Job Description Errors
     "CompetencyNotFoundError",
     "JobDescriptionNotFoundError",
+    # Onboarding Errors
+    "ActivityNotFoundError",
+    "ChecklistTemplateNotFoundError",
+    "InvalidSelfServiceTokenError",
 ]

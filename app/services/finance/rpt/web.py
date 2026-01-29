@@ -71,7 +71,7 @@ def _ifrs_label(category: IFRSCategory) -> str:
         IFRSCategory.EXPENSES: "Expenses",
         IFRSCategory.OTHER_COMPREHENSIVE_INCOME: "Other Comprehensive Income",
     }
-    return cast(str, label_map.get(category, category.value))
+    return label_map.get(category, category.value)
 
 
 def _report_type_label(report_type: ReportType) -> str:
@@ -89,7 +89,7 @@ def _report_type_label(report_type: ReportType) -> str:
         ReportType.REGULATORY: "Regulatory Report",
         ReportType.CUSTOM: "Custom Report",
     }
-    return cast(str, labels.get(report_type, report_type.value))
+    return labels.get(report_type, report_type.value)
 
 
 class ReportsWebService:

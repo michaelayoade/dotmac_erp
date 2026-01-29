@@ -27,7 +27,11 @@ from app.models.finance.payments.transfer_batch import (
 )
 from app.models.domain_settings import SettingDomain
 from app.services.common import coerce_uuid
-from app.services.finance.payments.paystack_client import PaystackClient, PaystackConfig
+from app.services.finance.payments.paystack_client import (
+    PaystackClient,
+    PaystackConfig,
+    PaystackError,
+)
 from app.services.settings_spec import resolve_value
 
 logger = logging.getLogger(__name__)
@@ -199,7 +203,9 @@ class PaymentService:
         paystack_config: PaystackConfig,
     ) -> PaymentIntent:
         """Verify a payment by reference with Paystack and update intent status."""
-        intent = self.get_intent_by_reference(self.db, reference, self.organization_id)
+        intent = PaymentService.get_intent_by_reference(
+            self.db, reference, self.organization_id
+        )
         if not intent:
             raise HTTPException(status_code=404, detail="Payment not found")
 
@@ -291,7 +297,7 @@ class PaymentService:
         if intent.status == PaymentIntentStatus.COMPLETED:
             logger.info(f"Payment intent {intent.intent_id} already completed")
             if intent.customer_payment_id:
-                return cast(UUID, intent.customer_payment_id)
+                return intent.customer_payment_id
             raise HTTPException(
                 status_code=400,
                 detail="Payment already processed but customer_payment_id missing",
@@ -414,7 +420,7 @@ class PaymentService:
                 },
             )
 
-            return cast(UUID, payment.payment_id)
+            return payment.payment_id
 
         except Exception as e:
             logger.exception(f"Failed to process payment for intent {intent.intent_id}")
@@ -461,14 +467,6 @@ class PaymentService:
         self.db.flush()
 
         logger.info(f"Payment intent {intent.intent_id} abandoned")
-
-    def get_intent_by_reference(self, reference: str) -> Optional[PaymentIntent]:
-        """Get a payment intent by Paystack reference."""
-        return (
-            self.db.query(PaymentIntent)
-            .filter(PaymentIntent.paystack_reference == reference)
-            .first()
-        )
 
     def get_intent_by_id(self, intent_id: UUID) -> Optional[PaymentIntent]:
         """Get a payment intent by ID."""
@@ -546,7 +544,7 @@ class PaymentService:
                 detail=f"Expense claim with status '{claim.status.value}' cannot be paid",
             )
 
-        if claim.net_payable_amount <= Decimal("0"):
+        if claim.net_payable_amount is None or claim.net_payable_amount <= Decimal("0"):
             raise HTTPException(status_code=400, detail="No amount payable for this claim")
 
         # Get employee for recipient details
@@ -693,7 +691,7 @@ class PaymentService:
                 amount=amount_kobo,
                 recipient_code=intent.transfer_recipient_code,
                 reference=intent.paystack_reference,
-                reason=f"Expense reimbursement: {intent.intent_metadata.get('claim_number', '')}",
+                reason=f"Expense reimbursement: {(intent.intent_metadata or {}).get('claim_number', '')}",
                 currency=intent.currency_code,
             )
 
@@ -782,32 +780,37 @@ class PaymentService:
                 from app.services.expense.expense_posting_adapter import ExpensePostingAdapter
 
                 # Get a system user ID for posting
-                system_user_id = claim.created_by_user_id
-
-                posting_result = ExpensePostingAdapter.post_expense_reimbursement(
-                    db=self.db,
-                    organization_id=self.organization_id,
-                    claim_id=claim.claim_id,
-                    posting_date=completed_at.date(),
-                    posted_by_user_id=system_user_id,
-                    bank_account_id=intent.bank_account_id,
-                    payment_reference=intent.paystack_reference,
-                    correlation_id=str(intent.intent_id),
-                )
-
-                if posting_result.success:
-                    logger.info(
-                        f"Auto-posted expense reimbursement {claim.claim_number} to GL",
-                        extra={
-                            "claim_id": str(claim.claim_id),
-                            "journal_entry_id": str(posting_result.journal_entry_id),
-                        },
-                    )
-                else:
+                system_user_id = claim.created_by_id
+                if not system_user_id:
                     logger.warning(
-                        f"Failed to auto-post expense reimbursement: {posting_result.message}",
+                        "Expense reimbursement not posted - missing user ID",
                         extra={"claim_id": str(claim.claim_id)},
                     )
+                else:
+                    posting_result = ExpensePostingAdapter.post_expense_reimbursement(
+                        db=self.db,
+                        organization_id=self.organization_id,
+                        claim_id=claim.claim_id,
+                        posting_date=completed_at.date(),
+                        posted_by_user_id=system_user_id,
+                        bank_account_id=intent.bank_account_id,
+                        payment_reference=intent.paystack_reference,
+                        correlation_id=str(intent.intent_id),
+                    )
+
+                    if posting_result.success:
+                        logger.info(
+                            f"Auto-posted expense reimbursement {claim.claim_number} to GL",
+                            extra={
+                                "claim_id": str(claim.claim_id),
+                                "journal_entry_id": str(posting_result.journal_entry_id),
+                            },
+                        )
+                    else:
+                        logger.warning(
+                            f"Failed to auto-post expense reimbursement: {posting_result.message}",
+                            extra={"claim_id": str(claim.claim_id)},
+                        )
             except Exception as post_error:
                 # Log but don't fail - payment is still recorded
                 logger.warning(
@@ -826,7 +829,7 @@ class PaymentService:
                 intent=intent,
                 fee_amount=fee_amount,
                 posting_date=completed_at.date(),
-                system_user_id=system_user_id or (claim.created_by_user_id if claim else None),
+                system_user_id=system_user_id or (claim.created_by_id if claim else None),
             )
 
         logger.info(
@@ -878,6 +881,13 @@ class PaymentService:
             from app.services.expense.expense_posting_adapter import ExpensePostingAdapter
 
             fee_account_uuid = coerce_uuid(fee_account_id)
+
+            if intent.bank_account_id is None:
+                logger.warning(
+                    "Transfer fee not posted - missing bank account",
+                    extra={"intent_id": str(intent.intent_id)},
+                )
+                return
 
             fee_result = ExpensePostingAdapter.post_transfer_fee(
                 db=self.db,
@@ -1187,9 +1197,12 @@ class PaymentService:
         """
         from app.services.expense.expense_posting_adapter import ExpensePostingAdapter
 
-        system_user_id = claim.created_by_user_id
+        system_user_id = claim.created_by_id
         if not system_user_id:
             logger.warning(f"Cannot post reversal entries - no user ID")
+            return
+        if intent.bank_account_id is None:
+            logger.warning("Cannot post reversal entries - missing bank account")
             return
 
         # Reverse the reimbursement entry if it was posted

@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import require_organization_id, require_tenant_auth
 from app.db import SessionLocal
 from app.models.people.attendance import AttendanceRequestStatus
+from app.models.people.attendance.attendance import AttendanceStatus
 from app.schemas.people.attendance import (
     # Shift Type
     ShiftTypeCreate,
@@ -293,12 +294,18 @@ def list_attendance(
 ):
     """List attendance records."""
     svc = AttendanceService(db)
+    status_value = None
+    if status:
+        try:
+            status_value = AttendanceStatus(status)
+        except ValueError:
+            status_value = None
     result = svc.list_attendance(
         org_id=organization_id,
         employee_id=employee_id,
         from_date=from_date,
         to_date=to_date,
-        status=status,
+        status=status_value,
         pagination=PaginationParams(offset=offset, limit=limit),
     )
     return AttendanceListResponse(
@@ -679,12 +686,18 @@ def export_attendance(
 ):
     """Export attendance records to CSV."""
     svc = AttendanceService(db)
+    status_value = None
+    if status:
+        try:
+            status_value = AttendanceStatus(status)
+        except ValueError:
+            status_value = None
     result = svc.list_attendance(
         org_id=organization_id,
         employee_id=employee_id,
         from_date=from_date,
         to_date=to_date,
-        status=status,
+        status=status_value,
         pagination=PaginationParams(offset=0, limit=10000),
     )
 

@@ -1,0 +1,201 @@
+{#
+    Default Offer Letter Template
+
+    This template is used when rendering offer letters through the DocumentTemplate system.
+    It is designed to be wrapped by base_letter.html.
+
+    Context variables available:
+    - candidate_name, candidate_first_name, candidate_last_name
+    - job_title, designation_name, department_name, location, employment_type
+    - base_salary, currency_code, pay_frequency, annual_salary
+    - signing_bonus, relocation_allowance, benefits, other_benefits
+    - offer_date, offer_expiry_date, proposed_start_date
+    - probation_months, notice_period_days
+    - organization_name, organization_address
+    - signatory_name, signatory_title
+    - offer_number
+#}
+
+<!-- Addressee -->
+<div class="addressee">
+    <p class="addressee-name">{{ candidate_name }}</p>
+    {% if candidate_address %}
+    <p class="addressee-address">{{ candidate_address }}</p>
+    {% endif %}
+</div>
+
+<!-- Subject Line -->
+<div class="subject">
+    <p class="subject-label">Subject:</p>
+    <p class="subject-text">Offer of Employment - {{ job_title }}</p>
+</div>
+
+<!-- Salutation -->
+<div class="salutation">
+    <p>Dear {{ candidate_first_name }},</p>
+</div>
+
+<!-- Main Content -->
+<div class="content">
+    <p>
+        We are pleased to extend to you an offer of employment with <strong>{{ organization_name }}</strong>
+        for the position of <strong>{{ job_title }}</strong>{% if department_name %} in the {{ department_name }} department{% endif %}.
+    </p>
+
+    <p>
+        After careful consideration of your qualifications and interview performance, we believe you will be
+        a valuable addition to our team. Please review the terms of this offer below.
+    </p>
+
+    <!-- Position Details -->
+    <h3>Position Details</h3>
+    <table>
+        <tr>
+            <td><strong>Position:</strong></td>
+            <td>{{ job_title }}</td>
+        </tr>
+        {% if department_name %}
+        <tr>
+            <td><strong>Department:</strong></td>
+            <td>{{ department_name }}</td>
+        </tr>
+        {% endif %}
+        {% if location %}
+        <tr>
+            <td><strong>Location:</strong></td>
+            <td>{{ location }}</td>
+        </tr>
+        {% endif %}
+        <tr>
+            <td><strong>Employment Type:</strong></td>
+            <td>{{ employment_type | replace("_", " ") | title }}</td>
+        </tr>
+        <tr>
+            <td><strong>Proposed Start Date:</strong></td>
+            <td>{{ proposed_start_date | format_date }}</td>
+        </tr>
+    </table>
+
+    <!-- Compensation -->
+    <h3>Compensation</h3>
+    <div class="highlight-box">
+        <div class="highlight-box-title">Salary Package</div>
+        <table>
+            <tr>
+                <td><strong>Base Salary:</strong></td>
+                <td class="amount">{{ currency_code }} {{ base_salary | format_currency }} {{ pay_frequency | lower }}</td>
+            </tr>
+            {% if annual_salary and pay_frequency != 'ANNUAL' %}
+            <tr>
+                <td><strong>Annual Equivalent:</strong></td>
+                <td class="amount">{{ currency_code }} {{ annual_salary | format_currency }} per annum</td>
+            </tr>
+            {% endif %}
+            {% if signing_bonus %}
+            <tr>
+                <td><strong>Signing Bonus:</strong></td>
+                <td class="amount">{{ currency_code }} {{ signing_bonus | format_currency }} (one-time)</td>
+            </tr>
+            {% endif %}
+            {% if relocation_allowance %}
+            <tr>
+                <td><strong>Relocation Allowance:</strong></td>
+                <td class="amount">{{ currency_code }} {{ relocation_allowance | format_currency }}</td>
+            </tr>
+            {% endif %}
+        </table>
+    </div>
+
+    {% if benefits %}
+    <!-- Benefits -->
+    <h3>Benefits</h3>
+    <p>In addition to your base salary, you will be entitled to the following benefits:</p>
+    <ul>
+        {% for benefit in benefits %}
+        <li>{{ benefit }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    <!-- Employment Terms -->
+    <h3>Employment Terms</h3>
+    <table>
+        <tr>
+            <td><strong>Probation Period:</strong></td>
+            <td>{{ probation_months }} month{% if probation_months != 1 %}s{% endif %}</td>
+        </tr>
+        <tr>
+            <td><strong>Notice Period:</strong></td>
+            <td>{{ notice_period_days }} days</td>
+        </tr>
+        {% if work_hours_per_week %}
+        <tr>
+            <td><strong>Working Hours:</strong></td>
+            <td>{{ work_hours_per_week }} hours per week</td>
+        </tr>
+        {% endif %}
+        {% if work_days %}
+        <tr>
+            <td><strong>Working Days:</strong></td>
+            <td>{{ work_days }}</td>
+        </tr>
+        {% endif %}
+    </table>
+
+    {% if terms_and_conditions %}
+    <!-- Additional Terms -->
+    <h3>Additional Terms</h3>
+    <p>{{ terms_and_conditions }}</p>
+    {% endif %}
+
+    <!-- Acceptance Instructions -->
+    <h3>Next Steps</h3>
+    <p>
+        To accept this offer, please sign and return a copy of this letter by
+        <strong>{{ offer_expiry_date | format_date }}</strong>. If you have any questions
+        regarding this offer, please do not hesitate to contact us.
+    </p>
+
+    <p>
+        Upon acceptance, we will provide you with onboarding information and any
+        additional documentation required to complete your employment setup.
+    </p>
+
+    <p>
+        We are excited about the prospect of you joining our team and look forward to
+        your positive response.
+    </p>
+</div>
+
+<!-- Signature Section -->
+<div class="signature-section">
+    <p class="closing">Sincerely,</p>
+    <div class="signature-block">
+        <div class="signature-line"></div>
+        <p class="signature-name">{{ signatory_name }}</p>
+        <p class="signature-title">{{ signatory_title }}</p>
+        <p class="signature-date">Date: {{ offer_date | format_date }}</p>
+    </div>
+</div>
+
+<!-- Acceptance Section -->
+<div class="acceptance-section">
+    <p class="acceptance-title">OFFER ACCEPTANCE</p>
+    <p>
+        I, <strong>{{ candidate_name }}</strong>, accept the offer of employment as outlined above
+        and agree to join {{ organization_name }} on the proposed start date.
+    </p>
+
+    <div class="dual-signature">
+        <div class="signature-block">
+            <div class="signature-line"></div>
+            <p class="signature-name">{{ candidate_name }}</p>
+            <p class="signature-title">Candidate Signature</p>
+        </div>
+        <div class="signature-block">
+            <div class="signature-line"></div>
+            <p class="signature-name">Date</p>
+            <p class="signature-title">&nbsp;</p>
+        </div>
+    </div>
+</div>

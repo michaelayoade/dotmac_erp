@@ -1,9 +1,8 @@
-{% extends "finance/base_finance.html" %}
-
-{% block page_title %}Profile{% endblock %}
+{% extends "base.html" %}
 
 {% block content %}
-<div class="max-w-4xl mx-auto space-y-8">
+<div class="px-6 py-8">
+    <div class="max-w-4xl mx-auto space-y-8">
     <!-- Profile Header -->
     <div class="stagger-in" style="animation-delay: 0ms;">
         <div class="card p-8">
@@ -89,7 +88,7 @@
 
                         <div>
                             <label class="form-label">Display name</label>
-                            <input type="text" name="display_name" value="{{ person.display_name or '' }}"
+                            <input type="text" name="display_name" value="{{ person.display_name if person.display_name and person.display_name|lower not in ['none', 'null'] else '' }}"
                                    class="form-input" placeholder="How you want to be addressed">
                             <p class="form-hint">Leave blank to use your full name</p>
                         </div>
@@ -307,23 +306,9 @@
                 </div>
             </div>
 
-            <!-- Danger Zone -->
-            <div class="stagger-in" style="animation-delay: 250ms;">
-                <div class="section-label">
-                    <span class="section-label-text text-rose-600 dark:text-rose-400">Danger zone</span>
-                </div>
-                <div class="card p-6 border-rose-200 dark:border-rose-900/50">
-                    <h4 class="font-medium text-slate-900 dark:text-white">Delete account</h4>
-                    <p class="text-sm text-slate-500 dark:text-slate-400 mt-1 mb-4">
-                        Permanently delete your account and all associated data. This action cannot be undone.
-                    </p>
-                    <button class="btn btn-sm text-rose-600 border-rose-200 hover:bg-rose-50 hover:border-rose-300 dark:border-rose-900/50 dark:hover:bg-rose-900/20"
-                            onclick="confirm('Are you sure you want to delete your account? This cannot be undone.') && alert('Please contact support to delete your account.')">
-                        Delete account
-                    </button>
-                </div>
-            </div>
+            <!-- Danger Zone intentionally hidden: account deletion disabled for all users -->
         </div>
     </div>
+</div>
 </div>
 {% endblock %}

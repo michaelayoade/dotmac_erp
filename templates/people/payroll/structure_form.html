@@ -14,7 +14,7 @@
 
 {% block content %}
 <div class="max-w-3xl mx-auto">
-    <form action="/people/payroll/structures/new" method="post" class="card" x-data="structureForm()">
+    <form action="{% if structure %}/people/payroll/structures/{{ structure.structure_id }}/edit{% else %}/people/payroll/structures/new{% endif %}" method="post" class="card" x-data="structureForm()">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <div class="p-6 border-b border-slate-200 dark:border-slate-700">
             <h2 class="text-lg font-semibold text-slate-900 dark:text-white">
@@ -31,7 +31,7 @@
                 <div>
                     <label for="structure_code" class="form-label">Code <span class="text-red-500">*</span></label>
                     <input type="text" name="structure_code" id="structure_code" required
-                        value="{{ structure.structure_code if structure else '' }}"
+                        value="{{ structure.structure_code if structure else form_data.get('structure_code', '') }}"
                         placeholder="STRUCT-001"
                         class="form-input w-full font-mono uppercase">
                     <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Unique identifier</p>
@@ -40,7 +40,7 @@
                     <label for="payroll_frequency" class="form-label">Payroll Frequency <span class="text-red-500">*</span></label>
                     <select name="payroll_frequency" id="payroll_frequency" required class="form-select w-full">
                         {% for f in frequencies %}
-                        <option value="{{ f }}" {% if structure and structure.payroll_frequency.value == f %}selected{% endif %}>{{ f | title }}</option>
+                        <option value="{{ f }}" {% if (structure and structure.payroll_frequency.value == f) or (not structure and form_data.get('payroll_frequency') == f) %}selected{% endif %}>{{ f | title }}</option>
                         {% endfor %}
                     </select>
                 </div>
@@ -49,7 +49,7 @@
             <div>
                 <label for="structure_name" class="form-label">Name <span class="text-red-500">*</span></label>
                 <input type="text" name="structure_name" id="structure_name" required
-                    value="{{ structure.structure_name if structure else '' }}"
+                    value="{{ structure.structure_name if structure else form_data.get('structure_name', '') }}"
                     placeholder="Standard Monthly Salary"
                     class="form-input w-full">
             </div>
@@ -57,7 +57,7 @@
             <div>
                 <label for="description" class="form-label">Description</label>
                 <textarea name="description" id="description" rows="2" class="form-input w-full"
-                    placeholder="Optional description...">{{ structure.description if structure else '' }}</textarea>
+                    placeholder="Optional description...">{{ structure.description if structure else form_data.get('description', '') }}</textarea>
             </div>
 
             {# Earnings Section #}
@@ -148,7 +148,7 @@
             <div class="space-y-3">
                 <label class="flex items-center gap-3">
                     <input type="checkbox" name="is_active" value="true"
-                        {% if (not structure) or (structure and structure.is_active) %}checked{% endif %}
+                        {% if (structure and (form_data.get('is_active') if form_data else structure.is_active)) or (not structure and form_data.get('is_active', True)) %}checked{% endif %}
                         class="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500">
                     <span class="text-sm text-slate-700 dark:text-slate-300">Active</span>
                     <span class="text-xs text-slate-500 dark:text-slate-400">Can be assigned to employees</span>
@@ -156,7 +156,14 @@
             </div>
         </div>
 
-        <div class="px-6 py-4 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-700 flex items-center justify-end gap-3">
+        <div class="px-6 py-4 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between gap-3">
+            {% if structure %}
+            <button type="submit" formaction="/people/payroll/structures/{{ structure.structure_id }}/delete" formmethod="post" onclick="return confirm('Delete this structure? If it is in use, it will be deactivated instead.');" class="btn btn-danger">
+                Delete Structure
+            </button>
+            {% else %}
+            <span></span>
+            {% endif %}
             <a href="/people/payroll/structures" class="btn btn-secondary">Cancel</a>
             <button type="submit" class="btn btn-primary">
                 <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -170,9 +177,11 @@
 
 <script>
 function structureForm() {
+    const initialEarnings = {{ earnings_data | tojson }};
+    const initialDeductions = {{ deductions_data | tojson }};
     return {
-        earnings: [{ component_id: '', formula: '' }],
-        deductions: [],
+        earnings: initialEarnings.length ? initialEarnings : [{ component_id: '', formula: '' }],
+        deductions: initialDeductions,
 
         addEarning() {
             this.earnings.push({ component_id: '', formula: '' });

@@ -14,7 +14,8 @@ from fastapi import FastAPI, Header, HTTPException
 from fastapi.testclient import TestClient
 
 from app.api.finance.gl import router, get_db
-from app.api.deps import require_tenant_auth
+from app.services.auth_dependencies import require_tenant_auth
+from app.services.auth_dependencies import _get_db as auth_deps_get_db
 from tests.api.ifrs.conftest import (
     MockAccount,
     MockFiscalPeriod,
@@ -44,6 +45,7 @@ def mock_db():
 def client(app, mock_db, mock_auth_dict, auth_headers):
     """Create test client with mocked dependencies."""
     app.dependency_overrides[get_db] = lambda: mock_db
+    app.dependency_overrides[auth_deps_get_db] = lambda: mock_db
     def _require_tenant_auth_override(authorization: str | None = Header(default=None)):
         if not authorization:
             raise HTTPException(status_code=401, detail="Unauthorized")
@@ -63,7 +65,7 @@ class TestAccountsAPI:
         mock_account = MockAccount(organization_id=org_id)
         category_id = uuid.uuid4()
 
-        with patch("app.api.ifrs.gl.chart_of_accounts_service.create_account") as mock_create:
+        with patch("app.api.finance.gl.chart_of_accounts_service.create_account") as mock_create:
             mock_create.return_value = mock_account
 
             response = client.post(
@@ -82,7 +84,7 @@ class TestAccountsAPI:
         """Test getting an account."""
         mock_account = MockAccount(organization_id=org_id)
 
-        with patch("app.api.ifrs.gl.chart_of_accounts_service.get") as mock_get:
+        with patch("app.api.finance.gl.chart_of_accounts_service.get") as mock_get:
             mock_get.return_value = mock_account
 
             response = client.get(f"/gl/accounts/{mock_account.account_id}")
@@ -95,7 +97,7 @@ class TestAccountsAPI:
         """Test listing accounts."""
         mock_accounts = [MockAccount(organization_id=org_id) for _ in range(5)]
 
-        with patch("app.api.ifrs.gl.chart_of_accounts_service.list") as mock_list:
+        with patch("app.api.finance.gl.chart_of_accounts_service.list") as mock_list:
             mock_list.return_value = mock_accounts
 
             response = client.get(f"/gl/accounts")
@@ -108,7 +110,7 @@ class TestAccountsAPI:
         """Test listing accounts with filters."""
         mock_accounts = [MockAccount(organization_id=org_id, is_active=True)]
 
-        with patch("app.api.ifrs.gl.chart_of_accounts_service.list") as mock_list:
+        with patch("app.api.finance.gl.chart_of_accounts_service.list") as mock_list:
             mock_list.return_value = mock_accounts
 
             response = client.get(
@@ -127,7 +129,7 @@ class TestAccountsAPI:
             account_name="Updated Cash",
         )
 
-        with patch("app.api.ifrs.gl.chart_of_accounts_service.update_account") as mock_update:
+        with patch("app.api.finance.gl.chart_of_accounts_service.update_account") as mock_update:
             mock_update.return_value = updated_account
 
             response = client.patch(
@@ -146,7 +148,7 @@ class TestAccountsAPI:
             is_active=False,
         )
 
-        with patch("app.api.ifrs.gl.chart_of_accounts_service.deactivate_account") as mock_deactivate:
+        with patch("app.api.finance.gl.chart_of_accounts_service.deactivate_account") as mock_deactivate:
             mock_deactivate.return_value = deactivated
 
             response = client.post(
@@ -163,7 +165,7 @@ class TestFiscalPeriodsAPI:
         """Test creating a fiscal period."""
         mock_period = MockFiscalPeriod(organization_id=org_id)
 
-        with patch("app.api.ifrs.gl.fiscal_period_service.create_period") as mock_create:
+        with patch("app.api.finance.gl.fiscal_period_service.create_period") as mock_create:
             mock_create.return_value = mock_period
 
             response = client.post(
@@ -183,7 +185,7 @@ class TestFiscalPeriodsAPI:
         """Test getting a fiscal period."""
         mock_period = MockFiscalPeriod(organization_id=org_id)
 
-        with patch("app.api.ifrs.gl.fiscal_period_service.get") as mock_get:
+        with patch("app.api.finance.gl.fiscal_period_service.get") as mock_get:
             mock_get.return_value = mock_period
 
             response = client.get(f"/gl/fiscal-periods/{mock_period.fiscal_period_id}")
@@ -194,7 +196,7 @@ class TestFiscalPeriodsAPI:
         """Test listing fiscal periods."""
         mock_periods = [MockFiscalPeriod(organization_id=org_id, period_number=i) for i in range(12)]
 
-        with patch("app.api.ifrs.gl.fiscal_period_service.list") as mock_list:
+        with patch("app.api.finance.gl.fiscal_period_service.list") as mock_list:
             mock_list.return_value = mock_periods
 
             response = client.get(f"/gl/fiscal-periods")
@@ -207,7 +209,7 @@ class TestFiscalPeriodsAPI:
         """Test listing fiscal periods with filters."""
         mock_periods = [MockFiscalPeriod(organization_id=org_id, status="OPEN")]
 
-        with patch("app.api.ifrs.gl.fiscal_period_service.list") as mock_list:
+        with patch("app.api.finance.gl.fiscal_period_service.list") as mock_list:
             mock_list.return_value = mock_periods
 
             response = client.get(
@@ -225,7 +227,7 @@ class TestFiscalPeriodsAPI:
             status="OPEN",
         )
 
-        with patch("app.api.ifrs.gl.fiscal_period_service.open_period") as mock_open:
+        with patch("app.api.finance.gl.fiscal_period_service.open_period") as mock_open:
             mock_open.return_value = opened_period
 
             response = client.post(
@@ -243,7 +245,7 @@ class TestFiscalPeriodsAPI:
             status="CLOSED",
         )
 
-        with patch("app.api.ifrs.gl.fiscal_period_service.close_period") as mock_close:
+        with patch("app.api.finance.gl.fiscal_period_service.close_period") as mock_close:
             mock_close.return_value = closed_period
 
             response = client.post(
@@ -261,7 +263,7 @@ class TestJournalEntriesAPI:
         """Test creating a journal entry."""
         mock_entry = MockJournalEntry(organization_id=org_id)
 
-        with patch("app.api.ifrs.gl.journal_service.create_entry") as mock_create:
+        with patch("app.api.finance.gl.journal_service.create_entry") as mock_create:
             mock_create.return_value = mock_entry
 
             response = client.post(
@@ -294,7 +296,7 @@ class TestJournalEntriesAPI:
         """Test getting a journal entry."""
         mock_entry = MockJournalEntry(organization_id=org_id)
 
-        with patch("app.api.ifrs.gl.journal_service.get") as mock_get:
+        with patch("app.api.finance.gl.journal_service.get") as mock_get:
             mock_get.return_value = mock_entry
 
             response = client.get(f"/gl/journal-entries/{mock_entry.journal_entry_id}")
@@ -305,7 +307,7 @@ class TestJournalEntriesAPI:
         """Test listing journal entries."""
         mock_entries = [MockJournalEntry(organization_id=org_id) for _ in range(5)]
 
-        with patch("app.api.ifrs.gl.journal_service.list") as mock_list:
+        with patch("app.api.finance.gl.journal_service.list") as mock_list:
             mock_list.return_value = mock_entries
 
             response = client.get(f"/gl/journal-entries")
@@ -318,7 +320,7 @@ class TestJournalEntriesAPI:
         """Test listing journal entries with filters."""
         mock_entries = [MockJournalEntry(organization_id=org_id, status="POSTED")]
 
-        with patch("app.api.ifrs.gl.journal_service.list") as mock_list:
+        with patch("app.api.finance.gl.journal_service.list") as mock_list:
             mock_list.return_value = mock_entries
 
             response = client.get(
@@ -337,7 +339,7 @@ class TestJournalEntriesAPI:
             message="Posted successfully",
         )
 
-        with patch("app.api.ifrs.gl.ledger_posting_service.post_entry") as mock_post:
+        with patch("app.api.finance.gl.ledger_posting_service.post_entry") as mock_post:
             mock_post.return_value = mock_result
 
             response = client.post(
@@ -358,7 +360,7 @@ class TestJournalEntriesAPI:
             status="POSTED",
         )
 
-        with patch("app.api.ifrs.gl.journal_service.reverse_entry") as mock_reverse:
+        with patch("app.api.finance.gl.journal_service.reverse_entry") as mock_reverse:
             mock_reverse.return_value = reversal_entry
 
             response = client.post(
@@ -388,7 +390,7 @@ class TestAccountBalancesAPI:
         )
 
         with patch("app.services.ifrs.gl.balance_service.get_balance") as mock_get_balance, \
-             patch("app.api.ifrs.gl.chart_of_accounts_service.get") as mock_get_account:
+             patch("app.api.finance.gl.chart_of_accounts_service.get") as mock_get_account:
             mock_get_balance.return_value = mock_balance
             mock_get_account.return_value = mock_account
 

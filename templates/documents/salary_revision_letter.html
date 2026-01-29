@@ -1,0 +1,217 @@
+{#
+    Salary Revision/Increment Letter Template
+
+    This template is used for annual increments and salary adjustments.
+    Designed to be wrapped by base_letter.html.
+
+    Context variables available:
+    - employee_name, employee_first_name, employee_last_name
+    - employee_id, employee_number, job_title, department_name
+    - effective_date, review_period
+    - current_salary, new_salary, currency_code, pay_frequency
+    - salary_increase_amount, salary_increase_percentage
+    - current_allowances (list of {name, amount})
+    - new_allowances (list of {name, amount})
+    - performance_rating, performance_note
+    - revision_reason: ANNUAL, PERFORMANCE, MARKET_ADJUSTMENT, ROLE_CHANGE
+    - organization_name
+    - signatory_name, signatory_title
+    - letter_date, reference_number
+#}
+
+<!-- Addressee -->
+<div class="addressee">
+    <p class="addressee-name">{{ employee_name }}</p>
+    <p style="font-size: 12px; color: #666;">
+        Employee ID: {{ employee_number }}<br>
+        {{ job_title }}{% if department_name %}, {{ department_name }}{% endif %}
+    </p>
+</div>
+
+<!-- Subject Line -->
+<div class="subject">
+    <p class="subject-label">Subject:</p>
+    <p class="subject-text">
+        {% if revision_reason == 'ANNUAL' %}Annual Salary Revision
+        {% elif revision_reason == 'PERFORMANCE' %}Performance-Based Salary Increment
+        {% elif revision_reason == 'MARKET_ADJUSTMENT' %}Salary Market Adjustment
+        {% elif revision_reason == 'ROLE_CHANGE' %}Salary Revision - Role Enhancement
+        {% else %}Salary Revision{% endif %}
+        - Effective {{ effective_date | format_date }}
+    </p>
+</div>
+
+<!-- Reference -->
+{% if reference_number %}
+<p style="font-size: 12px; color: #666; margin-bottom: 20px;">Ref: {{ reference_number }}</p>
+{% endif %}
+
+<!-- Salutation -->
+<div class="salutation">
+    <p>Dear {{ employee_first_name }},</p>
+</div>
+
+<!-- Main Content -->
+<div class="content">
+    <!-- Opening -->
+    {% if revision_reason == 'ANNUAL' %}
+    <p>
+        In line with our annual compensation review cycle, we are pleased to inform you of your
+        salary revision for the period {{ review_period | default('2026') }}.
+    </p>
+    {% elif revision_reason == 'PERFORMANCE' %}
+    <p>
+        Based on your exceptional performance during the review period, we are pleased to
+        announce a salary increment in recognition of your valuable contributions to
+        <strong>{{ organization_name }}</strong>.
+    </p>
+    {% elif revision_reason == 'MARKET_ADJUSTMENT' %}
+    <p>
+        As part of our commitment to offering competitive compensation, we are pleased to
+        announce an adjustment to your salary based on our market compensation analysis.
+    </p>
+    {% else %}
+    <p>
+        We are pleased to inform you of a revision to your compensation package,
+        effective <strong>{{ effective_date | format_date }}</strong>.
+    </p>
+    {% endif %}
+
+    {% if performance_rating %}
+    <!-- Performance Note -->
+    <div class="highlight-box" style="background-color: #f0fdf4; border-left: 4px solid #10b981; margin: 20px 0;">
+        <p style="margin: 0;">
+            <strong>Performance Rating:</strong> {{ performance_rating }}
+            {% if performance_note %}<br><span style="font-size: 13px;">{{ performance_note }}</span>{% endif %}
+        </p>
+    </div>
+    {% endif %}
+
+    <!-- Salary Revision Details -->
+    <h3>Revised Compensation</h3>
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+        <thead>
+            <tr style="background-color: #f1f5f9;">
+                <th style="padding: 10px; text-align: left; border: 1px solid #e2e8f0; width: 40%;">Component</th>
+                <th style="padding: 10px; text-align: right; border: 1px solid #e2e8f0; width: 30%;">Current</th>
+                <th style="padding: 10px; text-align: right; border: 1px solid #e2e8f0; width: 30%;">Revised</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td style="padding: 10px; border: 1px solid #e2e8f0;"><strong>Basic Salary</strong></td>
+                <td style="padding: 10px; text-align: right; border: 1px solid #e2e8f0;">
+                    {{ currency_code }} {{ current_salary | format_currency }}
+                </td>
+                <td style="padding: 10px; text-align: right; border: 1px solid #e2e8f0; background-color: #f0fdf4; font-weight: bold;">
+                    {{ currency_code }} {{ new_salary | format_currency }}
+                </td>
+            </tr>
+            {% if current_allowances or new_allowances %}
+            {% set all_allowance_names = [] %}
+            {% for a in current_allowances %}{% if a.name not in all_allowance_names %}{% set _ = all_allowance_names.append(a.name) %}{% endif %}{% endfor %}
+            {% for a in new_allowances %}{% if a.name not in all_allowance_names %}{% set _ = all_allowance_names.append(a.name) %}{% endif %}{% endfor %}
+            {% for name in all_allowance_names %}
+            {% set current_amt = 0 %}
+            {% set new_amt = 0 %}
+            {% for a in current_allowances %}{% if a.name == name %}{% set current_amt = a.amount %}{% endif %}{% endfor %}
+            {% for a in new_allowances %}{% if a.name == name %}{% set new_amt = a.amount %}{% endif %}{% endfor %}
+            <tr>
+                <td style="padding: 10px; border: 1px solid #e2e8f0;">{{ name }}</td>
+                <td style="padding: 10px; text-align: right; border: 1px solid #e2e8f0;">
+                    {% if current_amt %}{{ currency_code }} {{ current_amt | format_currency }}{% else %}-{% endif %}
+                </td>
+                <td style="padding: 10px; text-align: right; border: 1px solid #e2e8f0; {% if new_amt != current_amt %}background-color: #f0fdf4;{% endif %}">
+                    {% if new_amt %}{{ currency_code }} {{ new_amt | format_currency }}{% else %}-{% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+            {% endif %}
+        </tbody>
+        <tfoot>
+            <tr style="background-color: #f8fafc;">
+                <td style="padding: 10px; border: 1px solid #e2e8f0;"><strong>Gross Salary ({{ pay_frequency | title }})</strong></td>
+                <td style="padding: 10px; text-align: right; border: 1px solid #e2e8f0; font-weight: bold;">
+                    {{ currency_code }} {{ (current_salary + (current_allowances | map(attribute='amount') | sum if current_allowances else 0)) | format_currency }}
+                </td>
+                <td style="padding: 10px; text-align: right; border: 1px solid #e2e8f0; background-color: #dcfce7; font-weight: bold; color: #166534;">
+                    {{ currency_code }} {{ (new_salary + (new_allowances | map(attribute='amount') | sum if new_allowances else 0)) | format_currency }}
+                </td>
+            </tr>
+        </tfoot>
+    </table>
+
+    <!-- Increment Summary -->
+    <div class="highlight-box">
+        <div class="highlight-box-title">Increment Summary</div>
+        <table>
+            <tr>
+                <td><strong>Salary Increase:</strong></td>
+                <td class="amount" style="color: #059669;">
+                    {{ currency_code }} {{ salary_increase_amount | format_currency }}
+                    {% if salary_increase_percentage %}
+                    <span style="font-size: 12px;">({{ salary_increase_percentage }}% increase)</span>
+                    {% endif %}
+                </td>
+            </tr>
+            <tr>
+                <td><strong>Effective From:</strong></td>
+                <td>{{ effective_date | format_date }}</td>
+            </tr>
+        </table>
+    </div>
+
+    <!-- Terms -->
+    <h3>Terms</h3>
+    <ul>
+        <li>This revision supersedes your previous compensation terms</li>
+        <li>All other terms and conditions of your employment remain unchanged</li>
+        <li>This revised salary is subject to applicable statutory deductions</li>
+        {% if revision_reason == 'ANNUAL' %}
+        <li>The next compensation review will be conducted as per the annual review cycle</li>
+        {% endif %}
+    </ul>
+
+    <!-- Acknowledgment -->
+    <p style="margin-top: 20px;">
+        We appreciate your continued commitment and contributions to the organization.
+        Please sign and return the duplicate copy of this letter as acknowledgment.
+    </p>
+
+    <p>
+        Should you have any questions regarding your revised compensation, please feel free
+        to contact the Human Resources Department.
+    </p>
+</div>
+
+<!-- Signature Section -->
+<div class="signature-section">
+    <p class="closing">Best regards,</p>
+    <div class="signature-block">
+        <div class="signature-line"></div>
+        <p class="signature-name">{{ signatory_name }}</p>
+        <p class="signature-title">{{ signatory_title }}</p>
+        <p class="signature-date">Date: {{ letter_date | format_date }}</p>
+    </div>
+</div>
+
+<!-- Acknowledgment Section -->
+<div class="acceptance-section" style="margin-top: 40px; padding-top: 20px; border-top: 2px solid #333;">
+    <p class="acceptance-title">ACKNOWLEDGMENT</p>
+    <p>
+        I, <strong>{{ employee_name }}</strong>, acknowledge receipt of this salary revision letter
+        and accept the revised compensation terms effective {{ effective_date | format_date }}.
+    </p>
+
+    <div class="dual-signature" style="display: flex; justify-content: space-between; margin-top: 30px;">
+        <div class="signature-block" style="width: 45%;">
+            <div class="signature-line" style="border-bottom: 1px solid #333; margin: 30px 0 10px 0;"></div>
+            <p class="signature-name">{{ employee_name }}</p>
+            <p class="signature-title">Employee Signature</p>
+        </div>
+        <div class="signature-block" style="width: 45%;">
+            <div class="signature-line" style="border-bottom: 1px solid #333; margin: 30px 0 10px 0;"></div>
+            <p class="signature-name">Date</p>
+        </div>
+    </div>
+</div>

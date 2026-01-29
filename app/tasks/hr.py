@@ -699,3 +699,352 @@ def calculate_hr_analytics(organization_id: str) -> dict:
                 "success": False,
                 "error": str(e),
             }
+
+
+# ==============================================================================
+# Onboarding Tasks
+# ==============================================================================
+
+
+@shared_task
+def process_onboarding_overdue_activities() -> dict:
+    """
+    Update overdue flags for onboarding activities across all organizations.
+
+    Scans all pending onboarding activities and marks those past their due date
+    as overdue. This task should run daily.
+
+    Returns:
+        Dict with processing statistics
+    """
+    from app.services.people.hr.onboarding import OnboardingService
+
+    logger.info("Processing onboarding overdue activities")
+
+    results: dict[str, Any] = {
+        "organizations_processed": 0,
+        "activities_marked_overdue": 0,
+        "errors": [],
+    }
+
+    with SessionLocal() as db:
+        # Get all organizations
+        organizations = db.scalars(select(Organization)).all()
+
+        for org in organizations:
+            try:
+                service = OnboardingService(db)
+                count = service.update_overdue_flags(org.organization_id)
+
+                results["organizations_processed"] += 1
+                results["activities_marked_overdue"] += count
+
+            except Exception as e:
+                logger.error(
+                    "Failed to process overdue activities for org %s: %s",
+                    org.organization_id,
+                    e,
+                )
+                results["errors"].append({
+                    "organization_id": str(org.organization_id),
+                    "error": str(e),
+                })
+
+        db.commit()
+
+    logger.info(
+        "Onboarding overdue processing complete: %d activities marked in %d orgs",
+        results["activities_marked_overdue"],
+        results["organizations_processed"],
+    )
+
+    return results
+
+
+@shared_task
+def process_onboarding_reminders() -> dict:
+    """
+    Send reminder notifications for onboarding activities.
+
+    Sends notifications for:
+    - Activities due within 2 days
+    - Overdue activities (daily reminder until completed)
+
+    Avoids duplicate reminders within 24 hours.
+
+    Returns:
+        Dict with notification statistics
+    """
+    from app.models.notification import EntityType, NotificationChannel, NotificationType
+    from app.services.notification import NotificationService
+    from app.services.people.hr.onboarding import OnboardingService
+    from app.models.people.hr.lifecycle import EmployeeOnboarding
+
+    logger.info("Processing onboarding reminders")
+
+    results: dict[str, Any] = {
+        "due_soon_reminders": 0,
+        "overdue_reminders": 0,
+        "errors": [],
+    }
+
+    with SessionLocal() as db:
+        notification_service = NotificationService()
+        organizations = db.scalars(select(Organization)).all()
+
+        for org in organizations:
+            try:
+                onboarding_service = OnboardingService(db)
+
+                # Get activities needing reminders
+                activities = onboarding_service.get_activities_needing_reminder(
+                    org.organization_id,
+                    days_before_due=2,
+                    remind_if_overdue=True,
+                    hours_since_last_reminder=24,
+                )
+
+                for activity in activities:
+                    try:
+                        # Determine recipient
+                        recipient_id = activity.assignee_id
+
+                        # If no specific assignee, get from onboarding record
+                        if not recipient_id:
+                            onboarding = db.get(EmployeeOnboarding, activity.onboarding_id)
+                            if onboarding:
+                                # For self-service tasks, notify the employee via their person_id
+                                if activity.assigned_to_employee:
+                                    employee = db.get(Employee, onboarding.employee_id)
+                                    if employee:
+                                        recipient_id = employee.person_id
+                                # For manager tasks
+                                elif activity.assignee_role == "MANAGER" and onboarding.manager_id:
+                                    manager = db.get(Employee, onboarding.manager_id)
+                                    if manager:
+                                        recipient_id = manager.person_id
+                                # For buddy tasks
+                                elif activity.assignee_role == "BUDDY" and onboarding.buddy_employee_id:
+                                    buddy = db.get(Employee, onboarding.buddy_employee_id)
+                                    if buddy:
+                                        recipient_id = buddy.person_id
+
+                        if not recipient_id:
+                            logger.warning(
+                                "No recipient found for activity %s",
+                                activity.activity_id,
+                            )
+                            continue
+
+                        # Determine notification type
+                        is_overdue = activity.is_overdue
+                        notif_type = NotificationType.OVERDUE if is_overdue else NotificationType.DUE_SOON
+
+                        # Build notification message
+                        if is_overdue:
+                            title = f"Overdue: {activity.activity_name}"
+                            message = f"The onboarding task '{activity.activity_name}' is overdue. Please complete it as soon as possible."
+                        else:
+                            days_remaining = (activity.due_date - date.today()).days if activity.due_date else 0
+                            title = f"Task Due Soon: {activity.activity_name}"
+                            message = f"The onboarding task '{activity.activity_name}' is due in {days_remaining} day{'s' if days_remaining != 1 else ''}."
+
+                        # Send notification
+                        notification_service.create(
+                            db,
+                            organization_id=org.organization_id,
+                            recipient_id=recipient_id,
+                            entity_type=EntityType.SYSTEM,
+                            entity_id=activity.activity_id,
+                            notification_type=notif_type,
+                            title=title,
+                            message=message,
+                            channel=NotificationChannel.BOTH,
+                            action_url="/people/hr/onboarding",
+                        )
+
+                        # Mark reminder as sent
+                        onboarding_service.mark_reminder_sent(activity.activity_id)
+
+                        if is_overdue:
+                            results["overdue_reminders"] += 1
+                        else:
+                            results["due_soon_reminders"] += 1
+
+                    except Exception as e:
+                        logger.error(
+                            "Failed to send reminder for activity %s: %s",
+                            activity.activity_id,
+                            e,
+                        )
+                        results["errors"].append({
+                            "activity_id": str(activity.activity_id),
+                            "error": str(e),
+                        })
+
+            except Exception as e:
+                logger.error(
+                    "Failed to process reminders for org %s: %s",
+                    org.organization_id,
+                    e,
+                )
+                results["errors"].append({
+                    "organization_id": str(org.organization_id),
+                    "error": str(e),
+                })
+
+        db.commit()
+
+    total_sent = results["due_soon_reminders"] + results["overdue_reminders"]
+    logger.info(
+        "Onboarding reminders complete: %d sent (%d due soon, %d overdue)",
+        total_sent,
+        results["due_soon_reminders"],
+        results["overdue_reminders"],
+    )
+
+    return results
+
+
+@shared_task
+def send_welcome_email(onboarding_id: str) -> dict:
+    """
+    Send welcome email to a new hire with self-service portal link.
+
+    Args:
+        onboarding_id: UUID of the onboarding record
+
+    Returns:
+        Dict with result status
+    """
+    import os
+    from app.services.email import send_email
+    from app.services.people.hr.onboarding import OnboardingService
+    from app.models.people.hr.lifecycle import EmployeeOnboarding
+
+    logger.info("Sending welcome email for onboarding %s", onboarding_id)
+
+    with SessionLocal() as db:
+        try:
+            onboarding = db.get(EmployeeOnboarding, uuid.UUID(onboarding_id))
+            if not onboarding:
+                return {"success": False, "error": "Onboarding not found"}
+
+            if onboarding.self_service_email_sent:
+                return {"success": True, "message": "Email already sent"}
+
+            # Get employee details
+            employee = db.get(Employee, onboarding.employee_id)
+            if not employee or not employee.person:
+                return {"success": False, "error": "Employee or person not found"}
+
+            person = employee.person
+            if not person.email:
+                return {"success": False, "error": "No email address"}
+
+            # Get organization
+            org = db.get(Organization, onboarding.organization_id)
+            if not org:
+                return {"success": False, "error": "Organization not found"}
+
+            # Generate a fresh token for the URL
+            # SECURITY: Token is stored as hash, so we regenerate to get the raw token
+            service = OnboardingService(db)
+            raw_token = service.regenerate_self_service_token(
+                onboarding.organization_id, onboarding.onboarding_id
+            )
+
+            # Build portal URL with raw token
+            app_url = os.getenv("APP_URL", "http://localhost:8000")
+            portal_url = f"{app_url.rstrip('/')}/onboarding/start/{raw_token}"
+
+            # Build email content
+            employee_name = person.display_name or f"{person.first_name} {person.last_name}"
+            org_name = org.legal_name
+            start_date = onboarding.date_of_joining.strftime("%B %d, %Y") if onboarding.date_of_joining else "TBD"
+
+            subject = f"Welcome to {org_name} - Complete Your Onboarding"
+            body_html = f"""
+            <p>Dear {employee_name},</p>
+
+            <p>Welcome to <strong>{org_name}</strong>! We're excited to have you join our team.</p>
+
+            <p>Your start date is <strong>{start_date}</strong>.</p>
+
+            <p>To complete your onboarding tasks, please access your personal onboarding portal:</p>
+
+            <p><a href="{portal_url}" style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">Access Onboarding Portal</a></p>
+
+            <p>Through the portal, you'll be able to:</p>
+            <ul>
+                <li>Complete required forms and documents</li>
+                <li>Upload necessary paperwork</li>
+                <li>View your onboarding checklist and progress</li>
+                <li>Access company information</li>
+            </ul>
+
+            <p>If you have any questions, please don't hesitate to reach out to HR.</p>
+
+            <p>We look forward to seeing you soon!</p>
+
+            <p>Best regards,<br>
+            Human Resources<br>
+            {org_name}</p>
+            """
+
+            body_text = f"""
+Dear {employee_name},
+
+Welcome to {org_name}! We're excited to have you join our team.
+
+Your start date is {start_date}.
+
+To complete your onboarding tasks, please access your personal onboarding portal:
+{portal_url}
+
+Through the portal, you'll be able to:
+- Complete required forms and documents
+- Upload necessary paperwork
+- View your onboarding checklist and progress
+- Access company information
+
+If you have any questions, please don't hesitate to reach out to HR.
+
+We look forward to seeing you soon!
+
+Best regards,
+Human Resources
+{org_name}
+            """
+
+            # Send email
+            success = send_email(
+                db=db,
+                to_email=person.email,
+                subject=subject,
+                body_html=body_html,
+                body_text=body_text,
+            )
+
+            if success:
+                # Mark email as sent
+                onboarding_service = OnboardingService(db)
+                onboarding_service.mark_welcome_email_sent(
+                    onboarding.organization_id,
+                    onboarding.onboarding_id,
+                )
+                db.commit()
+
+                logger.info(
+                    "Welcome email sent to %s for onboarding %s",
+                    person.email,
+                    onboarding_id,
+                )
+
+                return {"success": True, "email": person.email}
+
+            return {"success": False, "error": "Failed to send email"}
+
+        except Exception as e:
+            logger.exception("Failed to send welcome email: %s", e)
+            return {"success": False, "error": str(e)}

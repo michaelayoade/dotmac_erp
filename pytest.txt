@@ -1,0 +1,11 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-8.2.2, pluggy-1.6.0 -- /root/dotmac/.venv/bin/python
+cachedir: .pytest_cache
+rootdir: /root/dotmac
+configfile: pytest.ini
+testpaths: tests
+plugins: playwright-0.7.2, base-url-2.1.0, asyncio-1.3.0, anyio-4.12.1, cov-5.0.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=function, asyncio_default_test_loop_scope=function
+collecting ... collected 3882 items
+
+tests/api/ifrs/test_banking_api.py::TestBankAccountAPI::test_create_bank_account_success 

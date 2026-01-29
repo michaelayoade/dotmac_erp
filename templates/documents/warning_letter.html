@@ -1,0 +1,244 @@
+{#
+    Warning Letter Template
+
+    This template is used for disciplinary warnings (verbal, written, final).
+    Designed to be wrapped by base_letter.html.
+
+    Context variables available:
+    - employee_name, employee_first_name, employee_last_name
+    - employee_id, employee_number, job_title, department_name
+    - warning_type: VERBAL, FIRST_WRITTEN, SECOND_WRITTEN, FINAL
+    - incident_date, incident_description
+    - policy_violated, policy_section
+    - previous_warnings (list of {date, type, description})
+    - expected_improvement, improvement_deadline
+    - consequences_if_not_improved
+    - support_offered (training, mentoring, etc.)
+    - organization_name
+    - signatory_name, signatory_title
+    - letter_date, reference_number, case_number
+#}
+
+<!-- Warning Type Header -->
+{% set warning_labels = {
+    'VERBAL': 'VERBAL WARNING',
+    'FIRST_WRITTEN': 'FIRST WRITTEN WARNING',
+    'SECOND_WRITTEN': 'SECOND WRITTEN WARNING',
+    'FINAL': 'FINAL WRITTEN WARNING'
+} %}
+
+<div style="text-align: center; margin-bottom: 30px; padding: 15px; background-color: {% if warning_type == 'FINAL' %}#fee2e2{% else %}#fef3c7{% endif %}; border: 2px solid {% if warning_type == 'FINAL' %}#dc2626{% else %}#d97706{% endif %};">
+    <h2 style="margin: 0; color: {% if warning_type == 'FINAL' %}#dc2626{% else %}#d97706{% endif %}; font-size: 18px;">
+        {{ warning_labels.get(warning_type, 'WRITTEN WARNING') }}
+    </h2>
+    {% if case_number %}
+    <p style="margin: 5px 0 0 0; font-size: 12px; color: #666;">Case Reference: {{ case_number }}</p>
+    {% endif %}
+</div>
+
+<!-- Addressee -->
+<div class="addressee">
+    <p class="addressee-name">{{ employee_name }}</p>
+    <p style="font-size: 12px; color: #666;">
+        Employee ID: {{ employee_number }}<br>
+        Position: {{ job_title }}{% if department_name %}, {{ department_name }}{% endif %}
+    </p>
+</div>
+
+<!-- Subject Line -->
+<div class="subject">
+    <p class="subject-label">Subject:</p>
+    <p class="subject-text">Disciplinary Warning - {{ policy_violated | default('Policy Violation') }}</p>
+</div>
+
+<!-- Reference -->
+{% if reference_number %}
+<p style="font-size: 12px; color: #666; margin-bottom: 20px;">Ref: {{ reference_number }}</p>
+{% endif %}
+
+<!-- Salutation -->
+<div class="salutation">
+    <p>Dear {{ employee_first_name }},</p>
+</div>
+
+<!-- Main Content -->
+<div class="content">
+    <p>
+        This letter serves as a formal <strong>{{ warning_labels.get(warning_type, 'written warning').lower() }}</strong>
+        regarding your conduct/performance as detailed below.
+    </p>
+
+    <!-- Incident Details -->
+    <h3>Details of the Incident/Concern</h3>
+    <table>
+        <tr>
+            <td><strong>Date of Incident:</strong></td>
+            <td>{{ incident_date | format_date }}</td>
+        </tr>
+        {% if policy_violated %}
+        <tr>
+            <td><strong>Policy Violated:</strong></td>
+            <td>{{ policy_violated }}{% if policy_section %} (Section {{ policy_section }}){% endif %}</td>
+        </tr>
+        {% endif %}
+    </table>
+
+    <div style="margin: 20px 0; padding: 15px; background-color: #f8fafc; border-left: 4px solid #64748b;">
+        <p style="margin: 0;"><strong>Description:</strong></p>
+        <p style="margin: 10px 0 0 0;">{{ incident_description }}</p>
+    </div>
+
+    {% if previous_warnings %}
+    <!-- Previous Warnings -->
+    <h3>Previous Disciplinary History</h3>
+    <p>For the record, you have received the following previous warnings:</p>
+    <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+            <tr style="background-color: #f1f5f9;">
+                <th style="padding: 8px; text-align: left; border: 1px solid #e2e8f0;">Date</th>
+                <th style="padding: 8px; text-align: left; border: 1px solid #e2e8f0;">Type</th>
+                <th style="padding: 8px; text-align: left; border: 1px solid #e2e8f0;">Issue</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for warning in previous_warnings %}
+            <tr>
+                <td style="padding: 8px; border: 1px solid #e2e8f0;">{{ warning.date | format_date }}</td>
+                <td style="padding: 8px; border: 1px solid #e2e8f0;">{{ warning.type }}</td>
+                <td style="padding: 8px; border: 1px solid #e2e8f0;">{{ warning.description }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+
+    <!-- Expected Improvement -->
+    <h3>Expected Improvement</h3>
+    <p>You are required to take the following corrective actions:</p>
+    {% if expected_improvement is string %}
+    <p>{{ expected_improvement }}</p>
+    {% else %}
+    <ul>
+        {% for item in expected_improvement %}
+        <li>{{ item }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    {% if improvement_deadline %}
+    <p>
+        <strong>Improvement Deadline:</strong> {{ improvement_deadline | format_date }}
+    </p>
+    {% endif %}
+
+    {% if support_offered %}
+    <!-- Support Offered -->
+    <h3>Support and Resources</h3>
+    <p>To help you achieve the required improvement, the following support will be provided:</p>
+    <ul>
+        {% for support in support_offered %}
+        <li>{{ support }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    <!-- Consequences -->
+    <h3>Consequences</h3>
+    <div style="padding: 15px; background-color: {% if warning_type == 'FINAL' %}#fee2e2{% else %}#fef9c3{% endif %}; border: 1px solid {% if warning_type == 'FINAL' %}#fecaca{% else %}#fef08a{% endif %}; margin: 15px 0;">
+        {% if warning_type == 'FINAL' %}
+        <p style="margin: 0; color: #dc2626;">
+            <strong>Important:</strong> This is your final warning. Any further incidents of misconduct
+            or failure to meet the required standards will result in termination of your employment.
+        </p>
+        {% else %}
+        <p style="margin: 0;">
+            {{ consequences_if_not_improved | default('Failure to demonstrate the required improvement may result in further disciplinary action, up to and including termination of employment.') }}
+        </p>
+        {% endif %}
+    </div>
+
+    <!-- Right to Appeal -->
+    <h3>Right to Appeal</h3>
+    <p>
+        You have the right to appeal this warning within {{ appeal_period_days | default(5) }} working days
+        of receiving this letter. Appeals should be submitted in writing to
+        {{ appeal_to | default('the Human Resources Department') }}.
+    </p>
+
+    <!-- Acknowledgment Request -->
+    <p style="margin-top: 20px;">
+        Please sign the acknowledgment section below to confirm that you have received and understood
+        this warning. Your signature does not necessarily indicate agreement with the contents, only
+        that you have received this communication.
+    </p>
+
+    <p>
+        We trust that you will take this matter seriously and make the necessary improvements.
+        Should you have any questions, please do not hesitate to discuss them with your supervisor
+        or the Human Resources Department.
+    </p>
+</div>
+
+<!-- Signature Section -->
+<div class="signature-section">
+    <p class="closing">Yours sincerely,</p>
+    <div class="signature-block">
+        <div class="signature-line"></div>
+        <p class="signature-name">{{ signatory_name }}</p>
+        <p class="signature-title">{{ signatory_title }}</p>
+        <p class="signature-date">Date: {{ letter_date | format_date }}</p>
+    </div>
+</div>
+
+<!-- CC Section -->
+{% if cc_recipients %}
+<div style="margin-top: 20px; font-size: 12px; color: #666;">
+    <p><strong>CC:</strong></p>
+    <ul style="margin: 5px 0; padding-left: 20px;">
+        {% for recipient in cc_recipients %}
+        <li>{{ recipient }}</li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+<!-- Acknowledgment Section -->
+<div class="acceptance-section" style="margin-top: 40px; padding-top: 20px; border-top: 2px solid #333;">
+    <p class="acceptance-title">EMPLOYEE ACKNOWLEDGMENT</p>
+    <p>
+        I, <strong>{{ employee_name }}</strong>, acknowledge that I have received and read this
+        warning letter dated {{ letter_date | format_date }}. I understand the concerns raised
+        and the expectations for improvement.
+    </p>
+
+    <p style="margin-top: 15px;">
+        <input type="checkbox" style="width: 14px; height: 14px; vertical-align: middle;">
+        <span style="margin-left: 5px;">I wish to provide a written response to this warning (attached)</span>
+    </p>
+
+    <div class="dual-signature" style="display: flex; justify-content: space-between; margin-top: 30px;">
+        <div class="signature-block" style="width: 45%;">
+            <div class="signature-line" style="border-bottom: 1px solid #333; margin: 30px 0 10px 0;"></div>
+            <p class="signature-name">{{ employee_name }}</p>
+            <p class="signature-title">Employee Signature</p>
+        </div>
+        <div class="signature-block" style="width: 45%;">
+            <div class="signature-line" style="border-bottom: 1px solid #333; margin: 30px 0 10px 0;"></div>
+            <p class="signature-name">Date</p>
+        </div>
+    </div>
+
+    <!-- Witness if employee refuses to sign -->
+    <div style="margin-top: 30px; padding: 15px; background-color: #f8fafc; border: 1px dashed #94a3b8;">
+        <p style="font-size: 12px; color: #64748b; margin: 0;">
+            <strong>If employee refuses to sign:</strong>
+        </p>
+        <p style="font-size: 12px; color: #64748b; margin: 10px 0 0 0;">
+            I confirm that this warning was delivered to {{ employee_name }} on _____________ (date)
+            and they refused to acknowledge receipt.
+        </p>
+        <div style="margin-top: 20px;">
+            <p style="font-size: 12px;">Witness Name: _________________________ Signature: _________________________</p>
+        </div>
+    </div>
+</div>

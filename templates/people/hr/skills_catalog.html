@@ -42,7 +42,7 @@
                                           {% else %}bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-400{% endif %}">
             All
         </a>
-        {% for cat in skill_categories %}
+        {% for cat in categories %}
         <a href="/people/hr/skills?category={{ cat.value }}" class="px-3 py-1 rounded-full text-sm transition-colors
                                                                      {% if selected_category == cat.value %}bg-teal-100 text-teal-700 dark:bg-teal-900 dark:text-teal-400
                                                                      {% else %}bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-400{% endif %}">
@@ -110,9 +110,18 @@
                         {% endif %}
                     </td>
                     <td class="px-6 py-4 text-right text-sm">
-                        <a href="/people/hr/skills/{{ skill.skill_id }}/edit" class="text-teal-600 hover:text-teal-700 dark:text-teal-400">
-                            Edit
-                        </a>
+                        <div class="flex items-center justify-end gap-3">
+                            <a href="/people/hr/skills/{{ skill.skill_id }}/edit" class="text-teal-600 hover:text-teal-700 dark:text-teal-400">
+                                Edit
+                            </a>
+                            <form method="post" action="/people/hr/skills/{{ skill.skill_id }}/delete"
+                                  onsubmit="return confirm('Delete this skill?')">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                <button type="submit" class="text-red-600 hover:text-red-700 dark:text-red-400">
+                                    Delete
+                                </button>
+                            </form>
+                        </div>
                     </td>
                 </tr>
                 {% endfor %}

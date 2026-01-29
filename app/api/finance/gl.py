@@ -5,7 +5,7 @@ General Ledger API endpoints for chart of accounts, journal entries,
 fiscal periods, and account balances.
 """
 
-from datetime import date
+from datetime import date, datetime
 from typing import Optional
 from uuid import UUID
 
@@ -37,6 +37,7 @@ from app.services.finance.gl import (
     journal_service,
     ledger_posting_service,
     AccountInput,
+    FiscalPeriodInput,
     JournalInput,
     JournalLineInput,
 )
@@ -70,12 +71,18 @@ def create_account(
     db: Session = Depends(get_db),
 ):
     """Create a new GL account."""
+    try:
+        account_type = AccountType(payload.account_type)
+        normal_balance = NormalBalance(payload.normal_balance)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     input_data = AccountInput(
         account_code=payload.account_code,
         account_name=payload.account_name,
         category_id=category_id,
-        account_type=parse_enum(AccountType, payload.account_type),
-        normal_balance=parse_enum(NormalBalance, payload.normal_balance),
+        account_type=account_type,
+        normal_balance=normal_balance,
         description=payload.description,
         is_reconciliation_required=payload.is_reconcilable,
     )
@@ -190,15 +197,14 @@ def create_fiscal_period(
     db: Session = Depends(get_db),
 ):
     """Create a new fiscal period."""
-    return fiscal_period_service.create_period(
-        db=db,
-        organization_id=organization_id,
+    input_data = FiscalPeriodInput(
+        fiscal_year_id=payload.fiscal_year_id,
+        period_number=payload.period_number,
         period_name=payload.period_name,
-        period_type=payload.period_type,
         start_date=payload.start_date,
         end_date=payload.end_date,
-        fiscal_year=payload.fiscal_year,
     )
+    return fiscal_period_service.create_period(db=db, organization_id=organization_id, input=input_data)
 
 
 @router.get("/fiscal-periods/{period_id}", response_model=FiscalPeriodRead)
@@ -246,7 +252,12 @@ def open_fiscal_period(
     db: Session = Depends(get_db),
 ):
     """Open a fiscal period for posting."""
-    return fiscal_period_service.open_period(db, organization_id, period_id)
+    opened_by_user_id = UUID(auth["person_id"]) if auth.get("person_id") else None
+    if not opened_by_user_id:
+        raise HTTPException(status_code=403, detail="User is not associated with a person")
+    return fiscal_period_service.open_period(
+        db, organization_id, period_id, opened_by_user_id
+    )
 
 
 @router.post("/fiscal-periods/{period_id}/close", response_model=FiscalPeriodRead)
@@ -411,9 +422,9 @@ def get_account_balance(
 
     balance = balance_service.get_balance(
         db=db,
-        organization_id=str(organization_id),
-        account_id=str(account_id),
-        fiscal_period_id=str(fiscal_period_id),
+        organization_id=organization_id,
+        account_id=account_id,
+        fiscal_period_id=fiscal_period_id,
     )
     if not balance:
         raise HTTPException(status_code=404, detail="Balance not found")
@@ -424,10 +435,10 @@ def get_account_balance(
         account_code=account.account_code,
         account_name=account.account_name,
         fiscal_period_id=balance.fiscal_period_id,
-        opening_balance=balance.opening_balance,
+        opening_balance=balance.opening_debit - balance.opening_credit,
         period_debit=balance.period_debit,
         period_credit=balance.period_credit,
-        closing_balance=balance.closing_balance,
+        closing_balance=balance.closing_debit - balance.closing_credit,
         currency_code=balance.currency_code,
     )
 
@@ -443,10 +454,13 @@ def get_trial_balance(
     """Get trial balance for a fiscal period."""
     from app.services.finance.gl import balance_service
 
+    as_of_datetime = (
+        datetime.combine(as_of_date, datetime.min.time()) if as_of_date else None
+    )
     result = balance_service.get_trial_balance(
         db=db,
         organization_id=str(organization_id),
         fiscal_period_id=str(fiscal_period_id),
-        as_of_date=as_of_date,
+        as_of_date=as_of_datetime,
     )
     return result

@@ -4,7 +4,9 @@ Admin web routes.
 Provides admin dashboard and management pages with admin role requirement.
 """
 
-from fastapi import APIRouter, Depends, Form, Query, Request
+from typing import Any
+
+from fastapi import APIRouter, Depends, Form, Query, Request, UploadFile
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
@@ -13,6 +15,12 @@ from app.web.deps import get_db, optional_web_auth, WebAuthContext
 
 
 router = APIRouter(prefix="/admin", tags=["admin-web"])
+
+
+def _normalize_form(form: Any) -> dict[str, str]:
+    if form is None:
+        return {}
+    return {key: value if isinstance(value, str) else "" for key, value in form.items()}
 
 
 @router.get("", response_class=HTMLResponse)
@@ -59,6 +67,7 @@ async def admin_users_create(
     form = getattr(request.state, "csrf_form", None)
     if form is None:
         form = await request.form()
+    form = _normalize_form(form)
 
     first_name = (form.get("first_name") or "").strip()
     last_name = (form.get("last_name") or "").strip()
@@ -125,6 +134,7 @@ async def admin_users_update(
     form = getattr(request.state, "csrf_form", None)
     if form is None:
         form = await request.form()
+    form = _normalize_form(form)
 
     first_name = (form.get("first_name") or "").strip()
     last_name = (form.get("last_name") or "").strip()
@@ -205,6 +215,7 @@ async def admin_roles_create(
     form = getattr(request.state, "csrf_form", None)
     if form is None:
         form = await request.form()
+    form = _normalize_form(form)
 
     name = (form.get("name") or "").strip()
     description = (form.get("description") or "").strip()
@@ -255,6 +266,7 @@ async def admin_roles_update(
     form = getattr(request.state, "csrf_form", None)
     if form is None:
         form = await request.form()
+    form = _normalize_form(form)
 
     name = (form.get("name") or "").strip()
     description = (form.get("description") or "").strip()
@@ -317,7 +329,8 @@ async def admin_permissions_create(
     form = getattr(request.state, "csrf_form", None)
     if form is None:
         form = await request.form()
-        request.state.csrf_form = form
+    form = _normalize_form(form)
+    request.state.csrf_form = form
 
     key = (form.get("key") or "").strip()
     description = (form.get("description") or "").strip()
@@ -366,7 +379,8 @@ async def admin_permissions_update(
     form = getattr(request.state, "csrf_form", None)
     if form is None:
         form = await request.form()
-        request.state.csrf_form = form
+    form = _normalize_form(form)
+    request.state.csrf_form = form
 
     key = (form.get("key") or "").strip()
     description = (form.get("description") or "").strip()
@@ -502,6 +516,8 @@ def admin_organizations_update(
     consolidation_method: str = Form(default=""),
     ownership_percentage: str = Form(default=""),
     is_active: str = Form(default=""),
+    salaries_expense_account_id: str = Form(default=""),
+    salary_payable_account_id: str = Form(default=""),
     db: Session = Depends(get_db),
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
@@ -526,6 +542,8 @@ def admin_organizations_update(
         consolidation_method,
         ownership_percentage,
         is_active,
+        salaries_expense_account_id,
+        salary_payable_account_id,
     )
 
 
@@ -574,6 +592,7 @@ async def admin_settings_create(
     form = getattr(request.state, "csrf_form", None)
     if form is None:
         form = await request.form()
+    form = _normalize_form(form)
 
     domain = (form.get("domain") or "").strip()
     key = (form.get("key") or "").strip()
@@ -645,6 +664,7 @@ async def admin_settings_update(
     form = getattr(request.state, "csrf_form", None)
     if form is None:
         form = await request.form()
+    form = _normalize_form(form)
 
     domain = (form.get("domain") or "").strip()
     key = (form.get("key") or "").strip()

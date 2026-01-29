@@ -177,7 +177,7 @@ def get_my_timesheet(
     days: list[TimesheetDay] = []
     for d in sorted(days_map.keys()):
         day_entries = days_map[d]
-        day_total = sum(e.hours for e in day_entries)
+        day_total = sum((e.hours for e in day_entries), Decimal("0"))
         days.append(
             TimesheetDay(
                 date=d,

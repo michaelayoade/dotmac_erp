@@ -141,7 +141,7 @@ def get_appraisal_cycle(
 ):
     """Get an appraisal cycle by ID."""
     svc = PerformanceService(db)
-    return AppraisalCycleRead.model_validate(svc.get_appraisal_cycle(organization_id, cycle_id))
+    return AppraisalCycleRead.model_validate(svc.get_cycle(organization_id, cycle_id))
 
 
 @router.patch("/cycles/{cycle_id}", response_model=AppraisalCycleRead)
@@ -614,7 +614,7 @@ def submit_self_assessment(
         achievements=payload.achievements,
         challenges=payload.challenges,
         development_needs=payload.development_needs,
-        kra_ratings=payload.kra_ratings,
+        kra_ratings=[r.model_dump() for r in payload.kra_ratings],
     )
     db.commit()
     return AppraisalRead.model_validate(appraisal)
@@ -635,7 +635,7 @@ def submit_manager_review(
         manager_overall_rating=payload.manager_overall_rating,
         manager_summary=payload.manager_summary,
         manager_recommendations=payload.manager_recommendations,
-        kra_ratings=payload.kra_ratings,
+        kra_ratings=[r.model_dump() for r in payload.kra_ratings],
     )
     db.commit()
     return AppraisalRead.model_validate(appraisal)
@@ -653,9 +653,9 @@ def submit_calibration(
     appraisal = svc.submit_calibration(
         org_id=organization_id,
         appraisal_id=appraisal_id,
-        final_rating=payload.final_rating,
+        calibrated_rating=payload.calibrated_rating,
         calibration_notes=payload.calibration_notes,
-        calibrated_by_id=payload.calibrated_by_id,
+        rating_label=payload.rating_label,
     )
     db.commit()
     return AppraisalRead.model_validate(appraisal)

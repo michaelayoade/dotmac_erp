@@ -15,6 +15,7 @@ from app.models.people.hr.employee import Employee, EmployeeStatus, Gender
 from app.models.people.hr.employee_grade import EmployeeGrade
 from app.models.people.hr.employment_type import EmploymentType
 from app.models.people.hr.lifecycle import (
+    ActivityStatus,
     BoardingStatus,
     SeparationType,
     EmployeeOnboarding,
@@ -27,9 +28,11 @@ from app.models.people.hr.lifecycle import (
     EmployeeTransferDetail,
 )
 from app.models.people.hr.checklist_template import (
+    AssigneeRole,
     ChecklistTemplate,
     ChecklistTemplateItem,
     ChecklistTemplateType,
+    OnboardingCategory,
 )
 from app.models.people.hr.employee_extended import (
     DocumentType,
@@ -50,6 +53,12 @@ from app.models.people.hr.job_description import (
     JobDescription,
     JobDescriptionCompetency,
 )
+from app.models.people.hr.handbook import (
+    DocumentCategory,
+    DocumentStatus,
+    HRDocument,
+    HRDocumentAcknowledgment,
+)
 
 __all__ = [
     "Department",
@@ -59,6 +68,8 @@ __all__ = [
     "EmployeeStatus",
     "EmploymentType",
     "Gender",
+    # Lifecycle enums and models
+    "ActivityStatus",
     "BoardingStatus",
     "SeparationType",
     "EmployeeOnboarding",
@@ -69,9 +80,12 @@ __all__ = [
     "EmployeePromotionDetail",
     "EmployeeTransfer",
     "EmployeeTransferDetail",
+    # Checklist templates
+    "AssigneeRole",
     "ChecklistTemplate",
     "ChecklistTemplateItem",
     "ChecklistTemplateType",
+    "OnboardingCategory",
     # Employee extended data
     "DocumentType",
     "QualificationType",
@@ -89,4 +103,9 @@ __all__ = [
     "Competency",
     "JobDescription",
     "JobDescriptionCompetency",
+    # HR Documents / Handbook
+    "DocumentCategory",
+    "DocumentStatus",
+    "HRDocument",
+    "HRDocumentAcknowledgment",
 ]

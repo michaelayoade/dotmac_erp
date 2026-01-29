@@ -49,7 +49,7 @@ def list_skills(
         "success": success,
         "error": error,
     })
-    return templates.TemplateResponse(request, "people/hr/skills.html", context)
+    return templates.TemplateResponse(request, "people/hr/skills_catalog.html", context)
 
 
 @router.get("/skills/new", response_class=HTMLResponse)
@@ -63,6 +63,7 @@ def new_skill_catalog_form(
     context.update({
         "categories": list(SkillCategory),
         "form_data": {},
+        "skill": None,
     })
     return templates.TemplateResponse(request, "people/hr/skill_catalog_form.html", context)
 
@@ -101,6 +102,94 @@ def create_skill(
                 "description": description,
                 "is_language": is_language,
             },
+            "skill": None,
             "error": str(e),
         })
         return templates.TemplateResponse(request, "people/hr/skill_catalog_form.html", context)
+
+
+@router.get("/skills/{skill_id}/edit", response_class=HTMLResponse)
+def edit_skill_catalog_form(
+    request: Request,
+    skill_id: str,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Edit skill form."""
+    org_id = coerce_uuid(auth.organization_id)
+    skill_svc = SkillService(db, org_id)
+    skill = skill_svc.get_skill(coerce_uuid(skill_id))
+
+    context = base_context(request, auth, "Edit Skill", "skills", db=db)
+    context.update({
+        "categories": list(SkillCategory),
+        "skill": skill,
+        "form_data": {},
+    })
+    return templates.TemplateResponse(request, "people/hr/skill_catalog_form.html", context)
+
+
+@router.post("/skills/{skill_id}/edit", response_class=HTMLResponse)
+def update_skill(
+    request: Request,
+    skill_id: str,
+    skill_name: str = Form(...),
+    category: str = Form(...),
+    description: Optional[str] = Form(None),
+    is_language: Optional[str] = Form(None),
+    is_active: Optional[str] = Form(None),
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Update an existing skill in the catalog."""
+    org_id = coerce_uuid(auth.organization_id)
+    skill_svc = SkillService(db, org_id)
+    skill_uuid = coerce_uuid(skill_id)
+
+    try:
+        skill_svc.update_skill(
+            skill_id=skill_uuid,
+            skill_name=skill_name,
+            category=SkillCategory(category),
+            description=description or None,
+            is_active=_parse_bool(is_active),
+        )
+        db.commit()
+        return RedirectResponse(url="/people/hr/skills?success=Skill+updated", status_code=303)
+    except Exception as e:
+        db.rollback()
+        skill = skill_svc.get_skill(skill_uuid)
+        context = base_context(request, auth, "Edit Skill", "skills", db=db)
+        context.update({
+            "categories": list(SkillCategory),
+            "skill": skill,
+            "form_data": {
+                "skill_name": skill_name,
+                "category": category,
+                "description": description,
+                "is_language": is_language,
+                "is_active": is_active,
+            },
+            "error": str(e),
+        })
+        return templates.TemplateResponse(request, "people/hr/skill_catalog_form.html", context)
+
+
+@router.post("/skills/{skill_id}/delete", response_class=HTMLResponse)
+def delete_skill(
+    request: Request,
+    skill_id: str,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Delete a skill from the catalog."""
+    org_id = coerce_uuid(auth.organization_id)
+    skill_svc = SkillService(db, org_id)
+
+    try:
+        skill_svc.delete_skill(coerce_uuid(skill_id))
+        db.commit()
+        return RedirectResponse(url="/people/hr/skills?success=Skill+deleted", status_code=303)
+    except Exception as e:
+        db.rollback()
+        return RedirectResponse(url=f"/people/hr/skills?error={str(e)}", status_code=303)

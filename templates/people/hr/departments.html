@@ -47,8 +47,11 @@
     {% if departments %}
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {% for dept in departments %}
-        <div class="card p-5 group hover:shadow-lg hover:border-teal-200 dark:hover:border-teal-800 transition-all">
-            <div class="flex items-start justify-between">
+        <div class="card p-5 group hover:shadow-lg hover:border-teal-200 dark:hover:border-teal-800 transition-all relative">
+            <a href="/people/hr/departments/{{ dept.department_id }}"
+               class="absolute inset-0 z-10 rounded-lg focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-slate-900"
+               aria-label="View {{ dept.department_name }}"></a>
+            <div class="flex items-start justify-between relative z-0">
                 <div class="flex items-center gap-3">
                     <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 text-white shadow-lg shadow-violet-500/25">
                         <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -72,11 +75,11 @@
             </div>
 
             {% if dept.description %}
-            <p class="mt-3 text-sm text-slate-600 dark:text-slate-400 line-clamp-2">{{ dept.description }}</p>
+            <p class="mt-3 text-sm text-slate-600 dark:text-slate-400 line-clamp-2 relative z-0">{{ dept.description }}</p>
             {% endif %}
 
             {% if dept.head %}
-            <div class="mt-3 flex items-center gap-2 text-sm">
+            <div class="mt-3 flex items-center gap-2 text-sm relative z-0">
                 <div class="w-6 h-6 rounded-full bg-gradient-to-br from-teal-400 to-cyan-500 flex items-center justify-center text-white text-xs font-medium">
                     {{ dept.head.full_name[0] if dept.head.full_name else '?' }}
                 </div>
@@ -87,7 +90,7 @@
             </div>
             {% endif %}
 
-            <div class="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+            <div class="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between relative z-0">
                 <div class="flex items-center gap-1.5 text-sm text-slate-500 dark:text-slate-400">
                     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
@@ -95,7 +98,7 @@
                     <span>{{ employee_counts.get(dept.department_id, 0) }} employees</span>
                 </div>
                 <a href="/people/hr/departments/{{ dept.department_id }}/edit"
-                   class="p-2 rounded-lg text-slate-400 hover:text-teal-600 hover:bg-teal-50 dark:hover:text-teal-400 dark:hover:bg-teal-900/30 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all"
+                   class="relative z-20 p-2 rounded-lg text-slate-400 hover:text-teal-600 hover:bg-teal-50 dark:hover:text-teal-400 dark:hover:bg-teal-900/30 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all"
                    title="Edit department">
                     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>

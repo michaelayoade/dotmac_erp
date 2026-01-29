@@ -262,6 +262,17 @@ def void_invoice(
     return ar_web_service.void_invoice_response(request, auth, db, invoice_id)
 
 
+@router.post("/invoices/{invoice_id}/cancel")
+def cancel_invoice(
+    request: Request,
+    invoice_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Cancel an AR invoice, returning to DRAFT for editing."""
+    return ar_web_service.cancel_invoice_response(request, auth, db, invoice_id)
+
+
 @router.post("/invoices/{invoice_id}/delete")
 def delete_invoice(
     request: Request,

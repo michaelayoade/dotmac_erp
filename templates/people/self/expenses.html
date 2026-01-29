@@ -13,128 +13,65 @@
 {% endblock %}
 
 {% block content %}
-<div class="space-y-6">
+<div class="space-y-6" x-data="{ showClaimModal: false }">
     <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
             <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">My Expenses</h1>
             <p class="text-sm text-slate-500 dark:text-slate-400">Track your expense claims and approvals.</p>
         </div>
+        <button type="button" class="coin-button" @click="showClaimModal = true">
+            <span class="coin-particle" aria-hidden="true"></span>
+            <span class="coin-particle" aria-hidden="true"></span>
+            <span class="coin-particle" aria-hidden="true"></span>
+            <span class="coin-particle" aria-hidden="true"></span>
+            <span class="coin-particle" aria-hidden="true"></span>
+            <span class="coin-particle" aria-hidden="true"></span>
+            <span class="coin-particle" aria-hidden="true"></span>
+            <span class="coin-particle" aria-hidden="true"></span>
+            <span class="coin-particle" aria-hidden="true"></span>
+            <span class="coin-particle" aria-hidden="true"></span>
+            <span class="relative z-10 flex items-center gap-2">
+                <span class="inline-flex h-4 w-4 items-center justify-center rounded-full border border-amber-400 bg-amber-200">
+                    <span class="block h-2.5 w-2.5 rounded-full bg-amber-500"></span>
+                </span>
+                New Expense
+            </span>
+        </button>
     </div>
 
-    <div class="card p-6">
-        <h2 class="text-lg font-semibold text-slate-900 dark:text-white">New Expense Claim</h2>
-        <form method="post" action="/people/self/expenses/claims" enctype="multipart/form-data" class="mt-4 grid gap-4 sm:grid-cols-2">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-            <div>
-                <label for="claim_date" class="form-label">Claim Date</label>
-                <input type="date" name="claim_date" id="claim_date" class="form-input w-full" required>
+    <div class="card p-5">
+        <div class="flex flex-wrap items-center gap-3">
+            <div class="flex-1 min-w-[220px]">
+                <label for="expense-search" class="sr-only">Search expenses</label>
+                <input id="expense-search" type="search" class="form-input w-full" placeholder="Search claims, purpose, amount, status">
             </div>
-            <div>
-                <label for="purpose" class="form-label">Purpose</label>
-                <input type="text" name="purpose" id="purpose" class="form-input w-full" required>
-            </div>
-            <div>
-                <label for="expense_date" class="form-label">Expense Date</label>
-                <input type="date" name="expense_date" id="expense_date" class="form-input w-full" required>
-            </div>
-            <div>
-                <label for="category_id" class="form-label">Category</label>
-                <select name="category_id" id="category_id" class="form-select w-full" required onchange="updateReceiptRequirement()">
-                    {% for cat in categories %}
-                    <option value="{{ cat.category_id }}"
-                            data-requires-receipt="{{ 'true' if cat.requires_receipt else 'false' }}"
-                            data-max-amount="{{ cat.max_amount_per_claim or '' }}">
-                        {{ cat.category_name }}{% if cat.requires_receipt %} *{% endif %}
-                    </option>
-                    {% endfor %}
+            <div class="min-w-[160px]">
+                <label for="expense-status-filter" class="sr-only">Status filter</label>
+                <select id="expense-status-filter" class="form-select w-full">
+                    <option value="">All statuses</option>
+                    <option value="DRAFT">Draft</option>
+                    <option value="SUBMITTED">Submitted</option>
+                    <option value="APPROVED">Approved</option>
+                    <option value="REJECTED">Rejected</option>
                 </select>
-                <p id="receipt-hint" class="mt-1 text-xs text-amber-600 dark:text-amber-400 hidden">
-                    <svg class="inline h-3 w-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
-                    </svg>
-                    Receipt required for this category
-                </p>
             </div>
-            <div class="sm:col-span-2">
-                <label for="description" class="form-label">Description</label>
-                <input type="text" name="description" id="description" class="form-input w-full" required>
-            </div>
-            <div>
-                <label for="recipient_bank_code" class="form-label">Bank Code</label>
-                <input type="text" name="recipient_bank_code" id="recipient_bank_code" class="form-input w-full" required placeholder="e.g. 058" value="{{ employee_bank_code }}">
-                <p class="mt-1 text-xs text-slate-400">Paystack bank code for reimbursement</p>
-            </div>
-            <div>
-                <label for="recipient_account_number" class="form-label">Account Number</label>
-                <input type="text" name="recipient_account_number" id="recipient_account_number" class="form-input w-full" required maxlength="10" pattern="[0-9]{10}" value="{{ employee_bank_account_number }}">
-                <p class="mt-1 text-xs text-slate-400">10-digit account number</p>
-            </div>
-            <div>
-                <label for="claimed_amount" class="form-label">Amount</label>
-                <input type="number" step="0.01" name="claimed_amount" id="claimed_amount" class="form-input w-full" required>
-            </div>
-            <div>
-                <label for="receipt_number" class="form-label">Receipt Number</label>
-                <input type="text" name="receipt_number" id="receipt_number" class="form-input w-full">
-            </div>
-            <div class="sm:col-span-2">
-                <label for="receipt_url" class="form-label">Receipt URL</label>
-                <input type="url" name="receipt_url" id="receipt_url" class="form-input w-full">
-            </div>
-            <div class="sm:col-span-2">
-                <label for="receipt_file" class="form-label">Receipt File</label>
-                <input type="file" name="receipt_file" id="receipt_file" class="form-input w-full">
-            </div>
-            <div>
-                <label for="project_id" class="form-label">Project (Optional)</label>
-                <select name="project_id" id="project_id" class="form-select w-full">
-                    <option value="">No project</option>
-                    {% for proj in projects %}
-                    <option value="{{ proj.project_id }}" {{ 'selected' if selected_project_id and selected_project_id == proj.project_id|string else '' }}>
-                        {{ proj.project_code }} - {{ proj.project_name }}
-                    </option>
-                    {% endfor %}
+            <div class="min-w-[180px]">
+                <label for="expense-sort" class="sr-only">Sort expenses</label>
+                <select id="expense-sort" class="form-select w-full">
+                    <option value="date-desc">Newest first</option>
+                    <option value="date-asc">Oldest first</option>
+                    <option value="amount-desc">Amount high to low</option>
+                    <option value="amount-asc">Amount low to high</option>
                 </select>
-                <p class="mt-1 text-xs text-slate-400">Link expense to a project from ERPNext</p>
             </div>
-            <div>
-                <label for="ticket_id" class="form-label">Support Ticket (Optional)</label>
-                <select name="ticket_id" id="ticket_id" class="form-select w-full">
-                    <option value="">No ticket</option>
-                    {% for ticket in tickets %}
-                    <option value="{{ ticket.ticket_id }}" {{ 'selected' if selected_ticket_id and selected_ticket_id == ticket.ticket_id|string else '' }}>
-                        {{ ticket.ticket_number }} - {{ ticket.subject|truncate(40) }}
-                    </option>
-                    {% endfor %}
-                </select>
-                <p class="mt-1 text-xs text-slate-400">Link expense to a support ticket from ERPNext</p>
-            </div>
-            <div>
-                <label for="task_id" class="form-label">Task (Optional)</label>
-                <select name="task_id" id="task_id" class="form-select w-full">
-                    <option value="">No task</option>
-                    {% for task in tasks %}
-                    <option value="{{ task.task_id }}" {{ 'selected' if selected_task_id and selected_task_id == task.task_id|string else '' }}>
-                        {{ task.task_code }} - {{ task.task_name }}
-                    </option>
-                    {% endfor %}
-                </select>
-                <p class="mt-1 text-xs text-slate-400">Link expense to a specific project task</p>
-            </div>
-            <div class="sm:col-span-2 flex items-center justify-between">
-                <label class="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
-                    <input type="checkbox" name="submit_now" class="rounded border-slate-300 text-teal-600 focus:ring-teal-500">
-                    Submit for approval
-                </label>
-                <button type="submit" class="btn btn-primary">Create Claim</button>
-            </div>
-        </form>
+            <div class="ml-auto text-sm text-slate-500 dark:text-slate-400" id="expense-count"></div>
+        </div>
     </div>
 
     {% if claims %}
     <div class="card overflow-hidden">
         <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+            <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700" id="expense-claims-table">
                 <thead>
                     <tr class="bg-slate-50 dark:bg-slate-800/50">
                         <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Claim</th>
@@ -146,15 +83,20 @@
                 </thead>
                 <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
                     {% for claim in claims %}
-                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                    {% set status_value = claim.status.value if claim.status is defined and claim.status.value is defined else claim.status %}
+                    {% set status_text = status_value|string %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+                        data-claim-row
+                        data-status="{{ status_text|upper }}"
+                        data-date="{{ claim.claim_date }}"
+                        data-amount="{{ claim.total_claimed_amount|string|replace(',', '') }}"
+                        data-search="{{ claim.claim_number }} {{ claim.purpose }} {{ status_text }} {{ claim.total_claimed_amount }}">
                         <td class="px-4 py-3">
                             <div class="text-sm font-medium text-slate-900 dark:text-white">{{ claim.claim_number }}</div>
                             <div class="text-xs text-slate-500 dark:text-slate-400">{{ claim.purpose }}</div>
                         </td>
                         <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">{{ claim.claim_date }}</td>
                         <td class="px-4 py-3 text-right text-sm text-slate-700 dark:text-slate-300 font-mono">{{ claim.total_claimed_amount }}</td>
-                        {% set status_value = claim.status.value if claim.status is defined and claim.status.value is defined else claim.status %}
-                        {% set status_text = status_value|string %}
                         <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">{{ status_text }}</td>
                         <td class="px-4 py-3 text-right text-sm space-x-3">
                             <a href="/people/self/expenses/claims/{{ claim.claim_id }}/edit"
@@ -174,11 +116,145 @@
             </table>
         </div>
     </div>
+    <div id="expense-empty" class="hidden card p-8 text-center">
+        <p class="text-slate-500 dark:text-slate-400">No expenses match your filters.</p>
+    </div>
     {% else %}
     <div class="card p-8 text-center">
         <p class="text-slate-500 dark:text-slate-400">No expense claims yet.</p>
     </div>
     {% endif %}
+
+    <div x-show="showClaimModal" x-cloak class="fixed inset-0 z-50 overflow-y-auto" aria-modal="true" role="dialog">
+    <div class="flex min-h-screen items-center justify-center px-4 py-10">
+        <div class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm" @click="showClaimModal = false"></div>
+        <div class="relative w-full max-w-3xl overflow-hidden rounded-xl bg-white shadow-2xl dark:bg-slate-900">
+            <div class="flex items-center justify-between border-b border-slate-200 px-6 py-4 dark:border-slate-800">
+                <div>
+                    <h2 class="text-lg font-semibold text-slate-900 dark:text-white">New Expense Claim</h2>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">Fill in the details and submit when ready.</p>
+                </div>
+                <button type="button" class="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200" @click="showClaimModal = false">
+                    <span class="sr-only">Close</span>
+                    <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                        <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+                    </svg>
+                </button>
+            </div>
+            <div class="max-h-[75vh] overflow-y-auto px-6 py-5">
+                <form id="expense-claim-form" method="post" action="/people/self/expenses/claims" enctype="multipart/form-data" class="grid gap-4 sm:grid-cols-2">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <div>
+                        <label for="claim_date" class="form-label">Claim Date</label>
+                        <input type="date" name="claim_date" id="claim_date" class="form-input w-full" required>
+                    </div>
+                    <div>
+                        <label for="purpose" class="form-label">Purpose</label>
+                        <input type="text" name="purpose" id="purpose" class="form-input w-full" required>
+                    </div>
+                    <div>
+                        <label for="expense_date" class="form-label">Expense Date</label>
+                        <input type="date" name="expense_date" id="expense_date" class="form-input w-full" required>
+                    </div>
+                    <div>
+                        <label for="category_id" class="form-label">Category</label>
+                        <select name="category_id" id="category_id" class="form-select w-full" required onchange="updateReceiptRequirement()">
+                            {% for cat in categories %}
+                            <option value="{{ cat.category_id }}"
+                                    data-requires-receipt="{{ 'true' if cat.requires_receipt else 'false' }}"
+                                    data-max-amount="{{ cat.max_amount_per_claim or '' }}">
+                                {{ cat.category_name }}{% if cat.requires_receipt %} *{% endif %}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <p id="receipt-hint" class="mt-1 text-xs text-amber-600 dark:text-amber-400 hidden">
+                            <svg class="inline h-3 w-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                            </svg>
+                            Receipt required for this category
+                        </p>
+                    </div>
+                    <div class="sm:col-span-2">
+                        <label for="description" class="form-label">Description</label>
+                        <input type="text" name="description" id="description" class="form-input w-full" required>
+                    </div>
+                    <div>
+                        <label for="recipient_bank_code" class="form-label">Bank Code</label>
+                        <input type="text" name="recipient_bank_code" id="recipient_bank_code" class="form-input w-full" required placeholder="e.g. 058" value="{{ employee_bank_code }}">
+                        <p class="mt-1 text-xs text-slate-400">Paystack bank code for reimbursement</p>
+                    </div>
+                    <div>
+                        <label for="recipient_account_number" class="form-label">Account Number</label>
+                        <input type="text" name="recipient_account_number" id="recipient_account_number" class="form-input w-full" required maxlength="10" pattern="[0-9]{10}" value="{{ employee_bank_account_number }}">
+                        <p class="mt-1 text-xs text-slate-400">10-digit account number</p>
+                    </div>
+                    <div>
+                        <label for="claimed_amount" class="form-label">Amount</label>
+                        <input type="number" step="0.01" name="claimed_amount" id="claimed_amount" class="form-input w-full" required>
+                    </div>
+                    <div>
+                        <label for="receipt_number" class="form-label">Receipt Number</label>
+                        <input type="text" name="receipt_number" id="receipt_number" class="form-input w-full">
+                    </div>
+                    <div class="sm:col-span-2">
+                        <label for="receipt_url" class="form-label">Receipt URL</label>
+                        <input type="url" name="receipt_url" id="receipt_url" class="form-input w-full">
+                    </div>
+                    <div class="sm:col-span-2">
+                        <label for="receipt_file" class="form-label">Receipt File</label>
+                        <input type="file" name="receipt_file" id="receipt_file" class="form-input w-full">
+                    </div>
+                    <div>
+                        <label for="project_id" class="form-label">Project (Optional)</label>
+                        <select name="project_id" id="project_id" class="form-select w-full">
+                            <option value="">No project</option>
+                            {% for proj in projects %}
+                            <option value="{{ proj.project_id }}" {{ 'selected' if selected_project_id and selected_project_id == proj.project_id|string else '' }}>
+                                {{ proj.project_code }} - {{ proj.project_name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <p class="mt-1 text-xs text-slate-400">Link expense to a project from ERPNext</p>
+                    </div>
+                    <div>
+                        <label for="ticket_id" class="form-label">Support Ticket (Optional)</label>
+                        <select name="ticket_id" id="ticket_id" class="form-select w-full">
+                            <option value="">No ticket</option>
+                            {% for ticket in tickets %}
+                            <option value="{{ ticket.ticket_id }}" {{ 'selected' if selected_ticket_id and selected_ticket_id == ticket.ticket_id|string else '' }}>
+                                {{ ticket.ticket_number }} - {{ ticket.subject|truncate(40) }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <p class="mt-1 text-xs text-slate-400">Link expense to a support ticket from ERPNext</p>
+                    </div>
+                    <div>
+                        <label for="task_id" class="form-label">Task (Optional)</label>
+                        <select name="task_id" id="task_id" class="form-select w-full">
+                            <option value="">No task</option>
+                            {% for task in tasks %}
+                            <option value="{{ task.task_id }}" {{ 'selected' if selected_task_id and selected_task_id == task.task_id|string else '' }}>
+                                {{ task.task_code }} - {{ task.task_name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <p class="mt-1 text-xs text-slate-400">Link expense to a specific project task</p>
+                    </div>
+                    <div class="sm:col-span-2 flex items-center justify-between">
+                        <label class="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                            <input type="checkbox" name="submit_now" class="rounded border-slate-300 text-teal-600 focus:ring-teal-500">
+                            Submit for approval
+                        </label>
+                        <div class="flex items-center gap-3">
+                            <button type="button" class="btn btn-secondary" @click="showClaimModal = false">Cancel</button>
+                            <button type="submit" class="btn btn-primary">Create Claim</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    </div>
 </div>
 
 <script>
@@ -193,14 +269,12 @@ function updateReceiptRequirement() {
     const requiresReceipt = option.dataset.requiresReceipt === 'true';
     const maxAmount = option.dataset.maxAmount;
 
-    // Show/hide receipt hint
     if (requiresReceipt) {
         hint.classList.remove('hidden');
     } else {
         hint.classList.add('hidden');
     }
 
-    // Update max amount placeholder
     if (maxAmount) {
         amountInput.setAttribute('max', maxAmount);
         amountInput.placeholder = 'Max: ' + parseFloat(maxAmount).toLocaleString();
@@ -210,32 +284,167 @@ function updateReceiptRequirement() {
     }
 }
 
-// Form validation
-document.querySelector('form[action="/people/self/expenses/claims"]').addEventListener('submit', function(e) {
-    const select = document.getElementById('category_id');
-    const option = select.options[select.selectedIndex];
-    const requiresReceipt = option.dataset.requiresReceipt === 'true';
+const claimForm = document.getElementById('expense-claim-form');
+if (claimForm) {
+    claimForm.addEventListener('submit', function(e) {
+        const select = document.getElementById('category_id');
+        const option = select.options[select.selectedIndex];
+        const requiresReceipt = option.dataset.requiresReceipt === 'true';
 
-    const receiptUrl = document.getElementById('receipt_url').value.trim();
-    const receiptFile = document.getElementById('receipt_file').files.length > 0;
+        const receiptUrl = document.getElementById('receipt_url').value.trim();
+        const receiptFile = document.getElementById('receipt_file').files.length > 0;
 
-    if (requiresReceipt && !receiptUrl && !receiptFile) {
-        e.preventDefault();
-        alert('This category requires a receipt. Please provide a receipt URL or upload a receipt file.');
-        return false;
+        if (requiresReceipt && !receiptUrl && !receiptFile) {
+            e.preventDefault();
+            alert('This category requires a receipt. Please provide a receipt URL or upload a receipt file.');
+            return false;
+        }
+
+        const maxAmount = option.dataset.maxAmount;
+        const amount = parseFloat(document.getElementById('claimed_amount').value);
+        if (maxAmount && amount > parseFloat(maxAmount)) {
+            e.preventDefault();
+            alert('Amount exceeds the maximum allowed (' + parseFloat(maxAmount).toLocaleString() + ') for this category.');
+            return false;
+        }
+    });
+}
+
+const searchInput = document.getElementById('expense-search');
+const statusFilter = document.getElementById('expense-status-filter');
+const sortSelect = document.getElementById('expense-sort');
+const tableBody = document.querySelector('#expense-claims-table tbody');
+const rows = tableBody ? Array.from(tableBody.querySelectorAll('[data-claim-row]')) : [];
+const emptyState = document.getElementById('expense-empty');
+const countEl = document.getElementById('expense-count');
+
+function parseAmount(value) {
+    const numeric = parseFloat(String(value).replace(/[^0-9.]/g, ''));
+    return Number.isNaN(numeric) ? 0 : numeric;
+}
+
+function getRowValue(row, key) {
+    return (row.dataset[key] || '').toLowerCase();
+}
+
+function applyFilters() {
+    if (!rows.length) return;
+    const query = (searchInput ? searchInput.value : '').trim().toLowerCase();
+    const status = statusFilter ? statusFilter.value : '';
+    let visibleCount = 0;
+
+    rows.forEach((row) => {
+        const searchText = getRowValue(row, 'search');
+        const matchesQuery = !query || searchText.includes(query);
+        const rowStatus = (row.dataset.status || '').toUpperCase();
+        const matchesStatus = !status || rowStatus === status;
+        const show = matchesQuery && matchesStatus;
+        row.classList.toggle('hidden', !show);
+        if (show) visibleCount += 1;
+    });
+
+    if (countEl) {
+        countEl.textContent = visibleCount + ' of ' + rows.length + ' claims';
     }
-
-    // Check max amount
-    const maxAmount = option.dataset.maxAmount;
-    const amount = parseFloat(document.getElementById('claimed_amount').value);
-    if (maxAmount && amount > parseFloat(maxAmount)) {
-        e.preventDefault();
-        alert('Amount exceeds the maximum allowed (' + parseFloat(maxAmount).toLocaleString() + ') for this category.');
-        return false;
+    if (emptyState) {
+        emptyState.classList.toggle('hidden', visibleCount !== 0);
     }
+}
+
+function sortRows() {
+    if (!tableBody || !rows.length) return;
+    const sortValue = sortSelect ? sortSelect.value : 'date-desc';
+    const sorted = [...rows].sort((a, b) => {
+        if (sortValue.startsWith('amount')) {
+            const amountA = parseAmount(a.dataset.amount);
+            const amountB = parseAmount(b.dataset.amount);
+            return sortValue === 'amount-asc' ? amountA - amountB : amountB - amountA;
+        }
+        const dateA = new Date(a.dataset.date || '').getTime();
+        const dateB = new Date(b.dataset.date || '').getTime();
+        return sortValue === 'date-asc' ? dateA - dateB : dateB - dateA;
+    });
+    sorted.forEach((row) => tableBody.appendChild(row));
+}
+
+function refreshTable() {
+    sortRows();
+    applyFilters();
+}
+
+if (searchInput) searchInput.addEventListener('input', applyFilters);
+if (statusFilter) statusFilter.addEventListener('change', applyFilters);
+if (sortSelect) sortSelect.addEventListener('change', refreshTable);
+
+const coinParticles = document.querySelectorAll('.coin-button .coin-particle');
+coinParticles.forEach((particle) => {
+    const x = Math.random() * 160 - 80;
+    const y = Math.random() * 160 - 80;
+    particle.style.setProperty('--coin-x', x.toFixed(0) + 'px');
+    particle.style.setProperty('--coin-y', y.toFixed(0) + 'px');
 });
 
-// Initialize on page load
-document.addEventListener('DOMContentLoaded', updateReceiptRequirement);
+document.addEventListener('DOMContentLoaded', function() {
+    updateReceiptRequirement();
+    refreshTable();
+});
 </script>
+
+<style>
+.coin-button {
+    position: relative;
+    overflow: hidden;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-width: 160px;
+    padding: 0.65rem 1.1rem;
+    border-radius: 0.75rem;
+    border: 1px solid rgba(251, 191, 36, 0.45);
+    background: rgba(253, 230, 138, 0.35);
+    color: #92400e;
+    font-weight: 600;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.coin-button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 10px 24px rgba(245, 158, 11, 0.2);
+    background: rgba(253, 230, 138, 0.6);
+}
+
+.coin-particle {
+    position: absolute;
+    width: 0.4rem;
+    height: 0.4rem;
+    border-radius: 9999px;
+    background: radial-gradient(circle at 30% 30%, #fde68a, #f59e0b 70%);
+    opacity: 0.35;
+    transform: translate(var(--coin-x), var(--coin-y));
+    transition: transform 0.35s ease, opacity 0.35s ease;
+}
+
+.coin-button:hover .coin-particle,
+.coin-button:focus-visible .coin-particle {
+    transform: translate(0, 0);
+    opacity: 0.95;
+}
+
+.coin-button:focus-visible {
+    outline: 2px solid rgba(245, 158, 11, 0.6);
+    outline-offset: 2px;
+}
+
+@media (prefers-color-scheme: dark) {
+    .coin-button {
+        background: rgba(120, 53, 15, 0.35);
+        color: #fcd34d;
+        border-color: rgba(251, 191, 36, 0.3);
+    }
+    .coin-button:hover {
+        background: rgba(120, 53, 15, 0.55);
+    }
+}
+</style>
 {% endblock %}

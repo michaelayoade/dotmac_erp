@@ -1,0 +1,193 @@
+{#
+    Experience/Service Letter Template
+
+    This template is used for employment reference letters for departing employees.
+    Designed to be wrapped by base_letter.html.
+
+    Context variables available:
+    - employee_name, employee_first_name, employee_last_name
+    - employee_id_number
+    - job_title, final_designation, department_name
+    - start_date, end_date, tenure_years, tenure_months
+    - employment_type
+    - responsibilities (list of key responsibilities)
+    - achievements (list of notable achievements)
+    - skills_developed (list of skills)
+    - conduct_rating: EXCELLENT, GOOD, SATISFACTORY
+    - separation_reason: RESIGNATION, MUTUAL, CONTRACT_END, RETIREMENT
+    - eligible_for_rehire: true/false
+    - organization_name, organization_address
+    - signatory_name, signatory_title
+    - letter_date, reference_number
+#}
+
+<!-- Header -->
+<div style="text-align: center; margin-bottom: 30px;">
+    <h2 style="font-size: 20px; font-weight: bold; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 1px;">
+        Certificate of Employment
+    </h2>
+    <p style="font-size: 14px; color: #666;">Experience Letter</p>
+    {% if reference_number %}
+    <p style="font-size: 12px; color: #888;">Ref: {{ reference_number }}</p>
+    {% endif %}
+</div>
+
+<!-- To Whom It May Concern -->
+<div class="addressee">
+    <p class="addressee-name" style="font-weight: bold;">To Whom It May Concern</p>
+</div>
+
+<!-- Main Content -->
+<div class="content">
+    <p>
+        This is to certify that <strong>{{ employee_name }}</strong>
+        {% if employee_id_number %}(ID: {{ employee_id_number }}){% endif %}
+        was employed with <strong>{{ organization_name }}</strong> from
+        <strong>{{ start_date | format_date }}</strong> to <strong>{{ end_date | format_date }}</strong>.
+    </p>
+
+    <!-- Employment Details -->
+    <h3>Employment Details</h3>
+    <table>
+        <tr>
+            <td><strong>Position Held:</strong></td>
+            <td>{{ final_designation | default(job_title) }}</td>
+        </tr>
+        {% if department_name %}
+        <tr>
+            <td><strong>Department:</strong></td>
+            <td>{{ department_name }}</td>
+        </tr>
+        {% endif %}
+        <tr>
+            <td><strong>Employment Type:</strong></td>
+            <td>{{ employment_type | replace("_", " ") | title }}</td>
+        </tr>
+        <tr>
+            <td><strong>Duration of Service:</strong></td>
+            <td>
+                {% if tenure_years %}{{ tenure_years }} year{% if tenure_years != 1 %}s{% endif %}{% endif %}
+                {% if tenure_months %} {{ tenure_months }} month{% if tenure_months != 1 %}s{% endif %}{% endif %}
+            </td>
+        </tr>
+    </table>
+
+    {% if responsibilities %}
+    <!-- Key Responsibilities -->
+    <h3>Key Responsibilities</h3>
+    <p>During their tenure, {{ employee_first_name }} was responsible for:</p>
+    <ul>
+        {% for responsibility in responsibilities %}
+        <li>{{ responsibility }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    {% if achievements %}
+    <!-- Achievements -->
+    <h3>Notable Achievements</h3>
+    <p>{{ employee_first_name }} made significant contributions, including:</p>
+    <ul>
+        {% for achievement in achievements %}
+        <li>{{ achievement }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    {% if skills_developed %}
+    <!-- Skills -->
+    <h3>Skills and Competencies</h3>
+    <p>{{ employee_first_name }} demonstrated proficiency in the following areas:</p>
+    <ul>
+        {% for skill in skills_developed %}
+        <li>{{ skill }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    <!-- Conduct and Performance -->
+    {% if conduct_rating %}
+    <h3>Performance and Conduct</h3>
+    {% set conduct_descriptions = {
+        'EXCELLENT': 'exemplary conduct and outstanding performance throughout their tenure. They consistently exceeded expectations and demonstrated exceptional professionalism.',
+        'GOOD': 'good conduct and satisfactory performance throughout their tenure. They met expectations and demonstrated professionalism in their work.',
+        'SATISFACTORY': 'satisfactory conduct during their employment. They fulfilled their duties as required.'
+    } %}
+    <p>
+        {{ employee_first_name }} displayed {{ conduct_descriptions.get(conduct_rating, 'satisfactory conduct during their employment.') }}
+    </p>
+    {% endif %}
+
+    <!-- Separation -->
+    {% if separation_reason %}
+    <h3>Separation</h3>
+    {% set separation_descriptions = {
+        'RESIGNATION': 'voluntary resignation',
+        'MUTUAL': 'mutual agreement',
+        'CONTRACT_END': 'completion of contract term',
+        'RETIREMENT': 'retirement'
+    } %}
+    <p>
+        {{ employee_first_name }}'s employment ended due to {{ separation_descriptions.get(separation_reason, 'separation from the organization') }}
+        on {{ end_date | format_date }}.
+    </p>
+    {% endif %}
+
+    <!-- Rehire Eligibility -->
+    {% if eligible_for_rehire is defined %}
+    <p>
+        {% if eligible_for_rehire %}
+        {{ employee_first_name }} left the organization on good terms and is <strong>eligible for rehire</strong>.
+        {% else %}
+        {{ employee_first_name }}'s eligibility for rehire is subject to the organization's standard hiring policies.
+        {% endif %}
+    </p>
+    {% endif %}
+
+    <!-- Recommendation -->
+    <div class="highlight-box" style="margin-top: 25px;">
+        <p style="margin: 0;">
+            We wish {{ employee_first_name }} all the best in their future endeavors and are confident
+            they will continue to excel in their career.
+        </p>
+    </div>
+
+    <!-- Verification Notice -->
+    <p style="margin-top: 25px;">
+        This certificate is issued upon request for employment verification purposes.
+        For any clarification regarding this certificate, please contact our Human Resources
+        Department.
+    </p>
+</div>
+
+<!-- Signature Section -->
+<div class="signature-section">
+    <p class="closing">Yours faithfully,</p>
+    <div class="signature-block">
+        <div class="signature-line"></div>
+        <p class="signature-name">{{ signatory_name }}</p>
+        <p class="signature-title">{{ signatory_title }}</p>
+        <p class="signature-org">{{ organization_name }}</p>
+        <p class="signature-date">Date: {{ letter_date | format_date }}</p>
+    </div>
+</div>
+
+<!-- Official Seal Note -->
+<div style="margin-top: 30px; text-align: center; font-size: 11px; color: #888;">
+    <p>
+        This letter is valid without signature when verified through our official HR portal
+        or when bearing the company's official seal.
+    </p>
+</div>
+
+<!-- Verification QR Code Placeholder -->
+{% if verification_code %}
+<div style="margin-top: 20px; padding: 15px; background-color: #f8fafc; border: 1px solid #e2e8f0; text-align: center;">
+    <p style="font-size: 11px; color: #64748b; margin: 0 0 10px 0;">
+        <strong>Verification Code:</strong> {{ verification_code }}
+    </p>
+    <p style="font-size: 10px; color: #94a3b8; margin: 0;">
+        Verify this letter at: {{ verification_url | default('hr.company.com/verify') }}
+    </p>
+</div>
+{% endif %}

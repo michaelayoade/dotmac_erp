@@ -113,7 +113,7 @@ def _calculate_account_balance_trends(
     )
 
     # Build trend data
-    result = {aid: [0] * periods for aid in account_ids}
+    result = {aid: [0.0] * periods for aid in account_ids}
     period_index = {pid: i for i, pid in enumerate(reversed(period_ids))}
 
     for account_id, period_id, net_balance in balances:
@@ -180,7 +180,8 @@ class AccountWebService:
         )
 
         audit_service = get_audit_service(db)
-        creator_names = audit_service.get_creator_names(accounts)
+        creator_ids = [account.created_by_user_id for account in accounts if account.created_by_user_id]
+        creator_names = audit_service.get_user_names_batch(creator_ids)
 
         account_ids = [a.account_id for a in accounts]
         balances = _calculate_account_balances(db, org_id, account_ids)
@@ -206,7 +207,11 @@ class AccountWebService:
                     "is_active": account.is_active,
                     "created_at": account.created_at,
                     "created_by_user_id": account.created_by_user_id,
-                    "created_by_name": creator_names.get(account.created_by_user_id),
+                    "created_by_name": (
+                        creator_names.get(account.created_by_user_id)
+                        if account.created_by_user_id
+                        else None
+                    ),
                     "updated_at": account.updated_at,
                 }
             )
@@ -635,14 +640,16 @@ class AccountWebService:
         is_financial_instrument: bool,
     ) -> HTMLResponse | RedirectResponse:
         """Handle account creation form submission."""
+        org_id = auth.organization_id
+        assert org_id is not None
         currency_code = default_currency_code or org_context_service.get_functional_currency(
             db,
-            auth.organization_id,
+            org_id,
         )
 
         account, error = self.create_account(
             db,
-            str(auth.organization_id),
+            str(org_id),
             account_code=account_code,
             account_name=account_name,
             category_id=category_id,
@@ -711,14 +718,16 @@ class AccountWebService:
         is_financial_instrument: bool,
     ) -> HTMLResponse | RedirectResponse:
         """Handle account update form submission."""
+        org_id = auth.organization_id
+        assert org_id is not None
         currency_code = default_currency_code or org_context_service.get_functional_currency(
             db,
-            auth.organization_id,
+            org_id,
         )
 
         _, error = self.update_account(
             db,
-            str(auth.organization_id),
+            str(org_id),
             account_id=account_id,
             account_code=account_code,
             account_name=account_name,

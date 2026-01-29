@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en"
+      x-data="{ darkMode: localStorage.getItem('darkMode') === 'true' }"
+      x-init="$watch('darkMode', val => localStorage.setItem('darkMode', val))"
+      :class="{ 'dark': darkMode }">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>{% block title %}Welcome - {{ brand_name }}{% endblock %}</title>
+
+    <!-- Self-hosted Typography -->
+    <link href="/static/css/fonts.css" rel="stylesheet">
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+
+    <!-- Compiled Tailwind CSS -->
+    <link href="/static/css/app.css" rel="stylesheet">
+    <link href="/static/css/font-overrides.css" rel="stylesheet">
+
+    <!-- HTMX -->
+    <script src="/static/js/vendor/htmx.js"></script>
+
+    <!-- Alpine.js -->
+    <script defer src="/static/js/vendor/alpine.js"></script>
+
+    {% block head %}{% endblock %}
+</head>
+<body class="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 antialiased">
+
+    <!-- Header -->
+    <header class="sticky top-0 z-40 border-b border-slate-200/70 bg-white/95 backdrop-blur dark:border-slate-800/70 dark:bg-slate-900/95">
+        <div class="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
+            <div class="flex h-16 items-center justify-between">
+                <!-- Logo & Brand -->
+                <a href="/onboarding/start/{{ token }}" class="flex items-center gap-3">
+                    <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 text-sm font-bold text-white shadow">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="text-xs font-medium uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Onboarding</p>
+                        <p class="font-semibold text-slate-900 dark:text-white">{{ brand_name }}</p>
+                    </div>
+                </a>
+
+                <!-- Navigation -->
+                <nav class="flex items-center gap-4">
+                    <a href="/onboarding/start/{{ token }}" class="text-sm font-medium text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white">
+                        Dashboard
+                    </a>
+                    <a href="/onboarding/start/{{ token }}/info" class="text-sm font-medium text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white">
+                        Company Info
+                    </a>
+                    <!-- Dark mode toggle -->
+                    <button @click="darkMode = !darkMode" class="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200">
+                        <svg x-show="!darkMode" class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+                        </svg>
+                        <svg x-show="darkMode" x-cloak class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
+                        </svg>
+                    </button>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="border-t border-slate-200 bg-white py-8 dark:border-slate-800 dark:bg-slate-900">
+        <div class="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
+            <div class="flex flex-col items-center justify-between gap-4 sm:flex-row">
+                <p class="text-sm text-slate-500 dark:text-slate-400">
+                    Questions? Contact your HR representative for assistance.
+                </p>
+                <p class="text-xs text-slate-400 dark:text-slate-500">
+                    Powered by {{ brand_name }}
+                </p>
+            </div>
+        </div>
+    </footer>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>

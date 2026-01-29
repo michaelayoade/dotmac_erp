@@ -41,6 +41,8 @@ class EntityType(str, enum.Enum):
     BANK_RECONCILIATION = "BANK_RECONCILIATION"
     INVOICE = "INVOICE"
     SUBLEDGER = "SUBLEDGER"
+    # HR/Discipline entity type
+    DISCIPLINE = "DISCIPLINE"
 
 
 class NotificationType(str, enum.Enum):
