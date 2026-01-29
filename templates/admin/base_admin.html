@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"
-      x-data="{ darkMode: localStorage.getItem('darkMode') === 'true', sidebarOpen: false, sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === 'true' }"
-      x-init="$watch('darkMode', val => localStorage.setItem('darkMode', val)); $watch('sidebarCollapsed', val => localStorage.setItem('sidebarCollapsed', val))"
+      x-data="{ darkMode: localStorage.getItem('darkMode') === 'true' }"
+      x-init="$watch('darkMode', val => localStorage.setItem('darkMode', val))"
       :class="{ 'dark': darkMode }">
 <head>
     <meta charset="utf-8" />
@@ -52,14 +52,76 @@
     <script defer src="/static/js/vendor/alpine.js"></script>
 
     <style>
+        :root {
+            --content-gutter: 24px;
+        }
+
         [x-cloak] { display: none !important; }
 
-        .sidebar-transition {
+        .app-shell {
+            display: flex !important;
+            flex-direction: row !important;
+            flex-wrap: nowrap !important;
+            min-height: 100vh;
+            position: relative;
+        }
+
+        .app-sidebar {
+            width: 16rem;
+            flex-shrink: 0;
+            position: sticky;
+            top: 0;
+            height: 100vh;
+            z-index: 40;
+            transform: translateX(0);
             transition: width 0.3s ease, transform 0.3s ease;
         }
 
-        .main-transition {
-            transition: margin-left 0.3s ease;
+        .app-main {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .app-header {
+            padding-left: var(--content-gutter);
+            padding-right: var(--content-gutter);
+        }
+
+        .app-page {
+            padding: var(--content-gutter);
+        }
+
+        .app-shell.app-sidebar-collapsed .app-sidebar {
+            width: 4rem;
+        }
+
+        @media (max-width: 1023px) {
+            .app-sidebar {
+                position: fixed;
+                left: 0;
+                top: 0;
+                bottom: 0;
+                height: auto;
+                transform: translateX(-100%);
+            }
+            .app-shell.app-sidebar-open .app-sidebar {
+                transform: translateX(0);
+            }
+        }
+
+        .app-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 30;
+            background: rgba(0, 0, 0, 0.5);
+        }
+
+        @media (min-width: 1024px) {
+            .app-overlay {
+                display: none !important;
+            }
         }
 
         /* Custom scrollbar for sidebar */
@@ -95,12 +157,57 @@
     {% set brand_name = brand.name %}
     {% set brand_mark = brand.mark %}
 
-    <div class="flex min-h-screen">
-        <div x-show="sidebarOpen" x-cloak class="fixed inset-0 z-40 bg-slate-900/50 md:hidden" @click="sidebarOpen = false"></div>
+    <div class="app-shell"
+         style="display: flex !important; flex-direction: row !important;"
+         x-data="{
+            sidebarOpen: false,
+            sidebarCollapsed: false,
+            sidebarCollapsedStored: localStorage.getItem('appSidebarCollapsed') === 'true',
+            isDesktop: false,
+            viewportWidth: 0,
+            init() {
+                this.updateViewport();
+                window.addEventListener('resize', () => this.updateViewport());
+            },
+            updateViewport() {
+                this.viewportWidth = window.innerWidth;
+                this.isDesktop = this.viewportWidth >= 1024;
+                this.sidebarCollapsed = this.isDesktop ? this.sidebarCollapsedStored : false;
+                if (!this.isDesktop) {
+                    this.sidebarOpen = false;
+                }
+            },
+            toggleSidebar() {
+                if (this.isDesktop) {
+                    this.sidebarCollapsed = !this.sidebarCollapsed;
+                    this.sidebarCollapsedStored = this.sidebarCollapsed;
+                    localStorage.setItem('appSidebarCollapsed', this.sidebarCollapsed);
+                } else {
+                    this.sidebarOpen = !this.sidebarOpen;
+                }
+            },
+            closeSidebar() {
+                this.sidebarOpen = false;
+            }
+         }"
+         :class="{
+            'app-sidebar-open': sidebarOpen && !isDesktop,
+            'app-sidebar-collapsed': isDesktop && sidebarCollapsed
+         }">
+        <div
+            x-show="sidebarOpen && !isDesktop"
+            x-cloak
+            class="app-overlay"
+            @click="closeSidebar()"
+            x-transition:enter="transition-opacity ease-out duration-300"
+            x-transition:enter-start="opacity-0"
+            x-transition:enter-end="opacity-100"
+            x-transition:leave="transition-opacity ease-in duration-200"
+            x-transition:leave-start="opacity-100"
+            x-transition:leave-end="opacity-0"></div>
         <!-- Sidebar -->
         <aside
-            class="fixed inset-y-0 left-0 z-50 flex flex-col bg-slate-900 dark:bg-slate-950 sidebar-transition"
-            :class="[sidebarCollapsed ? 'w-20' : 'w-64', sidebarOpen ? 'translate-x-0' : '-translate-x-full', 'md:translate-x-0']"
+            class="app-sidebar flex flex-col overflow-hidden bg-slate-900 dark:bg-slate-950"
         >
             <!-- Logo -->
             <div class="flex h-16 items-center justify-between px-4 border-b border-slate-800">
@@ -110,7 +217,11 @@
                     </div>
                     <span x-show="!sidebarCollapsed" x-transition class="text-lg font-semibold text-white font-display">Admin</span>
                 </a>
-                <button @click="sidebarCollapsed = !sidebarCollapsed" class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition hidden md:block">
+                <button @click="toggleSidebar()"
+                        x-show="isDesktop"
+                        x-cloak
+                        class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition"
+                        :class="sidebarCollapsed ? 'mx-auto' : ''">
                     <svg class="h-5 w-5 transition-transform" :class="sidebarCollapsed ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"/>
                     </svg>
@@ -228,22 +339,26 @@
         </aside>
 
         <!-- Main Content -->
-        <main class="flex-1 main-transition" :class="sidebarCollapsed ? 'md:ml-20' : 'md:ml-64'">
+        <main class="app-main">
             <!-- Top Header -->
-            <header class="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-slate-200 bg-white/80 backdrop-blur px-6 dark:border-slate-800 dark:bg-slate-900/80">
-                <div class="flex items-center gap-4">
+            <header class="sticky top-0 z-40 border-b border-slate-200 bg-white/80 backdrop-blur dark:border-slate-800 dark:bg-slate-900/80">
+                <div class="app-header flex h-16 items-center justify-between">
                     <!-- Mobile menu button -->
-                    <button @click="sidebarOpen = !sidebarOpen" class="md:hidden p-2 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800">
-                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
-                        </svg>
-                    </button>
-                    <div>
-                        <h1 class="text-lg font-semibold text-slate-900 dark:text-white font-display">{% block page_title %}Dashboard{% endblock %}</h1>
-                        <p class="text-sm text-slate-500 dark:text-slate-400">{% block page_subtitle %}Admin control panel{% endblock %}</p>
+                    <div class="flex items-center gap-4">
+                        <button @click="toggleSidebar()"
+                                x-show="!isDesktop"
+                                x-cloak
+                                class="p-2 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800">
+                            <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+                            </svg>
+                        </button>
+                        <div>
+                            <h1 class="text-lg font-semibold text-slate-900 dark:text-white font-display">{% block page_title %}Dashboard{% endblock %}</h1>
+                            <p class="text-sm text-slate-500 dark:text-slate-400">{% block page_subtitle %}Admin control panel{% endblock %}</p>
+                        </div>
                     </div>
-                </div>
-                <div class="flex items-center gap-3">
+                    <div class="flex items-center gap-3">
                     <!-- Dark mode toggle -->
                     <button @click="darkMode = !darkMode" class="p-2 rounded-xl text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
                         <svg x-show="!darkMode" class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -264,7 +379,7 @@
             </header>
 
     <!-- Page Content -->
-    <div class="p-6">
+    <div class="app-page">
         {% block content %}{% endblock %}
     </div>
 </main>

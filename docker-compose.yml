@@ -29,6 +29,8 @@ services:
       - .env
     environment:
       APP_URL: "https://erp.dotmac.io"
+      # Single-org mode: use this default organization for all users
+      DEFAULT_ORGANIZATION_ID: "00000000-0000-0000-0000-000000000001"
       # Override for Docker networking (must come after env_file)
       DATABASE_URL: postgresql+psycopg://postgres:${POSTGRES_PASSWORD}@db:5432/dotmac_erp
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
@@ -47,6 +49,8 @@ services:
         condition: service_healthy
     volumes:
       - dotmac_logs:/var/log/dotmac
+      - ./static:/app/static:ro
+      - ./templates:/app/templates:ro
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/health')"]
       interval: 30s

@@ -1,0 +1,55 @@
+/* ============================================================================
+   BACKGROUNDS & EFFECTS
+   Enhanced with warmth and visual depth
+   ============================================================================ */
+
+.bg-ledger {
+    background-image: repeating-linear-gradient(0deg, transparent, transparent 39px, rgba(13, 148, 136, 0.04) 39px, rgba(13, 148, 136, 0.04) 40px);
+}
+.dark .bg-ledger {
+    background-image: repeating-linear-gradient(0deg, transparent, transparent 39px, rgba(13, 148, 136, 0.08) 39px, rgba(13, 148, 136, 0.08) 40px);
+}
+
+.bg-mesh {
+    background-image:
+        radial-gradient(at 0% 0%, rgba(13, 148, 136, 0.08) 0px, transparent 50%),
+        radial-gradient(at 100% 0%, rgba(217, 119, 6, 0.06) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(13, 148, 136, 0.04) 0px, transparent 50%);
+}
+.dark .bg-mesh {
+    background-image:
+        radial-gradient(at 0% 0%, rgba(13, 148, 136, 0.15) 0px, transparent 50%),
+        radial-gradient(at 100% 0%, rgba(217, 119, 6, 0.1) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(13, 148, 136, 0.08) 0px, transparent 50%);
+}
+
+/* Main content area gradient */
+.bg-main-gradient {
+    background: linear-gradient(180deg, var(--parchment) 0%, #ffffff 50%, var(--parchment) 100%);
+}
+.dark .bg-main-gradient {
+    background: linear-gradient(180deg, var(--parchment) 0%, var(--parchment-dark) 50%, var(--parchment) 100%);
+}
+
+/* Dashboard gradient background */
+.bg-dashboard {
+    background:
+        radial-gradient(ellipse at top left, rgba(13, 148, 136, 0.05) 0%, transparent 50%),
+        radial-gradient(ellipse at bottom right, rgba(217, 119, 6, 0.03) 0%, transparent 50%),
+        linear-gradient(180deg, var(--parchment) 0%, #ffffff 100%);
+}
+.dark .bg-dashboard {
+    background:
+        radial-gradient(ellipse at top left, rgba(13, 148, 136, 0.1) 0%, transparent 50%),
+        radial-gradient(ellipse at bottom right, rgba(217, 119, 6, 0.06) 0%, transparent 50%),
+        linear-gradient(180deg, var(--parchment) 0%, var(--parchment-dark) 100%);
+}
+
+.grain-overlay {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.03;
+    z-index: 1000;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+}
