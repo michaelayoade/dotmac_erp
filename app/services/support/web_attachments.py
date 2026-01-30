@@ -85,16 +85,17 @@ class AttachmentWebService:
         attachment_id: str,
     ) -> FileResponse | RedirectResponse:
         """Download an attachment."""
+        org_id = coerce_uuid(auth.organization_id)
         aid = coerce_uuid(attachment_id)
 
-        attachment = attachment_service.get_attachment(db, aid)
+        attachment = attachment_service.get_attachment(db, org_id, aid)
         if not attachment:
             return RedirectResponse(
                 url=f"/operations/support/tickets/{ticket_id}?error=Attachment+not+found",
                 status_code=303,
             )
 
-        file_path = attachment_service.get_file_path(db, aid)
+        file_path = attachment_service.get_file_path(db, org_id, aid)
         if not file_path:
             return RedirectResponse(
                 url=f"/operations/support/tickets/{ticket_id}?error=File+not+found",
@@ -116,10 +117,11 @@ class AttachmentWebService:
         attachment_id: str,
     ) -> RedirectResponse:
         """Delete an attachment."""
+        org_id = coerce_uuid(auth.organization_id)
         aid = coerce_uuid(attachment_id)
 
         try:
-            attachment_service.delete_attachment(db, aid)
+            attachment_service.delete_attachment(db, org_id, aid)
             db.commit()
         except Exception as e:
             db.rollback()

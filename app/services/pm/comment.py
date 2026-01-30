@@ -71,11 +71,17 @@ class PMCommentService:
     def delete_comment(
         self,
         db: Session,
+        organization_id: uuid.UUID,
         comment_id: uuid.UUID,
         hard_delete: bool = False,
     ) -> bool:
-        """Delete a comment."""
-        comment = db.get(PMComment, comment_id)
+        """Delete a comment, scoped to organization."""
+        comment = db.execute(
+            select(PMComment).where(
+                PMComment.comment_id == comment_id,
+                PMComment.organization_id == organization_id,
+            )
+        ).scalar_one_or_none()
         if not comment:
             return False
 

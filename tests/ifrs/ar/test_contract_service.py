@@ -192,9 +192,9 @@ class MockRevenueRecognitionEvent:
 class TestCreateContract:
     """Tests for contract creation."""
 
-    @patch("app.services.ifrs.ar.contract.PerformanceObligation")
-    @patch("app.services.ifrs.ar.contract.Contract")
-    @patch("app.services.ifrs.ar.contract.Customer")
+    @patch("app.services.finance.ar.contract.PerformanceObligation")
+    @patch("app.services.finance.ar.contract.Contract")
+    @patch("app.services.finance.ar.contract.Customer")
     def test_create_contract_success(
         self, mock_customer_class, mock_contract_class, mock_obligation_class
     ):
@@ -244,7 +244,7 @@ class TestCreateContract:
         db.add.assert_called()
         db.commit.assert_called_once()
 
-    @patch("app.services.ifrs.ar.contract.Customer")
+    @patch("app.services.finance.ar.contract.Customer")
     def test_create_contract_customer_not_found(self, mock_customer_class):
         """Test contract creation with non-existent customer."""
         db = MagicMock()
@@ -269,7 +269,7 @@ class TestCreateContract:
         assert exc_info.value.status_code == 404
         assert "Customer not found" in str(exc_info.value.detail)
 
-    @patch("app.services.ifrs.ar.contract.Customer")
+    @patch("app.services.finance.ar.contract.Customer")
     def test_create_contract_not_enforceable(self, mock_customer_class):
         """Test contract creation fails when not enforceable."""
         db = MagicMock()
@@ -295,7 +295,7 @@ class TestCreateContract:
         assert exc_info.value.status_code == 400
         assert "enforceable" in str(exc_info.value.detail).lower()
 
-    @patch("app.services.ifrs.ar.contract.Customer")
+    @patch("app.services.finance.ar.contract.Customer")
     def test_create_contract_no_commercial_substance(self, mock_customer_class):
         """Test contract creation fails without commercial substance."""
         db = MagicMock()
@@ -321,7 +321,7 @@ class TestCreateContract:
         assert exc_info.value.status_code == 400
         assert "commercial substance" in str(exc_info.value.detail).lower()
 
-    @patch("app.services.ifrs.ar.contract.Customer")
+    @patch("app.services.finance.ar.contract.Customer")
     def test_create_contract_collectability_not_probable(self, mock_customer_class):
         """Test contract creation fails when collection not probable."""
         db = MagicMock()
@@ -347,9 +347,9 @@ class TestCreateContract:
         assert exc_info.value.status_code == 400
         assert "probable" in str(exc_info.value.detail).lower()
 
-    @patch("app.services.ifrs.ar.contract.PerformanceObligation")
-    @patch("app.services.ifrs.ar.contract.Contract")
-    @patch("app.services.ifrs.ar.contract.Customer")
+    @patch("app.services.finance.ar.contract.PerformanceObligation")
+    @patch("app.services.finance.ar.contract.Contract")
+    @patch("app.services.finance.ar.contract.Customer")
     def test_create_contract_with_multiple_obligations(
         self, mock_customer_class, mock_contract_class, mock_obligation_class
     ):
@@ -409,8 +409,8 @@ class TestCreateContract:
 class TestActivateContract:
     """Tests for contract activation."""
 
-    @patch("app.services.ifrs.ar.contract.PerformanceObligation")
-    @patch("app.services.ifrs.ar.contract.Contract")
+    @patch("app.services.finance.ar.contract.PerformanceObligation")
+    @patch("app.services.finance.ar.contract.Contract")
     def test_activate_contract_success(
         self, mock_contract_class, mock_obligation_class
     ):
@@ -435,7 +435,7 @@ class TestActivateContract:
         db.query.return_value.filter.return_value.count.return_value = 1  # Has obligations
 
         # Set up status comparison
-        with patch("app.services.ifrs.ar.contract.ContractStatus") as mock_status_class:
+        with patch("app.services.finance.ar.contract.ContractStatus") as mock_status_class:
             mock_status_class.DRAFT = mock_status
             mock_status_class.ACTIVE = MagicMock()
             mock_status_class.ACTIVE.value = "ACTIVE"
@@ -445,7 +445,7 @@ class TestActivateContract:
         assert result is not None
         db.commit.assert_called_once()
 
-    @patch("app.services.ifrs.ar.contract.Contract")
+    @patch("app.services.finance.ar.contract.Contract")
     def test_activate_contract_not_found(self, mock_contract_class):
         """Test activating non-existent contract."""
         db = MagicMock()
@@ -461,7 +461,7 @@ class TestActivateContract:
         assert exc_info.value.status_code == 404
         assert "Contract not found" in str(exc_info.value.detail)
 
-    @patch("app.services.ifrs.ar.contract.Contract")
+    @patch("app.services.finance.ar.contract.Contract")
     def test_activate_contract_wrong_status(self, mock_contract_class):
         """Test activating contract that's not in DRAFT status."""
         db = MagicMock()
@@ -477,7 +477,7 @@ class TestActivateContract:
 
         db.query.return_value.filter.return_value.first.return_value = mock_contract
 
-        with patch("app.services.ifrs.ar.contract.ContractStatus") as mock_status_class:
+        with patch("app.services.finance.ar.contract.ContractStatus") as mock_status_class:
             mock_status_class.DRAFT = MagicMock()
             mock_status_class.DRAFT.value = "DRAFT"
 
@@ -487,8 +487,8 @@ class TestActivateContract:
         assert exc_info.value.status_code == 400
         assert "Cannot activate" in str(exc_info.value.detail)
 
-    @patch("app.services.ifrs.ar.contract.PerformanceObligation")
-    @patch("app.services.ifrs.ar.contract.Contract")
+    @patch("app.services.finance.ar.contract.PerformanceObligation")
+    @patch("app.services.finance.ar.contract.Contract")
     def test_activate_contract_no_obligations(
         self, mock_contract_class, mock_obligation_class
     ):
@@ -508,7 +508,7 @@ class TestActivateContract:
         db.query.return_value.filter.return_value.first.return_value = mock_contract
         db.query.return_value.filter.return_value.count.return_value = 0
 
-        with patch("app.services.ifrs.ar.contract.ContractStatus") as mock_status_class:
+        with patch("app.services.finance.ar.contract.ContractStatus") as mock_status_class:
             mock_status_class.DRAFT = mock_status
 
             with pytest.raises(HTTPException) as exc_info:
@@ -523,10 +523,10 @@ class TestActivateContract:
 class TestAddPerformanceObligation:
     """Tests for adding performance obligations."""
 
-    @patch("app.services.ifrs.ar.contract.ContractService.reallocate_transaction_price")
-    @patch("app.services.ifrs.ar.contract.PerformanceObligation")
-    @patch("app.services.ifrs.ar.contract.ContractStatus")
-    @patch("app.services.ifrs.ar.contract.Contract")
+    @patch("app.services.finance.ar.contract.ContractService.reallocate_transaction_price")
+    @patch("app.services.finance.ar.contract.PerformanceObligation")
+    @patch("app.services.finance.ar.contract.ContractStatus")
+    @patch("app.services.finance.ar.contract.Contract")
     def test_add_obligation_success(
         self, mock_contract_class, mock_status_class, mock_obligation_class, mock_reallocate
     ):
@@ -571,7 +571,7 @@ class TestAddPerformanceObligation:
         db.commit.assert_called()
         mock_reallocate.assert_called_once()
 
-    @patch("app.services.ifrs.ar.contract.Contract")
+    @patch("app.services.finance.ar.contract.Contract")
     def test_add_obligation_contract_not_found(self, mock_contract_class):
         """Test adding obligation to non-existent contract."""
         db = MagicMock()
@@ -593,7 +593,7 @@ class TestAddPerformanceObligation:
 
         assert exc_info.value.status_code == 404
 
-    @patch("app.services.ifrs.ar.contract.Contract")
+    @patch("app.services.finance.ar.contract.Contract")
     def test_add_obligation_wrong_status(self, mock_contract_class):
         """Test adding obligation to completed contract."""
         db = MagicMock()
@@ -616,7 +616,7 @@ class TestAddPerformanceObligation:
             revenue_account_id=uuid4(),
         )
 
-        with patch("app.services.ifrs.ar.contract.ContractStatus") as mock_status_class:
+        with patch("app.services.finance.ar.contract.ContractStatus") as mock_status_class:
             mock_status_class.DRAFT = MagicMock()
             mock_status_class.ACTIVE = MagicMock()
 
@@ -633,8 +633,8 @@ class TestAddPerformanceObligation:
 class TestReallocateTransactionPrice:
     """Tests for transaction price reallocation."""
 
-    @patch("app.services.ifrs.ar.contract.PerformanceObligation")
-    @patch("app.services.ifrs.ar.contract.Contract")
+    @patch("app.services.finance.ar.contract.PerformanceObligation")
+    @patch("app.services.finance.ar.contract.Contract")
     def test_reallocate_transaction_price_success(
         self, mock_contract_class, mock_obligation_class
     ):
@@ -675,7 +675,7 @@ class TestReallocateTransactionPrice:
         assert obligation2.allocated_transaction_price == Decimal("3600.00")
         db.commit.assert_called_once()
 
-    @patch("app.services.ifrs.ar.contract.Contract")
+    @patch("app.services.finance.ar.contract.Contract")
     def test_reallocate_contract_not_found(self, mock_contract_class):
         """Test reallocation when contract not found."""
         db = MagicMock()
@@ -689,8 +689,8 @@ class TestReallocateTransactionPrice:
 
         db.commit.assert_not_called()
 
-    @patch("app.services.ifrs.ar.contract.PerformanceObligation")
-    @patch("app.services.ifrs.ar.contract.Contract")
+    @patch("app.services.finance.ar.contract.PerformanceObligation")
+    @patch("app.services.finance.ar.contract.Contract")
     def test_reallocate_no_obligations(
         self, mock_contract_class, mock_obligation_class
     ):
@@ -717,8 +717,8 @@ class TestReallocateTransactionPrice:
 class TestUpdateProgress:
     """Tests for over-time revenue recognition progress updates."""
 
-    @patch("app.services.ifrs.ar.contract.RevenueRecognitionEvent")
-    @patch("app.services.ifrs.ar.contract.PerformanceObligation")
+    @patch("app.services.finance.ar.contract.RevenueRecognitionEvent")
+    @patch("app.services.finance.ar.contract.PerformanceObligation")
     def test_update_progress_success(
         self, mock_obligation_class, mock_event_class
     ):
@@ -749,7 +749,7 @@ class TestUpdateProgress:
             progress_percentage=Decimal("25"),
         )
 
-        with patch("app.services.ifrs.ar.contract.SatisfactionPattern") as mock_pattern:
+        with patch("app.services.finance.ar.contract.SatisfactionPattern") as mock_pattern:
             mock_pattern.OVER_TIME = MockSatisfactionPattern.OVER_TIME
 
             result = ContractService.update_progress(db, org_id, input_data, user_id)
@@ -762,8 +762,8 @@ class TestUpdateProgress:
         assert mock_obligation.satisfaction_percentage == Decimal("25")
         assert mock_obligation.status == "IN_PROGRESS"
 
-    @patch("app.services.ifrs.ar.contract.RevenueRecognitionEvent")
-    @patch("app.services.ifrs.ar.contract.PerformanceObligation")
+    @patch("app.services.finance.ar.contract.RevenueRecognitionEvent")
+    @patch("app.services.finance.ar.contract.PerformanceObligation")
     def test_update_progress_to_100_satisfies_obligation(
         self, mock_obligation_class, mock_event_class
     ):
@@ -794,7 +794,7 @@ class TestUpdateProgress:
             progress_percentage=Decimal("100"),
         )
 
-        with patch("app.services.ifrs.ar.contract.SatisfactionPattern") as mock_pattern:
+        with patch("app.services.finance.ar.contract.SatisfactionPattern") as mock_pattern:
             mock_pattern.OVER_TIME = MockSatisfactionPattern.OVER_TIME
 
             result = ContractService.update_progress(db, org_id, input_data, user_id)
@@ -803,7 +803,7 @@ class TestUpdateProgress:
         assert mock_obligation.status == "SATISFIED"
         assert mock_obligation.actual_completion_date == date.today()
 
-    @patch("app.services.ifrs.ar.contract.PerformanceObligation")
+    @patch("app.services.finance.ar.contract.PerformanceObligation")
     def test_update_progress_obligation_not_found(self, mock_obligation_class):
         """Test progress update for non-existent obligation."""
         db = MagicMock()
@@ -823,7 +823,7 @@ class TestUpdateProgress:
 
         assert exc_info.value.status_code == 404
 
-    @patch("app.services.ifrs.ar.contract.PerformanceObligation")
+    @patch("app.services.finance.ar.contract.PerformanceObligation")
     def test_update_progress_point_in_time_fails(self, mock_obligation_class):
         """Test that progress updates fail for point-in-time obligations."""
         db = MagicMock()
@@ -842,7 +842,7 @@ class TestUpdateProgress:
             progress_percentage=Decimal("50"),
         )
 
-        with patch("app.services.ifrs.ar.contract.SatisfactionPattern") as mock_pattern:
+        with patch("app.services.finance.ar.contract.SatisfactionPattern") as mock_pattern:
             mock_pattern.OVER_TIME = MagicMock()  # Different from POINT_IN_TIME
 
             with pytest.raises(HTTPException) as exc_info:
@@ -851,7 +851,7 @@ class TestUpdateProgress:
         assert exc_info.value.status_code == 400
         assert "over-time" in str(exc_info.value.detail).lower()
 
-    @patch("app.services.ifrs.ar.contract.PerformanceObligation")
+    @patch("app.services.finance.ar.contract.PerformanceObligation")
     def test_update_progress_already_satisfied(self, mock_obligation_class):
         """Test progress update fails for already satisfied obligation."""
         db = MagicMock()
@@ -871,7 +871,7 @@ class TestUpdateProgress:
             progress_percentage=Decimal("50"),
         )
 
-        with patch("app.services.ifrs.ar.contract.SatisfactionPattern") as mock_pattern:
+        with patch("app.services.finance.ar.contract.SatisfactionPattern") as mock_pattern:
             mock_pattern.OVER_TIME = MockSatisfactionPattern.OVER_TIME
 
             with pytest.raises(HTTPException) as exc_info:
@@ -880,7 +880,7 @@ class TestUpdateProgress:
         assert exc_info.value.status_code == 400
         assert "satisfied" in str(exc_info.value.detail).lower()
 
-    @patch("app.services.ifrs.ar.contract.PerformanceObligation")
+    @patch("app.services.finance.ar.contract.PerformanceObligation")
     def test_update_progress_cannot_decrease(self, mock_obligation_class):
         """Test progress cannot decrease."""
         db = MagicMock()
@@ -903,7 +903,7 @@ class TestUpdateProgress:
             progress_percentage=Decimal("40"),  # Trying to decrease
         )
 
-        with patch("app.services.ifrs.ar.contract.SatisfactionPattern") as mock_pattern:
+        with patch("app.services.finance.ar.contract.SatisfactionPattern") as mock_pattern:
             mock_pattern.OVER_TIME = MockSatisfactionPattern.OVER_TIME
 
             with pytest.raises(HTTPException) as exc_info:
@@ -918,8 +918,8 @@ class TestUpdateProgress:
 class TestSatisfyPointInTime:
     """Tests for point-in-time revenue recognition."""
 
-    @patch("app.services.ifrs.ar.contract.RevenueRecognitionEvent")
-    @patch("app.services.ifrs.ar.contract.PerformanceObligation")
+    @patch("app.services.finance.ar.contract.RevenueRecognitionEvent")
+    @patch("app.services.finance.ar.contract.PerformanceObligation")
     def test_satisfy_point_in_time_success(
         self, mock_obligation_class, mock_event_class
     ):
@@ -946,7 +946,7 @@ class TestSatisfyPointInTime:
         )
         mock_event_class.return_value = mock_event
 
-        with patch("app.services.ifrs.ar.contract.SatisfactionPattern") as mock_pattern:
+        with patch("app.services.finance.ar.contract.SatisfactionPattern") as mock_pattern:
             mock_pattern.POINT_IN_TIME = MockSatisfactionPattern.POINT_IN_TIME
 
             result = ContractService.satisfy_point_in_time(
@@ -960,7 +960,7 @@ class TestSatisfyPointInTime:
         db.add.assert_called()
         db.commit.assert_called_once()
 
-    @patch("app.services.ifrs.ar.contract.PerformanceObligation")
+    @patch("app.services.finance.ar.contract.PerformanceObligation")
     def test_satisfy_point_in_time_not_found(self, mock_obligation_class):
         """Test satisfaction of non-existent obligation."""
         db = MagicMock()
@@ -976,7 +976,7 @@ class TestSatisfyPointInTime:
 
         assert exc_info.value.status_code == 404
 
-    @patch("app.services.ifrs.ar.contract.PerformanceObligation")
+    @patch("app.services.finance.ar.contract.PerformanceObligation")
     def test_satisfy_point_in_time_wrong_pattern(self, mock_obligation_class):
         """Test point-in-time fails for over-time obligations."""
         db = MagicMock()
@@ -989,7 +989,7 @@ class TestSatisfyPointInTime:
 
         db.query.return_value.filter.return_value.first.return_value = mock_obligation
 
-        with patch("app.services.ifrs.ar.contract.SatisfactionPattern") as mock_pattern:
+        with patch("app.services.finance.ar.contract.SatisfactionPattern") as mock_pattern:
             mock_pattern.POINT_IN_TIME = MagicMock()
 
             with pytest.raises(HTTPException) as exc_info:
@@ -1000,7 +1000,7 @@ class TestSatisfyPointInTime:
         assert exc_info.value.status_code == 400
         assert "over-time" in str(exc_info.value.detail).lower()
 
-    @patch("app.services.ifrs.ar.contract.PerformanceObligation")
+    @patch("app.services.finance.ar.contract.PerformanceObligation")
     def test_satisfy_point_in_time_already_satisfied(self, mock_obligation_class):
         """Test cannot satisfy already satisfied obligation."""
         db = MagicMock()
@@ -1014,7 +1014,7 @@ class TestSatisfyPointInTime:
 
         db.query.return_value.filter.return_value.first.return_value = mock_obligation
 
-        with patch("app.services.ifrs.ar.contract.SatisfactionPattern") as mock_pattern:
+        with patch("app.services.finance.ar.contract.SatisfactionPattern") as mock_pattern:
             mock_pattern.POINT_IN_TIME = MockSatisfactionPattern.POINT_IN_TIME
 
             with pytest.raises(HTTPException) as exc_info:
@@ -1031,8 +1031,8 @@ class TestSatisfyPointInTime:
 class TestModifyContract:
     """Tests for contract modifications."""
 
-    @patch("app.services.ifrs.ar.contract.ContractService._reallocate_prospectively")
-    @patch("app.services.ifrs.ar.contract.Contract")
+    @patch("app.services.finance.ar.contract.ContractService._reallocate_prospectively")
+    @patch("app.services.finance.ar.contract.Contract")
     def test_modify_contract_prospective(
         self, mock_contract_class, mock_reallocate
     ):
@@ -1054,7 +1054,7 @@ class TestModifyContract:
 
         db.query.return_value.filter.return_value.first.return_value = mock_contract
 
-        with patch("app.services.ifrs.ar.contract.ContractStatus") as mock_status_class:
+        with patch("app.services.finance.ar.contract.ContractStatus") as mock_status_class:
             mock_status_class.ACTIVE = mock_status
 
             result = ContractService.modify_contract(
@@ -1072,8 +1072,8 @@ class TestModifyContract:
         mock_reallocate.assert_called_once()
         db.commit.assert_called_once()
 
-    @patch("app.services.ifrs.ar.contract.ContractService._reallocate_cumulative_catchup")
-    @patch("app.services.ifrs.ar.contract.Contract")
+    @patch("app.services.finance.ar.contract.ContractService._reallocate_cumulative_catchup")
+    @patch("app.services.finance.ar.contract.Contract")
     def test_modify_contract_cumulative_catchup(
         self, mock_contract_class, mock_reallocate
     ):
@@ -1095,7 +1095,7 @@ class TestModifyContract:
 
         db.query.return_value.filter.return_value.first.return_value = mock_contract
 
-        with patch("app.services.ifrs.ar.contract.ContractStatus") as mock_status_class:
+        with patch("app.services.finance.ar.contract.ContractStatus") as mock_status_class:
             mock_status_class.ACTIVE = mock_status
 
             result = ContractService.modify_contract(
@@ -1111,7 +1111,7 @@ class TestModifyContract:
         assert mock_contract.total_contract_value == Decimal("15000.00")
         mock_reallocate.assert_called_once()
 
-    @patch("app.services.ifrs.ar.contract.Contract")
+    @patch("app.services.finance.ar.contract.Contract")
     def test_modify_contract_not_found(self, mock_contract_class):
         """Test modifying non-existent contract."""
         db = MagicMock()
@@ -1127,7 +1127,7 @@ class TestModifyContract:
 
         assert exc_info.value.status_code == 404
 
-    @patch("app.services.ifrs.ar.contract.Contract")
+    @patch("app.services.finance.ar.contract.Contract")
     def test_modify_contract_wrong_status(self, mock_contract_class):
         """Test modifying contract not in ACTIVE status."""
         db = MagicMock()
@@ -1142,7 +1142,7 @@ class TestModifyContract:
 
         db.query.return_value.filter.return_value.first.return_value = mock_contract
 
-        with patch("app.services.ifrs.ar.contract.ContractStatus") as mock_status_class:
+        with patch("app.services.finance.ar.contract.ContractStatus") as mock_status_class:
             mock_status_class.ACTIVE = MagicMock()
 
             with pytest.raises(HTTPException) as exc_info:
@@ -1158,8 +1158,8 @@ class TestModifyContract:
 class TestCompleteContract:
     """Tests for contract completion."""
 
-    @patch("app.services.ifrs.ar.contract.PerformanceObligation")
-    @patch("app.services.ifrs.ar.contract.Contract")
+    @patch("app.services.finance.ar.contract.PerformanceObligation")
+    @patch("app.services.finance.ar.contract.Contract")
     def test_complete_contract_success(
         self, mock_contract_class, mock_obligation_class
     ):
@@ -1173,7 +1173,7 @@ class TestCompleteContract:
         db.query.return_value.filter.return_value.first.return_value = mock_contract
         db.query.return_value.filter.return_value.count.return_value = 0  # No unsatisfied
 
-        with patch("app.services.ifrs.ar.contract.ContractStatus") as mock_status_class:
+        with patch("app.services.finance.ar.contract.ContractStatus") as mock_status_class:
             mock_status_class.COMPLETED = MagicMock()
 
             result = ContractService.complete_contract(db, org_id, contract_id)
@@ -1181,7 +1181,7 @@ class TestCompleteContract:
         assert result is not None
         db.commit.assert_called_once()
 
-    @patch("app.services.ifrs.ar.contract.Contract")
+    @patch("app.services.finance.ar.contract.Contract")
     def test_complete_contract_not_found(self, mock_contract_class):
         """Test completing non-existent contract."""
         db = MagicMock()
@@ -1195,8 +1195,8 @@ class TestCompleteContract:
 
         assert exc_info.value.status_code == 404
 
-    @patch("app.services.ifrs.ar.contract.PerformanceObligation")
-    @patch("app.services.ifrs.ar.contract.Contract")
+    @patch("app.services.finance.ar.contract.PerformanceObligation")
+    @patch("app.services.finance.ar.contract.Contract")
     def test_complete_contract_unsatisfied_obligations(
         self, mock_contract_class, mock_obligation_class
     ):
@@ -1222,7 +1222,7 @@ class TestCompleteContract:
 class TestGetters:
     """Tests for getter methods."""
 
-    @patch("app.services.ifrs.ar.contract.Contract")
+    @patch("app.services.finance.ar.contract.Contract")
     def test_get_contract(self, mock_contract_class):
         """Test getting contract by ID."""
         db = MagicMock()
@@ -1236,7 +1236,7 @@ class TestGetters:
         assert result is not None
         assert result.contract_id == contract_id
 
-    @patch("app.services.ifrs.ar.contract.Contract")
+    @patch("app.services.finance.ar.contract.Contract")
     def test_get_contract_not_found(self, mock_contract_class):
         """Test getting non-existent contract."""
         db = MagicMock()
@@ -1247,7 +1247,7 @@ class TestGetters:
 
         assert result is None
 
-    @patch("app.services.ifrs.ar.contract.Contract")
+    @patch("app.services.finance.ar.contract.Contract")
     def test_get_by_number(self, mock_contract_class):
         """Test getting contract by number."""
         db = MagicMock()
@@ -1261,7 +1261,7 @@ class TestGetters:
         assert result is not None
         assert result.contract_number == "CTR-000001"
 
-    @patch("app.services.ifrs.ar.contract.PerformanceObligation")
+    @patch("app.services.finance.ar.contract.PerformanceObligation")
     def test_get_obligations(self, mock_obligation_class):
         """Test getting obligations for a contract."""
         db = MagicMock()
@@ -1277,7 +1277,7 @@ class TestGetters:
 
         assert len(result) == 2
 
-    @patch("app.services.ifrs.ar.contract.RevenueRecognitionEvent")
+    @patch("app.services.finance.ar.contract.RevenueRecognitionEvent")
     def test_get_recognition_events(self, mock_event_class):
         """Test getting recognition events for an obligation."""
         db = MagicMock()
@@ -1299,7 +1299,7 @@ class TestGetters:
 class TestListContracts:
     """Tests for listing contracts."""
 
-    @patch("app.services.ifrs.ar.contract.Contract")
+    @patch("app.services.finance.ar.contract.Contract")
     def test_list_contracts(self, mock_contract_class):
         """Test listing contracts."""
         db = MagicMock()
@@ -1347,7 +1347,7 @@ class TestListContracts:
         # Verify filters were applied
         assert mock_query.filter.called
 
-    @patch("app.services.ifrs.ar.contract.Contract")
+    @patch("app.services.finance.ar.contract.Contract")
     def test_list_contracts_empty(self, mock_contract_class):
         """Test listing returns empty when no contracts."""
         db = MagicMock()
@@ -1364,7 +1364,7 @@ class TestListContracts:
 class TestInternalReallocation:
     """Tests for internal reallocation methods."""
 
-    @patch("app.services.ifrs.ar.contract.PerformanceObligation")
+    @patch("app.services.finance.ar.contract.PerformanceObligation")
     def test_reallocate_prospectively(self, mock_obligation_class):
         """Test prospective reallocation."""
         db = MagicMock()
@@ -1405,8 +1405,8 @@ class TestInternalReallocation:
         assert unsatisfied1.allocated_transaction_price == Decimal("2400.00")
         assert unsatisfied2.allocated_transaction_price == Decimal("1600.00")
 
-    @patch("app.services.ifrs.ar.contract.RevenueRecognitionEvent")
-    @patch("app.services.ifrs.ar.contract.PerformanceObligation")
+    @patch("app.services.finance.ar.contract.RevenueRecognitionEvent")
+    @patch("app.services.finance.ar.contract.PerformanceObligation")
     def test_reallocate_cumulative_catchup(
         self, mock_obligation_class, mock_event_class
     ):

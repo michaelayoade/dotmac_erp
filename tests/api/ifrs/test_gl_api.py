@@ -10,29 +10,24 @@ from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
 import pytest
-from fastapi import FastAPI, Header, HTTPException
-from fastapi.testclient import TestClient
+from fastapi import HTTPException
 
-from app.api.finance.gl import router, get_db
-from app.services.auth_dependencies import require_tenant_auth
-from app.services.auth_dependencies import _get_db as auth_deps_get_db
+from app.api.finance import gl as gl_api
+from app.schemas.finance.gl import (
+    AccountCreate,
+    AccountUpdate,
+    FiscalPeriodCreate,
+    JournalEntryCreate,
+    JournalLineCreate,
+)
 from tests.api.ifrs.conftest import (
     MockAccount,
     MockFiscalPeriod,
     MockJournalEntry,
     MockAccountBalance,
     MockTrialBalance,
-    MockTrialBalanceLine,
     MockPostingResult,
 )
-
-
-@pytest.fixture
-def app():
-    """Create a test FastAPI app."""
-    app = FastAPI()
-    app.include_router(router)
-    return app
 
 
 @pytest.fixture
@@ -41,86 +36,85 @@ def mock_db():
     return MagicMock()
 
 
-@pytest.fixture
-def client(app, mock_db, mock_auth_dict, auth_headers):
-    """Create test client with mocked dependencies."""
-    app.dependency_overrides[get_db] = lambda: mock_db
-    app.dependency_overrides[auth_deps_get_db] = lambda: mock_db
-    def _require_tenant_auth_override(authorization: str | None = Header(default=None)):
-        if not authorization:
-            raise HTTPException(status_code=401, detail="Unauthorized")
-        return mock_auth_dict
-
-    app.dependency_overrides[require_tenant_auth] = _require_tenant_auth_override
-    test_client = TestClient(app)
-    test_client.headers.update(auth_headers)
-    return test_client
-
-
 class TestAccountsAPI:
     """Tests for GL accounts endpoints."""
 
-    def test_create_account_success(self, client, org_id):
+    def test_create_account_success(self, mock_db, mock_auth_dict, org_id):
         """Test successful account creation."""
         mock_account = MockAccount(organization_id=org_id)
         category_id = uuid.uuid4()
 
         with patch("app.api.finance.gl.chart_of_accounts_service.create_account") as mock_create:
             mock_create.return_value = mock_account
-
-            response = client.post(
-                f"/gl/accounts?category_id={category_id}",
-                json={
-                    "account_code": "1000",
-                    "account_name": "Cash",
-                    "account_type": "POSTING",
-                    "normal_balance": "DEBIT",
-                },
+            payload = AccountCreate(
+                account_code="1000",
+                account_name="Cash",
+                account_type="POSTING",
+                normal_balance="DEBIT",
+            )
+            result = gl_api.create_account(
+                payload=payload,
+                organization_id=org_id,
+                category_id=category_id,
+                auth=mock_auth_dict,
+                db=mock_db,
             )
 
-        assert response.status_code == 201
+        assert result == mock_account
 
-    def test_get_account_success(self, client, org_id):
+    def test_get_account_success(self, mock_db, mock_auth_dict, org_id):
         """Test getting an account."""
         mock_account = MockAccount(organization_id=org_id)
 
         with patch("app.api.finance.gl.chart_of_accounts_service.get") as mock_get:
             mock_get.return_value = mock_account
+            result = gl_api.get_account(
+                mock_account.account_id,
+                auth=mock_auth_dict,
+                db=mock_db,
+            )
 
-            response = client.get(f"/gl/accounts/{mock_account.account_id}")
+        assert result.account_code == "1000"
 
-        assert response.status_code == 200
-        data = response.json()
-        assert data["account_code"] == "1000"
-
-    def test_list_accounts(self, client, org_id):
+    def test_list_accounts(self, mock_db, mock_auth_dict, org_id):
         """Test listing accounts."""
         mock_accounts = [MockAccount(organization_id=org_id) for _ in range(5)]
 
         with patch("app.api.finance.gl.chart_of_accounts_service.list") as mock_list:
             mock_list.return_value = mock_accounts
 
-            response = client.get(f"/gl/accounts")
+            result = gl_api.list_accounts(
+                organization_id=org_id,
+                auth=mock_auth_dict,
+                db=mock_db,
+                limit=50,
+                offset=0,
+            )
 
-        assert response.status_code == 200
-        data = response.json()
-        assert data["count"] == 5
+        assert result.count == 5
+        assert len(result.items) == 5
 
-    def test_list_accounts_with_filters(self, client, org_id):
+    def test_list_accounts_with_filters(self, mock_db, mock_auth_dict, org_id):
         """Test listing accounts with filters."""
         mock_accounts = [MockAccount(organization_id=org_id, is_active=True)]
 
         with patch("app.api.finance.gl.chart_of_accounts_service.list") as mock_list:
             mock_list.return_value = mock_accounts
 
-            response = client.get(
-                f"/gl/accounts?is_active=true&account_type=POSTING"
+            result = gl_api.list_accounts(
+                organization_id=org_id,
+                is_active=True,
+                account_type="POSTING",
+                auth=mock_auth_dict,
+                db=mock_db,
+                limit=50,
+                offset=0,
             )
 
-        assert response.status_code == 200
+        assert result.count == 1
         mock_list.assert_called_once()
 
-    def test_update_account(self, client, org_id):
+    def test_update_account(self, mock_db, mock_auth_dict, org_id):
         """Test updating an account."""
         mock_account = MockAccount(organization_id=org_id)
         updated_account = MockAccount(
@@ -132,14 +126,18 @@ class TestAccountsAPI:
         with patch("app.api.finance.gl.chart_of_accounts_service.update_account") as mock_update:
             mock_update.return_value = updated_account
 
-            response = client.patch(
-                f"/gl/accounts/{mock_account.account_id}",
-                json={"account_name": "Updated Cash"},
+            payload = AccountUpdate(account_name="Updated Cash")
+            result = gl_api.update_account(
+                mock_account.account_id,
+                payload,
+                organization_id=org_id,
+                auth=mock_auth_dict,
+                db=mock_db,
             )
 
-        assert response.status_code == 200
+        assert result.account_name == "Updated Cash"
 
-    def test_deactivate_account(self, client, org_id):
+    def test_deactivate_account(self, mock_db, mock_auth_dict, org_id):
         """Test deactivating an account."""
         mock_account = MockAccount(organization_id=org_id, is_active=True)
         deactivated = MockAccount(
@@ -151,74 +149,95 @@ class TestAccountsAPI:
         with patch("app.api.finance.gl.chart_of_accounts_service.deactivate_account") as mock_deactivate:
             mock_deactivate.return_value = deactivated
 
-            response = client.post(
-                f"/gl/accounts/{mock_account.account_id}/deactivate"
+            result = gl_api.deactivate_account(
+                mock_account.account_id,
+                organization_id=org_id,
+                auth=mock_auth_dict,
+                db=mock_db,
             )
 
-        assert response.status_code == 200
+        assert result.is_active is False
 
 
 class TestFiscalPeriodsAPI:
     """Tests for fiscal period endpoints."""
 
-    def test_create_fiscal_period(self, client, org_id):
+    def test_create_fiscal_period(self, mock_db, mock_auth_dict, org_id):
         """Test creating a fiscal period."""
         mock_period = MockFiscalPeriod(organization_id=org_id)
 
         with patch("app.api.finance.gl.fiscal_period_service.create_period") as mock_create:
             mock_create.return_value = mock_period
 
-            response = client.post(
-                f"/gl/fiscal-periods",
-                json={
-                    "period_name": "January 2024",
-                    "period_type": "MONTHLY",
-                    "start_date": "2024-01-01",
-                    "end_date": "2024-01-31",
-                    "fiscal_year": 2024,
-                },
+            payload = FiscalPeriodCreate(
+                fiscal_year_id=uuid.uuid4(),
+                period_number=1,
+                period_name="January 2024",
+                start_date=date(2024, 1, 1),
+                end_date=date(2024, 1, 31),
+            )
+            result = gl_api.create_fiscal_period(
+                payload,
+                organization_id=org_id,
+                auth=mock_auth_dict,
+                db=mock_db,
             )
 
-        assert response.status_code == 201
+        assert result == mock_period
 
-    def test_get_fiscal_period(self, client, org_id):
+    def test_get_fiscal_period(self, mock_db, mock_auth_dict, org_id):
         """Test getting a fiscal period."""
         mock_period = MockFiscalPeriod(organization_id=org_id)
 
         with patch("app.api.finance.gl.fiscal_period_service.get") as mock_get:
             mock_get.return_value = mock_period
 
-            response = client.get(f"/gl/fiscal-periods/{mock_period.fiscal_period_id}")
+            result = gl_api.get_fiscal_period(
+                mock_period.fiscal_period_id,
+                auth=mock_auth_dict,
+                db=mock_db,
+            )
 
-        assert response.status_code == 200
+        assert result.fiscal_period_id == mock_period.fiscal_period_id
 
-    def test_list_fiscal_periods(self, client, org_id):
+    def test_list_fiscal_periods(self, mock_db, mock_auth_dict, org_id):
         """Test listing fiscal periods."""
         mock_periods = [MockFiscalPeriod(organization_id=org_id, period_number=i) for i in range(12)]
 
         with patch("app.api.finance.gl.fiscal_period_service.list") as mock_list:
             mock_list.return_value = mock_periods
 
-            response = client.get(f"/gl/fiscal-periods")
+            result = gl_api.list_fiscal_periods(
+                organization_id=org_id,
+                auth=mock_auth_dict,
+                db=mock_db,
+                limit=50,
+                offset=0,
+            )
 
-        assert response.status_code == 200
-        data = response.json()
-        assert data["count"] == 12
+        assert result.count == 12
+        assert len(result.items) == 12
 
-    def test_list_fiscal_periods_with_filters(self, client, org_id):
+    def test_list_fiscal_periods_with_filters(self, mock_db, mock_auth_dict, org_id):
         """Test listing fiscal periods with filters."""
         mock_periods = [MockFiscalPeriod(organization_id=org_id, status="OPEN")]
 
         with patch("app.api.finance.gl.fiscal_period_service.list") as mock_list:
             mock_list.return_value = mock_periods
 
-            response = client.get(
-                f"/gl/fiscal-periods?fiscal_year=2024&status=OPEN"
+            result = gl_api.list_fiscal_periods(
+                organization_id=org_id,
+                fiscal_year_id=uuid.uuid4(),
+                status="OPEN",
+                auth=mock_auth_dict,
+                db=mock_db,
+                limit=50,
+                offset=0,
             )
 
-        assert response.status_code == 200
+        assert result.count == 1
 
-    def test_open_fiscal_period(self, client, org_id):
+    def test_open_fiscal_period(self, mock_db, mock_auth_dict, org_id):
         """Test opening a fiscal period."""
         mock_period = MockFiscalPeriod(organization_id=org_id, status="FUTURE")
         opened_period = MockFiscalPeriod(
@@ -230,13 +249,16 @@ class TestFiscalPeriodsAPI:
         with patch("app.api.finance.gl.fiscal_period_service.open_period") as mock_open:
             mock_open.return_value = opened_period
 
-            response = client.post(
-                f"/gl/fiscal-periods/{mock_period.fiscal_period_id}/open"
+            result = gl_api.open_fiscal_period(
+                mock_period.fiscal_period_id,
+                organization_id=org_id,
+                auth=mock_auth_dict,
+                db=mock_db,
             )
 
-        assert response.status_code == 200
+        assert result.status == "OPEN"
 
-    def test_close_fiscal_period(self, client, org_id, user_id):
+    def test_close_fiscal_period(self, mock_db, mock_auth_dict, org_id, user_id):
         """Test closing a fiscal period."""
         mock_period = MockFiscalPeriod(organization_id=org_id, status="OPEN")
         closed_period = MockFiscalPeriod(
@@ -248,89 +270,111 @@ class TestFiscalPeriodsAPI:
         with patch("app.api.finance.gl.fiscal_period_service.close_period") as mock_close:
             mock_close.return_value = closed_period
 
-            response = client.post(
-                f"/gl/fiscal-periods/{mock_period.fiscal_period_id}/close"
-                f"?closed_by_user_id={user_id}"
+            result = gl_api.close_fiscal_period(
+                mock_period.fiscal_period_id,
+                organization_id=org_id,
+                closed_by_user_id=user_id,
+                auth=mock_auth_dict,
+                db=mock_db,
             )
 
-        assert response.status_code == 200
+        assert result.status == "CLOSED"
 
 
 class TestJournalEntriesAPI:
     """Tests for journal entry endpoints."""
 
-    def test_create_journal_entry(self, client, org_id, user_id):
+    def test_create_journal_entry(self, mock_db, mock_auth_dict, org_id, user_id):
         """Test creating a journal entry."""
         mock_entry = MockJournalEntry(organization_id=org_id)
 
         with patch("app.api.finance.gl.journal_service.create_entry") as mock_create:
             mock_create.return_value = mock_entry
 
-            response = client.post(
-                f"/gl/journal-entries?created_by_user_id={user_id}",
-                json={
-                    "fiscal_period_id": str(uuid.uuid4()),
-                    "journal_date": str(date.today()),
-                    "description": "Test journal entry",
-                    "source_module": "GL",
-                    "lines": [
-                        {
-                            "account_id": str(uuid.uuid4()),
-                            "debit_amount": "1000.00",
-                            "credit_amount": "0",
-                            "currency_code": "USD",
-                        },
-                        {
-                            "account_id": str(uuid.uuid4()),
-                            "debit_amount": "0",
-                            "credit_amount": "1000.00",
-                            "currency_code": "USD",
-                        },
-                    ],
-                },
+            payload = JournalEntryCreate(
+                fiscal_period_id=uuid.uuid4(),
+                journal_date=date.today(),
+                description="Test journal entry",
+                source_module="GL",
+                lines=[
+                    JournalLineCreate(
+                        account_id=uuid.uuid4(),
+                        debit_amount=Decimal("1000.00"),
+                        credit_amount=Decimal("0"),
+                        currency_code="USD",
+                    ),
+                    JournalLineCreate(
+                        account_id=uuid.uuid4(),
+                        debit_amount=Decimal("0"),
+                        credit_amount=Decimal("1000.00"),
+                        currency_code="USD",
+                    ),
+                ],
+            )
+            result = gl_api.create_journal_entry(
+                payload,
+                organization_id=org_id,
+                created_by_user_id=user_id,
+                auth=mock_auth_dict,
+                db=mock_db,
             )
 
-        assert response.status_code == 201
+        assert result == mock_entry
 
-    def test_get_journal_entry(self, client, org_id):
+    def test_get_journal_entry(self, mock_db, mock_auth_dict, org_id):
         """Test getting a journal entry."""
         mock_entry = MockJournalEntry(organization_id=org_id)
 
         with patch("app.api.finance.gl.journal_service.get") as mock_get:
             mock_get.return_value = mock_entry
 
-            response = client.get(f"/gl/journal-entries/{mock_entry.journal_entry_id}")
+            result = gl_api.get_journal_entry(
+                mock_entry.journal_entry_id,
+                auth=mock_auth_dict,
+                db=mock_db,
+            )
 
-        assert response.status_code == 200
+        assert result.journal_entry_id == mock_entry.journal_entry_id
 
-    def test_list_journal_entries(self, client, org_id):
+    def test_list_journal_entries(self, mock_db, mock_auth_dict, org_id):
         """Test listing journal entries."""
         mock_entries = [MockJournalEntry(organization_id=org_id) for _ in range(5)]
 
         with patch("app.api.finance.gl.journal_service.list") as mock_list:
             mock_list.return_value = mock_entries
 
-            response = client.get(f"/gl/journal-entries")
+            result = gl_api.list_journal_entries(
+                organization_id=org_id,
+                auth=mock_auth_dict,
+                db=mock_db,
+                limit=50,
+                offset=0,
+            )
 
-        assert response.status_code == 200
-        data = response.json()
-        assert data["count"] == 5
+        assert result.count == 5
+        assert len(result.items) == 5
 
-    def test_list_journal_entries_with_filters(self, client, org_id):
+    def test_list_journal_entries_with_filters(self, mock_db, mock_auth_dict, org_id):
         """Test listing journal entries with filters."""
         mock_entries = [MockJournalEntry(organization_id=org_id, status="POSTED")]
 
         with patch("app.api.finance.gl.journal_service.list") as mock_list:
             mock_list.return_value = mock_entries
 
-            response = client.get(
-                f"/gl/journal-entries"
-                f"&status=POSTED&start_date=2024-01-01&end_date=2024-01-31"
+            result = gl_api.list_journal_entries(
+                organization_id=org_id,
+                status="POSTED",
+                from_date=date(2024, 1, 1),
+                to_date=date(2024, 1, 31),
+                auth=mock_auth_dict,
+                db=mock_db,
+                limit=50,
+                offset=0,
             )
 
-        assert response.status_code == 200
+        assert result.count == 1
 
-    def test_post_journal_entry(self, client, org_id, user_id):
+    def test_post_journal_entry(self, mock_db, mock_auth_dict, org_id, user_id):
         """Test posting a journal entry."""
         mock_result = MockPostingResult(
             success=True,
@@ -342,16 +386,17 @@ class TestJournalEntriesAPI:
         with patch("app.api.finance.gl.ledger_posting_service.post_entry") as mock_post:
             mock_post.return_value = mock_result
 
-            response = client.post(
-                f"/gl/journal-entries/{uuid.uuid4()}/post"
-                f"?posted_by_user_id={user_id}"
+            result = gl_api.post_journal_entry(
+                entry_id=uuid.uuid4(),
+                organization_id=org_id,
+                posted_by_user_id=user_id,
+                auth=mock_auth_dict,
+                db=mock_db,
             )
 
-        assert response.status_code == 200
-        data = response.json()
-        assert data["success"] is True
+        assert result.success is True
 
-    def test_reverse_journal_entry(self, client, org_id, user_id):
+    def test_reverse_journal_entry(self, mock_db, mock_auth_dict, org_id, user_id):
         """Test reversing a journal entry."""
         mock_entry = MockJournalEntry(organization_id=org_id, status="POSTED")
         reversal_entry = MockJournalEntry(
@@ -363,18 +408,22 @@ class TestJournalEntriesAPI:
         with patch("app.api.finance.gl.journal_service.reverse_entry") as mock_reverse:
             mock_reverse.return_value = reversal_entry
 
-            response = client.post(
-                f"/gl/journal-entries/{mock_entry.journal_entry_id}/reverse"
-                f"?reversal_date={date.today()}&reversed_by_user_id={user_id}"
+            result = gl_api.reverse_journal_entry(
+                entry_id=mock_entry.journal_entry_id,
+                reversal_date=date.today(),
+                organization_id=org_id,
+                reversed_by_user_id=user_id,
+                auth=mock_auth_dict,
+                db=mock_db,
             )
 
-        assert response.status_code == 200
+        assert result.journal_number == "JE-REV-0001"
 
 
 class TestAccountBalancesAPI:
     """Tests for account balance endpoints."""
 
-    def test_get_account_balance(self, client, org_id):
+    def test_get_account_balance(self, mock_db, mock_auth_dict, org_id):
         """Test getting account balance."""
         mock_account = MockAccount(organization_id=org_id)
         mock_balance = MockAccountBalance(
@@ -382,38 +431,47 @@ class TestAccountBalancesAPI:
             account_code=mock_account.account_code,
             account_name=mock_account.account_name,
             fiscal_period_id=uuid.uuid4(),
-            opening_balance=Decimal("0"),
+            opening_debit=Decimal("0"),
+            opening_credit=Decimal("0"),
             period_debit=Decimal("1000"),
             period_credit=Decimal("500"),
-            closing_balance=Decimal("500"),
+            closing_debit=Decimal("500"),
+            closing_credit=Decimal("0"),
             currency_code="USD",
         )
 
-        with patch("app.services.ifrs.gl.balance_service.get_balance") as mock_get_balance, \
+        with patch("app.services.finance.gl.balance_service.get_balance") as mock_get_balance, \
              patch("app.api.finance.gl.chart_of_accounts_service.get") as mock_get_account:
             mock_get_balance.return_value = mock_balance
             mock_get_account.return_value = mock_account
 
-            response = client.get(
-                f"/gl/balances/{mock_account.account_id}"
-                f"?fiscal_period_id={mock_balance.fiscal_period_id}"
+            result = gl_api.get_account_balance(
+                mock_account.account_id,
+                fiscal_period_id=mock_balance.fiscal_period_id,
+                organization_id=org_id,
+                auth=mock_auth_dict,
+                db=mock_db,
             )
 
-        assert response.status_code == 200
+        assert result.account_id == mock_account.account_id
 
-    def test_get_account_balance_not_found(self, client, org_id):
+    def test_get_account_balance_not_found(self, mock_db, mock_auth_dict, org_id):
         """Test getting non-existent account balance."""
-        with patch("app.services.ifrs.gl.balance_service.get_balance") as mock_get:
+        with patch("app.services.finance.gl.balance_service.get_balance") as mock_get:
             mock_get.return_value = None
 
-            response = client.get(
-                f"/gl/balances/{uuid.uuid4()}"
-                f"?fiscal_period_id={uuid.uuid4()}"
-            )
+            with pytest.raises(HTTPException) as exc:
+                gl_api.get_account_balance(
+                    uuid.uuid4(),
+                    fiscal_period_id=uuid.uuid4(),
+                    organization_id=org_id,
+                    auth=mock_auth_dict,
+                    db=mock_db,
+                )
 
-        assert response.status_code == 404
+        assert exc.value.status_code == 404
 
-    def test_get_trial_balance(self, client, org_id):
+    def test_get_trial_balance(self, mock_db, mock_auth_dict, org_id):
         """Test getting trial balance."""
         fiscal_period_id = uuid.uuid4()
         mock_trial_balance = MockTrialBalance(
@@ -426,11 +484,14 @@ class TestAccountBalancesAPI:
             is_balanced=True,
         )
 
-        with patch("app.services.ifrs.gl.balance_service.get_trial_balance") as mock_get:
+        with patch("app.services.finance.gl.balance_service.get_trial_balance") as mock_get:
             mock_get.return_value = mock_trial_balance
 
-            response = client.get(
-                f"/gl/trial-balance?fiscal_period_id={fiscal_period_id}"
+            result = gl_api.get_trial_balance(
+                organization_id=org_id,
+                fiscal_period_id=fiscal_period_id,
+                auth=mock_auth_dict,
+                db=mock_db,
             )
 
-        assert response.status_code == 200
+        assert result.total_debit == Decimal("10000")

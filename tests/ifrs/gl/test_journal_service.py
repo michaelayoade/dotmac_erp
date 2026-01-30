@@ -194,7 +194,7 @@ class TestCreateJournal:
         period = MockFiscalPeriod()
 
         with patch(
-            "app.services.ifrs.gl.journal.PeriodGuardService.get_period_for_date"
+            "app.services.finance.gl.journal.PeriodGuardService.get_period_for_date"
         ) as mock_period:
             mock_period.return_value = period
             with pytest.raises(HTTPException) as exc:
@@ -218,7 +218,7 @@ class TestCreateJournal:
         )
 
         with patch(
-            "app.services.ifrs.gl.journal.PeriodGuardService.get_period_for_date"
+            "app.services.finance.gl.journal.PeriodGuardService.get_period_for_date"
         ) as mock_period:
             mock_period.return_value = None
 
@@ -258,8 +258,8 @@ class TestSubmitJournal:
         )
         mock_db.get.return_value = journal
 
-        with patch("app.services.ifrs.gl.journal.JournalEntry"):
-            with patch("app.services.ifrs.gl.journal.JournalStatus", MockJournalStatus):
+        with patch("app.services.finance.gl.journal.JournalEntry"):
+            with patch("app.services.finance.gl.journal.JournalStatus", MockJournalStatus):
                 result = JournalService.submit_journal(
                     mock_db, org_id, journal.journal_entry_id, user_id
                 )
@@ -276,8 +276,8 @@ class TestSubmitJournal:
         )
         mock_db.get.return_value = journal
 
-        with patch("app.services.ifrs.gl.journal.JournalEntry"):
-            with patch("app.services.ifrs.gl.journal.JournalStatus", MockJournalStatus):
+        with patch("app.services.finance.gl.journal.JournalEntry"):
+            with patch("app.services.finance.gl.journal.JournalStatus", MockJournalStatus):
                 with pytest.raises(HTTPException) as exc:
                     JournalService.submit_journal(
                         mock_db, org_id, journal.journal_entry_id, user_id
@@ -299,8 +299,8 @@ class TestApproveJournal:
         )
         mock_db.get.return_value = journal
 
-        with patch("app.services.ifrs.gl.journal.JournalEntry"):
-            with patch("app.services.ifrs.gl.journal.JournalStatus", MockJournalStatus):
+        with patch("app.services.finance.gl.journal.JournalEntry"):
+            with patch("app.services.finance.gl.journal.JournalStatus", MockJournalStatus):
                 result = JournalService.approve_journal(
                     mock_db, org_id, journal.journal_entry_id, user_id
                 )
@@ -317,8 +317,8 @@ class TestApproveJournal:
         )
         mock_db.get.return_value = journal
 
-        with patch("app.services.ifrs.gl.journal.JournalEntry"):
-            with patch("app.services.ifrs.gl.journal.JournalStatus", MockJournalStatus):
+        with patch("app.services.finance.gl.journal.JournalEntry"):
+            with patch("app.services.finance.gl.journal.JournalStatus", MockJournalStatus):
                 with pytest.raises(HTTPException) as exc:
                     JournalService.approve_journal(
                         mock_db, org_id, journal.journal_entry_id, user_id
@@ -338,8 +338,8 @@ class TestApproveJournal:
         )
         mock_db.get.return_value = journal
 
-        with patch("app.services.ifrs.gl.journal.JournalEntry"):
-            with patch("app.services.ifrs.gl.journal.JournalStatus", MockJournalStatus):
+        with patch("app.services.finance.gl.journal.JournalEntry"):
+            with patch("app.services.finance.gl.journal.JournalStatus", MockJournalStatus):
                 with pytest.raises(HTTPException) as exc:
                     # Same user who created tries to approve
                     JournalService.approve_journal(
@@ -360,8 +360,8 @@ class TestVoidJournal:
         )
         mock_db.get.return_value = journal
 
-        with patch("app.services.ifrs.gl.journal.JournalEntry"):
-            with patch("app.services.ifrs.gl.journal.JournalStatus", MockJournalStatus):
+        with patch("app.services.finance.gl.journal.JournalEntry"):
+            with patch("app.services.finance.gl.journal.JournalStatus", MockJournalStatus):
                 result = JournalService.void_journal(
                     mock_db, org_id, journal.journal_entry_id, user_id, "Not needed"
                 )
@@ -378,8 +378,8 @@ class TestVoidJournal:
         )
         mock_db.get.return_value = journal
 
-        with patch("app.services.ifrs.gl.journal.JournalEntry"):
-            with patch("app.services.ifrs.gl.journal.JournalStatus", MockJournalStatus):
+        with patch("app.services.finance.gl.journal.JournalEntry"):
+            with patch("app.services.finance.gl.journal.JournalStatus", MockJournalStatus):
                 with pytest.raises(HTTPException) as exc:
                     JournalService.void_journal(
                         mock_db, org_id, journal.journal_entry_id, user_id, "Mistake"
@@ -396,7 +396,7 @@ class TestGetJournal:
         journal = MockJournalEntry(organization_id=org_id)
         mock_db.get.return_value = journal
 
-        with patch("app.services.ifrs.gl.journal.JournalEntry"):
+        with patch("app.services.finance.gl.journal.JournalEntry"):
             result = JournalService.get(mock_db, str(journal.journal_entry_id))
 
         assert result == journal
@@ -407,7 +407,7 @@ class TestGetJournal:
 
         mock_db.get.return_value = None
 
-        with patch("app.services.ifrs.gl.journal.JournalEntry"):
+        with patch("app.services.finance.gl.journal.JournalEntry"):
             with pytest.raises(HTTPException) as exc:
                 JournalService.get(mock_db, str(uuid4()))
 
@@ -428,8 +428,8 @@ class TestListJournals:
         mock_query.all.return_value = journals
         mock_db.query.return_value = mock_query
 
-        with patch("app.services.ifrs.gl.journal.JournalEntry"):
-            with patch("app.services.ifrs.gl.journal.JournalStatus", MockJournalStatus):
+        with patch("app.services.finance.gl.journal.JournalEntry"):
+            with patch("app.services.finance.gl.journal.JournalStatus", MockJournalStatus):
                 result = JournalService.list(
                     mock_db,
                     organization_id=str(org_id),
@@ -448,7 +448,7 @@ class TestGetJournalLines:
         lines = [MagicMock(), MagicMock()]
         mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = lines
 
-        with patch("app.services.ifrs.gl.journal.JournalEntryLine"):
+        with patch("app.services.finance.gl.journal.JournalEntryLine"):
             result = JournalService.get_lines(mock_db, str(journal_id))
 
         assert result == lines
@@ -473,21 +473,21 @@ class TestCreateJournalSuccess:
         period = MockFiscalPeriod()
 
         with patch(
-            "app.services.ifrs.gl.journal.PeriodGuardService.get_period_for_date"
+            "app.services.finance.gl.journal.PeriodGuardService.get_period_for_date"
         ) as mock_period:
             mock_period.return_value = period
             with patch(
-                "app.services.ifrs.gl.journal.SequenceService.get_next_number"
+                "app.services.finance.gl.journal.SequenceService.get_next_number"
             ) as mock_seq:
                 mock_seq.return_value = "JE-0001"
-                with patch("app.services.ifrs.gl.journal.JournalEntry") as MockJE:
+                with patch("app.services.finance.gl.journal.JournalEntry") as MockJE:
                     mock_journal = MockJournalEntry(
                         organization_id=org_id,
                         journal_entry_id=uuid4(),
                         status=MockJournalStatus.DRAFT,
                     )
                     MockJE.return_value = mock_journal
-                    with patch("app.services.ifrs.gl.journal.JournalEntryLine"):
+                    with patch("app.services.finance.gl.journal.JournalEntryLine"):
                         result = JournalService.create_journal(
                             mock_db, org_id, journal_input, user_id
                         )
@@ -536,20 +536,20 @@ class TestCreateJournalSuccess:
         period = MockFiscalPeriod()
 
         with patch(
-            "app.services.ifrs.gl.journal.PeriodGuardService.get_period_for_date"
+            "app.services.finance.gl.journal.PeriodGuardService.get_period_for_date"
         ) as mock_period:
             mock_period.return_value = period
             with patch(
-                "app.services.ifrs.gl.journal.SequenceService.get_next_number"
+                "app.services.finance.gl.journal.SequenceService.get_next_number"
             ) as mock_seq:
                 mock_seq.return_value = "JE-0002"
-                with patch("app.services.ifrs.gl.journal.JournalEntry") as MockJE:
+                with patch("app.services.finance.gl.journal.JournalEntry") as MockJE:
                     mock_journal = MockJournalEntry(
                         organization_id=org_id,
                         status=MockJournalStatus.DRAFT,
                     )
                     MockJE.return_value = mock_journal
-                    with patch("app.services.ifrs.gl.journal.JournalEntryLine"):
+                    with patch("app.services.finance.gl.journal.JournalEntryLine"):
                         result = JournalService.create_journal(
                             mock_db, org_id, journal_input, user_id
                         )
@@ -589,20 +589,20 @@ class TestCreateJournalSuccess:
         period = MockFiscalPeriod()
 
         with patch(
-            "app.services.ifrs.gl.journal.PeriodGuardService.get_period_for_date"
+            "app.services.finance.gl.journal.PeriodGuardService.get_period_for_date"
         ) as mock_period:
             mock_period.return_value = period
             with patch(
-                "app.services.ifrs.gl.journal.SequenceService.get_next_number"
+                "app.services.finance.gl.journal.SequenceService.get_next_number"
             ) as mock_seq:
                 mock_seq.return_value = "JE-0003"
-                with patch("app.services.ifrs.gl.journal.JournalEntry") as MockJE:
+                with patch("app.services.finance.gl.journal.JournalEntry") as MockJE:
                     mock_journal = MockJournalEntry(
                         organization_id=org_id,
                         status=MockJournalStatus.DRAFT,
                     )
                     MockJE.return_value = mock_journal
-                    with patch("app.services.ifrs.gl.journal.JournalEntryLine"):
+                    with patch("app.services.finance.gl.journal.JournalEntryLine"):
                         result = JournalService.create_journal(
                             mock_db, org_id, journal_input, user_id
                         )
@@ -635,13 +635,13 @@ class TestUpdateJournal:
 
         period = MockFiscalPeriod()
 
-        with patch("app.services.ifrs.gl.journal.JournalEntry"):
-            with patch("app.services.ifrs.gl.journal.JournalStatus", MockJournalStatus):
+        with patch("app.services.finance.gl.journal.JournalEntry"):
+            with patch("app.services.finance.gl.journal.JournalStatus", MockJournalStatus):
                 with patch(
-                    "app.services.ifrs.gl.journal.PeriodGuardService.get_period_for_date"
+                    "app.services.finance.gl.journal.PeriodGuardService.get_period_for_date"
                 ) as mock_period:
                     mock_period.return_value = period
-                    with patch("app.services.ifrs.gl.journal.JournalEntryLine"):
+                    with patch("app.services.finance.gl.journal.JournalEntryLine"):
                         result = JournalService.update_journal(
                             mock_db, org_id, journal.journal_entry_id, updated_input, user_id
                         )
@@ -669,8 +669,8 @@ class TestUpdateJournal:
             lines=sample_lines,
         )
 
-        with patch("app.services.ifrs.gl.journal.JournalEntry"):
-            with patch("app.services.ifrs.gl.journal.JournalStatus", MockJournalStatus):
+        with patch("app.services.finance.gl.journal.JournalEntry"):
+            with patch("app.services.finance.gl.journal.JournalStatus", MockJournalStatus):
                 with pytest.raises(HTTPException) as exc:
                     JournalService.update_journal(
                         mock_db, org_id, journal.journal_entry_id, updated_input, user_id
@@ -695,7 +695,7 @@ class TestUpdateJournal:
             lines=sample_lines,
         )
 
-        with patch("app.services.ifrs.gl.journal.JournalEntry"):
+        with patch("app.services.finance.gl.journal.JournalEntry"):
             with pytest.raises(HTTPException) as exc:
                 JournalService.update_journal(
                     mock_db, org_id, uuid4(), updated_input, user_id
@@ -738,8 +738,8 @@ class TestUpdateJournal:
             lines=unbalanced_lines,
         )
 
-        with patch("app.services.ifrs.gl.journal.JournalEntry"):
-            with patch("app.services.ifrs.gl.journal.JournalStatus", MockJournalStatus):
+        with patch("app.services.finance.gl.journal.JournalEntry"):
+            with patch("app.services.finance.gl.journal.JournalStatus", MockJournalStatus):
                 with pytest.raises(HTTPException) as exc:
                     JournalService.update_journal(
                         mock_db, org_id, journal.journal_entry_id, updated_input, user_id
@@ -768,8 +768,8 @@ class TestUpdateJournal:
             lines=[],
         )
 
-        with patch("app.services.ifrs.gl.journal.JournalEntry"):
-            with patch("app.services.ifrs.gl.journal.JournalStatus", MockJournalStatus):
+        with patch("app.services.finance.gl.journal.JournalEntry"):
+            with patch("app.services.finance.gl.journal.JournalStatus", MockJournalStatus):
                 with pytest.raises(HTTPException) as exc:
                     JournalService.update_journal(
                         mock_db, org_id, journal.journal_entry_id, updated_input, user_id
@@ -797,10 +797,10 @@ class TestUpdateJournal:
             lines=sample_lines,
         )
 
-        with patch("app.services.ifrs.gl.journal.JournalEntry"):
-            with patch("app.services.ifrs.gl.journal.JournalStatus", MockJournalStatus):
+        with patch("app.services.finance.gl.journal.JournalEntry"):
+            with patch("app.services.finance.gl.journal.JournalStatus", MockJournalStatus):
                 with patch(
-                    "app.services.ifrs.gl.journal.PeriodGuardService.get_period_for_date"
+                    "app.services.finance.gl.journal.PeriodGuardService.get_period_for_date"
                 ) as mock_period:
                     mock_period.return_value = None
                     with pytest.raises(HTTPException) as exc:
@@ -829,11 +829,11 @@ class TestPostJournal:
         mock_result.success = True
         mock_result.message = "Posted"
 
-        with patch("app.services.ifrs.gl.journal.JournalEntry"):
-            with patch("app.services.ifrs.gl.journal.JournalStatus", MockJournalStatus):
-                with patch("app.services.ifrs.gl.journal.PostingRequest"):
+        with patch("app.services.finance.gl.journal.JournalEntry"):
+            with patch("app.services.finance.gl.journal.JournalStatus", MockJournalStatus):
+                with patch("app.services.finance.gl.journal.PostingRequest"):
                     with patch(
-                        "app.services.ifrs.gl.journal.LedgerPostingService.post_journal_entry"
+                        "app.services.finance.gl.journal.LedgerPostingService.post_journal_entry"
                     ) as mock_posting:
                         mock_posting.return_value = mock_result
                         result = JournalService.post_journal(
@@ -851,8 +851,8 @@ class TestPostJournal:
         )
         mock_db.get.return_value = journal
 
-        with patch("app.services.ifrs.gl.journal.JournalEntry"):
-            with patch("app.services.ifrs.gl.journal.JournalStatus", MockJournalStatus):
+        with patch("app.services.finance.gl.journal.JournalEntry"):
+            with patch("app.services.finance.gl.journal.JournalStatus", MockJournalStatus):
                 result = JournalService.post_journal(
                     mock_db, org_id, journal.journal_entry_id, user_id
                 )
@@ -865,7 +865,7 @@ class TestPostJournal:
 
         mock_db.get.return_value = None
 
-        with patch("app.services.ifrs.gl.journal.JournalEntry"):
+        with patch("app.services.finance.gl.journal.JournalEntry"):
             with pytest.raises(HTTPException) as exc:
                 JournalService.post_journal(mock_db, org_id, uuid4(), user_id)
 
@@ -881,8 +881,8 @@ class TestPostJournal:
         )
         mock_db.get.return_value = journal
 
-        with patch("app.services.ifrs.gl.journal.JournalEntry"):
-            with patch("app.services.ifrs.gl.journal.JournalStatus", MockJournalStatus):
+        with patch("app.services.finance.gl.journal.JournalEntry"):
+            with patch("app.services.finance.gl.journal.JournalStatus", MockJournalStatus):
                 with pytest.raises(HTTPException) as exc:
                     JournalService.post_journal(
                         mock_db, org_id, journal.journal_entry_id, user_id
@@ -905,11 +905,11 @@ class TestPostJournal:
         mock_result.success = False
         mock_result.message = "Period is closed"
 
-        with patch("app.services.ifrs.gl.journal.JournalEntry"):
-            with patch("app.services.ifrs.gl.journal.JournalStatus", MockJournalStatus):
-                with patch("app.services.ifrs.gl.journal.PostingRequest"):
+        with patch("app.services.finance.gl.journal.JournalEntry"):
+            with patch("app.services.finance.gl.journal.JournalStatus", MockJournalStatus):
+                with patch("app.services.finance.gl.journal.PostingRequest"):
                     with patch(
-                        "app.services.ifrs.gl.journal.LedgerPostingService.post_journal_entry"
+                        "app.services.finance.gl.journal.LedgerPostingService.post_journal_entry"
                     ) as mock_posting:
                         mock_posting.return_value = mock_result
                         with pytest.raises(HTTPException) as exc:
@@ -932,14 +932,14 @@ class TestPostJournal:
         mock_result = MagicMock()
         mock_result.success = True
 
-        with patch("app.services.ifrs.gl.journal.JournalEntry"):
-            with patch("app.services.ifrs.gl.journal.JournalStatus", MockJournalStatus):
-                with patch("app.services.ifrs.gl.journal.PostingRequest") as MockPostReq:
+        with patch("app.services.finance.gl.journal.JournalEntry"):
+            with patch("app.services.finance.gl.journal.JournalStatus", MockJournalStatus):
+                with patch("app.services.finance.gl.journal.PostingRequest") as MockPostReq:
                     mock_req = MagicMock()
                     mock_req.idempotency_key = "custom-key-123"
                     MockPostReq.return_value = mock_req
                     with patch(
-                        "app.services.ifrs.gl.journal.LedgerPostingService.post_journal_entry"
+                        "app.services.finance.gl.journal.LedgerPostingService.post_journal_entry"
                     ) as mock_posting:
                         mock_posting.return_value = mock_result
                         result = JournalService.post_journal(
@@ -991,12 +991,12 @@ class TestReverseEntry:
 
         mock_db.get.return_value = journal
 
-        with patch("app.services.ifrs.gl.journal.JournalEntry") as MockJE:
+        with patch("app.services.finance.gl.journal.JournalEntry") as MockJE:
             mock_reversal = MagicMock()
             mock_reversal.lines = []
             mock_reversal.journal_entry_id = uuid4()
             MockJE.return_value = mock_reversal
-            with patch("app.services.ifrs.gl.journal.JournalEntryLine"):
+            with patch("app.services.finance.gl.journal.JournalEntryLine"):
                 result = JournalService.reverse_entry(
                     mock_db, org_id, journal.journal_entry_id, date.today(), user_id
                 )
@@ -1014,8 +1014,8 @@ class TestReverseEntry:
         )
         mock_db.get.return_value = journal
 
-        with patch("app.services.ifrs.gl.journal.JournalEntry"):
-            with patch("app.services.ifrs.gl.journal.JournalStatus", MockJournalStatus):
+        with patch("app.services.finance.gl.journal.JournalEntry"):
+            with patch("app.services.finance.gl.journal.JournalStatus", MockJournalStatus):
                 with pytest.raises(HTTPException) as exc:
                     JournalService.reverse_entry(
                         mock_db, org_id, journal.journal_entry_id, date.today(), user_id
@@ -1035,8 +1035,8 @@ class TestReverseEntry:
         journal.reversal_journal_id = uuid4()  # Already reversed
         mock_db.get.return_value = journal
 
-        with patch("app.services.ifrs.gl.journal.JournalEntry"):
-            with patch("app.services.ifrs.gl.journal.JournalStatus", MockJournalStatus):
+        with patch("app.services.finance.gl.journal.JournalEntry"):
+            with patch("app.services.finance.gl.journal.JournalStatus", MockJournalStatus):
                 with pytest.raises(HTTPException) as exc:
                     JournalService.reverse_entry(
                         mock_db, org_id, journal.journal_entry_id, date.today(), user_id
@@ -1051,7 +1051,7 @@ class TestReverseEntry:
 
         mock_db.get.return_value = None
 
-        with patch("app.services.ifrs.gl.journal.JournalEntry"):
+        with patch("app.services.finance.gl.journal.JournalEntry"):
             with pytest.raises(HTTPException) as exc:
                 JournalService.reverse_entry(
                     mock_db, org_id, uuid4(), date.today(), user_id
@@ -1069,7 +1069,7 @@ class TestSubmitJournalNotFound:
 
         mock_db.get.return_value = None
 
-        with patch("app.services.ifrs.gl.journal.JournalEntry"):
+        with patch("app.services.finance.gl.journal.JournalEntry"):
             with pytest.raises(HTTPException) as exc:
                 JournalService.submit_journal(mock_db, org_id, uuid4(), user_id)
 
@@ -1085,7 +1085,7 @@ class TestApproveJournalNotFound:
 
         mock_db.get.return_value = None
 
-        with patch("app.services.ifrs.gl.journal.JournalEntry"):
+        with patch("app.services.finance.gl.journal.JournalEntry"):
             with pytest.raises(HTTPException) as exc:
                 JournalService.approve_journal(mock_db, org_id, uuid4(), user_id)
 
@@ -1101,7 +1101,7 @@ class TestVoidJournalNotFound:
 
         mock_db.get.return_value = None
 
-        with patch("app.services.ifrs.gl.journal.JournalEntry"):
+        with patch("app.services.finance.gl.journal.JournalEntry"):
             with pytest.raises(HTTPException) as exc:
                 JournalService.void_journal(mock_db, org_id, uuid4(), user_id, "Reason")
 
@@ -1124,8 +1124,8 @@ class TestListJournalsWithFilters:
         mock_query.all.return_value = journals
         mock_db.query.return_value = mock_query
 
-        with patch("app.services.ifrs.gl.journal.JournalEntry"):
-            with patch("app.services.ifrs.gl.journal.JournalType") as MockType:
+        with patch("app.services.finance.gl.journal.JournalEntry"):
+            with patch("app.services.finance.gl.journal.JournalType") as MockType:
                 MockType.STANDARD = JournalType.STANDARD
                 result = JournalService.list(
                     mock_db,
@@ -1147,7 +1147,7 @@ class TestListJournalsWithFilters:
         mock_query.all.return_value = journals
         mock_db.query.return_value = mock_query
 
-        with patch("app.services.ifrs.gl.journal.JournalEntry"):
+        with patch("app.services.finance.gl.journal.JournalEntry"):
             result = JournalService.list(
                 mock_db,
                 organization_id=str(org_id),
@@ -1190,7 +1190,7 @@ class TestListJournalsWithFilters:
         mock_query.all.return_value = journals
         mock_db.query.return_value = mock_query
 
-        with patch("app.services.ifrs.gl.journal.JournalEntry"):
+        with patch("app.services.finance.gl.journal.JournalEntry"):
             result = JournalService.list(
                 mock_db,
                 organization_id=str(org_id),
@@ -1213,8 +1213,8 @@ class TestVoidSubmittedJournal:
         )
         mock_db.get.return_value = journal
 
-        with patch("app.services.ifrs.gl.journal.JournalEntry"):
-            with patch("app.services.ifrs.gl.journal.JournalStatus", MockJournalStatus):
+        with patch("app.services.finance.gl.journal.JournalEntry"):
+            with patch("app.services.finance.gl.journal.JournalStatus", MockJournalStatus):
                 result = JournalService.void_journal(
                     mock_db, org_id, journal.journal_entry_id, user_id, "Rejected"
                 )
@@ -1235,8 +1235,8 @@ class TestVoidReversedJournalFails:
         )
         mock_db.get.return_value = journal
 
-        with patch("app.services.ifrs.gl.journal.JournalEntry"):
-            with patch("app.services.ifrs.gl.journal.JournalStatus", MockJournalStatus):
+        with patch("app.services.finance.gl.journal.JournalEntry"):
+            with patch("app.services.finance.gl.journal.JournalStatus", MockJournalStatus):
                 with pytest.raises(HTTPException) as exc:
                     JournalService.void_journal(
                         mock_db, org_id, journal.journal_entry_id, user_id, "Reason"
@@ -1265,20 +1265,20 @@ class TestCreateEntry:
         period = MockFiscalPeriod()
 
         with patch(
-            "app.services.ifrs.gl.journal.PeriodGuardService.get_period_for_date"
+            "app.services.finance.gl.journal.PeriodGuardService.get_period_for_date"
         ) as mock_period:
             mock_period.return_value = period
             with patch(
-                "app.services.ifrs.gl.journal.SequenceService.get_next_number"
+                "app.services.finance.gl.journal.SequenceService.get_next_number"
             ) as mock_seq:
                 mock_seq.return_value = "JE-ALIAS"
-                with patch("app.services.ifrs.gl.journal.JournalEntry") as MockJE:
+                with patch("app.services.finance.gl.journal.JournalEntry") as MockJE:
                     mock_journal = MockJournalEntry(
                         organization_id=org_id,
                         status=MockJournalStatus.DRAFT,
                     )
                     MockJE.return_value = mock_journal
-                    with patch("app.services.ifrs.gl.journal.JournalEntryLine"):
+                    with patch("app.services.finance.gl.journal.JournalEntryLine"):
                         result = JournalService.create_entry(
                             mock_db, org_id, journal_input, user_id
                         )
@@ -1303,11 +1303,11 @@ class TestPostDraftJournal:
         mock_result.success = True
         mock_result.message = "Posted"
 
-        with patch("app.services.ifrs.gl.journal.JournalEntry"):
-            with patch("app.services.ifrs.gl.journal.JournalStatus", MockJournalStatus):
-                with patch("app.services.ifrs.gl.journal.PostingRequest"):
+        with patch("app.services.finance.gl.journal.JournalEntry"):
+            with patch("app.services.finance.gl.journal.JournalStatus", MockJournalStatus):
+                with patch("app.services.finance.gl.journal.PostingRequest"):
                     with patch(
-                        "app.services.ifrs.gl.journal.LedgerPostingService.post_journal_entry"
+                        "app.services.finance.gl.journal.LedgerPostingService.post_journal_entry"
                     ) as mock_posting:
                         mock_posting.return_value = mock_result
                         result = JournalService.post_journal(
@@ -1333,11 +1333,11 @@ class TestPostJournalWithAdjustment:
         mock_result = MagicMock()
         mock_result.success = True
 
-        with patch("app.services.ifrs.gl.journal.JournalEntry"):
-            with patch("app.services.ifrs.gl.journal.JournalStatus", MockJournalStatus):
-                with patch("app.services.ifrs.gl.journal.PostingRequest") as MockPostReq:
+        with patch("app.services.finance.gl.journal.JournalEntry"):
+            with patch("app.services.finance.gl.journal.JournalStatus", MockJournalStatus):
+                with patch("app.services.finance.gl.journal.PostingRequest") as MockPostReq:
                     with patch(
-                        "app.services.ifrs.gl.journal.LedgerPostingService.post_journal_entry"
+                        "app.services.finance.gl.journal.LedgerPostingService.post_journal_entry"
                     ) as mock_posting:
                         mock_posting.return_value = mock_result
                         result = JournalService.post_journal(
@@ -1360,11 +1360,11 @@ class TestPostJournalWithAdjustment:
         mock_result.success = True
         reopen_session_id = uuid4()
 
-        with patch("app.services.ifrs.gl.journal.JournalEntry"):
-            with patch("app.services.ifrs.gl.journal.JournalStatus", MockJournalStatus):
-                with patch("app.services.ifrs.gl.journal.PostingRequest") as MockPostReq:
+        with patch("app.services.finance.gl.journal.JournalEntry"):
+            with patch("app.services.finance.gl.journal.JournalStatus", MockJournalStatus):
+                with patch("app.services.finance.gl.journal.PostingRequest") as MockPostReq:
                     with patch(
-                        "app.services.ifrs.gl.journal.LedgerPostingService.post_journal_entry"
+                        "app.services.finance.gl.journal.LedgerPostingService.post_journal_entry"
                     ) as mock_posting:
                         mock_posting.return_value = mock_result
                         result = JournalService.post_journal(
@@ -1389,7 +1389,7 @@ class TestJournalWrongOrganization:
         )
         mock_db.get.return_value = journal
 
-        with patch("app.services.ifrs.gl.journal.JournalEntry"):
+        with patch("app.services.finance.gl.journal.JournalEntry"):
             with pytest.raises(HTTPException) as exc:
                 JournalService.submit_journal(mock_db, org_id, journal.journal_entry_id, user_id)
 
@@ -1406,7 +1406,7 @@ class TestJournalWrongOrganization:
         )
         mock_db.get.return_value = journal
 
-        with patch("app.services.ifrs.gl.journal.JournalEntry"):
+        with patch("app.services.finance.gl.journal.JournalEntry"):
             with pytest.raises(HTTPException) as exc:
                 JournalService.approve_journal(mock_db, org_id, journal.journal_entry_id, user_id)
 
@@ -1423,7 +1423,7 @@ class TestJournalWrongOrganization:
         )
         mock_db.get.return_value = journal
 
-        with patch("app.services.ifrs.gl.journal.JournalEntry"):
+        with patch("app.services.finance.gl.journal.JournalEntry"):
             with pytest.raises(HTTPException) as exc:
                 JournalService.void_journal(mock_db, org_id, journal.journal_entry_id, user_id, "Wrong org")
 
@@ -1440,7 +1440,7 @@ class TestJournalWrongOrganization:
         )
         mock_db.get.return_value = journal
 
-        with patch("app.services.ifrs.gl.journal.JournalEntry"):
+        with patch("app.services.finance.gl.journal.JournalEntry"):
             with pytest.raises(HTTPException) as exc:
                 JournalService.post_journal(mock_db, org_id, journal.journal_entry_id, user_id)
 
@@ -1467,7 +1467,7 @@ class TestJournalWrongOrganization:
             lines=sample_lines,
         )
 
-        with patch("app.services.ifrs.gl.journal.JournalEntry"):
+        with patch("app.services.finance.gl.journal.JournalEntry"):
             with pytest.raises(HTTPException) as exc:
                 JournalService.update_journal(
                     mock_db, org_id, journal.journal_entry_id, updated_input, user_id
@@ -1486,7 +1486,7 @@ class TestJournalWrongOrganization:
         )
         mock_db.get.return_value = journal
 
-        with patch("app.services.ifrs.gl.journal.JournalEntry"):
+        with patch("app.services.finance.gl.journal.JournalEntry"):
             with pytest.raises(HTTPException) as exc:
                 JournalService.reverse_entry(
                     mock_db, org_id, journal.journal_entry_id, date.today(), user_id
@@ -1508,7 +1508,7 @@ class TestListJournalsEmpty:
         mock_query.all.return_value = []
         mock_db.query.return_value = mock_query
 
-        with patch("app.services.ifrs.gl.journal.JournalEntry"):
+        with patch("app.services.finance.gl.journal.JournalEntry"):
             result = JournalService.list(mock_db, organization_id=str(org_id))
 
         assert result == []
@@ -1523,7 +1523,7 @@ class TestListJournalsEmpty:
         mock_query.all.return_value = journals
         mock_db.query.return_value = mock_query
 
-        with patch("app.services.ifrs.gl.journal.JournalEntry"):
+        with patch("app.services.finance.gl.journal.JournalEntry"):
             result = JournalService.list(mock_db)
 
         assert result == journals
@@ -1638,7 +1638,7 @@ class TestGetLinesEmpty:
         journal_id = uuid4()
         mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = []
 
-        with patch("app.services.ifrs.gl.journal.JournalEntryLine"):
+        with patch("app.services.finance.gl.journal.JournalEntryLine"):
             result = JournalService.get_lines(mock_db, journal_id)
 
         assert result == []
@@ -1657,8 +1657,8 @@ class TestApproveJournalVoid:
         )
         mock_db.get.return_value = journal
 
-        with patch("app.services.ifrs.gl.journal.JournalEntry"):
-            with patch("app.services.ifrs.gl.journal.JournalStatus", MockJournalStatus):
+        with patch("app.services.finance.gl.journal.JournalEntry"):
+            with patch("app.services.finance.gl.journal.JournalStatus", MockJournalStatus):
                 with pytest.raises(HTTPException) as exc:
                     JournalService.approve_journal(
                         mock_db, org_id, journal.journal_entry_id, user_id

@@ -153,8 +153,8 @@ class TestUpdateBalanceForPosting:
 
         mock_db.query.return_value.filter.return_value.first.return_value = existing_balance
 
-        with patch("app.services.ifrs.gl.account_balance.AccountBalance"):
-            with patch("app.services.ifrs.gl.account_balance.BalanceType", MockBalanceType):
+        with patch("app.services.finance.gl.account_balance.AccountBalance"):
+            with patch("app.services.finance.gl.account_balance.BalanceType", MockBalanceType):
                 result = AccountBalanceService.update_balance_for_posting(
                     mock_db,
                     org_id,
@@ -173,8 +173,8 @@ class TestUpdateBalanceForPosting:
         account_id = uuid4()
         mock_db.query.return_value.filter.return_value.first.return_value = None
 
-        with patch("app.services.ifrs.gl.account_balance.AccountBalance") as mock_ab:
-            with patch("app.services.ifrs.gl.account_balance.BalanceType", MockBalanceType):
+        with patch("app.services.finance.gl.account_balance.AccountBalance") as mock_ab:
+            with patch("app.services.finance.gl.account_balance.BalanceType", MockBalanceType):
                 result = AccountBalanceService.update_balance_for_posting(
                     mock_db,
                     org_id,
@@ -202,8 +202,8 @@ class TestGetBalance:
         )
         mock_db.query.return_value.filter.return_value.first.return_value = balance
 
-        with patch("app.services.ifrs.gl.account_balance.AccountBalance"):
-            with patch("app.services.ifrs.gl.account_balance.BalanceType", MockBalanceType):
+        with patch("app.services.finance.gl.account_balance.AccountBalance"):
+            with patch("app.services.finance.gl.account_balance.BalanceType", MockBalanceType):
                 result = AccountBalanceService.get_balance(
                     mock_db, org_id, account_id, fiscal_period.fiscal_period_id
                 )
@@ -221,8 +221,8 @@ class TestGetBalance:
         )
         mock_db.query.return_value.filter.return_value.first.return_value = balance
 
-        with patch("app.services.ifrs.gl.account_balance.AccountBalance"):
-            with patch("app.services.ifrs.gl.account_balance.BalanceType", MockBalanceType):
+        with patch("app.services.finance.gl.account_balance.AccountBalance"):
+            with patch("app.services.finance.gl.account_balance.BalanceType", MockBalanceType):
                 result = AccountBalanceService.get_balance(
                     mock_db,
                     org_id,
@@ -277,11 +277,11 @@ class TestGetAccountBalances:
         mock_query.all.side_effect = [agg_rows, accounts]
         mock_db.query.return_value = mock_query
 
-        with patch("app.services.ifrs.gl.account_balance.AccountBalance"):
-            with patch("app.services.ifrs.gl.account_balance.Account"):
-                with patch("app.services.ifrs.gl.account_balance.BalanceType", MockBalanceType):
-                    with patch("app.services.ifrs.gl.account_balance.and_", return_value=MagicMock()):
-                        with patch("app.services.ifrs.gl.account_balance.func"):
+        with patch("app.services.finance.gl.account_balance.AccountBalance"):
+            with patch("app.services.finance.gl.account_balance.Account"):
+                with patch("app.services.finance.gl.account_balance.BalanceType", MockBalanceType):
+                    with patch("app.services.finance.gl.account_balance.and_", return_value=MagicMock()):
+                        with patch("app.services.finance.gl.account_balance.func"):
                             result = AccountBalanceService.get_account_balances(
                                 mock_db, org_id, fiscal_period.fiscal_period_id
                             )
@@ -303,7 +303,7 @@ class TestListBalances:
         mock_query.all.return_value = balances
         mock_db.query.return_value = mock_query
 
-        with patch("app.services.ifrs.gl.account_balance.AccountBalance"):
+        with patch("app.services.finance.gl.account_balance.AccountBalance"):
             result = AccountBalanceService.list(
                 mock_db, organization_id=str(org_id), limit=50, offset=0
             )
@@ -343,21 +343,21 @@ class TestGetYTDBalance:
             def in_(self, values):
                 return MagicMock()
 
-        with patch("app.services.ifrs.gl.account_balance.AccountBalance") as mock_ab:
+        with patch("app.services.finance.gl.account_balance.AccountBalance") as mock_ab:
             mock_ab.organization_id = MockColumn()
             mock_ab.account_id = MockColumn()
             mock_ab.fiscal_period_id = MockColumn()
             mock_ab.balance_type = MockColumn()
             mock_ab.net_balance = MagicMock()
 
-            with patch("app.services.ifrs.gl.account_balance.FiscalPeriod") as mock_fp:
+            with patch("app.services.finance.gl.account_balance.FiscalPeriod") as mock_fp:
                 mock_fp.fiscal_year_id = MockColumn()
                 mock_fp.organization_id = MockColumn()
                 mock_fp.period_number = MockColumn()
 
-                with patch("app.services.ifrs.gl.account_balance.BalanceType", MockBalanceType):
-                    with patch("app.services.ifrs.gl.account_balance.and_", return_value=MagicMock()):
-                        with patch("app.services.ifrs.gl.account_balance.func") as mock_func:
+                with patch("app.services.finance.gl.account_balance.BalanceType", MockBalanceType):
+                    with patch("app.services.finance.gl.account_balance.and_", return_value=MagicMock()):
+                        with patch("app.services.finance.gl.account_balance.func") as mock_func:
                             mock_func.sum.return_value = MagicMock()
 
                             result = AccountBalanceService.get_ytd_balance(

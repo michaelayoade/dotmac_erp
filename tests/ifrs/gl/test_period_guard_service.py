@@ -78,14 +78,14 @@ class MockFiscalPeriod:
 @contextmanager
 def patch_period_guard():
     """Helper context manager that sets up all required patches."""
-    with patch("app.services.ifrs.gl.period_guard.FiscalPeriod") as mock_fp:
+    with patch("app.services.finance.gl.period_guard.FiscalPeriod") as mock_fp:
         mock_fp.organization_id = MockColumn()
         mock_fp.start_date = MockColumn()
         mock_fp.end_date = MockColumn()
         mock_fp.status = MockColumn()
         mock_fp.period_number = MockColumn()
-        with patch("app.services.ifrs.gl.period_guard.and_", return_value=MagicMock()):
-            with patch("app.services.ifrs.gl.period_guard.PeriodStatus", MockPeriodStatus):
+        with patch("app.services.finance.gl.period_guard.and_", return_value=MagicMock()):
+            with patch("app.services.finance.gl.period_guard.PeriodStatus", MockPeriodStatus):
                 yield mock_fp
 
 

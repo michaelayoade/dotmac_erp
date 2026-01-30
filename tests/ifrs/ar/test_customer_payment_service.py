@@ -89,17 +89,17 @@ class TestCreateCustomerPayment:
             allocations=allocations,
         )
 
-        with patch("app.services.ifrs.ar.customer_payment.Customer"):
-            with patch("app.services.ifrs.ar.customer_payment.CustomerPayment") as MockPay:
+        with patch("app.services.finance.ar.customer_payment.Customer"):
+            with patch("app.services.finance.ar.customer_payment.CustomerPayment") as MockPay:
                 mock_payment = MockCustomerPayment(
                     organization_id=org_id,
                     customer_id=customer.customer_id,
                 )
                 MockPay.return_value = mock_payment
 
-                with patch("app.services.ifrs.ar.customer_payment.PaymentAllocation"):
-                    with patch("app.services.ifrs.ar.customer_payment.Invoice"):
-                        with patch("app.services.ifrs.ar.customer_payment.SequenceService.get_next_number", return_value="RCP-0001"):
+                with patch("app.services.finance.ar.customer_payment.PaymentAllocation"):
+                    with patch("app.services.finance.ar.customer_payment.Invoice"):
+                        with patch("app.services.finance.ar.customer_payment.SequenceService.get_next_number", return_value="RCP-0001"):
                             result = CustomerPaymentService.create_payment(
                                 mock_db, org_id, payment_input, user_id
                             )
@@ -128,7 +128,7 @@ class TestCreateCustomerPayment:
             allocations=[],
         )
 
-        with patch("app.services.ifrs.ar.customer_payment.Customer"):
+        with patch("app.services.finance.ar.customer_payment.Customer"):
             with pytest.raises(HTTPException) as exc:
                 CustomerPaymentService.create_payment(
                     mock_db, org_id, payment_input, user_id
@@ -172,12 +172,12 @@ class TestPostPayment:
         # Mock query for allocations
         mock_db.query.return_value.filter.return_value.all.return_value = payment.allocations
 
-        with patch("app.services.ifrs.ar.customer_payment.CustomerPayment"):
-            with patch("app.services.ifrs.ar.customer_payment.Customer"):
-                with patch("app.services.ifrs.ar.customer_payment.PaymentAllocation"):
+        with patch("app.services.finance.ar.customer_payment.CustomerPayment"):
+            with patch("app.services.finance.ar.customer_payment.Customer"):
+                with patch("app.services.finance.ar.customer_payment.PaymentAllocation"):
                     # Patch at source modules since imports are local
-                    with patch("app.services.ifrs.gl.journal.JournalService") as mock_journal:
-                        with patch("app.services.ifrs.gl.ledger_posting.LedgerPostingService") as mock_posting:
+                    with patch("app.services.finance.gl.journal.JournalService") as mock_journal:
+                        with patch("app.services.finance.gl.ledger_posting.LedgerPostingService") as mock_posting:
                             mock_journal.create_journal.return_value = MagicMock(journal_entry_id=uuid4())
                             mock_posting.post_journal_entry.return_value = MagicMock(success=True)
                             result = CustomerPaymentService.post_payment(
@@ -203,7 +203,7 @@ class TestMarkBouncedPayment:
         )
         mock_db.get.return_value = payment
 
-        with patch("app.services.ifrs.ar.customer_payment.CustomerPayment"):
+        with patch("app.services.finance.ar.customer_payment.CustomerPayment"):
             result = CustomerPaymentService.mark_bounced(
                 mock_db, org_id, payment.payment_id, "NSF"
             )
@@ -247,9 +247,9 @@ class TestMarkBouncedPayment:
         mock_db.get.side_effect = mock_get
         mock_db.query.return_value.filter.return_value.all.return_value = payment.allocations
 
-        with patch("app.services.ifrs.ar.customer_payment.CustomerPayment"):
-            with patch("app.services.ifrs.ar.customer_payment.Invoice"):
-                with patch("app.services.ifrs.ar.customer_payment.PaymentAllocation"):
+        with patch("app.services.finance.ar.customer_payment.CustomerPayment"):
+            with patch("app.services.finance.ar.customer_payment.Invoice"):
+                with patch("app.services.finance.ar.customer_payment.PaymentAllocation"):
                     result = CustomerPaymentService.mark_bounced(
                         mock_db, org_id, payment.payment_id, "NSF"
                     )
@@ -272,7 +272,7 @@ class TestVoidCustomerPayment:
         )
         mock_db.get.return_value = payment
 
-        with patch("app.services.ifrs.ar.customer_payment.CustomerPayment"):
+        with patch("app.services.finance.ar.customer_payment.CustomerPayment"):
             result = CustomerPaymentService.void_payment(
                 mock_db, org_id, payment.payment_id, user_id, "Duplicate"
             )
@@ -292,7 +292,7 @@ class TestVoidCustomerPayment:
         )
         mock_db.get.return_value = payment
 
-        with patch("app.services.ifrs.ar.customer_payment.CustomerPayment"):
+        with patch("app.services.finance.ar.customer_payment.CustomerPayment"):
             with pytest.raises(HTTPException) as exc:
                 CustomerPaymentService.void_payment(
                     mock_db, org_id, payment.payment_id, user_id, "Error"
@@ -311,7 +311,7 @@ class TestGetCustomerPayment:
         payment = MockCustomerPayment(organization_id=org_id)
         mock_db.get.return_value = payment
 
-        with patch("app.services.ifrs.ar.customer_payment.CustomerPayment"):
+        with patch("app.services.finance.ar.customer_payment.CustomerPayment"):
             result = CustomerPaymentService.get(mock_db, str(payment.payment_id))
 
         assert result == payment
@@ -323,7 +323,7 @@ class TestGetCustomerPayment:
 
         mock_db.get.return_value = None
 
-        with patch("app.services.ifrs.ar.customer_payment.CustomerPayment"):
+        with patch("app.services.finance.ar.customer_payment.CustomerPayment"):
             with pytest.raises(HTTPException) as exc:
                 CustomerPaymentService.get(mock_db, str(uuid4()))
 
@@ -347,7 +347,7 @@ class TestListCustomerPayments:
         mock_query.all.return_value = payments
         mock_db.query.return_value = mock_query
 
-        with patch("app.services.ifrs.ar.customer_payment.CustomerPayment"):
+        with patch("app.services.finance.ar.customer_payment.CustomerPayment"):
             result = CustomerPaymentService.list(
                 mock_db,
                 organization_id=str(org_id),
@@ -379,8 +379,8 @@ class TestGetPaymentAllocations:
         # Mock the query for allocations
         mock_db.query.return_value.filter.return_value.all.return_value = allocations
 
-        with patch("app.services.ifrs.ar.customer_payment.CustomerPayment"):
-            with patch("app.services.ifrs.ar.customer_payment.PaymentAllocation"):
+        with patch("app.services.finance.ar.customer_payment.CustomerPayment"):
+            with patch("app.services.finance.ar.customer_payment.PaymentAllocation"):
                 result = CustomerPaymentService.get_payment_allocations(
                     mock_db, org_id, payment_id
                 )

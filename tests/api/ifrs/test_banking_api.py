@@ -120,7 +120,15 @@ class TestBankAccountAPI:
             mock_list.return_value = mock_accounts
             mock_count.return_value = 3
 
-            result = banking.list_bank_accounts(auth=mock_auth, db=mock_db)
+            result = banking.list_bank_accounts(
+                None,
+                None,
+                None,
+                50,
+                0,
+                auth=mock_auth,
+                db=mock_db,
+            )
 
         assert result.count == 3
         assert len(result.items) == 3
@@ -135,10 +143,11 @@ class TestBankAccountAPI:
             mock_count.return_value = 1
 
             result = banking.list_bank_accounts(
-                status="active",
-                currency_code="USD",
-                limit=10,
-                offset=0,
+                "active",
+                "USD",
+                None,
+                10,
+                0,
                 auth=mock_auth,
                 db=mock_db,
             )
@@ -287,7 +296,16 @@ class TestBankStatementAPI:
             mock_list.return_value = mock_statements
             mock_count.return_value = 3
 
-            result = banking.list_bank_statements(auth=mock_auth, db=mock_db)
+            result = banking.list_bank_statements(
+                None,
+                None,
+                None,
+                None,
+                50,
+                0,
+                auth=mock_auth,
+                db=mock_db,
+            )
 
         assert result.count == 3
 
@@ -390,7 +408,16 @@ class TestBankReconciliationAPI:
             mock_list.return_value = mock_recons
             mock_count.return_value = 3
 
-            result = banking.list_reconciliations(auth=mock_auth, db=mock_db)
+            result = banking.list_reconciliations(
+                None,
+                None,
+                None,
+                None,
+                50,
+                0,
+                auth=mock_auth,
+                db=mock_db,
+            )
 
         assert result.count == 3
 

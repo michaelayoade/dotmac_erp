@@ -88,10 +88,11 @@ class CommentWebService:
         comment_id: str,
     ) -> RedirectResponse:
         """Delete a comment."""
+        org_id = coerce_uuid(auth.organization_id)
         cid = coerce_uuid(comment_id)
 
         try:
-            comment_service.delete_comment(db, cid)
+            comment_service.delete_comment(db, org_id, cid)
             db.commit()
         except Exception as e:
             db.rollback()

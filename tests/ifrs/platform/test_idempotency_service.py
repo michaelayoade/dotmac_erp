@@ -16,14 +16,14 @@ from tests.ifrs.platform.conftest import MockColumn, MockIdempotencyRecord
 @contextmanager
 def patch_idempotency_service():
     """Helper context manager that sets up all required patches for IdempotencyService."""
-    with patch('app.services.ifrs.platform.idempotency.IdempotencyRecord') as mock_record:
+    with patch('app.services.finance.platform.idempotency.IdempotencyRecord') as mock_record:
         mock_record.organization_id = MockColumn()
         mock_record.idempotency_key = MockColumn()
         mock_record.endpoint = MockColumn()
         mock_record.expires_at = MockColumn()
         mock_record.record_id = MockColumn()
-        with patch('app.services.ifrs.platform.idempotency.and_', return_value=MagicMock()):
-            with patch('app.services.ifrs.platform.idempotency.coerce_uuid', side_effect=lambda x: x):
+        with patch('app.services.finance.platform.idempotency.and_', return_value=MagicMock()):
+            with patch('app.services.finance.platform.idempotency.coerce_uuid', side_effect=lambda x: x):
                 yield mock_record
 
 
@@ -43,7 +43,7 @@ class TestIdempotencyService:
         """New idempotency keys should return None."""
         mock_db_session.query.return_value.filter.return_value.first.return_value = None
 
-        with patch('app.services.ifrs.platform.idempotency.IdempotencyRecord'):
+        with patch('app.services.finance.platform.idempotency.IdempotencyRecord'):
             result = service.check(
                 mock_db_session,
                 organization_id=organization_id,
@@ -67,7 +67,7 @@ class TestIdempotencyService:
         )
         mock_db_session.query.return_value.filter.return_value.first.return_value = mock_record
 
-        with patch('app.services.ifrs.platform.idempotency.IdempotencyRecord'):
+        with patch('app.services.finance.platform.idempotency.IdempotencyRecord'):
             result = service.check(
                 mock_db_session,
                 organization_id=organization_id,
@@ -92,7 +92,7 @@ class TestIdempotencyService:
         )
         mock_db_session.query.return_value.filter.return_value.first.return_value = mock_record
 
-        with patch('app.services.ifrs.platform.idempotency.IdempotencyRecord'):
+        with patch('app.services.finance.platform.idempotency.IdempotencyRecord'):
             with pytest.raises(HTTPException) as exc_info:
                 service.check(
                     mock_db_session,
@@ -117,7 +117,7 @@ class TestIdempotencyService:
         )
         mock_db_session.query.return_value.filter.return_value.first.return_value = mock_record
 
-        with patch('app.services.ifrs.platform.idempotency.IdempotencyRecord'):
+        with patch('app.services.finance.platform.idempotency.IdempotencyRecord'):
             result = service.check(
                 mock_db_session,
                 organization_id=organization_id,
@@ -132,7 +132,7 @@ class TestIdempotencyService:
 
     def test_store_response_creates_record(self, service, mock_db_session, organization_id):
         """store_response should create a new idempotency record."""
-        with patch('app.services.ifrs.platform.idempotency.IdempotencyRecord') as MockRecord:
+        with patch('app.services.finance.platform.idempotency.IdempotencyRecord') as MockRecord:
             mock_instance = MagicMock()
             MockRecord.return_value = mock_instance
 
@@ -202,7 +202,7 @@ class TestIdempotencyService:
         mock_db_session.execute.return_value = mock_result
 
         with patch_idempotency_service():
-            with patch('app.services.ifrs.platform.idempotency.delete') as mock_delete:
+            with patch('app.services.finance.platform.idempotency.delete') as mock_delete:
                 result = service.cleanup_expired(mock_db_session, batch_size=100)
 
         assert result == 1
@@ -221,7 +221,7 @@ class TestIdempotencyService:
         """get should raise 404 for missing records."""
         mock_db_session.get.return_value = None
 
-        with patch('app.services.ifrs.platform.idempotency.IdempotencyRecord'):
+        with patch('app.services.finance.platform.idempotency.IdempotencyRecord'):
             with pytest.raises(HTTPException) as exc_info:
                 service.get(mock_db_session, str(uuid.uuid4()))
 

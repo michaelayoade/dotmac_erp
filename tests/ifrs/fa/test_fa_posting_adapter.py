@@ -210,11 +210,11 @@ class TestFAPostingAdapterDepreciationSuccess:
         mock_db.query.return_value.filter.return_value.all.return_value = mock_schedules
 
         with patch(
-            "app.services.ifrs.fa.fa_posting_adapter.JournalService"
+            "app.services.finance.fa.fa_posting_adapter.JournalService"
         ) as mock_journal_svc, patch(
-            "app.services.ifrs.fa.fa_posting_adapter.LedgerPostingService"
+            "app.services.finance.fa.fa_posting_adapter.LedgerPostingService"
         ) as mock_posting_svc, patch(
-            "app.services.ifrs.fa.fa_posting_adapter.org_context_service"
+            "app.services.finance.fa.fa_posting_adapter.org_context_service"
         ) as mock_org_ctx:
             mock_journal_result = MagicMock()
             mock_journal_result.journal_entry_id = uuid.uuid4()
@@ -268,11 +268,11 @@ class TestFAPostingAdapterDepreciationSuccess:
         mock_db.query.return_value.filter.return_value.all.return_value = mock_schedules
 
         with patch(
-            "app.services.ifrs.fa.fa_posting_adapter.JournalService"
+            "app.services.finance.fa.fa_posting_adapter.JournalService"
         ) as mock_journal_svc, patch(
-            "app.services.ifrs.fa.fa_posting_adapter.LedgerPostingService"
+            "app.services.finance.fa.fa_posting_adapter.LedgerPostingService"
         ) as mock_posting_svc, patch(
-            "app.services.ifrs.fa.fa_posting_adapter.org_context_service"
+            "app.services.finance.fa.fa_posting_adapter.org_context_service"
         ) as mock_org_ctx:
             mock_journal_result = MagicMock()
             mock_journal_result.journal_entry_id = uuid.uuid4()
@@ -319,9 +319,9 @@ class TestFAPostingAdapterDisposalSuccess:
         mock_db.get.side_effect = [mock_disposal, mock_asset, mock_category]
 
         with patch(
-            "app.services.ifrs.fa.fa_posting_adapter.JournalService"
+            "app.services.finance.fa.fa_posting_adapter.JournalService"
         ) as mock_journal_svc, patch(
-            "app.services.ifrs.fa.fa_posting_adapter.LedgerPostingService"
+            "app.services.finance.fa.fa_posting_adapter.LedgerPostingService"
         ) as mock_posting_svc:
             mock_journal_result = MagicMock()
             mock_journal_result.journal_entry_id = uuid.uuid4()
@@ -361,9 +361,9 @@ class TestFAPostingAdapterDisposalSuccess:
         mock_db.get.side_effect = [mock_disposal, mock_asset, mock_category]
 
         with patch(
-            "app.services.ifrs.fa.fa_posting_adapter.JournalService"
+            "app.services.finance.fa.fa_posting_adapter.JournalService"
         ) as mock_journal_svc, patch(
-            "app.services.ifrs.fa.fa_posting_adapter.LedgerPostingService"
+            "app.services.finance.fa.fa_posting_adapter.LedgerPostingService"
         ) as mock_posting_svc:
             mock_journal_result = MagicMock()
             mock_journal_result.journal_entry_id = uuid.uuid4()
@@ -446,9 +446,9 @@ class TestFAPostingAdapterRevaluationSuccess:
         mock_db.get.side_effect = [mock_reval, mock_asset, mock_category]
 
         with patch(
-            "app.services.ifrs.fa.fa_posting_adapter.JournalService"
+            "app.services.finance.fa.fa_posting_adapter.JournalService"
         ) as mock_journal_svc, patch(
-            "app.services.ifrs.fa.fa_posting_adapter.LedgerPostingService"
+            "app.services.finance.fa.fa_posting_adapter.LedgerPostingService"
         ) as mock_posting_svc:
             mock_journal_result = MagicMock()
             mock_journal_result.journal_entry_id = uuid.uuid4()
@@ -488,9 +488,9 @@ class TestFAPostingAdapterRevaluationSuccess:
         mock_db.get.side_effect = [mock_reval, mock_asset, mock_category]
 
         with patch(
-            "app.services.ifrs.fa.fa_posting_adapter.JournalService"
+            "app.services.finance.fa.fa_posting_adapter.JournalService"
         ) as mock_journal_svc, patch(
-            "app.services.ifrs.fa.fa_posting_adapter.LedgerPostingService"
+            "app.services.finance.fa.fa_posting_adapter.LedgerPostingService"
         ) as mock_posting_svc:
             mock_journal_result = MagicMock()
             mock_journal_result.journal_entry_id = uuid.uuid4()

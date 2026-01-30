@@ -430,8 +430,11 @@ class FIFOValuationService(ListResponseMixin):
         warehouse_id = coerce_uuid(warehouse_id)
         period_id = coerce_uuid(fiscal_period_id)
 
-        # Get item details
-        item = db.query(Item).filter(Item.item_id == item_id).first()
+        # Get item details - verify belongs to organization
+        item = db.query(Item).filter(
+            Item.item_id == item_id,
+            Item.organization_id == org_id,
+        ).first()
         if not item:
             raise HTTPException(status_code=404, detail="Item not found")
 

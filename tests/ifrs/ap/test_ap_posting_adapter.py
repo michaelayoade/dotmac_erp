@@ -19,6 +19,7 @@ import pytest
 from app.models.finance.ap.supplier_invoice import SupplierInvoiceStatus, SupplierInvoiceType
 from app.models.finance.ap.supplier_payment import APPaymentStatus
 from app.services.finance.ap.ap_posting_adapter import APPostingAdapter, APPostingResult
+from app.services.finance.ap.posting.helpers import create_tax_transactions
 
 
 # ============ Mock Classes ============
@@ -79,8 +80,12 @@ class MockSupplierInvoiceLine:
         line_amount: Decimal = Decimal("1000.00"),
         tax_amount: Decimal = Decimal("0"),
         tax_code_id: uuid.UUID = None,
+        item_id: uuid.UUID = None,
+        goods_receipt_line_id: uuid.UUID = None,
         expense_account_id: uuid.UUID = _DEFAULT,
+        capitalize_flag: bool = False,
         asset_account_id: uuid.UUID = None,
+        asset_category_id: uuid.UUID = None,
         cost_center_id: uuid.UUID = None,
         project_id: uuid.UUID = None,
         segment_id: uuid.UUID = None,
@@ -92,11 +97,15 @@ class MockSupplierInvoiceLine:
         self.line_amount = line_amount
         self.tax_amount = tax_amount
         self.tax_code_id = tax_code_id
+        self.item_id = item_id
+        self.goods_receipt_line_id = goods_receipt_line_id
+        self.capitalize_flag = capitalize_flag
         if expense_account_id is MockSupplierInvoiceLine._DEFAULT:
             self.expense_account_id = uuid.uuid4()
         else:
             self.expense_account_id = expense_account_id
         self.asset_account_id = asset_account_id
+        self.asset_category_id = asset_category_id
         self.cost_center_id = cost_center_id
         self.project_id = project_id
         self.segment_id = segment_id
@@ -111,6 +120,7 @@ class MockSupplier:
         organization_id: uuid.UUID = None,
         legal_name: str = "Test Supplier Inc",
         tax_id: str = "TAX789012",
+        tax_identification_number: str = None,
         ap_control_account_id: uuid.UUID = None,
         default_expense_account_id: uuid.UUID = None,
     ):
@@ -118,6 +128,7 @@ class MockSupplier:
         self.organization_id = organization_id or uuid.uuid4()
         self.legal_name = legal_name
         self.tax_id = tax_id
+        self.tax_identification_number = tax_identification_number or tax_id
         self.ap_control_account_id = ap_control_account_id or uuid.uuid4()
         self.default_expense_account_id = default_expense_account_id or uuid.uuid4()
 
@@ -135,6 +146,10 @@ class MockSupplierPayment:
         currency_code: str = "USD",
         exchange_rate: Decimal = Decimal("1.0"),
         payment_amount: Decimal = Decimal("1000.00"),
+        amount: Decimal = None,
+        gross_amount: Decimal = None,
+        withholding_tax_amount: Decimal = None,
+        withholding_tax_code_id: uuid.UUID = None,
         status: APPaymentStatus = APPaymentStatus.APPROVED,
         bank_account_id: uuid.UUID = None,
         correlation_id: uuid.UUID = None,
@@ -147,6 +162,10 @@ class MockSupplierPayment:
         self.currency_code = currency_code
         self.exchange_rate = exchange_rate
         self.payment_amount = payment_amount
+        self.amount = amount if amount is not None else payment_amount
+        self.gross_amount = gross_amount
+        self.withholding_tax_amount = withholding_tax_amount
+        self.withholding_tax_code_id = withholding_tax_code_id
         self.status = status
         self.bank_account_id = bank_account_id or uuid.uuid4()
         self.correlation_id = correlation_id or uuid.uuid4()
@@ -396,8 +415,8 @@ class TestPostInvoice:
         assert result.success is False
         assert "No expense account" in result.message
 
-    @patch("app.services.ifrs.ap.ap_posting_adapter.JournalService")
-    @patch("app.services.ifrs.ap.ap_posting_adapter.LedgerPostingService")
+    @patch("app.services.finance.ap.posting.invoice.JournalService")
+    @patch("app.services.finance.ap.posting.invoice.LedgerPostingService")
     def test_post_invoice_success(
         self,
         mock_ledger_service,
@@ -444,8 +463,8 @@ class TestPostInvoice:
         assert result.journal_entry_id == journal.journal_entry_id
         assert "successfully" in result.message.lower()
 
-    @patch("app.services.ifrs.ap.ap_posting_adapter.JournalService")
-    @patch("app.services.ifrs.ap.ap_posting_adapter.LedgerPostingService")
+    @patch("app.services.finance.ap.posting.invoice.JournalService")
+    @patch("app.services.finance.ap.posting.invoice.LedgerPostingService")
     def test_post_credit_note(
         self,
         mock_ledger_service,
@@ -501,8 +520,8 @@ class TestPostInvoice:
         # First line should have credit (not debit) for credit note expense
         assert journal_input.lines[0].credit_amount > Decimal("0")
 
-    @patch("app.services.ifrs.ap.ap_posting_adapter.JournalService")
-    @patch("app.services.ifrs.ap.ap_posting_adapter.LedgerPostingService")
+    @patch("app.services.finance.ap.posting.invoice.JournalService")
+    @patch("app.services.finance.ap.posting.invoice.LedgerPostingService")
     def test_post_multicurrency_invoice(
         self,
         mock_ledger_service,
@@ -558,7 +577,7 @@ class TestPostInvoice:
         assert journal_input.currency_code == "EUR"
         assert journal_input.exchange_rate == Decimal("1.10")
 
-    @patch("app.services.ifrs.ap.ap_posting_adapter.JournalService")
+    @patch("app.services.finance.ap.posting.invoice.JournalService")
     def test_post_invoice_journal_creation_failure(
         self,
         mock_journal_service,
@@ -601,8 +620,8 @@ class TestPostInvoice:
         assert result.success is False
         assert "Journal creation failed" in result.message
 
-    @patch("app.services.ifrs.ap.ap_posting_adapter.JournalService")
-    @patch("app.services.ifrs.ap.ap_posting_adapter.LedgerPostingService")
+    @patch("app.services.finance.ap.posting.invoice.JournalService")
+    @patch("app.services.finance.ap.posting.invoice.LedgerPostingService")
     def test_post_invoice_ledger_posting_failure(
         self,
         mock_ledger_service,
@@ -649,8 +668,8 @@ class TestPostInvoice:
         assert "Ledger posting failed" in result.message
         assert result.journal_entry_id == journal.journal_entry_id
 
-    @patch("app.services.ifrs.ap.ap_posting_adapter.JournalService")
-    @patch("app.services.ifrs.ap.ap_posting_adapter.LedgerPostingService")
+    @patch("app.services.finance.ap.posting.invoice.JournalService")
+    @patch("app.services.finance.ap.posting.invoice.LedgerPostingService")
     def test_post_invoice_with_idempotency_key(
         self,
         mock_ledger_service,
@@ -698,8 +717,8 @@ class TestPostInvoice:
         posting_request = call_args[0][1]
         assert posting_request.idempotency_key == custom_key
 
-    @patch("app.services.ifrs.ap.ap_posting_adapter.JournalService")
-    @patch("app.services.ifrs.ap.ap_posting_adapter.LedgerPostingService")
+    @patch("app.services.finance.ap.posting.invoice.JournalService")
+    @patch("app.services.finance.ap.posting.invoice.LedgerPostingService")
     def test_post_invoice_with_cost_centers(
         self,
         mock_ledger_service,
@@ -757,8 +776,8 @@ class TestPostInvoice:
         assert expense_line.project_id == project_id
         assert expense_line.segment_id == segment_id
 
-    @patch("app.services.ifrs.ap.ap_posting_adapter.JournalService")
-    @patch("app.services.ifrs.ap.ap_posting_adapter.LedgerPostingService")
+    @patch("app.services.finance.ap.posting.invoice.JournalService")
+    @patch("app.services.finance.ap.posting.invoice.LedgerPostingService")
     def test_post_invoice_exception_handling(
         self,
         mock_ledger_service,
@@ -804,8 +823,8 @@ class TestPostInvoice:
         assert "Posting error" in result.message
         assert result.journal_entry_id == journal.journal_entry_id
 
-    @patch("app.services.ifrs.ap.ap_posting_adapter.JournalService")
-    @patch("app.services.ifrs.ap.ap_posting_adapter.LedgerPostingService")
+    @patch("app.services.finance.ap.posting.invoice.JournalService")
+    @patch("app.services.finance.ap.posting.invoice.LedgerPostingService")
     def test_post_invoice_uses_asset_account(
         self,
         mock_ledger_service,
@@ -938,8 +957,8 @@ class TestPostPayment:
         assert result.success is False
         assert "Supplier not found" in result.message
 
-    @patch("app.services.ifrs.ap.ap_posting_adapter.JournalService")
-    @patch("app.services.ifrs.ap.ap_posting_adapter.LedgerPostingService")
+    @patch("app.services.finance.ap.posting.payment.JournalService")
+    @patch("app.services.finance.ap.posting.payment.LedgerPostingService")
     def test_post_payment_success(
         self,
         mock_ledger_service,
@@ -987,8 +1006,8 @@ class TestPostPayment:
         assert journal_input.lines[0].debit_amount == mock_payment.payment_amount
         assert journal_input.lines[1].credit_amount == mock_payment.payment_amount
 
-    @patch("app.services.ifrs.ap.ap_posting_adapter.JournalService")
-    @patch("app.services.ifrs.ap.ap_posting_adapter.LedgerPostingService")
+    @patch("app.services.finance.ap.posting.payment.JournalService")
+    @patch("app.services.finance.ap.posting.payment.LedgerPostingService")
     def test_post_multicurrency_payment(
         self,
         mock_ledger_service,
@@ -1036,7 +1055,7 @@ class TestPostPayment:
         # Functional amount = 800 * 1.25 = 1000
         assert journal_input.lines[0].debit_amount_functional == Decimal("1000.00")
 
-    @patch("app.services.ifrs.ap.ap_posting_adapter.JournalService")
+    @patch("app.services.finance.ap.posting.payment.JournalService")
     def test_post_payment_journal_failure(
         self,
         mock_journal_service,
@@ -1075,8 +1094,8 @@ class TestPostPayment:
         assert result.success is False
         assert "Journal creation failed" in result.message
 
-    @patch("app.services.ifrs.ap.ap_posting_adapter.JournalService")
-    @patch("app.services.ifrs.ap.ap_posting_adapter.LedgerPostingService")
+    @patch("app.services.finance.ap.posting.payment.JournalService")
+    @patch("app.services.finance.ap.posting.payment.LedgerPostingService")
     def test_post_payment_ledger_failure(
         self,
         mock_ledger_service,
@@ -1116,8 +1135,8 @@ class TestPostPayment:
         assert result.success is False
         assert "Ledger posting failed" in result.message
 
-    @patch("app.services.ifrs.ap.ap_posting_adapter.JournalService")
-    @patch("app.services.ifrs.ap.ap_posting_adapter.LedgerPostingService")
+    @patch("app.services.finance.ap.posting.payment.JournalService")
+    @patch("app.services.finance.ap.posting.payment.LedgerPostingService")
     def test_post_payment_exception_handling(
         self,
         mock_ledger_service,
@@ -1200,7 +1219,7 @@ class TestReverseInvoicePosting:
         assert result.success is False
         assert "not been posted" in result.message.lower()
 
-    @patch("app.services.ifrs.gl.reversal.ReversalService")
+    @patch("app.services.finance.gl.reversal.ReversalService")
     def test_reverse_invoice_success(
         self, mock_reversal_service, mock_db, organization_id, user_id, mock_invoice
     ):
@@ -1224,7 +1243,7 @@ class TestReverseInvoicePosting:
         assert "reversed successfully" in result.message.lower()
         assert result.journal_entry_id == reversal_result.reversal_journal_id
 
-    @patch("app.services.ifrs.gl.reversal.ReversalService")
+    @patch("app.services.finance.gl.reversal.ReversalService")
     def test_reverse_invoice_failure(
         self, mock_reversal_service, mock_db, organization_id, user_id, mock_invoice
     ):
@@ -1249,7 +1268,7 @@ class TestReverseInvoicePosting:
         assert result.success is False
         assert reversal_result.message in result.message
 
-    @patch("app.services.ifrs.gl.reversal.ReversalService")
+    @patch("app.services.finance.gl.reversal.ReversalService")
     def test_reverse_invoice_http_exception(
         self, mock_reversal_service, mock_db, organization_id, user_id, mock_invoice
     ):
@@ -1280,9 +1299,9 @@ class TestReverseInvoicePosting:
 
 
 class TestCreateTaxTransactions:
-    """Tests for APPostingAdapter._create_tax_transactions()."""
+    """Tests for create_tax_transactions()."""
 
-    @patch("app.services.ifrs.ap.ap_posting_adapter.tax_transaction_service")
+    @patch("app.services.finance.ap.posting.helpers.tax_transaction_service")
     def test_create_tax_transactions_no_fiscal_period(
         self, mock_tax_service, mock_db, organization_id, mock_invoice, mock_supplier
     ):
@@ -1295,7 +1314,7 @@ class TestCreateTaxTransactions:
 
         mock_db.query.return_value.filter.return_value.first.return_value = None
 
-        result = APPostingAdapter._create_tax_transactions(
+        result = create_tax_transactions(
             db=mock_db,
             organization_id=organization_id,
             invoice=mock_invoice,
@@ -1307,7 +1326,7 @@ class TestCreateTaxTransactions:
         assert result == []
         mock_tax_service.create_from_invoice_line.assert_not_called()
 
-    @patch("app.services.ifrs.ap.ap_posting_adapter.tax_transaction_service")
+    @patch("app.services.finance.ap.posting.helpers.tax_transaction_service")
     def test_create_tax_transactions_no_tax_code(
         self, mock_tax_service, mock_db, organization_id, mock_invoice, mock_supplier
     ):
@@ -1321,7 +1340,7 @@ class TestCreateTaxTransactions:
 
         mock_db.query.return_value.filter.return_value.first.return_value = fiscal_period
 
-        result = APPostingAdapter._create_tax_transactions(
+        result = create_tax_transactions(
             db=mock_db,
             organization_id=organization_id,
             invoice=mock_invoice,
@@ -1333,7 +1352,7 @@ class TestCreateTaxTransactions:
         assert result == []
         mock_tax_service.create_from_invoice_line.assert_not_called()
 
-    @patch("app.services.ifrs.ap.ap_posting_adapter.tax_transaction_service")
+    @patch("app.services.finance.ap.posting.helpers.tax_transaction_service")
     def test_create_tax_transactions_success(
         self, mock_tax_service, mock_db, organization_id, mock_invoice, mock_supplier
     ):
@@ -1353,7 +1372,7 @@ class TestCreateTaxTransactions:
         mock_tax_txn.transaction_id = tax_txn_id
         mock_tax_service.create_from_invoice_line.return_value = mock_tax_txn
 
-        result = APPostingAdapter._create_tax_transactions(
+        result = create_tax_transactions(
             db=mock_db,
             organization_id=organization_id,
             invoice=mock_invoice,
@@ -1370,7 +1389,7 @@ class TestCreateTaxTransactions:
         assert call_kwargs["is_purchase"] is True
         assert call_kwargs["base_amount"] == Decimal("1000.00")
 
-    @patch("app.services.ifrs.ap.ap_posting_adapter.tax_transaction_service")
+    @patch("app.services.finance.ap.posting.helpers.tax_transaction_service")
     def test_create_tax_transactions_credit_note(
         self, mock_tax_service, mock_db, organization_id, mock_supplier
     ):
@@ -1393,7 +1412,7 @@ class TestCreateTaxTransactions:
         mock_tax_txn.transaction_id = uuid.uuid4()
         mock_tax_service.create_from_invoice_line.return_value = mock_tax_txn
 
-        result = APPostingAdapter._create_tax_transactions(
+        result = create_tax_transactions(
             db=mock_db,
             organization_id=organization_id,
             invoice=credit_note,
@@ -1408,7 +1427,7 @@ class TestCreateTaxTransactions:
         # Credit note should have negative base amount
         assert call_kwargs["base_amount"] == Decimal("-500.00")
 
-    @patch("app.services.ifrs.ap.ap_posting_adapter.tax_transaction_service")
+    @patch("app.services.finance.ap.posting.helpers.tax_transaction_service")
     def test_create_tax_transactions_exception_handling(
         self, mock_tax_service, mock_db, organization_id, mock_invoice, mock_supplier
     ):
@@ -1427,7 +1446,7 @@ class TestCreateTaxTransactions:
         )
 
         # Should not raise, just return empty list
-        result = APPostingAdapter._create_tax_transactions(
+        result = create_tax_transactions(
             db=mock_db,
             organization_id=organization_id,
             invoice=mock_invoice,

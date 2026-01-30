@@ -30,6 +30,7 @@ from app.services.support.attachment import attachment_service
 from app.services.support.category import category_service
 from app.services.support.team import team_service
 from app.services.support.sla import sla_service
+from app.services.dropdown import dropdown_service
 from app.templates import templates
 
 # Import delegated web services
@@ -338,7 +339,7 @@ class SupportWebService:
         stats = ticket_service.get_stats(db, org_id)
 
         # Get employees for filter dropdown
-        employees = self._get_employees_for_dropdown(db, org_id)
+        employees = dropdown_service.get_employees(db, org_id)
 
         # Get categories and teams for filter dropdowns
         categories = category_service.list_categories(db, org_id)
@@ -425,7 +426,7 @@ class SupportWebService:
         linked_tasks = self._get_linked_tasks(db, org_id, ticket.ticket_id)
 
         # Get employees for assignment dropdown
-        employees = self._get_employees_for_dropdown(db, org_id)
+        employees = dropdown_service.get_employees(db, org_id)
 
         # Get attachments (split ticket vs comment attachments)
         all_attachments = attachment_service.list_attachments(db, ticket.ticket_id)
@@ -484,13 +485,13 @@ class SupportWebService:
                 title = f"Edit {ticket.ticket_number}"
 
         # Get employees for dropdowns
-        employees = self._get_employees_for_dropdown(db, org_id)
+        employees = dropdown_service.get_employees(db, org_id)
 
         # Get projects for dropdown
-        projects = self._get_projects_for_dropdown(db, org_id)
+        projects = dropdown_service.get_projects(db, org_id)
 
         # Get customers for dropdown
-        customers = self._get_customers_for_dropdown(db, org_id)
+        customers = dropdown_service.get_customers(db, org_id)
 
         # Get categories and teams for dropdowns
         categories = category_service.list_categories(db, org_id)
@@ -901,48 +902,19 @@ class SupportWebService:
     ) -> HTMLResponse:
         """Render the archived tickets list page."""
         from app.web.deps import base_context
-        from sqlalchemy import select, func
 
         org_id = coerce_uuid(auth.organization_id)
 
-        # Build query for archived tickets only
-        from app.models.support.ticket import Ticket
-        from sqlalchemy.orm import joinedload
-
-        query = (
-            select(Ticket)
-            .where(
-                Ticket.organization_id == org_id,
-                Ticket.is_deleted == True,  # noqa: E712
-            )
-            .options(
-                joinedload(Ticket.raised_by),
-                joinedload(Ticket.assigned_to),
-            )
+        # Delegate to core service
+        tickets, total = ticket_service.list_archived_tickets(
+            db,
+            org_id,
+            search=search,
+            page=page,
+            per_page=per_page,
         )
 
-        if search:
-            from sqlalchemy import or_
-            search_term = f"%{search}%"
-            query = query.where(
-                or_(
-                    Ticket.ticket_number.ilike(search_term),
-                    Ticket.subject.ilike(search_term),
-                )
-            )
-
-        # Get total count
-        count_query = select(func.count()).select_from(query.subquery())
-        total = db.scalar(count_query) or 0
-
-        # Apply ordering and pagination
-        query = query.order_by(Ticket.updated_at.desc())
-        offset = (page - 1) * per_page
-        query = query.offset(offset).limit(per_page)
-
-        tickets = list(db.execute(query).scalars().unique().all())
-
-        # Format tickets
+        # Format tickets for template
         formatted_tickets = [_format_ticket_for_list(t) for t in tickets]
 
         total_pages = (total + per_page - 1) // per_page
@@ -1338,33 +1310,6 @@ class SupportWebService:
         )
         return list(db.scalars(stmt).all())
 
-    def _get_employees_for_dropdown(
-        self,
-        db: Session,
-        organization_id: UUID,
-    ) -> List[Dict[str, Any]]:
-        """Get employees for dropdown selection."""
-        from app.models.people.hr import Employee, EmployeeStatus
-
-        results = db.execute(
-            select(Employee, Person)
-            .join(Person, Person.id == Employee.person_id)
-            .where(
-                Employee.organization_id == organization_id,
-                Employee.status.in_([EmployeeStatus.ACTIVE]),
-            )
-            .order_by(Person.first_name, Person.last_name)
-        ).all()
-
-        return [
-            {
-                "employee_id": str(emp.employee_id),
-                "employee_code": emp.employee_code,
-                "full_name": f"{person.first_name or ''} {person.last_name or ''}".strip(),
-            }
-            for emp, person in results
-        ]
-
     def _format_activity_timeline(
         self,
         activities: List[Any],
@@ -1454,69 +1399,6 @@ class SupportWebService:
 
         return formatted
 
-    def _get_projects_for_dropdown(
-        self,
-        db: Session,
-        organization_id: UUID,
-    ) -> List[Dict[str, Any]]:
-        """Get projects for dropdown selection."""
-        from app.models.finance.core_org.project import Project, ProjectStatus
-
-        try:
-            results = db.execute(
-                select(Project)
-                .where(
-                    Project.organization_id == organization_id,
-                    Project.status == ProjectStatus.ACTIVE,
-                )
-                .order_by(Project.project_code)
-            ).scalars().all()
-
-            return [
-                {
-                    "project_id": str(p.project_id),
-                    "project_code": p.project_code,
-                    "project_name": p.project_name,
-                }
-                for p in results
-            ]
-        except Exception:
-            # Project model may not exist yet
-            return []
-
-    def _get_customers_for_dropdown(
-        self,
-        db: Session,
-        organization_id: UUID,
-    ) -> List[Dict[str, Any]]:
-        """Get customers for dropdown selection."""
-        from app.models.finance.ar.customer import Customer
-
-        try:
-            results = db.execute(
-                select(Customer)
-                .where(
-                    Customer.organization_id == organization_id,
-                    Customer.is_active == True,
-                )
-                .order_by(Customer.legal_name)
-            ).scalars().all()
-
-            return [
-                {
-                    "customer_id": str(c.customer_id),
-                    "customer_code": c.customer_code,
-                    "customer_name": c.trading_name or c.legal_name,
-                    "customer_email": (c.primary_contact or {}).get("email"),
-                    "customer_phone": (c.primary_contact or {}).get("phone"),
-                    "billing_address": (c.billing_address or {}).get("address", ""),
-                    "shipping_address": (c.shipping_address or {}).get("address", ""),
-                }
-                for c in results
-            ]
-        except Exception:
-            # Customer model may not exist yet
-            return []
 
     # ========================================================================
     # Delegated Methods - Comments

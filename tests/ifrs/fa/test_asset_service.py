@@ -132,7 +132,7 @@ class TestAssetService:
             currency_code="USD",
         )
 
-        with patch("app.services.ifrs.fa.asset.SequenceService.get_next_number") as mock_seq:
+        with patch("app.services.finance.fa.asset.SequenceService.get_next_number") as mock_seq:
             mock_seq.return_value = "FA-0001"
             result = AssetService.create_asset(mock_db, org_id, input_data, user_id)
 

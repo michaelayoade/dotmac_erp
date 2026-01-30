@@ -131,6 +131,59 @@ class TicketService:
 
         return tickets, total
 
+    def list_archived_tickets(
+        self,
+        db: Session,
+        organization_id: UUID,
+        *,
+        search: Optional[str] = None,
+        page: int = 1,
+        per_page: int = 50,
+    ) -> Tuple[List[Ticket], int]:
+        """
+        List archived (soft-deleted) tickets with pagination.
+
+        Returns:
+            Tuple of (tickets list, total count)
+        """
+        org_id = coerce_uuid(organization_id)
+
+        # Query for archived tickets only
+        query = (
+            select(Ticket)
+            .where(
+                Ticket.organization_id == org_id,
+                Ticket.is_deleted == True,  # noqa: E712
+            )
+            .options(
+                joinedload(Ticket.raised_by),
+                joinedload(Ticket.assigned_to),
+            )
+        )
+
+        # Apply search filter
+        if search:
+            search_term = f"%{search}%"
+            query = query.where(
+                or_(
+                    Ticket.ticket_number.ilike(search_term),
+                    Ticket.subject.ilike(search_term),
+                )
+            )
+
+        # Get total count
+        count_query = select(func.count()).select_from(query.subquery())
+        total = db.scalar(count_query) or 0
+
+        # Apply ordering and pagination
+        query = query.order_by(Ticket.updated_at.desc())
+        offset = (page - 1) * per_page
+        query = query.offset(offset).limit(per_page)
+
+        tickets = list(db.execute(query).scalars().unique().all())
+
+        return tickets, total
+
     def get_ticket(
         self,
         db: Session,
@@ -311,9 +364,13 @@ class TicketService:
         if category_id is not None:
             from app.models.support.category import TicketCategory
 
+            org_id = coerce_uuid(organization_id)
             old_category_name = None
             if ticket.category_id:
-                old_cat = db.get(TicketCategory, ticket.category_id)
+                old_cat = db.query(TicketCategory).filter(
+                    TicketCategory.category_id == ticket.category_id,
+                    TicketCategory.organization_id == org_id,
+                ).first()
                 if old_cat:
                     old_category_name = old_cat.category_name
 
@@ -322,7 +379,10 @@ class TicketService:
                 ticket.category_id = new_cat_id
                 new_category_name = None
                 if new_cat_id:
-                    new_cat = db.get(TicketCategory, new_cat_id)
+                    new_cat = db.query(TicketCategory).filter(
+                        TicketCategory.category_id == new_cat_id,
+                        TicketCategory.organization_id == org_id,
+                    ).first()
                     if new_cat:
                         new_category_name = new_cat.category_name
                 if new_category_name:
@@ -338,9 +398,13 @@ class TicketService:
         if team_id is not None:
             from app.models.support.team import SupportTeam
 
+            org_id = coerce_uuid(organization_id)
             old_team_name = None
             if ticket.team_id:
-                old_team = db.get(SupportTeam, ticket.team_id)
+                old_team = db.query(SupportTeam).filter(
+                    SupportTeam.team_id == ticket.team_id,
+                    SupportTeam.organization_id == org_id,
+                ).first()
                 if old_team:
                     old_team_name = old_team.team_name
 
@@ -349,7 +413,10 @@ class TicketService:
                 ticket.team_id = new_team_id
                 new_team_name = None
                 if new_team_id:
-                    new_team = db.get(SupportTeam, new_team_id)
+                    new_team = db.query(SupportTeam).filter(
+                        SupportTeam.team_id == new_team_id,
+                        SupportTeam.organization_id == org_id,
+                    ).first()
                     if new_team:
                         new_team_name = new_team.team_name
                 if new_team_name:

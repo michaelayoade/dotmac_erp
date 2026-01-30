@@ -165,7 +165,7 @@ def create_transaction_input(
 class TestCalculateWeightedAverageCost:
     """Tests for calculate_weighted_average_cost method."""
 
-    @patch("app.services.ifrs.inv.transaction.func")
+    @patch("app.services.finance.inv.transaction.func")
     def test_calculate_with_existing_inventory(self, mock_func):
         """Test weighted average calculation with existing inventory."""
         mock_db = MagicMock()
@@ -192,7 +192,7 @@ class TestCalculateWeightedAverageCost:
         # (100 * 10 + 50 * 12) / 150 = 1600 / 150 = 10.666666...
         assert result == Decimal("10.666667")
 
-    @patch("app.services.ifrs.inv.transaction.func")
+    @patch("app.services.finance.inv.transaction.func")
     def test_calculate_with_zero_existing_inventory(self, mock_func):
         """Test weighted average calculation with no existing inventory."""
         mock_db = MagicMock()
@@ -219,7 +219,7 @@ class TestCalculateWeightedAverageCost:
         # (0 * 0 + 50 * 12) / 50 = 12.00
         assert result == Decimal("12.000000")
 
-    @patch("app.services.ifrs.inv.transaction.func")
+    @patch("app.services.finance.inv.transaction.func")
     def test_calculate_returns_new_cost_when_total_quantity_zero_or_negative(self, mock_func):
         """Test when total quantity is zero or negative returns new unit cost."""
         mock_db = MagicMock()
@@ -249,7 +249,7 @@ class TestCalculateWeightedAverageCost:
 class TestGetCurrentBalance:
     """Tests for get_current_balance method."""
 
-    @patch("app.services.ifrs.inv.transaction.func")
+    @patch("app.services.finance.inv.transaction.func")
     def test_get_balance_with_transactions(self, mock_func):
         """Test getting balance with various transactions."""
         mock_db = MagicMock()
@@ -268,7 +268,7 @@ class TestGetCurrentBalance:
 
         assert result == Decimal("150")
 
-    @patch("app.services.ifrs.inv.transaction.func")
+    @patch("app.services.finance.inv.transaction.func")
     def test_get_balance_returns_zero_when_no_transactions(self, mock_func):
         """Test getting balance when no transactions exist."""
         mock_db = MagicMock()

@@ -193,7 +193,7 @@ class TestAccountCategoryImporter:
         importer = AccountCategoryImporter(mock_db, import_config)
         assert importer._get_display_order(IFRSCategory.EQUITY) == 300
 
-    @patch("app.services.ifrs.import_export.accounts.AccountCategory")
+    @patch("app.services.finance.import_export.accounts.AccountCategory")
     def test_create_entity_creates_category(self, mock_category_cls, mock_db, import_config):
         """create_entity should create AccountCategory with correct attributes."""
         importer = AccountCategoryImporter(mock_db, import_config)
@@ -283,7 +283,7 @@ class TestAccountImporter:
         # OCI is last in enum
         assert importer._get_code_prefix(IFRSCategory.OTHER_COMPREHENSIVE_INCOME) == "6"
 
-    @patch("app.services.ifrs.import_export.accounts.Account")
+    @patch("app.services.finance.import_export.accounts.Account")
     def test_create_entity_generates_code_if_missing(
         self, mock_account_cls, mock_db, import_config
     ):
@@ -303,7 +303,7 @@ class TestAccountImporter:
         importer.create_entity(row)
         assert importer._account_code_counter == 1
 
-    @patch("app.services.ifrs.import_export.accounts.Account")
+    @patch("app.services.finance.import_export.accounts.Account")
     def test_create_entity_uses_provided_code(
         self, mock_account_cls, mock_db, import_config
     ):

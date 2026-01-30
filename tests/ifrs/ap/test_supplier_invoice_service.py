@@ -76,16 +76,16 @@ class TestCreateSupplierInvoice:
             lines=lines,
         )
 
-        with patch("app.services.ifrs.ap.supplier_invoice.Supplier"):
-            with patch("app.services.ifrs.ap.supplier_invoice.SupplierInvoice") as MockInv:
+        with patch("app.services.finance.ap.supplier_invoice.Supplier"):
+            with patch("app.services.finance.ap.supplier_invoice.SupplierInvoice") as MockInv:
                 mock_invoice = MockSupplierInvoice(
                     organization_id=org_id,
                     supplier_id=supplier.supplier_id,
                 )
                 MockInv.return_value = mock_invoice
 
-                with patch("app.services.ifrs.ap.supplier_invoice.SupplierInvoiceLine"):
-                    with patch("app.services.ifrs.ap.supplier_invoice.SequenceService.get_next_number", return_value="APINV-0001"):
+                with patch("app.services.finance.ap.supplier_invoice.SupplierInvoiceLine"):
+                    with patch("app.services.finance.ap.supplier_invoice.SequenceService.get_next_number", return_value="APINV-0001"):
                         result = SupplierInvoiceService.create_invoice(
                             mock_db, org_id, invoice_input, user_id
                         )
@@ -124,7 +124,7 @@ class TestCreateSupplierInvoice:
             lines=lines,
         )
 
-        with patch("app.services.ifrs.ap.supplier_invoice.Supplier"):
+        with patch("app.services.finance.ap.supplier_invoice.Supplier"):
             with pytest.raises(HTTPException) as exc:
                 SupplierInvoiceService.create_invoice(
                     mock_db, org_id, invoice_input, user_id
@@ -154,7 +154,7 @@ class TestCreateSupplierInvoice:
             lines=[],
         )
 
-        with patch("app.services.ifrs.ap.supplier_invoice.Supplier"):
+        with patch("app.services.finance.ap.supplier_invoice.Supplier"):
             with pytest.raises(HTTPException) as exc:
                 SupplierInvoiceService.create_invoice(
                     mock_db, org_id, invoice_input, user_id
@@ -176,8 +176,8 @@ class TestSubmitSupplierInvoice:
         )
         mock_db.get.return_value = invoice
 
-        with patch("app.services.ifrs.ap.supplier_invoice.SupplierInvoice"):
-            with patch("app.services.ifrs.ap.supplier_invoice.SupplierInvoiceStatus", MockSupplierInvoiceStatus):
+        with patch("app.services.finance.ap.supplier_invoice.SupplierInvoice"):
+            with patch("app.services.finance.ap.supplier_invoice.SupplierInvoiceStatus", MockSupplierInvoiceStatus):
                 result = SupplierInvoiceService.submit_invoice(
                     mock_db, org_id, invoice.invoice_id, user_id
                 )
@@ -196,8 +196,8 @@ class TestSubmitSupplierInvoice:
         )
         mock_db.get.return_value = invoice
 
-        with patch("app.services.ifrs.ap.supplier_invoice.SupplierInvoice"):
-            with patch("app.services.ifrs.ap.supplier_invoice.SupplierInvoiceStatus", MockSupplierInvoiceStatus):
+        with patch("app.services.finance.ap.supplier_invoice.SupplierInvoice"):
+            with patch("app.services.finance.ap.supplier_invoice.SupplierInvoiceStatus", MockSupplierInvoiceStatus):
                 with pytest.raises(HTTPException) as exc:
                     SupplierInvoiceService.submit_invoice(
                         mock_db, org_id, invoice.invoice_id, user_id
@@ -221,8 +221,8 @@ class TestApproveSupplierInvoice:
         )
         mock_db.get.return_value = invoice
 
-        with patch("app.services.ifrs.ap.supplier_invoice.SupplierInvoice"):
-            with patch("app.services.ifrs.ap.supplier_invoice.SupplierInvoiceStatus", MockSupplierInvoiceStatus):
+        with patch("app.services.finance.ap.supplier_invoice.SupplierInvoice"):
+            with patch("app.services.finance.ap.supplier_invoice.SupplierInvoiceStatus", MockSupplierInvoiceStatus):
                 result = SupplierInvoiceService.approve_invoice(
                     mock_db, org_id, invoice.invoice_id, user_id
                 )
@@ -243,8 +243,8 @@ class TestApproveSupplierInvoice:
         )
         mock_db.get.return_value = invoice
 
-        with patch("app.services.ifrs.ap.supplier_invoice.SupplierInvoice"):
-            with patch("app.services.ifrs.ap.supplier_invoice.SupplierInvoiceStatus", MockSupplierInvoiceStatus):
+        with patch("app.services.finance.ap.supplier_invoice.SupplierInvoice"):
+            with patch("app.services.finance.ap.supplier_invoice.SupplierInvoiceStatus", MockSupplierInvoiceStatus):
                 with pytest.raises(HTTPException) as exc:
                     # Same user tries to approve
                     SupplierInvoiceService.approve_invoice(
@@ -268,8 +268,8 @@ class TestVoidSupplierInvoice:
         )
         mock_db.get.return_value = invoice
 
-        with patch("app.services.ifrs.ap.supplier_invoice.SupplierInvoice"):
-            with patch("app.services.ifrs.ap.supplier_invoice.SupplierInvoiceStatus", MockSupplierInvoiceStatus):
+        with patch("app.services.finance.ap.supplier_invoice.SupplierInvoice"):
+            with patch("app.services.finance.ap.supplier_invoice.SupplierInvoiceStatus", MockSupplierInvoiceStatus):
                 result = SupplierInvoiceService.void_invoice(
                     mock_db, org_id, invoice.invoice_id, user_id, "Not needed"
                 )
@@ -288,8 +288,8 @@ class TestVoidSupplierInvoice:
         )
         mock_db.get.return_value = invoice
 
-        with patch("app.services.ifrs.ap.supplier_invoice.SupplierInvoice"):
-            with patch("app.services.ifrs.ap.supplier_invoice.SupplierInvoiceStatus", MockSupplierInvoiceStatus):
+        with patch("app.services.finance.ap.supplier_invoice.SupplierInvoice"):
+            with patch("app.services.finance.ap.supplier_invoice.SupplierInvoiceStatus", MockSupplierInvoiceStatus):
                 with pytest.raises(HTTPException) as exc:
                     SupplierInvoiceService.void_invoice(
                         mock_db, org_id, invoice.invoice_id, user_id, "Mistake"
@@ -308,7 +308,7 @@ class TestGetSupplierInvoice:
         invoice = MockSupplierInvoice(organization_id=org_id)
         mock_db.get.return_value = invoice
 
-        with patch("app.services.ifrs.ap.supplier_invoice.SupplierInvoice"):
+        with patch("app.services.finance.ap.supplier_invoice.SupplierInvoice"):
             result = SupplierInvoiceService.get(mock_db, str(invoice.invoice_id))
 
         assert result == invoice
@@ -320,7 +320,7 @@ class TestGetSupplierInvoice:
 
         mock_db.get.return_value = None
 
-        with patch("app.services.ifrs.ap.supplier_invoice.SupplierInvoice"):
+        with patch("app.services.finance.ap.supplier_invoice.SupplierInvoice"):
             with pytest.raises(HTTPException) as exc:
                 SupplierInvoiceService.get(mock_db, str(uuid4()))
 
@@ -343,8 +343,8 @@ class TestListSupplierInvoices:
         mock_query.all.return_value = invoices
         mock_db.query.return_value = mock_query
 
-        with patch("app.services.ifrs.ap.supplier_invoice.SupplierInvoice"):
-            with patch("app.services.ifrs.ap.supplier_invoice.SupplierInvoiceStatus", MockSupplierInvoiceStatus):
+        with patch("app.services.finance.ap.supplier_invoice.SupplierInvoice"):
+            with patch("app.services.finance.ap.supplier_invoice.SupplierInvoiceStatus", MockSupplierInvoiceStatus):
                 result = SupplierInvoiceService.list(
                     mock_db,
                     organization_id=str(org_id),
@@ -376,8 +376,8 @@ class TestGetInvoiceLines:
         # Mock the query for lines
         mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = lines
 
-        with patch("app.services.ifrs.ap.supplier_invoice.SupplierInvoice"):
-            with patch("app.services.ifrs.ap.supplier_invoice.SupplierInvoiceLine"):
+        with patch("app.services.finance.ap.supplier_invoice.SupplierInvoice"):
+            with patch("app.services.finance.ap.supplier_invoice.SupplierInvoiceLine"):
                 result = SupplierInvoiceService.get_invoice_lines(mock_db, org_id, invoice_id)
 
         assert len(result) == 2
@@ -401,7 +401,16 @@ class TestUpdateSupplierInvoice:
         )
         supplier = MockSupplier(organization_id=org_id, supplier_id=invoice.supplier_id)
 
-        mock_db.get.side_effect = [invoice, supplier]
+        def get_side_effect(model, record_id):
+            if str(record_id) == str(invoice.invoice_id):
+                return invoice
+            if str(record_id) == str(invoice.supplier_id):
+                return supplier
+            account = MagicMock()
+            account.organization_id = org_id
+            return account
+
+        mock_db.get.side_effect = get_side_effect
 
         mock_query = MagicMock()
         mock_query.filter.return_value = mock_query
@@ -427,9 +436,9 @@ class TestUpdateSupplierInvoice:
             lines=lines,
         )
 
-        with patch("app.services.ifrs.ap.supplier_invoice.SupplierInvoice"):
-            with patch("app.services.ifrs.ap.supplier_invoice.SupplierInvoiceLine"):
-                with patch("app.services.ifrs.ap.supplier_invoice.SupplierInvoiceStatus", MockSupplierInvoiceStatus):
+        with patch("app.services.finance.ap.supplier_invoice.SupplierInvoice"):
+            with patch("app.services.finance.ap.supplier_invoice.SupplierInvoiceLine"):
+                with patch("app.services.finance.ap.supplier_invoice.SupplierInvoiceStatus", MockSupplierInvoiceStatus):
                     result = SupplierInvoiceService.update_invoice(
                         mock_db, org_id, invoice.invoice_id, invoice_input
                     )
@@ -462,8 +471,8 @@ class TestUpdateSupplierInvoice:
             lines=[InvoiceLineInput(description="Test", quantity=Decimal("1"), unit_price=Decimal("100"))],
         )
 
-        with patch("app.services.ifrs.ap.supplier_invoice.SupplierInvoice"):
-            with patch("app.services.ifrs.ap.supplier_invoice.SupplierInvoiceStatus", MockSupplierInvoiceStatus):
+        with patch("app.services.finance.ap.supplier_invoice.SupplierInvoice"):
+            with patch("app.services.finance.ap.supplier_invoice.SupplierInvoiceStatus", MockSupplierInvoiceStatus):
                 with pytest.raises(HTTPException) as exc:
                     SupplierInvoiceService.update_invoice(
                         mock_db, org_id, invoice.invoice_id, invoice_input
@@ -493,7 +502,7 @@ class TestUpdateSupplierInvoice:
             lines=[InvoiceLineInput(description="Test", quantity=Decimal("1"), unit_price=Decimal("100"))],
         )
 
-        with patch("app.services.ifrs.ap.supplier_invoice.SupplierInvoice"):
+        with patch("app.services.finance.ap.supplier_invoice.SupplierInvoice"):
             with pytest.raises(HTTPException) as exc:
                 SupplierInvoiceService.update_invoice(
                     mock_db, org_id, uuid4(), invoice_input
@@ -522,10 +531,10 @@ class TestPostSupplierInvoice:
         mock_result.posting_batch_id = uuid4()
         mock_result.message = "Posted successfully"
 
-        with patch("app.services.ifrs.ap.supplier_invoice.SupplierInvoice"):
-            with patch("app.services.ifrs.ap.supplier_invoice.SupplierInvoiceStatus", MockSupplierInvoiceStatus):
+        with patch("app.services.finance.ap.supplier_invoice.SupplierInvoice"):
+            with patch("app.services.finance.ap.supplier_invoice.SupplierInvoiceStatus", MockSupplierInvoiceStatus):
                 # APPostingAdapter is imported inside the method, so patch the actual module
-                with patch("app.services.ifrs.ap.ap_posting_adapter.APPostingAdapter") as MockAdapter:
+                with patch("app.services.finance.ap.ap_posting_adapter.APPostingAdapter") as MockAdapter:
                     MockAdapter.post_invoice.return_value = mock_result
                     result = SupplierInvoiceService.post_invoice(
                         mock_db, org_id, invoice.invoice_id, user_id
@@ -545,8 +554,8 @@ class TestPostSupplierInvoice:
         )
         mock_db.get.return_value = invoice
 
-        with patch("app.services.ifrs.ap.supplier_invoice.SupplierInvoice"):
-            with patch("app.services.ifrs.ap.supplier_invoice.SupplierInvoiceStatus", MockSupplierInvoiceStatus):
+        with patch("app.services.finance.ap.supplier_invoice.SupplierInvoice"):
+            with patch("app.services.finance.ap.supplier_invoice.SupplierInvoiceStatus", MockSupplierInvoiceStatus):
                 with pytest.raises(HTTPException) as exc:
                     SupplierInvoiceService.post_invoice(
                         mock_db, org_id, invoice.invoice_id, user_id
@@ -569,9 +578,9 @@ class TestPostSupplierInvoice:
         mock_result.success = False
         mock_result.message = "Posting failed: invalid account"
 
-        with patch("app.services.ifrs.ap.supplier_invoice.SupplierInvoice"):
-            with patch("app.services.ifrs.ap.supplier_invoice.SupplierInvoiceStatus", MockSupplierInvoiceStatus):
-                with patch("app.services.ifrs.ap.ap_posting_adapter.APPostingAdapter") as MockAdapter:
+        with patch("app.services.finance.ap.supplier_invoice.SupplierInvoice"):
+            with patch("app.services.finance.ap.supplier_invoice.SupplierInvoiceStatus", MockSupplierInvoiceStatus):
+                with patch("app.services.finance.ap.ap_posting_adapter.APPostingAdapter") as MockAdapter:
                     MockAdapter.post_invoice.return_value = mock_result
                     with pytest.raises(HTTPException) as exc:
                         SupplierInvoiceService.post_invoice(
@@ -594,8 +603,8 @@ class TestPutOnHold:
         )
         mock_db.get.return_value = invoice
 
-        with patch("app.services.ifrs.ap.supplier_invoice.SupplierInvoice"):
-            with patch("app.services.ifrs.ap.supplier_invoice.SupplierInvoiceStatus", MockSupplierInvoiceStatus):
+        with patch("app.services.finance.ap.supplier_invoice.SupplierInvoice"):
+            with patch("app.services.finance.ap.supplier_invoice.SupplierInvoiceStatus", MockSupplierInvoiceStatus):
                 result = SupplierInvoiceService.put_on_hold(
                     mock_db, org_id, invoice.invoice_id, "Under review"
                 )
@@ -614,8 +623,8 @@ class TestPutOnHold:
         )
         mock_db.get.return_value = invoice
 
-        with patch("app.services.ifrs.ap.supplier_invoice.SupplierInvoice"):
-            with patch("app.services.ifrs.ap.supplier_invoice.SupplierInvoiceStatus", MockSupplierInvoiceStatus):
+        with patch("app.services.finance.ap.supplier_invoice.SupplierInvoice"):
+            with patch("app.services.finance.ap.supplier_invoice.SupplierInvoiceStatus", MockSupplierInvoiceStatus):
                 with pytest.raises(HTTPException) as exc:
                     SupplierInvoiceService.put_on_hold(
                         mock_db, org_id, invoice.invoice_id, "Review"
@@ -639,8 +648,8 @@ class TestReleaseFromHold:
         )
         mock_db.get.return_value = invoice
 
-        with patch("app.services.ifrs.ap.supplier_invoice.SupplierInvoice"):
-            with patch("app.services.ifrs.ap.supplier_invoice.SupplierInvoiceStatus", MockSupplierInvoiceStatus):
+        with patch("app.services.finance.ap.supplier_invoice.SupplierInvoice"):
+            with patch("app.services.finance.ap.supplier_invoice.SupplierInvoiceStatus", MockSupplierInvoiceStatus):
                 result = SupplierInvoiceService.release_from_hold(
                     mock_db, org_id, invoice.invoice_id
                 )
@@ -659,8 +668,8 @@ class TestReleaseFromHold:
         )
         mock_db.get.return_value = invoice
 
-        with patch("app.services.ifrs.ap.supplier_invoice.SupplierInvoice"):
-            with patch("app.services.ifrs.ap.supplier_invoice.SupplierInvoiceStatus", MockSupplierInvoiceStatus):
+        with patch("app.services.finance.ap.supplier_invoice.SupplierInvoice"):
+            with patch("app.services.finance.ap.supplier_invoice.SupplierInvoiceStatus", MockSupplierInvoiceStatus):
                 result = SupplierInvoiceService.release_from_hold(
                     mock_db, org_id, invoice.invoice_id
                 )
@@ -679,8 +688,8 @@ class TestReleaseFromHold:
         )
         mock_db.get.return_value = invoice
 
-        with patch("app.services.ifrs.ap.supplier_invoice.SupplierInvoice"):
-            with patch("app.services.ifrs.ap.supplier_invoice.SupplierInvoiceStatus", MockSupplierInvoiceStatus):
+        with patch("app.services.finance.ap.supplier_invoice.SupplierInvoice"):
+            with patch("app.services.finance.ap.supplier_invoice.SupplierInvoiceStatus", MockSupplierInvoiceStatus):
                 with pytest.raises(HTTPException) as exc:
                     SupplierInvoiceService.release_from_hold(
                         mock_db, org_id, invoice.invoice_id
@@ -704,8 +713,8 @@ class TestRecordPayment:
         )
         mock_db.get.return_value = invoice
 
-        with patch("app.services.ifrs.ap.supplier_invoice.SupplierInvoice"):
-            with patch("app.services.ifrs.ap.supplier_invoice.SupplierInvoiceStatus", MockSupplierInvoiceStatus):
+        with patch("app.services.finance.ap.supplier_invoice.SupplierInvoice"):
+            with patch("app.services.finance.ap.supplier_invoice.SupplierInvoiceStatus", MockSupplierInvoiceStatus):
                 result = SupplierInvoiceService.record_payment(
                     mock_db, org_id, invoice.invoice_id, Decimal("500.00")
                 )
@@ -726,8 +735,8 @@ class TestRecordPayment:
         )
         mock_db.get.return_value = invoice
 
-        with patch("app.services.ifrs.ap.supplier_invoice.SupplierInvoice"):
-            with patch("app.services.ifrs.ap.supplier_invoice.SupplierInvoiceStatus", MockSupplierInvoiceStatus):
+        with patch("app.services.finance.ap.supplier_invoice.SupplierInvoice"):
+            with patch("app.services.finance.ap.supplier_invoice.SupplierInvoiceStatus", MockSupplierInvoiceStatus):
                 result = SupplierInvoiceService.record_payment(
                     mock_db, org_id, invoice.invoice_id, Decimal("1000.00")
                 )
@@ -747,8 +756,8 @@ class TestRecordPayment:
         )
         mock_db.get.return_value = invoice
 
-        with patch("app.services.ifrs.ap.supplier_invoice.SupplierInvoice"):
-            with patch("app.services.ifrs.ap.supplier_invoice.SupplierInvoiceStatus", MockSupplierInvoiceStatus):
+        with patch("app.services.finance.ap.supplier_invoice.SupplierInvoice"):
+            with patch("app.services.finance.ap.supplier_invoice.SupplierInvoiceStatus", MockSupplierInvoiceStatus):
                 result = SupplierInvoiceService.record_payment(
                     mock_db, org_id, invoice.invoice_id, Decimal("600.00")
                 )
@@ -768,8 +777,8 @@ class TestRecordPayment:
         )
         mock_db.get.return_value = invoice
 
-        with patch("app.services.ifrs.ap.supplier_invoice.SupplierInvoice"):
-            with patch("app.services.ifrs.ap.supplier_invoice.SupplierInvoiceStatus", MockSupplierInvoiceStatus):
+        with patch("app.services.finance.ap.supplier_invoice.SupplierInvoice"):
+            with patch("app.services.finance.ap.supplier_invoice.SupplierInvoiceStatus", MockSupplierInvoiceStatus):
                 with pytest.raises(HTTPException) as exc:
                     SupplierInvoiceService.record_payment(
                         mock_db, org_id, invoice.invoice_id, Decimal("100.00")
@@ -817,16 +826,16 @@ class TestCreditNoteHandling:
             lines=lines,
         )
 
-        with patch("app.services.ifrs.ap.supplier_invoice.Supplier"):
-            with patch("app.services.ifrs.ap.supplier_invoice.SupplierInvoice") as MockInv:
+        with patch("app.services.finance.ap.supplier_invoice.Supplier"):
+            with patch("app.services.finance.ap.supplier_invoice.SupplierInvoice") as MockInv:
                 mock_invoice = MockSupplierInvoice(
                     organization_id=org_id,
                     supplier_id=supplier.supplier_id,
                 )
                 MockInv.return_value = mock_invoice
 
-                with patch("app.services.ifrs.ap.supplier_invoice.SupplierInvoiceLine"):
-                    with patch("app.services.ifrs.ap.supplier_invoice.SequenceService.get_next_number", return_value="APINV-0002"):
+                with patch("app.services.finance.ap.supplier_invoice.SupplierInvoiceLine"):
+                    with patch("app.services.finance.ap.supplier_invoice.SequenceService.get_next_number", return_value="APINV-0002"):
                         result = SupplierInvoiceService.create_invoice(
                             mock_db, org_id, invoice_input, user_id
                         )
@@ -872,7 +881,7 @@ class TestInactiveSupplierHandling:
             lines=lines,
         )
 
-        with patch("app.services.ifrs.ap.supplier_invoice.Supplier"):
+        with patch("app.services.finance.ap.supplier_invoice.Supplier"):
             with pytest.raises(HTTPException) as exc:
                 SupplierInvoiceService.create_invoice(
                     mock_db, org_id, invoice_input, user_id
@@ -892,7 +901,7 @@ class TestInvoiceNotFoundScenarios:
 
         mock_db.get.return_value = None
 
-        with patch("app.services.ifrs.ap.supplier_invoice.SupplierInvoice"):
+        with patch("app.services.finance.ap.supplier_invoice.SupplierInvoice"):
             with pytest.raises(HTTPException) as exc:
                 SupplierInvoiceService.submit_invoice(
                     mock_db, org_id, uuid4(), user_id
@@ -907,7 +916,7 @@ class TestInvoiceNotFoundScenarios:
 
         mock_db.get.return_value = None
 
-        with patch("app.services.ifrs.ap.supplier_invoice.SupplierInvoice"):
+        with patch("app.services.finance.ap.supplier_invoice.SupplierInvoice"):
             with pytest.raises(HTTPException) as exc:
                 SupplierInvoiceService.approve_invoice(
                     mock_db, org_id, uuid4(), user_id
@@ -922,7 +931,7 @@ class TestInvoiceNotFoundScenarios:
 
         mock_db.get.return_value = None
 
-        with patch("app.services.ifrs.ap.supplier_invoice.SupplierInvoice"):
+        with patch("app.services.finance.ap.supplier_invoice.SupplierInvoice"):
             with pytest.raises(HTTPException) as exc:
                 SupplierInvoiceService.void_invoice(
                     mock_db, org_id, uuid4(), user_id, "Test"
@@ -937,7 +946,7 @@ class TestInvoiceNotFoundScenarios:
 
         mock_db.get.return_value = None
 
-        with patch("app.services.ifrs.ap.supplier_invoice.SupplierInvoice"):
+        with patch("app.services.finance.ap.supplier_invoice.SupplierInvoice"):
             with pytest.raises(HTTPException) as exc:
                 SupplierInvoiceService.get_invoice_lines(
                     mock_db, org_id, uuid4()

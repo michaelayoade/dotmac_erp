@@ -341,23 +341,35 @@ class MaterialRequestWebService:
 
         items_map = {}
         if item_ids:
-            inv_items = db.query(Item).filter(Item.item_id.in_(item_ids)).all()
+            inv_items = db.query(Item).filter(
+                Item.item_id.in_(item_ids),
+                Item.organization_id == org_id,
+            ).all()
             items_map = {i.item_id: i for i in inv_items}
 
         warehouses_map = {}
         if warehouse_ids:
-            wh_list = db.query(Warehouse).filter(Warehouse.warehouse_id.in_(warehouse_ids)).all()
+            wh_list = db.query(Warehouse).filter(
+                Warehouse.warehouse_id.in_(warehouse_ids),
+                Warehouse.organization_id == org_id,
+            ).all()
             warehouses_map = {w.warehouse_id: w for w in wh_list}
 
         projects_map = {}
         if project_ids:
-            proj_list = db.query(Project).filter(Project.project_id.in_(project_ids)).all()
+            proj_list = db.query(Project).filter(
+                Project.project_id.in_(project_ids),
+                Project.organization_id == org_id,
+            ).all()
             projects_map = {p.project_id: p for p in proj_list}
 
         # Get default warehouse and requested by names
         default_warehouse_name = None
         if request.default_warehouse_id:
-            wh = db.get(Warehouse, request.default_warehouse_id)
+            wh = db.query(Warehouse).filter(
+                Warehouse.warehouse_id == request.default_warehouse_id,
+                Warehouse.organization_id == org_id,
+            ).first()
             if wh:
                 default_warehouse_name = f"{wh.warehouse_code} - {wh.warehouse_name}"
 
@@ -366,7 +378,10 @@ class MaterialRequestWebService:
             emp = (
                 db.query(Employee)
                 .join(Person, Person.id == Employee.person_id)
-                .filter(Employee.employee_id == request.requested_by_id)
+                .filter(
+                    Employee.employee_id == request.requested_by_id,
+                    Employee.organization_id == org_id,
+                )
                 .first()
             )
             if emp and emp.person:

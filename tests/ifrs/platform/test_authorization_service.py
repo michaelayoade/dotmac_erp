@@ -15,25 +15,25 @@ from tests.ifrs.platform.conftest import MockColumn
 @contextmanager
 def patch_authorization_service():
     """Helper context manager that sets up all required patches for AuthorizationService."""
-    with patch('app.services.ifrs.platform.authorization.Permission') as mock_perm:
+    with patch('app.services.finance.platform.authorization.Permission') as mock_perm:
         mock_perm.key = MockColumn()
         mock_perm.is_active = MockColumn()
         mock_perm.id = MockColumn()
-        with patch('app.services.ifrs.platform.authorization.Role') as mock_role:
+        with patch('app.services.finance.platform.authorization.Role') as mock_role:
             mock_role.name = MockColumn()
             mock_role.is_active = MockColumn()
             mock_role.id = MockColumn()
-            with patch('app.services.ifrs.platform.authorization.PersonRole') as mock_pr:
+            with patch('app.services.finance.platform.authorization.PersonRole') as mock_pr:
                 mock_pr.person_id = MockColumn()
                 mock_pr.role_id = MockColumn()
-                with patch('app.services.ifrs.platform.authorization.RolePermission') as mock_rp:
+                with patch('app.services.finance.platform.authorization.RolePermission') as mock_rp:
                     mock_rp.role_id = MockColumn()
                     mock_rp.permission_id = MockColumn()
-                    with patch('app.services.ifrs.platform.authorization.Person') as mock_person:
+                    with patch('app.services.finance.platform.authorization.Person') as mock_person:
                         mock_person.id = MockColumn()
                         mock_person.organization_id = MockColumn()
-                        with patch('app.services.ifrs.platform.authorization.and_', return_value=MagicMock()):
-                            with patch('app.services.ifrs.platform.authorization.coerce_uuid', side_effect=lambda x: x):
+                        with patch('app.services.finance.platform.authorization.and_', return_value=MagicMock()):
+                            with patch('app.services.finance.platform.authorization.coerce_uuid', side_effect=lambda x: x):
                                 yield mock_perm, mock_role, mock_pr, mock_rp
 
 
@@ -96,8 +96,8 @@ class TestAuthorizationService:
         """check_permission should return False when user has no roles."""
         mock_db_session.query.return_value.filter.return_value.all.return_value = []
 
-        with patch('app.services.ifrs.platform.authorization.PersonRole'):
-            with patch('app.services.ifrs.platform.authorization.coerce_uuid', side_effect=lambda x: x):
+        with patch('app.services.finance.platform.authorization.PersonRole'):
+            with patch('app.services.finance.platform.authorization.coerce_uuid', side_effect=lambda x: x):
                 result = service.check_permission(
                     mock_db_session,
                     user_id=user_id,
@@ -114,9 +114,9 @@ class TestAuthorizationService:
         mock_db_session.query.return_value.filter.return_value.all.return_value = [person_role]
         mock_db_session.query.return_value.filter.return_value.first.return_value = None
 
-        with patch('app.services.ifrs.platform.authorization.Permission'):
-            with patch('app.services.ifrs.platform.authorization.PersonRole'):
-                with patch('app.services.ifrs.platform.authorization.coerce_uuid', side_effect=lambda x: x):
+        with patch('app.services.finance.platform.authorization.Permission'):
+            with patch('app.services.finance.platform.authorization.PersonRole'):
+                with patch('app.services.finance.platform.authorization.coerce_uuid', side_effect=lambda x: x):
                     result = service.check_permission(
                         mock_db_session,
                         user_id=user_id,
@@ -165,9 +165,9 @@ class TestAuthorizationService:
             person_role,  # PersonRole lookup
         ]
 
-        with patch('app.services.ifrs.platform.authorization.Role'):
-            with patch('app.services.ifrs.platform.authorization.PersonRole'):
-                with patch('app.services.ifrs.platform.authorization.coerce_uuid', side_effect=lambda x: x):
+        with patch('app.services.finance.platform.authorization.Role'):
+            with patch('app.services.finance.platform.authorization.PersonRole'):
+                with patch('app.services.finance.platform.authorization.coerce_uuid', side_effect=lambda x: x):
                     result = service.check_role(
                         mock_db_session,
                         user_id=user_id,
@@ -186,9 +186,9 @@ class TestAuthorizationService:
             None,  # PersonRole not found
         ]
 
-        with patch('app.services.ifrs.platform.authorization.Role'):
-            with patch('app.services.ifrs.platform.authorization.PersonRole'):
-                with patch('app.services.ifrs.platform.authorization.coerce_uuid', side_effect=lambda x: x):
+        with patch('app.services.finance.platform.authorization.Role'):
+            with patch('app.services.finance.platform.authorization.PersonRole'):
+                with patch('app.services.finance.platform.authorization.coerce_uuid', side_effect=lambda x: x):
                     result = service.check_role(
                         mock_db_session,
                         user_id=user_id,
@@ -231,7 +231,7 @@ class TestAuthorizationService:
         other_user = uuid.uuid4()
         previous_actors = [other_user]
 
-        with patch('app.services.ifrs.platform.authorization.coerce_uuid', side_effect=lambda x: x):
+        with patch('app.services.finance.platform.authorization.coerce_uuid', side_effect=lambda x: x):
             result = service.validate_sod(
                 mock_db_session,
                 user_id=user_id,
@@ -248,7 +248,7 @@ class TestAuthorizationService:
         """validate_sod should fail when user is a previous actor."""
         previous_actors = [user_id]
 
-        with patch('app.services.ifrs.platform.authorization.coerce_uuid', side_effect=lambda x: x):
+        with patch('app.services.finance.platform.authorization.coerce_uuid', side_effect=lambda x: x):
             result = service.validate_sod(
                 mock_db_session,
                 user_id=user_id,
@@ -266,7 +266,7 @@ class TestAuthorizationService:
         """validate_sod_rule should fail for CANNOT_BE_CREATOR when user is creator."""
         context = {"created_by_user_id": user_id}
 
-        with patch('app.services.ifrs.platform.authorization.coerce_uuid', side_effect=lambda x: x):
+        with patch('app.services.finance.platform.authorization.coerce_uuid', side_effect=lambda x: x):
             result = service.validate_sod_rule(
                 mock_db_session,
                 user_id=user_id,
@@ -283,7 +283,7 @@ class TestAuthorizationService:
         """validate_sod_rule should fail for CANNOT_BE_PREVIOUS_APPROVER."""
         context = {"previous_approvers": [user_id]}
 
-        with patch('app.services.ifrs.platform.authorization.coerce_uuid', side_effect=lambda x: x):
+        with patch('app.services.finance.platform.authorization.coerce_uuid', side_effect=lambda x: x):
             result = service.validate_sod_rule(
                 mock_db_session,
                 user_id=user_id,
@@ -301,7 +301,7 @@ class TestAuthorizationService:
         other_user = uuid.uuid4()
         context = {"created_by_user_id": other_user}
 
-        with patch('app.services.ifrs.platform.authorization.coerce_uuid', side_effect=lambda x: x):
+        with patch('app.services.finance.platform.authorization.coerce_uuid', side_effect=lambda x: x):
             result = service.validate_sod_rule(
                 mock_db_session,
                 user_id=user_id,
@@ -349,8 +349,8 @@ class TestAuthorizationService:
         """get_user_permissions should return empty list for user with no roles."""
         mock_db_session.query.return_value.filter.return_value.all.return_value = []
 
-        with patch('app.services.ifrs.platform.authorization.PersonRole'):
-            with patch('app.services.ifrs.platform.authorization.coerce_uuid', side_effect=lambda x: x):
+        with patch('app.services.finance.platform.authorization.PersonRole'):
+            with patch('app.services.finance.platform.authorization.coerce_uuid', side_effect=lambda x: x):
                 result = service.get_user_permissions(
                     mock_db_session,
                     user_id=user_id,
@@ -369,9 +369,9 @@ class TestAuthorizationService:
         mock_db_session.query.return_value.join.return_value.filter.return_value.all.return_value = [person_role]
         mock_db_session.query.return_value.filter.return_value.all.return_value = [role]
 
-        with patch('app.services.ifrs.platform.authorization.Role'):
-            with patch('app.services.ifrs.platform.authorization.PersonRole'):
-                with patch('app.services.ifrs.platform.authorization.coerce_uuid', side_effect=lambda x: x):
+        with patch('app.services.finance.platform.authorization.Role'):
+            with patch('app.services.finance.platform.authorization.PersonRole'):
+                with patch('app.services.finance.platform.authorization.coerce_uuid', side_effect=lambda x: x):
                     result = service.get_user_roles(
                         mock_db_session,
                         user_id=user_id,

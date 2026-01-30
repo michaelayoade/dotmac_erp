@@ -89,17 +89,17 @@ class TestCreateSupplierPayment:
             allocations=allocations,
         )
 
-        with patch("app.services.ifrs.ap.supplier_payment.Supplier"):
-            with patch("app.services.ifrs.ap.supplier_payment.SupplierPayment") as MockPay:
+        with patch("app.services.finance.ap.supplier_payment.Supplier"):
+            with patch("app.services.finance.ap.supplier_payment.SupplierPayment") as MockPay:
                 mock_payment = MockSupplierPayment(
                     organization_id=org_id,
                     supplier_id=supplier.supplier_id,
                 )
                 MockPay.return_value = mock_payment
 
-                with patch("app.services.ifrs.ap.supplier_payment.APPaymentAllocation"):
-                    with patch("app.services.ifrs.ap.supplier_payment.SupplierInvoice"):
-                        with patch("app.services.ifrs.ap.supplier_payment.SequenceService.get_next_number", return_value="PAY-0001"):
+                with patch("app.services.finance.ap.supplier_payment.APPaymentAllocation"):
+                    with patch("app.services.finance.ap.supplier_payment.SupplierInvoice"):
+                        with patch("app.services.finance.ap.supplier_payment.SequenceService.get_next_number", return_value="PAY-0001"):
                             result = SupplierPaymentService.create_payment(
                                 mock_db, org_id, payment_input, user_id
                             )
@@ -128,7 +128,7 @@ class TestCreateSupplierPayment:
             allocations=[],
         )
 
-        with patch("app.services.ifrs.ap.supplier_payment.Supplier"):
+        with patch("app.services.finance.ap.supplier_payment.Supplier"):
             with pytest.raises(HTTPException) as exc:
                 SupplierPaymentService.create_payment(
                     mock_db, org_id, payment_input, user_id
@@ -153,7 +153,7 @@ class TestApproveSupplierPayment:
         )
         mock_db.get.return_value = payment
 
-        with patch("app.services.ifrs.ap.supplier_payment.SupplierPayment"):
+        with patch("app.services.finance.ap.supplier_payment.SupplierPayment"):
             result = SupplierPaymentService.approve_payment(
                 mock_db, org_id, payment.payment_id, user_id
             )
@@ -175,7 +175,7 @@ class TestApproveSupplierPayment:
         )
         mock_db.get.return_value = payment
 
-        with patch("app.services.ifrs.ap.supplier_payment.SupplierPayment"):
+        with patch("app.services.finance.ap.supplier_payment.SupplierPayment"):
             with pytest.raises(HTTPException) as exc:
                 # Same user tries to approve
                 SupplierPaymentService.approve_payment(
@@ -201,8 +201,8 @@ class TestPostSupplierPayment:
         mock_db.get.return_value = payment
 
         # Mock the posting adapter to avoid deep integration
-        with patch("app.services.ifrs.ap.supplier_payment.SupplierPayment"):
-            with patch("app.services.ifrs.ap.ap_posting_adapter.APPostingAdapter.post_payment") as mock_post:
+        with patch("app.services.finance.ap.supplier_payment.SupplierPayment"):
+            with patch("app.services.finance.ap.ap_posting_adapter.APPostingAdapter.post_payment") as mock_post:
                 mock_post.return_value = MagicMock()  # Return a mock journal
                 result = SupplierPaymentService.post_payment(
                     mock_db, org_id, payment.payment_id, user_id
@@ -226,7 +226,7 @@ class TestVoidSupplierPayment:
         )
         mock_db.get.return_value = payment
 
-        with patch("app.services.ifrs.ap.supplier_payment.SupplierPayment"):
+        with patch("app.services.finance.ap.supplier_payment.SupplierPayment"):
             result = SupplierPaymentService.void_payment(
                 mock_db, org_id, payment.payment_id, user_id, "Duplicate"
             )
@@ -246,7 +246,7 @@ class TestVoidSupplierPayment:
         )
         mock_db.get.return_value = payment
 
-        with patch("app.services.ifrs.ap.supplier_payment.SupplierPayment"):
+        with patch("app.services.finance.ap.supplier_payment.SupplierPayment"):
             with pytest.raises(HTTPException) as exc:
                 SupplierPaymentService.void_payment(
                     mock_db, org_id, payment.payment_id, user_id, "Error"
@@ -265,7 +265,7 @@ class TestGetSupplierPayment:
         payment = MockSupplierPayment(organization_id=org_id)
         mock_db.get.return_value = payment
 
-        with patch("app.services.ifrs.ap.supplier_payment.SupplierPayment"):
+        with patch("app.services.finance.ap.supplier_payment.SupplierPayment"):
             result = SupplierPaymentService.get(mock_db, str(payment.payment_id))
 
         assert result == payment
@@ -277,7 +277,7 @@ class TestGetSupplierPayment:
 
         mock_db.get.return_value = None
 
-        with patch("app.services.ifrs.ap.supplier_payment.SupplierPayment"):
+        with patch("app.services.finance.ap.supplier_payment.SupplierPayment"):
             with pytest.raises(HTTPException) as exc:
                 SupplierPaymentService.get(mock_db, str(uuid4()))
 
@@ -301,7 +301,7 @@ class TestListSupplierPayments:
         mock_query.all.return_value = payments
         mock_db.query.return_value = mock_query
 
-        with patch("app.services.ifrs.ap.supplier_payment.SupplierPayment"):
+        with patch("app.services.finance.ap.supplier_payment.SupplierPayment"):
             result = SupplierPaymentService.list(
                 mock_db,
                 organization_id=str(org_id),
@@ -333,8 +333,8 @@ class TestGetPaymentAllocations:
         # Mock the query for allocations
         mock_db.query.return_value.filter.return_value.all.return_value = allocations
 
-        with patch("app.services.ifrs.ap.supplier_payment.SupplierPayment"):
-            with patch("app.services.ifrs.ap.supplier_payment.APPaymentAllocation"):
+        with patch("app.services.finance.ap.supplier_payment.SupplierPayment"):
+            with patch("app.services.finance.ap.supplier_payment.APPaymentAllocation"):
                 result = SupplierPaymentService.get_payment_allocations(
                     mock_db, org_id, payment_id
                 )

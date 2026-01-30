@@ -142,9 +142,9 @@ class TestTAXPostingAdapterPostTaxTransaction:
         mock_db.get.side_effect = [mock_txn, mock_code]
 
         with patch(
-            "app.services.ifrs.tax.tax_posting_adapter.JournalService"
+            "app.services.finance.tax.tax_posting_adapter.JournalService"
         ) as mock_journal_svc, patch(
-            "app.services.ifrs.tax.tax_posting_adapter.LedgerPostingService"
+            "app.services.finance.tax.tax_posting_adapter.LedgerPostingService"
         ) as mock_posting_svc:
             mock_journal_svc.create_journal.return_value = MockJournalResult()
             mock_posting_svc.post_journal_entry.return_value = MockPostingResult(
@@ -182,9 +182,9 @@ class TestTAXPostingAdapterPostTaxTransaction:
         mock_db.get.side_effect = [mock_txn, mock_code]
 
         with patch(
-            "app.services.ifrs.tax.tax_posting_adapter.JournalService"
+            "app.services.finance.tax.tax_posting_adapter.JournalService"
         ) as mock_journal_svc, patch(
-            "app.services.ifrs.tax.tax_posting_adapter.LedgerPostingService"
+            "app.services.finance.tax.tax_posting_adapter.LedgerPostingService"
         ) as mock_posting_svc:
             mock_journal_svc.create_journal.return_value = MockJournalResult()
             mock_posting_svc.post_journal_entry.return_value = MockPostingResult(
@@ -220,9 +220,9 @@ class TestTAXPostingAdapterPostTaxTransaction:
         mock_db.get.side_effect = [mock_txn, mock_code]
 
         with patch(
-            "app.services.ifrs.tax.tax_posting_adapter.JournalService"
+            "app.services.finance.tax.tax_posting_adapter.JournalService"
         ) as mock_journal_svc, patch(
-            "app.services.ifrs.tax.tax_posting_adapter.LedgerPostingService"
+            "app.services.finance.tax.tax_posting_adapter.LedgerPostingService"
         ) as mock_posting_svc:
             mock_journal_svc.create_journal.return_value = MockJournalResult()
             mock_posting_svc.post_journal_entry.return_value = MockPostingResult(
@@ -286,7 +286,7 @@ class TestTAXPostingAdapterPostTaxTransaction:
         mock_db.get.side_effect = [mock_txn, mock_code]
 
         with patch(
-            "app.services.ifrs.tax.tax_posting_adapter.JournalService"
+            "app.services.finance.tax.tax_posting_adapter.JournalService"
         ) as mock_journal_svc:
             mock_journal_svc.create_journal.side_effect = HTTPException(
                 status_code=400, detail="Journal validation failed"
@@ -317,9 +317,9 @@ class TestTAXPostingAdapterPostTaxTransaction:
         mock_db.get.side_effect = [mock_txn, mock_code]
 
         with patch(
-            "app.services.ifrs.tax.tax_posting_adapter.JournalService"
+            "app.services.finance.tax.tax_posting_adapter.JournalService"
         ) as mock_journal_svc, patch(
-            "app.services.ifrs.tax.tax_posting_adapter.LedgerPostingService"
+            "app.services.finance.tax.tax_posting_adapter.LedgerPostingService"
         ) as mock_posting_svc:
             mock_journal_svc.create_journal.return_value = MockJournalResult()
             mock_posting_svc.post_journal_entry.return_value = MockPostingResult(
@@ -354,9 +354,9 @@ class TestTAXPostingAdapterPostCurrentTaxProvision:
         mock_db.get.return_value = mock_jurisdiction
 
         with patch(
-            "app.services.ifrs.tax.tax_posting_adapter.JournalService"
+            "app.services.finance.tax.tax_posting_adapter.JournalService"
         ) as mock_journal_svc, patch(
-            "app.services.ifrs.tax.tax_posting_adapter.LedgerPostingService"
+            "app.services.finance.tax.tax_posting_adapter.LedgerPostingService"
         ) as mock_posting_svc:
             mock_journal_svc.create_journal.return_value = MockJournalResult()
             mock_posting_svc.post_journal_entry.return_value = MockPostingResult(
@@ -387,9 +387,9 @@ class TestTAXPostingAdapterPostCurrentTaxProvision:
         mock_db.get.return_value = mock_jurisdiction
 
         with patch(
-            "app.services.ifrs.tax.tax_posting_adapter.JournalService"
+            "app.services.finance.tax.tax_posting_adapter.JournalService"
         ) as mock_journal_svc, patch(
-            "app.services.ifrs.tax.tax_posting_adapter.LedgerPostingService"
+            "app.services.finance.tax.tax_posting_adapter.LedgerPostingService"
         ) as mock_posting_svc:
             mock_journal_svc.create_journal.return_value = MockJournalResult()
             mock_posting_svc.post_journal_entry.return_value = MockPostingResult(
@@ -472,9 +472,9 @@ class TestTAXPostingAdapterPostDeferredTaxMovement:
         mock_db.get.side_effect = [mock_movement, mock_basis, mock_jurisdiction]
 
         with patch(
-            "app.services.ifrs.tax.tax_posting_adapter.JournalService"
+            "app.services.finance.tax.tax_posting_adapter.JournalService"
         ) as mock_journal_svc, patch(
-            "app.services.ifrs.tax.tax_posting_adapter.LedgerPostingService"
+            "app.services.finance.tax.tax_posting_adapter.LedgerPostingService"
         ) as mock_posting_svc:
             mock_journal_svc.create_journal.return_value = MockJournalResult()
             mock_posting_svc.post_journal_entry.return_value = MockPostingResult(
@@ -511,9 +511,9 @@ class TestTAXPostingAdapterPostDeferredTaxMovement:
         mock_db.get.side_effect = [mock_movement, mock_basis, mock_jurisdiction]
 
         with patch(
-            "app.services.ifrs.tax.tax_posting_adapter.JournalService"
+            "app.services.finance.tax.tax_posting_adapter.JournalService"
         ) as mock_journal_svc, patch(
-            "app.services.ifrs.tax.tax_posting_adapter.LedgerPostingService"
+            "app.services.finance.tax.tax_posting_adapter.LedgerPostingService"
         ) as mock_posting_svc:
             mock_journal_svc.create_journal.return_value = MockJournalResult()
             mock_posting_svc.post_journal_entry.return_value = MockPostingResult(
@@ -550,9 +550,9 @@ class TestTAXPostingAdapterPostDeferredTaxMovement:
         mock_db.get.side_effect = [mock_movement, mock_basis, mock_jurisdiction]
 
         with patch(
-            "app.services.ifrs.tax.tax_posting_adapter.JournalService"
+            "app.services.finance.tax.tax_posting_adapter.JournalService"
         ) as mock_journal_svc, patch(
-            "app.services.ifrs.tax.tax_posting_adapter.LedgerPostingService"
+            "app.services.finance.tax.tax_posting_adapter.LedgerPostingService"
         ) as mock_posting_svc:
             mock_journal_svc.create_journal.return_value = MockJournalResult()
             mock_posting_svc.post_journal_entry.return_value = MockPostingResult(

@@ -16,12 +16,12 @@ from tests.ifrs.platform.conftest import MockColumn, MockNumberingSequence
 @contextmanager
 def patch_sequence_service():
     """Helper context manager that sets up all required patches for SequenceService."""
-    with patch('app.services.ifrs.platform.sequence.NumberingSequence') as mock_seq:
+    with patch('app.services.finance.platform.sequence.NumberingSequence') as mock_seq:
         mock_seq.organization_id = MockColumn()
         mock_seq.sequence_type = MockColumn()
         mock_seq.fiscal_year_id = MockColumn()
-        with patch('app.services.ifrs.platform.sequence.and_', return_value=MagicMock()):
-            with patch('app.services.ifrs.platform.sequence.coerce_uuid', side_effect=lambda x: x):
+        with patch('app.services.finance.platform.sequence.and_', return_value=MagicMock()):
+            with patch('app.services.finance.platform.sequence.coerce_uuid', side_effect=lambda x: x):
                 yield mock_seq
 
 
@@ -57,8 +57,8 @@ class TestSequenceService:
         )
         mock_db_session.query.return_value.filter.return_value.filter.return_value.with_for_update.return_value.first.return_value = mock_sequence
 
-        with patch('app.services.ifrs.platform.sequence.NumberingSequence'):
-            with patch('app.services.ifrs.platform.sequence.coerce_uuid', side_effect=lambda x: x):
+        with patch('app.services.finance.platform.sequence.NumberingSequence'):
+            with patch('app.services.finance.platform.sequence.coerce_uuid', side_effect=lambda x: x):
                 result = service.get_next_number(
                     mock_db_session,
                     organization_id=organization_id,
@@ -76,8 +76,8 @@ class TestSequenceService:
         """get_next_number should raise 404 for unconfigured sequence."""
         mock_db_session.query.return_value.filter.return_value.filter.return_value.with_for_update.return_value.first.return_value = None
 
-        with patch('app.services.ifrs.platform.sequence.NumberingSequence'):
-            with patch('app.services.ifrs.platform.sequence.coerce_uuid', side_effect=lambda x: x):
+        with patch('app.services.finance.platform.sequence.NumberingSequence'):
+            with patch('app.services.finance.platform.sequence.coerce_uuid', side_effect=lambda x: x):
                 with pytest.raises(HTTPException) as exc_info:
                     service.get_next_number(
                         mock_db_session,
@@ -102,8 +102,8 @@ class TestSequenceService:
         )
         mock_db_session.query.return_value.filter.return_value.filter.return_value.with_for_update.return_value.first.return_value = mock_sequence
 
-        with patch('app.services.ifrs.platform.sequence.NumberingSequence'):
-            with patch('app.services.ifrs.platform.sequence.coerce_uuid', side_effect=lambda x: x):
+        with patch('app.services.finance.platform.sequence.NumberingSequence'):
+            with patch('app.services.finance.platform.sequence.coerce_uuid', side_effect=lambda x: x):
                 result = service.get_next_number(
                     mock_db_session,
                     organization_id=organization_id,
@@ -119,10 +119,10 @@ class TestSequenceService:
         """configure_sequence should create new sequence."""
         mock_db_session.query.return_value.filter.return_value.filter.return_value.first.return_value = None
 
-        with patch('app.services.ifrs.platform.sequence.NumberingSequence') as MockModel:
+        with patch('app.services.finance.platform.sequence.NumberingSequence') as MockModel:
             mock_instance = MagicMock()
             MockModel.return_value = mock_instance
-            with patch('app.services.ifrs.platform.sequence.coerce_uuid', side_effect=lambda x: x):
+            with patch('app.services.finance.platform.sequence.coerce_uuid', side_effect=lambda x: x):
                 result = service.configure_sequence(
                     mock_db_session,
                     organization_id=organization_id,
@@ -146,8 +146,8 @@ class TestSequenceService:
         )
         mock_db_session.query.return_value.filter.return_value.filter.return_value.first.return_value = existing_sequence
 
-        with patch('app.services.ifrs.platform.sequence.NumberingSequence'):
-            with patch('app.services.ifrs.platform.sequence.coerce_uuid', side_effect=lambda x: x):
+        with patch('app.services.finance.platform.sequence.NumberingSequence'):
+            with patch('app.services.finance.platform.sequence.coerce_uuid', side_effect=lambda x: x):
                 result = service.configure_sequence(
                     mock_db_session,
                     organization_id=organization_id,
@@ -212,14 +212,14 @@ class TestSequenceService:
             None,  # fy_sequence
         ]
 
-        with patch('app.services.ifrs.platform.sequence.NumberingSequence') as MockModel:
+        with patch('app.services.finance.platform.sequence.NumberingSequence') as MockModel:
             mock_instance = MagicMock()
             MockModel.return_value = mock_instance
             MockModel.organization_id = MockColumn()
             MockModel.sequence_type = MockColumn()
             MockModel.fiscal_year_id = MockColumn()
-            with patch('app.services.ifrs.platform.sequence.and_', return_value=MagicMock()):
-                with patch('app.services.ifrs.platform.sequence.coerce_uuid', side_effect=lambda x: x):
+            with patch('app.services.finance.platform.sequence.and_', return_value=MagicMock()):
+                with patch('app.services.finance.platform.sequence.coerce_uuid', side_effect=lambda x: x):
                     result = service.reset_sequence(
                         mock_db_session,
                         organization_id=organization_id,
@@ -240,8 +240,8 @@ class TestSequenceService:
         )
         mock_db_session.query.return_value.filter.return_value.filter.return_value.first.return_value = mock_sequence
 
-        with patch('app.services.ifrs.platform.sequence.NumberingSequence'):
-            with patch('app.services.ifrs.platform.sequence.coerce_uuid', side_effect=lambda x: x):
+        with patch('app.services.finance.platform.sequence.NumberingSequence'):
+            with patch('app.services.finance.platform.sequence.coerce_uuid', side_effect=lambda x: x):
                 result = service.get_current_number(
                     mock_db_session,
                     organization_id=organization_id,
@@ -257,8 +257,8 @@ class TestSequenceService:
         """get_current_number should raise 404 for missing sequence."""
         mock_db_session.query.return_value.filter.return_value.filter.return_value.first.return_value = None
 
-        with patch('app.services.ifrs.platform.sequence.NumberingSequence'):
-            with patch('app.services.ifrs.platform.sequence.coerce_uuid', side_effect=lambda x: x):
+        with patch('app.services.finance.platform.sequence.NumberingSequence'):
+            with patch('app.services.finance.platform.sequence.coerce_uuid', side_effect=lambda x: x):
                 with pytest.raises(HTTPException) as exc_info:
                     service.get_current_number(
                         mock_db_session,
@@ -272,8 +272,8 @@ class TestSequenceService:
         """get should raise 404 for non-existent sequence ID."""
         mock_db_session.get.return_value = None
 
-        with patch('app.services.ifrs.platform.sequence.NumberingSequence'):
-            with patch('app.services.ifrs.platform.sequence.coerce_uuid', side_effect=lambda x: x):
+        with patch('app.services.finance.platform.sequence.NumberingSequence'):
+            with patch('app.services.finance.platform.sequence.coerce_uuid', side_effect=lambda x: x):
                 with pytest.raises(HTTPException) as exc_info:
                     service.get(mock_db_session, str(uuid.uuid4()))
 
@@ -287,8 +287,8 @@ class TestSequenceService:
         ]
         mock_db_session.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = mock_sequences
 
-        with patch('app.services.ifrs.platform.sequence.NumberingSequence'):
-            with patch('app.services.ifrs.platform.sequence.coerce_uuid', side_effect=lambda x: x):
+        with patch('app.services.finance.platform.sequence.NumberingSequence'):
+            with patch('app.services.finance.platform.sequence.coerce_uuid', side_effect=lambda x: x):
                 result = service.list(
                     mock_db_session,
                     organization_id=str(organization_id),
@@ -310,8 +310,8 @@ class TestSequenceService:
         )
         mock_db_session.query.return_value.filter.return_value.filter.return_value.first.return_value = mock_sequence
 
-        with patch('app.services.ifrs.platform.sequence.NumberingSequence'):
-            with patch('app.services.ifrs.platform.sequence.coerce_uuid', side_effect=lambda x: x):
+        with patch('app.services.finance.platform.sequence.NumberingSequence'):
+            with patch('app.services.finance.platform.sequence.coerce_uuid', side_effect=lambda x: x):
                 result = service.preview_next_number(
                     mock_db_session,
                     organization_id=organization_id,
@@ -328,8 +328,8 @@ class TestSequenceService:
         """preview_next_number should raise 404 for missing sequence."""
         mock_db_session.query.return_value.filter.return_value.filter.return_value.first.return_value = None
 
-        with patch('app.services.ifrs.platform.sequence.NumberingSequence'):
-            with patch('app.services.ifrs.platform.sequence.coerce_uuid', side_effect=lambda x: x):
+        with patch('app.services.finance.platform.sequence.NumberingSequence'):
+            with patch('app.services.finance.platform.sequence.coerce_uuid', side_effect=lambda x: x):
                 with pytest.raises(HTTPException) as exc_info:
                     service.preview_next_number(
                         mock_db_session,

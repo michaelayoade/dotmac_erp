@@ -92,7 +92,7 @@ class TestCustomerImporter:
         row = {"Display Name": "  Acme Corp  "}
         assert importer.get_unique_key(row) == "Acme Corp"
 
-    @patch("app.services.ifrs.import_export.contacts.Customer")
+    @patch("app.services.finance.import_export.contacts.Customer")
     def test_create_entity_company_type_with_company_name(
         self, mock_customer_cls, mock_db, import_config, ar_control_account_id
     ):
@@ -113,7 +113,7 @@ class TestCustomerImporter:
         call_kwargs = mock_customer_cls.call_args[1]
         assert call_kwargs["customer_type"] == CustomerType.COMPANY
 
-    @patch("app.services.ifrs.import_export.contacts.Customer")
+    @patch("app.services.finance.import_export.contacts.Customer")
     def test_create_entity_individual_type_with_name_only(
         self, mock_customer_cls, mock_db, import_config, ar_control_account_id
     ):
@@ -208,7 +208,7 @@ class TestSupplierImporter:
         row = {"Display Name": "", "Contact Name": "  John Vendor  "}
         assert importer.get_unique_key(row) == "John Vendor"
 
-    @patch("app.services.ifrs.import_export.contacts.Supplier")
+    @patch("app.services.finance.import_export.contacts.Supplier")
     def test_create_entity_generates_supplier_code(
         self, mock_supplier_cls, mock_db, import_config, ap_control_account_id
     ):
@@ -225,7 +225,7 @@ class TestSupplierImporter:
         call_kwargs = mock_supplier_cls.call_args[1]
         assert call_kwargs["supplier_code"] == "SUPP00001"
 
-    @patch("app.services.ifrs.import_export.contacts.Supplier")
+    @patch("app.services.finance.import_export.contacts.Supplier")
     def test_create_entity_uses_vendor_type_for_company(
         self, mock_supplier_cls, mock_db, import_config, ap_control_account_id
     ):
@@ -244,7 +244,7 @@ class TestSupplierImporter:
         call_kwargs = mock_supplier_cls.call_args[1]
         assert call_kwargs["supplier_type"] == SupplierType.VENDOR
 
-    @patch("app.services.ifrs.import_export.contacts.Supplier")
+    @patch("app.services.finance.import_export.contacts.Supplier")
     def test_create_entity_sets_withholding_tax_from_taxable(
         self, mock_supplier_cls, mock_db, import_config, ap_control_account_id
     ):

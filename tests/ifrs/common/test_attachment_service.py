@@ -149,7 +149,7 @@ class TestGetUploadPath:
     def test_get_upload_path_creates_directory(self, org_id):
         """Test that upload path creates directory structure."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            with patch("app.services.ifrs.common.attachment.UPLOAD_BASE_DIR", tmpdir):
+            with patch("app.services.finance.common.attachment.UPLOAD_BASE_DIR", tmpdir):
                 path = AttachmentService.get_upload_path(org_id, "SUPPLIER_INVOICE")
                 assert path.exists()
                 assert str(org_id) in str(path)
@@ -158,7 +158,7 @@ class TestGetUploadPath:
     def test_get_upload_path_lowercases_entity_type(self, org_id):
         """Test that entity type is lowercased in path."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            with patch("app.services.ifrs.common.attachment.UPLOAD_BASE_DIR", tmpdir):
+            with patch("app.services.finance.common.attachment.UPLOAD_BASE_DIR", tmpdir):
                 path = AttachmentService.get_upload_path(org_id, "PURCHASE_ORDER")
                 assert "purchase_order" in str(path)
 
@@ -171,8 +171,8 @@ class TestSaveFile:
         file_content = BytesIO(b"PDF file content here")
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            with patch("app.services.ifrs.common.attachment.UPLOAD_BASE_DIR", tmpdir):
-                with patch("app.services.ifrs.common.attachment.Attachment") as MockAttachmentClass:
+            with patch("app.services.finance.common.attachment.UPLOAD_BASE_DIR", tmpdir):
+                with patch("app.services.finance.common.attachment.Attachment") as MockAttachmentClass:
                     mock_attachment = MockAttachment(
                         organization_id=org_id,
                         entity_id=uuid4(),
@@ -219,7 +219,7 @@ class TestSaveFile:
         large_content = BytesIO(b"x" * (MAX_FILE_SIZE + 1000))
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            with patch("app.services.ifrs.common.attachment.UPLOAD_BASE_DIR", tmpdir):
+            with patch("app.services.finance.common.attachment.UPLOAD_BASE_DIR", tmpdir):
                 with pytest.raises(ValueError) as exc:
                     AttachmentService.save_file(
                         mock_db, org_id, valid_input, large_content, user_id
@@ -236,7 +236,7 @@ class TestGetAttachment:
         attachment = MockAttachment()
         mock_db.get.return_value = attachment
 
-        with patch("app.services.ifrs.common.attachment.Attachment"):
+        with patch("app.services.finance.common.attachment.Attachment"):
             result = AttachmentService.get(mock_db, attachment.organization_id, str(attachment.attachment_id))
 
         assert result == attachment
@@ -245,7 +245,7 @@ class TestGetAttachment:
         """Test getting non-existent attachment returns None."""
         mock_db.get.return_value = None
 
-        with patch("app.services.ifrs.common.attachment.Attachment"):
+        with patch("app.services.finance.common.attachment.Attachment"):
             result = AttachmentService.get(mock_db, org_id, str(uuid4()))
 
         assert result is None
@@ -258,7 +258,7 @@ class TestGetFilePath:
         """Test that full path is returned."""
         attachment = MockAttachment(file_path="org123/invoice/file.pdf")
 
-        with patch("app.services.ifrs.common.attachment.UPLOAD_BASE_DIR", "/uploads"):
+        with patch("app.services.finance.common.attachment.UPLOAD_BASE_DIR", "/uploads"):
             result = AttachmentService.get_file_path(attachment)
 
         assert str(result) == "/uploads/org123/invoice/file.pdf"
@@ -280,7 +280,7 @@ class TestListForEntity:
         mock_query.all.return_value = attachments
         mock_db.query.return_value = mock_query
 
-        with patch("app.services.ifrs.common.attachment.Attachment"):
+        with patch("app.services.finance.common.attachment.Attachment"):
             result = AttachmentService.list_for_entity(
                 mock_db, org_id, "SUPPLIER_INVOICE", entity_id
             )
@@ -296,7 +296,7 @@ class TestListForEntity:
         mock_query.all.return_value = []
         mock_db.query.return_value = mock_query
 
-        with patch("app.services.ifrs.common.attachment.Attachment"):
+        with patch("app.services.finance.common.attachment.Attachment"):
             result = AttachmentService.list_for_entity(
                 mock_db, org_id, "SUPPLIER_INVOICE", entity_id
             )
@@ -321,7 +321,7 @@ class TestDeleteAttachment:
             f.flush()
 
             with patch.object(AttachmentService, "get_file_path", return_value=Path(f.name)):
-                with patch("app.services.ifrs.common.attachment.Attachment"):
+                with patch("app.services.finance.common.attachment.Attachment"):
                     result = AttachmentService.delete(
                         mock_db, str(attachment.attachment_id), org_id
                     )
@@ -337,7 +337,7 @@ class TestDeleteAttachment:
         mock_query.first.return_value = None
         mock_db.query.return_value = mock_query
 
-        with patch("app.services.ifrs.common.attachment.Attachment"):
+        with patch("app.services.finance.common.attachment.Attachment"):
             result = AttachmentService.delete(mock_db, str(uuid4()), org_id)
 
         assert result is False
@@ -354,7 +354,7 @@ class TestCountForEntity:
         mock_query.scalar.return_value = 5
         mock_db.query.return_value = mock_query
 
-        with patch("app.services.ifrs.common.attachment.Attachment"):
+        with patch("app.services.finance.common.attachment.Attachment"):
             result = AttachmentService.count_for_entity(
                 mock_db, org_id, "SUPPLIER_INVOICE", entity_id
             )
@@ -368,7 +368,7 @@ class TestCountForEntity:
         mock_query.scalar.return_value = None
         mock_db.query.return_value = mock_query
 
-        with patch("app.services.ifrs.common.attachment.Attachment"):
+        with patch("app.services.finance.common.attachment.Attachment"):
             result = AttachmentService.count_for_entity(
                 mock_db, org_id, "SUPPLIER_INVOICE", entity_id
             )

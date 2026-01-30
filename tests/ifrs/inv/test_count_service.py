@@ -258,7 +258,7 @@ class TestCreateCount:
             count_description="Test count",
         )
 
-        with patch('app.services.ifrs.inv.balance.InventoryBalanceService.get_on_hand', return_value=Decimal("0")):
+        with patch('app.services.finance.inv.balance.InventoryBalanceService.get_on_hand', return_value=Decimal("0")):
             InventoryCountService.create_count(mock_db, org_id, input, user_id)
 
         mock_db.add.assert_called()
@@ -277,7 +277,7 @@ class TestCreateCount:
             warehouse_id=warehouse_id,
         )
 
-        with patch('app.services.ifrs.inv.balance.InventoryBalanceService.get_on_hand', return_value=Decimal("0")):
+        with patch('app.services.finance.inv.balance.InventoryBalanceService.get_on_hand', return_value=Decimal("0")):
             InventoryCountService.create_count(mock_db, org_id, input, user_id)
 
         mock_db.add.assert_called()
@@ -296,7 +296,7 @@ class TestCreateCount:
             fiscal_period_id=fiscal_period_id,
         )
 
-        with patch('app.services.ifrs.inv.balance.InventoryBalanceService.get_on_hand', return_value=Decimal("100")):
+        with patch('app.services.finance.inv.balance.InventoryBalanceService.get_on_hand', return_value=Decimal("100")):
             InventoryCountService.create_count(mock_db, org_id, input, user_id)
 
         # Should add header + at least one line
@@ -317,7 +317,7 @@ class TestCreateCount:
             is_full_count=True,
         )
 
-        with patch('app.services.ifrs.inv.balance.InventoryBalanceService.get_on_hand', return_value=Decimal("0")):
+        with patch('app.services.finance.inv.balance.InventoryBalanceService.get_on_hand', return_value=Decimal("0")):
             InventoryCountService.create_count(mock_db, org_id, input, user_id)
 
         # Should still add line for zero-stock item
@@ -662,7 +662,7 @@ class TestPostCount:
         mock_db.get.side_effect = lambda model, id: mock_count if id == mock_count.count_id else mock_item
         mock_db.query.return_value.filter.return_value.all.return_value = [variance_line]
 
-        with patch('app.services.ifrs.inv.transaction.InventoryTransactionService.create_adjustment') as mock_adjust:
+        with patch('app.services.finance.inv.transaction.InventoryTransactionService.create_adjustment') as mock_adjust:
             InventoryCountService.post_count(mock_db, org_id, mock_count.count_id, user_id)
 
             mock_adjust.assert_called_once()
@@ -673,7 +673,7 @@ class TestPostCount:
         mock_db.get.return_value = mock_count
         mock_db.query.return_value.filter.return_value.all.return_value = []  # No lines
 
-        with patch('app.services.ifrs.inv.transaction.InventoryTransactionService.create_adjustment'):
+        with patch('app.services.finance.inv.transaction.InventoryTransactionService.create_adjustment'):
             InventoryCountService.post_count(mock_db, org_id, mock_count.count_id, user_id)
 
         assert mock_count.status == CountStatus.POSTED

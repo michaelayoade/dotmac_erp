@@ -465,7 +465,7 @@ def submit_expense(
 ):
     """Submit expense for approval."""
     try:
-        expense_service.submit(db, expense_id, str(auth.user_id))
+        expense_service.submit(db, str(auth.organization_id), expense_id, str(auth.user_id))
         db.commit()
     except Exception as e:
         db.rollback()
@@ -481,7 +481,7 @@ def approve_expense(
 ):
     """Approve expense."""
     try:
-        expense_service.approve(db, expense_id, str(auth.user_id))
+        expense_service.approve(db, str(auth.organization_id), expense_id, str(auth.user_id))
         db.commit()
     except Exception as e:
         db.rollback()
@@ -497,7 +497,7 @@ def reject_expense(
 ):
     """Reject expense."""
     try:
-        expense_service.reject(db, expense_id, str(auth.user_id))
+        expense_service.reject(db, str(auth.organization_id), expense_id, str(auth.user_id))
         db.commit()
     except Exception as e:
         db.rollback()
@@ -514,7 +514,7 @@ def post_expense(
 ):
     """Post expense to GL."""
     try:
-        expense_service.post(db, expense_id, str(auth.user_id), fiscal_period_id)
+        expense_service.post(db, str(auth.organization_id), expense_id, str(auth.user_id), fiscal_period_id)
         db.commit()
     except Exception as e:
         db.rollback()

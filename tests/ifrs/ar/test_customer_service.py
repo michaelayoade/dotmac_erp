@@ -68,7 +68,7 @@ class TestCreateCustomer:
         mock_query.first.return_value = None  # No duplicate
         mock_db.query.return_value = mock_query
 
-        with patch("app.services.ifrs.ar.customer.Customer") as MockCustomerClass:
+        with patch("app.services.finance.ar.customer.Customer") as MockCustomerClass:
             mock_customer = MockCustomer(
                 organization_id=org_id,
                 customer_code=sample_customer_input.customer_code,
@@ -99,7 +99,7 @@ class TestCreateCustomer:
         mock_query.first.return_value = existing
         mock_db.query.return_value = mock_query
 
-        with patch("app.services.ifrs.ar.customer.Customer"):
+        with patch("app.services.finance.ar.customer.Customer"):
             with pytest.raises(HTTPException) as exc:
                 CustomerService.create_customer(mock_db, org_id, sample_customer_input)
 
@@ -123,7 +123,7 @@ class TestUpdateCustomer:
         mock_query.first.return_value = None  # No duplicate
         mock_db.query.return_value = mock_query
 
-        with patch("app.services.ifrs.ar.customer.Customer"):
+        with patch("app.services.finance.ar.customer.Customer"):
             result = CustomerService.update_customer(
                 mock_db, org_id, customer.customer_id, sample_customer_input
             )
@@ -137,7 +137,7 @@ class TestUpdateCustomer:
 
         mock_db.get.return_value = None
 
-        with patch("app.services.ifrs.ar.customer.Customer"):
+        with patch("app.services.finance.ar.customer.Customer"):
             with pytest.raises(HTTPException) as exc:
                 CustomerService.update_customer(
                     mock_db, org_id, uuid4(), sample_customer_input
@@ -155,7 +155,7 @@ class TestUpdateCustomer:
         )
         mock_db.get.return_value = customer
 
-        with patch("app.services.ifrs.ar.customer.Customer"):
+        with patch("app.services.finance.ar.customer.Customer"):
             with pytest.raises(HTTPException) as exc:
                 CustomerService.update_customer(
                     mock_db, org_id, customer.customer_id, sample_customer_input
@@ -177,7 +177,7 @@ class TestUpdateCreditLimit:
 
         new_limit = Decimal("50000.00")
 
-        with patch("app.services.ifrs.ar.customer.Customer"):
+        with patch("app.services.finance.ar.customer.Customer"):
             result = CustomerService.update_credit_limit(
                 mock_db, org_id, customer.customer_id, new_limit
             )
@@ -199,7 +199,7 @@ class TestUpdateRiskCategory:
         )
         mock_db.get.return_value = customer
 
-        with patch("app.services.ifrs.ar.customer.Customer"):
+        with patch("app.services.finance.ar.customer.Customer"):
             result = CustomerService.update_risk_category(
                 mock_db, org_id, customer.customer_id, RiskCategory.HIGH
             )
@@ -216,7 +216,7 @@ class TestDeactivateCustomer:
         customer = MockCustomer(organization_id=org_id, is_active=True)
         mock_db.get.return_value = customer
 
-        with patch("app.services.ifrs.ar.customer.Customer"):
+        with patch("app.services.finance.ar.customer.Customer"):
             result = CustomerService.deactivate_customer(
                 mock_db, org_id, customer.customer_id
             )
@@ -230,7 +230,7 @@ class TestDeactivateCustomer:
 
         mock_db.get.return_value = None
 
-        with patch("app.services.ifrs.ar.customer.Customer"):
+        with patch("app.services.finance.ar.customer.Customer"):
             with pytest.raises(HTTPException) as exc:
                 CustomerService.deactivate_customer(mock_db, org_id, uuid4())
 
@@ -245,7 +245,7 @@ class TestActivateCustomer:
         customer = MockCustomer(organization_id=org_id, is_active=False)
         mock_db.get.return_value = customer
 
-        with patch("app.services.ifrs.ar.customer.Customer"):
+        with patch("app.services.finance.ar.customer.Customer"):
             result = CustomerService.activate_customer(
                 mock_db, org_id, customer.customer_id
             )
@@ -278,7 +278,7 @@ class TestCheckCreditLimit:
         mock_query.all.return_value = [invoice]
         mock_db.query.return_value = mock_query
 
-        with patch("app.services.ifrs.ar.customer.Customer"):
+        with patch("app.services.finance.ar.customer.Customer"):
             is_within, current_balance, available = CustomerService.check_credit_limit(
                 mock_db, org_id, customer.customer_id, Decimal("5000.00")
             )
@@ -308,7 +308,7 @@ class TestCheckCreditLimit:
         mock_query.all.return_value = [invoice]
         mock_db.query.return_value = mock_query
 
-        with patch("app.services.ifrs.ar.customer.Customer"):
+        with patch("app.services.finance.ar.customer.Customer"):
             is_within, current_balance, available = CustomerService.check_credit_limit(
                 mock_db, org_id, customer.customer_id, Decimal("2000.00")
             )
@@ -325,7 +325,7 @@ class TestCheckCreditLimit:
         )
         mock_db.get.return_value = customer
 
-        with patch("app.services.ifrs.ar.customer.Customer"):
+        with patch("app.services.finance.ar.customer.Customer"):
             is_within, current_balance, available = CustomerService.check_credit_limit(
                 mock_db, org_id, customer.customer_id, Decimal("1000000.00")
             )
@@ -342,7 +342,7 @@ class TestGetCustomer:
         customer = MockCustomer(organization_id=org_id)
         mock_db.get.return_value = customer
 
-        with patch("app.services.ifrs.ar.customer.Customer"):
+        with patch("app.services.finance.ar.customer.Customer"):
             result = CustomerService.get(mock_db, org_id, str(customer.customer_id))
 
         assert result == customer
@@ -353,7 +353,7 @@ class TestGetCustomer:
 
         mock_db.get.return_value = None
 
-        with patch("app.services.ifrs.ar.customer.Customer"):
+        with patch("app.services.finance.ar.customer.Customer"):
             with pytest.raises(HTTPException) as exc:
                 CustomerService.get(mock_db, org_id, str(uuid4()))
 
@@ -374,7 +374,7 @@ class TestGetCustomerByCode:
         mock_query.first.return_value = customer
         mock_db.query.return_value = mock_query
 
-        with patch("app.services.ifrs.ar.customer.Customer"):
+        with patch("app.services.finance.ar.customer.Customer"):
             result = CustomerService.get_by_code(mock_db, org_id, "CUS-001")
 
         assert result == customer
@@ -386,7 +386,7 @@ class TestGetCustomerByCode:
         mock_query.first.return_value = None
         mock_db.query.return_value = mock_query
 
-        with patch("app.services.ifrs.ar.customer.Customer"):
+        with patch("app.services.finance.ar.customer.Customer"):
             result = CustomerService.get_by_code(mock_db, org_id, "NOTFOUND")
 
         assert result is None
@@ -406,7 +406,7 @@ class TestListCustomers:
         mock_query.all.return_value = customers
         mock_db.query.return_value = mock_query
 
-        with patch("app.services.ifrs.ar.customer.Customer"):
+        with patch("app.services.finance.ar.customer.Customer"):
             result = CustomerService.list(
                 mock_db,
                 organization_id=str(org_id),
@@ -426,7 +426,7 @@ class TestListCustomers:
         mock_query.all.return_value = customers
         mock_db.query.return_value = mock_query
 
-        with patch("app.services.ifrs.ar.customer.Customer"):
+        with patch("app.services.finance.ar.customer.Customer"):
             result = CustomerService.list(
                 mock_db,
                 organization_id=str(org_id),
@@ -466,7 +466,7 @@ class TestGetCustomerSummary:
         mock_query.all.return_value = [invoice1, invoice2]
         mock_db.query.return_value = mock_query
 
-        with patch("app.services.ifrs.ar.customer.Customer"):
+        with patch("app.services.finance.ar.customer.Customer"):
             result = CustomerService.get_customer_summary(
                 mock_db, org_id, customer.customer_id
             )
@@ -483,7 +483,7 @@ class TestGetCustomerSummary:
 
         mock_db.get.return_value = None
 
-        with patch("app.services.ifrs.ar.customer.Customer"):
+        with patch("app.services.finance.ar.customer.Customer"):
             with pytest.raises(HTTPException) as exc:
                 CustomerService.get_customer_summary(mock_db, org_id, uuid4())
 

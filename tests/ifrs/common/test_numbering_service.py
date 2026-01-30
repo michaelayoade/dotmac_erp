@@ -131,7 +131,7 @@ class TestSyncNumberingServiceGetOrCreateSequence:
         assert result == sequence
         mock_db.add.assert_not_called()
 
-    @patch("app.services.ifrs.common.numbering.NumberingSequence")
+    @patch("app.services.finance.common.numbering.NumberingSequence")
     def test_get_or_create_new_sequence(self, mock_seq_class, mock_db, org_id):
         """Test creating a new sequence when none exists."""
         mock_db.query.return_value.filter.return_value.first.return_value = None
@@ -143,7 +143,7 @@ class TestSyncNumberingServiceGetOrCreateSequence:
         mock_db.add.assert_called_once()
         mock_db.flush.assert_called_once()
 
-    @patch("app.services.ifrs.common.numbering.NumberingSequence")
+    @patch("app.services.finance.common.numbering.NumberingSequence")
     def test_get_or_create_uses_default_prefix(self, mock_seq_class, mock_db, org_id):
         """Test that new sequences use default prefixes."""
         mock_db.query.return_value.filter.return_value.first.return_value = None

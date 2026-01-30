@@ -177,7 +177,7 @@ class TestPostJournalEntry:
         mock_db.get.return_value = journal
 
         with patch(
-            "app.services.ifrs.gl.ledger_posting.PeriodGuardService.require_open_period",
+            "app.services.finance.gl.ledger_posting.PeriodGuardService.require_open_period",
             side_effect=HTTPException(status_code=400, detail="Period is closed"),
         ):
             with pytest.raises(HTTPException) as exc:
@@ -315,7 +315,7 @@ class TestGetBatch:
         batch = MockPostingBatch(batch_id=batch_id)
         mock_db.get.return_value = batch
 
-        with patch("app.services.ifrs.gl.ledger_posting.PostingBatch"):
+        with patch("app.services.finance.gl.ledger_posting.PostingBatch"):
             result = LedgerPostingService.get_batch(mock_db, batch_id)
 
         assert result == batch
@@ -325,7 +325,7 @@ class TestGetBatch:
         mock_db.get.return_value = None
         batch_id = uuid4()
 
-        with patch("app.services.ifrs.gl.ledger_posting.PostingBatch"):
+        with patch("app.services.finance.gl.ledger_posting.PostingBatch"):
             with pytest.raises(HTTPException) as exc:
                 LedgerPostingService.get_batch(mock_db, batch_id)
 
@@ -346,7 +346,7 @@ class TestListPostingBatches:
         mock_query.all.return_value = batches
         mock_db.query.return_value = mock_query
 
-        with patch("app.services.ifrs.gl.ledger_posting.PostingBatch"):
+        with patch("app.services.finance.gl.ledger_posting.PostingBatch"):
             result = LedgerPostingService.list(
                 mock_db, organization_id=str(org_id), limit=50, offset=0
             )
@@ -370,7 +370,7 @@ class TestGetLedgerLines:
         mock_query.all.return_value = lines
         mock_db.query.return_value = mock_query
 
-        with patch("app.services.ifrs.gl.ledger_posting.PostedLedgerLine"):
+        with patch("app.services.finance.gl.ledger_posting.PostedLedgerLine"):
             result = LedgerPostingService.get_ledger_lines(
                 mock_db, org_id, posting_batch_id=batch_id
             )

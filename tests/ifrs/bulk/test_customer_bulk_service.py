@@ -23,7 +23,7 @@ class TestCanDelete:
         """Customer with no invoices can be deleted."""
         mock_db.query.return_value.filter.return_value.count.return_value = 0
 
-        with patch("app.services.ifrs.ar.bulk.Customer", MagicMock()):
+        with patch("app.services.finance.ar.bulk.Customer", MagicMock()):
             from app.services.finance.ar.bulk import CustomerBulkService
 
             service = CustomerBulkService(mock_db, organization_id)
@@ -36,7 +36,7 @@ class TestCanDelete:
         """Customer with invoices cannot be deleted."""
         mock_db.query.return_value.filter.return_value.count.return_value = 8
 
-        with patch("app.services.ifrs.ar.bulk.Customer", MagicMock()):
+        with patch("app.services.finance.ar.bulk.Customer", MagicMock()):
             from app.services.finance.ar.bulk import CustomerBulkService
 
             service = CustomerBulkService(mock_db, organization_id)
@@ -50,7 +50,7 @@ class TestCanDelete:
         customer = MockCustomer(legal_name="ABC Corp")
         mock_db.query.return_value.filter.return_value.count.return_value = 15
 
-        with patch("app.services.ifrs.ar.bulk.Customer", MagicMock()):
+        with patch("app.services.finance.ar.bulk.Customer", MagicMock()):
             from app.services.finance.ar.bulk import CustomerBulkService
 
             service = CustomerBulkService(mock_db, organization_id)
@@ -63,7 +63,7 @@ class TestCanDelete:
         customer = MockCustomer(legal_name="XYZ Industries Ltd")
         mock_db.query.return_value.filter.return_value.count.return_value = 5
 
-        with patch("app.services.ifrs.ar.bulk.Customer", MagicMock()):
+        with patch("app.services.finance.ar.bulk.Customer", MagicMock()):
             from app.services.finance.ar.bulk import CustomerBulkService
 
             service = CustomerBulkService(mock_db, organization_id)
@@ -75,7 +75,7 @@ class TestCanDelete:
         """Method should return a tuple of (bool, str)."""
         mock_db.query.return_value.filter.return_value.count.return_value = 0
 
-        with patch("app.services.ifrs.ar.bulk.Customer", MagicMock()):
+        with patch("app.services.finance.ar.bulk.Customer", MagicMock()):
             from app.services.finance.ar.bulk import CustomerBulkService
 
             service = CustomerBulkService(mock_db, organization_id)
@@ -96,7 +96,7 @@ class TestGetExportValue:
         """Should export customer_type enum value as string."""
         customer = MockCustomer(customer_type=MockCustomerType.company)
 
-        with patch("app.services.ifrs.ar.bulk.Customer", MagicMock()):
+        with patch("app.services.finance.ar.bulk.Customer", MagicMock()):
             from app.services.finance.ar.bulk import CustomerBulkService
 
             service = CustomerBulkService(mock_db, organization_id)
@@ -108,7 +108,7 @@ class TestGetExportValue:
         """Should export individual type correctly."""
         customer = MockCustomer(customer_type=MockCustomerType.individual)
 
-        with patch("app.services.ifrs.ar.bulk.Customer", MagicMock()):
+        with patch("app.services.finance.ar.bulk.Customer", MagicMock()):
             from app.services.finance.ar.bulk import CustomerBulkService
 
             service = CustomerBulkService(mock_db, organization_id)
@@ -120,7 +120,7 @@ class TestGetExportValue:
         """Should export government type correctly."""
         customer = MockCustomer(customer_type=MockCustomerType.government)
 
-        with patch("app.services.ifrs.ar.bulk.Customer", MagicMock()):
+        with patch("app.services.finance.ar.bulk.Customer", MagicMock()):
             from app.services.finance.ar.bulk import CustomerBulkService
 
             service = CustomerBulkService(mock_db, organization_id)
@@ -132,7 +132,7 @@ class TestGetExportValue:
         """Should handle None customer_type."""
         customer = MockCustomer(customer_type=None)
 
-        with patch("app.services.ifrs.ar.bulk.Customer", MagicMock()):
+        with patch("app.services.finance.ar.bulk.Customer", MagicMock()):
             from app.services.finance.ar.bulk import CustomerBulkService
 
             service = CustomerBulkService(mock_db, organization_id)
@@ -144,7 +144,7 @@ class TestGetExportValue:
         """Should export risk_category enum value."""
         customer = MockCustomer(risk_category=MockRiskCategory.low)
 
-        with patch("app.services.ifrs.ar.bulk.Customer", MagicMock()):
+        with patch("app.services.finance.ar.bulk.Customer", MagicMock()):
             from app.services.finance.ar.bulk import CustomerBulkService
 
             service = CustomerBulkService(mock_db, organization_id)
@@ -156,7 +156,7 @@ class TestGetExportValue:
         """Should export medium risk category."""
         customer = MockCustomer(risk_category=MockRiskCategory.medium)
 
-        with patch("app.services.ifrs.ar.bulk.Customer", MagicMock()):
+        with patch("app.services.finance.ar.bulk.Customer", MagicMock()):
             from app.services.finance.ar.bulk import CustomerBulkService
 
             service = CustomerBulkService(mock_db, organization_id)
@@ -168,7 +168,7 @@ class TestGetExportValue:
         """Should export high risk category."""
         customer = MockCustomer(risk_category=MockRiskCategory.high)
 
-        with patch("app.services.ifrs.ar.bulk.Customer", MagicMock()):
+        with patch("app.services.finance.ar.bulk.Customer", MagicMock()):
             from app.services.finance.ar.bulk import CustomerBulkService
 
             service = CustomerBulkService(mock_db, organization_id)
@@ -180,7 +180,7 @@ class TestGetExportValue:
         """Should handle None risk_category."""
         customer = MockCustomer(risk_category=None)
 
-        with patch("app.services.ifrs.ar.bulk.Customer", MagicMock()):
+        with patch("app.services.finance.ar.bulk.Customer", MagicMock()):
             from app.services.finance.ar.bulk import CustomerBulkService
 
             service = CustomerBulkService(mock_db, organization_id)
@@ -194,7 +194,7 @@ class TestGetExportValue:
             primary_contact={"name": "Jane Smith", "email": "jane@test.com"}
         )
 
-        with patch("app.services.ifrs.ar.bulk.Customer", MagicMock()):
+        with patch("app.services.finance.ar.bulk.Customer", MagicMock()):
             from app.services.finance.ar.bulk import CustomerBulkService
 
             service = CustomerBulkService(mock_db, organization_id)
@@ -208,7 +208,7 @@ class TestGetExportValue:
             primary_contact={"name": "Jane", "email": "jane@customer.com", "phone": "555-0200"}
         )
 
-        with patch("app.services.ifrs.ar.bulk.Customer", MagicMock()):
+        with patch("app.services.finance.ar.bulk.Customer", MagicMock()):
             from app.services.finance.ar.bulk import CustomerBulkService
 
             service = CustomerBulkService(mock_db, organization_id)
@@ -222,7 +222,7 @@ class TestGetExportValue:
             primary_contact={"name": "Jane", "email": "jane@test.com", "phone": "+1-555-0200"}
         )
 
-        with patch("app.services.ifrs.ar.bulk.Customer", MagicMock()):
+        with patch("app.services.finance.ar.bulk.Customer", MagicMock()):
             from app.services.finance.ar.bulk import CustomerBulkService
 
             service = CustomerBulkService(mock_db, organization_id)
@@ -234,7 +234,7 @@ class TestGetExportValue:
         """Should handle None primary_contact."""
         customer = MockCustomer(primary_contact=None)
 
-        with patch("app.services.ifrs.ar.bulk.Customer", MagicMock()):
+        with patch("app.services.finance.ar.bulk.Customer", MagicMock()):
             from app.services.finance.ar.bulk import CustomerBulkService
 
             service = CustomerBulkService(mock_db, organization_id)
@@ -246,7 +246,7 @@ class TestGetExportValue:
         """Should export credit_hold boolean."""
         customer = MockCustomer(credit_hold=True)
 
-        with patch("app.services.ifrs.ar.bulk.Customer", MagicMock()):
+        with patch("app.services.finance.ar.bulk.Customer", MagicMock()):
             from app.services.finance.ar.bulk import CustomerBulkService
 
             service = CustomerBulkService(mock_db, organization_id)
@@ -258,7 +258,7 @@ class TestGetExportValue:
         """Should export credit_hold false value."""
         customer = MockCustomer(credit_hold=False)
 
-        with patch("app.services.ifrs.ar.bulk.Customer", MagicMock()):
+        with patch("app.services.finance.ar.bulk.Customer", MagicMock()):
             from app.services.finance.ar.bulk import CustomerBulkService
 
             service = CustomerBulkService(mock_db, organization_id)
@@ -270,7 +270,7 @@ class TestGetExportValue:
         """Should export credit_limit as string."""
         customer = MockCustomer(credit_limit=Decimal("50000.00"))
 
-        with patch("app.services.ifrs.ar.bulk.Customer", MagicMock()):
+        with patch("app.services.finance.ar.bulk.Customer", MagicMock()):
             from app.services.finance.ar.bulk import CustomerBulkService
 
             service = CustomerBulkService(mock_db, organization_id)
@@ -282,7 +282,7 @@ class TestGetExportValue:
         """Simple fields should delegate to parent class."""
         customer = MockCustomer(legal_name="Test Customer", currency_code="GBP")
 
-        with patch("app.services.ifrs.ar.bulk.Customer", MagicMock()):
+        with patch("app.services.finance.ar.bulk.Customer", MagicMock()):
             from app.services.finance.ar.bulk import CustomerBulkService
 
             service = CustomerBulkService(mock_db, organization_id)
@@ -300,7 +300,7 @@ class TestGetExportFilename:
 
     def test_filename_includes_customers(self, mock_db, organization_id):
         """Filename should include 'customers'."""
-        with patch("app.services.ifrs.ar.bulk.Customer", MagicMock()):
+        with patch("app.services.finance.ar.bulk.Customer", MagicMock()):
             from app.services.finance.ar.bulk import CustomerBulkService
 
             service = CustomerBulkService(mock_db, organization_id)
@@ -310,7 +310,7 @@ class TestGetExportFilename:
 
     def test_filename_includes_timestamp(self, mock_db, organization_id):
         """Filename should include a timestamp."""
-        with patch("app.services.ifrs.ar.bulk.Customer", MagicMock()):
+        with patch("app.services.finance.ar.bulk.Customer", MagicMock()):
             from app.services.finance.ar.bulk import CustomerBulkService
 
             service = CustomerBulkService(mock_db, organization_id)
@@ -321,7 +321,7 @@ class TestGetExportFilename:
 
     def test_filename_ends_csv(self, mock_db, organization_id):
         """Filename should end with .csv."""
-        with patch("app.services.ifrs.ar.bulk.Customer", MagicMock()):
+        with patch("app.services.finance.ar.bulk.Customer", MagicMock()):
             from app.services.finance.ar.bulk import CustomerBulkService
 
             service = CustomerBulkService(mock_db, organization_id)
@@ -347,7 +347,7 @@ class TestBulkDelete:
         ]
         mock_db.query.return_value.filter.return_value.count.return_value = 0
 
-        with patch("app.services.ifrs.ar.bulk.Customer", MagicMock()):
+        with patch("app.services.finance.ar.bulk.Customer", MagicMock()):
             from app.services.finance.ar.bulk import CustomerBulkService
 
             service = CustomerBulkService(mock_db, organization_id)
@@ -375,7 +375,7 @@ class TestBulkDelete:
 
         mock_db.query.return_value.filter.return_value.count = mock_count
 
-        with patch("app.services.ifrs.ar.bulk.Customer", MagicMock()):
+        with patch("app.services.finance.ar.bulk.Customer", MagicMock()):
             from app.services.finance.ar.bulk import CustomerBulkService
 
             service = CustomerBulkService(mock_db, organization_id)
@@ -388,7 +388,7 @@ class TestBulkDelete:
     @pytest.mark.asyncio
     async def test_bulk_delete_empty_ids(self, mock_db, organization_id):
         """Empty IDs list should return failure."""
-        with patch("app.services.ifrs.ar.bulk.Customer", MagicMock()):
+        with patch("app.services.finance.ar.bulk.Customer", MagicMock()):
             from app.services.finance.ar.bulk import CustomerBulkService
 
             service = CustomerBulkService(mock_db, organization_id)
@@ -408,7 +408,7 @@ class TestBulkExport:
         """CSV export should include correct headers."""
         mock_db.query.return_value.filter.return_value.all.return_value = [mock_customer]
 
-        with patch("app.services.ifrs.ar.bulk.Customer", MagicMock()):
+        with patch("app.services.finance.ar.bulk.Customer", MagicMock()):
             from app.services.finance.ar.bulk import CustomerBulkService
 
             service = CustomerBulkService(mock_db, organization_id)
@@ -429,7 +429,7 @@ class TestBulkExport:
         """CSV export should include entity data."""
         mock_db.query.return_value.filter.return_value.all.return_value = [mock_customer]
 
-        with patch("app.services.ifrs.ar.bulk.Customer", MagicMock()):
+        with patch("app.services.finance.ar.bulk.Customer", MagicMock()):
             from app.services.finance.ar.bulk import CustomerBulkService
 
             service = CustomerBulkService(mock_db, organization_id)
@@ -450,7 +450,7 @@ class TestFactoryFunction:
 
     def test_factory_creates_service(self, mock_db, organization_id, user_id):
         """Factory should create CustomerBulkService instance."""
-        with patch("app.services.ifrs.ar.bulk.Customer", MagicMock()):
+        with patch("app.services.finance.ar.bulk.Customer", MagicMock()):
             from app.services.finance.ar.bulk import get_customer_bulk_service
 
             service = get_customer_bulk_service(mock_db, organization_id, user_id)
@@ -461,7 +461,7 @@ class TestFactoryFunction:
 
     def test_factory_user_id_optional(self, mock_db, organization_id):
         """Factory should work without user_id."""
-        with patch("app.services.ifrs.ar.bulk.Customer", MagicMock()):
+        with patch("app.services.finance.ar.bulk.Customer", MagicMock()):
             from app.services.finance.ar.bulk import get_customer_bulk_service
 
             service = get_customer_bulk_service(mock_db, organization_id)

@@ -236,7 +236,7 @@ class TestCalculateDeferredTax:
 class TestCreateBasis:
     """Tests for create_basis method."""
 
-    @patch("app.services.ifrs.tax.deferred_tax.DeferredTaxBasis")
+    @patch("app.services.finance.tax.deferred_tax.DeferredTaxBasis")
     def test_create_basis_success(
         self, mock_basis_class, mock_db, org_id, sample_basis_input
     ):
@@ -263,7 +263,7 @@ class TestCreateBasis:
         assert exc.value.status_code == 400
         assert "already exists" in exc.value.detail
 
-    @patch("app.services.ifrs.tax.deferred_tax.DeferredTaxBasis")
+    @patch("app.services.finance.tax.deferred_tax.DeferredTaxBasis")
     def test_create_basis_with_partial_recognition(
         self, mock_basis_class, mock_db, org_id, jurisdiction_id
     ):
@@ -289,7 +289,7 @@ class TestCreateBasis:
         # Verify basis was created
         mock_db.add.assert_called_once()
 
-    @patch("app.services.ifrs.tax.deferred_tax.DeferredTaxBasis")
+    @patch("app.services.finance.tax.deferred_tax.DeferredTaxBasis")
     def test_create_basis_not_recognized(
         self, mock_basis_class, mock_db, org_id, jurisdiction_id
     ):
@@ -390,7 +390,7 @@ class TestUpdateBasis:
 class TestCreateMovement:
     """Tests for create_movement method."""
 
-    @patch("app.services.ifrs.tax.deferred_tax.DeferredTaxMovement")
+    @patch("app.services.finance.tax.deferred_tax.DeferredTaxMovement")
     def test_create_movement_success(self, mock_movement_class, mock_db, org_id):
         """Test successful movement creation."""
         basis = MockDeferredTaxBasis(
@@ -439,7 +439,7 @@ class TestCreateMovement:
 
         assert exc.value.status_code == 404
 
-    @patch("app.services.ifrs.tax.deferred_tax.DeferredTaxMovement")
+    @patch("app.services.finance.tax.deferred_tax.DeferredTaxMovement")
     def test_create_movement_with_rate_change(self, mock_movement_class, mock_db, org_id):
         """Test movement with tax rate change."""
         basis = MockDeferredTaxBasis(
@@ -470,7 +470,7 @@ class TestCreateMovement:
 
         assert isinstance(result, DeferredTaxMovementResult)
 
-    @patch("app.services.ifrs.tax.deferred_tax.DeferredTaxMovement")
+    @patch("app.services.finance.tax.deferred_tax.DeferredTaxMovement")
     def test_create_movement_with_oci(self, mock_movement_class, mock_db, org_id):
         """Test movement with OCI component."""
         basis = MockDeferredTaxBasis(

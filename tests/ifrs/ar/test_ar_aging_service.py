@@ -294,7 +294,7 @@ class TestCalculateCustomerAging:
 class TestCalculateOrganizationAging:
     """Tests for ARAgingService.calculate_organization_aging."""
 
-    @patch("app.services.ifrs.ar.ar_aging.org_context_service")
+    @patch("app.services.finance.ar.ar_aging.org_context_service")
     def test_calculate_organization_aging_no_invoices(
         self, mock_org_context, mock_db, organization_id
     ):
@@ -312,7 +312,7 @@ class TestCalculateOrganizationAging:
         assert result.customer_count == 0
         assert result.invoice_count == 0
 
-    @patch("app.services.ifrs.ar.ar_aging.org_context_service")
+    @patch("app.services.finance.ar.ar_aging.org_context_service")
     def test_calculate_organization_aging_multiple_customers(
         self, mock_org_context, mock_db, organization_id, mock_invoice
     ):
@@ -344,7 +344,7 @@ class TestCalculateOrganizationAging:
         assert result.customer_count == 2
         assert result.invoice_count == 2
 
-    @patch("app.services.ifrs.ar.ar_aging.org_context_service")
+    @patch("app.services.finance.ar.ar_aging.org_context_service")
     def test_calculate_organization_aging_all_buckets(
         self, mock_org_context, mock_db, organization_id, mock_invoice
     ):

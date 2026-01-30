@@ -15,15 +15,15 @@ from tests.ifrs.platform.conftest import MockColumn, MockSystemConfiguration
 @contextmanager
 def patch_audit_log_service():
     """Helper context manager that sets up all required patches for AuditLogService."""
-    with patch('app.services.ifrs.platform.audit_log.AuditLog') as mock_log:
+    with patch('app.services.finance.platform.audit_log.AuditLog') as mock_log:
         mock_log.organization_id = MockColumn()
         mock_log.table_schema = MockColumn()
         mock_log.table_name = MockColumn()
         mock_log.record_id = MockColumn()
         mock_log.occurred_at = MockColumn()
         mock_log.user_id = MockColumn()
-        with patch('app.services.ifrs.platform.audit_log.and_', return_value=MagicMock()):
-            with patch('app.services.ifrs.platform.audit_log.coerce_uuid', side_effect=lambda x: x):
+        with patch('app.services.finance.platform.audit_log.and_', return_value=MagicMock()):
+            with patch('app.services.finance.platform.audit_log.coerce_uuid', side_effect=lambda x: x):
                 yield mock_log
 
 
@@ -84,11 +84,11 @@ class TestAuditLogService:
         """log_change should create an audit log record."""
         mock_db_session.query.return_value.filter.return_value.order_by.return_value.first.return_value = None
 
-        with patch('app.services.ifrs.platform.audit_log.AuditLog') as MockModel:
+        with patch('app.services.finance.platform.audit_log.AuditLog') as MockModel:
             mock_instance = MagicMock()
             mock_instance.audit_id = uuid.uuid4()
             MockModel.return_value = mock_instance
-            with patch('app.services.ifrs.platform.audit_log.coerce_uuid', side_effect=lambda x: x):
+            with patch('app.services.finance.platform.audit_log.coerce_uuid', side_effect=lambda x: x):
                 result = service.log_change(
                     mock_db_session,
                     organization_id=organization_id,
@@ -111,10 +111,10 @@ class TestAuditLogService:
         """log_change should compute changed fields."""
         mock_db_session.query.return_value.filter.return_value.order_by.return_value.first.return_value = None
 
-        with patch('app.services.ifrs.platform.audit_log.AuditLog') as MockModel:
+        with patch('app.services.finance.platform.audit_log.AuditLog') as MockModel:
             mock_instance = MagicMock()
             MockModel.return_value = mock_instance
-            with patch('app.services.ifrs.platform.audit_log.coerce_uuid', side_effect=lambda x: x):
+            with patch('app.services.finance.platform.audit_log.coerce_uuid', side_effect=lambda x: x):
                 service.log_change(
                     mock_db_session,
                     organization_id=organization_id,
@@ -141,10 +141,10 @@ class TestAuditLogService:
         )
         mock_db_session.query.return_value.filter.return_value.order_by.return_value.first.return_value = prev_log
 
-        with patch('app.services.ifrs.platform.audit_log.AuditLog') as MockModel:
+        with patch('app.services.finance.platform.audit_log.AuditLog') as MockModel:
             mock_instance = MagicMock()
             MockModel.return_value = mock_instance
-            with patch('app.services.ifrs.platform.audit_log.coerce_uuid', side_effect=lambda x: x):
+            with patch('app.services.finance.platform.audit_log.coerce_uuid', side_effect=lambda x: x):
                 service.log_change(
                     mock_db_session,
                     organization_id=organization_id,
@@ -162,10 +162,10 @@ class TestAuditLogService:
         self, service, mock_db_session, organization_id, mock_audit_action
     ):
         """log_change should skip hash computation when disabled."""
-        with patch('app.services.ifrs.platform.audit_log.AuditLog') as MockModel:
+        with patch('app.services.finance.platform.audit_log.AuditLog') as MockModel:
             mock_instance = MagicMock()
             MockModel.return_value = mock_instance
-            with patch('app.services.ifrs.platform.audit_log.coerce_uuid', side_effect=lambda x: x):
+            with patch('app.services.finance.platform.audit_log.coerce_uuid', side_effect=lambda x: x):
                 service.log_change(
                     mock_db_session,
                     organization_id=organization_id,
@@ -186,8 +186,8 @@ class TestAuditLogService:
         mock_logs = [MockAuditLog(organization_id=organization_id)]
         mock_db_session.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = mock_logs
 
-        with patch('app.services.ifrs.platform.audit_log.AuditLog'):
-            with patch('app.services.ifrs.platform.audit_log.coerce_uuid', side_effect=lambda x: x):
+        with patch('app.services.finance.platform.audit_log.AuditLog'):
+            with patch('app.services.finance.platform.audit_log.coerce_uuid', side_effect=lambda x: x):
                 result = service.get_audit_trail(
                     mock_db_session,
                     organization_id=organization_id,
@@ -205,8 +205,8 @@ class TestAuditLogService:
         ]
         mock_db_session.query.return_value.filter.return_value.order_by.return_value.all.return_value = mock_logs
 
-        with patch('app.services.ifrs.platform.audit_log.AuditLog'):
-            with patch('app.services.ifrs.platform.audit_log.coerce_uuid', side_effect=lambda x: x):
+        with patch('app.services.finance.platform.audit_log.AuditLog'):
+            with patch('app.services.finance.platform.audit_log.coerce_uuid', side_effect=lambda x: x):
                 result = service.get_record_history(
                     mock_db_session,
                     organization_id=organization_id,
@@ -371,8 +371,8 @@ class TestAuditLogService:
         ]
         mock_db_session.query.return_value.filter.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = mock_logs
 
-        with patch('app.services.ifrs.platform.audit_log.AuditLog'):
-            with patch('app.services.ifrs.platform.audit_log.coerce_uuid', side_effect=lambda x: x):
+        with patch('app.services.finance.platform.audit_log.AuditLog'):
+            with patch('app.services.finance.platform.audit_log.coerce_uuid', side_effect=lambda x: x):
                 result = service.list(
                     mock_db_session,
                     organization_id=str(organization_id),

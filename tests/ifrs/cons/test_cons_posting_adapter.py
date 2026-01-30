@@ -275,8 +275,8 @@ class TestPostEliminationEntry:
         assert result.success is False
         assert "consolidating entity" in result.message.lower()
 
-    @patch("app.services.ifrs.cons.cons_posting_adapter.JournalInput")
-    @patch("app.services.ifrs.cons.cons_posting_adapter.JournalService")
+    @patch("app.services.finance.cons.cons_posting_adapter.JournalInput")
+    @patch("app.services.finance.cons.cons_posting_adapter.JournalService")
     def test_post_elimination_success(
         self,
         mock_journal_service,
@@ -319,8 +319,8 @@ class TestPostEliminationEntry:
         assert result.journal_entry_id == journal.entry_id
         assert result.entry_number == journal.entry_number
 
-    @patch("app.services.ifrs.cons.cons_posting_adapter.JournalInput")
-    @patch("app.services.ifrs.cons.cons_posting_adapter.JournalService")
+    @patch("app.services.finance.cons.cons_posting_adapter.JournalInput")
+    @patch("app.services.finance.cons.cons_posting_adapter.JournalService")
     def test_post_elimination_with_nci(
         self,
         mock_journal_service,
@@ -368,8 +368,8 @@ class TestPostEliminationEntry:
         # JournalInput was called with the right number of lines
         mock_journal_input.assert_called_once()
 
-    @patch("app.services.ifrs.cons.cons_posting_adapter.JournalInput")
-    @patch("app.services.ifrs.cons.cons_posting_adapter.JournalService")
+    @patch("app.services.finance.cons.cons_posting_adapter.JournalInput")
+    @patch("app.services.finance.cons.cons_posting_adapter.JournalService")
     def test_post_elimination_approved_status(
         self,
         mock_journal_service,
@@ -413,8 +413,8 @@ class TestPostEliminationEntry:
 
         assert result.success is True
 
-    @patch("app.services.ifrs.cons.cons_posting_adapter.JournalInput")
-    @patch("app.services.ifrs.cons.cons_posting_adapter.JournalService")
+    @patch("app.services.finance.cons.cons_posting_adapter.JournalInput")
+    @patch("app.services.finance.cons.cons_posting_adapter.JournalService")
     def test_post_elimination_journal_failure(
         self,
         mock_journal_service,
@@ -459,8 +459,8 @@ class TestPostEliminationEntry:
         assert result.success is False
         assert "Failed to post" in result.message
 
-    @patch("app.services.ifrs.cons.cons_posting_adapter.JournalInput")
-    @patch("app.services.ifrs.cons.cons_posting_adapter.JournalService")
+    @patch("app.services.finance.cons.cons_posting_adapter.JournalInput")
+    @patch("app.services.finance.cons.cons_posting_adapter.JournalService")
     def test_post_elimination_with_idempotency_key(
         self,
         mock_journal_service,
@@ -693,8 +693,8 @@ class TestPostTranslationAdjustment:
         assert result.success is False
         assert "consolidating entity" in result.message.lower()
 
-    @patch("app.services.ifrs.cons.cons_posting_adapter.JournalInput")
-    @patch("app.services.ifrs.cons.cons_posting_adapter.JournalService")
+    @patch("app.services.finance.cons.cons_posting_adapter.JournalInput")
+    @patch("app.services.finance.cons.cons_posting_adapter.JournalService")
     def test_post_cta_positive_adjustment(
         self,
         mock_journal_service,
@@ -740,8 +740,8 @@ class TestPostTranslationAdjustment:
         assert result.success is True
         mock_journal_input.assert_called_once()
 
-    @patch("app.services.ifrs.cons.cons_posting_adapter.JournalInput")
-    @patch("app.services.ifrs.cons.cons_posting_adapter.JournalService")
+    @patch("app.services.finance.cons.cons_posting_adapter.JournalInput")
+    @patch("app.services.finance.cons.cons_posting_adapter.JournalService")
     def test_post_cta_negative_adjustment(
         self,
         mock_journal_service,
@@ -787,8 +787,8 @@ class TestPostTranslationAdjustment:
         assert result.success is True
         mock_journal_input.assert_called_once()
 
-    @patch("app.services.ifrs.cons.cons_posting_adapter.JournalInput")
-    @patch("app.services.ifrs.cons.cons_posting_adapter.JournalService")
+    @patch("app.services.finance.cons.cons_posting_adapter.JournalInput")
+    @patch("app.services.finance.cons.cons_posting_adapter.JournalService")
     def test_post_cta_updates_run_total(
         self,
         mock_journal_service,
@@ -835,8 +835,8 @@ class TestPostTranslationAdjustment:
         assert result.success is True
         assert mock_run.total_translation_adjustment == Decimal("1500.00")
 
-    @patch("app.services.ifrs.cons.cons_posting_adapter.JournalInput")
-    @patch("app.services.ifrs.cons.cons_posting_adapter.JournalService")
+    @patch("app.services.finance.cons.cons_posting_adapter.JournalInput")
+    @patch("app.services.finance.cons.cons_posting_adapter.JournalService")
     def test_post_cta_journal_failure(
         self,
         mock_journal_service,
@@ -940,8 +940,8 @@ class TestPostNCIAllocation:
         assert result.success is False
         assert "entity not found" in result.message.lower()
 
-    @patch("app.services.ifrs.cons.cons_posting_adapter.JournalInput")
-    @patch("app.services.ifrs.cons.cons_posting_adapter.JournalService")
+    @patch("app.services.finance.cons.cons_posting_adapter.JournalInput")
+    @patch("app.services.finance.cons.cons_posting_adapter.JournalService")
     def test_post_nci_success(
         self,
         mock_journal_service,
@@ -988,8 +988,8 @@ class TestPostNCIAllocation:
         assert result.journal_entry_id == journal.entry_id
         mock_journal_input.assert_called_once()
 
-    @patch("app.services.ifrs.cons.cons_posting_adapter.JournalInput")
-    @patch("app.services.ifrs.cons.cons_posting_adapter.JournalService")
+    @patch("app.services.finance.cons.cons_posting_adapter.JournalInput")
+    @patch("app.services.finance.cons.cons_posting_adapter.JournalService")
     def test_post_nci_journal_failure(
         self,
         mock_journal_service,

@@ -172,7 +172,7 @@ class MockShipment:
 class TestGenerateSONumber:
     """Tests for generate_so_number method."""
 
-    @patch("app.services.ifrs.ar.sales_order.SyncNumberingService")
+    @patch("app.services.finance.ar.sales_order.SyncNumberingService")
     def test_generate_so_number(self, mock_numbering_class):
         """Test SO number generation."""
         mock_db = MagicMock()
@@ -191,8 +191,8 @@ class TestGenerateSONumber:
 class TestCreate:
     """Tests for create method."""
 
-    @patch("app.services.ifrs.ar.sales_order.SalesOrderService.generate_so_number")
-    @patch("app.services.ifrs.ar.sales_order.SalesOrder")
+    @patch("app.services.finance.ar.sales_order.SalesOrderService.generate_so_number")
+    @patch("app.services.finance.ar.sales_order.SalesOrder")
     def test_create_basic_order(self, mock_so_class, mock_generate):
         """Test creating a basic sales order."""
         mock_db = MagicMock()
@@ -216,10 +216,10 @@ class TestCreate:
         mock_db.add.assert_called_once()
         mock_db.flush.assert_called()
 
-    @patch("app.services.ifrs.ar.sales_order.SalesOrderService.generate_so_number")
-    @patch("app.services.ifrs.ar.sales_order.SalesOrderService._add_lines")
-    @patch("app.services.ifrs.ar.sales_order.SalesOrderService._recalculate_totals")
-    @patch("app.services.ifrs.ar.sales_order.SalesOrder")
+    @patch("app.services.finance.ar.sales_order.SalesOrderService.generate_so_number")
+    @patch("app.services.finance.ar.sales_order.SalesOrderService._add_lines")
+    @patch("app.services.finance.ar.sales_order.SalesOrderService._recalculate_totals")
+    @patch("app.services.finance.ar.sales_order.SalesOrder")
     def test_create_order_with_lines(self, mock_so_class, mock_recalc, mock_add_lines, mock_generate):
         """Test creating a sales order with lines."""
         mock_db = MagicMock()
@@ -253,8 +253,8 @@ class TestCreate:
         mock_add_lines.assert_called_once()
         mock_recalc.assert_called_once()
 
-    @patch("app.services.ifrs.ar.sales_order.SalesOrderService.generate_so_number")
-    @patch("app.services.ifrs.ar.sales_order.SalesOrder")
+    @patch("app.services.finance.ar.sales_order.SalesOrderService.generate_so_number")
+    @patch("app.services.finance.ar.sales_order.SalesOrder")
     def test_create_order_with_shipping_details(self, mock_so_class, mock_generate):
         """Test creating order with shipping details."""
         mock_db = MagicMock()
@@ -443,9 +443,9 @@ class TestConfirm:
 class TestCreateShipment:
     """Tests for create_shipment method."""
 
-    @patch("app.services.ifrs.ar.sales_order.SyncNumberingService")
-    @patch("app.services.ifrs.ar.sales_order.Shipment")
-    @patch("app.services.ifrs.ar.sales_order.ShipmentLine")
+    @patch("app.services.finance.ar.sales_order.SyncNumberingService")
+    @patch("app.services.finance.ar.sales_order.Shipment")
+    @patch("app.services.finance.ar.sales_order.ShipmentLine")
     def test_create_shipment_success(self, mock_ship_line_class, mock_shipment_class, mock_numbering_class):
         """Test creating a shipment."""
         mock_db = MagicMock()
@@ -529,8 +529,8 @@ class TestCreateShipment:
 
         assert "Cannot ship" in str(exc_info.value)
 
-    @patch("app.services.ifrs.ar.sales_order.SyncNumberingService")
-    @patch("app.services.ifrs.ar.sales_order.Shipment")
+    @patch("app.services.finance.ar.sales_order.SyncNumberingService")
+    @patch("app.services.finance.ar.sales_order.Shipment")
     def test_create_shipment_over_quantity(self, mock_shipment_class, mock_numbering_class):
         """Test creating shipment with more than available quantity."""
         mock_db = MagicMock()
@@ -616,9 +616,9 @@ class TestMarkDelivered:
 class TestCreateInvoiceFromSO:
     """Tests for create_invoice_from_so method."""
 
-    @patch("app.services.ifrs.ar.sales_order.InvoiceLine")
-    @patch("app.services.ifrs.ar.sales_order.Invoice")
-    @patch("app.services.ifrs.ar.sales_order.SyncNumberingService")
+    @patch("app.services.finance.ar.sales_order.InvoiceLine")
+    @patch("app.services.finance.ar.sales_order.Invoice")
+    @patch("app.services.finance.ar.sales_order.SyncNumberingService")
     def test_create_invoice_success(self, mock_numbering_class, mock_invoice_class, mock_inv_line_class):
         """Test creating invoice from shipped order."""
         mock_db = MagicMock()
@@ -693,7 +693,7 @@ class TestCreateInvoiceFromSO:
 
         assert "Cannot invoice" in str(exc_info.value)
 
-    @patch("app.services.ifrs.ar.sales_order.SyncNumberingService")
+    @patch("app.services.finance.ar.sales_order.SyncNumberingService")
     def test_create_invoice_no_lines_to_invoice(self, mock_numbering_class):
         """Test creating invoice when no lines available."""
         mock_db = MagicMock()

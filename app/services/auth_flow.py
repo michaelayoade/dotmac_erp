@@ -557,6 +557,8 @@ def revoke_sessions_for_person(
     person_id: str,
     exclude_session_id: str | None = None,
 ) -> int:
+    from app.services.auth_dependencies import invalidate_session_cache
+
     person_uuid = coerce_uuid(person_id)
     query = (
         db.query(AuthSession)
@@ -575,6 +577,8 @@ def revoke_sessions_for_person(
     for session in sessions:
         session.status = SessionStatus.revoked
         session.revoked_at = now
+        # Invalidate session cache
+        invalidate_session_cache(session.id)
     return len(sessions)
 
 
@@ -857,6 +861,8 @@ class AuthFlow(ListResponseMixin):
 
     @staticmethod
     def logout(db: Session, refresh_token: str):
+        from app.services.auth_dependencies import invalidate_session_cache
+
         token_hash = _hash_token(refresh_token)
         session = (
             db.query(AuthSession)
@@ -869,6 +875,8 @@ class AuthFlow(ListResponseMixin):
         session.status = SessionStatus.revoked
         session.revoked_at = _now()
         db.commit()
+        # Invalidate session cache
+        invalidate_session_cache(session.id)
         return {"revoked_at": session.revoked_at}
 
     @staticmethod

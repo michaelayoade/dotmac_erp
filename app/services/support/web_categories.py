@@ -78,10 +78,11 @@ class CategoryWebService:
 
         category = None
         title = "New Category"
+        org_id = coerce_uuid(auth.organization_id)
 
         if category_id:
             cid = coerce_uuid(category_id)
-            category = category_service.get_category(db, cid)
+            category = category_service.get_category(db, org_id, cid)
             if category:
                 title = f"Edit {category.category_name}"
 
@@ -202,11 +203,12 @@ class CategoryWebService:
         is_active: Optional[bool] = None,
     ) -> Response:
         """Update a category."""
+        org_id = coerce_uuid(auth.organization_id)
         cid = coerce_uuid(category_id)
 
         try:
             category = category_service.update_category(
-                db, cid,
+                db, org_id, cid,
                 category_name=category_name,
                 description=description,
                 color=color,

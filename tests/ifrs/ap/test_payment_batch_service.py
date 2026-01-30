@@ -95,6 +95,8 @@ class MockSupplier:
     def __init__(self, supplier_id=None, name="Test Supplier"):
         self.supplier_id = supplier_id or uuid4()
         self.name = name
+        self.trading_name = name
+        self.legal_name = name
 
 
 @pytest.fixture
@@ -139,7 +141,7 @@ def batch_input():
 class TestCreateBatch:
     """Tests for create_batch method."""
 
-    @patch("app.services.ifrs.ap.payment_batch.SequenceService")
+    @patch("app.services.finance.ap.payment_batch.SequenceService")
     def test_create_batch_success(self, mock_sequence, mock_db, org_id, user_id, batch_input):
         """Test successful batch creation."""
         mock_sequence.get_next_number.return_value = "PMT-202601-0001"
@@ -152,7 +154,7 @@ class TestCreateBatch:
         mock_db.flush.assert_called_once()
         mock_db.commit.assert_called_once()
 
-    @patch("app.services.ifrs.ap.payment_batch.SequenceService")
+    @patch("app.services.finance.ap.payment_batch.SequenceService")
     def test_create_batch_calculates_totals(self, mock_sequence, mock_db, org_id, user_id, batch_input):
         """Test that batch creation calculates correct totals."""
         mock_sequence.get_next_number.return_value = "PMT-202601-0001"
@@ -499,7 +501,7 @@ class TestApproveBatch:
 class TestProcessBatch:
     """Tests for process_batch method."""
 
-    @patch("app.services.ifrs.ap.supplier_payment.SupplierPaymentService")
+    @patch("app.services.finance.ap.supplier_payment.SupplierPaymentService")
     def test_process_batch_success(self, mock_payment_service, mock_db, org_id, user_id):
         """Test successful batch processing."""
         batch = MockPaymentBatch(
@@ -524,7 +526,7 @@ class TestProcessBatch:
         assert mock_payment_service.post_payment.call_count == 2
         mock_db.commit.assert_called_once()
 
-    @patch("app.services.ifrs.ap.supplier_payment.SupplierPaymentService")
+    @patch("app.services.finance.ap.supplier_payment.SupplierPaymentService")
     def test_process_batch_partial_failure(self, mock_payment_service, mock_db, org_id, user_id):
         """Test batch processing with partial failure."""
         batch = MockPaymentBatch(

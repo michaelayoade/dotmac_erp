@@ -304,7 +304,7 @@ class TestCalculateSupplierAging:
 class TestCalculateOrganizationAging:
     """Tests for calculate_organization_aging method."""
 
-    @patch("app.services.ifrs.ap.ap_aging.org_context_service")
+    @patch("app.services.finance.ap.ap_aging.org_context_service")
     def test_calculate_organization_aging_success(
         self, mock_org_context, mock_db, org_id
     ):
@@ -338,7 +338,7 @@ class TestCalculateOrganizationAging:
         assert result.invoice_count == 2
         assert result.currency_code == "USD"
 
-    @patch("app.services.ifrs.ap.ap_aging.org_context_service")
+    @patch("app.services.finance.ap.ap_aging.org_context_service")
     def test_calculate_organization_aging_no_invoices(
         self, mock_org_context, mock_db, org_id
     ):
@@ -494,7 +494,7 @@ class TestGetAgingBySupplier:
 class TestCreateAgingSnapshot:
     """Tests for create_aging_snapshot method."""
 
-    @patch("app.services.ifrs.ap.ap_aging.APAgingSnapshot")
+    @patch("app.services.finance.ap.ap_aging.APAgingSnapshot")
     def test_create_aging_snapshot_success(self, mock_snapshot_class, mock_db, org_id, user_id):
         """Test creating aging snapshot."""
         fiscal_period_id = uuid4()

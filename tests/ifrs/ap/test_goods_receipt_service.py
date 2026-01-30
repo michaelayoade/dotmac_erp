@@ -173,13 +173,13 @@ class MockGoodsReceiptLine:
 class TestCreateReceipt:
     """Tests for goods receipt creation."""
 
-    @patch("app.services.ifrs.ap.goods_receipt.GoodsReceiptService._update_po_status")
-    @patch("app.services.ifrs.ap.goods_receipt.SequenceService")
-    @patch("app.services.ifrs.ap.goods_receipt.GoodsReceiptLine")
-    @patch("app.services.ifrs.ap.goods_receipt.GoodsReceipt")
-    @patch("app.services.ifrs.ap.goods_receipt.PurchaseOrderLine")
-    @patch("app.services.ifrs.ap.goods_receipt.POStatus")
-    @patch("app.services.ifrs.ap.goods_receipt.PurchaseOrder")
+    @patch("app.services.finance.ap.goods_receipt.GoodsReceiptService._update_po_status")
+    @patch("app.services.finance.ap.goods_receipt.SequenceService")
+    @patch("app.services.finance.ap.goods_receipt.GoodsReceiptLine")
+    @patch("app.services.finance.ap.goods_receipt.GoodsReceipt")
+    @patch("app.services.finance.ap.goods_receipt.PurchaseOrderLine")
+    @patch("app.services.finance.ap.goods_receipt.POStatus")
+    @patch("app.services.finance.ap.goods_receipt.PurchaseOrder")
     def test_create_receipt_success(
         self,
         mock_po_class,
@@ -247,7 +247,7 @@ class TestCreateReceipt:
         db.commit.assert_called_once()
         mock_seq_service.get_next_number.assert_called_once()
 
-    @patch("app.services.ifrs.ap.goods_receipt.PurchaseOrder")
+    @patch("app.services.finance.ap.goods_receipt.PurchaseOrder")
     def test_create_receipt_po_not_found(self, mock_po_class):
         """Test receipt creation with non-existent PO."""
         db = MagicMock()
@@ -273,8 +273,8 @@ class TestCreateReceipt:
         assert exc_info.value.status_code == 404
         assert "Purchase order not found" in str(exc_info.value.detail)
 
-    @patch("app.services.ifrs.ap.goods_receipt.POStatus")
-    @patch("app.services.ifrs.ap.goods_receipt.PurchaseOrder")
+    @patch("app.services.finance.ap.goods_receipt.POStatus")
+    @patch("app.services.finance.ap.goods_receipt.PurchaseOrder")
     def test_create_receipt_po_wrong_status(self, mock_po_class, mock_po_status):
         """Test receipt creation for PO not in receivable status."""
         db = MagicMock()
@@ -311,8 +311,8 @@ class TestCreateReceipt:
         assert exc_info.value.status_code == 400
         assert "Cannot receive goods" in str(exc_info.value.detail)
 
-    @patch("app.services.ifrs.ap.goods_receipt.POStatus")
-    @patch("app.services.ifrs.ap.goods_receipt.PurchaseOrder")
+    @patch("app.services.finance.ap.goods_receipt.POStatus")
+    @patch("app.services.finance.ap.goods_receipt.PurchaseOrder")
     def test_create_receipt_no_lines(self, mock_po_class, mock_po_status):
         """Test receipt creation without lines fails."""
         db = MagicMock()
@@ -342,8 +342,8 @@ class TestCreateReceipt:
         assert exc_info.value.status_code == 400
         assert "at least one line" in str(exc_info.value.detail).lower()
 
-    @patch("app.services.ifrs.ap.goods_receipt.POStatus")
-    @patch("app.services.ifrs.ap.goods_receipt.PurchaseOrder")
+    @patch("app.services.finance.ap.goods_receipt.POStatus")
+    @patch("app.services.finance.ap.goods_receipt.PurchaseOrder")
     def test_create_receipt_invalid_po_line(self, mock_po_class, mock_po_status):
         """Test receipt creation with invalid PO line."""
         db = MagicMock()
@@ -386,13 +386,13 @@ class TestCreateReceipt:
         assert exc_info.value.status_code == 400
         assert "not found in this purchase order" in str(exc_info.value.detail)
 
-    @patch("app.services.ifrs.ap.goods_receipt.GoodsReceiptService._update_po_status")
-    @patch("app.services.ifrs.ap.goods_receipt.SequenceService")
-    @patch("app.services.ifrs.ap.goods_receipt.GoodsReceiptLine")
-    @patch("app.services.ifrs.ap.goods_receipt.GoodsReceipt")
-    @patch("app.services.ifrs.ap.goods_receipt.PurchaseOrderLine")
-    @patch("app.services.ifrs.ap.goods_receipt.POStatus")
-    @patch("app.services.ifrs.ap.goods_receipt.PurchaseOrder")
+    @patch("app.services.finance.ap.goods_receipt.GoodsReceiptService._update_po_status")
+    @patch("app.services.finance.ap.goods_receipt.SequenceService")
+    @patch("app.services.finance.ap.goods_receipt.GoodsReceiptLine")
+    @patch("app.services.finance.ap.goods_receipt.GoodsReceipt")
+    @patch("app.services.finance.ap.goods_receipt.PurchaseOrderLine")
+    @patch("app.services.finance.ap.goods_receipt.POStatus")
+    @patch("app.services.finance.ap.goods_receipt.PurchaseOrder")
     def test_create_receipt_quantity_exceeds_remaining(
         self,
         mock_po_class,
@@ -461,8 +461,8 @@ class TestCreateReceipt:
 class TestStartInspection:
     """Tests for starting inspection."""
 
-    @patch("app.services.ifrs.ap.goods_receipt.ReceiptStatus")
-    @patch("app.services.ifrs.ap.goods_receipt.GoodsReceipt")
+    @patch("app.services.finance.ap.goods_receipt.ReceiptStatus")
+    @patch("app.services.finance.ap.goods_receipt.GoodsReceipt")
     def test_start_inspection_success(self, mock_receipt_class, mock_status_class):
         """Test successful inspection start."""
         db = MagicMock()
@@ -489,7 +489,7 @@ class TestStartInspection:
         assert mock_receipt.status == mock_inspecting
         db.commit.assert_called_once()
 
-    @patch("app.services.ifrs.ap.goods_receipt.GoodsReceipt")
+    @patch("app.services.finance.ap.goods_receipt.GoodsReceipt")
     def test_start_inspection_not_found(self, mock_receipt_class):
         """Test starting inspection on non-existent receipt."""
         db = MagicMock()
@@ -502,8 +502,8 @@ class TestStartInspection:
 
         assert exc_info.value.status_code == 404
 
-    @patch("app.services.ifrs.ap.goods_receipt.ReceiptStatus")
-    @patch("app.services.ifrs.ap.goods_receipt.GoodsReceipt")
+    @patch("app.services.finance.ap.goods_receipt.ReceiptStatus")
+    @patch("app.services.finance.ap.goods_receipt.GoodsReceipt")
     def test_start_inspection_wrong_status(self, mock_receipt_class, mock_status_class):
         """Test starting inspection on receipt not in RECEIVED status."""
         db = MagicMock()
@@ -533,11 +533,12 @@ class TestStartInspection:
 class TestCompleteInspection:
     """Tests for completing inspection."""
 
-    @patch("app.services.ifrs.ap.goods_receipt.ReceiptStatus")
-    @patch("app.services.ifrs.ap.goods_receipt.GoodsReceiptLine")
-    @patch("app.services.ifrs.ap.goods_receipt.GoodsReceipt")
+    @patch("app.services.finance.ap.goods_receipt.GoodsReceiptService._create_inventory_transactions_for_receipt")
+    @patch("app.services.finance.ap.goods_receipt.ReceiptStatus")
+    @patch("app.services.finance.ap.goods_receipt.GoodsReceiptLine")
+    @patch("app.services.finance.ap.goods_receipt.GoodsReceipt")
     def test_complete_inspection_all_accepted(
-        self, mock_receipt_class, mock_line_class, mock_status_class
+        self, mock_receipt_class, mock_line_class, mock_status_class, mock_create_inventory
     ):
         """Test inspection completion with all items accepted."""
         db = MagicMock()
@@ -578,6 +579,8 @@ class TestCompleteInspection:
             )
         ]
 
+        mock_create_inventory.return_value = []
+
         result = GoodsReceiptService.complete_inspection(
             db, org_id, receipt_id, inspection_results
         )
@@ -586,10 +589,10 @@ class TestCompleteInspection:
         assert mock_receipt.status == mock_accepted
         db.commit.assert_called_once()
 
-    @patch("app.services.ifrs.ap.goods_receipt.GoodsReceiptService._reverse_po_quantities")
-    @patch("app.services.ifrs.ap.goods_receipt.ReceiptStatus")
-    @patch("app.services.ifrs.ap.goods_receipt.GoodsReceiptLine")
-    @patch("app.services.ifrs.ap.goods_receipt.GoodsReceipt")
+    @patch("app.services.finance.ap.goods_receipt.GoodsReceiptService._reverse_po_quantities")
+    @patch("app.services.finance.ap.goods_receipt.ReceiptStatus")
+    @patch("app.services.finance.ap.goods_receipt.GoodsReceiptLine")
+    @patch("app.services.finance.ap.goods_receipt.GoodsReceipt")
     def test_complete_inspection_all_rejected(
         self, mock_receipt_class, mock_line_class, mock_status_class, mock_reverse
     ):
@@ -642,11 +645,12 @@ class TestCompleteInspection:
         mock_reverse.assert_called_once()  # PO quantities should be reversed
         db.commit.assert_called_once()
 
-    @patch("app.services.ifrs.ap.goods_receipt.ReceiptStatus")
-    @patch("app.services.ifrs.ap.goods_receipt.GoodsReceiptLine")
-    @patch("app.services.ifrs.ap.goods_receipt.GoodsReceipt")
+    @patch("app.services.finance.ap.goods_receipt.GoodsReceiptService._create_inventory_transactions_for_receipt")
+    @patch("app.services.finance.ap.goods_receipt.ReceiptStatus")
+    @patch("app.services.finance.ap.goods_receipt.GoodsReceiptLine")
+    @patch("app.services.finance.ap.goods_receipt.GoodsReceipt")
     def test_complete_inspection_partial(
-        self, mock_receipt_class, mock_line_class, mock_status_class
+        self, mock_receipt_class, mock_line_class, mock_status_class, mock_create_inventory
     ):
         """Test inspection completion with partial acceptance."""
         db = MagicMock()
@@ -688,6 +692,8 @@ class TestCompleteInspection:
             )
         ]
 
+        mock_create_inventory.return_value = []
+
         result = GoodsReceiptService.complete_inspection(
             db, org_id, receipt_id, inspection_results
         )
@@ -695,7 +701,7 @@ class TestCompleteInspection:
         assert result is not None
         assert mock_receipt.status == mock_partial
 
-    @patch("app.services.ifrs.ap.goods_receipt.GoodsReceipt")
+    @patch("app.services.finance.ap.goods_receipt.GoodsReceipt")
     def test_complete_inspection_not_found(self, mock_receipt_class):
         """Test completing inspection on non-existent receipt."""
         db = MagicMock()
@@ -708,9 +714,9 @@ class TestCompleteInspection:
 
         assert exc_info.value.status_code == 404
 
-    @patch("app.services.ifrs.ap.goods_receipt.ReceiptStatus")
-    @patch("app.services.ifrs.ap.goods_receipt.GoodsReceiptLine")
-    @patch("app.services.ifrs.ap.goods_receipt.GoodsReceipt")
+    @patch("app.services.finance.ap.goods_receipt.ReceiptStatus")
+    @patch("app.services.finance.ap.goods_receipt.GoodsReceiptLine")
+    @patch("app.services.finance.ap.goods_receipt.GoodsReceipt")
     def test_complete_inspection_quantity_mismatch(
         self, mock_receipt_class, mock_line_class, mock_status_class
     ):
@@ -755,9 +761,9 @@ class TestCompleteInspection:
         assert exc_info.value.status_code == 400
         assert "must equal received quantity" in str(exc_info.value.detail)
 
-    @patch("app.services.ifrs.ap.goods_receipt.ReceiptStatus")
-    @patch("app.services.ifrs.ap.goods_receipt.GoodsReceiptLine")
-    @patch("app.services.ifrs.ap.goods_receipt.GoodsReceipt")
+    @patch("app.services.finance.ap.goods_receipt.ReceiptStatus")
+    @patch("app.services.finance.ap.goods_receipt.GoodsReceiptLine")
+    @patch("app.services.finance.ap.goods_receipt.GoodsReceipt")
     def test_complete_inspection_line_not_found(
         self, mock_receipt_class, mock_line_class, mock_status_class
     ):
@@ -801,9 +807,10 @@ class TestCompleteInspection:
 class TestAcceptAll:
     """Tests for accepting all items."""
 
-    @patch("app.services.ifrs.ap.goods_receipt.ReceiptStatus")
-    @patch("app.services.ifrs.ap.goods_receipt.GoodsReceipt")
-    def test_accept_all_success(self, mock_receipt_class, mock_status_class):
+    @patch("app.services.finance.ap.goods_receipt.GoodsReceiptService._create_inventory_transactions_for_receipt")
+    @patch("app.services.finance.ap.goods_receipt.ReceiptStatus")
+    @patch("app.services.finance.ap.goods_receipt.GoodsReceipt")
+    def test_accept_all_success(self, mock_receipt_class, mock_status_class, mock_create_inventory):
         """Test successful accept all."""
         db = MagicMock()
         org_id = uuid4()
@@ -828,6 +835,8 @@ class TestAcceptAll:
 
         db.query.return_value.filter.return_value.first.return_value = mock_receipt
 
+        mock_create_inventory.return_value = []
+
         result = GoodsReceiptService.accept_all(db, org_id, receipt_id)
 
         assert result is not None
@@ -837,7 +846,7 @@ class TestAcceptAll:
         assert mock_line2.quantity_accepted == Decimal("5")
         db.commit.assert_called_once()
 
-    @patch("app.services.ifrs.ap.goods_receipt.GoodsReceipt")
+    @patch("app.services.finance.ap.goods_receipt.GoodsReceipt")
     def test_accept_all_not_found(self, mock_receipt_class):
         """Test accept all on non-existent receipt."""
         db = MagicMock()
@@ -850,8 +859,8 @@ class TestAcceptAll:
 
         assert exc_info.value.status_code == 404
 
-    @patch("app.services.ifrs.ap.goods_receipt.ReceiptStatus")
-    @patch("app.services.ifrs.ap.goods_receipt.GoodsReceipt")
+    @patch("app.services.finance.ap.goods_receipt.ReceiptStatus")
+    @patch("app.services.finance.ap.goods_receipt.GoodsReceipt")
     def test_accept_all_wrong_status(self, mock_receipt_class, mock_status_class):
         """Test accept all on receipt not in correct status."""
         db = MagicMock()
@@ -882,7 +891,7 @@ class TestAcceptAll:
 class TestInternalMethods:
     """Tests for internal helper methods."""
 
-    @patch("app.services.ifrs.ap.goods_receipt.POStatus")
+    @patch("app.services.finance.ap.goods_receipt.POStatus")
     def test_update_po_status_partially_received(self, mock_po_status):
         """Test PO status update for partial receipt."""
         db = MagicMock()
@@ -905,7 +914,7 @@ class TestInternalMethods:
         assert mock_po.amount_received == Decimal("500.00")
         assert mock_po.status == mock_partial
 
-    @patch("app.services.ifrs.ap.goods_receipt.POStatus")
+    @patch("app.services.finance.ap.goods_receipt.POStatus")
     def test_update_po_status_fully_received(self, mock_po_status):
         """Test PO status update for full receipt."""
         db = MagicMock()
@@ -928,9 +937,9 @@ class TestInternalMethods:
         assert mock_po.amount_received == Decimal("1000.00")
         assert mock_po.status == mock_received
 
-    @patch("app.services.ifrs.ap.goods_receipt.GoodsReceiptService._update_po_status")
-    @patch("app.services.ifrs.ap.goods_receipt.PurchaseOrder")
-    @patch("app.services.ifrs.ap.goods_receipt.PurchaseOrderLine")
+    @patch("app.services.finance.ap.goods_receipt.GoodsReceiptService._update_po_status")
+    @patch("app.services.finance.ap.goods_receipt.PurchaseOrder")
+    @patch("app.services.finance.ap.goods_receipt.PurchaseOrderLine")
     def test_reverse_po_quantities(
         self, mock_po_line_class, mock_po_class, mock_update_status
     ):
@@ -967,7 +976,7 @@ class TestInternalMethods:
 class TestGetters:
     """Tests for getter methods."""
 
-    @patch("app.services.ifrs.ap.goods_receipt.GoodsReceipt")
+    @patch("app.services.finance.ap.goods_receipt.GoodsReceipt")
     def test_get_receipt(self, mock_receipt_class):
         """Test getting receipt by ID."""
         db = MagicMock()
@@ -981,7 +990,7 @@ class TestGetters:
         assert result is not None
         assert result.receipt_id == receipt_id
 
-    @patch("app.services.ifrs.ap.goods_receipt.GoodsReceipt")
+    @patch("app.services.finance.ap.goods_receipt.GoodsReceipt")
     def test_get_receipt_not_found(self, mock_receipt_class):
         """Test getting non-existent receipt."""
         db = MagicMock()
@@ -992,7 +1001,7 @@ class TestGetters:
 
         assert result is None
 
-    @patch("app.services.ifrs.ap.goods_receipt.GoodsReceipt")
+    @patch("app.services.finance.ap.goods_receipt.GoodsReceipt")
     def test_get_by_number(self, mock_receipt_class):
         """Test getting receipt by number."""
         db = MagicMock()
@@ -1006,7 +1015,7 @@ class TestGetters:
         assert result is not None
         assert result.receipt_number == "GR-000001"
 
-    @patch("app.services.ifrs.ap.goods_receipt.GoodsReceiptLine")
+    @patch("app.services.finance.ap.goods_receipt.GoodsReceiptLine")
     def test_get_receipt_lines(self, mock_line_class):
         """Test getting receipt lines."""
         db = MagicMock()
@@ -1022,7 +1031,7 @@ class TestGetters:
 
         assert len(result) == 2
 
-    @patch("app.services.ifrs.ap.goods_receipt.GoodsReceipt")
+    @patch("app.services.finance.ap.goods_receipt.GoodsReceipt")
     def test_list_by_po(self, mock_receipt_class):
         """Test listing receipts by PO."""
         db = MagicMock()
@@ -1045,7 +1054,7 @@ class TestGetters:
 class TestListReceipts:
     """Tests for listing goods receipts."""
 
-    @patch("app.services.ifrs.ap.goods_receipt.GoodsReceipt")
+    @patch("app.services.finance.ap.goods_receipt.GoodsReceipt")
     def test_list_receipts(self, mock_receipt_class):
         """Test listing goods receipts."""
         db = MagicMock()
@@ -1090,7 +1099,7 @@ class TestListReceipts:
         assert len(result) == 1
         assert mock_query.filter.called
 
-    @patch("app.services.ifrs.ap.goods_receipt.GoodsReceipt")
+    @patch("app.services.finance.ap.goods_receipt.GoodsReceipt")
     def test_list_receipts_empty(self, mock_receipt_class):
         """Test listing returns empty when no receipts."""
         db = MagicMock()

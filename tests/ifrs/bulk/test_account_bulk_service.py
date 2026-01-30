@@ -20,7 +20,7 @@ class TestCanDelete:
 
     def test_cannot_delete_control_account(self, mock_db, mock_control_account, organization_id):
         """Control accounts cannot be deleted."""
-        with patch("app.services.ifrs.gl.bulk.Account", MagicMock()):
+        with patch("app.services.finance.gl.bulk.Account", MagicMock()):
             from app.services.finance.gl.bulk import AccountBulkService
 
             service = AccountBulkService(mock_db, organization_id)
@@ -33,7 +33,7 @@ class TestCanDelete:
         """Non-control accounts without journal entries can be deleted."""
         mock_db.query.return_value.filter.return_value.count.return_value = 0
 
-        with patch("app.services.ifrs.gl.bulk.Account", MagicMock()):
+        with patch("app.services.finance.gl.bulk.Account", MagicMock()):
             from app.services.finance.gl.bulk import AccountBulkService
 
             service = AccountBulkService(mock_db, organization_id)
@@ -46,7 +46,7 @@ class TestCanDelete:
         """Accounts with journal lines cannot be deleted."""
         mock_db.query.return_value.filter.return_value.count.return_value = 50
 
-        with patch("app.services.ifrs.gl.bulk.Account", MagicMock()):
+        with patch("app.services.finance.gl.bulk.Account", MagicMock()):
             from app.services.finance.gl.bulk import AccountBulkService
 
             service = AccountBulkService(mock_db, organization_id)
@@ -59,7 +59,7 @@ class TestCanDelete:
         """Accounts without journal lines can be deleted."""
         mock_db.query.return_value.filter.return_value.count.return_value = 0
 
-        with patch("app.services.ifrs.gl.bulk.Account", MagicMock()):
+        with patch("app.services.finance.gl.bulk.Account", MagicMock()):
             from app.services.finance.gl.bulk import AccountBulkService
 
             service = AccountBulkService(mock_db, organization_id)
@@ -73,7 +73,7 @@ class TestCanDelete:
         account = MockAccount(account_name="Test Account")
         mock_db.query.return_value.filter.return_value.count.return_value = 100
 
-        with patch("app.services.ifrs.gl.bulk.Account", MagicMock()):
+        with patch("app.services.finance.gl.bulk.Account", MagicMock()):
             from app.services.finance.gl.bulk import AccountBulkService
 
             service = AccountBulkService(mock_db, organization_id)
@@ -86,7 +86,7 @@ class TestCanDelete:
         # Even if there are no journal entries, control account should fail
         mock_db.query.return_value.filter.return_value.count.return_value = 0
 
-        with patch("app.services.ifrs.gl.bulk.Account", MagicMock()):
+        with patch("app.services.finance.gl.bulk.Account", MagicMock()):
             from app.services.finance.gl.bulk import AccountBulkService
 
             service = AccountBulkService(mock_db, organization_id)
@@ -100,7 +100,7 @@ class TestCanDelete:
         account = MockAccount(account_name="Cash at Bank", is_control_account=False)
         mock_db.query.return_value.filter.return_value.count.return_value = 25
 
-        with patch("app.services.ifrs.gl.bulk.Account", MagicMock()):
+        with patch("app.services.finance.gl.bulk.Account", MagicMock()):
             from app.services.finance.gl.bulk import AccountBulkService
 
             service = AccountBulkService(mock_db, organization_id)
@@ -115,7 +115,7 @@ class TestCanDelete:
             is_control_account=True
         )
 
-        with patch("app.services.ifrs.gl.bulk.Account", MagicMock()):
+        with patch("app.services.finance.gl.bulk.Account", MagicMock()):
             from app.services.finance.gl.bulk import AccountBulkService
 
             service = AccountBulkService(mock_db, organization_id)
@@ -127,7 +127,7 @@ class TestCanDelete:
         """Method should return a tuple of (bool, str)."""
         mock_db.query.return_value.filter.return_value.count.return_value = 0
 
-        with patch("app.services.ifrs.gl.bulk.Account", MagicMock()):
+        with patch("app.services.finance.gl.bulk.Account", MagicMock()):
             from app.services.finance.gl.bulk import AccountBulkService
 
             service = AccountBulkService(mock_db, organization_id)
@@ -148,7 +148,7 @@ class TestGetExportValue:
         """Should export account_type enum value as string."""
         account = MockAccount(account_type=MockAccountType.posting)
 
-        with patch("app.services.ifrs.gl.bulk.Account", MagicMock()):
+        with patch("app.services.finance.gl.bulk.Account", MagicMock()):
             from app.services.finance.gl.bulk import AccountBulkService
 
             service = AccountBulkService(mock_db, organization_id)
@@ -160,7 +160,7 @@ class TestGetExportValue:
         """Should export control type correctly."""
         account = MockAccount(account_type=MockAccountType.control)
 
-        with patch("app.services.ifrs.gl.bulk.Account", MagicMock()):
+        with patch("app.services.finance.gl.bulk.Account", MagicMock()):
             from app.services.finance.gl.bulk import AccountBulkService
 
             service = AccountBulkService(mock_db, organization_id)
@@ -172,7 +172,7 @@ class TestGetExportValue:
         """Should handle None account_type."""
         account = MockAccount(account_type=None)
 
-        with patch("app.services.ifrs.gl.bulk.Account", MagicMock()):
+        with patch("app.services.finance.gl.bulk.Account", MagicMock()):
             from app.services.finance.gl.bulk import AccountBulkService
 
             service = AccountBulkService(mock_db, organization_id)
@@ -184,7 +184,7 @@ class TestGetExportValue:
         """Should export assets category."""
         account = MockAccount(account_category=MockAccountCategory.assets)
 
-        with patch("app.services.ifrs.gl.bulk.Account", MagicMock()):
+        with patch("app.services.finance.gl.bulk.Account", MagicMock()):
             from app.services.finance.gl.bulk import AccountBulkService
 
             service = AccountBulkService(mock_db, organization_id)
@@ -196,7 +196,7 @@ class TestGetExportValue:
         """Should export liabilities category."""
         account = MockAccount(account_category=MockAccountCategory.liabilities)
 
-        with patch("app.services.ifrs.gl.bulk.Account", MagicMock()):
+        with patch("app.services.finance.gl.bulk.Account", MagicMock()):
             from app.services.finance.gl.bulk import AccountBulkService
 
             service = AccountBulkService(mock_db, organization_id)
@@ -208,7 +208,7 @@ class TestGetExportValue:
         """Should export equity category."""
         account = MockAccount(account_category=MockAccountCategory.equity)
 
-        with patch("app.services.ifrs.gl.bulk.Account", MagicMock()):
+        with patch("app.services.finance.gl.bulk.Account", MagicMock()):
             from app.services.finance.gl.bulk import AccountBulkService
 
             service = AccountBulkService(mock_db, organization_id)
@@ -220,7 +220,7 @@ class TestGetExportValue:
         """Should export revenue category."""
         account = MockAccount(account_category=MockAccountCategory.revenue)
 
-        with patch("app.services.ifrs.gl.bulk.Account", MagicMock()):
+        with patch("app.services.finance.gl.bulk.Account", MagicMock()):
             from app.services.finance.gl.bulk import AccountBulkService
 
             service = AccountBulkService(mock_db, organization_id)
@@ -232,7 +232,7 @@ class TestGetExportValue:
         """Should export expenses category."""
         account = MockAccount(account_category=MockAccountCategory.expenses)
 
-        with patch("app.services.ifrs.gl.bulk.Account", MagicMock()):
+        with patch("app.services.finance.gl.bulk.Account", MagicMock()):
             from app.services.finance.gl.bulk import AccountBulkService
 
             service = AccountBulkService(mock_db, organization_id)
@@ -244,7 +244,7 @@ class TestGetExportValue:
         """Should handle None account_category."""
         account = MockAccount(account_category=None)
 
-        with patch("app.services.ifrs.gl.bulk.Account", MagicMock()):
+        with patch("app.services.finance.gl.bulk.Account", MagicMock()):
             from app.services.finance.gl.bulk import AccountBulkService
 
             service = AccountBulkService(mock_db, organization_id)
@@ -256,7 +256,7 @@ class TestGetExportValue:
         """Should export is_control_account boolean."""
         account = MockAccount(is_control_account=True)
 
-        with patch("app.services.ifrs.gl.bulk.Account", MagicMock()):
+        with patch("app.services.finance.gl.bulk.Account", MagicMock()):
             from app.services.finance.gl.bulk import AccountBulkService
 
             service = AccountBulkService(mock_db, organization_id)
@@ -268,7 +268,7 @@ class TestGetExportValue:
         """Should export is_control_account false value."""
         account = MockAccount(is_control_account=False)
 
-        with patch("app.services.ifrs.gl.bulk.Account", MagicMock()):
+        with patch("app.services.finance.gl.bulk.Account", MagicMock()):
             from app.services.finance.gl.bulk import AccountBulkService
 
             service = AccountBulkService(mock_db, organization_id)
@@ -285,7 +285,7 @@ class TestGetExportValue:
             description="Cash at bank"
         )
 
-        with patch("app.services.ifrs.gl.bulk.Account", MagicMock()):
+        with patch("app.services.finance.gl.bulk.Account", MagicMock()):
             from app.services.finance.gl.bulk import AccountBulkService
 
             service = AccountBulkService(mock_db, organization_id)
@@ -307,7 +307,7 @@ class TestGetExportFilename:
 
     def test_filename_includes_accounts(self, mock_db, organization_id):
         """Filename should include 'accounts'."""
-        with patch("app.services.ifrs.gl.bulk.Account", MagicMock()):
+        with patch("app.services.finance.gl.bulk.Account", MagicMock()):
             from app.services.finance.gl.bulk import AccountBulkService
 
             service = AccountBulkService(mock_db, organization_id)
@@ -317,7 +317,7 @@ class TestGetExportFilename:
 
     def test_filename_includes_timestamp(self, mock_db, organization_id):
         """Filename should include a timestamp."""
-        with patch("app.services.ifrs.gl.bulk.Account", MagicMock()):
+        with patch("app.services.finance.gl.bulk.Account", MagicMock()):
             from app.services.finance.gl.bulk import AccountBulkService
 
             service = AccountBulkService(mock_db, organization_id)
@@ -328,7 +328,7 @@ class TestGetExportFilename:
 
     def test_filename_ends_csv(self, mock_db, organization_id):
         """Filename should end with .csv."""
-        with patch("app.services.ifrs.gl.bulk.Account", MagicMock()):
+        with patch("app.services.finance.gl.bulk.Account", MagicMock()):
             from app.services.finance.gl.bulk import AccountBulkService
 
             service = AccountBulkService(mock_db, organization_id)
@@ -354,7 +354,7 @@ class TestBulkDelete:
         ]
         mock_db.query.return_value.filter.return_value.count.return_value = 0
 
-        with patch("app.services.ifrs.gl.bulk.Account", MagicMock()):
+        with patch("app.services.finance.gl.bulk.Account", MagicMock()):
             from app.services.finance.gl.bulk import AccountBulkService
 
             service = AccountBulkService(mock_db, organization_id)
@@ -373,7 +373,7 @@ class TestBulkDelete:
 
         mock_db.query.return_value.filter.return_value.all.return_value = [control_account]
 
-        with patch("app.services.ifrs.gl.bulk.Account", MagicMock()):
+        with patch("app.services.finance.gl.bulk.Account", MagicMock()):
             from app.services.finance.gl.bulk import AccountBulkService
 
             service = AccountBulkService(mock_db, organization_id)
@@ -391,7 +391,7 @@ class TestBulkDelete:
         mock_db.query.return_value.filter.return_value.all.return_value = [account]
         mock_db.query.return_value.filter.return_value.count.return_value = 100
 
-        with patch("app.services.ifrs.gl.bulk.Account", MagicMock()):
+        with patch("app.services.finance.gl.bulk.Account", MagicMock()):
             from app.services.finance.gl.bulk import AccountBulkService
 
             service = AccountBulkService(mock_db, organization_id)
@@ -413,7 +413,7 @@ class TestBulkDelete:
         ]
         mock_db.query.return_value.filter.return_value.count.return_value = 0
 
-        with patch("app.services.ifrs.gl.bulk.Account", MagicMock()):
+        with patch("app.services.finance.gl.bulk.Account", MagicMock()):
             from app.services.finance.gl.bulk import AccountBulkService
 
             service = AccountBulkService(mock_db, organization_id)
@@ -425,7 +425,7 @@ class TestBulkDelete:
     @pytest.mark.asyncio
     async def test_bulk_delete_empty_ids(self, mock_db, organization_id):
         """Empty IDs list should return failure."""
-        with patch("app.services.ifrs.gl.bulk.Account", MagicMock()):
+        with patch("app.services.finance.gl.bulk.Account", MagicMock()):
             from app.services.finance.gl.bulk import AccountBulkService
 
             service = AccountBulkService(mock_db, organization_id)
@@ -445,7 +445,7 @@ class TestBulkExport:
         """CSV export should include correct headers."""
         mock_db.query.return_value.filter.return_value.all.return_value = [mock_account]
 
-        with patch("app.services.ifrs.gl.bulk.Account", MagicMock()):
+        with patch("app.services.finance.gl.bulk.Account", MagicMock()):
             from app.services.finance.gl.bulk import AccountBulkService
 
             service = AccountBulkService(mock_db, organization_id)
@@ -467,7 +467,7 @@ class TestBulkExport:
         """CSV export should include entity data."""
         mock_db.query.return_value.filter.return_value.all.return_value = [mock_account]
 
-        with patch("app.services.ifrs.gl.bulk.Account", MagicMock()):
+        with patch("app.services.finance.gl.bulk.Account", MagicMock()):
             from app.services.finance.gl.bulk import AccountBulkService
 
             service = AccountBulkService(mock_db, organization_id)
@@ -488,7 +488,7 @@ class TestFactoryFunction:
 
     def test_factory_creates_service(self, mock_db, organization_id, user_id):
         """Factory should create AccountBulkService instance."""
-        with patch("app.services.ifrs.gl.bulk.Account", MagicMock()):
+        with patch("app.services.finance.gl.bulk.Account", MagicMock()):
             from app.services.finance.gl.bulk import get_account_bulk_service
 
             service = get_account_bulk_service(mock_db, organization_id, user_id)
@@ -499,7 +499,7 @@ class TestFactoryFunction:
 
     def test_factory_user_id_optional(self, mock_db, organization_id):
         """Factory should work without user_id."""
-        with patch("app.services.ifrs.gl.bulk.Account", MagicMock()):
+        with patch("app.services.finance.gl.bulk.Account", MagicMock()):
             from app.services.finance.gl.bulk import get_account_bulk_service
 
             service = get_account_bulk_service(mock_db, organization_id)

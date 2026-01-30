@@ -92,7 +92,7 @@ class TestTaxWebServiceHelpers:
 class TestTaxWebServiceReturnDetail:
     """Tests for return_detail_context method."""
 
-    @patch("app.services.ifrs.tax.web.tax_return_service")
+    @patch("app.services.finance.tax.web.tax_return_service")
     def test_return_detail_context_success(self, mock_service):
         """Test successful return detail context."""
         from app.services.finance.tax.web import TaxWebService
@@ -124,7 +124,7 @@ class TestTaxWebServiceReturnDetail:
         assert result["tax_return"]["return_id"] == return_id
         assert len(result["box_values"]) == 2
 
-    @patch("app.services.ifrs.tax.web.tax_return_service")
+    @patch("app.services.finance.tax.web.tax_return_service")
     def test_return_detail_context_not_found(self, mock_service):
         """Test return detail context with missing return."""
         from app.services.finance.tax.web import TaxWebService
@@ -143,7 +143,7 @@ class TestTaxWebServiceReturnDetail:
         assert result["tax_return"] is None
         assert result["box_values"] == []
 
-    @patch("app.services.ifrs.tax.web.tax_return_service")
+    @patch("app.services.finance.tax.web.tax_return_service")
     def test_return_detail_context_wrong_org(self, mock_service):
         """Test return detail context with wrong organization."""
         from app.services.finance.tax.web import TaxWebService

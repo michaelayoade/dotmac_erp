@@ -46,10 +46,10 @@ def sample_supplier_input():
     return SupplierInput(
         supplier_code="SUP-001",
         supplier_type=SupplierType.VENDOR,
-        legal_name="Acme Corporation",
-        ap_control_account_id=uuid4(),
+        supplier_name="Acme Corporation",
+        default_payable_account_id=uuid4(),
         trading_name="Acme Corp",
-        tax_identification_number="12-3456789",
+        tax_id="12-3456789",
         payment_terms_days=30,
         currency_code="USD",
     )
@@ -65,11 +65,11 @@ class TestCreateSupplier:
         mock_query.first.return_value = None  # No duplicate
         mock_db.query.return_value = mock_query
 
-        with patch("app.services.ifrs.ap.supplier.Supplier") as MockSupplierClass:
+        with patch("app.services.finance.ap.supplier.Supplier") as MockSupplierClass:
             mock_supplier = MockSupplier(
                 organization_id=org_id,
                 supplier_code=sample_supplier_input.supplier_code,
-                legal_name=sample_supplier_input.legal_name,
+                legal_name=sample_supplier_input.supplier_name,
             )
             MockSupplierClass.return_value = mock_supplier
 
@@ -96,7 +96,7 @@ class TestCreateSupplier:
         mock_query.first.return_value = existing
         mock_db.query.return_value = mock_query
 
-        with patch("app.services.ifrs.ap.supplier.Supplier"):
+        with patch("app.services.finance.ap.supplier.Supplier"):
             with pytest.raises(HTTPException) as exc:
                 SupplierService.create_supplier(mock_db, org_id, sample_supplier_input)
 
@@ -120,7 +120,7 @@ class TestUpdateSupplier:
         mock_query.first.return_value = None  # No duplicate
         mock_db.query.return_value = mock_query
 
-        with patch("app.services.ifrs.ap.supplier.Supplier"):
+        with patch("app.services.finance.ap.supplier.Supplier"):
             result = SupplierService.update_supplier(
                 mock_db, org_id, supplier.supplier_id, sample_supplier_input
             )
@@ -134,7 +134,7 @@ class TestUpdateSupplier:
 
         mock_db.get.return_value = None
 
-        with patch("app.services.ifrs.ap.supplier.Supplier"):
+        with patch("app.services.finance.ap.supplier.Supplier"):
             with pytest.raises(HTTPException) as exc:
                 SupplierService.update_supplier(
                     mock_db, org_id, uuid4(), sample_supplier_input
@@ -152,7 +152,7 @@ class TestUpdateSupplier:
         )
         mock_db.get.return_value = supplier
 
-        with patch("app.services.ifrs.ap.supplier.Supplier"):
+        with patch("app.services.finance.ap.supplier.Supplier"):
             with pytest.raises(HTTPException) as exc:
                 SupplierService.update_supplier(
                     mock_db, org_id, supplier.supplier_id, sample_supplier_input
@@ -171,7 +171,7 @@ class TestDeactivateSupplier:
         # Mock the query chain for outstanding balance check
         mock_db.query.return_value.filter.return_value.scalar.return_value = Decimal("0")
 
-        with patch("app.services.ifrs.ap.supplier.Supplier"):
+        with patch("app.services.finance.ap.supplier.Supplier"):
             result = SupplierService.deactivate_supplier(
                 mock_db, org_id, supplier.supplier_id
             )
@@ -185,7 +185,7 @@ class TestDeactivateSupplier:
 
         mock_db.get.return_value = None
 
-        with patch("app.services.ifrs.ap.supplier.Supplier"):
+        with patch("app.services.finance.ap.supplier.Supplier"):
             with pytest.raises(HTTPException) as exc:
                 SupplierService.deactivate_supplier(mock_db, org_id, uuid4())
 
@@ -200,7 +200,7 @@ class TestActivateSupplier:
         supplier = MockSupplier(organization_id=org_id, is_active=False)
         mock_db.get.return_value = supplier
 
-        with patch("app.services.ifrs.ap.supplier.Supplier"):
+        with patch("app.services.finance.ap.supplier.Supplier"):
             result = SupplierService.activate_supplier(
                 mock_db, org_id, supplier.supplier_id
             )
@@ -217,7 +217,7 @@ class TestGetSupplier:
         supplier = MockSupplier(organization_id=org_id)
         mock_db.get.return_value = supplier
 
-        with patch("app.services.ifrs.ap.supplier.Supplier"):
+        with patch("app.services.finance.ap.supplier.Supplier"):
             result = SupplierService.get(mock_db, org_id, str(supplier.supplier_id))
 
         assert result == supplier
@@ -228,7 +228,7 @@ class TestGetSupplier:
 
         mock_db.get.return_value = None
 
-        with patch("app.services.ifrs.ap.supplier.Supplier"):
+        with patch("app.services.finance.ap.supplier.Supplier"):
             with pytest.raises(HTTPException) as exc:
                 SupplierService.get(mock_db, org_id, str(uuid4()))
 
@@ -249,7 +249,7 @@ class TestGetSupplierByCode:
         mock_query.first.return_value = supplier
         mock_db.query.return_value = mock_query
 
-        with patch("app.services.ifrs.ap.supplier.Supplier"):
+        with patch("app.services.finance.ap.supplier.Supplier"):
             result = SupplierService.get_by_code(mock_db, org_id, "SUP-001")
 
         assert result == supplier
@@ -261,7 +261,7 @@ class TestGetSupplierByCode:
         mock_query.first.return_value = None
         mock_db.query.return_value = mock_query
 
-        with patch("app.services.ifrs.ap.supplier.Supplier"):
+        with patch("app.services.finance.ap.supplier.Supplier"):
             result = SupplierService.get_by_code(mock_db, org_id, "NOTFOUND")
 
         assert result is None
@@ -281,7 +281,7 @@ class TestListSuppliers:
         mock_query.all.return_value = suppliers
         mock_db.query.return_value = mock_query
 
-        with patch("app.services.ifrs.ap.supplier.Supplier"):
+        with patch("app.services.finance.ap.supplier.Supplier"):
             result = SupplierService.list(
                 mock_db,
                 organization_id=str(org_id),
@@ -301,7 +301,7 @@ class TestListSuppliers:
         mock_query.all.return_value = suppliers
         mock_db.query.return_value = mock_query
 
-        with patch("app.services.ifrs.ap.supplier.Supplier"):
+        with patch("app.services.finance.ap.supplier.Supplier"):
             result = SupplierService.list(
                 mock_db,
                 organization_id=str(org_id),
@@ -338,7 +338,7 @@ class TestGetSupplierSummary:
         mock_query.all.return_value = [invoice1, invoice2]
         mock_db.query.return_value = mock_query
 
-        with patch("app.services.ifrs.ap.supplier.Supplier"):
+        with patch("app.services.finance.ap.supplier.Supplier"):
             result = SupplierService.get_supplier_summary(
                 mock_db, org_id, supplier.supplier_id
             )
@@ -354,7 +354,7 @@ class TestGetSupplierSummary:
 
         mock_db.get.return_value = None
 
-        with patch("app.services.ifrs.ap.supplier.Supplier"):
+        with patch("app.services.finance.ap.supplier.Supplier"):
             with pytest.raises(HTTPException) as exc:
                 SupplierService.get_supplier_summary(mock_db, org_id, uuid4())
 

@@ -122,7 +122,7 @@ class MockQuoteLine:
 class TestGenerateQuoteNumber:
     """Tests for generate_quote_number method."""
 
-    @patch("app.services.ifrs.ar.quote.SyncNumberingService")
+    @patch("app.services.finance.ar.quote.SyncNumberingService")
     def test_generate_quote_number(self, mock_numbering_class):
         """Test quote number generation."""
         mock_db = MagicMock()
@@ -141,8 +141,8 @@ class TestGenerateQuoteNumber:
 class TestCreate:
     """Tests for create method."""
 
-    @patch("app.services.ifrs.ar.quote.QuoteService.generate_quote_number")
-    @patch("app.services.ifrs.ar.quote.Quote")
+    @patch("app.services.finance.ar.quote.QuoteService.generate_quote_number")
+    @patch("app.services.finance.ar.quote.Quote")
     def test_create_basic_quote(self, mock_quote_class, mock_generate):
         """Test creating a basic quote."""
         mock_db = MagicMock()
@@ -167,10 +167,10 @@ class TestCreate:
         mock_db.add.assert_called_once()
         mock_db.flush.assert_called()
 
-    @patch("app.services.ifrs.ar.quote.QuoteService.generate_quote_number")
-    @patch("app.services.ifrs.ar.quote.QuoteService._add_lines")
-    @patch("app.services.ifrs.ar.quote.QuoteService._recalculate_totals")
-    @patch("app.services.ifrs.ar.quote.Quote")
+    @patch("app.services.finance.ar.quote.QuoteService.generate_quote_number")
+    @patch("app.services.finance.ar.quote.QuoteService._add_lines")
+    @patch("app.services.finance.ar.quote.QuoteService._recalculate_totals")
+    @patch("app.services.finance.ar.quote.Quote")
     def test_create_quote_with_lines(self, mock_quote_class, mock_recalc, mock_add_lines, mock_generate):
         """Test creating a quote with lines."""
         mock_db = MagicMock()
@@ -507,9 +507,9 @@ class TestReject:
 class TestConvertToInvoice:
     """Tests for convert_to_invoice method."""
 
-    @patch("app.services.ifrs.ar.quote.InvoiceLine")
-    @patch("app.services.ifrs.ar.quote.Invoice")
-    @patch("app.services.ifrs.ar.quote.SyncNumberingService")
+    @patch("app.services.finance.ar.quote.InvoiceLine")
+    @patch("app.services.finance.ar.quote.Invoice")
+    @patch("app.services.finance.ar.quote.SyncNumberingService")
     def test_convert_to_invoice_success(self, mock_numbering_class, mock_invoice_class, mock_inv_line_class):
         """Test converting accepted quote to invoice."""
         mock_db = MagicMock()
@@ -578,9 +578,9 @@ class TestConvertToInvoice:
 class TestConvertToSalesOrder:
     """Tests for convert_to_sales_order method."""
 
-    @patch("app.services.ifrs.ar.quote.SalesOrderLine")
-    @patch("app.services.ifrs.ar.quote.SalesOrder")
-    @patch("app.services.ifrs.ar.quote.SyncNumberingService")
+    @patch("app.services.finance.ar.quote.SalesOrderLine")
+    @patch("app.services.finance.ar.quote.SalesOrder")
+    @patch("app.services.finance.ar.quote.SyncNumberingService")
     def test_convert_to_sales_order_success(self, mock_numbering_class, mock_so_class, mock_so_line_class):
         """Test converting accepted quote to sales order."""
         mock_db = MagicMock()

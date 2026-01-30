@@ -1191,7 +1191,7 @@ def delete_project_comment(
         return RedirectResponse(url="/operations/projects", status_code=303)
 
     try:
-        comment_service.delete_comment(db, coerce_uuid(comment_id))
+        comment_service.delete_comment(db, org_id, coerce_uuid(comment_id))
         db.commit()
     except Exception:
         db.rollback()
@@ -1858,7 +1858,7 @@ def delete_task_comment(
         return RedirectResponse(url=f"/operations/projects/{project.project_code}/tasks", status_code=303)
 
     try:
-        comment_service.delete_comment(db, coerce_uuid(comment_id))
+        comment_service.delete_comment(db, org_id, coerce_uuid(comment_id))
         db.commit()
     except Exception:
         db.rollback()

@@ -148,10 +148,10 @@ class MockPurchaseOrderLine:
 class TestCreatePO:
     """Tests for purchase order creation."""
 
-    @patch("app.services.ifrs.ap.purchase_order.SequenceService")
-    @patch("app.services.ifrs.ap.purchase_order.PurchaseOrderLine")
-    @patch("app.services.ifrs.ap.purchase_order.PurchaseOrder")
-    @patch("app.services.ifrs.ap.purchase_order.Supplier")
+    @patch("app.services.finance.ap.purchase_order.SequenceService")
+    @patch("app.services.finance.ap.purchase_order.PurchaseOrderLine")
+    @patch("app.services.finance.ap.purchase_order.PurchaseOrder")
+    @patch("app.services.finance.ap.purchase_order.Supplier")
     def test_create_po_success(
         self, mock_supplier_class, mock_po_class, mock_line_class, mock_seq_service
     ):
@@ -197,7 +197,7 @@ class TestCreatePO:
         db.commit.assert_called_once()
         mock_seq_service.get_next_number.assert_called_once()
 
-    @patch("app.services.ifrs.ap.purchase_order.Supplier")
+    @patch("app.services.finance.ap.purchase_order.Supplier")
     def test_create_po_supplier_not_found(self, mock_supplier_class):
         """Test PO creation with non-existent supplier."""
         db = MagicMock()
@@ -226,7 +226,7 @@ class TestCreatePO:
         assert exc_info.value.status_code == 404
         assert "Supplier not found" in str(exc_info.value.detail)
 
-    @patch("app.services.ifrs.ap.purchase_order.Supplier")
+    @patch("app.services.finance.ap.purchase_order.Supplier")
     def test_create_po_no_lines(self, mock_supplier_class):
         """Test PO creation without lines fails."""
         db = MagicMock()
@@ -250,10 +250,10 @@ class TestCreatePO:
         assert exc_info.value.status_code == 400
         assert "at least one line" in str(exc_info.value.detail).lower()
 
-    @patch("app.services.ifrs.ap.purchase_order.SequenceService")
-    @patch("app.services.ifrs.ap.purchase_order.PurchaseOrderLine")
-    @patch("app.services.ifrs.ap.purchase_order.PurchaseOrder")
-    @patch("app.services.ifrs.ap.purchase_order.Supplier")
+    @patch("app.services.finance.ap.purchase_order.SequenceService")
+    @patch("app.services.finance.ap.purchase_order.PurchaseOrderLine")
+    @patch("app.services.finance.ap.purchase_order.PurchaseOrder")
+    @patch("app.services.finance.ap.purchase_order.Supplier")
     def test_create_po_calculates_totals(
         self, mock_supplier_class, mock_po_class, mock_line_class, mock_seq_service
     ):
@@ -308,10 +308,10 @@ class TestCreatePO:
         assert captured_values.get("tax_amount") == Decimal("75")
         assert captured_values.get("total_amount") == Decimal("825")
 
-    @patch("app.services.ifrs.ap.purchase_order.SequenceService")
-    @patch("app.services.ifrs.ap.purchase_order.PurchaseOrderLine")
-    @patch("app.services.ifrs.ap.purchase_order.PurchaseOrder")
-    @patch("app.services.ifrs.ap.purchase_order.Supplier")
+    @patch("app.services.finance.ap.purchase_order.SequenceService")
+    @patch("app.services.finance.ap.purchase_order.PurchaseOrderLine")
+    @patch("app.services.finance.ap.purchase_order.PurchaseOrder")
+    @patch("app.services.finance.ap.purchase_order.Supplier")
     def test_create_po_with_all_fields(
         self, mock_supplier_class, mock_po_class, mock_line_class, mock_seq_service
     ):
@@ -365,8 +365,8 @@ class TestCreatePO:
 class TestSubmitForApproval:
     """Tests for PO submission for approval."""
 
-    @patch("app.services.ifrs.ap.purchase_order.POStatus")
-    @patch("app.services.ifrs.ap.purchase_order.PurchaseOrder")
+    @patch("app.services.finance.ap.purchase_order.POStatus")
+    @patch("app.services.finance.ap.purchase_order.PurchaseOrder")
     def test_submit_for_approval_success(self, mock_po_class, mock_status_class):
         """Test successful PO submission."""
         db = MagicMock()
@@ -392,7 +392,7 @@ class TestSubmitForApproval:
         assert mock_po.status == mock_pending
         db.commit.assert_called_once()
 
-    @patch("app.services.ifrs.ap.purchase_order.PurchaseOrder")
+    @patch("app.services.finance.ap.purchase_order.PurchaseOrder")
     def test_submit_for_approval_not_found(self, mock_po_class):
         """Test submission of non-existent PO."""
         db = MagicMock()
@@ -406,8 +406,8 @@ class TestSubmitForApproval:
 
         assert exc_info.value.status_code == 404
 
-    @patch("app.services.ifrs.ap.purchase_order.POStatus")
-    @patch("app.services.ifrs.ap.purchase_order.PurchaseOrder")
+    @patch("app.services.finance.ap.purchase_order.POStatus")
+    @patch("app.services.finance.ap.purchase_order.PurchaseOrder")
     def test_submit_for_approval_wrong_status(self, mock_po_class, mock_status_class):
         """Test submission of PO not in DRAFT status."""
         db = MagicMock()
@@ -438,8 +438,8 @@ class TestSubmitForApproval:
 class TestApprovePO:
     """Tests for PO approval."""
 
-    @patch("app.services.ifrs.ap.purchase_order.POStatus")
-    @patch("app.services.ifrs.ap.purchase_order.PurchaseOrder")
+    @patch("app.services.finance.ap.purchase_order.POStatus")
+    @patch("app.services.finance.ap.purchase_order.PurchaseOrder")
     def test_approve_po_success(self, mock_po_class, mock_status_class):
         """Test successful PO approval."""
         db = MagicMock()
@@ -471,7 +471,7 @@ class TestApprovePO:
         assert mock_po.approved_at is not None
         db.commit.assert_called_once()
 
-    @patch("app.services.ifrs.ap.purchase_order.PurchaseOrder")
+    @patch("app.services.finance.ap.purchase_order.PurchaseOrder")
     def test_approve_po_not_found(self, mock_po_class):
         """Test approval of non-existent PO."""
         db = MagicMock()
@@ -484,8 +484,8 @@ class TestApprovePO:
 
         assert exc_info.value.status_code == 404
 
-    @patch("app.services.ifrs.ap.purchase_order.POStatus")
-    @patch("app.services.ifrs.ap.purchase_order.PurchaseOrder")
+    @patch("app.services.finance.ap.purchase_order.POStatus")
+    @patch("app.services.finance.ap.purchase_order.PurchaseOrder")
     def test_approve_po_wrong_status(self, mock_po_class, mock_status_class):
         """Test approval of PO not in PENDING_APPROVAL status."""
         db = MagicMock()
@@ -509,8 +509,8 @@ class TestApprovePO:
         assert exc_info.value.status_code == 400
         assert "Cannot approve" in str(exc_info.value.detail)
 
-    @patch("app.services.ifrs.ap.purchase_order.POStatus")
-    @patch("app.services.ifrs.ap.purchase_order.PurchaseOrder")
+    @patch("app.services.finance.ap.purchase_order.POStatus")
+    @patch("app.services.finance.ap.purchase_order.PurchaseOrder")
     def test_approve_po_segregation_of_duties(self, mock_po_class, mock_status_class):
         """Test SoD enforcement - approver cannot be creator."""
         db = MagicMock()
@@ -543,8 +543,8 @@ class TestApprovePO:
 class TestCancelPO:
     """Tests for PO cancellation."""
 
-    @patch("app.services.ifrs.ap.purchase_order.POStatus")
-    @patch("app.services.ifrs.ap.purchase_order.PurchaseOrder")
+    @patch("app.services.finance.ap.purchase_order.POStatus")
+    @patch("app.services.finance.ap.purchase_order.PurchaseOrder")
     def test_cancel_po_success(self, mock_po_class, mock_status_class):
         """Test successful PO cancellation."""
         db = MagicMock()
@@ -574,7 +574,7 @@ class TestCancelPO:
         assert mock_po.status == mock_cancelled
         db.commit.assert_called_once()
 
-    @patch("app.services.ifrs.ap.purchase_order.PurchaseOrder")
+    @patch("app.services.finance.ap.purchase_order.PurchaseOrder")
     def test_cancel_po_not_found(self, mock_po_class):
         """Test cancellation of non-existent PO."""
         db = MagicMock()
@@ -587,8 +587,8 @@ class TestCancelPO:
 
         assert exc_info.value.status_code == 404
 
-    @patch("app.services.ifrs.ap.purchase_order.POStatus")
-    @patch("app.services.ifrs.ap.purchase_order.PurchaseOrder")
+    @patch("app.services.finance.ap.purchase_order.POStatus")
+    @patch("app.services.finance.ap.purchase_order.PurchaseOrder")
     def test_cancel_po_received_status(self, mock_po_class, mock_status_class):
         """Test cannot cancel PO in RECEIVED status."""
         db = MagicMock()
@@ -612,8 +612,8 @@ class TestCancelPO:
         assert exc_info.value.status_code == 400
         assert "Cannot cancel" in str(exc_info.value.detail)
 
-    @patch("app.services.ifrs.ap.purchase_order.POStatus")
-    @patch("app.services.ifrs.ap.purchase_order.PurchaseOrder")
+    @patch("app.services.finance.ap.purchase_order.POStatus")
+    @patch("app.services.finance.ap.purchase_order.PurchaseOrder")
     def test_cancel_po_closed_status(self, mock_po_class, mock_status_class):
         """Test cannot cancel PO in CLOSED status."""
         db = MagicMock()
@@ -636,8 +636,8 @@ class TestCancelPO:
 
         assert exc_info.value.status_code == 400
 
-    @patch("app.services.ifrs.ap.purchase_order.POStatus")
-    @patch("app.services.ifrs.ap.purchase_order.PurchaseOrder")
+    @patch("app.services.finance.ap.purchase_order.POStatus")
+    @patch("app.services.finance.ap.purchase_order.PurchaseOrder")
     def test_cancel_po_with_received_goods(self, mock_po_class, mock_status_class):
         """Test cannot cancel PO with received goods."""
         db = MagicMock()
@@ -671,8 +671,8 @@ class TestCancelPO:
 class TestClosePO:
     """Tests for PO closing."""
 
-    @patch("app.services.ifrs.ap.purchase_order.POStatus")
-    @patch("app.services.ifrs.ap.purchase_order.PurchaseOrder")
+    @patch("app.services.finance.ap.purchase_order.POStatus")
+    @patch("app.services.finance.ap.purchase_order.PurchaseOrder")
     def test_close_po_success(self, mock_po_class, mock_status_class):
         """Test successful PO closing."""
         db = MagicMock()
@@ -696,7 +696,7 @@ class TestClosePO:
         assert mock_po.status == mock_closed
         db.commit.assert_called_once()
 
-    @patch("app.services.ifrs.ap.purchase_order.PurchaseOrder")
+    @patch("app.services.finance.ap.purchase_order.PurchaseOrder")
     def test_close_po_not_found(self, mock_po_class):
         """Test closing non-existent PO."""
         db = MagicMock()
@@ -709,8 +709,8 @@ class TestClosePO:
 
         assert exc_info.value.status_code == 404
 
-    @patch("app.services.ifrs.ap.purchase_order.POStatus")
-    @patch("app.services.ifrs.ap.purchase_order.PurchaseOrder")
+    @patch("app.services.finance.ap.purchase_order.POStatus")
+    @patch("app.services.finance.ap.purchase_order.PurchaseOrder")
     def test_close_po_cancelled(self, mock_po_class, mock_status_class):
         """Test cannot close cancelled PO."""
         db = MagicMock()
@@ -738,8 +738,8 @@ class TestClosePO:
 class TestUpdateReceivedAmount:
     """Tests for updating received amount."""
 
-    @patch("app.services.ifrs.ap.purchase_order.POStatus")
-    @patch("app.services.ifrs.ap.purchase_order.PurchaseOrder")
+    @patch("app.services.finance.ap.purchase_order.POStatus")
+    @patch("app.services.finance.ap.purchase_order.PurchaseOrder")
     def test_update_received_partial(self, mock_po_class, mock_status_class):
         """Test partial receipt updates status to PARTIALLY_RECEIVED."""
         db = MagicMock()
@@ -767,8 +767,8 @@ class TestUpdateReceivedAmount:
         assert mock_po.status == mock_partial
         db.commit.assert_called_once()
 
-    @patch("app.services.ifrs.ap.purchase_order.POStatus")
-    @patch("app.services.ifrs.ap.purchase_order.PurchaseOrder")
+    @patch("app.services.finance.ap.purchase_order.POStatus")
+    @patch("app.services.finance.ap.purchase_order.PurchaseOrder")
     def test_update_received_full(self, mock_po_class, mock_status_class):
         """Test full receipt updates status to RECEIVED."""
         db = MagicMock()
@@ -796,7 +796,7 @@ class TestUpdateReceivedAmount:
         assert mock_po.status == mock_received
         db.commit.assert_called_once()
 
-    @patch("app.services.ifrs.ap.purchase_order.PurchaseOrder")
+    @patch("app.services.finance.ap.purchase_order.PurchaseOrder")
     def test_update_received_not_found(self, mock_po_class):
         """Test updating non-existent PO."""
         db = MagicMock()
@@ -808,8 +808,8 @@ class TestUpdateReceivedAmount:
 
         assert exc_info.value.status_code == 404
 
-    @patch("app.services.ifrs.ap.purchase_order.POStatus")
-    @patch("app.services.ifrs.ap.purchase_order.PurchaseOrder")
+    @patch("app.services.finance.ap.purchase_order.POStatus")
+    @patch("app.services.finance.ap.purchase_order.PurchaseOrder")
     def test_update_received_over_total(self, mock_po_class, mock_status_class):
         """Test receipt can exceed total (over-delivery)."""
         db = MagicMock()
@@ -842,7 +842,7 @@ class TestUpdateReceivedAmount:
 class TestGetters:
     """Tests for getter methods."""
 
-    @patch("app.services.ifrs.ap.purchase_order.PurchaseOrder")
+    @patch("app.services.finance.ap.purchase_order.PurchaseOrder")
     def test_get_po(self, mock_po_class):
         """Test getting PO by ID."""
         db = MagicMock()
@@ -856,7 +856,7 @@ class TestGetters:
         assert result is not None
         assert result.po_id == po_id
 
-    @patch("app.services.ifrs.ap.purchase_order.PurchaseOrder")
+    @patch("app.services.finance.ap.purchase_order.PurchaseOrder")
     def test_get_po_not_found(self, mock_po_class):
         """Test getting non-existent PO."""
         db = MagicMock()
@@ -867,7 +867,7 @@ class TestGetters:
 
         assert result is None
 
-    @patch("app.services.ifrs.ap.purchase_order.PurchaseOrder")
+    @patch("app.services.finance.ap.purchase_order.PurchaseOrder")
     def test_get_by_number(self, mock_po_class):
         """Test getting PO by number."""
         db = MagicMock()
@@ -881,7 +881,7 @@ class TestGetters:
         assert result is not None
         assert result.po_number == "PO-000001"
 
-    @patch("app.services.ifrs.ap.purchase_order.PurchaseOrderLine")
+    @patch("app.services.finance.ap.purchase_order.PurchaseOrderLine")
     def test_get_po_lines(self, mock_line_class):
         """Test getting PO lines."""
         db = MagicMock()
@@ -903,7 +903,7 @@ class TestGetters:
 class TestListPOs:
     """Tests for listing purchase orders."""
 
-    @patch("app.services.ifrs.ap.purchase_order.PurchaseOrder")
+    @patch("app.services.finance.ap.purchase_order.PurchaseOrder")
     def test_list_pos(self, mock_po_class):
         """Test listing purchase orders."""
         db = MagicMock()
@@ -949,7 +949,7 @@ class TestListPOs:
         assert len(result) == 1
         assert mock_query.filter.called
 
-    @patch("app.services.ifrs.ap.purchase_order.PurchaseOrder")
+    @patch("app.services.finance.ap.purchase_order.PurchaseOrder")
     def test_list_pos_empty(self, mock_po_class):
         """Test listing returns empty when no POs."""
         db = MagicMock()
@@ -960,7 +960,7 @@ class TestListPOs:
 
         assert len(result) == 0
 
-    @patch("app.services.ifrs.ap.purchase_order.PurchaseOrder")
+    @patch("app.services.finance.ap.purchase_order.PurchaseOrder")
     def test_list_pos_pagination(self, mock_po_class):
         """Test list respects pagination."""
         db = MagicMock()

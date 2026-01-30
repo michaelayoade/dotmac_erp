@@ -15,14 +15,14 @@ from tests.ifrs.platform.conftest import MockColumn, MockEventOutbox
 @contextmanager
 def patch_outbox_publisher():
     """Helper context manager that sets up all required patches for OutboxPublisher."""
-    with patch('app.services.ifrs.platform.outbox_publisher.EventOutbox') as mock_outbox:
+    with patch('app.services.finance.platform.outbox_publisher.EventOutbox') as mock_outbox:
         mock_outbox.status = MockColumn()
         mock_outbox.next_retry_at = MockColumn()
         mock_outbox.retry_count = MockColumn()
         mock_outbox.producer_module = MockColumn()
-        with patch('app.services.ifrs.platform.outbox_publisher.and_', return_value=MagicMock()):
-            with patch('app.services.ifrs.platform.outbox_publisher.or_', return_value=MagicMock()):
-                with patch('app.services.ifrs.platform.outbox_publisher.coerce_uuid', side_effect=lambda x: x):
+        with patch('app.services.finance.platform.outbox_publisher.and_', return_value=MagicMock()):
+            with patch('app.services.finance.platform.outbox_publisher.or_', return_value=MagicMock()):
+                with patch('app.services.finance.platform.outbox_publisher.coerce_uuid', side_effect=lambda x: x):
                     yield mock_outbox
 
 
@@ -52,12 +52,12 @@ class TestOutboxPublisher:
         self, service, mock_db_session
     ):
         """publish_event should create an event outbox record."""
-        with patch('app.services.ifrs.platform.outbox_publisher.EventOutbox') as MockModel:
+        with patch('app.services.finance.platform.outbox_publisher.EventOutbox') as MockModel:
             mock_instance = MagicMock()
             MockModel.return_value = mock_instance
-            with patch('app.services.ifrs.platform.outbox_publisher.EventStatus') as MockStatus:
+            with patch('app.services.finance.platform.outbox_publisher.EventStatus') as MockStatus:
                 MockStatus.PENDING = "PENDING"
-                with patch('app.services.ifrs.platform.outbox_publisher.coerce_uuid', side_effect=lambda x: x):
+                with patch('app.services.finance.platform.outbox_publisher.coerce_uuid', side_effect=lambda x: x):
                     result = service.publish_event(
                         mock_db_session,
                         event_name="journal.posted",
@@ -96,9 +96,9 @@ class TestOutboxPublisher:
         mock_event = MockEventOutbox(event_id=event_id, status="PENDING")
         mock_db_session.get.return_value = mock_event
 
-        with patch('app.services.ifrs.platform.outbox_publisher.EventOutbox'):
-            with patch('app.services.ifrs.platform.outbox_publisher.EventStatus', mock_event_status):
-                with patch('app.services.ifrs.platform.outbox_publisher.coerce_uuid', side_effect=lambda x: x):
+        with patch('app.services.finance.platform.outbox_publisher.EventOutbox'):
+            with patch('app.services.finance.platform.outbox_publisher.EventStatus', mock_event_status):
+                with patch('app.services.finance.platform.outbox_publisher.coerce_uuid', side_effect=lambda x: x):
                     result = service.mark_published(
                         mock_db_session,
                         event_id=event_id,
@@ -114,8 +114,8 @@ class TestOutboxPublisher:
         """mark_published should raise for non-existent event."""
         mock_db_session.get.return_value = None
 
-        with patch('app.services.ifrs.platform.outbox_publisher.EventOutbox'):
-            with patch('app.services.ifrs.platform.outbox_publisher.coerce_uuid', side_effect=lambda x: x):
+        with patch('app.services.finance.platform.outbox_publisher.EventOutbox'):
+            with patch('app.services.finance.platform.outbox_publisher.coerce_uuid', side_effect=lambda x: x):
                 with pytest.raises(ValueError) as exc_info:
                     service.mark_published(
                         mock_db_session,
@@ -132,9 +132,9 @@ class TestOutboxPublisher:
         mock_event = MockEventOutbox(event_id=event_id, status="PENDING", retry_count=0)
         mock_db_session.get.return_value = mock_event
 
-        with patch('app.services.ifrs.platform.outbox_publisher.EventOutbox'):
-            with patch('app.services.ifrs.platform.outbox_publisher.EventStatus', mock_event_status):
-                with patch('app.services.ifrs.platform.outbox_publisher.coerce_uuid', side_effect=lambda x: x):
+        with patch('app.services.finance.platform.outbox_publisher.EventOutbox'):
+            with patch('app.services.finance.platform.outbox_publisher.EventStatus', mock_event_status):
+                with patch('app.services.finance.platform.outbox_publisher.coerce_uuid', side_effect=lambda x: x):
                     result = service.handle_retry(
                         mock_db_session,
                         event_id=event_id,
@@ -157,9 +157,9 @@ class TestOutboxPublisher:
         )
         mock_db_session.get.return_value = mock_event
 
-        with patch('app.services.ifrs.platform.outbox_publisher.EventOutbox'):
-            with patch('app.services.ifrs.platform.outbox_publisher.EventStatus', mock_event_status):
-                with patch('app.services.ifrs.platform.outbox_publisher.coerce_uuid', side_effect=lambda x: x):
+        with patch('app.services.finance.platform.outbox_publisher.EventOutbox'):
+            with patch('app.services.finance.platform.outbox_publisher.EventStatus', mock_event_status):
+                with patch('app.services.finance.platform.outbox_publisher.coerce_uuid', side_effect=lambda x: x):
                     result = service.handle_retry(
                         mock_db_session,
                         event_id=event_id,
@@ -176,9 +176,9 @@ class TestOutboxPublisher:
         mock_event = MockEventOutbox(event_id=event_id, status="PENDING", retry_count=0)
         mock_db_session.get.return_value = mock_event
 
-        with patch('app.services.ifrs.platform.outbox_publisher.EventOutbox'):
-            with patch('app.services.ifrs.platform.outbox_publisher.EventStatus', mock_event_status):
-                with patch('app.services.ifrs.platform.outbox_publisher.coerce_uuid', side_effect=lambda x: x):
+        with patch('app.services.finance.platform.outbox_publisher.EventOutbox'):
+            with patch('app.services.finance.platform.outbox_publisher.EventStatus', mock_event_status):
+                with patch('app.services.finance.platform.outbox_publisher.coerce_uuid', side_effect=lambda x: x):
                     result = service.handle_retry(
                         mock_db_session,
                         event_id=event_id,
@@ -196,9 +196,9 @@ class TestOutboxPublisher:
         mock_event = MockEventOutbox(event_id=event_id, status="FAILED")
         mock_db_session.get.return_value = mock_event
 
-        with patch('app.services.ifrs.platform.outbox_publisher.EventOutbox'):
-            with patch('app.services.ifrs.platform.outbox_publisher.EventStatus', mock_event_status):
-                with patch('app.services.ifrs.platform.outbox_publisher.coerce_uuid', side_effect=lambda x: x):
+        with patch('app.services.finance.platform.outbox_publisher.EventOutbox'):
+            with patch('app.services.finance.platform.outbox_publisher.EventStatus', mock_event_status):
+                with patch('app.services.finance.platform.outbox_publisher.coerce_uuid', side_effect=lambda x: x):
                     result = service.mark_dead(
                         mock_db_session,
                         event_id=event_id,
@@ -215,8 +215,8 @@ class TestOutboxPublisher:
         mock_events = [MockEventOutbox(status="FAILED")]
         mock_db_session.query.return_value.filter.return_value.order_by.return_value.limit.return_value.all.return_value = mock_events
 
-        with patch('app.services.ifrs.platform.outbox_publisher.EventOutbox'):
-            with patch('app.services.ifrs.platform.outbox_publisher.EventStatus', mock_event_status):
+        with patch('app.services.finance.platform.outbox_publisher.EventOutbox'):
+            with patch('app.services.finance.platform.outbox_publisher.EventStatus', mock_event_status):
                 result = service.get_failed_events(
                     mock_db_session,
                     status=mock_event_status.FAILED,
@@ -237,9 +237,9 @@ class TestOutboxPublisher:
         )
         mock_db_session.get.return_value = mock_event
 
-        with patch('app.services.ifrs.platform.outbox_publisher.EventOutbox'):
-            with patch('app.services.ifrs.platform.outbox_publisher.EventStatus', mock_event_status):
-                with patch('app.services.ifrs.platform.outbox_publisher.coerce_uuid', side_effect=lambda x: x):
+        with patch('app.services.finance.platform.outbox_publisher.EventOutbox'):
+            with patch('app.services.finance.platform.outbox_publisher.EventStatus', mock_event_status):
+                with patch('app.services.finance.platform.outbox_publisher.coerce_uuid', side_effect=lambda x: x):
                     result = service.retry_dead_event(
                         mock_db_session,
                         event_id=event_id,
@@ -258,8 +258,8 @@ class TestOutboxPublisher:
         mock_event = MockEventOutbox(event_id=event_id)
         mock_db_session.get.return_value = mock_event
 
-        with patch('app.services.ifrs.platform.outbox_publisher.EventOutbox'):
-            with patch('app.services.ifrs.platform.outbox_publisher.coerce_uuid', side_effect=lambda x: x):
+        with patch('app.services.finance.platform.outbox_publisher.EventOutbox'):
+            with patch('app.services.finance.platform.outbox_publisher.coerce_uuid', side_effect=lambda x: x):
                 result = service.get_event(
                     mock_db_session,
                     event_id=str(event_id),
@@ -273,8 +273,8 @@ class TestOutboxPublisher:
         """get_event should raise for non-existent event."""
         mock_db_session.get.return_value = None
 
-        with patch('app.services.ifrs.platform.outbox_publisher.EventOutbox'):
-            with patch('app.services.ifrs.platform.outbox_publisher.coerce_uuid', side_effect=lambda x: x):
+        with patch('app.services.finance.platform.outbox_publisher.EventOutbox'):
+            with patch('app.services.finance.platform.outbox_publisher.coerce_uuid', side_effect=lambda x: x):
                 with pytest.raises(ValueError) as exc_info:
                     service.get_event(
                         mock_db_session,
@@ -290,7 +290,7 @@ class TestOutboxPublisher:
         mock_events = [MockEventOutbox(aggregate_type="JournalEntry", aggregate_id="123")]
         mock_db_session.query.return_value.filter.return_value.order_by.return_value.limit.return_value.all.return_value = mock_events
 
-        with patch('app.services.ifrs.platform.outbox_publisher.EventOutbox'):
+        with patch('app.services.finance.platform.outbox_publisher.EventOutbox'):
             result = service.get_events_by_aggregate(
                 mock_db_session,
                 aggregate_type="JournalEntry",
@@ -306,7 +306,7 @@ class TestOutboxPublisher:
         mock_events = [MockEventOutbox(correlation_id="corr-123")]
         mock_db_session.query.return_value.filter.return_value.order_by.return_value.limit.return_value.all.return_value = mock_events
 
-        with patch('app.services.ifrs.platform.outbox_publisher.EventOutbox'):
+        with patch('app.services.finance.platform.outbox_publisher.EventOutbox'):
             result = service.get_events_by_correlation(
                 mock_db_session,
                 correlation_id="corr-123",
@@ -319,8 +319,8 @@ class TestOutboxPublisher:
         mock_events = [MockEventOutbox(), MockEventOutbox()]
         mock_db_session.query.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = mock_events
 
-        with patch('app.services.ifrs.platform.outbox_publisher.EventOutbox'):
-            with patch('app.services.ifrs.platform.outbox_publisher.EventStatus', mock_event_status):
+        with patch('app.services.finance.platform.outbox_publisher.EventOutbox'):
+            with patch('app.services.finance.platform.outbox_publisher.EventStatus', mock_event_status):
                 result = service.list(
                     mock_db_session,
                     status=mock_event_status.PENDING,

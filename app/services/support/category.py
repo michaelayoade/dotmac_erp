@@ -53,10 +53,16 @@ class CategoryService:
     def get_category(
         self,
         db: Session,
+        organization_id: uuid.UUID,
         category_id: uuid.UUID,
     ) -> Optional[TicketCategory]:
-        """Get a category by ID."""
-        return db.get(TicketCategory, category_id)
+        """Get a category by ID, scoped to organization."""
+        return db.execute(
+            select(TicketCategory).where(
+                TicketCategory.category_id == category_id,
+                TicketCategory.organization_id == organization_id,
+            )
+        ).scalar_one_or_none()
 
     def get_category_by_code(
         self,
@@ -142,6 +148,7 @@ class CategoryService:
     def update_category(
         self,
         db: Session,
+        organization_id: uuid.UUID,
         category_id: uuid.UUID,
         category_name: Optional[str] = None,
         description: Optional[str] = None,
@@ -155,7 +162,7 @@ class CategoryService:
         is_active: Optional[bool] = None,
     ) -> Optional[TicketCategory]:
         """Update a category."""
-        category = self.get_category(db, category_id)
+        category = self.get_category(db, organization_id, category_id)
         if not category:
             return None
 
@@ -187,6 +194,7 @@ class CategoryService:
     def delete_category(
         self,
         db: Session,
+        organization_id: uuid.UUID,
         category_id: uuid.UUID,
         hard_delete: bool = False,
     ) -> Tuple[bool, Optional[str]]:
@@ -201,7 +209,7 @@ class CategoryService:
         Returns:
             (success, error_message)
         """
-        category = self.get_category(db, category_id)
+        category = self.get_category(db, organization_id, category_id)
         if not category:
             return False, "Category not found"
 
