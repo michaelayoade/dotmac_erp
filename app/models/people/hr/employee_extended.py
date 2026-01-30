@@ -144,7 +144,7 @@ class EmployeeDocument(Base, AuditMixin, SoftDeleteMixin):
 
     # Document metadata
     document_type: Mapped[DocumentType] = mapped_column(
-        Enum(DocumentType, name="document_type"),
+        Enum(DocumentType, name="employee_document_type", schema="hr"),
         nullable=False,
     )
     document_name: Mapped[str] = mapped_column(
