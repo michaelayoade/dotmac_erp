@@ -1,0 +1,49 @@
+.......................................................................s [  1%]
+ssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss [  3%]
+ssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss [  5%]
+ssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss [  7%]
+ssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss [  9%]
+ssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss [ 11%]
+ssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss [ 12%]
+ssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss [ 14%]
+ssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss [ 16%]
+ssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss [ 18%]
+ssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss [ 20%]
+ssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss [ 22%]
+ssssssssss.............................................................. [ 24%]
+........................................................................ [ 25%]
+...................................................................E
+==================================== ERRORS ====================================
+______ ERROR at setup of TestCreateSupplier.test_create_supplier_success _______
+
+    @pytest.fixture
+    def sample_supplier_input():
+        """Create sample supplier input."""
+        from app.models.finance.ap.supplier import SupplierType
+    
+>       return SupplierInput(
+            supplier_code="SUP-001",
+            supplier_type=SupplierType.VENDOR,
+            supplier_name="Acme Corporation",
+            default_payable_account_id=uuid4(),
+            trading_name="Acme Corp",
+            tax_id="12-3456789",
+            payment_terms_days=30,
+            currency_code="USD",
+        )
+E       TypeError: SupplierInput.__init__() got an unexpected keyword argument 'legal_name'
+
+tests/ifrs/ap/test_supplier_service.py:46: TypeError
+=============================== warnings summary ===============================
+tests/e2e/test_module_integrations.py:303
+  /root/dotmac/tests/e2e/test_module_integrations.py:303: PytestUnknownMarkWarning: Unknown pytest.mark.slow - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.slow
+
+tests/e2e/test_module_integrations.py:320
+  /root/dotmac/tests/e2e/test_module_integrations.py:320: PytestUnknownMarkWarning: Unknown pytest.mark.slow - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.slow
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+ERROR tests/ifrs/ap/test_supplier_service.py::TestCreateSupplier::test_create_supplier_success
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!

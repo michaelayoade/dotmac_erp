@@ -1,11 +1,113 @@
-============================= test session starts ==============================
-platform linux -- Python 3.12.3, pytest-8.2.2, pluggy-1.6.0 -- /root/dotmac/.venv/bin/python
-cachedir: .pytest_cache
-rootdir: /root/dotmac
-configfile: pytest.ini
-testpaths: tests
-plugins: playwright-0.7.2, base-url-2.1.0, asyncio-1.3.0, anyio-4.12.1, cov-5.0.0
-asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=function, asyncio_default_test_loop_scope=function
-collecting ... collected 3882 items
+........................................................................ [  2%]
+........................................................................ [  4%]
+........................................................................ [  7%]
+..........................................................F
+=================================== FAILURES ===================================
+_______________ TestUpdateSupplier.test_update_supplier_success ________________
 
-tests/api/ifrs/test_banking_api.py::TestBankAccountAPI::test_create_bank_account_success 
+self = <tests.ifrs.ap.test_supplier_service.TestUpdateSupplier object at 0x7e41284a8110>
+mock_db = <MagicMock id='138817713645392'>
+org_id = UUID('9a5ced1c-6e2e-4220-b088-b6f663aaeb2d')
+sample_supplier_input = SupplierInput(supplier_code='SUP-001', supplier_type=<SupplierType.VENDOR: 'VENDOR'>, supplier_name='Acme Corporation'...tance_address=None, primary_contact=None, bank_details=None, email=None, phone=None, address=None, payment_method=None)
+
+    def test_update_supplier_success(self, mock_db, org_id, sample_supplier_input):
+        """Test successful supplier update."""
+        supplier = MockSupplier(
+            organization_id=org_id,
+            supplier_code="OLD-CODE",
+        )
+        mock_db.get.return_value = supplier
+    
+        mock_query = MagicMock()
+        mock_query.filter.return_value = mock_query
+        mock_query.first.return_value = None  # No duplicate
+        mock_db.query.return_value = mock_query
+    
+        with patch("app.services.finance.ap.supplier.Supplier"):
+>           result = SupplierService.update_supplier(
+                mock_db, org_id, supplier.supplier_id, sample_supplier_input
+            )
+
+tests/ifrs/ap/test_supplier_service.py:124: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app/services/finance/ap/supplier.py:177: in update_supplier
+    validate_unique_code(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+db = <MagicMock id='138817713645392'>
+model_class = <MagicMock name='Supplier' id='138817712453920'>
+org_id = UUID('9a5ced1c-6e2e-4220-b088-b6f663aaeb2d'), code_value = 'SUP-001'
+code_field_name = 'supplier_code', entity_name = 'Supplier'
+exclude_id = UUID('3cff9640-a95c-4619-992f-06c45233aeea'), parent_id = None
+parent_field_name = None
+
+    def validate_unique_code(
+        db: Session,
+        model_class: Type[T],
+        org_id: UUID | str,
+        code_value: str,
+        code_field_name: str = "code",
+        entity_name: Optional[str] = None,
+        exclude_id: Optional[UUID | str] = None,
+        parent_id: Optional[UUID | str] = None,
+        parent_field_name: Optional[str] = None,
+    ) -> None:
+        """
+        Validate that a code is unique within an organization (and optionally within a parent entity).
+    
+        Args:
+            db: Database session
+            model_class: SQLAlchemy model class
+            org_id: Organization ID to scope the check
+            code_value: The code value to check for uniqueness
+            code_field_name: Name of the code field on the model (e.g., "supplier_code")
+            entity_name: Human-readable entity name for error messages (auto-derived if not provided)
+            exclude_id: Entity ID to exclude from the check (for updates)
+            parent_id: Optional parent entity ID for hierarchical uniqueness
+            parent_field_name: Field name for parent relationship (e.g., "warehouse_id")
+    
+        Raises:
+            HTTPException(400): If the code already exists
+        """
+        org_id = coerce_uuid(org_id)
+    
+        # Build base filter
+        code_column = getattr(model_class, code_field_name, None)
+        if code_column is None:
+            raise ValueError(f"Model {model_class.__name__} has no field '{code_field_name}'")
+    
+        org_column = getattr(model_class, "organization_id", None)
+        if org_column is None:
+            raise ValueError(f"Model {model_class.__name__} has no 'organization_id' field")
+    
+        filters = [
+            org_column == org_id,
+            code_column == code_value,
+        ]
+    
+        # Add parent scope if provided
+        if parent_id is not None and parent_field_name:
+            parent_column = getattr(model_class, parent_field_name, None)
+            if parent_column is not None:
+                filters.append(parent_column == coerce_uuid(parent_id))
+    
+        # Exclude current entity for updates
+        if exclude_id is not None:
+            pk_column_name = get_model_pk_column(model_class)
+>           pk_column = getattr(model_class, pk_column_name, None)
+E           TypeError: attribute name must be string, not 'MagicMock'
+
+app/services/finance/common/helpers.py:116: TypeError
+=============================== warnings summary ===============================
+tests/e2e/test_module_integrations.py:303
+  /root/dotmac/tests/e2e/test_module_integrations.py:303: PytestUnknownMarkWarning: Unknown pytest.mark.slow - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.slow
+
+tests/e2e/test_module_integrations.py:320
+  /root/dotmac/tests/e2e/test_module_integrations.py:320: PytestUnknownMarkWarning: Unknown pytest.mark.slow - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.slow
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/ifrs/ap/test_supplier_service.py::TestUpdateSupplier::test_update_supplier_success
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
