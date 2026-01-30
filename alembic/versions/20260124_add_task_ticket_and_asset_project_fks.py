@@ -86,15 +86,15 @@ def upgrade() -> None:
         new_column_name="custodian_employee_id",
         schema="fa",
     )
-    # Add FK constraint to employee
-    op.create_foreign_key(
-        "fk_asset_custodian_employee",
-        "asset",
-        "employee",
-        ["custodian_employee_id"],
-        ["employee_id"],
-        source_schema="fa",
-        referent_schema="hr",
+    # Add FK constraint to employee as NOT VALID to avoid failing on legacy data
+    op.execute(
+        """
+        ALTER TABLE fa.asset
+        ADD CONSTRAINT fk_asset_custodian_employee
+        FOREIGN KEY (custodian_employee_id)
+        REFERENCES hr.employee (employee_id)
+        NOT VALID
+        """
     )
 
 

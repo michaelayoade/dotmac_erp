@@ -17,6 +17,12 @@ depends_on = None
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    # If core RBAC tables already exist (from initial schema), skip to avoid conflict.
+    if inspector.has_table("roles") and inspector.has_table("permissions"):
+        return
+
     # Create roles table
     op.create_table(
         'roles',
@@ -72,6 +78,12 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    # These tables may be shared with the initial schema; avoid destructive drops.
+    return
+
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+
     # Drop indexes
     op.drop_index('ix_person_roles_role_id', table_name='person_roles')
     op.drop_index('ix_person_roles_person_id', table_name='person_roles')

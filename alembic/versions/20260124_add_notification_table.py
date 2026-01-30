@@ -76,7 +76,7 @@ def upgrade() -> None:
             "notification_id",
             postgresql.UUID(as_uuid=True),
             primary_key=True,
-            default=sa.text("gen_random_uuid()"),
+            server_default=sa.text("gen_random_uuid()"),
         ),
         sa.Column(
             "organization_id",

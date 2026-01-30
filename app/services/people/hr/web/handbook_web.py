@@ -87,6 +87,7 @@ class HRHandbookWebService:
             "people/hr/handbook/documents.html",
             {
                 "request": request,
+                "user": auth.user,
                 "documents": documents,
                 "stats_map": stats_map,
                 "total": total,
@@ -119,6 +120,7 @@ class HRHandbookWebService:
             "people/hr/handbook/document_form.html",
             {
                 "request": request,
+                "user": auth.user,
                 "document": document,
                 "categories": list(DocumentCategory),
                 "statuses": list(DocumentStatus),
@@ -209,6 +211,7 @@ class HRHandbookWebService:
                 "people/hr/handbook/document_form.html",
                 {
                     "request": request,
+                    "user": auth.user,
                     "document": document_opt,
                     "categories": list(DocumentCategory),
                     "statuses": list(DocumentStatus),
@@ -242,6 +245,7 @@ class HRHandbookWebService:
             "people/hr/handbook/document_detail.html",
             {
                 "request": request,
+                "user": auth.user,
                 "document": document,
                 "stats": stats,
                 "acknowledgments": acknowledgments,

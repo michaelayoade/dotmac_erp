@@ -171,9 +171,9 @@ def upgrade() -> None:
         sa.Column('email_sent_at', sa.DateTime(), nullable=True),
         sa.Column('actor_id', sa.UUID(), nullable=True),
         sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
-        sa.ForeignKeyConstraint(['recipient_id'], ['public.person.person_id']),
+        sa.ForeignKeyConstraint(['recipient_id'], ['public.people.id']),
         sa.ForeignKeyConstraint(['ticket_id'], ['support.ticket.ticket_id'], ondelete='CASCADE'),
-        sa.ForeignKeyConstraint(['actor_id'], ['public.person.person_id']),
+        sa.ForeignKeyConstraint(['actor_id'], ['public.people.id']),
         sa.PrimaryKeyConstraint('notification_id'),
         schema='support'
     )

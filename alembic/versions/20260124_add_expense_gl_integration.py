@@ -42,17 +42,10 @@ def upgrade() -> None:
     )
 
     # Add index on supplier_invoice_id if it doesn't exist
-    # (Using IF NOT EXISTS equivalent approach)
-    try:
-        op.create_index(
-            "idx_expense_claim_supplier_invoice",
-            "expense_claim",
-            ["supplier_invoice_id"],
-            schema="expense",
-        )
-    except Exception:
-        # Index may already exist
-        pass
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_expense_claim_supplier_invoice "
+        "ON expense.expense_claim (supplier_invoice_id)"
+    )
 
 
 def downgrade() -> None:
@@ -64,14 +57,7 @@ def downgrade() -> None:
         schema="expense",
     )
 
-    try:
-        op.drop_index(
-            "idx_expense_claim_supplier_invoice",
-            table_name="expense_claim",
-            schema="expense",
-        )
-    except Exception:
-        pass
+    op.execute("DROP INDEX IF EXISTS expense.idx_expense_claim_supplier_invoice")
 
     # Drop column
     op.drop_column("expense_claim", "journal_entry_id", schema="expense")
