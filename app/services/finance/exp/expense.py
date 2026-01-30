@@ -101,11 +101,16 @@ class ExpenseService:
     @staticmethod
     def submit(
         db: Session,
+        organization_id: str,
         expense_id: str,
         submitted_by: str,
     ) -> ExpenseEntry:
         """Submit expense for approval."""
-        expense = db.get(ExpenseEntry, coerce_uuid(expense_id))
+        org_id = coerce_uuid(organization_id)
+        expense = db.query(ExpenseEntry).filter(
+            ExpenseEntry.expense_id == coerce_uuid(expense_id),
+            ExpenseEntry.organization_id == org_id,
+        ).first()
         if not expense:
             raise ValueError("Expense not found")
 
@@ -122,11 +127,16 @@ class ExpenseService:
     @staticmethod
     def approve(
         db: Session,
+        organization_id: str,
         expense_id: str,
         approved_by: str,
     ) -> ExpenseEntry:
         """Approve expense."""
-        expense = db.get(ExpenseEntry, coerce_uuid(expense_id))
+        org_id = coerce_uuid(organization_id)
+        expense = db.query(ExpenseEntry).filter(
+            ExpenseEntry.expense_id == coerce_uuid(expense_id),
+            ExpenseEntry.organization_id == org_id,
+        ).first()
         if not expense:
             raise ValueError("Expense not found")
 
@@ -143,11 +153,16 @@ class ExpenseService:
     @staticmethod
     def reject(
         db: Session,
+        organization_id: str,
         expense_id: str,
         rejected_by: str,
     ) -> ExpenseEntry:
         """Reject expense."""
-        expense = db.get(ExpenseEntry, coerce_uuid(expense_id))
+        org_id = coerce_uuid(organization_id)
+        expense = db.query(ExpenseEntry).filter(
+            ExpenseEntry.expense_id == coerce_uuid(expense_id),
+            ExpenseEntry.organization_id == org_id,
+        ).first()
         if not expense:
             raise ValueError("Expense not found")
 
@@ -164,12 +179,23 @@ class ExpenseService:
     @staticmethod
     def post(
         db: Session,
+        organization_id: str,
         expense_id: str,
         posted_by: str,
         fiscal_period_id: str,
     ) -> ExpenseEntry:
-        """Post expense to general ledger."""
-        expense = db.get(ExpenseEntry, coerce_uuid(expense_id))
+        """Post expense to general ledger.
+
+        Uses a savepoint to ensure transactional consistency - if any step
+        fails, all changes are rolled back.
+        """
+        from app.models.finance.gl.fiscal_period import FiscalPeriod
+
+        org_id = coerce_uuid(organization_id)
+        expense = db.query(ExpenseEntry).filter(
+            ExpenseEntry.expense_id == coerce_uuid(expense_id),
+            ExpenseEntry.organization_id == org_id,
+        ).first()
         if not expense:
             raise ValueError("Expense not found")
 
@@ -182,99 +208,113 @@ class ExpenseService:
         user_id = coerce_uuid(posted_by)
         period_id = coerce_uuid(fiscal_period_id)
 
-        # Generate journal number
-        today = date.today()
-        prefix = f"JE-EXP-{today.strftime('%Y%m')}-"
-        last_je = (
-            db.query(JournalEntry)
-            .filter(
-                JournalEntry.organization_id == expense.organization_id,
-                JournalEntry.journal_number.like(f"{prefix}%"),
-            )
-            .order_by(JournalEntry.journal_number.desc())
-            .first()
-        )
-        if last_je:
-            try:
-                seq = int(last_je.journal_number.split("-")[-1]) + 1
-            except ValueError:
-                seq = 1
-        else:
-            seq = 1
-        journal_number = f"{prefix}{seq:04d}"
+        # Validate fiscal period belongs to the organization
+        fiscal_period = db.get(FiscalPeriod, period_id)
+        if not fiscal_period or fiscal_period.organization_id != org_id:
+            raise ValueError("Fiscal period not found or does not belong to organization")
 
-        # Create journal entry
-        journal = JournalEntry(
-            organization_id=expense.organization_id,
-            journal_number=journal_number,
-            journal_type=JournalType.STANDARD,
-            fiscal_period_id=period_id,
-            entry_date=expense.expense_date,
-            posting_date=expense.expense_date,
-            description=f"Expense: {expense.description}",
-            reference=expense.expense_number,
-            currency_code=expense.currency_code,
-            source_module="EXP",
-            source_document_id=expense.expense_id,
-            status=JournalStatus.POSTED,
-            created_by_user_id=user_id,
-            posted_by_user_id=user_id,
-            posted_at=datetime.utcnow(),
-        )
-        db.add(journal)
-        db.flush()
-
-        total_amount = expense.amount + expense.tax_amount
-
-        # Debit expense account
-        debit_line = JournalEntryLine(
-            journal_entry_id=journal.journal_entry_id,
-            line_number=1,
-            account_id=expense.expense_account_id,
-            description=expense.description,
-            debit_amount=expense.amount,
-            credit_amount=Decimal("0"),
-            currency_code=expense.currency_code,
-        )
-        db.add(debit_line)
-
-        # Debit tax if applicable
-        line_num = 2
-        if expense.tax_amount > 0 and expense.tax_code_id:
-            from app.models.finance.tax.tax_code import TaxCode
-            tax_code = db.get(TaxCode, expense.tax_code_id)
-            if tax_code and tax_code.tax_paid_account_id:
-                tax_line = JournalEntryLine(
-                    journal_entry_id=journal.journal_entry_id,
-                    line_number=line_num,
-                    account_id=tax_code.tax_paid_account_id,
-                    description=f"Input tax - {expense.description}",
-                    debit_amount=expense.tax_amount,
-                    credit_amount=Decimal("0"),
-                    currency_code=expense.currency_code,
+        # Use savepoint for transactional consistency
+        savepoint = db.begin_nested()
+        try:
+            # Generate journal number
+            today = date.today()
+            prefix = f"JE-EXP-{today.strftime('%Y%m')}-"
+            last_je = (
+                db.query(JournalEntry)
+                .filter(
+                    JournalEntry.organization_id == expense.organization_id,
+                    JournalEntry.journal_number.like(f"{prefix}%"),
                 )
-                db.add(tax_line)
-                line_num += 1
+                .order_by(JournalEntry.journal_number.desc())
+                .first()
+            )
+            if last_je:
+                try:
+                    seq = int(last_je.journal_number.split("-")[-1]) + 1
+                except ValueError:
+                    seq = 1
+            else:
+                seq = 1
+            journal_number = f"{prefix}{seq:04d}"
 
-        # Credit payment account
-        credit_line = JournalEntryLine(
-            journal_entry_id=journal.journal_entry_id,
-            line_number=line_num,
-            account_id=expense.payment_account_id,
-            description=f"Payment for: {expense.description}",
-            debit_amount=Decimal("0"),
-            credit_amount=total_amount,
-            currency_code=expense.currency_code,
-        )
-        db.add(credit_line)
+            # Create journal entry
+            journal = JournalEntry(
+                organization_id=expense.organization_id,
+                journal_number=journal_number,
+                journal_type=JournalType.STANDARD,
+                fiscal_period_id=period_id,
+                entry_date=expense.expense_date,
+                posting_date=expense.expense_date,
+                description=f"Expense: {expense.description}",
+                reference=expense.expense_number,
+                currency_code=expense.currency_code,
+                source_module="EXP",
+                source_document_id=expense.expense_id,
+                status=JournalStatus.POSTED,
+                created_by_user_id=user_id,
+                posted_by_user_id=user_id,
+                posted_at=datetime.utcnow(),
+            )
+            db.add(journal)
+            db.flush()
 
-        # Update expense
-        expense.status = ExpenseStatus.POSTED
-        expense.journal_entry_id = journal.journal_entry_id
-        expense.posted_by = user_id
-        expense.posted_at = datetime.utcnow()
+            total_amount = expense.amount + expense.tax_amount
 
-        db.flush()
+            # Debit expense account
+            debit_line = JournalEntryLine(
+                journal_entry_id=journal.journal_entry_id,
+                line_number=1,
+                account_id=expense.expense_account_id,
+                description=expense.description,
+                debit_amount=expense.amount,
+                credit_amount=Decimal("0"),
+                currency_code=expense.currency_code,
+            )
+            db.add(debit_line)
+
+            # Debit tax if applicable
+            line_num = 2
+            if expense.tax_amount > 0 and expense.tax_code_id:
+                from app.models.finance.tax.tax_code import TaxCode
+                tax_code = db.get(TaxCode, expense.tax_code_id)
+                if tax_code and tax_code.tax_paid_account_id:
+                    tax_line = JournalEntryLine(
+                        journal_entry_id=journal.journal_entry_id,
+                        line_number=line_num,
+                        account_id=tax_code.tax_paid_account_id,
+                        description=f"Input tax - {expense.description}",
+                        debit_amount=expense.tax_amount,
+                        credit_amount=Decimal("0"),
+                        currency_code=expense.currency_code,
+                    )
+                    db.add(tax_line)
+                    line_num += 1
+
+            # Credit payment account
+            credit_line = JournalEntryLine(
+                journal_entry_id=journal.journal_entry_id,
+                line_number=line_num,
+                account_id=expense.payment_account_id,
+                description=f"Payment for: {expense.description}",
+                debit_amount=Decimal("0"),
+                credit_amount=total_amount,
+                currency_code=expense.currency_code,
+            )
+            db.add(credit_line)
+
+            # Update expense
+            expense.status = ExpenseStatus.POSTED
+            expense.journal_entry_id = journal.journal_entry_id
+            expense.posted_by = user_id
+            expense.posted_at = datetime.utcnow()
+
+            db.flush()
+            savepoint.commit()
+
+        except Exception:
+            savepoint.rollback()
+            raise
+
         return expense
 
     @staticmethod

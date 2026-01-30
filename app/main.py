@@ -119,8 +119,60 @@ app.middleware("http")(rate_limit_middleware)
 app.middleware("http")(csrf_middleware)
 
 
+# Sensitive parameter names to redact from audit logs
+_SENSITIVE_PARAMS = frozenset({
+    "password", "passwd", "pwd", "secret", "token", "api_key", "apikey",
+    "api-key", "auth", "authorization", "credential", "credentials",
+    "access_token", "refresh_token", "private_key", "privatekey",
+})
+
+
+def _sanitize_query_params(params: dict) -> dict:
+    """Redact sensitive query parameters from audit logs."""
+    return {
+        k: "***REDACTED***" if k.lower() in _SENSITIVE_PARAMS else v
+        for k, v in params.items()
+    }
+
+
+def _extract_audit_data(request: Request, response: Response) -> dict:
+    """Extract audit data from request/response for async logging."""
+    from app.models.audit import AuditActorType
+
+    actor_type = request.headers.get("x-actor-type", AuditActorType.system.value)
+    actor_id = request.headers.get("x-actor-id")
+    request_id = request.headers.get("x-request-id")
+    entity_id = request.headers.get("x-entity-id")
+    ip_address = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
+
+    try:
+        query_params = _sanitize_query_params(dict(request.query_params))
+    except (KeyError, Exception):
+        query_params = {}
+
+    return {
+        "actor_type": actor_type,
+        "actor_id": actor_id,
+        "action": request.method,
+        "entity_type": request.url.path,
+        "entity_id": entity_id,
+        "status_code": response.status_code,
+        "is_success": response.status_code < 400,
+        "ip_address": ip_address,
+        "user_agent": user_agent,
+        "request_id": request_id,
+        "metadata_": {
+            "path": request.url.path,
+            "query": query_params,
+        },
+    }
+
+
 @app.middleware("http")
 async def audit_middleware(request: Request, call_next):
+    from app.tasks.audit import log_audit_event
+
     response: Response
     path = request.url.path
     db = SessionLocal()
@@ -143,20 +195,14 @@ async def audit_middleware(request: Request, call_next):
         response = await call_next(request)
     except Exception:
         if should_log:
-            db = SessionLocal()
-            try:
-                audit_service.audit_events.log_request(
-                    db, request, Response(status_code=500)
-                )
-            finally:
-                db.close()
+            # Log error response asynchronously
+            audit_data = _extract_audit_data(request, Response(status_code=500))
+            log_audit_event.delay(**audit_data)
         raise
     if should_log:
-        db = SessionLocal()
-        try:
-            audit_service.audit_events.log_request(db, request, response)
-        finally:
-            db.close()
+        # Log response asynchronously via Celery
+        audit_data = _extract_audit_data(request, response)
+        log_audit_event.delay(**audit_data)
     return response
 
 

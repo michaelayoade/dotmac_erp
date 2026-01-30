@@ -3,18 +3,133 @@ import os
 import smtplib
 import socket
 import ssl
+import threading
+from contextlib import contextmanager
 from email.mime.application import MIMEApplication
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email import encoders
-from typing import Optional
+from typing import Generator, Optional
 
 from sqlalchemy.orm import Session
 
 from app.models.domain_settings import SettingDomain
 
 logger = logging.getLogger(__name__)
+
+
+# SMTP Connection Pool configuration
+SMTP_POOL_SIZE = int(os.getenv("SMTP_POOL_SIZE", "5"))
+SMTP_POOL_TIMEOUT = int(os.getenv("SMTP_POOL_TIMEOUT", "30"))
+
+
+class SMTPConnectionPool:
+    """
+    Thread-safe SMTP connection pool for efficient email sending.
+
+    Maintains a pool of SMTP connections to avoid the overhead of
+    creating new connections for each email.
+    """
+
+    def __init__(self, max_connections: int = SMTP_POOL_SIZE):
+        self._pool: list[smtplib.SMTP | smtplib.SMTP_SSL] = []
+        self._lock = threading.Lock()
+        self._max_connections = max_connections
+        self._config: dict | None = None
+        self._config_hash: str | None = None
+
+    def _get_config_hash(self, config: dict) -> str:
+        """Generate hash of config to detect changes."""
+        return f"{config['host']}:{config['port']}:{config.get('username', '')}:{config['use_ssl']}:{config['use_tls']}"
+
+    def _create_connection(self, config: dict) -> smtplib.SMTP | smtplib.SMTP_SSL:
+        """Create a new SMTP connection."""
+        timeout = SMTP_POOL_TIMEOUT
+        if config["use_ssl"]:
+            server = smtplib.SMTP_SSL(config["host"], config["port"], timeout=timeout)
+        else:
+            server = smtplib.SMTP(config["host"], config["port"], timeout=timeout)
+            if config["use_tls"]:
+                server.starttls()
+
+        if config["username"] and config["password"]:
+            server.login(config["username"], config["password"])
+
+        return server
+
+    def _is_connection_alive(self, conn: smtplib.SMTP | smtplib.SMTP_SSL) -> bool:
+        """Check if a connection is still alive."""
+        try:
+            status = conn.noop()[0]
+            return status == 250
+        except (smtplib.SMTPException, OSError):
+            return False
+
+    def _close_connection(self, conn: smtplib.SMTP | smtplib.SMTP_SSL) -> None:
+        """Safely close a connection."""
+        try:
+            conn.quit()
+        except (smtplib.SMTPException, OSError):
+            try:
+                conn.close()
+            except (smtplib.SMTPException, OSError):
+                pass
+
+    @contextmanager
+    def get_connection(self, config: dict) -> Generator[smtplib.SMTP | smtplib.SMTP_SSL, None, None]:
+        """
+        Get an SMTP connection from the pool.
+
+        Creates a new connection if the pool is empty.
+        Returns the connection to the pool after use.
+        """
+        config_hash = self._get_config_hash(config)
+        conn: smtplib.SMTP | smtplib.SMTP_SSL | None = None
+
+        with self._lock:
+            # Clear pool if config changed
+            if self._config_hash != config_hash:
+                for old_conn in self._pool:
+                    self._close_connection(old_conn)
+                self._pool.clear()
+                self._config_hash = config_hash
+
+            # Try to get a connection from the pool
+            while self._pool:
+                candidate = self._pool.pop()
+                if self._is_connection_alive(candidate):
+                    conn = candidate
+                    break
+                else:
+                    self._close_connection(candidate)
+
+        # Create new connection if needed
+        if conn is None:
+            conn = self._create_connection(config)
+
+        try:
+            yield conn
+            # Return connection to pool if still alive and pool not full
+            with self._lock:
+                if len(self._pool) < self._max_connections and self._is_connection_alive(conn):
+                    self._pool.append(conn)
+                    conn = None  # Don't close it
+        finally:
+            if conn is not None:
+                self._close_connection(conn)
+
+    def clear(self) -> None:
+        """Clear all connections from the pool."""
+        with self._lock:
+            for conn in self._pool:
+                self._close_connection(conn)
+            self._pool.clear()
+            self._config_hash = None
+
+
+# Global connection pool instance
+_smtp_pool = SMTPConnectionPool()
 
 
 def _env_value(name: str) -> str | None:
@@ -166,6 +281,7 @@ def send_email(
     body_html: str,
     body_text: str | None = None,
     attachments: Optional[list[tuple[str, bytes, str]]] = None,
+    raise_on_error: bool = False,
 ) -> bool:
     """
     Send an email using SMTP settings from database or environment.
@@ -178,9 +294,14 @@ def send_email(
         body_text: Plain text body content (optional)
         attachments: List of attachments as (filename, data, mime_type) tuples
                     Example: [("payslip.pdf", pdf_bytes, "application/pdf")]
+        raise_on_error: If True, re-raise exceptions instead of returning False.
+                       Use this for async tasks that need to classify errors.
 
     Returns:
         True if email was sent successfully, False otherwise
+
+    Raises:
+        smtplib.SMTPException: If raise_on_error=True and sending fails
     """
     config = _get_smtp_config(db)
 
@@ -219,37 +340,16 @@ def send_email(
             )
             msg.attach(attachment_part)
 
-    server: smtplib.SMTP | smtplib.SMTP_SSL | None = None
-    timeout_seconds = 10
     try:
-        if config["use_ssl"]:
-            server = smtplib.SMTP_SSL(config["host"], config["port"], timeout=timeout_seconds)
-        else:
-            server = smtplib.SMTP(config["host"], config["port"], timeout=timeout_seconds)
-
-        if config["use_tls"] and not config["use_ssl"]:
-            server.starttls()
-
-        if config["username"] and config["password"]:
-            server.login(config["username"], config["password"])
-
-        server.sendmail(config["from_email"], to_email, msg.as_string())
-
+        with _smtp_pool.get_connection(config) as server:
+            server.sendmail(config["from_email"], to_email, msg.as_string())
         logger.info("Email sent to %s", to_email)
         return True
     except Exception as exc:
         logger.error("Failed to send email to %s: %s", to_email, exc)
+        if raise_on_error:
+            raise
         return False
-    finally:
-        if server:
-            try:
-                server.quit()
-            except (smtplib.SMTPException, OSError) as quit_exc:
-                logger.debug("SMTP quit failed, trying close: %s", quit_exc)
-                try:
-                    server.close()
-                except (smtplib.SMTPException, OSError) as close_exc:
-                    logger.debug("SMTP close also failed: %s", close_exc)
 
 
 def send_password_reset_email(
@@ -271,3 +371,28 @@ def send_password_reset_email(
     )
     body_text = f"Hi {name}, use this link to reset your password: {reset_link}"
     return send_email(db, to_email, subject, body_html, body_text)
+
+
+# Async email sending convenience function
+def queue_email(
+    to_email: str,
+    subject: str,
+    body_html: str,
+    body_text: str | None = None,
+    attachments: list[tuple[str, bytes, str]] | None = None,
+) -> None:
+    """
+    Queue an email for async delivery via Celery.
+
+    Use this for non-blocking email sends where immediate delivery is not required.
+    For immediate delivery (e.g., password reset), use send_email() directly.
+
+    Args:
+        to_email: Recipient email address
+        subject: Email subject
+        body_html: HTML body content
+        body_text: Plain text body content (optional)
+        attachments: List of attachments as (filename, data, mime_type) tuples
+    """
+    from app.tasks.email import queue_email as _queue_email
+    _queue_email(to_email, subject, body_html, body_text, attachments)

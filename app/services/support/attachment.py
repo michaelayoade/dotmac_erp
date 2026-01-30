@@ -53,8 +53,32 @@ class AttachmentService:
         Args:
             upload_dir: Base directory for file uploads
         """
-        self.upload_dir = Path(upload_dir)
+        self.upload_dir = Path(upload_dir).resolve()
         self.upload_dir.mkdir(parents=True, exist_ok=True)
+
+    def _validate_path_within_upload_dir(self, path: Path) -> Path:
+        """
+        Validate that a path is within the upload directory.
+
+        Prevents path traversal attacks via symlinks or malicious paths.
+
+        Args:
+            path: Path to validate
+
+        Returns:
+            Resolved absolute path
+
+        Raises:
+            ValueError: If path is outside upload directory
+        """
+        resolved = path.resolve()
+        try:
+            resolved.relative_to(self.upload_dir)
+        except ValueError:
+            raise ValueError(
+                f"Path traversal attempt detected: {path} is outside upload directory"
+            )
+        return resolved
 
     def list_attachments(
         self,
@@ -87,10 +111,20 @@ class AttachmentService:
     def get_attachment(
         self,
         db: Session,
+        organization_id: uuid.UUID,
         attachment_id: uuid.UUID,
     ) -> Optional[TicketAttachment]:
-        """Get an attachment by ID."""
-        return db.get(TicketAttachment, attachment_id)
+        """Get an attachment by ID, scoped to organization via ticket."""
+        from app.models.support.ticket import Ticket
+
+        return db.execute(
+            select(TicketAttachment)
+            .join(Ticket, TicketAttachment.ticket_id == Ticket.ticket_id)
+            .where(
+                TicketAttachment.attachment_id == attachment_id,
+                Ticket.organization_id == organization_id,
+            )
+        ).scalar_one_or_none()
 
     def validate_file(
         self,
@@ -165,6 +199,13 @@ class AttachmentService:
 
         storage_path = ticket_dir / storage_filename
 
+        # Validate path is within upload directory (prevent path traversal)
+        try:
+            storage_path = self._validate_path_within_upload_dir(storage_path)
+        except ValueError as e:
+            logger.error("Path validation failed: %s", e)
+            return None, "Invalid file path"
+
         # Save file
         try:
             with open(storage_path, "wb") as f:
@@ -199,6 +240,7 @@ class AttachmentService:
     def delete_attachment(
         self,
         db: Session,
+        organization_id: uuid.UUID,
         attachment_id: uuid.UUID,
         hard_delete: bool = False,
     ) -> Tuple[bool, Optional[str]]:
@@ -207,21 +249,27 @@ class AttachmentService:
 
         Args:
             db: Database session
+            organization_id: Organization UUID for tenant scoping
             attachment_id: Attachment UUID
             hard_delete: If true, delete file from disk too
 
         Returns:
             (success, error_message)
         """
-        attachment = self.get_attachment(db, attachment_id)
+        attachment = self.get_attachment(db, organization_id, attachment_id)
         if not attachment:
             return False, "Attachment not found"
 
         if hard_delete:
             # Delete file from disk
             try:
-                if os.path.exists(attachment.storage_path):
-                    os.remove(attachment.storage_path)
+                storage_path = Path(attachment.storage_path)
+                # Validate path is within upload directory (prevent path traversal)
+                validated_path = self._validate_path_within_upload_dir(storage_path)
+                if validated_path.exists():
+                    validated_path.unlink()
+            except ValueError as e:
+                logger.error("Path validation failed during delete: %s", e)
             except Exception as e:
                 logger.warning("Failed to delete file: %s", e)
 
@@ -237,6 +285,7 @@ class AttachmentService:
     def get_file_path(
         self,
         db: Session,
+        organization_id: uuid.UUID,
         attachment_id: uuid.UUID,
     ) -> Optional[str]:
         """
@@ -244,20 +293,30 @@ class AttachmentService:
 
         Args:
             db: Database session
+            organization_id: Organization UUID for tenant scoping
             attachment_id: Attachment UUID
 
         Returns:
             File path or None if not found
         """
-        attachment = self.get_attachment(db, attachment_id)
+        attachment = self.get_attachment(db, organization_id, attachment_id)
         if not attachment or attachment.is_deleted:
             return None
 
-        if not os.path.exists(attachment.storage_path):
-            logger.warning("Attachment file not found: %s", attachment.storage_path)
+        # Validate path is within upload directory (prevent path traversal)
+        try:
+            validated_path = self._validate_path_within_upload_dir(
+                Path(attachment.storage_path)
+            )
+        except ValueError as e:
+            logger.error("Path validation failed: %s", e)
             return None
 
-        return attachment.storage_path
+        if not validated_path.exists():
+            logger.warning("Attachment file not found: %s", validated_path)
+            return None
+
+        return str(validated_path)
 
     def get_stats(
         self,

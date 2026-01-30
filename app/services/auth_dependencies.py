@@ -1,3 +1,4 @@
+import logging
 import os
 from datetime import datetime, timedelta, timezone
 from typing import Optional, cast
@@ -15,7 +16,10 @@ from app.models.rbac import Permission, PersonRole, RolePermission, Role
 from app.rls import set_current_organization_sync, enable_rls_bypass_sync
 from app.services.auth import hash_api_key
 from app.services.auth_flow import decode_access_token, hash_session_token
+from app.services.cache import cache_service
 from app.services.common import coerce_uuid
+
+logger = logging.getLogger(__name__)
 
 # Cookie name for web session
 WEB_SESSION_COOKIE = "session_token"
@@ -23,6 +27,9 @@ WEB_SESSION_COOKIE = "session_token"
 # Session activity timeout in days - sessions inactive longer than this are considered expired
 # Default: 7 days. Override with SESSION_ACTIVITY_TIMEOUT_DAYS env var.
 SESSION_ACTIVITY_TIMEOUT_DAYS = int(os.getenv("SESSION_ACTIVITY_TIMEOUT_DAYS", "7"))
+
+# Session validation cache TTL in seconds (5 minutes default)
+SESSION_CACHE_TTL_SECONDS = int(os.getenv("SESSION_CACHE_TTL_SECONDS", "300"))
 
 
 def _get_auth_db_for_sso() -> Session | None:
@@ -96,6 +103,137 @@ def _decode_token_for_sso(token: str, db: Session | None = None) -> dict:
         temp_db.close()
 
 
+def _session_cache_key(session_id: UUID) -> str:
+    """Generate cache key for session validation."""
+    return f"session:{session_id}:valid"
+
+
+def _session_revoked_key(session_id: UUID) -> str:
+    """Generate cache key for session revocation marker."""
+    return f"session:{session_id}:revoked"
+
+
+# Short TTL for revocation markers to handle race conditions (30 seconds)
+SESSION_REVOKED_MARKER_TTL_SECONDS = 30
+
+
+def _validate_session_cached(
+    session_id: UUID,
+    person_id: UUID,
+    now: datetime,
+    db: Session,
+    auth_db: Session | None = None,
+) -> AuthSession | None:
+    """
+    Validate session with Redis caching.
+
+    Checks Redis cache first. On cache miss, queries DB and caches result.
+    Returns None if session is invalid or expired.
+
+    Uses a revocation marker to handle race conditions between cache hit
+    and logout/revocation operations.
+    """
+    cache_key = _session_cache_key(session_id)
+    revoked_key = _session_revoked_key(session_id)
+
+    # Check cache first (if Redis is available)
+    if cache_service.is_available:
+        # First check if session was recently revoked (handles race condition)
+        if cache_service.get(revoked_key) is not None:
+            logger.debug("Session %s has revocation marker, querying DB", session_id)
+            # Fall through to DB query to get authoritative state
+        else:
+            cached = cache_service.get(cache_key)
+            if cached is not None:
+                # Cache hit - verify cached person_id matches
+                if cached.get("person_id") == str(person_id):
+                    # Check cached expiration
+                    cached_expires = cached.get("expires_at")
+                    if cached_expires:
+                        try:
+                            expires_dt = datetime.fromisoformat(cached_expires)
+                            if expires_dt.tzinfo is None:
+                                expires_dt = expires_dt.replace(tzinfo=timezone.utc)
+                            if expires_dt > now:
+                                logger.debug("Session %s validated from cache", session_id)
+                                # Query DB for full session object (needed for activity tracking)
+                                # but skip if we only need validation
+                                return _query_session(session_id, person_id, now, db, auth_db)
+                        except ValueError:
+                            pass
+                # Cache invalid, fall through to DB check
+                cache_service.delete(cache_key)
+
+    # Query database
+    session = _query_session(session_id, person_id, now, db, auth_db)
+
+    if session and cache_service.is_available:
+        # Cache the valid session
+        expires_at = session.expires_at
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+
+        cache_service.set(
+            cache_key,
+            {
+                "person_id": str(person_id),
+                "expires_at": expires_at.isoformat(),
+            },
+            ttl_seconds=SESSION_CACHE_TTL_SECONDS,
+        )
+        logger.debug("Session %s cached for %ds", session_id, SESSION_CACHE_TTL_SECONDS)
+
+    return session
+
+
+def _query_session(
+    session_id: UUID,
+    person_id: UUID,
+    now: datetime,
+    db: Session,
+    auth_db: Session | None = None,
+) -> AuthSession | None:
+    """Query session from database (local or SSO auth DB)."""
+    if auth_db:
+        return _validate_session_sso(session_id, person_id, now, auth_db)
+
+    return (
+        db.query(AuthSession)
+        .filter(AuthSession.id == session_id)
+        .filter(AuthSession.person_id == person_id)
+        .filter(AuthSession.status == SessionStatus.active)
+        .filter(AuthSession.revoked_at.is_(None))
+        .filter(AuthSession.expires_at > now)
+        .first()
+    )
+
+
+def invalidate_session_cache(session_id: UUID) -> bool:
+    """
+    Invalidate session cache on logout/revocation.
+
+    Should be called when:
+    - User logs out
+    - Session is revoked
+    - Password is changed
+
+    Sets a short-lived revocation marker to handle race conditions where
+    a concurrent request might have already passed the cache check.
+    """
+    cache_key = _session_cache_key(session_id)
+    revoked_key = _session_revoked_key(session_id)
+
+    # Set revocation marker first (short TTL to handle race conditions)
+    cache_service.set(
+        revoked_key,
+        {"revoked": True},
+        ttl_seconds=SESSION_REVOKED_MARKER_TTL_SECONDS,
+    )
+
+    # Then delete the session cache
+    return cache_service.delete(cache_key)
+
+
 def is_session_inactive(session: AuthSession, now: datetime) -> bool:
     """Check if a session has been inactive for too long.
 
@@ -146,21 +284,10 @@ def get_current_user_id(
     person_uuid = cast(UUID, coerce_uuid(person_id))
     session_uuid = coerce_uuid(session_id)
 
-    # SSO: validate session against shared auth database
+    # Validate session with caching (SSO-aware)
     auth_db = _get_auth_db_for_sso()
     try:
-        if auth_db:
-            session = _validate_session_sso(session_uuid, person_uuid, now, auth_db)
-        else:
-            session = (
-                db.query(AuthSession)
-                .filter(AuthSession.id == session_uuid)
-                .filter(AuthSession.person_id == person_uuid)
-                .filter(AuthSession.status == SessionStatus.active)
-                .filter(AuthSession.revoked_at.is_(None))
-                .filter(AuthSession.expires_at > now)
-                .first()
-            )
+        session = _validate_session_cached(session_uuid, person_uuid, now, db, auth_db)
 
         if not session:
             raise HTTPException(status_code=401, detail="Unauthorized")
@@ -200,21 +327,10 @@ def get_current_org_id(
     person_uuid = coerce_uuid(person_id)
     session_uuid = coerce_uuid(session_id)
 
-    # SSO: validate session against shared auth database
+    # Validate session with caching (SSO-aware)
     auth_db = _get_auth_db_for_sso()
     try:
-        if auth_db:
-            session = _validate_session_sso(session_uuid, person_uuid, now, auth_db)
-        else:
-            session = (
-                db.query(AuthSession)
-                .filter(AuthSession.id == session_uuid)
-                .filter(AuthSession.person_id == person_uuid)
-                .filter(AuthSession.status == SessionStatus.active)
-                .filter(AuthSession.revoked_at.is_(None))
-                .filter(AuthSession.expires_at > now)
-                .first()
-            )
+        session = _validate_session_cached(session_uuid, person_uuid, now, db, auth_db)
 
         if not session:
             raise HTTPException(status_code=401, detail="Unauthorized")
