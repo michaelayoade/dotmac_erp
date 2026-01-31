@@ -120,7 +120,13 @@ class TestUpdateSupplier:
         mock_query.first.return_value = None  # No duplicate
         mock_db.query.return_value = mock_query
 
-        with patch("app.services.finance.ap.supplier.Supplier"):
+        with (
+            patch("app.services.finance.ap.supplier.Supplier"),
+            patch(
+                "app.services.finance.common.helpers.get_model_pk_column",
+                return_value="supplier_id",
+            ),
+        ):
             result = SupplierService.update_supplier(
                 mock_db, org_id, supplier.supplier_id, sample_supplier_input
             )
@@ -301,7 +307,13 @@ class TestListSuppliers:
         mock_query.all.return_value = suppliers
         mock_db.query.return_value = mock_query
 
-        with patch("app.services.finance.ap.supplier.Supplier"):
+        with (
+            patch("app.services.finance.ap.supplier.Supplier"),
+            patch(
+                "app.services.finance.ap.supplier.apply_search_filter",
+                return_value=mock_query,
+            ),
+        ):
             result = SupplierService.list(
                 mock_db,
                 organization_id=str(org_id),

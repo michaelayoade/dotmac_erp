@@ -1,0 +1,337 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}Data Completeness Report{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/payroll/runs" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Payroll</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">Data Completeness</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">Data Completeness Report</h1>
+            <p class="text-sm text-slate-500 dark:text-slate-400">Review employee data readiness for statutory exports</p>
+        </div>
+        <a href="/people/payroll/runs" class="btn btn-secondary">
+            <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+            </svg>
+            Back
+        </a>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
+        <div class="card p-5">
+            <div class="flex items-center gap-4">
+                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-800">
+                    <svg class="h-6 w-6 text-slate-600 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">Total Assigned</p>
+                    <p class="text-2xl font-semibold text-slate-900 dark:text-white">{{ report.total_employees }}</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="card p-5">
+            <div class="flex items-center gap-4">
+                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-100 dark:bg-emerald-900/30">
+                    <svg class="h-6 w-6 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">Complete</p>
+                    <p class="text-2xl font-semibold text-emerald-600 dark:text-emerald-400">{{ report.complete_count }}</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="card p-5">
+            <div class="flex items-center gap-4">
+                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-100 dark:bg-amber-900/30">
+                    <svg class="h-6 w-6 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">Incomplete</p>
+                    <p class="text-2xl font-semibold text-amber-600 dark:text-amber-400">{{ report.incomplete_count }}</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="card p-5">
+            <div class="flex items-center gap-4">
+                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-rose-100 dark:bg-rose-900/30">
+                    <svg class="h-6 w-6 text-rose-600 dark:text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">No Tax Profile</p>
+                    <p class="text-2xl font-semibold text-rose-600 dark:text-rose-400">{{ report.missing_profile_count }}</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="card p-5">
+            <div class="flex items-center gap-4">
+                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-teal-100 dark:bg-teal-900/30">
+                    <svg class="h-6 w-6 text-teal-600 dark:text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">Completeness</p>
+                    <p class="text-2xl font-semibold text-teal-600 dark:text-teal-400">{{ "{:.1f}".format(report.completeness_rate) }}%</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Export Readiness Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div class="card p-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-violet-100 dark:bg-violet-900/30">
+                        <svg class="h-5 w-5 text-violet-600 dark:text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="text-sm font-medium text-slate-900 dark:text-white">PAYE Ready</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Has TIN</p>
+                    </div>
+                </div>
+                <span class="text-xl font-semibold text-violet-600 dark:text-violet-400">{{ report.paye_ready_count }}/{{ report.total_employees }}</span>
+            </div>
+        </div>
+
+        <div class="card p-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-sky-100 dark:bg-sky-900/30">
+                        <svg class="h-5 w-5 text-sky-600 dark:text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="text-sm font-medium text-slate-900 dark:text-white">Pension Ready</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Has RSA PIN & PFA</p>
+                    </div>
+                </div>
+                <span class="text-xl font-semibold text-sky-600 dark:text-sky-400">{{ report.pension_ready_count }}/{{ report.total_employees }}</span>
+            </div>
+        </div>
+
+        <div class="card p-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-orange-100 dark:bg-orange-900/30">
+                        <svg class="h-5 w-5 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="text-sm font-medium text-slate-900 dark:text-white">NHF Ready</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Has NHF Number</p>
+                    </div>
+                </div>
+                <span class="text-xl font-semibold text-orange-600 dark:text-orange-400">{{ report.nhf_ready_count }}/{{ report.total_employees }}</span>
+            </div>
+        </div>
+
+        <div class="card p-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
+                        <svg class="h-5 w-5 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="text-sm font-medium text-slate-900 dark:text-white">Bank Ready</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Has Bank Details</p>
+                    </div>
+                </div>
+                <span class="text-xl font-semibold text-emerald-600 dark:text-emerald-400">{{ report.bank_ready_count }}/{{ report.total_employees }}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="card">
+        <form method="get" class="p-4">
+            <div class="flex flex-wrap gap-4 items-end">
+                <div class="w-48">
+                    <label for="department_id" class="form-label">Department</label>
+                    <select name="department_id" id="department_id" class="form-select w-full">
+                        <option value="">All Departments</option>
+                        {% for dept in departments %}
+                        <option value="{{ dept.department_id }}" {% if selected_department_id == dept.department_id|string %}selected{% endif %}>{{ dept.department_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="w-48">
+                    <label for="designation_id" class="form-label">Designation</label>
+                    <select name="designation_id" id="designation_id" class="form-select w-full">
+                        <option value="">All Designations</option>
+                        {% for desig in designations %}
+                        <option value="{{ desig.designation_id }}" {% if selected_designation_id == desig.designation_id|string %}selected{% endif %}>{{ desig.designation_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="flex items-center gap-2">
+                    <input type="checkbox" name="show_complete" id="show_complete" value="true"
+                        class="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+                        {% if show_complete %}checked{% endif %}>
+                    <label for="show_complete" class="text-sm text-slate-700 dark:text-slate-300">Show complete employees</label>
+                </div>
+                <button type="submit" class="btn btn-secondary h-10">Apply Filter</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Employee Table -->
+    <div class="card overflow-hidden">
+        <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+            <h2 class="text-lg font-medium text-slate-900 dark:text-white">
+                {% if show_complete %}All Employees{% else %}Employees with Missing Data{% endif %}
+                <span class="text-sm font-normal text-slate-500 dark:text-slate-400 ml-2">({{ report.employees | length }} shown)</span>
+            </h2>
+        </div>
+
+        {% if report.employees %}
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="bg-slate-50 dark:bg-slate-800/50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Employee</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Department</th>
+                        <th class="px-6 py-3 text-center text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Missing Fields</th>
+                        <th class="px-6 py-3 text-center text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Export Readiness</th>
+                        <th class="px-6 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                    {% for emp in report.employees %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="flex items-center">
+                                <div class="h-9 w-9 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-sm font-medium text-slate-600 dark:text-slate-300">
+                                    {{ emp.full_name[:2] | upper }}
+                                </div>
+                                <div class="ml-3">
+                                    <p class="text-sm font-medium text-slate-900 dark:text-white">{{ emp.full_name }}</p>
+                                    <p class="text-xs text-slate-500 dark:text-slate-400">{{ emp.employee_number }}</p>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-700 dark:text-slate-300">
+                            {{ emp.department_name or '-' }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-center">
+                            {% if emp.status.value == 'complete' %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400">
+                                Complete
+                            </span>
+                            {% elif emp.status.value == 'missing_profile' %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-400">
+                                No Profile
+                            </span>
+                            {% else %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
+                                Incomplete
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4">
+                            {% if emp.missing_fields %}
+                            <div class="flex flex-wrap gap-1">
+                                {% for field in emp.missing_fields %}
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300" title="{{ field.field_label }}">
+                                    {{ field.field_name }}
+                                </span>
+                                {% endfor %}
+                            </div>
+                            {% else %}
+                            <span class="text-emerald-600 dark:text-emerald-400 text-xs">All fields complete</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="flex items-center justify-center gap-1">
+                                <span class="inline-flex items-center justify-center w-6 h-6 rounded text-xs font-medium {% if emp.is_paye_ready %}bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400{% else %}bg-slate-100 text-slate-400 dark:bg-slate-700 dark:text-slate-500{% endif %}" title="PAYE: {% if emp.is_paye_ready %}Ready{% else %}Missing TIN{% endif %}">
+                                    P
+                                </span>
+                                <span class="inline-flex items-center justify-center w-6 h-6 rounded text-xs font-medium {% if emp.is_pension_ready %}bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400{% else %}bg-slate-100 text-slate-400 dark:bg-slate-700 dark:text-slate-500{% endif %}" title="Pension: {% if emp.is_pension_ready %}Ready{% else %}Missing RSA/PFA{% endif %}">
+                                    Pe
+                                </span>
+                                <span class="inline-flex items-center justify-center w-6 h-6 rounded text-xs font-medium {% if emp.is_nhf_ready %}bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400{% else %}bg-slate-100 text-slate-400 dark:bg-slate-700 dark:text-slate-500{% endif %}" title="NHF: {% if emp.is_nhf_ready %}Ready{% else %}Missing NHF Number{% endif %}">
+                                    N
+                                </span>
+                                <span class="inline-flex items-center justify-center w-6 h-6 rounded text-xs font-medium {% if emp.is_bank_ready %}bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400{% else %}bg-slate-100 text-slate-400 dark:bg-slate-700 dark:text-slate-500{% endif %}" title="Bank: {% if emp.is_bank_ready %}Ready{% else %}Missing Bank Details{% endif %}">
+                                    B
+                                </span>
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-right">
+                            <a href="/people/hr/employees/{{ emp.employee_id }}/edit" class="text-teal-600 hover:text-teal-800 dark:text-teal-400 dark:hover:text-teal-300 text-sm">
+                                Edit
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="p-12 text-center">
+            <svg class="mx-auto h-12 w-12 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <h3 class="mt-2 text-sm font-medium text-slate-900 dark:text-white">All employees have complete data</h3>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                All assigned employees have the required data for statutory exports.
+            </p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Legend -->
+    <div class="card p-4">
+        <h3 class="text-sm font-medium text-slate-900 dark:text-white mb-3">Export Readiness Legend</h3>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            <div>
+                <span class="inline-flex items-center justify-center w-6 h-6 rounded text-xs font-medium bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400">P</span>
+                <span class="ml-2 text-slate-600 dark:text-slate-400">PAYE - requires TIN</span>
+            </div>
+            <div>
+                <span class="inline-flex items-center justify-center w-6 h-6 rounded text-xs font-medium bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400">Pe</span>
+                <span class="ml-2 text-slate-600 dark:text-slate-400">Pension - requires RSA PIN & PFA Code</span>
+            </div>
+            <div>
+                <span class="inline-flex items-center justify-center w-6 h-6 rounded text-xs font-medium bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400">N</span>
+                <span class="ml-2 text-slate-600 dark:text-slate-400">NHF - requires NHF Number</span>
+            </div>
+            <div>
+                <span class="inline-flex items-center justify-center w-6 h-6 rounded text-xs font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">B</span>
+                <span class="ml-2 text-slate-600 dark:text-slate-400">Bank Upload - requires Account & Bank Name</span>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

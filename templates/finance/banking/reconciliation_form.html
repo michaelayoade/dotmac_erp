@@ -18,7 +18,7 @@
           action="/api/v1/banking/reconciliations"
           hx-post="/api/v1/banking/reconciliations"
           hx-swap="none"
-          hx-on::after-request="if(event.detail.successful) { const data = JSON.parse(event.detail.xhr.response); window.location.href='/banking/reconciliations/' + data.reconciliation_id; }"
+          hx-on::after-request="if(event.detail.successful) { const data = JSON.parse(event.detail.xhr.response); window.location.href='/finance/banking/reconciliations/' + data.reconciliation_id; }"
           class="space-y-6">
 
         <!-- Bank Account Selection -->

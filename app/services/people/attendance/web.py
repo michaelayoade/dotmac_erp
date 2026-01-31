@@ -871,6 +871,94 @@ class AttendanceWebService:
         return templates.TemplateResponse(request, "people/attendance/requests.html", context)
 
     @staticmethod
+    def attendance_request_new_form_response(
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        form_data: Optional[dict] = None,
+        error: Optional[str] = None,
+    ) -> HTMLResponse:
+        """New attendance request form."""
+        org_id = coerce_uuid(auth.organization_id)
+        employees = AttendanceWebService._get_employees(db, org_id)
+
+        context = base_context(request, auth, "New Attendance Request", "attendance", db=db)
+        context.update({
+            "employees": employees,
+            "form_data": form_data or {},
+            "error": error,
+        })
+        return templates.TemplateResponse(request, "people/attendance/request_form.html", context)
+
+    async def create_attendance_request_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> HTMLResponse | RedirectResponse:
+        """Create a new attendance request."""
+        form = getattr(request.state, "csrf_form", None)
+        if form is None:
+            form = await request.form()
+
+        org_id = coerce_uuid(auth.organization_id)
+        svc = AttendanceService(db)
+
+        employee_id = AttendanceWebService._get_form_str(form, "employee_id")
+        from_date_str = AttendanceWebService._get_form_str(form, "from_date")
+        to_date_str = AttendanceWebService._get_form_str(form, "to_date")
+        half_day = AttendanceWebService._get_form_str(form, "half_day") == "true"
+        half_day_date_str = AttendanceWebService._get_form_str(form, "half_day_date")
+        reason = AttendanceWebService._get_form_str(form, "reason") or None
+        explanation = AttendanceWebService._get_form_str(form, "explanation") or None
+
+        if not employee_id or not from_date_str or not to_date_str:
+            return self.attendance_request_new_form_response(
+                request=request,
+                auth=auth,
+                db=db,
+                form_data=dict(form),
+                error="Employee, from date, and to date are required.",
+            )
+
+        from_date = AttendanceWebService._parse_date(from_date_str)
+        to_date = AttendanceWebService._parse_date(to_date_str)
+        half_day_date = AttendanceWebService._parse_date(half_day_date_str) if half_day else None
+
+        if not from_date or not to_date:
+            return self.attendance_request_new_form_response(
+                request=request,
+                auth=auth,
+                db=db,
+                form_data=dict(form),
+                error="From date and to date must be valid dates.",
+            )
+
+        try:
+            svc.create_attendance_request(
+                org_id,
+                employee_id=coerce_uuid(employee_id),
+                from_date=from_date,
+                to_date=to_date,
+                half_day=half_day,
+                half_day_date=half_day_date,
+                reason=reason,
+                explanation=explanation,
+            )
+            db.commit()
+            success_msg = quote("Attendance request submitted")
+            return RedirectResponse(url=f"/people/attendance/requests?success={success_msg}", status_code=303)
+        except Exception as e:
+            db.rollback()
+            return self.attendance_request_new_form_response(
+                request=request,
+                auth=auth,
+                db=db,
+                form_data=dict(form),
+                error=str(e),
+            )
+
+    @staticmethod
     def approve_attendance_request_response(
         auth: WebAuthContext,
         db: Session,

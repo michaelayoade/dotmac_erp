@@ -1,0 +1,168 @@
+{% extends "admin/base_admin.html" %}
+
+{% block page_title %}Branding{% endblock %}
+{% block page_subtitle %}Configure logo and visual identity{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-6">
+    <!-- Breadcrumb -->
+    <nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+        <a href="/admin/settings/hub" class="hover:text-accent-600 dark:hover:text-accent-400 transition-colors">Settings</a>
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+        </svg>
+        <span class="font-medium text-slate-900 dark:text-white">Branding</span>
+    </nav>
+
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Branding</h1>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                Customize your organization's visual identity across the system.
+            </p>
+        </div>
+    </div>
+
+    <!-- Success Message -->
+    {% if request.query_params.get('success') %}
+    <div class="rounded-lg bg-green-50 border border-green-200 p-4 dark:bg-green-900/20 dark:border-green-800">
+        <div class="flex items-center gap-3">
+            <svg class="h-5 w-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+            </svg>
+            <p class="text-sm text-green-700 dark:text-green-300">Branding settings updated successfully.</p>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Error Message -->
+    {% if error %}
+    <div class="rounded-lg bg-red-50 border border-red-200 p-4 dark:bg-red-900/20 dark:border-red-800">
+        <div class="flex items-center gap-3">
+            <svg class="h-5 w-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <p class="text-sm text-red-700 dark:text-red-300">{{ error }}</p>
+        </div>
+    </div>
+    {% endif %}
+
+    <form method="POST" action="/admin/settings/branding" class="space-y-6">
+        <!-- Logo Settings -->
+        <div class="admin-card p-6">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Logo</h2>
+            <div class="space-y-6">
+                <div>
+                    <label for="logo_url" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Main Logo URL</label>
+                    <input type="url" id="logo_url" name="logo_url"
+                           value="{{ organization.logo_url or '' if organization else '' }}"
+                           placeholder="https://www.company.com/logo.png"
+                           class="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm focus:border-accent-500 focus:ring-accent-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Primary logo used in navigation and reports. Recommended size: 200x50px</p>
+                </div>
+                {% if organization and organization.logo_url %}
+                <div class="p-4 bg-slate-50 dark:bg-slate-900 rounded-lg">
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mb-2">Current Logo Preview:</p>
+                    <img src="{{ organization.logo_url }}" alt="Company Logo" class="max-h-16 object-contain">
+                </div>
+                {% endif %}
+
+                {% if branding %}
+                <div>
+                    <label for="favicon_url" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Favicon URL</label>
+                    <input type="url" id="favicon_url" name="favicon_url"
+                           value="{{ branding.favicon_url or '' }}"
+                           placeholder="https://www.company.com/favicon.ico"
+                           class="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm focus:border-accent-500 focus:ring-accent-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Browser tab icon. Recommended: 32x32px .ico or .png</p>
+                </div>
+                <div>
+                    <label for="email_logo_url" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Email Logo URL</label>
+                    <input type="url" id="email_logo_url" name="email_logo_url"
+                           value="{{ branding.email_logo_url or '' }}"
+                           placeholder="https://www.company.com/email-logo.png"
+                           class="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm focus:border-accent-500 focus:ring-accent-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Logo for email headers. Recommended: 200x50px</p>
+                </div>
+                <div>
+                    <label for="report_logo_url" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Report Logo URL</label>
+                    <input type="url" id="report_logo_url" name="report_logo_url"
+                           value="{{ branding.report_logo_url or '' }}"
+                           placeholder="https://www.company.com/report-logo.png"
+                           class="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm focus:border-accent-500 focus:ring-accent-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Logo for PDF reports and documents</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Colors -->
+        {% if branding is defined %}
+        <div class="admin-card p-6">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Colors</h2>
+            <div class="grid gap-6 sm:grid-cols-3">
+                <div>
+                    <label for="primary_color" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Primary Color</label>
+                    <div class="flex gap-2">
+                        <input type="color" id="primary_color_picker"
+                               value="{{ branding.primary_color or '#14b8a6' if branding else '#14b8a6' }}"
+                               class="h-10 w-12 rounded border border-slate-300 cursor-pointer"
+                               onchange="document.getElementById('primary_color').value = this.value">
+                        <input type="text" id="primary_color" name="primary_color"
+                               value="{{ branding.primary_color or '' if branding else '' }}"
+                               placeholder="#14b8a6"
+                               pattern="^#[0-9a-fA-F]{6}$"
+                               class="flex-1 rounded-lg border border-slate-300 px-4 py-2.5 text-sm focus:border-accent-500 focus:ring-accent-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                    </div>
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Main brand color</p>
+                </div>
+                <div>
+                    <label for="secondary_color" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Secondary Color</label>
+                    <div class="flex gap-2">
+                        <input type="color" id="secondary_color_picker"
+                               value="{{ branding.secondary_color or '#64748b' if branding else '#64748b' }}"
+                               class="h-10 w-12 rounded border border-slate-300 cursor-pointer"
+                               onchange="document.getElementById('secondary_color').value = this.value">
+                        <input type="text" id="secondary_color" name="secondary_color"
+                               value="{{ branding.secondary_color or '' if branding else '' }}"
+                               placeholder="#64748b"
+                               pattern="^#[0-9a-fA-F]{6}$"
+                               class="flex-1 rounded-lg border border-slate-300 px-4 py-2.5 text-sm focus:border-accent-500 focus:ring-accent-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                    </div>
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Secondary accents</p>
+                </div>
+                <div>
+                    <label for="accent_color" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Accent Color</label>
+                    <div class="flex gap-2">
+                        <input type="color" id="accent_color_picker"
+                               value="{{ branding.accent_color or '#f59e0b' if branding else '#f59e0b' }}"
+                               class="h-10 w-12 rounded border border-slate-300 cursor-pointer"
+                               onchange="document.getElementById('accent_color').value = this.value">
+                        <input type="text" id="accent_color" name="accent_color"
+                               value="{{ branding.accent_color or '' if branding else '' }}"
+                               placeholder="#f59e0b"
+                               pattern="^#[0-9a-fA-F]{6}$"
+                               class="flex-1 rounded-lg border border-slate-300 px-4 py-2.5 text-sm focus:border-accent-500 focus:ring-accent-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                    </div>
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Highlights and CTAs</p>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Actions -->
+        <div class="flex items-center justify-end gap-4 py-4">
+            <a href="/admin/settings/hub" class="inline-flex items-center px-4 py-2.5 rounded-lg text-sm font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 dark:text-slate-300 dark:bg-slate-800 dark:border-slate-600 dark:hover:bg-slate-700 transition-colors">
+                Cancel
+            </a>
+            <button type="submit" class="inline-flex items-center px-4 py-2.5 rounded-lg text-sm font-medium text-white bg-accent-600 hover:bg-accent-700 focus:ring-2 focus:ring-accent-500 focus:ring-offset-2 transition-colors">
+                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                </svg>
+                Save Changes
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

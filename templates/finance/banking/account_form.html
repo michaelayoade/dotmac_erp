@@ -18,7 +18,7 @@
           action="{{ '/api/v1/banking/accounts/' + account.bank_account_id|string if account else '/api/v1/banking/accounts' }}"
           hx-post="{{ '/api/v1/banking/accounts/' + account.bank_account_id|string if account else '/api/v1/banking/accounts' }}"
           hx-swap="none"
-          hx-on::after-request="if(event.detail.successful) window.location.href='/banking/accounts'"
+          hx-on::after-request="if(event.detail.successful) window.location.href='/finance/banking/accounts'"
           class="space-y-6">
 
         <!-- Bank Information -->

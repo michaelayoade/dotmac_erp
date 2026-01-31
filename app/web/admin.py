@@ -7,11 +7,13 @@ Provides admin dashboard and management pages with admin role requirement.
 from typing import Any
 
 from fastapi import APIRouter, Depends, Form, Query, Request, UploadFile
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
+from app.services.admin.settings_web import admin_settings_web_service
 from app.services.admin.web import admin_web_service
-from app.web.deps import get_db, optional_web_auth, WebAuthContext
+from app.templates import templates
+from app.web.deps import get_db, optional_web_auth, org_brand_context, WebAuthContext
 
 
 router = APIRouter(prefix="/admin", tags=["admin-web"])
@@ -849,3 +851,242 @@ def admin_tasks_delete(
 ):
     """Delete a task."""
     return admin_web_service.tasks_delete_response(request, db, auth, task_id)
+
+
+# ========== Settings Hub ==========
+
+
+def _admin_base_context(request: Request, auth: WebAuthContext, page_title: str, db: Session) -> dict:
+    """Build base context for admin settings pages."""
+    context = {
+        "request": request,
+        "user": {"name": "Admin", "initials": "AD"} if auth else {},
+        "page_title": page_title,
+        "active_page": "settings",
+        "brand": org_brand_context(db, auth.organization_id if auth else None),
+    }
+    return context
+
+
+@router.get("/settings/hub", response_class=HTMLResponse)
+def admin_settings_hub(
+    request: Request,
+    db: Session = Depends(get_db),
+    auth: WebAuthContext = Depends(optional_web_auth),
+):
+    """Admin settings hub page."""
+    context = _admin_base_context(request, auth, "Settings", db)
+    context.update(admin_settings_web_service.get_hub_context(
+        auth.organization_id if auth else None
+    ))
+    return templates.TemplateResponse(request, "admin/settings/index.html", context)
+
+
+@router.get("/settings/organization", response_class=HTMLResponse)
+def admin_settings_organization(
+    request: Request,
+    db: Session = Depends(get_db),
+    auth: WebAuthContext = Depends(optional_web_auth),
+):
+    """Organization profile settings page."""
+    context = _admin_base_context(request, auth, "Organization Profile", db)
+    if auth and auth.organization_id:
+        context.update(admin_settings_web_service.get_organization_context(db, auth.organization_id))
+    return templates.TemplateResponse(request, "admin/settings/organization.html", context)
+
+
+@router.post("/settings/organization", response_class=HTMLResponse)
+async def admin_settings_organization_update(
+    request: Request,
+    db: Session = Depends(get_db),
+    auth: WebAuthContext = Depends(optional_web_auth),
+):
+    """Update organization profile."""
+    form = getattr(request.state, "csrf_form", None)
+    if form is None:
+        form = await request.form()
+    data = dict(form)
+
+    if auth and auth.organization_id:
+        success, error = admin_settings_web_service.update_organization(db, auth.organization_id, data)
+        if not success:
+            context = _admin_base_context(request, auth, "Organization Profile", db)
+            context.update(admin_settings_web_service.get_organization_context(db, auth.organization_id))
+            context["error"] = error
+            return templates.TemplateResponse(request, "admin/settings/organization.html", context)
+
+    return RedirectResponse(url="/admin/settings/organization?saved=1", status_code=303)
+
+
+@router.get("/settings/branding", response_class=HTMLResponse)
+def admin_settings_branding(
+    request: Request,
+    db: Session = Depends(get_db),
+    auth: WebAuthContext = Depends(optional_web_auth),
+):
+    """Branding settings page."""
+    context = _admin_base_context(request, auth, "Branding", db)
+    if auth and auth.organization_id:
+        context.update(admin_settings_web_service.get_branding_context(db, auth.organization_id))
+    return templates.TemplateResponse(request, "admin/settings/branding.html", context)
+
+
+@router.post("/settings/branding", response_class=HTMLResponse)
+async def admin_settings_branding_update(
+    request: Request,
+    db: Session = Depends(get_db),
+    auth: WebAuthContext = Depends(optional_web_auth),
+):
+    """Update branding settings."""
+    form = getattr(request.state, "csrf_form", None)
+    if form is None:
+        form = await request.form()
+    data = dict(form)
+
+    if auth and auth.organization_id:
+        success, error = admin_settings_web_service.update_branding(db, auth.organization_id, data)
+        if not success:
+            context = _admin_base_context(request, auth, "Branding", db)
+            context.update(admin_settings_web_service.get_branding_context(db, auth.organization_id))
+            context["error"] = error
+            return templates.TemplateResponse(request, "admin/settings/branding.html", context)
+
+    return RedirectResponse(url="/admin/settings/branding?saved=1", status_code=303)
+
+
+@router.get("/settings/email", response_class=HTMLResponse)
+def admin_settings_email(
+    request: Request,
+    db: Session = Depends(get_db),
+    auth: WebAuthContext = Depends(optional_web_auth),
+):
+    """Email configuration page."""
+    context = _admin_base_context(request, auth, "Email Configuration", db)
+    if auth and auth.organization_id:
+        context.update(admin_settings_web_service.get_email_context(db, auth.organization_id))
+    return templates.TemplateResponse(request, "admin/settings/email.html", context)
+
+
+@router.post("/settings/email", response_class=HTMLResponse)
+async def admin_settings_email_update(
+    request: Request,
+    db: Session = Depends(get_db),
+    auth: WebAuthContext = Depends(optional_web_auth),
+):
+    """Update email settings."""
+    form = getattr(request.state, "csrf_form", None)
+    if form is None:
+        form = await request.form()
+    data = dict(form)
+
+    if auth and auth.organization_id:
+        success, error = admin_settings_web_service.update_email(db, auth.organization_id, data)
+        if not success:
+            context = _admin_base_context(request, auth, "Email Configuration", db)
+            context.update(admin_settings_web_service.get_email_context(db, auth.organization_id))
+            context["error"] = error
+            return templates.TemplateResponse(request, "admin/settings/email.html", context)
+
+    return RedirectResponse(url="/admin/settings/email?saved=1", status_code=303)
+
+
+@router.get("/settings/features", response_class=HTMLResponse)
+def admin_settings_features(
+    request: Request,
+    db: Session = Depends(get_db),
+    auth: WebAuthContext = Depends(optional_web_auth),
+):
+    """Feature flags page."""
+    context = _admin_base_context(request, auth, "Feature Flags", db)
+    if auth and auth.organization_id:
+        context.update(admin_settings_web_service.get_features_context(db, auth.organization_id))
+    return templates.TemplateResponse(request, "admin/settings/features.html", context)
+
+
+@router.post("/settings/features/{feature_key}/toggle", response_class=HTMLResponse)
+async def admin_settings_feature_toggle(
+    request: Request,
+    feature_key: str,
+    db: Session = Depends(get_db),
+    auth: WebAuthContext = Depends(optional_web_auth),
+):
+    """Toggle a feature flag."""
+    form = getattr(request.state, "csrf_form", None)
+    if form is None:
+        form = await request.form()
+    enabled = str(form.get("enabled", "false")).lower() == "true"
+
+    if auth and auth.organization_id:
+        success, error = admin_settings_web_service.toggle_feature(
+            db, auth.organization_id, feature_key, enabled
+        )
+        if not success:
+            context = _admin_base_context(request, auth, "Feature Flags", db)
+            context.update(admin_settings_web_service.get_features_context(db, auth.organization_id))
+            context["error"] = error
+            return templates.TemplateResponse(request, "admin/settings/features.html", context)
+
+    return RedirectResponse(url="/admin/settings/features?saved=1", status_code=303)
+
+
+@router.get("/settings/payments", response_class=HTMLResponse)
+def admin_settings_payments(
+    request: Request,
+    db: Session = Depends(get_db),
+    auth: WebAuthContext = Depends(optional_web_auth),
+):
+    """Payments settings hub page."""
+    context = _admin_base_context(request, auth, "Payment Providers", db)
+    if auth and auth.organization_id:
+        context.update(admin_settings_web_service.get_payments_hub_context(db, auth.organization_id))
+    return templates.TemplateResponse(request, "admin/settings/payments_index.html", context)
+
+
+@router.get("/settings/payments/paystack", response_class=HTMLResponse)
+def admin_settings_paystack(
+    request: Request,
+    db: Session = Depends(get_db),
+    auth: WebAuthContext = Depends(optional_web_auth),
+):
+    """Paystack settings page."""
+    context = _admin_base_context(request, auth, "Paystack Settings", db)
+    if auth and auth.organization_id:
+        context.update(admin_settings_web_service.get_paystack_context(db, auth.organization_id))
+    return templates.TemplateResponse(request, "admin/settings/paystack.html", context)
+
+
+@router.post("/settings/payments/paystack", response_class=HTMLResponse)
+async def admin_settings_paystack_update(
+    request: Request,
+    db: Session = Depends(get_db),
+    auth: WebAuthContext = Depends(optional_web_auth),
+):
+    """Update Paystack settings."""
+    form = getattr(request.state, "csrf_form", None)
+    if form is None:
+        form = await request.form()
+    data = dict(form)
+
+    if auth and auth.organization_id:
+        success, error = admin_settings_web_service.update_paystack(db, auth.organization_id, data)
+        if not success:
+            context = _admin_base_context(request, auth, "Paystack Settings", db)
+            context.update(admin_settings_web_service.get_paystack_context(db, auth.organization_id))
+            context["error"] = error
+            return templates.TemplateResponse(request, "admin/settings/paystack.html", context)
+
+    return RedirectResponse(url="/admin/settings/payments/paystack?saved=1", status_code=303)
+
+
+@router.get("/settings/advanced", response_class=HTMLResponse)
+def admin_settings_advanced(
+    request: Request,
+    page: int = Query(default=1, ge=1),
+    search: str = Query(default=""),
+    status: str = Query(default=""),
+    domain: str = Query(default=""),
+    db: Session = Depends(get_db),
+    auth: WebAuthContext = Depends(optional_web_auth),
+):
+    """Advanced settings (raw DomainSettings CRUD)."""
+    return admin_web_service.settings_response(request, db, auth, page, search, status, domain)

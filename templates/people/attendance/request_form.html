@@ -1,0 +1,92 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}New Attendance Request{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/attendance" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Attendance</a>
+    <span class="mx-2">/</span>
+    <a href="/people/attendance/requests" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Requests</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">New</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl space-y-6">
+    <div>
+        <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">New Attendance Request</h1>
+        <p class="text-sm text-slate-500 dark:text-slate-400">Submit a correction or regularization request.</p>
+    </div>
+
+    {% if error %}
+    <div class="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-900/40 dark:bg-rose-900/20 dark:text-rose-300">
+        {{ error }}
+    </div>
+    {% endif %}
+
+    <form method="post" action="/people/attendance/requests/new" class="card p-6 space-y-6">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                <label class="form-label">Employee</label>
+                <select name="employee_id" class="form-select" required>
+                    <option value="">Select employee</option>
+                    {% for emp in employees %}
+                    <option value="{{ emp.employee_id }}" {% if form_data.employee_id == emp.employee_id|string %}selected{% endif %}>
+                        {{ emp.employee_code }} - {{ emp.full_name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="form-label">From date</label>
+                <input type="date" name="from_date" required
+                       value="{{ form_data.from_date | default('') }}"
+                       class="form-input">
+            </div>
+            <div>
+                <label class="form-label">To date</label>
+                <input type="date" name="to_date" required
+                       value="{{ form_data.to_date | default('') }}"
+                       class="form-input">
+            </div>
+            <div class="flex items-center gap-2">
+                <input type="checkbox" name="half_day" id="half_day" value="true"
+                       class="rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+                       {{ 'checked' if form_data.half_day }}>
+                <label for="half_day" class="text-sm text-slate-700 dark:text-slate-300">Half-day request</label>
+            </div>
+            <div>
+                <label class="form-label">Half-day date</label>
+                <input type="date" name="half_day_date"
+                       value="{{ form_data.half_day_date | default('') }}"
+                       class="form-input">
+                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Required when half-day is selected.</p>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 gap-4">
+            <div>
+                <label class="form-label">Reason</label>
+                <input type="text" name="reason"
+                       value="{{ form_data.reason | default('') }}"
+                       class="form-input"
+                       placeholder="e.g., System outage, late approval">
+            </div>
+            <div>
+                <label class="form-label">Explanation</label>
+                <textarea name="explanation" rows="4" class="form-input"
+                          placeholder="Add details for the request">{{ form_data.explanation | default('') }}</textarea>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-3">
+            <button type="submit" class="btn btn-primary">Submit Request</button>
+            <a href="/people/attendance/requests" class="btn btn-secondary">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

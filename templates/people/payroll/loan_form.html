@@ -1,0 +1,213 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}New Loan Application{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a>
+    <span class="mx-2">/</span>
+    <a href="/people/payroll/loans" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Loans</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">New Application</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+    <div class="card">
+        <div class="p-6 border-b border-slate-200 dark:border-slate-700">
+            <h1 class="text-xl font-semibold text-slate-900 dark:text-white">New Loan Application</h1>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Create a new employee loan application</p>
+        </div>
+
+        <form method="post" action="/people/payroll/loans/new" class="p-6 space-y-6">
+            {{ request.state.csrf_form | safe }}
+
+            {# Employee Selection #}
+            <div class="form-group">
+                <label for="employee_id" class="form-label">Employee <span class="text-rose-500">*</span></label>
+                <select name="employee_id" id="employee_id" class="form-select w-full" required>
+                    <option value="">-- Select Employee --</option>
+                    {% for emp in employees %}
+                    <option value="{{ emp.employee_id }}" {% if selected_employee and selected_employee.employee_id == emp.employee_id %}selected{% endif %}>
+                        {{ emp.full_name }} ({{ emp.employee_number or 'No ID' }})
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            {# Loan Type #}
+            <div class="form-group">
+                <label for="loan_type_id" class="form-label">Loan Type <span class="text-rose-500">*</span></label>
+                <select name="loan_type_id" id="loan_type_id" class="form-select w-full" required onchange="updateLoanTypeDetails()">
+                    <option value="">-- Select Loan Type --</option>
+                    {% for lt in loan_types %}
+                    <option value="{{ lt.loan_type_id }}"
+                            data-min="{{ lt.min_amount }}"
+                            data-max="{{ lt.max_amount or '' }}"
+                            data-min-tenure="{{ lt.min_tenure_months }}"
+                            data-max-tenure="{{ lt.max_tenure_months }}"
+                            data-rate="{{ lt.default_interest_rate }}"
+                            data-method="{{ lt.interest_method.value }}">
+                        {{ lt.type_name }}
+                    </option>
+                    {% endfor %}
+                </select>
+                <div id="loan-type-details" class="hidden mt-2 p-3 bg-slate-50 dark:bg-slate-800 rounded-lg text-sm">
+                    <div class="grid grid-cols-2 gap-2 text-slate-600 dark:text-slate-400">
+                        <div>Amount: <span id="lt-amount-range" class="font-medium text-slate-900 dark:text-white"></span></div>
+                        <div>Tenure: <span id="lt-tenure-range" class="font-medium text-slate-900 dark:text-white"></span></div>
+                        <div>Interest Rate: <span id="lt-rate" class="font-medium text-slate-900 dark:text-white"></span></div>
+                        <div>Interest Method: <span id="lt-method" class="font-medium text-slate-900 dark:text-white"></span></div>
+                    </div>
+                </div>
+            </div>
+
+            {# Principal Amount #}
+            <div class="form-group">
+                <label for="principal_amount" class="form-label">Principal Amount <span class="text-rose-500">*</span></label>
+                <div class="relative">
+                    <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">&#8358;</span>
+                    <input type="number" name="principal_amount" id="principal_amount"
+                        class="form-input w-full pl-8 font-mono"
+                        required min="0" step="0.01"
+                        placeholder="0.00">
+                </div>
+            </div>
+
+            {# Tenure #}
+            <div class="form-group">
+                <label for="tenure_months" class="form-label">Repayment Period (Months) <span class="text-rose-500">*</span></label>
+                <input type="number" name="tenure_months" id="tenure_months"
+                    class="form-input w-full"
+                    required min="1" max="60" value="12">
+            </div>
+
+            {# First Repayment Date #}
+            <div class="form-group">
+                <label for="first_repayment_date" class="form-label">First Repayment Date</label>
+                <input type="date" name="first_repayment_date" id="first_repayment_date"
+                    class="form-input w-full">
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    Leave blank to use the default (first of next month if application is before 15th)
+                </p>
+            </div>
+
+            {# Purpose #}
+            <div class="form-group">
+                <label for="purpose" class="form-label">Purpose</label>
+                <textarea name="purpose" id="purpose" rows="3"
+                    class="form-textarea w-full"
+                    placeholder="Optional: Describe the purpose of this loan..."></textarea>
+            </div>
+
+            {# Calculated Summary #}
+            <div id="loan-summary" class="hidden p-4 bg-slate-50 dark:bg-slate-800 rounded-lg">
+                <h3 class="font-medium text-slate-900 dark:text-white mb-3">Loan Summary</h3>
+                <div class="grid grid-cols-2 gap-3 text-sm">
+                    <div class="text-slate-600 dark:text-slate-400">Principal Amount:</div>
+                    <div class="text-slate-900 dark:text-white font-mono" id="summary-principal">-</div>
+                    <div class="text-slate-600 dark:text-slate-400">Total Interest:</div>
+                    <div class="text-slate-900 dark:text-white font-mono" id="summary-interest">-</div>
+                    <div class="text-slate-600 dark:text-slate-400">Total Repayable:</div>
+                    <div class="text-slate-900 dark:text-white font-mono font-medium" id="summary-total">-</div>
+                    <div class="text-slate-600 dark:text-slate-400">Monthly Installment:</div>
+                    <div class="text-emerald-600 dark:text-emerald-400 font-mono font-medium" id="summary-installment">-</div>
+                </div>
+            </div>
+
+            {# Actions #}
+            <div class="flex justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
+                <a href="/people/payroll/loans" class="btn btn-ghost">Cancel</a>
+                <button type="submit" class="btn btn-primary">
+                    <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                    </svg>
+                    Create Loan Application
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function updateLoanTypeDetails() {
+    const select = document.getElementById('loan_type_id');
+    const details = document.getElementById('loan-type-details');
+    const option = select.options[select.selectedIndex];
+
+    if (!option.value) {
+        details.classList.add('hidden');
+        return;
+    }
+
+    const min = parseFloat(option.dataset.min) || 0;
+    const max = option.dataset.max ? parseFloat(option.dataset.max) : null;
+    const minTenure = parseInt(option.dataset.minTenure) || 1;
+    const maxTenure = parseInt(option.dataset.maxTenure) || 60;
+    const rate = parseFloat(option.dataset.rate) || 0;
+    const method = option.dataset.method || 'NONE';
+
+    document.getElementById('lt-amount-range').textContent =
+        max ? `${min.toLocaleString()} - ${max.toLocaleString()}` : `Min ${min.toLocaleString()}`;
+    document.getElementById('lt-tenure-range').textContent = `${minTenure} - ${maxTenure} months`;
+    document.getElementById('lt-rate').textContent = rate + '% p.a.';
+    document.getElementById('lt-method').textContent = method.replace('_', ' ');
+
+    // Update input constraints
+    document.getElementById('principal_amount').min = min;
+    if (max) document.getElementById('principal_amount').max = max;
+    document.getElementById('tenure_months').min = minTenure;
+    document.getElementById('tenure_months').max = maxTenure;
+
+    details.classList.remove('hidden');
+    calculateLoan();
+}
+
+function calculateLoan() {
+    const select = document.getElementById('loan_type_id');
+    const option = select.options[select.selectedIndex];
+    if (!option.value) return;
+
+    const principal = parseFloat(document.getElementById('principal_amount').value) || 0;
+    const tenure = parseInt(document.getElementById('tenure_months').value) || 1;
+    const rate = parseFloat(option.dataset.rate) || 0;
+    const method = option.dataset.method || 'NONE';
+
+    let totalInterest = 0;
+    let totalRepayable = principal;
+    let monthlyInstallment = principal / tenure;
+
+    if (method === 'FLAT' && rate > 0) {
+        const years = tenure / 12;
+        totalInterest = principal * (rate / 100) * years;
+        totalRepayable = principal + totalInterest;
+        monthlyInstallment = totalRepayable / tenure;
+    } else if (method === 'REDUCING_BALANCE' && rate > 0) {
+        const monthlyRate = rate / 100 / 12;
+        if (monthlyRate > 0) {
+            const factor = Math.pow(1 + monthlyRate, tenure);
+            monthlyInstallment = principal * monthlyRate * factor / (factor - 1);
+            totalRepayable = monthlyInstallment * tenure;
+            totalInterest = totalRepayable - principal;
+        }
+    }
+
+    const summary = document.getElementById('loan-summary');
+    if (principal > 0) {
+        document.getElementById('summary-principal').textContent = principal.toLocaleString('en-NG', {minimumFractionDigits: 2});
+        document.getElementById('summary-interest').textContent = totalInterest.toLocaleString('en-NG', {minimumFractionDigits: 2});
+        document.getElementById('summary-total').textContent = totalRepayable.toLocaleString('en-NG', {minimumFractionDigits: 2});
+        document.getElementById('summary-installment').textContent = monthlyInstallment.toLocaleString('en-NG', {minimumFractionDigits: 2});
+        summary.classList.remove('hidden');
+    } else {
+        summary.classList.add('hidden');
+    }
+}
+
+document.getElementById('principal_amount').addEventListener('input', calculateLoan);
+document.getElementById('tenure_months').addEventListener('input', calculateLoan);
+</script>
+{% endblock %}

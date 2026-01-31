@@ -1,11 +1,13 @@
 """
-IFRS Settings Web Routes.
+Finance Settings Web Routes.
 
-Configuration pages for IFRS modules including numbering sequences,
-organization profile, email, automation, reporting, and feature flags.
+Configuration pages for Finance modules including numbering sequences,
+automation settings, and report configuration.
+
+Note: Org-wide settings (organization profile, branding, email, features,
+payments) have moved to Admin settings at /admin/settings/hub.
 """
 import uuid
-from typing import Optional
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -13,13 +15,51 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
 from app.services.finance.settings_web import settings_web_service
-from app.services.finance.branding import BrandingService
 from app.templates import templates
 from app.web.deps import get_async_db, get_db, require_finance_access, WebAuthContext, base_context
 
 
-router = APIRouter(prefix="/settings", tags=["ifrs-settings"])
+router = APIRouter(prefix="/settings", tags=["finance-settings"])
 
+
+# ========== Settings Index ==========
+
+@router.get("", response_class=HTMLResponse)
+async def settings_index(
+    request: Request,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Settings index page."""
+    context = base_context(request, auth, "Settings", "settings", db=db)
+    # Finance-specific settings only - org-wide settings moved to Admin
+    context.update({
+        "settings_sections": [
+            {
+                "title": "Numbering Sequences",
+                "description": "Configure document number formats for invoices, quotes, orders, and more.",
+                "url": "/settings/numbering",
+                "icon": "hashtag",
+            },
+            {
+                "title": "Automation Settings",
+                "description": "Configure recurring transactions, workflows, and custom fields.",
+                "url": "/settings/automation-settings",
+                "icon": "arrow-path",
+            },
+            {
+                "title": "Report Settings",
+                "description": "Default export formats, page layout, and report branding.",
+                "url": "/settings/reports",
+                "icon": "document-text",
+            },
+        ],
+        "admin_settings_url": "/admin/settings/hub",
+    })
+    return templates.TemplateResponse(request, "finance/settings/index.html", context)
+
+
+# ========== Numbering Sequences ==========
 
 @router.get("/numbering", response_class=HTMLResponse)
 async def numbering_sequences_list(
@@ -73,12 +113,11 @@ async def update_numbering_sequence(
     db: AsyncSession = Depends(get_async_db),
 ):
     """Update a numbering sequence configuration."""
-    # Parse checkbox values from form (checkboxes only submit when checked)
     form_data = await request.form()
     include_year = "include_year" in form_data
     include_month = "include_month" in form_data
 
-    success, error = await settings_web_service.update_numbering_sequence(
+    await settings_web_service.update_numbering_sequence(
         db=db,
         sequence_id=sequence_id,
         prefix=prefix,
@@ -106,156 +145,6 @@ async def reset_numbering_sequence(
     await settings_web_service.reset_numbering_sequence(db, sequence_id, new_value)
 
     return RedirectResponse(url="/settings/numbering", status_code=303)
-
-
-@router.get("", response_class=HTMLResponse)
-async def settings_index(
-    request: Request,
-    auth: WebAuthContext = Depends(require_finance_access),
-    db: Session = Depends(get_db),
-):
-    """Settings index page."""
-    context = base_context(request, auth, "Settings", "settings", db=db)
-    context.update({
-        "settings_sections": [
-            {
-                "title": "Organization Profile",
-                "description": "Company information, address, and regional settings.",
-                "url": "/settings/organization",
-                "icon": "building-office",
-            },
-            {
-                "title": "Branding",
-                "description": "Logo, colors, typography, and visual identity.",
-                "url": "/settings/branding",
-                "icon": "swatch",
-            },
-            {
-                "title": "Numbering Sequences",
-                "description": "Configure document number formats for invoices, quotes, orders, and more.",
-                "url": "/settings/numbering",
-                "icon": "hashtag",
-            },
-            {
-                "title": "Email Configuration",
-                "description": "SMTP server settings for sending notifications and documents.",
-                "url": "/settings/email",
-                "icon": "envelope",
-            },
-            {
-                "title": "Automation Settings",
-                "description": "Configure recurring transactions, workflows, and custom fields.",
-                "url": "/settings/automation-settings",
-                "icon": "arrow-path",
-            },
-            {
-                "title": "Report Settings",
-                "description": "Default export formats, page layout, and report branding.",
-                "url": "/settings/reports",
-                "icon": "document-text",
-            },
-            {
-                "title": "Feature Flags",
-                "description": "Enable or disable optional modules and functionality.",
-                "url": "/settings/features",
-                "icon": "flag",
-            },
-            {
-                "title": "Payments",
-                "description": "Configure payment providers and gateway integrations.",
-                "url": "/settings/payments",
-                "icon": "credit-card",
-            },
-        ],
-    })
-    return templates.TemplateResponse(request, "finance/settings/index.html", context)
-
-
-# ========== Organization Profile ==========
-
-@router.get("/organization", response_class=HTMLResponse)
-async def organization_settings(
-    request: Request,
-    auth: WebAuthContext = Depends(require_finance_access),
-    db: AsyncSession = Depends(get_async_db),
-    sync_db: Session = Depends(get_db),
-):
-    """Organization profile settings page."""
-    result = await settings_web_service.get_organization_context(db, auth.organization_id)
-
-    context = base_context(request, auth, "Organization Profile", "settings", db=sync_db)
-    context.update(result)
-
-    return templates.TemplateResponse(request, "finance/settings/organization.html", context)
-
-
-@router.post("/organization", response_class=HTMLResponse)
-async def update_organization_settings(
-    request: Request,
-    auth: WebAuthContext = Depends(require_finance_access),
-    db: AsyncSession = Depends(get_async_db),
-):
-    """Update organization profile."""
-    form_data = getattr(request.state, "csrf_form", None)
-    if form_data is None:
-        form_data = await request.form()
-    data = dict(form_data)
-
-    success, error = await settings_web_service.update_organization(
-        db, auth.organization_id, data
-    )
-
-    if not success:
-        result = await settings_web_service.get_organization_context(db, auth.organization_id)
-        context = base_context(request, auth, "Organization Profile", "settings")
-        context.update(result)
-        context["error"] = error
-        return templates.TemplateResponse(request, "finance/settings/organization.html", context)
-
-    return RedirectResponse(url="/settings/organization?saved=1", status_code=303)
-
-
-# ========== Email Configuration ==========
-
-@router.get("/email", response_class=HTMLResponse)
-async def email_settings(
-    request: Request,
-    auth: WebAuthContext = Depends(require_finance_access),
-    db: Session = Depends(get_db),
-):
-    """Email configuration page."""
-    result = settings_web_service.get_email_settings_context(db, auth.organization_id)
-
-    context = base_context(request, auth, "Email Configuration", "settings", db=db)
-    context.update(result)
-
-    return templates.TemplateResponse(request, "finance/settings/email.html", context)
-
-
-@router.post("/email", response_class=HTMLResponse)
-async def update_email_settings(
-    request: Request,
-    auth: WebAuthContext = Depends(require_finance_access),
-    db: Session = Depends(get_db),
-):
-    """Update email settings."""
-    form_data = getattr(request.state, "csrf_form", None)
-    if form_data is None:
-        form_data = await request.form()
-    data = dict(form_data)
-
-    success, error = settings_web_service.update_email_settings(
-        db, auth.organization_id, data
-    )
-
-    if not success:
-        result = settings_web_service.get_email_settings_context(db, auth.organization_id)
-        context = base_context(request, auth, "Email Configuration", "settings", db=db)
-        context.update(result)
-        context["error"] = error
-        return templates.TemplateResponse(request, "finance/settings/email.html", context)
-
-    return RedirectResponse(url="/settings/email?saved=1", status_code=303)
 
 
 # ========== Automation Settings ==========
@@ -358,129 +247,41 @@ async def update_report_settings(
     return RedirectResponse(url="/settings/reports?saved=1", status_code=303)
 
 
-# ========== Feature Flags ==========
+# ========== Legacy Route Redirects ==========
+# These routes previously lived in Finance but have moved to Admin.
+# Redirects are provided for backwards compatibility.
 
-@router.get("/features", response_class=HTMLResponse)
-async def feature_flags(
-    request: Request,
-    auth: WebAuthContext = Depends(require_finance_access),
-    db: Session = Depends(get_db),
-):
-    """Feature flags page."""
-    result = settings_web_service.get_features_context(db, auth.organization_id)
-
-    context = base_context(request, auth, "Feature Flags", "settings", db=db)
-    context.update(result)
-
-    return templates.TemplateResponse(request, "finance/settings/features.html", context)
+@router.get("/organization")
+async def redirect_organization():
+    """Redirect to Admin organization settings."""
+    return RedirectResponse(url="/admin/settings/organization", status_code=301)
 
 
-@router.post("/features/{feature_key}/toggle", response_class=HTMLResponse)
-async def toggle_feature(
-    request: Request,
-    feature_key: str,
-    auth: WebAuthContext = Depends(require_finance_access),
-    db: Session = Depends(get_db),
-):
-    """Toggle a feature flag."""
-    form_data = getattr(request.state, "csrf_form", None)
-    if form_data is None:
-        form_data = await request.form()
-    enabled = str(form_data.get("enabled", "false")).lower() == "true"
-
-    success, error = settings_web_service.toggle_feature(
-        db, auth.organization_id, feature_key, enabled
-    )
-
-    if not success:
-        result = settings_web_service.get_features_context(db, auth.organization_id)
-        context = base_context(request, auth, "Feature Flags", "settings", db=db)
-        context.update(result)
-        context["error"] = error
-        return templates.TemplateResponse(request, "finance/settings/features.html", context)
-
-    return RedirectResponse(url="/settings/features?saved=1", status_code=303)
+@router.get("/branding")
+async def redirect_branding():
+    """Redirect to Admin branding settings."""
+    return RedirectResponse(url="/admin/settings/branding", status_code=301)
 
 
-# ========== Payments Settings ==========
+@router.get("/email")
+async def redirect_email():
+    """Redirect to Admin email settings."""
+    return RedirectResponse(url="/admin/settings/email", status_code=301)
 
 
-@router.get("/payments", response_class=HTMLResponse)
-async def payments_settings_index(
-    request: Request,
-    auth: WebAuthContext = Depends(require_finance_access),
-    db: Session = Depends(get_db),
-):
-    """Payments settings landing page."""
-    result = settings_web_service.get_payments_settings_context(db, auth.organization_id)
-
-    context = base_context(request, auth, "Payments Settings", "settings", db=db)
-    context.update(result)
-
-    return templates.TemplateResponse(request, "finance/settings/payments_index.html", context)
+@router.get("/features")
+async def redirect_features():
+    """Redirect to Admin feature flags."""
+    return RedirectResponse(url="/admin/settings/features", status_code=301)
 
 
-@router.get("/payments/paystack", response_class=HTMLResponse)
-async def paystack_settings(
-    request: Request,
-    auth: WebAuthContext = Depends(require_finance_access),
-    db: Session = Depends(get_db),
-):
-    """Paystack settings page."""
-    result = settings_web_service.get_payments_settings_context(db, auth.organization_id)
-
-    context = base_context(request, auth, "Paystack Settings", "settings", db=db)
-    context.update(result)
-
-    return templates.TemplateResponse(request, "finance/settings/paystack.html", context)
+@router.get("/payments")
+async def redirect_payments():
+    """Redirect to Admin payments settings."""
+    return RedirectResponse(url="/admin/settings/payments", status_code=301)
 
 
-@router.post("/payments/paystack", response_class=HTMLResponse)
-async def update_paystack_settings(
-    request: Request,
-    auth: WebAuthContext = Depends(require_finance_access),
-    db: Session = Depends(get_db),
-):
-    """Update Paystack settings."""
-    form_data = getattr(request.state, "csrf_form", None)
-    if form_data is None:
-        form_data = await request.form()
-    data = dict(form_data)
-
-    success, error = settings_web_service.update_payments_settings(
-        db, auth.organization_id, data
-    )
-
-    if not success:
-        result = settings_web_service.get_payments_settings_context(db, auth.organization_id)
-        context = base_context(request, auth, "Paystack Settings", "settings", db=db)
-        context.update(result)
-        context["error"] = error
-        return templates.TemplateResponse(request, "finance/settings/paystack.html", context)
-
-    return RedirectResponse(url="/settings/payments/paystack?saved=1", status_code=303)
-
-
-# ========== Branding Settings ==========
-
-
-@router.get("/branding", response_class=HTMLResponse)
-async def branding_settings(
-    request: Request,
-    auth: WebAuthContext = Depends(require_finance_access),
-    db: Session = Depends(get_db),
-):
-    """Branding settings page with live preview."""
-    service = BrandingService(db)
-
-    # Get or create branding for this organization
-    branding = service.get_or_create(auth.organization_id, auth.person_id)
-    db.commit()
-
-    context = base_context(request, auth, "Branding", "settings", db=db)
-    context.update({
-        "branding": branding,
-        "org_id": auth.organization_id,
-    })
-
-    return templates.TemplateResponse(request, "finance/settings/branding.html", context)
+@router.get("/payments/paystack")
+async def redirect_paystack():
+    """Redirect to Admin Paystack settings."""
+    return RedirectResponse(url="/admin/settings/payments/paystack", status_code=301)

@@ -1,0 +1,194 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}{{ 'Edit' if loan_type else 'New' }} Loan Type{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a>
+    <span class="mx-2">/</span>
+    <a href="/people/payroll/loans" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Loans</a>
+    <span class="mx-2">/</span>
+    <a href="/people/payroll/loans/types" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Loan Types</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">{{ 'Edit' if loan_type else 'New' }}</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+    <div class="card">
+        <div class="p-6 border-b border-slate-200 dark:border-slate-700">
+            <h1 class="text-xl font-semibold text-slate-900 dark:text-white">
+                {{ 'Edit Loan Type' if loan_type else 'New Loan Type' }}
+            </h1>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                Configure loan parameters for employee loan applications
+            </p>
+        </div>
+
+        <form method="post" action="/people/payroll/loans/types/{{ loan_type.loan_type_id if loan_type else 'new' }}" class="p-6 space-y-6">
+            {{ request.state.csrf_form | safe }}
+
+            {# Basic Information #}
+            <div class="grid grid-cols-2 gap-4">
+                <div class="form-group">
+                    <label for="type_code" class="form-label">Type Code <span class="text-rose-500">*</span></label>
+                    <input type="text" name="type_code" id="type_code"
+                        value="{{ loan_type.type_code if loan_type else '' }}"
+                        class="form-input w-full font-mono uppercase"
+                        required maxlength="20"
+                        placeholder="e.g., SALARY_ADV">
+                </div>
+                <div class="form-group">
+                    <label for="type_name" class="form-label">Type Name <span class="text-rose-500">*</span></label>
+                    <input type="text" name="type_name" id="type_name"
+                        value="{{ loan_type.type_name if loan_type else '' }}"
+                        class="form-input w-full"
+                        required maxlength="100"
+                        placeholder="e.g., Salary Advance">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="category" class="form-label">Category <span class="text-rose-500">*</span></label>
+                <select name="category" id="category" class="form-select w-full" required>
+                    {% for val, label in categories %}
+                    <option value="{{ val }}" {% if loan_type and loan_type.category.value == val %}selected{% endif %}>
+                        {{ label }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="description" class="form-label">Description</label>
+                <textarea name="description" id="description" rows="2"
+                    class="form-textarea w-full"
+                    placeholder="Optional description...">{{ loan_type.description if loan_type else '' }}</textarea>
+            </div>
+
+            {# Amount Limits #}
+            <div class="border-t border-slate-200 dark:border-slate-700 pt-6">
+                <h3 class="text-sm font-medium text-slate-900 dark:text-white mb-4">Amount Limits</h3>
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="form-group">
+                        <label for="min_amount" class="form-label">Minimum Amount</label>
+                        <div class="relative">
+                            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">&#8358;</span>
+                            <input type="number" name="min_amount" id="min_amount"
+                                value="{{ loan_type.min_amount if loan_type else '0' }}"
+                                class="form-input w-full pl-8 font-mono"
+                                min="0" step="0.01">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="max_amount" class="form-label">Maximum Amount</label>
+                        <div class="relative">
+                            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">&#8358;</span>
+                            <input type="number" name="max_amount" id="max_amount"
+                                value="{{ loan_type.max_amount if loan_type and loan_type.max_amount else '' }}"
+                                class="form-input w-full pl-8 font-mono"
+                                min="0" step="0.01"
+                                placeholder="No limit">
+                        </div>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Leave blank for no upper limit</p>
+                    </div>
+                </div>
+            </div>
+
+            {# Tenure Limits #}
+            <div class="border-t border-slate-200 dark:border-slate-700 pt-6">
+                <h3 class="text-sm font-medium text-slate-900 dark:text-white mb-4">Repayment Period</h3>
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="form-group">
+                        <label for="min_tenure_months" class="form-label">Minimum Tenure (Months)</label>
+                        <input type="number" name="min_tenure_months" id="min_tenure_months"
+                            value="{{ loan_type.min_tenure_months if loan_type else '1' }}"
+                            class="form-input w-full"
+                            min="1" max="120">
+                    </div>
+                    <div class="form-group">
+                        <label for="max_tenure_months" class="form-label">Maximum Tenure (Months)</label>
+                        <input type="number" name="max_tenure_months" id="max_tenure_months"
+                            value="{{ loan_type.max_tenure_months if loan_type else '12' }}"
+                            class="form-input w-full"
+                            min="1" max="120">
+                    </div>
+                </div>
+            </div>
+
+            {# Interest Configuration #}
+            <div class="border-t border-slate-200 dark:border-slate-700 pt-6">
+                <h3 class="text-sm font-medium text-slate-900 dark:text-white mb-4">Interest Configuration</h3>
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="form-group">
+                        <label for="interest_method" class="form-label">Interest Method</label>
+                        <select name="interest_method" id="interest_method" class="form-select w-full">
+                            {% for val, label in interest_methods %}
+                            <option value="{{ val }}" {% if loan_type and loan_type.interest_method.value == val %}selected{% endif %}>
+                                {{ label }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                            None = interest-free, Flat = simple interest, Reducing = EMI
+                        </p>
+                    </div>
+                    <div class="form-group">
+                        <label for="default_interest_rate" class="form-label">Default Interest Rate (% p.a.)</label>
+                        <input type="number" name="default_interest_rate" id="default_interest_rate"
+                            value="{{ loan_type.default_interest_rate if loan_type else '0' }}"
+                            class="form-input w-full"
+                            min="0" max="100" step="0.01">
+                    </div>
+                </div>
+            </div>
+
+            {# Eligibility #}
+            <div class="border-t border-slate-200 dark:border-slate-700 pt-6">
+                <h3 class="text-sm font-medium text-slate-900 dark:text-white mb-4">Eligibility & Approval</h3>
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="form-group">
+                        <label for="min_service_months" class="form-label">Minimum Service Period (Months)</label>
+                        <input type="number" name="min_service_months" id="min_service_months"
+                            value="{{ loan_type.min_service_months if loan_type else '0' }}"
+                            class="form-input w-full"
+                            min="0">
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">0 = no minimum service required</p>
+                    </div>
+                    <div class="form-group flex items-center pt-6">
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" name="requires_approval" class="sr-only peer"
+                                {% if not loan_type or loan_type.requires_approval %}checked{% endif %}>
+                            <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-teal-300 dark:peer-focus:ring-teal-800 rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-teal-600"></div>
+                            <span class="ml-3 text-sm font-medium text-slate-900 dark:text-slate-300">Requires Approval</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            {# Status #}
+            <div class="border-t border-slate-200 dark:border-slate-700 pt-6">
+                <div class="form-group flex items-center">
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" name="is_active" class="sr-only peer"
+                            {% if not loan_type or loan_type.is_active %}checked{% endif %}>
+                        <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-teal-300 dark:peer-focus:ring-teal-800 rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-teal-600"></div>
+                        <span class="ml-3 text-sm font-medium text-slate-900 dark:text-slate-300">Active</span>
+                    </label>
+                </div>
+            </div>
+
+            {# Actions #}
+            <div class="flex justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
+                <a href="/people/payroll/loans/types" class="btn btn-ghost">Cancel</a>
+                <button type="submit" class="btn btn-primary">
+                    {{ 'Update Loan Type' if loan_type else 'Create Loan Type' }}
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

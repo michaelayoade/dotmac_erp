@@ -1,0 +1,501 @@
+{# Partial template for payroll run detail - used for HTMX swaps #}
+{% from "components/macros.html" import status_badge %}
+<div id="run-content" class="space-y-6">
+    {% if error %}
+    <div class="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-900/40 dark:bg-rose-900/20 dark:text-rose-200"
+         x-data x-init="setTimeout(() => $el.remove(), 5000)">
+        {{ error }}
+    </div>
+    {% endif %}
+    {% if success %}
+    <div class="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-900/20 dark:text-emerald-200"
+         x-data x-init="setTimeout(() => $el.remove(), 5000)">
+        {{ success }}
+    </div>
+    {% endif %}
+
+    <!-- Header with Actions -->
+    <div class="flex flex-wrap items-start justify-between gap-4">
+        <div>
+            <div class="flex items-center gap-3">
+                <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">{{ entry.entry_number }}</h1>
+                {{ status_badge(entry.status.value) }}
+            </div>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                {{ entry.start_date.strftime('%d %b %Y') if entry.start_date else '' }} - {{ entry.end_date.strftime('%d %b %Y') if entry.end_date else '' }}
+                &bull; {{ entry.payroll_frequency.value | title }}
+                {% if entry.department %}&bull; {{ entry.department.department_name }}{% endif %}
+            </p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+            <a href="/people/payroll/runs/new?clone_from={{ entry.entry_id }}" class="btn btn-secondary" title="Create a new run using this one as a template">
+                <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2M8 16h8a2 2 0 002-2v-5m-4 7v2m0 0h2m-2 0h-2"/>
+                </svg>
+                Clone Run
+            </a>
+            <a href="/people/payroll/runs/{{ entry.entry_id }}/variance" class="btn btn-ghost" title="Compare this run with the previous period">
+                <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3v18h18M7 15l4-4 3 3 5-7"/>
+                </svg>
+                Variance
+            </a>
+            {% if entry.salary_slips_created and entry.status.value in ["DRAFT", "SLIPS_CREATED"] %}
+            <a href="/people/payroll/runs/{{ entry.entry_id }}/adjustments" class="btn btn-ghost" title="Apply one-time adjustments to all slips">
+                <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                </svg>
+                Bulk Adjustments
+            </a>
+            {% endif %}
+            {% if entry.status.value == "DRAFT" %}
+            <form method="post" action="/people/payroll/runs/{{ entry.entry_id }}/generate"
+                  hx-post="/people/payroll/runs/{{ entry.entry_id }}/generate"
+                  hx-target="#run-content"
+                  hx-swap="outerHTML"
+                  class="inline">
+                {{ request.state.csrf_form | safe }}
+                <button type="submit" class="btn btn-primary" data-loading-disable>
+                    <svg class="h-4 w-4 mr-1 htmx-indicator animate-spin hidden" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                    </svg>
+                    <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
+                    </svg>
+                    Generate Salary Slips
+                </button>
+            </form>
+            <form method="post" action="/people/payroll/runs/{{ entry.entry_id }}/delete" class="inline"
+                onsubmit="return confirm('Delete this payroll run?')">
+                {{ request.state.csrf_form | safe }}
+                <button type="submit" class="btn btn-danger">Delete</button>
+            </form>
+            {% elif entry.status.value == "SLIPS_CREATED" %}
+            <form method="post" action="/people/payroll/runs/{{ entry.entry_id }}/submit-and-approve"
+                  hx-post="/people/payroll/runs/{{ entry.entry_id }}/submit-and-approve"
+                  hx-target="#run-content"
+                  hx-swap="outerHTML"
+                  hx-confirm="Submit and approve all {{ slips | length }} salary slips?"
+                  class="inline"
+                  title="Submits and approves in one action (requires approver role)">
+                {{ request.state.csrf_form | safe }}
+                <button type="submit" class="btn btn-primary" data-loading-disable>
+                    <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    Submit &amp; Approve
+                </button>
+            </form>
+            <form method="post" action="/people/payroll/runs/{{ entry.entry_id }}/submit"
+                  hx-post="/people/payroll/runs/{{ entry.entry_id }}/submit"
+                  hx-target="#run-content"
+                  hx-swap="outerHTML"
+                  class="inline"
+                  title="Submits slips for approval without approving">
+                {{ request.state.csrf_form | safe }}
+                <button type="submit" class="btn btn-secondary" data-loading-disable>Submit Only</button>
+            </form>
+            <form method="post" action="/people/payroll/runs/{{ entry.entry_id }}/regenerate"
+                  hx-post="/people/payroll/runs/{{ entry.entry_id }}/regenerate"
+                  hx-target="#run-content"
+                  hx-swap="outerHTML"
+                  hx-confirm="This will delete all draft slips and regenerate them. Continue?"
+                  class="inline">
+                {{ request.state.csrf_form | safe }}
+                <button type="submit" class="btn btn-ghost" data-loading-disable>Regenerate</button>
+            </form>
+            {% elif entry.status.value == "SUBMITTED" %}
+            <form method="post" action="/people/payroll/runs/{{ entry.entry_id }}/approve"
+                  hx-post="/people/payroll/runs/{{ entry.entry_id }}/approve"
+                  hx-target="#run-content"
+                  hx-swap="outerHTML"
+                  class="inline"
+                  title="Approves all submitted slips in this run">
+                {{ request.state.csrf_form | safe }}
+                <button type="submit" class="btn btn-primary" data-loading-disable>
+                    <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                    </svg>
+                    Approve All Slips
+                </button>
+            </form>
+            {% elif entry.status.value == "APPROVED" %}
+            <form method="post" action="/people/payroll/runs/{{ entry.entry_id }}/post"
+                  hx-post="/people/payroll/runs/{{ entry.entry_id }}/post"
+                  hx-target="#run-content"
+                  hx-swap="outerHTML"
+                  class="inline"
+                  title="Posts approved slips to the General Ledger">
+                {{ request.state.csrf_form | safe }}
+                <input type="hidden" name="posting_date" value="{{ entry.posting_date.isoformat() if entry.posting_date else '' }}">
+                <button type="submit" class="btn btn-primary" data-loading-disable>
+                    <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                    </svg>
+                    Post to GL
+                </button>
+            </form>
+            {% elif entry.status.value == "POSTED" %}
+            {% if entry.payslips_email_status %}
+            <form method="post" action="/people/payroll/runs/{{ entry.entry_id }}/send-payslips?force=true"
+                  hx-post="/people/payroll/runs/{{ entry.entry_id }}/send-payslips?force=true"
+                  hx-target="#run-content"
+                  hx-swap="outerHTML"
+                  hx-confirm="Payslips have already been queued. Re-queue emails for all posted slips?"
+                  class="inline">
+                {{ request.state.csrf_form | safe }}
+                <button type="submit" class="btn btn-secondary" data-loading-disable>
+                    <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8m-18 8h18a2 2 0 002-2V6a2 2 0 00-2-2H3a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                    </svg>
+                    Resend Payslips
+                </button>
+            </form>
+            {% else %}
+            <form method="post" action="/people/payroll/runs/{{ entry.entry_id }}/send-payslips"
+                  hx-post="/people/payroll/runs/{{ entry.entry_id }}/send-payslips"
+                  hx-target="#run-content"
+                  hx-swap="outerHTML"
+                  hx-confirm="Queue payslip emails for all posted slips in this run?"
+                  class="inline">
+                {{ request.state.csrf_form | safe }}
+                <button type="submit" class="btn btn-secondary" data-loading-disable>
+                    <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8m-18 8h18a2 2 0 002-2V6a2 2 0 00-2-2H3a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                    </svg>
+                    Send Payslips
+                </button>
+            </form>
+            {% endif %}
+            <span class="text-sm text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                </svg>
+                Payroll Complete
+            </span>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if entry.status.value != "POSTED" %}
+    <div class="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-800/40 dark:text-slate-300">
+        {% if entry.status.value == "DRAFT" %}
+        Next step: generate salary slips to move this run to approval.
+        {% elif entry.status.value == "SLIPS_CREATED" %}
+        Next step: submit slips for approval, or use “Submit &amp; Approve” if you’re the approver.
+        {% elif entry.status.value == "SUBMITTED" %}
+        Next step: approve the run to enable posting to GL.
+        {% elif entry.status.value == "APPROVED" %}
+        Next step: post to GL to finalize this run.
+        {% elif entry.status.value == "CANCELLED" %}
+        This run is cancelled and cannot be changed.
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {% if entry.status.value == "SLIPS_CREATED" %}
+    <div class="text-xs text-slate-500 dark:text-slate-400">
+        “Submit Only” sends slips for approval. “Submit &amp; Approve” completes both steps in one action.
+    </div>
+    {% endif %}
+
+    {% if entry.status.value == "POSTED" and entry.payslips_email_status in ["RUNNING", "QUEUED", "REQUEUED"] %}
+    <script>
+        (function () {
+            const statusEl = document.getElementById("run-email-status");
+            if (!statusEl) return;
+            const endpoint = statusEl.dataset.endpoint;
+            const update = () => {
+                fetch(endpoint, { headers: { "Accept": "application/json" } })
+                    .then((res) => res.ok ? res.json() : null)
+                    .then((data) => {
+                        if (!data) return;
+                        statusEl.textContent = data.status || "Not queued";
+                        const progressEl = document.getElementById("run-email-progress");
+                        if (progressEl) {
+                            const processed = data.processed || 0;
+                            const total = data.total || 0;
+                            progressEl.textContent = total ? `(${processed}/${total})` : "";
+                        }
+                        if (data.status && ["SENT", "PARTIAL"].includes(data.status)) {
+                            clearInterval(timer);
+                        }
+                    })
+                    .catch(() => {});
+            };
+            const timer = setInterval(update, 3000);
+            update();
+        })();
+    </script>
+    {% endif %}
+
+    <!-- Summary Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div class="card p-4">
+            <div class="text-sm text-slate-500 dark:text-slate-400">Employees</div>
+            <div class="text-2xl font-semibold text-slate-900 dark:text-white">{{ entry.employee_count }}</div>
+        </div>
+        <div class="card p-4">
+            <div class="text-sm text-slate-500 dark:text-slate-400">Total Gross Pay</div>
+            <div class="text-2xl font-semibold text-slate-900 dark:text-white font-mono">{{ "{:,.2f}".format(entry.total_gross_pay) }}</div>
+        </div>
+        <div class="card p-4">
+            <div class="text-sm text-slate-500 dark:text-slate-400">Total Deductions</div>
+            <div class="text-2xl font-semibold text-rose-600 dark:text-rose-400 font-mono">{{ "{:,.2f}".format(entry.total_deductions) }}</div>
+        </div>
+        <div class="card p-4">
+            <div class="text-sm text-slate-500 dark:text-slate-400">Net Payable</div>
+            <div class="text-2xl font-semibold text-emerald-600 dark:text-emerald-400 font-mono">{{ "{:,.2f}".format(entry.total_net_pay) }}</div>
+        </div>
+    </div>
+
+    <!-- Run Details -->
+    <div class="card">
+        <div class="p-4 border-b border-slate-200 dark:border-slate-700">
+            <h2 class="text-lg font-medium text-slate-900 dark:text-white">Run Details</h2>
+        </div>
+        <div class="p-4 grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+            <div>
+                <div class="text-slate-500 dark:text-slate-400">Posting Date</div>
+                <div class="text-slate-900 dark:text-white">{{ entry.posting_date.strftime('%d %b %Y') if entry.posting_date else '-' }}</div>
+            </div>
+            <div>
+                <div class="text-slate-500 dark:text-slate-400">Currency</div>
+                <div class="text-slate-900 dark:text-white">{{ entry.currency_code }}</div>
+            </div>
+            <div>
+                <div class="text-slate-500 dark:text-slate-400">Created</div>
+                <div class="text-slate-900 dark:text-white">{{ entry.created_at.strftime('%d %b %Y %H:%M') if entry.created_at else '-' }}</div>
+            </div>
+            <div>
+                <div class="text-slate-500 dark:text-slate-400">Payslip Email Status</div>
+                <div class="text-slate-900 dark:text-white">
+                    <span id="run-email-status" data-endpoint="/people/payroll/runs/{{ entry.entry_id }}/email-status">
+                        {{ entry.payslips_email_status or 'Not queued' }}
+                    </span>
+                    {% if entry.payslips_email_total_count %}
+                    <span id="run-email-progress" class="text-xs text-slate-500 dark:text-slate-400">
+                        ({{ entry.payslips_email_processed_count or 0 }}/{{ entry.payslips_email_total_count }})
+                    </span>
+                    {% endif %}
+                </div>
+            </div>
+            <div>
+                <div class="text-slate-500 dark:text-slate-400">Payslip Emails Queued</div>
+                <div class="text-slate-900 dark:text-white">{{ entry.payslips_email_queued_at.strftime('%d %b %Y %H:%M') if entry.payslips_email_queued_at else '-' }}</div>
+            </div>
+            <div>
+                <div class="text-slate-500 dark:text-slate-400">Email Target</div>
+                <div class="text-slate-900 dark:text-white">{{ posted_slip_count }} posted slips</div>
+            </div>
+            {% if entry.department %}
+            <div>
+                <div class="text-slate-500 dark:text-slate-400">Department Filter</div>
+                <div class="text-slate-900 dark:text-white">{{ entry.department.department_name }}</div>
+            </div>
+            {% endif %}
+            {% if entry.notes %}
+            <div class="md:col-span-2">
+                <div class="text-slate-500 dark:text-slate-400">Notes</div>
+                <div class="text-slate-900 dark:text-white">{{ entry.notes }}</div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Statutory Exports (only shown when POSTED) -->
+    {% if entry.status.value == "POSTED" %}
+    <div class="card">
+        <div class="p-4 border-b border-slate-200 dark:border-slate-700">
+            <h2 class="text-lg font-medium text-slate-900 dark:text-white">Downloads &amp; Exports</h2>
+        </div>
+        <div class="p-4">
+            <p class="text-sm text-slate-500 dark:text-slate-400 mb-4">
+                Download statutory schedules and bank upload files for this payroll run.
+            </p>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                <!-- Bank Upload -->
+                <div class="border border-slate-200 dark:border-slate-700 rounded-lg p-4">
+                    <div class="flex items-center gap-2 mb-2">
+                        <svg class="h-5 w-5 text-violet-600 dark:text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
+                        </svg>
+                        <span class="font-medium text-slate-900 dark:text-white">Bank Upload</span>
+                    </div>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mb-3">CSV for bank bulk payment upload</p>
+                    <div class="space-y-1">
+                        <a href="/api/v1/payroll/entries/{{ entry.entry_id }}/exports/bank-upload?bank_format=zenith"
+                           class="block text-sm text-violet-600 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300">
+                            ↓ Zenith Format
+                        </a>
+                        <a href="/api/v1/payroll/entries/{{ entry.entry_id }}/exports/bank-upload?bank_format=generic"
+                           class="block text-sm text-violet-600 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300">
+                            ↓ Generic Format
+                        </a>
+                    </div>
+                </div>
+
+                <!-- PAYE Schedule -->
+                <div class="border border-slate-200 dark:border-slate-700 rounded-lg p-4">
+                    <div class="flex items-center gap-2 mb-2">
+                        <svg class="h-5 w-5 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z"/>
+                        </svg>
+                        <span class="font-medium text-slate-900 dark:text-white">PAYE Schedule</span>
+                    </div>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mb-3">Tax schedule for state revenue</p>
+                    <div class="space-y-1">
+                        <a href="/api/v1/payroll/entries/{{ entry.entry_id }}/exports/paye?paye_format=lirs"
+                           class="block text-sm text-violet-600 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300">
+                            ↓ LIRS (Lagos)
+                        </a>
+                        <a href="/api/v1/payroll/entries/{{ entry.entry_id }}/exports/paye?paye_format=fctirs"
+                           class="block text-sm text-violet-600 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300">
+                            ↓ FCTIRS (FCT)
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Pension Schedule -->
+                <div class="border border-slate-200 dark:border-slate-700 rounded-lg p-4">
+                    <div class="flex items-center gap-2 mb-2">
+                        <svg class="h-5 w-5 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/>
+                        </svg>
+                        <span class="font-medium text-slate-900 dark:text-white">Pension Schedule</span>
+                    </div>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mb-3">PFA contribution upload file</p>
+                    <div class="space-y-1">
+                        <a href="/api/v1/payroll/entries/{{ entry.entry_id }}/exports/pension?pension_format=paypen"
+                           class="block text-sm text-violet-600 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300">
+                            ↓ Paypen Format
+                        </a>
+                        <a href="/api/v1/payroll/entries/{{ entry.entry_id }}/exports/pension?pension_format=generic"
+                           class="block text-sm text-violet-600 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300">
+                            ↓ Detailed Schedule
+                        </a>
+                    </div>
+                </div>
+
+                <!-- NHF Schedule -->
+                <div class="border border-slate-200 dark:border-slate-700 rounded-lg p-4">
+                    <div class="flex items-center gap-2 mb-2">
+                        <svg class="h-5 w-5 text-cyan-600 dark:text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+                        </svg>
+                        <span class="font-medium text-slate-900 dark:text-white">NHF Schedule</span>
+                    </div>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mb-3">FMBN contribution upload file</p>
+                    <div class="space-y-1">
+                        <a href="/api/v1/payroll/entries/{{ entry.entry_id }}/exports/nhf"
+                           class="block text-sm text-violet-600 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300">
+                            ↓ FMBN Format
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Salary Slips Table -->
+    <div class="card overflow-hidden">
+        <div class="p-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+            <h2 class="text-lg font-medium text-slate-900 dark:text-white">Salary Slips</h2>
+            {% if slip_status_counts %}
+            <div class="flex gap-2 text-xs">
+                {% for status, count in slip_status_counts.items() %}
+                <span class="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+                    {{ status | title }}: {{ count }}
+                </span>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+
+        {% if slips %}
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+                <thead>
+                    <tr class="bg-slate-50 dark:bg-slate-800/50">
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Employee</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Slip Number</th>
+                        <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Gross Pay</th>
+                        <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Deductions</th>
+                        <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Net Pay</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Status</th>
+                        <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                    {% for slip in slips %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                        <td class="px-4 py-3">
+                            <div class="text-sm font-medium text-slate-900 dark:text-white">{{ slip.employee_name or 'Unknown' }}</div>
+                            {% if slip.employee %}
+                            <div class="text-xs text-slate-500 dark:text-slate-400">{{ slip.employee.employee_code }}</div>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400 font-mono">
+                            {{ slip.slip_number }}
+                        </td>
+                        <td class="px-4 py-3 text-right text-sm text-slate-700 dark:text-slate-300 font-mono">
+                            {{ "{:,.2f}".format(slip.gross_pay) }}
+                        </td>
+                        <td class="px-4 py-3 text-right text-sm text-rose-600 dark:text-rose-400 font-mono">
+                            {{ "{:,.2f}".format(slip.total_deduction) }}
+                        </td>
+                        <td class="px-4 py-3 text-right text-sm font-mono font-medium text-emerald-600 dark:text-emerald-400">
+                            {{ "{:,.2f}".format(slip.net_pay) }}
+                        </td>
+                        <td class="px-4 py-3">
+                            {{ status_badge(slip.status.value) }}
+                        </td>
+                        <td class="px-4 py-3 text-right">
+                            <a href="/people/payroll/slips/{{ slip.slip_id }}" class="text-sm text-violet-600 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300">View</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot class="bg-slate-50 dark:bg-slate-800/50">
+                    <tr>
+                        <td colspan="2" class="px-4 py-3 text-sm font-medium text-slate-900 dark:text-white">
+                            Total ({{ slips | length }} slips)
+                        </td>
+                        <td class="px-4 py-3 text-right text-sm font-medium text-slate-900 dark:text-white font-mono">
+                            {{ "{:,.2f}".format(entry.total_gross_pay) }}
+                        </td>
+                        <td class="px-4 py-3 text-right text-sm font-medium text-rose-600 dark:text-rose-400 font-mono">
+                            {{ "{:,.2f}".format(entry.total_deductions) }}
+                        </td>
+                        <td class="px-4 py-3 text-right text-sm font-bold text-emerald-600 dark:text-emerald-400 font-mono">
+                            {{ "{:,.2f}".format(entry.total_net_pay) }}
+                        </td>
+                        <td colspan="2"></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+        {% else %}
+        <div class="p-8 text-center">
+            <div class="mx-auto w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-4">
+                <svg class="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                </svg>
+            </div>
+            <p class="text-slate-500 dark:text-slate-400 mb-4">No salary slips generated yet.</p>
+            {% if entry.status.value == "DRAFT" %}
+            <form method="post" action="/people/payroll/runs/{{ entry.entry_id }}/generate"
+                  hx-post="/people/payroll/runs/{{ entry.entry_id }}/generate"
+                  hx-target="#run-content"
+                  hx-swap="outerHTML"
+                  class="inline">
+                {{ request.state.csrf_form | safe }}
+                <button type="submit" class="btn btn-primary" data-loading-disable>Generate Salary Slips</button>
+            </form>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>

@@ -208,6 +208,10 @@ class MockCustomerPayment:
         currency_code: str = "USD",
         exchange_rate: Decimal = Decimal("1.0"),
         amount: Decimal = Decimal("1000.00"),
+        gross_amount: Optional[Decimal] = None,
+        wht_amount: Decimal = Decimal("0"),
+        wht_code_id: Optional[uuid.UUID] = None,
+        wht_certificate_number: Optional[str] = None,
         functional_currency_amount: Decimal = Decimal("1000.00"),
         status: PaymentStatus = PaymentStatus.PENDING,
         bank_account_id: Optional[uuid.UUID] = None,
@@ -226,6 +230,10 @@ class MockCustomerPayment:
         self.currency_code = currency_code
         self.exchange_rate = exchange_rate
         self.amount = amount
+        self.gross_amount = gross_amount if gross_amount is not None else amount
+        self.wht_amount = wht_amount
+        self.wht_code_id = wht_code_id
+        self.wht_certificate_number = wht_certificate_number
         self.functional_currency_amount = functional_currency_amount
         self.status = status
         self.bank_account_id = bank_account_id or uuid.uuid4()

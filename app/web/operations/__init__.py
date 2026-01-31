@@ -8,6 +8,7 @@ Route structure:
 - /operations/inv/*       - Inventory management pages
 - /operations/projects/*  - Project management pages
 - /operations/support/*   - Support/Helpdesk pages
+- /operations/settings/*  - Operations settings pages
 """
 
 from fastapi import APIRouter
@@ -15,6 +16,7 @@ from fastapi import APIRouter
 from app.web.operations.dashboard import router as dashboard_router
 from app.web.operations.inv import router as inv_router
 from app.web.operations.projects import router as projects_router
+from app.web.operations.settings import router as settings_router
 from app.web.operations.support import router as support_router
 
 # Create main operations web router
@@ -31,3 +33,6 @@ router.include_router(projects_router)
 
 # Support/Helpdesk routes
 router.include_router(support_router)
+
+# Settings routes
+router.include_router(settings_router)

@@ -20,7 +20,7 @@
           action="{{ '/api/v1/banking/rules/' + rule.rule_id|string if rule else '/api/v1/banking/rules' }}"
           hx-post="{{ '/api/v1/banking/rules/' + rule.rule_id|string if rule else '/api/v1/banking/rules' }}"
           hx-swap="none"
-          hx-on::after-request="if(event.detail.successful) window.location.href='/banking/rules'"
+          hx-on::after-request="if(event.detail.successful) window.location.href='/finance/banking/rules'"
           class="space-y-6"
           x-data="ruleForm()">
 

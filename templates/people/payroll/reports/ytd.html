@@ -1,0 +1,134 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}Payroll YTD Report{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/payroll/runs" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Payroll</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">YTD Report</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">Payroll YTD Report</h1>
+            <p class="text-sm text-slate-500 dark:text-slate-400">
+                Year-to-date totals for posted/paid slips ({{ report.start_date.strftime('%b %d, %Y') }} - {{ report.display_end_date.strftime('%b %d, %Y') }}).
+            </p>
+        </div>
+        <a href="/people/payroll/runs" class="btn btn-secondary">Back</a>
+    </div>
+
+    <div class="card">
+        <form method="get" class="p-4">
+            <div class="flex flex-wrap items-end gap-4">
+                <div class="w-32">
+                    <label for="year" class="form-label">Year</label>
+                    <input type="number" min="2000" max="2100" name="year" id="year" value="{{ year }}" class="form-input w-full">
+                </div>
+                <div class="w-44">
+                    <label for="start_date" class="form-label">From</label>
+                    <input type="date" name="start_date" id="start_date" value="{{ start_date }}" class="form-input w-full">
+                </div>
+                <div class="w-44">
+                    <label for="end_date" class="form-label">To</label>
+                    <input type="date" name="end_date" id="end_date" value="{{ end_date }}" class="form-input w-full">
+                </div>
+                <button type="submit" class="btn btn-secondary h-10">Apply</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div class="card p-4">
+            <div class="text-sm text-slate-500 dark:text-slate-400">Employees</div>
+            <div class="text-2xl font-semibold text-slate-900 dark:text-white">{{ report.rows | length }}</div>
+        </div>
+        <div class="card p-4">
+            <div class="text-sm text-slate-500 dark:text-slate-400">Total Gross</div>
+            <div class="text-2xl font-semibold text-slate-900 dark:text-white font-mono">{{ "{:,.2f}".format(report.totals.total_gross) }}</div>
+        </div>
+        <div class="card p-4">
+            <div class="text-sm text-slate-500 dark:text-slate-400">Total Deductions</div>
+            <div class="text-2xl font-semibold text-rose-600 dark:text-rose-400 font-mono">{{ "{:,.2f}".format(report.totals.total_deductions) }}</div>
+        </div>
+        <div class="card p-4">
+            <div class="text-sm text-slate-500 dark:text-slate-400">Total Net</div>
+            <div class="text-2xl font-semibold text-emerald-600 dark:text-emerald-400 font-mono">{{ "{:,.2f}".format(report.totals.total_net) }}</div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div class="card p-4">
+            <div class="text-sm text-slate-500 dark:text-slate-400">PAYE</div>
+            <div class="text-lg font-semibold text-slate-900 dark:text-white font-mono">{{ "{:,.2f}".format(report.totals.total_paye) }}</div>
+        </div>
+        <div class="card p-4">
+            <div class="text-sm text-slate-500 dark:text-slate-400">Pension</div>
+            <div class="text-lg font-semibold text-slate-900 dark:text-white font-mono">{{ "{:,.2f}".format(report.totals.total_pension) }}</div>
+        </div>
+        <div class="card p-4">
+            <div class="text-sm text-slate-500 dark:text-slate-400">NHF</div>
+            <div class="text-lg font-semibold text-slate-900 dark:text-white font-mono">{{ "{:,.2f}".format(report.totals.total_nhf) }}</div>
+        </div>
+        <div class="card p-4">
+            <div class="text-sm text-slate-500 dark:text-slate-400">NHIS</div>
+            <div class="text-lg font-semibold text-slate-900 dark:text-white font-mono">{{ "{:,.2f}".format(report.totals.total_nhis) }}</div>
+        </div>
+    </div>
+
+    <div class="card overflow-hidden">
+        <div class="p-4 border-b border-slate-200 dark:border-slate-700">
+            <h2 class="text-lg font-medium text-slate-900 dark:text-white">Employee Breakdown</h2>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+                <thead class="bg-slate-50 dark:bg-slate-800/50">
+                    <tr class="text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                        <th class="px-4 py-3">Employee</th>
+                        <th class="px-4 py-3">Department</th>
+                        <th class="px-4 py-3 text-right">Slips</th>
+                        <th class="px-4 py-3 text-right">Gross</th>
+                        <th class="px-4 py-3 text-right">Deductions</th>
+                        <th class="px-4 py-3 text-right">Net</th>
+                        <th class="px-4 py-3 text-right">PAYE</th>
+                        <th class="px-4 py-3 text-right">Pension</th>
+                        <th class="px-4 py-3 text-right">NHF</th>
+                        <th class="px-4 py-3 text-right">NHIS</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700 bg-white dark:bg-slate-900">
+                    {% for row in report.rows %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                        <td class="px-4 py-3 text-sm text-slate-900 dark:text-white">
+                            <div class="font-medium">{{ row.employee_name }}</div>
+                            <div class="text-xs text-slate-500 dark:text-slate-400">{{ row.employee_code or '' }}</div>
+                        </td>
+                        <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">{{ row.department_name or '-' }}</td>
+                        <td class="px-4 py-3 text-sm text-right text-slate-600 dark:text-slate-300">{{ row.slip_count }}</td>
+                        <td class="px-4 py-3 text-sm text-right font-mono text-slate-900 dark:text-white">{{ "{:,.2f}".format(row.gross) }}</td>
+                        <td class="px-4 py-3 text-sm text-right font-mono text-rose-600 dark:text-rose-400">{{ "{:,.2f}".format(row.deductions) }}</td>
+                        <td class="px-4 py-3 text-sm text-right font-mono text-emerald-600 dark:text-emerald-400">{{ "{:,.2f}".format(row.net) }}</td>
+                        <td class="px-4 py-3 text-sm text-right font-mono text-slate-700 dark:text-slate-200">{{ "{:,.2f}".format(row.paye) }}</td>
+                        <td class="px-4 py-3 text-sm text-right font-mono text-slate-700 dark:text-slate-200">{{ "{:,.2f}".format(row.pension) }}</td>
+                        <td class="px-4 py-3 text-sm text-right font-mono text-slate-700 dark:text-slate-200">{{ "{:,.2f}".format(row.nhf) }}</td>
+                        <td class="px-4 py-3 text-sm text-right font-mono text-slate-700 dark:text-slate-200">{{ "{:,.2f}".format(row.nhis) }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="10" class="px-4 py-10 text-center text-sm text-slate-500 dark:text-slate-400">
+                            No posted payroll slips found for {{ year }}.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

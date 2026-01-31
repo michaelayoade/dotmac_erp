@@ -110,6 +110,12 @@
                 <a href="/people/recruit/applicants?job_opening_id={{ opening.job_opening_id }}" class="btn btn-secondary">
                     View Applicants
                 </a>
+                <form method="post" action="/people/recruit/jobs/{{ opening.job_opening_id }}/delete" onsubmit="return confirm('Delete this job opening? This cannot be undone.');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <button type="submit" class="btn btn-danger" {% if applicants_count and applicants_count > 0 %}disabled title="Cannot delete job opening with applicants"{% endif %}>
+                        Delete
+                    </button>
+                </form>
             </div>
         </div>
     </div>

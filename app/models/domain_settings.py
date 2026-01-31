@@ -36,6 +36,7 @@ class SettingDomain(enum.Enum):
     features = "features"
     reporting = "reporting"
     payments = "payments"
+    operations = "operations"
 
 
 class SettingChangeAction(enum.Enum):
@@ -46,16 +47,24 @@ class SettingChangeAction(enum.Enum):
     DELETE = "DELETE"
 
 
+class SettingScope(enum.Enum):
+    """Scope of a setting - global or org-specific."""
+
+    GLOBAL = "GLOBAL"
+    ORG_SPECIFIC = "ORG_SPECIFIC"
+
+
 class DomainSetting(Base):
     __tablename__ = "domain_settings"
     __table_args__ = (
-        UniqueConstraint("domain", "key", name="uq_domain_settings_domain_key"),
+        UniqueConstraint("domain", "key", "organization_id", name="uq_domain_settings_domain_key_org"),
         CheckConstraint(
             "(value_type = 'json' AND value_text IS NULL) "
             "OR (value_type IN ('string', 'integer') AND value_json IS NULL) "
             "OR (value_type = 'boolean')",
             name="ck_domain_settings_value_storage",
         ),
+        Index("ix_domain_settings_org", "organization_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -63,6 +72,15 @@ class DomainSetting(Base):
     )
     domain: Mapped[SettingDomain] = mapped_column(Enum(SettingDomain), nullable=False)
     key: Mapped[str] = mapped_column(String(120), nullable=False)
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("core_org.organization.organization_id", ondelete="CASCADE"),
+        nullable=True,
+        comment="NULL = global setting, UUID = org-specific setting",
+    )
+    scope: Mapped[SettingScope] = mapped_column(
+        Enum(SettingScope), default=SettingScope.GLOBAL, nullable=False
+    )
     value_type: Mapped[SettingValueType] = mapped_column(
         Enum(SettingValueType), default=SettingValueType.string
     )
@@ -116,6 +134,9 @@ class DomainSettingHistory(Base):
     # Setting identification (denormalized for queries after setting deletion)
     domain: Mapped[str] = mapped_column(String(50), nullable=False)
     key: Mapped[str] = mapped_column(String(120), nullable=False)
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True, comment="Organization ID (NULL = global setting)"
+    )
 
     # Change action
     action: Mapped[SettingChangeAction] = mapped_column(

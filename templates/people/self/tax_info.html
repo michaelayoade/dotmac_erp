@@ -1,0 +1,320 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}My Tax & Bank Information{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/self/attendance" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Self Service</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">Tax & Bank Info</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto space-y-6">
+    <div>
+        <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">My Tax & Bank Information</h1>
+        <p class="text-sm text-slate-500 dark:text-slate-400">Update your statutory and payment information for payroll processing.</p>
+    </div>
+
+    {% if success %}
+    <div class="rounded-lg bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 p-4">
+        <div class="flex">
+            <svg class="h-5 w-5 text-emerald-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+            </svg>
+            <div class="ml-3">
+                <p class="text-sm font-medium text-emerald-800 dark:text-emerald-200">{{ success }}</p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if error %}
+    <div class="rounded-lg bg-rose-50 dark:bg-rose-900/30 border border-rose-200 dark:border-rose-800 p-4">
+        <div class="flex">
+            <svg class="h-5 w-5 text-rose-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clip-rule="evenodd" />
+            </svg>
+            <div class="ml-3">
+                <p class="text-sm font-medium text-rose-800 dark:text-rose-200">{{ error }}</p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Info Card -->
+    <div class="rounded-lg bg-sky-50 dark:bg-sky-900/30 border border-sky-200 dark:border-sky-800 p-4">
+        <div class="flex">
+            <svg class="h-5 w-5 text-sky-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+            </svg>
+            <div class="ml-3">
+                <p class="text-sm text-sky-800 dark:text-sky-200">
+                    This information is used for statutory deductions (PAYE, Pension, NHF) and salary payments.
+                    Changes require approval before being applied.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    {% if has_pending %}
+    <!-- Pending Request Warning -->
+    <div class="rounded-lg bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 p-4">
+        <div class="flex">
+            <svg class="h-5 w-5 text-amber-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
+            </svg>
+            <div class="ml-3">
+                <h3 class="text-sm font-medium text-amber-800 dark:text-amber-200">Pending Change Request</h3>
+                <p class="text-sm text-amber-700 dark:text-amber-300 mt-1">
+                    You have a pending change request awaiting approval. You cannot submit new changes until
+                    the current request is reviewed.
+                </p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if recent_requests %}
+    <!-- Recent Change Requests -->
+    <div class="card">
+        <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Recent Change Requests</h2>
+        </div>
+        <div class="divide-y divide-slate-200 dark:divide-slate-700">
+            {% for req in recent_requests[:5] %}
+            <div class="px-6 py-4 flex justify-between items-center">
+                <div>
+                    <p class="text-sm font-medium text-slate-900 dark:text-white">
+                        {{ req.change_type.value | replace('_', ' ') | title }}
+                    </p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">
+                        {{ req.created_at.strftime('%b %d, %Y at %H:%M') if req.created_at else 'Unknown' }}
+                    </p>
+                </div>
+                <div>
+                    {% if req.status.value == 'PENDING' %}
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300">
+                        Pending Review
+                    </span>
+                    {% elif req.status.value == 'APPROVED' %}
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300">
+                        Approved
+                    </span>
+                    {% elif req.status.value == 'REJECTED' %}
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-rose-100 text-rose-800 dark:bg-rose-900/50 dark:text-rose-300">
+                        Rejected
+                    </span>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <form method="post" class="space-y-6">
+        {{ request.state.csrf_form | safe }}
+        <fieldset {% if has_pending %}disabled{% endif %}>
+
+        <!-- Bank Details -->
+        <div class="card">
+            <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Bank Account Details</h2>
+                <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">For salary payments</p>
+            </div>
+            <div class="p-6 space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="bank_name" class="form-label">Bank Name <span class="text-rose-500">*</span></label>
+                        <select name="bank_name" id="bank_name" class="form-select w-full">
+                            <option value="">-- Select Bank --</option>
+                            {% for bank in banks %}
+                            <option value="{{ bank.bank_name }}" {% if employee.bank_name == bank.bank_name %}selected{% endif %}>
+                                {{ bank.bank_name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label for="bank_account_number" class="form-label">Account Number <span class="text-rose-500">*</span></label>
+                        <input type="text" name="bank_account_number" id="bank_account_number"
+                            value="{{ employee.bank_account_number or '' }}"
+                            placeholder="0123456789"
+                            maxlength="10"
+                            pattern="[0-9]{10}"
+                            class="form-input w-full font-mono">
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">10-digit NUBAN account number</p>
+                    </div>
+                </div>
+                <div>
+                    <label for="bank_account_name" class="form-label">Account Name</label>
+                    <input type="text" name="bank_account_name" id="bank_account_name"
+                        value="{{ employee.bank_account_name or '' }}"
+                        placeholder="As shown on your bank statement"
+                        class="form-input w-full">
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Should match your bank records</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tax Identification -->
+        <div class="card">
+            <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Tax Identification</h2>
+                <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">For PAYE tax filing</p>
+            </div>
+            <div class="p-6 space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="tin" class="form-label">Tax Identification Number (TIN)</label>
+                        <input type="text" name="tin" id="tin"
+                            value="{{ tax_profile.tin if tax_profile else '' }}"
+                            placeholder="e.g., 12345678-0001"
+                            class="form-input w-full font-mono">
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                            <a href="https://taxpromax.firs.gov.ng/TaxPayerEnquiry" target="_blank" class="text-teal-600 hover:underline">
+                                Look up your TIN
+                            </a>
+                        </p>
+                    </div>
+                    <div>
+                        <label for="tax_state" class="form-label">Tax State</label>
+                        <select name="tax_state" id="tax_state" class="form-select w-full">
+                            <option value="">-- Select State --</option>
+                            {% for state in nigeria_states %}
+                            <option value="{{ state }}" {% if tax_profile and tax_profile.tax_state == state %}selected{% endif %}>
+                                {{ state }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">State where PAYE is remitted</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pension Information -->
+        <div class="card">
+            <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Pension Information</h2>
+                <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">PRA 2014 - Retirement Savings Account details</p>
+            </div>
+            <div class="p-6 space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="rsa_pin" class="form-label">RSA PIN</label>
+                        <input type="text" name="rsa_pin" id="rsa_pin"
+                            value="{{ tax_profile.rsa_pin if tax_profile else '' }}"
+                            placeholder="e.g., PEN100012345678"
+                            class="form-input w-full font-mono">
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Retirement Savings Account PIN from your PFA</p>
+                    </div>
+                    <div>
+                        <label for="pfa_code" class="form-label">Pension Fund Administrator (PFA)</label>
+                        <select name="pfa_code" id="pfa_code" class="form-select w-full">
+                            <option value="">-- Select PFA --</option>
+                            {% for pfa in pfas %}
+                            <option value="{{ pfa.pfa_code }}" {% if tax_profile and tax_profile.pfa_code == pfa.pfa_code %}selected{% endif %}>
+                                {{ pfa.pfa_name }}{% if pfa.short_name %} ({{ pfa.short_name }}){% endif %}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- NHF Information -->
+        <div class="card">
+            <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white">National Housing Fund (NHF)</h2>
+                <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">For FMBN contributions</p>
+            </div>
+            <div class="p-6">
+                <div class="max-w-md">
+                    <label for="nhf_number" class="form-label">NHF Number</label>
+                    <input type="text" name="nhf_number" id="nhf_number"
+                        value="{{ tax_profile.nhf_number if tax_profile else '' }}"
+                        placeholder="e.g., NHF12345678"
+                        class="form-input w-full font-mono">
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Your NHF registration number from FMBN</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Data Completeness Status -->
+        <div class="card">
+            <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Data Completeness</h2>
+            </div>
+            <div class="p-6">
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div class="flex items-center gap-2">
+                        {% if employee.bank_account_number and employee.bank_name %}
+                        <svg class="h-5 w-5 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                        </svg>
+                        {% else %}
+                        <svg class="h-5 w-5 text-slate-300 dark:text-slate-600" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clip-rule="evenodd" />
+                        </svg>
+                        {% endif %}
+                        <span class="text-sm text-slate-700 dark:text-slate-300">Bank Details</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        {% if tax_profile and tax_profile.tin %}
+                        <svg class="h-5 w-5 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                        </svg>
+                        {% else %}
+                        <svg class="h-5 w-5 text-slate-300 dark:text-slate-600" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clip-rule="evenodd" />
+                        </svg>
+                        {% endif %}
+                        <span class="text-sm text-slate-700 dark:text-slate-300">PAYE (TIN)</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        {% if tax_profile and tax_profile.rsa_pin and tax_profile.pfa_code %}
+                        <svg class="h-5 w-5 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                        </svg>
+                        {% else %}
+                        <svg class="h-5 w-5 text-slate-300 dark:text-slate-600" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clip-rule="evenodd" />
+                        </svg>
+                        {% endif %}
+                        <span class="text-sm text-slate-700 dark:text-slate-300">Pension</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        {% if tax_profile and tax_profile.nhf_number %}
+                        <svg class="h-5 w-5 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                        </svg>
+                        {% else %}
+                        <svg class="h-5 w-5 text-slate-300 dark:text-slate-600" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clip-rule="evenodd" />
+                        </svg>
+                        {% endif %}
+                        <span class="text-sm text-slate-700 dark:text-slate-300">NHF</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Submit Button -->
+        <div class="flex justify-end">
+            <button type="submit" class="btn btn-primary">
+                <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                Submit for Approval
+            </button>
+        </div>
+        </fieldset>
+    </form>
+</div>
+{% endblock %}

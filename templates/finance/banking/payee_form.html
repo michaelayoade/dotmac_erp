@@ -20,7 +20,7 @@
           action="{{ '/api/v1/banking/payees/' + payee.payee_id|string if payee else '/api/v1/banking/payees' }}"
           hx-post="{{ '/api/v1/banking/payees/' + payee.payee_id|string if payee else '/api/v1/banking/payees' }}"
           hx-swap="none"
-          hx-on::after-request="if(event.detail.successful) window.location.href='/banking/payees'"
+          hx-on::after-request="if(event.detail.successful) window.location.href='/finance/banking/payees'"
           class="space-y-6">
 
         <!-- Basic Information -->

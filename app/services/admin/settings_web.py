@@ -1,0 +1,384 @@
+"""
+Admin Settings Web Service.
+
+Provides context and update functions for Admin settings UI pages.
+Handles org-wide settings: Organization profile, Branding, Email, Features, Payments.
+"""
+
+import uuid
+import logging
+from typing import Any, Optional
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.models.domain_settings import SettingDomain
+from app.models.finance.core_org import Organization
+from app.services.settings_spec import (
+    DOMAIN_SETTINGS_SERVICE,
+    list_specs,
+    resolve_value,
+    get_spec,
+    coerce_value,
+)
+from app.schemas.settings import DomainSettingUpdate
+
+logger = logging.getLogger(__name__)
+
+
+# Hub sections configuration
+ADMIN_SETTINGS_SECTIONS = [
+    {
+        "title": "Organization",
+        "description": "Company profile, legal details, and contact information",
+        "url": "/admin/settings/organization",
+        "icon": "building-office",
+    },
+    {
+        "title": "Branding",
+        "description": "Logo, colors, and visual identity",
+        "url": "/admin/settings/branding",
+        "icon": "swatch",
+    },
+    {
+        "title": "Email",
+        "description": "SMTP configuration and email profiles",
+        "url": "/admin/settings/email",
+        "icon": "envelope",
+    },
+    {
+        "title": "Features",
+        "description": "Enable or disable system features",
+        "url": "/admin/settings/features",
+        "icon": "flag",
+    },
+    {
+        "title": "Payments",
+        "description": "Payment gateway integration",
+        "url": "/admin/settings/payments",
+        "icon": "credit-card",
+    },
+    {
+        "title": "Advanced",
+        "description": "Raw system settings (for administrators)",
+        "url": "/admin/settings/advanced",
+        "icon": "cog",
+    },
+]
+
+
+# Common timezone list
+COMMON_TIMEZONES = [
+    ("UTC", "UTC"),
+    ("America/New_York", "Eastern Time (US)"),
+    ("America/Chicago", "Central Time (US)"),
+    ("America/Denver", "Mountain Time (US)"),
+    ("America/Los_Angeles", "Pacific Time (US)"),
+    ("Europe/London", "London"),
+    ("Europe/Paris", "Paris"),
+    ("Europe/Berlin", "Berlin"),
+    ("Asia/Tokyo", "Tokyo"),
+    ("Asia/Shanghai", "Shanghai"),
+    ("Asia/Singapore", "Singapore"),
+    ("Australia/Sydney", "Sydney"),
+    ("Africa/Lagos", "Lagos"),
+    ("Africa/Johannesburg", "Johannesburg"),
+]
+
+DATE_FORMATS = [
+    ("YYYY-MM-DD", "2025-01-10"),
+    ("DD/MM/YYYY", "10/01/2025"),
+    ("MM/DD/YYYY", "01/10/2025"),
+    ("DD-MM-YYYY", "10-01-2025"),
+    ("DD.MM.YYYY", "10.01.2025"),
+]
+
+NUMBER_FORMATS = [
+    ("1,234.56", "Comma thousand, dot decimal"),
+    ("1.234,56", "Dot thousand, comma decimal"),
+    ("1 234.56", "Space thousand, dot decimal"),
+    ("1 234,56", "Space thousand, comma decimal"),
+]
+
+
+class AdminSettingsWebService:
+    """Service for Admin Settings UI."""
+
+    # ========== Hub ==========
+
+    def get_hub_context(self, organization_id: uuid.UUID) -> dict[str, Any]:
+        """Get context for settings hub page."""
+        return {
+            "settings_sections": ADMIN_SETTINGS_SECTIONS,
+        }
+
+    # ========== Organization Profile ==========
+
+    def get_organization_context(
+        self, db: Session, organization_id: uuid.UUID
+    ) -> dict[str, Any]:
+        """Get organization profile for editing."""
+        org = db.get(Organization, organization_id)
+        if not org:
+            return {"organization": None, "error": "Organization not found"}
+
+        return {
+            "organization": org,
+            "timezones": COMMON_TIMEZONES,
+            "date_formats": DATE_FORMATS,
+            "number_formats": NUMBER_FORMATS,
+        }
+
+    def update_organization(
+        self,
+        db: Session,
+        organization_id: uuid.UUID,
+        data: dict[str, Any],
+    ) -> tuple[bool, Optional[str]]:
+        """Update organization profile."""
+        org = db.get(Organization, organization_id)
+        if not org:
+            return False, "Organization not found"
+
+        # Update allowed fields
+        allowed_fields = [
+            "legal_name",
+            "trading_name",
+            "registration_number",
+            "tax_identification_number",
+            "functional_currency_code",
+            "presentation_currency_code",
+            "fiscal_year_end_month",
+            "fiscal_year_end_day",
+            "timezone",
+            "date_format",
+            "number_format",
+            "contact_email",
+            "contact_phone",
+            "address_line1",
+            "address_line2",
+            "city",
+            "state",
+            "postal_code",
+            "country",
+            "logo_url",
+            "website_url",
+        ]
+
+        for field in allowed_fields:
+            if field in data:
+                value = data[field]
+                # Handle empty strings as None for optional fields
+                if value == "" and field not in [
+                    "legal_name",
+                    "functional_currency_code",
+                    "presentation_currency_code",
+                ]:
+                    value = None
+                setattr(org, field, value)
+
+        db.commit()
+        return True, None
+
+    # ========== Branding ==========
+
+    def get_branding_context(
+        self, db: Session, organization_id: uuid.UUID
+    ) -> dict[str, Any]:
+        """Get branding settings for the form."""
+        org = db.get(Organization, organization_id)
+        if not org:
+            return {"organization": None, "error": "Organization not found"}
+
+        # Try to get branding from OrganizationBranding if it exists
+        branding = None
+        try:
+            from app.models.finance.core_org.organization_branding import OrganizationBranding
+            branding = db.execute(
+                select(OrganizationBranding).where(
+                    OrganizationBranding.organization_id == organization_id
+                )
+            ).scalar_one_or_none()
+        except Exception:
+            pass
+
+        return {
+            "organization": org,
+            "branding": branding,
+        }
+
+    def update_branding(
+        self,
+        db: Session,
+        organization_id: uuid.UUID,
+        data: dict[str, Any],
+    ) -> tuple[bool, Optional[str]]:
+        """Update branding settings."""
+        org = db.get(Organization, organization_id)
+        if not org:
+            return False, "Organization not found"
+
+        # Update logo_url on organization if provided
+        if "logo_url" in data:
+            org.logo_url = data["logo_url"] if data["logo_url"] else None
+
+        # Try to update OrganizationBranding if model exists
+        try:
+            from app.models.finance.core_org.organization_branding import OrganizationBranding
+            branding = db.execute(
+                select(OrganizationBranding).where(
+                    OrganizationBranding.organization_id == organization_id
+                )
+            ).scalar_one_or_none()
+
+            branding_fields = [
+                "primary_color",
+                "secondary_color",
+                "accent_color",
+                "favicon_url",
+                "email_logo_url",
+                "report_logo_url",
+                "email_header_html",
+                "email_footer_html",
+            ]
+
+            if branding:
+                for field in branding_fields:
+                    if field in data:
+                        setattr(branding, field, data[field] if data[field] else None)
+            else:
+                # Create new branding record if any branding data provided
+                has_branding_data = any(data.get(f) for f in branding_fields)
+                if has_branding_data:
+                    branding = OrganizationBranding(
+                        organization_id=organization_id,
+                        **{f: data.get(f) for f in branding_fields if f in data}
+                    )
+                    db.add(branding)
+        except Exception as e:
+            logger.debug("OrganizationBranding model unavailable: %s", e)
+
+        db.commit()
+        return True, None
+
+    # ========== Email Settings ==========
+
+    def get_email_context(
+        self, db: Session, organization_id: uuid.UUID
+    ) -> dict[str, Any]:
+        """Get email settings for the form."""
+        # Delegate to finance settings service for email context
+        from app.services.finance.settings_web import settings_web_service
+        return settings_web_service.get_email_settings_context(db, organization_id)
+
+    def update_email(
+        self,
+        db: Session,
+        organization_id: uuid.UUID,
+        data: dict[str, Any],
+    ) -> tuple[bool, Optional[str]]:
+        """Update email settings."""
+        # Delegate to finance settings service for email updates
+        from app.services.finance.settings_web import settings_web_service
+        return settings_web_service.update_email_settings(db, organization_id, data)
+
+    # ========== Feature Flags ==========
+
+    def get_features_context(
+        self, db: Session, organization_id: uuid.UUID
+    ) -> dict[str, Any]:
+        """Get feature flags for the form."""
+        specs = list_specs(SettingDomain.features)
+        features = []
+
+        feature_descriptions = {
+            "enable_multi_currency": "Support multiple currencies in transactions and reporting",
+            "enable_budgeting": "Budget planning and variance analysis",
+            "enable_project_accounting": "Track costs and revenue by project",
+            "enable_bank_reconciliation": "Match bank statements with ledger entries",
+            "enable_recurring_transactions": "Automatically generate invoices, bills, and journal entries",
+            "enable_inventory": "Track inventory items and stock levels",
+            "enable_fixed_assets": "Manage fixed assets and depreciation",
+            "enable_leases": "IFRS 16 lease accounting and right-of-use assets",
+        }
+
+        for spec in specs:
+            value = resolve_value(db, SettingDomain.features, spec.key)
+            features.append({
+                "key": spec.key,
+                "label": spec.key.replace("enable_", "").replace("_", " ").title(),
+                "description": feature_descriptions.get(spec.key, ""),
+                "enabled": bool(value),
+                "default": spec.default,
+            })
+
+        return {"features": features}
+
+    def toggle_feature(
+        self,
+        db: Session,
+        organization_id: uuid.UUID,
+        key: str,
+        enabled: bool,
+    ) -> tuple[bool, Optional[str]]:
+        """Toggle a feature flag."""
+        spec = get_spec(SettingDomain.features, key)
+        if not spec:
+            return False, f"Unknown feature: {key}"
+
+        service = DOMAIN_SETTINGS_SERVICE.get(SettingDomain.features)
+        if not service:
+            return False, "Features settings service not found"
+
+        payload = DomainSettingUpdate(
+            value_type=spec.value_type,
+            value_text="true" if enabled else "false",
+        )
+        service.upsert_by_key(db, key, payload)
+        db.commit()
+        return True, None
+
+    # ========== Payments Settings ==========
+
+    def get_payments_hub_context(
+        self, db: Session, organization_id: uuid.UUID
+    ) -> dict[str, Any]:
+        """Get payments hub context with available providers."""
+        # Check which payment providers are configured
+        paystack_enabled = resolve_value(db, SettingDomain.payments, "paystack_enabled")
+
+        providers = [
+            {
+                "name": "Paystack",
+                "slug": "paystack",
+                "description": "Accept payments via Paystack (cards, bank transfers)",
+                "configured": bool(paystack_enabled),
+                "url": "/admin/settings/payments/paystack",
+                "icon": "credit-card",
+            },
+        ]
+
+        return {"providers": providers}
+
+    def get_paystack_context(
+        self, db: Session, organization_id: uuid.UUID
+    ) -> dict[str, Any]:
+        """Get Paystack settings for the form."""
+        # Delegate to finance settings service
+        from app.services.finance.settings_web import settings_web_service
+        return settings_web_service.get_payments_settings_context(db, organization_id)
+
+    def update_paystack(
+        self,
+        db: Session,
+        organization_id: uuid.UUID,
+        data: dict[str, Any],
+    ) -> tuple[bool, Optional[str]]:
+        """Update Paystack settings."""
+        # Delegate to finance settings service
+        from app.services.finance.settings_web import settings_web_service
+        return settings_web_service.update_payments_settings(db, organization_id, data)
+
+
+# Singleton instance
+admin_settings_web_service = AdminSettingsWebService()

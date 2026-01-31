@@ -392,3 +392,31 @@ class JobOpeningWebService:
             db.rollback()
 
         return RedirectResponse(url=f"/people/recruit/jobs/{job_opening_id}", status_code=303)
+
+    def delete_job_opening_response(
+        self,
+        auth: WebAuthContext,
+        db: Session,
+        job_opening_id: str,
+    ) -> RedirectResponse:
+        """Handle job opening deletion."""
+        org_id = coerce_uuid(auth.organization_id)
+        svc = RecruitmentService(db)
+
+        try:
+            applicants = svc.list_applicants(
+                org_id,
+                job_opening_id=coerce_uuid(job_opening_id),
+                pagination=PaginationParams(limit=1),
+            )
+            if applicants.total > 0:
+                return RedirectResponse(
+                    url=f"/people/recruit/jobs/{job_opening_id}?error=Cannot+delete+job+opening+with+applicants",
+                    status_code=303,
+                )
+            svc.delete_job_opening(org_id, coerce_uuid(job_opening_id))
+            db.commit()
+            return RedirectResponse(url="/people/recruit/jobs", status_code=303)
+        except Exception:
+            db.rollback()
+            return RedirectResponse(url=f"/people/recruit/jobs/{job_opening_id}", status_code=303)

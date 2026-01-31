@@ -157,6 +157,16 @@ def close_job_opening(
     return recruit_web_service.close_job_opening_response(auth, db, job_opening_id)
 
 
+@router.post("/jobs/{job_opening_id}/delete")
+def delete_job_opening(
+    job_opening_id: str,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Delete a job opening."""
+    return recruit_web_service.delete_job_opening_response(auth, db, job_opening_id)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Applicants
 # ─────────────────────────────────────────────────────────────────────────────

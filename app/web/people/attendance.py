@@ -299,6 +299,26 @@ def attendance_requests_list(
     )
 
 
+@router.get("/requests/new", response_class=HTMLResponse)
+def attendance_request_new_form(
+    request: Request,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """New attendance request form."""
+    return attendance_web_service.attendance_request_new_form_response(request, auth, db)
+
+
+@router.post("/requests/new", response_class=HTMLResponse)
+async def create_attendance_request(
+    request: Request,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Create a new attendance request."""
+    return await attendance_web_service.create_attendance_request_response(request, auth, db)
+
+
 @router.post("/requests/{request_id}/approve")
 async def approve_attendance_request(
     request_id: str,
