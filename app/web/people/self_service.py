@@ -402,6 +402,15 @@ async def update_expense_claim(
     if not recipient_bank_code or not recipient_account_number:
         raise HTTPException(status_code=400, detail="Bank code and account number are required")
 
+    # Extract optional project/ticket/task linkage
+    project_id_str = _safe_form_text(form.get("project_id"))
+    ticket_id_str = _safe_form_text(form.get("ticket_id"))
+    task_id_str = _safe_form_text(form.get("task_id"))
+
+    project_id = UUID(project_id_str) if project_id_str else None
+    ticket_id = UUID(ticket_id_str) if ticket_id_str else None
+    task_id = UUID(task_id_str) if task_id_str else None
+
     items = []
     for item_id in item_ids:
         remove = form.get(f"remove_item_{item_id}")
@@ -448,6 +457,9 @@ async def update_expense_claim(
         items=items,
         recipient_bank_code=recipient_bank_code or None,
         recipient_account_number=recipient_account_number or None,
+        project_id=project_id,
+        ticket_id=ticket_id,
+        task_id=task_id,
     )
 
 

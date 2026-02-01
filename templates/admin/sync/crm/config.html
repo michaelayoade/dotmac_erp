@@ -1,0 +1,287 @@
+{% extends "admin/base_admin.html" %}
+
+{% block page_title %}CRM Integration Settings{% endblock %}
+{% block page_subtitle %}Configure DotMac CRM sync connection{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Breadcrumb -->
+    <nav class="flex items-center gap-2 text-sm">
+        <a href="/admin/sync/crm" class="text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200">CRM Sync</a>
+        <svg class="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+        </svg>
+        <span class="text-slate-900 dark:text-white font-medium">Configuration</span>
+    </nav>
+
+    <!-- Flash Messages -->
+    {% if request.query_params.get('success') %}
+    <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900 dark:bg-emerald-900/20">
+        <div class="flex items-center gap-3">
+            <svg class="h-5 w-5 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <p class="text-sm font-medium text-emerald-800 dark:text-emerald-200">{{ request.query_params.get('success') | urldecode }}</p>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if request.query_params.get('error') %}
+    <div class="rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-900 dark:bg-red-900/20">
+        <div class="flex items-center gap-3">
+            <svg class="h-5 w-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <p class="text-sm font-medium text-red-800 dark:text-red-200">{{ request.query_params.get('error') | urldecode }}</p>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- New API Key Display (one-time) -->
+    {% if request.query_params.get('new_key') %}
+    <div class="rounded-xl border-2 border-emerald-300 bg-emerald-50 p-6 dark:border-emerald-700 dark:bg-emerald-900/30">
+        <div class="flex items-start gap-4">
+            <div class="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-800">
+                <svg class="h-6 w-6 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/>
+                </svg>
+            </div>
+            <div class="flex-1">
+                <h3 class="text-lg font-semibold text-emerald-800 dark:text-emerald-200">API Key Generated</h3>
+                <p class="text-sm text-emerald-700 dark:text-emerald-300 mt-1 mb-3">
+                    Copy this key now - it won't be shown again. Use this in DotMac CRM's integration settings.
+                </p>
+                <div class="flex items-center gap-2">
+                    <code id="new-api-key" class="flex-1 px-4 py-3 bg-white dark:bg-slate-800 rounded-lg font-mono text-sm text-slate-900 dark:text-white border border-emerald-200 dark:border-emerald-700 break-all">{{ request.query_params.get('new_key') }}</code>
+                    <button type="button" onclick="copyApiKey()" class="px-4 py-3 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 transition flex items-center gap-2">
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"/>
+                        </svg>
+                        Copy
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+        function copyApiKey() {
+            const key = document.getElementById('new-api-key').textContent;
+            navigator.clipboard.writeText(key).then(() => {
+                alert('API key copied to clipboard!');
+            });
+        }
+    </script>
+    {% endif %}
+
+    <div class="grid gap-6 lg:grid-cols-3">
+        <!-- API Key Management -->
+        <div class="lg:col-span-2 space-y-6">
+            <div class="admin-card p-6">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display mb-6">API Key Management</h2>
+
+                {% if has_api_key %}
+                <div class="space-y-4">
+                    <div class="flex items-center justify-between p-4 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl border border-emerald-100 dark:border-emerald-800">
+                        <div class="flex items-center gap-3">
+                            <div class="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-800">
+                                <svg class="h-5 w-5 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <p class="text-sm font-medium text-emerald-800 dark:text-emerald-200">API Key Active</p>
+                                <p class="text-xs text-emerald-600 dark:text-emerald-400">{{ api_key_masked }}</p>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-xs text-emerald-600 dark:text-emerald-400">Created: {{ api_key_created_at.strftime('%b %d, %Y') if api_key_created_at else '-' }}</p>
+                            <p class="text-xs text-emerald-600 dark:text-emerald-400">Last used: {{ api_key_last_used.strftime('%b %d, %H:%M') if api_key_last_used else 'Never' }}</p>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-3">
+                        <form action="/admin/sync/crm/config/generate-key" method="post">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                            <button type="submit" onclick="return confirm('This will revoke the current key and generate a new one. The CRM will need to be reconfigured. Continue?')"
+                                    class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-amber-200 dark:border-amber-700 text-amber-700 dark:text-amber-300 text-sm font-medium hover:bg-amber-50 dark:hover:bg-amber-900/20 transition">
+                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                                </svg>
+                                Regenerate Key
+                            </button>
+                        </form>
+                        <form action="/admin/sync/crm/config/revoke-key" method="post">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                            <button type="submit" onclick="return confirm('This will disable CRM sync. Are you sure?')"
+                                    class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-red-200 dark:border-red-700 text-red-700 dark:text-red-300 text-sm font-medium hover:bg-red-50 dark:hover:bg-red-900/20 transition">
+                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+                                </svg>
+                                Revoke Key
+                            </button>
+                        </form>
+                    </div>
+                </div>
+                {% else %}
+                <div class="text-center py-8">
+                    <div class="mx-auto h-16 w-16 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-4">
+                        <svg class="h-8 w-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/>
+                        </svg>
+                    </div>
+                    <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-2">No API Key Configured</h3>
+                    <p class="text-sm text-slate-500 dark:text-slate-400 mb-6 max-w-sm mx-auto">
+                        Generate an API key to allow DotMac CRM to sync projects, tickets, and work orders to this ERP.
+                    </p>
+                    <form action="/admin/sync/crm/config/generate-key" method="post">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                        <button type="submit" class="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-primary-600 text-white text-sm font-medium hover:bg-primary-700 transition">
+                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/>
+                            </svg>
+                            Generate API Key
+                        </button>
+                    </form>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Sync Settings -->
+            <div class="admin-card p-6">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display mb-6">Sync Settings</h2>
+
+                <form action="/admin/sync/crm/config" method="post" class="space-y-6">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+                    <div class="space-y-4">
+                        <div class="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl">
+                            <div>
+                                <label class="text-sm font-medium text-slate-900 dark:text-white">Enable Integration</label>
+                                <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Allow CRM to sync data to this ERP</p>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" name="is_active" class="sr-only peer" {{ 'checked' if config and config.is_active else '' }}>
+                                <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 dark:peer-focus:ring-primary-800 rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-primary-600"></div>
+                            </label>
+                        </div>
+
+                        <div class="border-t border-slate-200 dark:border-slate-700 pt-4">
+                            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">Entity Types to Sync</label>
+                            <div class="space-y-3">
+                                <label class="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+                                    <input type="checkbox" name="sync_projects" class="rounded border-slate-300 dark:border-slate-600 text-primary-600 focus:ring-primary-500" {{ 'checked' if not config or 'projects' in (config.company or 'all') or config.company == 'all' else '' }}>
+                                    <div>
+                                        <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Projects</span>
+                                        <p class="text-xs text-slate-500 dark:text-slate-400">Sync customer projects for expense tracking</p>
+                                    </div>
+                                </label>
+                                <label class="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+                                    <input type="checkbox" name="sync_tickets" class="rounded border-slate-300 dark:border-slate-600 text-primary-600 focus:ring-primary-500" {{ 'checked' if not config or 'tickets' in (config.company or 'all') or config.company == 'all' else '' }}>
+                                    <div>
+                                        <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Support Tickets</span>
+                                        <p class="text-xs text-slate-500 dark:text-slate-400">Sync support tickets for expense attribution</p>
+                                    </div>
+                                </label>
+                                <label class="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+                                    <input type="checkbox" name="sync_work_orders" class="rounded border-slate-300 dark:border-slate-600 text-primary-600 focus:ring-primary-500" {{ 'checked' if not config or 'work_orders' in (config.company or 'all') or config.company == 'all' else '' }}>
+                                    <div>
+                                        <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Work Orders</span>
+                                        <p class="text-xs text-slate-500 dark:text-slate-400">Sync field work orders as tasks</p>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+                        <button type="submit" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary-600 text-white text-sm font-medium hover:bg-primary-700 transition">
+                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                            </svg>
+                            Save Settings
+                        </button>
+                        <a href="/admin/sync/crm" class="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200">
+                            Cancel
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Help Section -->
+        <div class="space-y-6">
+            <div class="admin-card p-6">
+                <h3 class="text-lg font-semibold text-slate-900 dark:text-white font-display mb-4">Setup Guide</h3>
+                <ol class="space-y-4 text-sm text-slate-600 dark:text-slate-300">
+                    <li class="flex gap-3">
+                        <span class="flex h-6 w-6 items-center justify-center rounded-full bg-primary-100 text-primary-600 dark:bg-primary-900/30 dark:text-primary-400 text-xs font-semibold flex-shrink-0">1</span>
+                        <span>Generate an API key above</span>
+                    </li>
+                    <li class="flex gap-3">
+                        <span class="flex h-6 w-6 items-center justify-center rounded-full bg-primary-100 text-primary-600 dark:bg-primary-900/30 dark:text-primary-400 text-xs font-semibold flex-shrink-0">2</span>
+                        <span>Copy the API key (shown only once)</span>
+                    </li>
+                    <li class="flex gap-3">
+                        <span class="flex h-6 w-6 items-center justify-center rounded-full bg-primary-100 text-primary-600 dark:bg-primary-900/30 dark:text-primary-400 text-xs font-semibold flex-shrink-0">3</span>
+                        <span>In DotMac CRM, go to Settings &rarr; Integrations</span>
+                    </li>
+                    <li class="flex gap-3">
+                        <span class="flex h-6 w-6 items-center justify-center rounded-full bg-primary-100 text-primary-600 dark:bg-primary-900/30 dark:text-primary-400 text-xs font-semibold flex-shrink-0">4</span>
+                        <span>Add ERP integration with the API key</span>
+                    </li>
+                    <li class="flex gap-3">
+                        <span class="flex h-6 w-6 items-center justify-center rounded-full bg-primary-100 text-primary-600 dark:bg-primary-900/30 dark:text-primary-400 text-xs font-semibold flex-shrink-0">5</span>
+                        <span>Enable sync for desired entity types</span>
+                    </li>
+                </ol>
+            </div>
+
+            <div class="admin-card p-6">
+                <h3 class="text-lg font-semibold text-slate-900 dark:text-white font-display mb-4">How It Works</h3>
+                <div class="space-y-4 text-sm text-slate-600 dark:text-slate-300">
+                    <div class="flex items-start gap-3">
+                        <svg class="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                        </svg>
+                        <div>
+                            <p class="font-medium text-slate-900 dark:text-white">Real-time Sync</p>
+                            <p class="text-slate-500 dark:text-slate-400">CRM pushes updates via webhook when entities change</p>
+                        </div>
+                    </div>
+                    <div class="flex items-start gap-3">
+                        <svg class="h-5 w-5 text-emerald-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        <div>
+                            <p class="font-medium text-slate-900 dark:text-white">Expense Linking</p>
+                            <p class="text-slate-500 dark:text-slate-400">Employees can link expenses to CRM projects/tickets</p>
+                        </div>
+                    </div>
+                    <div class="flex items-start gap-3">
+                        <svg class="h-5 w-5 text-violet-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                        </svg>
+                        <div>
+                            <p class="font-medium text-slate-900 dark:text-white">Cost Reporting</p>
+                            <p class="text-slate-500 dark:text-slate-400">CRM can query expense totals per project</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="admin-card p-6">
+                <h3 class="text-lg font-semibold text-slate-900 dark:text-white font-display mb-4">API Endpoint</h3>
+                <div class="space-y-2">
+                    <p class="text-sm text-slate-500 dark:text-slate-400">CRM should send requests to:</p>
+                    <code class="block px-3 py-2 bg-slate-100 dark:bg-slate-800 rounded-lg text-xs font-mono text-slate-700 dark:text-slate-300 break-all">
+                        POST /api/v1/sync/crm/bulk
+                    </code>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-2">
+                        Include header: <code class="px-1 py-0.5 bg-slate-100 dark:bg-slate-800 rounded">X-API-Key: &lt;your-key&gt;</code>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

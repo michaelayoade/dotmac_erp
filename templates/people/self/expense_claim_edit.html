@@ -78,6 +78,46 @@
                        {% if not can_edit %}disabled{% endif %}>
             </div>
         </div>
+
+        <div class="border-t border-slate-200 dark:border-slate-700 pt-4">
+            <h3 class="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Link to Project/Ticket (Optional)</h3>
+            <div class="grid gap-4 sm:grid-cols-3">
+                <div>
+                    <label for="project_id" class="form-label">Project</label>
+                    <select name="project_id" id="project_id" class="form-select w-full" {% if not can_edit %}disabled{% endif %}>
+                        <option value="">No project</option>
+                        {% for proj in projects %}
+                        <option value="{{ proj.project_id }}" {% if claim.project_id and claim.project_id == proj.project_id %}selected{% endif %}>
+                            {{ proj.project_code }} - {{ proj.project_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label for="ticket_id" class="form-label">Support Ticket</label>
+                    <select name="ticket_id" id="ticket_id" class="form-select w-full" {% if not can_edit %}disabled{% endif %}>
+                        <option value="">No ticket</option>
+                        {% for ticket in tickets %}
+                        <option value="{{ ticket.ticket_id }}" {% if claim.ticket_id and claim.ticket_id == ticket.ticket_id %}selected{% endif %}>
+                            {{ ticket.ticket_number }} - {{ ticket.subject|truncate(40) }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label for="task_id" class="form-label">Task</label>
+                    <select name="task_id" id="task_id" class="form-select w-full" {% if not can_edit %}disabled{% endif %}>
+                        <option value="">No task</option>
+                        {% for task in tasks %}
+                        <option value="{{ task.task_id }}" {% if claim.task_id and claim.task_id == task.task_id %}selected{% endif %}>
+                            {{ task.task_code }} - {{ task.task_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+        </div>
+
         <div class="overflow-x-auto">
             <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
                 <thead>

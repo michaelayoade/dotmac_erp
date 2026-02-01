@@ -1,0 +1,428 @@
+"""
+DotMac CRM Sync Web Service.
+
+Provides data and operations for the CRM sync management UI.
+"""
+import logging
+import secrets
+import uuid
+from datetime import datetime, timezone
+from typing import Optional
+from urllib.parse import quote_plus
+
+from fastapi import Request
+from fastapi.responses import HTMLResponse, RedirectResponse
+from sqlalchemy import func, select, desc
+from sqlalchemy.orm import Session
+
+from app.models.auth import ApiKey
+from app.models.person import Person
+from app.models.sync import IntegrationConfig, IntegrationType
+from app.models.sync.dotmac_crm_sync import CRMEntityType, CRMSyncMapping, CRMSyncStatus
+from app.services.auth import hash_api_key
+from app.templates import templates
+from app.web.deps import WebAuthContext, brand_context, org_brand_context
+
+logger = logging.getLogger(__name__)
+
+# CRM sync entity types for display
+CRM_ENTITY_TYPES = {
+    CRMEntityType.PROJECT: "Projects",
+    CRMEntityType.TICKET: "Tickets",
+    CRMEntityType.WORK_ORDER: "Work Orders",
+}
+
+
+class CRMSyncWebService:
+    """Service for CRM sync management web UI."""
+
+    def _base_context(
+        self,
+        request: Request,
+        auth: Optional[WebAuthContext],
+        title: str,
+        active_tab: str = "dashboard",
+        db: Optional[Session] = None,
+    ) -> dict:
+        """Build base context for templates."""
+        org_branding = None
+        if db and auth and auth.organization_id:
+            org_branding = org_brand_context(db, auth.organization_id)
+        return {
+            "request": request,
+            "auth": auth,
+            "title": title,
+            "page_title": title,
+            "brand": org_branding or brand_context(),
+            "org_branding": org_branding,
+            "user": auth.user if auth else {"name": "Admin", "initials": "AD"},
+            "csrf_token": getattr(request.state, "csrf_token", ""),
+            "active_tab": active_tab,
+            "active_page": "sync",
+            "module": "admin",
+            "sub_module": "crm-sync",
+            "crm_entity_types": CRM_ENTITY_TYPES,
+        }
+
+    def _require_admin(
+        self,
+        request: Request,
+        auth: Optional[WebAuthContext],
+    ) -> Optional[HTMLResponse | RedirectResponse]:
+        """Check if user is admin, return error response if not."""
+        if not auth or not auth.is_authenticated:
+            return RedirectResponse(url="/login?next=/admin/sync/crm", status_code=302)
+        return None
+
+    def _get_crm_config(self, db: Session, org_id: uuid.UUID) -> Optional[IntegrationConfig]:
+        """Get CRM integration config for organization."""
+        stmt = select(IntegrationConfig).where(
+            IntegrationConfig.organization_id == org_id,
+            IntegrationConfig.integration_type == IntegrationType.DOTMAC_CRM,
+        )
+        return db.scalar(stmt)
+
+    def _get_service_api_key(self, db: Session, org_id: uuid.UUID) -> Optional[ApiKey]:
+        """Get the CRM service API key for organization."""
+        # Look for API key with label matching CRM service pattern
+        stmt = (
+            select(ApiKey)
+            .join(Person, ApiKey.person_id == Person.id)
+            .where(
+                Person.organization_id == org_id,
+                ApiKey.label.ilike("dotmac-crm-service%"),
+                ApiKey.is_active.is_(True),
+                ApiKey.revoked_at.is_(None),
+            )
+            .order_by(desc(ApiKey.created_at))
+        )
+        return db.scalar(stmt)
+
+    def _get_sync_stats(self, db: Session, org_id: uuid.UUID) -> dict:
+        """Get sync statistics by entity type."""
+        stats = {}
+        for entity_type in CRMEntityType:
+            stmt = select(func.count(CRMSyncMapping.mapping_id)).where(
+                CRMSyncMapping.organization_id == org_id,
+                CRMSyncMapping.crm_entity_type == entity_type,
+            )
+            total = db.scalar(stmt) or 0
+
+            # Count by status
+            active_stmt = select(func.count(CRMSyncMapping.mapping_id)).where(
+                CRMSyncMapping.organization_id == org_id,
+                CRMSyncMapping.crm_entity_type == entity_type,
+                CRMSyncMapping.crm_status == CRMSyncStatus.ACTIVE,
+            )
+            active = db.scalar(active_stmt) or 0
+
+            stats[entity_type.value] = {
+                "total": total,
+                "active": active,
+                "completed": total - active,
+                "label": CRM_ENTITY_TYPES.get(entity_type, entity_type.value),
+            }
+        return stats
+
+    def _get_recent_syncs(self, db: Session, org_id: uuid.UUID, limit: int = 10) -> list:
+        """Get recently synced entities."""
+        stmt = (
+            select(CRMSyncMapping)
+            .where(CRMSyncMapping.organization_id == org_id)
+            .order_by(desc(CRMSyncMapping.synced_at))
+            .limit(limit)
+        )
+        return list(db.scalars(stmt).all())
+
+    # ============ Dashboard ============
+
+    def dashboard_response(
+        self,
+        request: Request,
+        db: Session,
+        auth: Optional[WebAuthContext],
+    ) -> HTMLResponse | RedirectResponse:
+        """Render CRM sync dashboard page."""
+        error_response = self._require_admin(request, auth)
+        if error_response:
+            return error_response
+
+        context = self._base_context(request, auth, "DotMac CRM Sync", "dashboard", db)
+        org_id = uuid.UUID(auth.organization_id) if auth else None
+
+        if org_id:
+            # Get config and API key
+            config = self._get_crm_config(db, org_id)
+            api_key = self._get_service_api_key(db, org_id)
+
+            context["config"] = config
+            context["api_key"] = api_key
+            context["integration_configured"] = bool(config and config.is_active and api_key)
+
+            # Get stats
+            context["sync_stats"] = self._get_sync_stats(db, org_id)
+            context["total_synced"] = sum(s["total"] for s in context["sync_stats"].values())
+
+            # Get recent activity
+            context["recent_syncs"] = self._get_recent_syncs(db, org_id)
+
+            # Last sync time
+            if context["recent_syncs"]:
+                context["last_sync_at"] = context["recent_syncs"][0].synced_at
+            else:
+                context["last_sync_at"] = None
+        else:
+            context["integration_configured"] = False
+            context["sync_stats"] = {}
+            context["total_synced"] = 0
+            context["recent_syncs"] = []
+
+        return templates.TemplateResponse(request, "admin/sync/crm/dashboard.html", context)
+
+    # ============ Configuration ============
+
+    def config_response(
+        self,
+        request: Request,
+        db: Session,
+        auth: Optional[WebAuthContext],
+    ) -> HTMLResponse | RedirectResponse:
+        """Render CRM config page."""
+        error_response = self._require_admin(request, auth)
+        if error_response:
+            return error_response
+
+        context = self._base_context(request, auth, "CRM Integration Settings", "config", db)
+        org_id = uuid.UUID(auth.organization_id) if auth else None
+
+        if org_id:
+            config = self._get_crm_config(db, org_id)
+            api_key = self._get_service_api_key(db, org_id)
+
+            context["config"] = config
+            context["api_key"] = api_key
+            context["has_api_key"] = bool(api_key)
+
+            # Mask API key for display
+            if api_key:
+                context["api_key_masked"] = f"****{api_key.key_hash[-8:]}"
+                context["api_key_created_at"] = api_key.created_at
+                context["api_key_last_used"] = api_key.last_used_at
+
+        return templates.TemplateResponse(request, "admin/sync/crm/config.html", context)
+
+    def config_save_response(
+        self,
+        request: Request,
+        db: Session,
+        auth: Optional[WebAuthContext],
+        is_active: bool,
+        sync_projects: bool,
+        sync_tickets: bool,
+        sync_work_orders: bool,
+    ) -> RedirectResponse:
+        """Save CRM config."""
+        error_response = self._require_admin(request, auth)
+        if error_response:
+            return error_response
+
+        org_id = uuid.UUID(auth.organization_id) if auth else None
+        if not org_id:
+            return RedirectResponse(
+                url="/admin/sync/crm/config?error=" + quote_plus("No organization"),
+                status_code=302,
+            )
+
+        # Get or create config
+        config = self._get_crm_config(db, org_id)
+        if not config:
+            config = IntegrationConfig(
+                organization_id=org_id,
+                integration_type=IntegrationType.DOTMAC_CRM,
+                base_url="https://crm.dotmac.io",  # Default CRM URL
+                is_active=is_active,
+                created_by_user_id=uuid.UUID(auth.person_id) if auth else None,
+            )
+            db.add(config)
+        else:
+            config.is_active = is_active
+            config.updated_at = datetime.now(timezone.utc)
+
+        # Store sync settings in company field as JSON-like string
+        sync_settings = []
+        if sync_projects:
+            sync_settings.append("projects")
+        if sync_tickets:
+            sync_settings.append("tickets")
+        if sync_work_orders:
+            sync_settings.append("work_orders")
+        config.company = ",".join(sync_settings) if sync_settings else "all"
+
+        db.commit()
+
+        logger.info("CRM sync config saved for org %s: active=%s", org_id, is_active)
+        return RedirectResponse(
+            url="/admin/sync/crm/config?success=" + quote_plus("Configuration saved"),
+            status_code=302,
+        )
+
+    def generate_api_key_response(
+        self,
+        request: Request,
+        db: Session,
+        auth: Optional[WebAuthContext],
+    ) -> RedirectResponse:
+        """Generate a new API key for CRM sync."""
+        error_response = self._require_admin(request, auth)
+        if error_response:
+            return error_response
+
+        org_id = uuid.UUID(auth.organization_id) if auth else None
+        person_id = uuid.UUID(auth.person_id) if auth else None
+
+        if not org_id or not person_id:
+            return RedirectResponse(
+                url="/admin/sync/crm/config?error=" + quote_plus("Authentication required"),
+                status_code=302,
+            )
+
+        # Revoke any existing CRM service API keys for this org
+        existing_keys = db.scalars(
+            select(ApiKey)
+            .join(Person, ApiKey.person_id == Person.id)
+            .where(
+                Person.organization_id == org_id,
+                ApiKey.label.ilike("dotmac-crm-service%"),
+                ApiKey.is_active.is_(True),
+                ApiKey.revoked_at.is_(None),
+            )
+        ).all()
+
+        for key in existing_keys:
+            key.is_active = False
+            key.revoked_at = datetime.now(timezone.utc)
+            logger.info("Revoked old CRM API key: %s", key.id)
+
+        # Generate new API key
+        raw_key = secrets.token_urlsafe(32)
+        key_hash = hash_api_key(raw_key)
+
+        new_key = ApiKey(
+            person_id=person_id,
+            label=f"dotmac-crm-service-{datetime.now(timezone.utc).strftime('%Y%m%d')}",
+            key_hash=key_hash,
+            is_active=True,
+        )
+        db.add(new_key)
+        db.commit()
+
+        logger.info("Generated new CRM API key for org %s: %s", org_id, new_key.id)
+
+        # Store the raw key in session for one-time display
+        # We'll use a query param to show it (in production, use secure session)
+        return RedirectResponse(
+            url=f"/admin/sync/crm/config?success={quote_plus('API key generated')}&new_key={raw_key}",
+            status_code=302,
+        )
+
+    def revoke_api_key_response(
+        self,
+        request: Request,
+        db: Session,
+        auth: Optional[WebAuthContext],
+    ) -> RedirectResponse:
+        """Revoke the CRM service API key."""
+        error_response = self._require_admin(request, auth)
+        if error_response:
+            return error_response
+
+        org_id = uuid.UUID(auth.organization_id) if auth else None
+        if not org_id:
+            return RedirectResponse(
+                url="/admin/sync/crm/config?error=" + quote_plus("No organization"),
+                status_code=302,
+            )
+
+        api_key = self._get_service_api_key(db, org_id)
+        if api_key:
+            api_key.is_active = False
+            api_key.revoked_at = datetime.now(timezone.utc)
+            db.commit()
+            logger.info("Revoked CRM API key: %s", api_key.id)
+
+        return RedirectResponse(
+            url="/admin/sync/crm/config?success=" + quote_plus("API key revoked"),
+            status_code=302,
+        )
+
+    # ============ Entities ============
+
+    def entities_response(
+        self,
+        request: Request,
+        db: Session,
+        auth: Optional[WebAuthContext],
+        entity_type: Optional[str] = None,
+        status: Optional[str] = None,
+        search: Optional[str] = None,
+        page: int = 1,
+    ) -> HTMLResponse | RedirectResponse:
+        """Render synced entities list."""
+        error_response = self._require_admin(request, auth)
+        if error_response:
+            return error_response
+
+        context = self._base_context(request, auth, "Synced CRM Entities", "entities", db)
+        org_id = uuid.UUID(auth.organization_id) if auth else None
+
+        per_page = 25
+        offset = (page - 1) * per_page
+
+        if org_id:
+            # Build query
+            stmt = select(CRMSyncMapping).where(
+                CRMSyncMapping.organization_id == org_id
+            )
+
+            # Filters
+            if entity_type and entity_type in [e.value for e in CRMEntityType]:
+                stmt = stmt.where(CRMSyncMapping.crm_entity_type == CRMEntityType(entity_type))
+
+            if status and status in [s.value for s in CRMSyncStatus]:
+                stmt = stmt.where(CRMSyncMapping.crm_status == CRMSyncStatus(status))
+
+            if search:
+                search_filter = f"%{search}%"
+                stmt = stmt.where(
+                    (CRMSyncMapping.display_name.ilike(search_filter))
+                    | (CRMSyncMapping.display_code.ilike(search_filter))
+                    | (CRMSyncMapping.crm_id.ilike(search_filter))
+                )
+
+            # Count
+            count_stmt = select(func.count()).select_from(stmt.subquery())
+            total_count = db.scalar(count_stmt) or 0
+
+            # Paginate
+            stmt = stmt.order_by(desc(CRMSyncMapping.synced_at)).offset(offset).limit(per_page)
+            entities = list(db.scalars(stmt).all())
+
+            context["entities"] = entities
+            context["total_count"] = total_count
+            context["page"] = page
+            context["per_page"] = per_page
+            context["total_pages"] = (total_count + per_page - 1) // per_page
+            context["filter_entity_type"] = entity_type
+            context["filter_status"] = status
+            context["filter_search"] = search
+            context["entity_type_choices"] = [(e.value, CRM_ENTITY_TYPES[e]) for e in CRMEntityType]
+            context["status_choices"] = [(s.value, s.value.title()) for s in CRMSyncStatus]
+        else:
+            context["entities"] = []
+            context["total_count"] = 0
+
+        return templates.TemplateResponse(request, "admin/sync/crm/entities.html", context)
+
+
+# Singleton instance
+crm_sync_web_service = CRMSyncWebService()

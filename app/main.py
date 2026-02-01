@@ -24,6 +24,7 @@ from app.web.finance import automation_router as automation_web_router
 from app.web.auth import router as auth_web_router
 from app.web.admin import router as admin_web_router
 from app.web.admin_sync import router as admin_sync_router
+from app.web.admin_crm_sync import router as admin_crm_sync_router
 from app.web.profile import router as profile_web_router
 from app.web.people import router as people_web_router
 from app.web.payroll_alias import router as payroll_alias_web_router
@@ -54,6 +55,7 @@ from app.api.support import router as support_router
 from app.api.pm import router as pm_router
 from app.api.crm import router as crm_router
 from app.api.crm import webhook_router as crm_webhook_router
+from app.api.sync.dotmac_crm import router as crm_sync_router
 from app.api.careers import router as careers_api_router
 from app.web.careers import router as careers_web_router
 from app.web.onboarding_portal import router as onboarding_portal_router
@@ -305,6 +307,7 @@ app.include_router(web_home_router)
 app.include_router(auth_web_router)
 app.include_router(admin_web_router)
 app.include_router(admin_sync_router)  # Admin sync management UI
+app.include_router(admin_crm_sync_router)  # DotMac CRM sync management UI
 app.include_router(profile_web_router)
 app.include_router(finance_web_router, prefix="/finance")
 app.include_router(expense_web_router, prefix="/expense")
@@ -351,6 +354,8 @@ _include_api_router(pm_router, dependencies=[Depends(require_tenant_auth)])
 _include_api_router(crm_router, dependencies=[Depends(require_tenant_auth)])
 # CRM webhook router - NO authentication (uses HMAC signature verification)
 _include_api_router(crm_webhook_router)
+# DotMac CRM Sync - service auth (API key) for bulk sync, tenant auth for UI endpoints
+_include_api_router(crm_sync_router)
 
 # Public Careers Portal (no authentication required)
 _include_api_router(careers_api_router)  # API endpoints

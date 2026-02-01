@@ -1,0 +1,307 @@
+{% extends "admin/base_admin.html" %}
+
+{% block page_title %}DotMac CRM Sync{% endblock %}
+{% block page_subtitle %}Sync projects, tickets, and work orders from DotMac CRM{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Flash Messages -->
+    {% if request.query_params.get('success') %}
+    <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900 dark:bg-emerald-900/20">
+        <div class="flex items-center gap-3">
+            <svg class="h-5 w-5 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <p class="text-sm font-medium text-emerald-800 dark:text-emerald-200">{{ request.query_params.get('success') | urldecode }}</p>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if request.query_params.get('error') %}
+    <div class="rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-900 dark:bg-red-900/20">
+        <div class="flex items-center gap-3">
+            <svg class="h-5 w-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <p class="text-sm font-medium text-red-800 dark:text-red-200">{{ request.query_params.get('error') | urldecode }}</p>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Stats Grid -->
+    <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        <!-- Integration Status -->
+        <div class="admin-card stat-card p-6">
+            <div class="flex items-start justify-between">
+                <div>
+                    <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Integration</p>
+                    <p class="mt-2 text-xl font-bold {% if integration_configured %}text-emerald-600 dark:text-emerald-400{% else %}text-amber-600 dark:text-amber-400{% endif %} font-display">
+                        {% if integration_configured %}Connected{% else %}Not Configured{% endif %}
+                    </p>
+                    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">DotMac CRM</p>
+                </div>
+                <div class="flex h-12 w-12 items-center justify-center rounded-xl {% if integration_configured %}bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400{% else %}bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400{% endif %}">
+                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+                    </svg>
+                </div>
+            </div>
+        </div>
+
+        <!-- Total Synced -->
+        <div class="admin-card stat-card p-6">
+            <div class="flex items-start justify-between">
+                <div>
+                    <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Total Synced</p>
+                    <p class="mt-2 text-3xl font-bold text-slate-900 dark:text-white font-display">{{ total_synced | default(0) }}</p>
+                    <p class="mt-1 text-sm text-emerald-600 dark:text-emerald-400">CRM entities linked</p>
+                </div>
+                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
+                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                    </svg>
+                </div>
+            </div>
+        </div>
+
+        <!-- Projects -->
+        <div class="admin-card stat-card p-6">
+            <div class="flex items-start justify-between">
+                <div>
+                    <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Projects</p>
+                    <p class="mt-2 text-3xl font-bold text-slate-900 dark:text-white font-display">{{ sync_stats.get('PROJECT', {}).get('total', 0) }}</p>
+                    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ sync_stats.get('PROJECT', {}).get('active', 0) }} active</p>
+                </div>
+                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-violet-100 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400">
+                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
+                    </svg>
+                </div>
+            </div>
+        </div>
+
+        <!-- Work Orders / Tickets -->
+        <div class="admin-card stat-card p-6">
+            <div class="flex items-start justify-between">
+                <div>
+                    <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Work Orders</p>
+                    <p class="mt-2 text-3xl font-bold text-slate-900 dark:text-white font-display">{{ sync_stats.get('WORK_ORDER', {}).get('total', 0) }}</p>
+                    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ sync_stats.get('TICKET', {}).get('total', 0) }} tickets</p>
+                </div>
+                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400">
+                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
+                    </svg>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content Grid -->
+    <div class="grid gap-6 lg:grid-cols-3">
+        <!-- Setup / Status Card -->
+        <div class="admin-card p-6">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display mb-4">Integration Status</h2>
+
+            {% if not integration_configured %}
+            <div class="text-center py-6">
+                <div class="mx-auto h-12 w-12 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center mb-3">
+                    <svg class="h-6 w-6 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                    </svg>
+                </div>
+                <p class="text-sm font-medium text-slate-900 dark:text-white">Integration Not Configured</p>
+                <p class="text-sm text-slate-500 dark:text-slate-400 mt-1 mb-4">Generate an API key to enable CRM sync</p>
+                <a href="/admin/sync/crm/config" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-600 text-white text-sm font-medium hover:bg-amber-700 transition">
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                    </svg>
+                    Configure Integration
+                </a>
+            </div>
+            {% else %}
+            <div class="space-y-4">
+                <div class="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-800">
+                    <span class="text-sm text-slate-600 dark:text-slate-300">Status</span>
+                    <span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+                        <span class="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                        Active
+                    </span>
+                </div>
+                <div class="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-800">
+                    <span class="text-sm text-slate-600 dark:text-slate-300">API Key</span>
+                    <span class="text-sm text-emerald-600 dark:text-emerald-400">Configured</span>
+                </div>
+                <div class="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-800">
+                    <span class="text-sm text-slate-600 dark:text-slate-300">Last Sync</span>
+                    <span class="text-sm text-slate-500 dark:text-slate-400">
+                        {% if last_sync_at %}
+                        {{ last_sync_at.strftime('%b %d, %H:%M') }}
+                        {% else %}
+                        Never
+                        {% endif %}
+                    </span>
+                </div>
+                <div class="pt-2">
+                    <a href="/admin/sync/crm/config" class="inline-flex items-center gap-2 text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400">
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                        </svg>
+                        Manage Settings
+                    </a>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Entity Breakdown -->
+        <div class="lg:col-span-2 admin-card p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display">Entity Breakdown</h2>
+                <a href="/admin/sync/crm/entities" class="text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">
+                    View all &rarr;
+                </a>
+            </div>
+
+            {% if sync_stats %}
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead>
+                        <tr class="border-b border-slate-200 dark:border-slate-700">
+                            <th class="pb-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Entity Type</th>
+                            <th class="pb-3 text-right text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total</th>
+                            <th class="pb-3 text-right text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Active</th>
+                            <th class="pb-3 text-right text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Completed</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                        {% for key, stats in sync_stats.items() %}
+                        <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                            <td class="py-3 text-sm font-medium text-slate-900 dark:text-white">{{ stats.label }}</td>
+                            <td class="py-3 text-sm text-right text-slate-600 dark:text-slate-300">{{ stats.total }}</td>
+                            <td class="py-3 text-sm text-right text-emerald-600 dark:text-emerald-400">{{ stats.active }}</td>
+                            <td class="py-3 text-sm text-right text-slate-400">{{ stats.completed }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-12">
+                <div class="mx-auto h-12 w-12 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-3">
+                    <svg class="h-6 w-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"/>
+                    </svg>
+                </div>
+                <p class="text-sm font-medium text-slate-900 dark:text-white">No sync data yet</p>
+                <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Entities will appear here once CRM starts syncing</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Recent Activity -->
+    <div class="admin-card p-6">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display">Recent Sync Activity</h2>
+            <a href="/admin/sync/crm/entities" class="text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">
+                View all &rarr;
+            </a>
+        </div>
+
+        {% if recent_syncs %}
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead>
+                    <tr class="border-b border-slate-200 dark:border-slate-700">
+                        <th class="pb-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Entity</th>
+                        <th class="pb-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Type</th>
+                        <th class="pb-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
+                        <th class="pb-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Synced</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                    {% for sync in recent_syncs %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                        <td class="py-3">
+                            <div class="text-sm font-medium text-slate-900 dark:text-white">{{ sync.display_name | truncate(40) }}</div>
+                            <div class="text-xs text-slate-500 dark:text-slate-400">{{ sync.display_code or sync.crm_id[:8] }}</div>
+                        </td>
+                        <td class="py-3">
+                            <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300">
+                                {{ sync.crm_entity_type.value }}
+                            </span>
+                        </td>
+                        <td class="py-3">
+                            <span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold
+                                {% if sync.crm_status.value == 'ACTIVE' %}bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400
+                                {% elif sync.crm_status.value == 'COMPLETED' %}bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400
+                                {% elif sync.crm_status.value == 'CANCELLED' %}bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400
+                                {% else %}bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400{% endif %}">
+                                {{ sync.crm_status.value }}
+                            </span>
+                        </td>
+                        <td class="py-3 text-sm text-slate-500 dark:text-slate-400">
+                            {{ sync.synced_at.strftime('%b %d, %H:%M') if sync.synced_at else '-' }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-12">
+            <div class="mx-auto h-12 w-12 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-3">
+                <svg class="h-6 w-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+            </div>
+            <p class="text-sm font-medium text-slate-900 dark:text-white">No sync activity</p>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Activity will appear here after CRM syncs data</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Quick Links -->
+    <div class="grid gap-4 sm:grid-cols-3">
+        <a href="/admin/sync/crm/config" class="admin-card p-4 flex items-center gap-4 hover:shadow-lg transition-shadow">
+            <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                </svg>
+            </div>
+            <div>
+                <span class="block font-medium text-slate-800 dark:text-slate-200">Configuration</span>
+                <span class="text-sm text-slate-500 dark:text-slate-400">API key & settings</span>
+            </div>
+        </a>
+
+        <a href="/admin/sync/crm/entities" class="admin-card p-4 flex items-center gap-4 hover:shadow-lg transition-shadow">
+            <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"/>
+                </svg>
+            </div>
+            <div>
+                <span class="block font-medium text-slate-800 dark:text-slate-200">Synced Entities</span>
+                <span class="text-sm text-slate-500 dark:text-slate-400">Browse CRM data</span>
+            </div>
+        </a>
+
+        <a href="/admin/sync" class="admin-card p-4 flex items-center gap-4 hover:shadow-lg transition-shadow">
+            <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-violet-100 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400">
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+            </div>
+            <div>
+                <span class="block font-medium text-slate-800 dark:text-slate-200">ERPNext Sync</span>
+                <span class="text-sm text-slate-500 dark:text-slate-400">Other integrations</span>
+            </div>
+        </a>
+    </div>
+</div>
+{% endblock %}

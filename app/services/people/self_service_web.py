@@ -683,12 +683,23 @@ class SelfServiceWebService:
             raise HTTPException(status_code=403, detail="Forbidden")
         can_edit = claim.status == ExpenseClaimStatus.DRAFT
         categories = svc.list_categories(org_id, is_active=True, pagination=None).items
+
+        # Get projects, tickets, tasks for dropdowns (same as create form)
+        projects = self._get_projects_for_dropdown(db, org_id)
+        tickets = self._get_tickets_for_dropdown(db, org_id)
+        tasks = self._get_tasks_for_dropdown(
+            db, org_id, str(claim.project_id) if claim.project_id else None
+        )
+
         context = base_context(request, auth, "Edit Expense Claim", "self-expenses", db=db)
         context.update(
             {
                 "claim": claim,
                 "categories": categories,
                 "can_edit": can_edit,
+                "projects": projects,
+                "tickets": tickets,
+                "tasks": tasks,
             }
         )
         context["has_team_approvals"] = self._has_team_approvals(
@@ -707,6 +718,9 @@ class SelfServiceWebService:
         items: list[dict],
         recipient_bank_code: Optional[str] = None,
         recipient_account_number: Optional[str] = None,
+        project_id: Optional[UUID] = None,
+        ticket_id: Optional[UUID] = None,
+        task_id: Optional[UUID] = None,
     ) -> RedirectResponse:
         org_id = coerce_uuid(auth.organization_id)
         person_id = coerce_uuid(auth.person_id)
@@ -724,6 +738,9 @@ class SelfServiceWebService:
             claim_id,
             recipient_bank_code=recipient_bank_code,
             recipient_account_number=recipient_account_number,
+            project_id=project_id,
+            ticket_id=ticket_id,
+            task_id=task_id,
         )
 
         for item in items:

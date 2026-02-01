@@ -21,6 +21,7 @@ class IntegrationType(str, enum.Enum):
     QUICKBOOKS = "QUICKBOOKS"
     XERO = "XERO"
     SAGE = "SAGE"
+    DOTMAC_CRM = "DOTMAC_CRM"
 
 
 class IntegrationConfig(Base):
