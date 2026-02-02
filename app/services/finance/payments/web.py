@@ -117,13 +117,31 @@ class PaymentWebService:
     @staticmethod
     def reimburse_expense_context(db: Session, organization_id, expense_claim_id: str) -> dict:
         from app.models.expense.expense_claim import ExpenseClaim, ExpenseClaimStatus
+        from app.models.finance.payments.payment_intent import (
+            PaymentIntent,
+            PaymentIntentStatus,
+        )
         from app.models.people.hr.employee import Employee
 
         expense_claim = db.get(ExpenseClaim, expense_claim_id)
         if not expense_claim or expense_claim.organization_id != organization_id:
             return {"redirect_url": "/expense/claims"}
 
-        can_reimburse = expense_claim.status == ExpenseClaimStatus.APPROVED
+        # Check for existing active payment intent to prevent duplicate payments
+        active_statuses = [PaymentIntentStatus.PENDING, PaymentIntentStatus.PROCESSING]
+        active_intent = (
+            db.query(PaymentIntent)
+            .filter(
+                PaymentIntent.source_type == "EXPENSE_CLAIM",
+                PaymentIntent.source_id == expense_claim.claim_id,
+                PaymentIntent.status.in_(active_statuses),
+            )
+            .first()
+        )
+
+        can_reimburse = (
+            expense_claim.status == ExpenseClaimStatus.APPROVED and active_intent is None
+        )
         employee = db.get(Employee, expense_claim.employee_id) if expense_claim.employee_id else None
 
         paystack_enabled = resolve_value(db, SettingDomain.payments, "paystack_enabled")
@@ -139,6 +157,8 @@ class PaymentWebService:
                 "can_reimburse": can_reimburse,
                 "paystack_enabled": bool(paystack_enabled),
                 "transfers_enabled": bool(transfers_enabled),
+                "has_active_payment": active_intent is not None,
+                "active_intent_status": active_intent.status.value if active_intent else None,
             }
         }
 

@@ -312,6 +312,7 @@ class PayrollEntryBase(BaseModel):
     currency_code: str = Field(default="NGN", max_length=3)
     department_id: Optional[UUID] = None
     designation_id: Optional[UUID] = None
+    bank_account_id: Optional[UUID] = None
     notes: Optional[str] = None
 
 
@@ -350,6 +351,7 @@ class PayrollEntryUpdate(BaseModel):
     currency_code: Optional[str] = Field(default=None, max_length=3)
     department_id: Optional[UUID] = None
     designation_id: Optional[UUID] = None
+    bank_account_id: Optional[UUID] = None
     notes: Optional[str] = None
 
 

@@ -12,6 +12,7 @@ from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_organization_id, require_tenant_auth
+from app.services.auth_dependencies import require_tenant_permission
 from app.db import SessionLocal
 from app.models.domain_settings import SettingDomain
 from app.models.finance.payments.payment_intent import PaymentIntentStatus
@@ -141,9 +142,12 @@ class InitiateTransferResponse(BaseModel):
 
     intent_id: UUID
     transfer_code: str
-    status: str
+    status: str  # PROCESSING, COMPLETED, or FAILED
     amount: float
     currency: str
+    completed_immediately: bool = False  # True if transfer completed without webhook
+    claim_status: Optional[str] = None  # Status of the expense claim after transfer
+    message: Optional[str] = None  # Human-readable status message
 
 
 # =============================================================================
@@ -168,7 +172,6 @@ def get_paystack_config(db: Session, organization_id: UUID) -> PaystackConfig:
     # Get keys
     secret_key = resolve_value(db, SettingDomain.payments, "paystack_secret_key")
     public_key = resolve_value(db, SettingDomain.payments, "paystack_public_key")
-    webhook_secret = resolve_value(db, SettingDomain.payments, "paystack_webhook_secret")
 
     if not secret_key:
         raise HTTPException(
@@ -182,10 +185,12 @@ def get_paystack_config(db: Session, organization_id: UUID) -> PaystackConfig:
             detail="Paystack public key not configured",
         )
 
+    # Paystack uses the API secret key for webhook signature verification
+    # (there's no separate webhook secret in Paystack)
     return PaystackConfig(
         secret_key=str(secret_key),
         public_key=str(public_key),
-        webhook_secret=str(webhook_secret or ""),
+        webhook_secret=str(secret_key),
     )
 
 
@@ -200,6 +205,7 @@ def initialize_invoice_payment(
     request: Request,
     organization_id: UUID = Depends(require_organization_id),
     db: Session = Depends(get_db),
+    auth: dict = Depends(require_tenant_permission("payments:invoice:initialize")),
 ):
     """
     Initialize a Paystack payment for an invoice.
@@ -248,6 +254,7 @@ def get_payment_status(
     reference: str,
     organization_id: UUID = Depends(require_organization_id),
     db: Session = Depends(get_db),
+    auth: dict = Depends(require_tenant_permission("payments:read")),
 ):
     """
     Get payment status by reference.
@@ -275,6 +282,7 @@ def get_payment_intent(
     intent_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     db: Session = Depends(get_db),
+    auth: dict = Depends(require_tenant_permission("payments:read")),
 ):
     """
     Get payment intent by ID.
@@ -303,6 +311,7 @@ def verify_payment(
     reference: str,
     organization_id: UUID = Depends(require_organization_id),
     db: Session = Depends(get_db),
+    auth: dict = Depends(require_tenant_permission("payments:verify")),
 ):
     """
     Verify a payment with Paystack.
@@ -345,6 +354,7 @@ def verify_payment(
 def list_banks(
     organization_id: UUID = Depends(require_organization_id),
     db: Session = Depends(get_db),
+    auth: dict = Depends(require_tenant_permission("payments:read")),
 ):
     """
     List supported banks for transfers.
@@ -371,6 +381,7 @@ def resolve_bank_account(
     request_data: ResolveAccountRequest,
     organization_id: UUID = Depends(require_organization_id),
     db: Session = Depends(get_db),
+    auth: dict = Depends(require_tenant_permission("payments:expense:initialize")),
 ):
     """
     Resolve a bank account to verify it exists and get the account name.
@@ -409,6 +420,7 @@ def initialize_expense_payment(
     request_data: InitializeExpensePaymentRequest,
     organization_id: UUID = Depends(require_organization_id),
     db: Session = Depends(get_db),
+    auth: dict = Depends(require_tenant_permission("payments:expense:initialize")),
 ):
     """
     Initialize an expense reimbursement payment (transfer).
@@ -420,6 +432,7 @@ def initialize_expense_payment(
     - Paystack transfers must be enabled
     - Expense claim must be approved
     - Bank account details must be valid (from the expense claim)
+    - No existing active payment intent for this claim
     """
     # Check if transfers are enabled
     transfers_enabled = resolve_value(db, SettingDomain.payments, "paystack_transfers_enabled")
@@ -432,10 +445,29 @@ def initialize_expense_payment(
     config = get_paystack_config(db, organization_id)
 
     from app.models.expense.expense_claim import ExpenseClaim
+    from app.models.finance.payments.payment_intent import PaymentIntent
 
     claim = db.get(ExpenseClaim, request_data.expense_claim_id)
     if not claim or claim.organization_id != organization_id:
         raise HTTPException(status_code=404, detail="Expense claim not found")
+
+    # Check for existing active payment intent to prevent duplicate payments
+    active_statuses = [PaymentIntentStatus.PENDING, PaymentIntentStatus.PROCESSING]
+    existing_intent = (
+        db.query(PaymentIntent)
+        .filter(
+            PaymentIntent.source_type == "EXPENSE_CLAIM",
+            PaymentIntent.source_id == request_data.expense_claim_id,
+            PaymentIntent.status.in_(active_statuses),
+        )
+        .first()
+    )
+    if existing_intent:
+        raise HTTPException(
+            status_code=409,
+            detail=f"A payment is already in progress for this claim (status: {existing_intent.status.value}). "
+            "Please wait for it to complete or check the transfers page.",
+        )
 
     recipient_bank_code = claim.recipient_bank_code
     recipient_account_number = claim.recipient_account_number
@@ -483,6 +515,7 @@ def initiate_transfer(
     intent_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     db: Session = Depends(get_db),
+    auth: dict = Depends(require_tenant_permission("payments:transfer:initiate")),
 ):
     """
     Initiate a Paystack transfer for an expense reimbursement.
@@ -532,12 +565,36 @@ def initiate_transfer(
         logger.error(f"Transfer initiation failed: {e}")
         raise HTTPException(status_code=502, detail=f"Transfer failed: {e.message}")
 
+    # Refresh intent and get claim status for response
+    db.refresh(updated_intent)
+
+    # Get the expense claim status
+    from app.models.expense.expense_claim import ExpenseClaim
+
+    claim_status = None
+    if updated_intent.source_id:
+        claim = db.get(ExpenseClaim, updated_intent.source_id)
+        if claim:
+            claim_status = claim.status.value
+
+    # Determine if completed immediately and create appropriate message
+    completed_immediately = updated_intent.status == PaymentIntentStatus.COMPLETED
+    if completed_immediately:
+        message = "Transfer completed successfully! The expense claim has been marked as paid."
+    elif updated_intent.status == PaymentIntentStatus.FAILED:
+        message = "Transfer failed. Please check the error and try again."
+    else:
+        message = "Transfer initiated and is being processed. You will be notified when complete."
+
     return InitiateTransferResponse(
         intent_id=updated_intent.intent_id,
         transfer_code=updated_intent.transfer_code or "",
         status=updated_intent.status.value,
         amount=float(updated_intent.amount),
         currency=updated_intent.currency_code,
+        completed_immediately=completed_immediately,
+        claim_status=claim_status,
+        message=message,
     )
 
 
@@ -545,6 +602,7 @@ def initiate_transfer(
 def list_pending_transfers(
     organization_id: UUID = Depends(require_organization_id),
     db: Session = Depends(get_db),
+    auth: dict = Depends(require_tenant_permission("payments:read")),
 ):
     """
     List pending expense reimbursement transfers.

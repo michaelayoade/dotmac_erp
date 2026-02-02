@@ -1614,3 +1614,86 @@ class LeaveService:
             "average_monthly_applications": average_monthly_apps,
             "average_monthly_days": average_monthly_days,
         }
+
+    # =========================================================================
+    # Payroll Integration
+    # =========================================================================
+
+    def calculate_lwp_days_in_period(
+        self,
+        leaves: list,
+        period_start: date,
+        period_end: date,
+    ) -> Decimal:
+        """
+        Calculate total LWP days that overlap with a pay period.
+
+        Only counts leave applications where the leave_type.is_lwp is True
+        and the leave overlaps with the given period.
+
+        Args:
+            leaves: List of LeaveApplication objects
+            period_start: Start of the pay period (inclusive)
+            period_end: End of the pay period (inclusive)
+
+        Returns:
+            Total LWP days as Decimal (handles half-days as 0.5)
+        """
+        total_days = Decimal("0")
+
+        for leave in leaves:
+            # Get leave type to check if it's LWP
+            leave_type = getattr(leave, 'leave_type', None)
+            if leave_type and not getattr(leave_type, 'is_lwp', False):
+                continue
+
+            # Get leave dates
+            leave_start = getattr(leave, 'from_date', None)
+            leave_end = getattr(leave, 'to_date', None)
+
+            if not leave_start or not leave_end:
+                continue
+
+            # Calculate overlap with period
+            overlap_start = max(leave_start, period_start)
+            overlap_end = min(leave_end, period_end)
+
+            if overlap_start > overlap_end:
+                # No overlap
+                continue
+
+            # Calculate days in overlap
+            overlap_days = (overlap_end - overlap_start).days + 1
+
+            # Handle half-day leaves
+            is_half_day = getattr(leave, 'half_day', False)
+            half_day_date = getattr(leave, 'half_day_date', None)
+
+            if is_half_day and half_day_date:
+                # Half-day leave only counts if the half-day date is in the overlap
+                if period_start <= half_day_date <= period_end:
+                    total_days += Decimal("0.5")
+            else:
+                total_days += Decimal(str(overlap_days))
+
+        return total_days
+
+    def mark_leave_posted_to_payroll(
+        self,
+        leaves: list,
+        slip_id: UUID,
+    ) -> None:
+        """
+        Mark leave applications as posted to payroll.
+
+        Sets is_posted_to_payroll=True and salary_slip_id on each leave.
+
+        Args:
+            leaves: List of LeaveApplication objects
+            slip_id: The salary slip ID that includes these leaves
+        """
+        for leave in leaves:
+            leave.is_posted_to_payroll = True
+            leave.salary_slip_id = slip_id
+
+        self.db.flush()

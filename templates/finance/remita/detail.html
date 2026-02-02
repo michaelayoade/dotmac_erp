@@ -1,0 +1,416 @@
+{% extends "finance/base_finance.html" %}
+
+{% block page_title %}RRR {{ rrr.rrr if rrr else 'Detail' }}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400">
+    <a href="/finance/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/finance/remita" class="hover:text-primary-600 dark:hover:text-primary-400">Remita RRRs</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white">{{ rrr.rrr if rrr else 'Not Found' }}</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+{% if error %}
+<div class="rounded-lg bg-rose-50 p-4 text-sm text-rose-700 dark:bg-rose-900/30 dark:text-rose-400">
+    {{ error }}
+</div>
+{% elif rrr %}
+{% if error_message %}
+<div class="mb-6 rounded-lg bg-rose-50 p-4 text-sm text-rose-700 dark:bg-rose-900/30 dark:text-rose-400">
+    {{ error_message }}
+</div>
+{% endif %}
+<div class="space-y-6">
+    {% if success_message %}
+    <div class="rounded-lg bg-emerald-50 p-4 text-sm text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+        {{ success_message }}
+    </div>
+    {% endif %}
+
+    <!-- Header with RRR and status -->
+    <div class="flex flex-wrap items-start justify-between gap-4">
+        <div>
+            <div class="flex items-center gap-3">
+                <h1 class="text-2xl font-bold text-slate-900 dark:text-white font-mono">{{ rrr.rrr }}</h1>
+                {% set status_colors = {
+                    'pending': 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+                    'paid': 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+                    'expired': 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-400',
+                    'failed': 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400',
+                    'cancelled': 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-400'
+                } %}
+                <span class="inline-flex rounded-full px-3 py-1 text-sm font-medium {{ status_colors.get(rrr.status.value, 'bg-slate-100 text-slate-700') }}">
+                    {{ rrr.status.value | title }}
+                </span>
+            </div>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ rrr.description }}</p>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex items-center gap-2">
+            {% if can_refresh %}
+            <form method="POST" action="/finance/remita/{{ rrr.id }}/refresh">
+                <button type="submit"
+                        class="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700">
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                    </svg>
+                    Check Status
+                </button>
+            </form>
+            {% endif %}
+
+            {% if can_cancel %}
+            <form method="POST" action="/finance/remita/{{ rrr.id }}/cancel"
+                  onsubmit="return confirm('Are you sure you want to cancel this RRR?')">
+                <button type="submit"
+                        class="inline-flex items-center gap-2 rounded-lg border border-rose-300 px-3 py-2 text-sm font-medium text-rose-700 hover:bg-rose-50 dark:border-rose-600 dark:text-rose-400 dark:hover:bg-rose-900/30">
+                    Cancel RRR
+                </button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="grid gap-6 lg:grid-cols-2">
+        <!-- Main Details -->
+        <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800/50">
+            <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-4">Payment Details</h2>
+
+            <dl class="space-y-4">
+                <div class="flex justify-between">
+                    <dt class="text-sm text-slate-500 dark:text-slate-400">Amount</dt>
+                    <dd class="text-lg font-semibold text-slate-900 dark:text-white">
+                        NGN {{ "{:,.2f}".format(rrr.amount) }}
+                    </dd>
+                </div>
+
+                <div class="flex justify-between">
+                    <dt class="text-sm text-slate-500 dark:text-slate-400">Biller</dt>
+                    <dd class="text-sm text-slate-900 dark:text-white">{{ rrr.biller_name }}</dd>
+                </div>
+
+                <div class="flex justify-between">
+                    <dt class="text-sm text-slate-500 dark:text-slate-400">Service</dt>
+                    <dd class="text-sm text-slate-900 dark:text-white">{{ rrr.service_name }}</dd>
+                </div>
+
+                <div class="flex justify-between">
+                    <dt class="text-sm text-slate-500 dark:text-slate-400">Service Type ID</dt>
+                    <dd class="text-sm font-mono text-slate-900 dark:text-white">{{ rrr.service_type_id }}</dd>
+                </div>
+
+                <div class="flex justify-between">
+                    <dt class="text-sm text-slate-500 dark:text-slate-400">Generated</dt>
+                    <dd class="text-sm text-slate-900 dark:text-white">{{ rrr.generated_at.strftime('%Y-%m-%d %H:%M:%S') }}</dd>
+                </div>
+
+                {% if rrr.paid_at %}
+                <div class="flex justify-between">
+                    <dt class="text-sm text-slate-500 dark:text-slate-400">Paid At</dt>
+                    <dd class="text-sm text-emerald-600 dark:text-emerald-400">{{ rrr.paid_at.strftime('%Y-%m-%d %H:%M:%S') }}</dd>
+                </div>
+                {% endif %}
+
+                {% if rrr.payment_reference %}
+                <div class="flex justify-between">
+                    <dt class="text-sm text-slate-500 dark:text-slate-400">Payment Reference</dt>
+                    <dd class="text-sm font-mono text-slate-900 dark:text-white">{{ rrr.payment_reference }}</dd>
+                </div>
+                {% endif %}
+
+                {% if rrr.payment_channel %}
+                <div class="flex justify-between">
+                    <dt class="text-sm text-slate-500 dark:text-slate-400">Payment Channel</dt>
+                    <dd class="text-sm text-slate-900 dark:text-white">{{ rrr.payment_channel }}</dd>
+                </div>
+                {% endif %}
+            </dl>
+        </div>
+
+        <!-- Payer Information -->
+        <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800/50">
+            <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-4">Payer Information</h2>
+
+            <dl class="space-y-4">
+                <div class="flex justify-between">
+                    <dt class="text-sm text-slate-500 dark:text-slate-400">Name</dt>
+                    <dd class="text-sm text-slate-900 dark:text-white">{{ rrr.payer_name }}</dd>
+                </div>
+
+                <div class="flex justify-between">
+                    <dt class="text-sm text-slate-500 dark:text-slate-400">Email</dt>
+                    <dd class="text-sm text-slate-900 dark:text-white">{{ rrr.payer_email }}</dd>
+                </div>
+
+                {% if rrr.payer_phone %}
+                <div class="flex justify-between">
+                    <dt class="text-sm text-slate-500 dark:text-slate-400">Phone</dt>
+                    <dd class="text-sm text-slate-900 dark:text-white">{{ rrr.payer_phone }}</dd>
+                </div>
+                {% endif %}
+            </dl>
+
+            {% if rrr.last_status_check %}
+            <div class="mt-6 pt-4 border-t border-slate-200 dark:border-slate-700">
+                <p class="text-xs text-slate-500 dark:text-slate-400">
+                    Last status check: {{ rrr.last_status_check.strftime('%Y-%m-%d %H:%M:%S') }}
+                </p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Mark as Paid Form (for pending RRRs) -->
+    {% if can_mark_paid %}
+    <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800/50"
+         x-data="{ showMarkPaid: false }">
+        <div class="flex items-center justify-between">
+            <div>
+                <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Manual Payment Confirmation</h2>
+                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                    If you've confirmed payment through your bank, you can manually mark this RRR as paid.
+                </p>
+            </div>
+            <button @click="showMarkPaid = !showMarkPaid"
+                    class="text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">
+                <span x-show="!showMarkPaid">Mark as Paid</span>
+                <span x-show="showMarkPaid">Cancel</span>
+            </button>
+        </div>
+
+        <form method="POST" action="/finance/remita/{{ rrr.id }}/mark-paid"
+              x-show="showMarkPaid" x-transition
+              class="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+            <div class="grid gap-4 sm:grid-cols-2">
+                <div>
+                    <label for="payment_reference" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                        Payment Reference <span class="text-rose-500">*</span>
+                    </label>
+                    <input type="text" name="payment_reference" id="payment_reference" required
+                           placeholder="Bank transaction reference"
+                           class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-primary-500 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                </div>
+                <div>
+                    <label for="payment_channel" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                        Payment Channel
+                    </label>
+                    <select name="payment_channel" id="payment_channel"
+                            class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-primary-500 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                        <option value="Bank">Bank Transfer</option>
+                        <option value="Card">Card</option>
+                        <option value="USSD">USSD</option>
+                        <option value="Cash">Cash Deposit</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+            </div>
+            <div class="mt-4 flex justify-end">
+                <button type="submit"
+                        class="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2">
+                    Confirm Payment
+                </button>
+            </div>
+        </form>
+    </div>
+    {% endif %}
+
+    <!-- Source Link -->
+    <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800/50">
+        <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-4">Source</h2>
+        {% if rrr.source_type and rrr.source_id %}
+        <p class="text-sm text-slate-700 dark:text-slate-300">
+            Linked to <span class="font-medium">{{ source_link.label if source_link else rrr.source_type }}</span>:
+            {% if source_link and source_link.url %}
+            <a href="{{ source_link.url }}" class="font-mono text-xs text-primary-600 hover:underline dark:text-primary-400">
+                {{ rrr.source_id }}
+            </a>
+            {% else %}
+            <span class="font-mono text-xs">{{ rrr.source_id }}</span>
+            {% endif %}
+        </p>
+        {% else %}
+        <form method="POST" action="/finance/remita/{{ rrr.id }}/link" class="space-y-3">
+            <div class="grid gap-3 sm:grid-cols-2">
+                <div>
+                    <label for="source_type" class="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
+                        Source Type
+                    </label>
+                    <select name="source_type" id="source_type" required
+                            class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-primary-500 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                        <option value="">Select a source</option>
+                        {% for option in source_options %}
+                        <option value="{{ option.value }}">{{ option.label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label for="source_id" class="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
+                        Source ID
+                    </label>
+                    <input type="text" name="source_id" id="source_id" required
+                           placeholder="Paste the record UUID"
+                           class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-primary-500 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                </div>
+            </div>
+            <div>
+                <label for="source_search" class="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
+                    Search
+                </label>
+                <input type="text" id="source_search"
+                       placeholder="Search by number, reference, or name"
+                       class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-primary-500 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                <div class="mt-2 grid gap-2 sm:grid-cols-3">
+                    <div>
+                        <label for="source_status" class="block text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-1">
+                            Status
+                        </label>
+                        <select id="source_status"
+                                class="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs focus:border-primary-500 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                            <option value="">Any</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="source_date_from" class="block text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-1">
+                            Date From
+                        </label>
+                        <input type="date" id="source_date_from"
+                               class="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs focus:border-primary-500 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                    </div>
+                    <div>
+                        <label for="source_date_to" class="block text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-1">
+                            Date To
+                        </label>
+                        <input type="date" id="source_date_to"
+                               class="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs focus:border-primary-500 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                    </div>
+                </div>
+                <div class="mt-2 flex items-center gap-2">
+                    <button type="button" id="source_recent"
+                            class="rounded-md border border-slate-300 px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800/60">
+                        Show Recent
+                    </button>
+                </div>
+                <div id="source_search_results" class="mt-2 rounded-lg border border-slate-200 dark:border-slate-700 hidden"></div>
+                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    Select a result to fill the Source ID.
+                </p>
+            </div>
+            <div class="flex justify-end">
+                <button type="submit"
+                        class="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2">
+                    Link RRR
+                </button>
+            </div>
+        </form>
+        <script>
+            (function () {
+                const typeEl = document.getElementById("source_type");
+                const searchEl = document.getElementById("source_search");
+                const resultsEl = document.getElementById("source_search_results");
+                const sourceIdEl = document.getElementById("source_id");
+                const statusEl = document.getElementById("source_status");
+                const dateFromEl = document.getElementById("source_date_from");
+                const dateToEl = document.getElementById("source_date_to");
+                const recentBtn = document.getElementById("source_recent");
+                const invoiceStatuses = [
+                    "DRAFT","SUBMITTED","PENDING_APPROVAL","APPROVED","POSTED",
+                    "PARTIALLY_PAID","PAID","ON_HOLD","VOID","DISPUTED"
+                ];
+                const paymentStatuses = [
+                    "DRAFT","PENDING","APPROVED","SENT","CLEARED","VOID","REJECTED"
+                ];
+                let lastQuery = "";
+                let timer = null;
+
+                const clearResults = () => {
+                    resultsEl.innerHTML = "";
+                    resultsEl.classList.add("hidden");
+                };
+
+                const renderResults = (items) => {
+                    if (!items || !items.length) {
+                        clearResults();
+                        return;
+                    }
+                    resultsEl.innerHTML = items.map((item) => `
+                        <button type="button"
+                                data-id="${item.id}"
+                                class="w-full text-left px-3 py-2 border-b border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/60">
+                            <div class="text-sm font-medium text-slate-900 dark:text-white">${item.label}</div>
+                            <div class="text-xs text-slate-500 dark:text-slate-400">${item.sub_label || ""}</div>
+                        </button>
+                    `).join("");
+                    resultsEl.classList.remove("hidden");
+                };
+
+                const fetchResults = async (opts = {}) => {
+                    const type = typeEl.value;
+                    const q = searchEl.value.trim();
+                    if (!type || (!opts.recent && q.length < 2)) {
+                        clearResults();
+                        return;
+                    }
+                    if (!opts.recent && q === lastQuery) return;
+                    lastQuery = q;
+                    const status = statusEl.value;
+                    const dateFrom = dateFromEl.value;
+                    const dateTo = dateToEl.value;
+                    const params = new URLSearchParams({
+                        source_type: type,
+                        q: q,
+                    });
+                    if (status) params.append("status", status);
+                    if (dateFrom) params.append("date_from", dateFrom);
+                    if (dateTo) params.append("date_to", dateTo);
+                    if (opts.recent) params.append("recent", "true");
+                    const url = `/finance/remita/source-search?${params.toString()}`;
+                    const res = await fetch(url, { headers: { "Accept": "application/json" } });
+                    const data = res.ok ? await res.json() : { items: [] };
+                    renderResults(data.items || []);
+                };
+
+                const populateStatusOptions = () => {
+                    const type = typeEl.value;
+                    const options = type === "ap_invoice" ? invoiceStatuses
+                        : (type === "ap_payment" ? paymentStatuses : []);
+                    statusEl.innerHTML = "<option value=\"\">Any</option>";
+                    options.forEach((s) => {
+                        const opt = document.createElement("option");
+                        opt.value = s;
+                        opt.textContent = s.replace(/_/g, " ");
+                        statusEl.appendChild(opt);
+                    });
+                };
+
+                resultsEl.addEventListener("click", (event) => {
+                    const btn = event.target.closest("button[data-id]");
+                    if (!btn) return;
+                    sourceIdEl.value = btn.dataset.id || "";
+                    clearResults();
+                });
+
+                typeEl.addEventListener("change", () => {
+                    lastQuery = "";
+                    populateStatusOptions();
+                    fetchResults();
+                });
+                searchEl.addEventListener("input", () => {
+                    if (timer) clearTimeout(timer);
+                    timer = setTimeout(fetchResults, 250);
+                });
+                statusEl.addEventListener("change", () => fetchResults());
+                dateFromEl.addEventListener("change", () => fetchResults());
+                dateToEl.addEventListener("change", () => fetchResults());
+                recentBtn.addEventListener("click", () => fetchResults({ recent: true }));
+                populateStatusOptions();
+            })();
+        </script>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}

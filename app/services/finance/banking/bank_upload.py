@@ -109,12 +109,38 @@ class BankUploadService:
         Resolve bank code for a payment item.
 
         Uses provided bank_code if available, otherwise looks up from bank_name.
+        Returns bank code as a string, zero-padded to 3 digits.
         """
-        if item.bank_code:
-            return item.bank_code
+        code = item.bank_code
+        if not code:
+            code = self.bank_directory.lookup_bank_code(item.bank_name)
 
-        code = self.bank_directory.lookup_bank_code(item.bank_name)
-        return code or ""
+        if not code:
+            return ""
+
+        # Ensure bank code is formatted as 3-digit string (e.g., "044", "057")
+        code_str = str(code).strip()
+        if code_str.isdigit():
+            return code_str.zfill(3)
+        return code_str
+
+    def _format_account_number(self, account_number: str) -> str:
+        """
+        Format account number as 10-digit string with leading zeros preserved.
+
+        Nigerian bank accounts are 10 digits (NUBAN format).
+        """
+        if not account_number:
+            return ""
+
+        # Remove any spaces or dashes
+        cleaned = str(account_number).strip().replace(" ", "").replace("-", "")
+
+        # If numeric, zero-pad to 10 digits
+        if cleaned.isdigit():
+            return cleaned.zfill(10)
+
+        return cleaned
 
     def _generate_zenith_format(
         self,
@@ -156,10 +182,15 @@ class BankUploadService:
         row_count = 0
         date_str = payment_date.strftime("%d/%m/%Y")
 
+        # Format source/debit account number
+        formatted_source_account = self._format_account_number(source_account_number)
+
         for item in items:
             bank_code = self._resolve_bank_code(item)
             if not bank_code:
                 errors.append(f"Bank code not found for: {item.beneficiary_name} ({item.bank_name})")
+
+            account_number = self._format_account_number(item.account_number)
 
             writer.writerow([
                 item.reference,
@@ -167,9 +198,9 @@ class BankUploadService:
                 str(item.amount),
                 date_str,
                 item.beneficiary_code or "",
-                item.account_number,
+                account_number,
                 bank_code,
-                source_account_number,
+                formatted_source_account,
             ])
             total_amount += item.amount
             row_count += 1
@@ -224,7 +255,7 @@ class BankUploadService:
 
             writer.writerow([
                 idx,
-                item.account_number,
+                self._format_account_number(item.account_number),
                 bank_code,
                 item.beneficiary_name,
                 str(item.amount),
@@ -279,7 +310,7 @@ class BankUploadService:
             remarks = item.narration or item.reference
 
             writer.writerow([
-                item.account_number,
+                self._format_account_number(item.account_number),
                 bank_code,
                 str(item.amount),
                 item.beneficiary_name,
@@ -342,7 +373,7 @@ class BankUploadService:
             writer.writerow([
                 item.reference,
                 item.beneficiary_name,
-                item.account_number,
+                self._format_account_number(item.account_number),
                 bank_code,
                 item.bank_name,
                 str(item.amount),

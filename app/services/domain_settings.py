@@ -584,6 +584,7 @@ email_settings = DomainSettings(SettingDomain.email)
 features_settings = DomainSettings(SettingDomain.features)
 reporting_settings = DomainSettings(SettingDomain.reporting)
 payments_settings = DomainSettings(SettingDomain.payments)
+payroll_settings = DomainSettings(SettingDomain.payroll)
 
 
 # =============================================================================

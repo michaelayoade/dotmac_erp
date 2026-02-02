@@ -67,10 +67,11 @@ def new_case_form(
 
 @router.post("/new")
 def create_case(
-    employee_id: str = Form(...),
-    violation_type: str = Form(...),
-    severity: str = Form(...),
-    subject: str = Form(...),
+    request: Request,
+    employee_id: Optional[str] = Form(None),
+    violation_type: Optional[str] = Form(None),
+    severity: Optional[str] = Form(None),
+    subject: Optional[str] = Form(None),
     description: Optional[str] = Form(None),
     incident_date: Optional[str] = Form(None),
     reported_by_id: Optional[str] = Form(None),
@@ -78,17 +79,64 @@ def create_case(
     db: Session = Depends(get_db),
 ):
     """Create a new disciplinary case."""
-    return discipline_web_service.case_create_response(
-        auth=auth,
-        db=db,
-        employee_id=employee_id,
-        violation_type=violation_type,
-        severity=severity,
-        subject=subject,
-        description=description,
-        incident_date=incident_date,
-        reported_by_id=reported_by_id,
-    )
+    form = getattr(request.state, "csrf_form", None)
+    if form:
+        # Prefer CSRF-parsed form data when available (middleware may consume body).
+        employee_id = form.get("employee_id") or employee_id
+        violation_type = form.get("violation_type") or violation_type
+        severity = form.get("severity") or severity
+        subject = form.get("subject") or subject
+        description = form.get("description") or description
+        incident_date = form.get("incident_date") or incident_date
+        reported_by_id = form.get("reported_by_id") or reported_by_id
+
+    if not employee_id or not violation_type or not severity or not subject:
+        db.rollback()
+        return discipline_web_service.case_new_form_response(
+            request=request,
+            auth=auth,
+            db=db,
+            error="Employee, violation type, severity, and subject are required.",
+            form_data={
+                "employee_id": employee_id or "",
+                "violation_type": violation_type or "",
+                "severity": severity or "",
+                "subject": subject or "",
+                "description": description or "",
+                "incident_date": incident_date or "",
+                "reported_by_id": reported_by_id or "",
+            },
+        )
+    try:
+        return discipline_web_service.case_create_response(
+            auth=auth,
+            db=db,
+            employee_id=employee_id,
+            violation_type=violation_type,
+            severity=severity,
+            subject=subject,
+            description=description,
+            incident_date=incident_date,
+            reported_by_id=reported_by_id,
+        )
+    except Exception as exc:
+        message = getattr(exc, "detail", None) or str(exc)
+        db.rollback()
+        return discipline_web_service.case_new_form_response(
+            request=request,
+            auth=auth,
+            db=db,
+            error=message,
+            form_data={
+                "employee_id": employee_id or "",
+                "violation_type": violation_type or "",
+                "severity": severity or "",
+                "subject": subject or "",
+                "description": description or "",
+                "incident_date": incident_date or "",
+                "reported_by_id": reported_by_id or "",
+            },
+        )
 
 
 @router.get("/{case_id}", response_class=HTMLResponse)

@@ -365,7 +365,7 @@ class PurchaseOrderWebService:
         )
         items_list = [
             {
-                "item_id": item.item_id,
+                "item_id": str(item.item_id),
                 "item_code": item.item_code,
                 "item_name": item.item_name,
                 "standard_cost": float(item.standard_cost) if item.standard_cost else None,

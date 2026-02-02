@@ -1,0 +1,241 @@
+{% extends "admin/base_admin.html" %}
+
+{% block page_title %}Inventory Push to CRM{% endblock %}
+{% block page_subtitle %}Push inventory data from ERP to DotMac CRM{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Breadcrumb -->
+    <nav class="flex items-center gap-2 text-sm">
+        <a href="/admin/sync/crm" class="text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200">CRM Sync</a>
+        <svg class="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+        </svg>
+        <span class="text-slate-900 dark:text-white font-medium">Inventory Push</span>
+    </nav>
+
+    <!-- Messages -->
+    {% if request.query_params.get('success') %}
+    <div class="rounded-xl border border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-900/30 p-4">
+        <div class="flex items-center gap-3">
+            <svg class="h-5 w-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+            </svg>
+            <p class="text-sm font-medium text-emerald-800 dark:text-emerald-200">{{ request.query_params.get('success') }}</p>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if request.query_params.get('error') %}
+    <div class="rounded-xl border border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/30 p-4">
+        <div class="flex items-center gap-3">
+            <svg class="h-5 w-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+            <p class="text-sm font-medium text-red-800 dark:text-red-200">{{ request.query_params.get('error') }}</p>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Main Content -->
+        <div class="lg:col-span-2 space-y-6">
+            <!-- Connection Status -->
+            <div class="admin-card p-6">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Connection Status</h2>
+
+                <div class="space-y-4">
+                    <div class="flex items-center justify-between p-4 rounded-lg bg-slate-50 dark:bg-slate-800/50">
+                        <div class="flex items-center gap-3">
+                            <div class="flex h-10 w-10 items-center justify-center rounded-lg {% if is_configured %}bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400{% else %}bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400{% endif %}">
+                                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <p class="text-sm font-medium text-slate-900 dark:text-white">
+                                    {% if is_configured %}Configured{% else %}Not Configured{% endif %}
+                                </p>
+                                <p class="text-xs text-slate-500 dark:text-slate-400">CRM Inventory Webhook</p>
+                            </div>
+                        </div>
+                        <form method="POST" action="/admin/sync/crm/inventory/health-check">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                            <button type="submit" {% if not is_configured %}disabled{% endif %}
+                                    class="px-3 py-1.5 rounded-lg text-sm font-medium {% if is_configured %}bg-primary-600 text-white hover:bg-primary-700{% else %}bg-slate-200 text-slate-400 cursor-not-allowed{% endif %} transition">
+                                Test Connection
+                            </button>
+                        </form>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                            <p class="text-slate-500 dark:text-slate-400">Webhook URL</p>
+                            <p class="font-mono text-xs text-slate-900 dark:text-white truncate">{{ webhook_url }}</p>
+                        </div>
+                        <div>
+                            <p class="text-slate-500 dark:text-slate-400">API Token</p>
+                            <p class="text-slate-900 dark:text-white">
+                                {% if has_api_token %}
+                                <span class="inline-flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
+                                    <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                                    </svg>
+                                    Configured
+                                </span>
+                                {% else %}
+                                <span class="text-amber-600 dark:text-amber-400">Not set</span>
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Push Actions -->
+            <div class="admin-card p-6">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Push Inventory</h2>
+
+                <form method="POST" action="/admin/sync/crm/inventory/push" class="space-y-6">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+                    <!-- Push Type Selection -->
+                    <div class="space-y-3">
+                        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Push Type</label>
+
+                        <div class="space-y-2">
+                            <label class="flex items-start gap-3 p-4 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer">
+                                <input type="radio" name="push_type" value="full" checked
+                                       class="mt-1 h-4 w-4 text-primary-600 border-slate-300 focus:ring-primary-500">
+                                <div>
+                                    <p class="text-sm font-medium text-slate-900 dark:text-white">Full Inventory Sync</p>
+                                    <p class="text-xs text-slate-500 dark:text-slate-400">Push all {{ total_items }} inventory items with current stock levels</p>
+                                </div>
+                            </label>
+
+                            <label class="flex items-start gap-3 p-4 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer">
+                                <input type="radio" name="push_type" value="low_stock"
+                                       class="mt-1 h-4 w-4 text-primary-600 border-slate-300 focus:ring-primary-500">
+                                <div>
+                                    <p class="text-sm font-medium text-slate-900 dark:text-white">Low Stock Alerts Only</p>
+                                    <p class="text-xs text-slate-500 dark:text-slate-400">Push {{ low_stock_count }} items that are below reorder point</p>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Options -->
+                    <div class="space-y-3">
+                        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Options</label>
+
+                        <label class="flex items-center gap-3">
+                            <input type="checkbox" name="include_zero_stock"
+                                   class="h-4 w-4 text-primary-600 border-slate-300 rounded focus:ring-primary-500">
+                            <span class="text-sm text-slate-700 dark:text-slate-300">Include items with zero stock</span>
+                        </label>
+                    </div>
+
+                    <!-- Submit -->
+                    <div class="flex items-center gap-3">
+                        <button type="submit" {% if not is_configured %}disabled{% endif %}
+                                class="px-6 py-2.5 rounded-xl text-sm font-semibold {% if is_configured %}bg-primary-600 text-white hover:bg-primary-700{% else %}bg-slate-200 text-slate-400 cursor-not-allowed{% endif %} transition">
+                            <span class="flex items-center gap-2">
+                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                                </svg>
+                                Push to CRM
+                            </span>
+                        </button>
+
+                        {% if not is_configured %}
+                        <p class="text-sm text-amber-600 dark:text-amber-400">
+                            Configure CRM_INVENTORY_WEBHOOK_URL and CRM_API_TOKEN to enable push
+                        </p>
+                        {% endif %}
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="space-y-6">
+            <!-- Stats -->
+            <div class="admin-card p-6">
+                <h3 class="text-sm font-semibold text-slate-900 dark:text-white mb-4">Inventory Stats</h3>
+
+                <div class="space-y-4">
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm text-slate-600 dark:text-slate-400">Total Items</span>
+                        <span class="text-lg font-semibold text-slate-900 dark:text-white">{{ total_items }}</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm text-slate-600 dark:text-slate-400">Low Stock Items</span>
+                        <span class="text-lg font-semibold {% if low_stock_count > 0 %}text-amber-600 dark:text-amber-400{% else %}text-emerald-600 dark:text-emerald-400{% endif %}">{{ low_stock_count }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Setup Guide -->
+            <div class="admin-card p-6">
+                <h3 class="text-sm font-semibold text-slate-900 dark:text-white mb-4">Setup Guide</h3>
+
+                <div class="space-y-4 text-sm">
+                    <div class="flex gap-3">
+                        <div class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full {% if has_api_token %}bg-emerald-100 text-emerald-600{% else %}bg-slate-200 text-slate-500{% endif %}">
+                            {% if has_api_token %}
+                            <svg class="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                            </svg>
+                            {% else %}1{% endif %}
+                        </div>
+                        <div>
+                            <p class="font-medium text-slate-900 dark:text-white">Set CRM_API_TOKEN</p>
+                            <p class="text-slate-500 dark:text-slate-400">Your CRM API bearer token</p>
+                        </div>
+                    </div>
+
+                    <div class="flex gap-3">
+                        <div class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full {% if webhook_url != 'Not configured' %}bg-emerald-100 text-emerald-600{% else %}bg-slate-200 text-slate-500{% endif %}">
+                            {% if webhook_url != 'Not configured' %}
+                            <svg class="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                            </svg>
+                            {% else %}2{% endif %}
+                        </div>
+                        <div>
+                            <p class="font-medium text-slate-900 dark:text-white">Set CRM_INVENTORY_WEBHOOK_URL</p>
+                            <p class="text-slate-500 dark:text-slate-400">CRM endpoint to receive inventory</p>
+                        </div>
+                    </div>
+
+                    <div class="flex gap-3">
+                        <div class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-200 text-slate-500">
+                            3
+                        </div>
+                        <div>
+                            <p class="font-medium text-slate-900 dark:text-white">Test & Push</p>
+                            <p class="text-slate-500 dark:text-slate-400">Test connection then push data</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Environment Variables -->
+            <div class="admin-card p-6">
+                <h3 class="text-sm font-semibold text-slate-900 dark:text-white mb-4">Environment Variables</h3>
+
+                <div class="space-y-3 font-mono text-xs">
+                    <div class="p-2 rounded bg-slate-100 dark:bg-slate-800">
+                        <p class="text-slate-500">CRM_API_TOKEN=</p>
+                        <p class="text-slate-900 dark:text-white">your-crm-bearer-token</p>
+                    </div>
+                    <div class="p-2 rounded bg-slate-100 dark:bg-slate-800">
+                        <p class="text-slate-500">CRM_INVENTORY_WEBHOOK_URL=</p>
+                        <p class="text-slate-900 dark:text-white">https://crm.domain/api/v1/inventory/sync</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

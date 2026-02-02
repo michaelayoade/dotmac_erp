@@ -5,6 +5,7 @@ Provides admin dashboard and management pages with admin role requirement.
 """
 
 from typing import Any
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, Form, Query, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -69,6 +70,7 @@ async def admin_users_create(
     form = getattr(request.state, "csrf_form", None)
     if form is None:
         form = await request.form()
+    roles = form.getlist("roles") if hasattr(form, "getlist") else []
     form = _normalize_form(form)
 
     first_name = (form.get("first_name") or "").strip()
@@ -82,7 +84,6 @@ async def admin_users_create(
     phone = (form.get("phone") or "").strip()
     status = (form.get("status") or "active").strip()
     must_change_password = form.get("must_change_password") or ""
-    roles = form.getlist("roles") if hasattr(form, "getlist") else []
 
     return admin_web_service.users_create_response(
         request,
@@ -136,6 +137,7 @@ async def admin_users_update(
     form = getattr(request.state, "csrf_form", None)
     if form is None:
         form = await request.form()
+    roles = form.getlist("roles") if hasattr(form, "getlist") else []
     form = _normalize_form(form)
 
     first_name = (form.get("first_name") or "").strip()
@@ -150,7 +152,6 @@ async def admin_users_update(
     status = (form.get("status") or "active").strip()
     must_change_password = form.get("must_change_password") or ""
     email_verified = form.get("email_verified") or ""
-    roles = form.getlist("roles") if hasattr(form, "getlist") else []
 
     return admin_web_service.users_update_response(
         request,
@@ -633,88 +634,6 @@ async def admin_settings_create(
     )
 
 
-@router.get("/settings/{setting_id}", response_class=HTMLResponse)
-def admin_settings_view(
-    request: Request,
-    setting_id: str,
-    db: Session = Depends(get_db),
-    auth: WebAuthContext = Depends(optional_web_auth),
-):
-    """View setting details (same as edit)."""
-    return admin_web_service.settings_view_response(request, db, auth, setting_id)
-
-
-@router.get("/settings/{setting_id}/edit", response_class=HTMLResponse)
-def admin_settings_edit(
-    request: Request,
-    setting_id: str,
-    db: Session = Depends(get_db),
-    auth: WebAuthContext = Depends(optional_web_auth),
-):
-    """Show edit setting form."""
-    return admin_web_service.settings_edit_response(request, db, auth, setting_id)
-
-
-@router.post("/settings/{setting_id}/edit", response_class=HTMLResponse)
-async def admin_settings_update(
-    request: Request,
-    setting_id: str,
-    db: Session = Depends(get_db),
-    auth: WebAuthContext = Depends(optional_web_auth),
-):
-    """Handle edit setting form submission."""
-    form = getattr(request.state, "csrf_form", None)
-    if form is None:
-        form = await request.form()
-    form = _normalize_form(form)
-
-    domain = (form.get("domain") or "").strip()
-    key = (form.get("key") or "").strip()
-    value_type = (form.get("value_type") or "").strip()
-    value = form.get("value") or ""
-    is_secret = form.get("is_secret") or ""
-    is_active = form.get("is_active") or ""
-    if not (domain and key and value_type):
-        content_type = (request.headers.get("content-type") or "").lower()
-        if content_type.startswith("application/json"):
-            try:
-                payload = await request.json()
-            except Exception:
-                payload = {}
-            if isinstance(payload, dict):
-                domain = domain or str(payload.get("domain") or "").strip()
-                key = key or str(payload.get("key") or "").strip()
-                value_type = value_type or str(payload.get("value_type") or "").strip()
-                if not value:
-                    value = payload.get("value") or ""
-                if not is_secret:
-                    is_secret = payload.get("is_secret") or ""
-                if not is_active:
-                    is_active = payload.get("is_active") or ""
-
-    return admin_web_service.settings_update_response(
-        request,
-        db,
-        auth,
-        setting_id,
-        domain,
-        key,
-        value_type,
-        value,
-        is_secret,
-        is_active,
-    )
-
-
-@router.post("/settings/{setting_id}/delete")
-def admin_settings_delete(
-    request: Request,
-    setting_id: str,
-    db: Session = Depends(get_db),
-    auth: WebAuthContext = Depends(optional_web_auth),
-):
-    """Delete a setting."""
-    return admin_web_service.settings_delete_response(request, db, auth, setting_id)
 
 
 @router.get("/audit-logs", response_class=HTMLResponse)
@@ -905,7 +824,7 @@ async def admin_settings_organization_update(
     form = getattr(request.state, "csrf_form", None)
     if form is None:
         form = await request.form()
-    data = dict(form)
+    data = _normalize_form(form)
 
     if auth and auth.organization_id:
         success, error = admin_settings_web_service.update_organization(db, auth.organization_id, data)
@@ -1090,3 +1009,87 @@ def admin_settings_advanced(
 ):
     """Advanced settings (raw DomainSettings CRUD)."""
     return admin_web_service.settings_response(request, db, auth, page, search, status, domain)
+
+
+@router.get("/settings/{setting_id}", response_class=HTMLResponse)
+def admin_settings_view(
+    request: Request,
+    setting_id: UUID,
+    db: Session = Depends(get_db),
+    auth: WebAuthContext = Depends(optional_web_auth),
+):
+    """View setting details (same as edit)."""
+    return admin_web_service.settings_view_response(request, db, auth, str(setting_id))
+
+
+@router.get("/settings/{setting_id}/edit", response_class=HTMLResponse)
+def admin_settings_edit(
+    request: Request,
+    setting_id: UUID,
+    db: Session = Depends(get_db),
+    auth: WebAuthContext = Depends(optional_web_auth),
+):
+    """Show edit setting form."""
+    return admin_web_service.settings_edit_response(request, db, auth, str(setting_id))
+
+
+@router.post("/settings/{setting_id}/edit", response_class=HTMLResponse)
+async def admin_settings_update(
+    request: Request,
+    setting_id: UUID,
+    db: Session = Depends(get_db),
+    auth: WebAuthContext = Depends(optional_web_auth),
+):
+    """Handle edit setting form submission."""
+    form = getattr(request.state, "csrf_form", None)
+    if form is None:
+        form = await request.form()
+    form = _normalize_form(form)
+
+    domain = (form.get("domain") or "").strip()
+    key = (form.get("key") or "").strip()
+    value_type = (form.get("value_type") or "").strip()
+    value = form.get("value") or ""
+    is_secret = form.get("is_secret") or ""
+    is_active = form.get("is_active") or ""
+    if not (domain and key and value_type):
+        content_type = (request.headers.get("content-type") or "").lower()
+        if content_type.startswith("application/json"):
+            try:
+                payload = await request.json()
+            except Exception:
+                payload = {}
+            if isinstance(payload, dict):
+                domain = domain or str(payload.get("domain") or "").strip()
+                key = key or str(payload.get("key") or "").strip()
+                value_type = value_type or str(payload.get("value_type") or "").strip()
+                if not value:
+                    value = payload.get("value") or ""
+                if not is_secret:
+                    is_secret = payload.get("is_secret") or ""
+                if not is_active:
+                    is_active = payload.get("is_active") or ""
+
+    return admin_web_service.settings_update_response(
+        request,
+        db,
+        auth,
+        str(setting_id),
+        domain,
+        key,
+        value_type,
+        value,
+        is_secret,
+        is_active,
+    )
+
+
+@router.post("/settings/{setting_id}/delete")
+def admin_settings_delete(
+    request: Request,
+    setting_id: UUID,
+    db: Session = Depends(get_db),
+    auth: WebAuthContext = Depends(optional_web_auth),
+):
+    """Delete a setting."""
+    return admin_web_service.settings_delete_response(request, db, auth, str(setting_id))

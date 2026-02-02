@@ -454,7 +454,7 @@ def base_context(
         db: Optional database session for loading org branding and notifications
 
     Returns:
-        Dict with common template context values (without request - use new TemplateResponse signature)
+        Dict with common template context values, including request for TemplateResponse.
     """
     # Get org-specific branding if db session available
     org_branding = None
@@ -528,6 +528,7 @@ def base_context(
     )
 
     return {
+        "request": request,
         "title": page_title,
         "page_title": page_title,
         "brand": org_branding or brand_context(),

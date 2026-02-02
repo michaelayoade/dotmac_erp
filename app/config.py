@@ -25,6 +25,17 @@ class Settings:
     avatar_allowed_types: str = os.getenv("AVATAR_ALLOWED_TYPES", "image/jpeg,image/png,image/gif,image/webp")
     avatar_url_prefix: str = os.getenv("AVATAR_URL_PREFIX", "/static/avatars")
 
+    # Branding asset uploads
+    branding_upload_dir: str = os.getenv("BRANDING_UPLOAD_DIR", "static/branding")
+    branding_max_size_bytes: int = int(
+        os.getenv("BRANDING_MAX_SIZE_BYTES", str(5 * 1024 * 1024))
+    )  # 5MB
+    branding_allowed_types: str = os.getenv(
+        "BRANDING_ALLOWED_TYPES",
+        "image/jpeg,image/png,image/gif,image/webp,image/svg+xml,image/x-icon,image/vnd.microsoft.icon",
+    )
+    branding_url_prefix: str = os.getenv("BRANDING_URL_PREFIX", "/static/branding")
+
     # Branding
     brand_name: str = os.getenv("BRAND_NAME", "Dotmac ERP")
     brand_tagline: str = os.getenv(
@@ -111,6 +122,34 @@ class Settings:
     crm_request_timeout: float = float(os.getenv("CRM_REQUEST_TIMEOUT", "30.0"))
     # CRM max retries for failed requests
     crm_max_retries: int = int(os.getenv("CRM_MAX_RETRIES", "3"))
+    # CRM inventory webhook URL (for pushing inventory updates TO CRM)
+    crm_inventory_webhook_url: str | None = os.getenv("CRM_INVENTORY_WEBHOOK_URL") or None
+    # Push inventory changes when stock changes by this percentage (0 = push all changes)
+    crm_inventory_push_threshold_percent: int = int(os.getenv("CRM_INVENTORY_PUSH_THRESHOLD_PERCENT", "10"))
+
+    # ==========================================================================
+    # Remita Integration (RRR for government payments)
+    # ==========================================================================
+    # Remita merchant ID
+    remita_merchant_id: str = os.getenv("REMITA_MERCHANT_ID", "")
+    # Remita API key
+    remita_api_key: str = os.getenv("REMITA_API_KEY", "")
+    # Production mode (True for live, False for demo/sandbox)
+    remita_is_live: bool = os.getenv("REMITA_IS_LIVE", "false").lower() == "true"
+
+    # ==========================================================================
+    # Splynx Integration (ISP billing - selfcare.dotmac.ng)
+    # ==========================================================================
+    # Splynx API base URL
+    splynx_api_url: str = os.getenv("SPLYNX_API_URL", "https://selfcare.dotmac.ng")
+    # Splynx API key (first part of Basic auth)
+    splynx_api_key: str = os.getenv("SPLYNX_API_KEY", "")
+    # Splynx API secret (second part of Basic auth)
+    splynx_api_secret: str = os.getenv("SPLYNX_API_SECRET", "")
+    # Request timeout in seconds
+    splynx_request_timeout: float = float(os.getenv("SPLYNX_REQUEST_TIMEOUT", "60.0"))
+    # Max retries for failed requests
+    splynx_max_retries: int = int(os.getenv("SPLYNX_MAX_RETRIES", "3"))
 
 
 settings = Settings()

@@ -135,11 +135,33 @@ class ExpenseClaimsWebService:
         }
         paystack_enabled = resolve_value(db, SettingDomain.payments, "paystack_enabled")
         transfers_enabled = resolve_value(db, SettingDomain.payments, "paystack_transfers_enabled")
+
+        # Check for existing active payment intent to prevent duplicate payments
+        has_active_payment = False
+        if claim.status == ExpenseClaimStatus.APPROVED:
+            from app.models.finance.payments.payment_intent import (
+                PaymentIntent,
+                PaymentIntentStatus,
+            )
+
+            active_statuses = [PaymentIntentStatus.PENDING, PaymentIntentStatus.PROCESSING]
+            has_active_payment = (
+                db.query(PaymentIntent)
+                .filter(
+                    PaymentIntent.source_type == "EXPENSE_CLAIM",
+                    PaymentIntent.source_id == claim_uuid,
+                    PaymentIntent.status.in_(active_statuses),
+                )
+                .first()
+                is not None
+            )
+
         can_paystack = (
             (auth.is_admin or auth.has_module_access("finance"))
             and bool(paystack_enabled)
             and bool(transfers_enabled)
             and claim.status == ExpenseClaimStatus.APPROVED
+            and not has_active_payment
         )
 
         context = base_context(request, auth, f"Claim {claim.claim_number}", "claims")
@@ -149,6 +171,7 @@ class ExpenseClaimsWebService:
                 "can_submit": can_submit,
                 "can_act": can_act,
                 "can_paystack": can_paystack,
+                "has_active_payment": has_active_payment,
                 "action": request.query_params.get("action"),
                 "error": request.query_params.get("error"),
             }

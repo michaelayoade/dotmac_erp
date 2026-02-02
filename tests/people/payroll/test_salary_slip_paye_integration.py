@@ -165,6 +165,8 @@ class TestPAYEIntegration:
             annual_rent=Decimal("1200000"),
             pension_amount=Decimal("288000"),
             pension_rate=Decimal("0.08"),
+            employer_pension_amount=Decimal("360000"),
+            employer_pension_rate=Decimal("0.10"),
             nhf_amount=Decimal("90000"),
             nhf_rate=Decimal("0.025"),
             nhis_amount=Decimal("0"),

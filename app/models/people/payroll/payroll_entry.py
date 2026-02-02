@@ -29,6 +29,8 @@ from app.models.people.base import AuditMixin, ERPNextSyncMixin, StatusTrackingM
 from app.models.people.payroll.salary_structure import PayrollFrequency
 
 if TYPE_CHECKING:
+    from app.models.finance.banking.bank_account import BankAccount
+    from app.models.finance.gl.account import Account
     from app.models.finance.gl.journal_entry import JournalEntry
     from app.models.people.hr.department import Department
     from app.models.people.payroll.salary_slip import SalarySlip
@@ -137,6 +139,18 @@ class PayrollEntry(Base, AuditMixin, ERPNextSyncMixin, StatusTrackingMixin):
         nullable=True,
         comment="Filter by designation",
     )
+    source_bank_account_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("banking.bank_accounts.bank_account_id"),
+        nullable=True,
+        comment="Payment bank account for bank upload",
+    )
+    expense_account_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("gl.account.account_id"),
+        nullable=True,
+        comment="GL expense account for payroll posting (overrides org default)",
+    )
 
     # Totals (aggregated from slips)
     total_gross_pay: Mapped[Decimal] = mapped_column(
@@ -167,6 +181,32 @@ class PayrollEntry(Base, AuditMixin, ERPNextSyncMixin, StatusTrackingMixin):
     salary_slips_submitted: Mapped[bool] = mapped_column(
         Boolean,
         default=False,
+    )
+
+    # Payslip email tracking
+    payslips_email_status: Mapped[Optional[str]] = mapped_column(
+        String(20),
+        nullable=True,
+    )
+    payslips_email_queued_at: Mapped[Optional[datetime]] = mapped_column(
+        nullable=True,
+    )
+    payslips_email_queued_by_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("people.id"),
+        nullable=True,
+    )
+    payslips_email_total_count: Mapped[Optional[int]] = mapped_column(
+        nullable=True,
+    )
+    payslips_email_processed_count: Mapped[Optional[int]] = mapped_column(
+        nullable=True,
+    )
+    payslips_email_error_count: Mapped[Optional[int]] = mapped_column(
+        nullable=True,
+    )
+    payslips_email_last_run_at: Mapped[Optional[datetime]] = mapped_column(
+        nullable=True,
     )
 
     # GL Integration (consolidated posting)
@@ -202,6 +242,14 @@ class PayrollEntry(Base, AuditMixin, ERPNextSyncMixin, StatusTrackingMixin):
         "SalarySlip",
         foreign_keys="SalarySlip.payroll_entry_id",
         back_populates="payroll_entry",
+    )
+    source_bank_account: Mapped[Optional["BankAccount"]] = relationship(
+        "BankAccount",
+        foreign_keys=[source_bank_account_id],
+    )
+    expense_account: Mapped[Optional["Account"]] = relationship(
+        "Account",
+        foreign_keys=[expense_account_id],
     )
     journal_entry: Mapped[Optional["JournalEntry"]] = relationship(
         "JournalEntry",

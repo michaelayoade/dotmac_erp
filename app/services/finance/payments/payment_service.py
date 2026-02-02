@@ -5,11 +5,12 @@ Handles payment intent creation and processing for Paystack integration.
 """
 import logging
 from datetime import datetime, timedelta, timezone
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Any, Optional, cast
 from uuid import UUID, uuid4
 
 from fastapi import HTTPException
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.finance.ar.customer import Customer
@@ -106,6 +107,34 @@ class PaymentService:
         if invoice.balance_due <= Decimal("0"):
             raise HTTPException(status_code=400, detail="Invoice is already fully paid")
 
+        # Check for existing active payment intent to prevent duplicate payments
+        active_statuses = [PaymentIntentStatus.PENDING, PaymentIntentStatus.PROCESSING]
+        existing_intent = (
+            self.db.query(PaymentIntent)
+            .filter(
+                PaymentIntent.source_type == "INVOICE",
+                PaymentIntent.source_id == inv_id,
+                PaymentIntent.status.in_(active_statuses),
+            )
+            .first()
+        )
+        if existing_intent:
+            expires_at = existing_intent.expires_at
+            if expires_at and expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=timezone.utc)
+            if expires_at and expires_at <= datetime.now(timezone.utc):
+                existing_intent.status = PaymentIntentStatus.EXPIRED
+                self.db.flush()
+            else:
+                raise HTTPException(
+                    status_code=409,
+                    detail=(
+                        "A payment is already in progress for this invoice "
+                        f"(status: {existing_intent.status.value}). "
+                        "Please wait for it to complete or check the payment history."
+                    ),
+                )
+
         # Get customer and validate email
         customer = self.db.get(Customer, invoice.customer_id)
         if not customer:
@@ -127,8 +156,12 @@ class PaymentService:
         short_uuid = uuid4().hex[:8]
         reference = f"INV-{invoice.invoice_number}-{short_uuid}"
 
-        # Amount in kobo (Naira * 100)
-        amount_kobo = int(invoice.balance_due * 100)
+        # Amount in kobo (Naira * 100) - use round to avoid truncation
+        amount_kobo = int(
+            (Decimal(invoice.balance_due) * Decimal("100")).to_integral_value(
+                rounding=ROUND_HALF_UP
+            )
+        )
 
         # Build metadata
         intent_metadata = {
@@ -217,6 +250,26 @@ class PaymentService:
                 result = client.verify_transaction(reference)
 
             if result.status == "success":
+                try:
+                    self._validate_amount_and_currency(
+                        intent=intent,
+                        amount_kobo=result.amount,
+                        currency=result.currency,
+                        context="verify",
+                    )
+                except ValueError as e:
+                    self.mark_payment_failed(
+                        intent,
+                        str(e),
+                        gateway_response={
+                            "status": result.status,
+                            "amount": result.amount,
+                            "currency": result.currency,
+                            "reference": result.reference,
+                        },
+                    )
+                    raise HTTPException(status_code=400, detail=str(e))
+
                 if result.paid_at:
                     try:
                         paid_at = datetime.fromisoformat(result.paid_at.replace("Z", "+00:00"))
@@ -250,6 +303,53 @@ class PaymentService:
             raise
 
         return intent
+
+    @staticmethod
+    def _validate_amount_and_currency(
+        intent: PaymentIntent,
+        amount_kobo: int,
+        currency: str,
+        context: str,
+    ) -> None:
+        """Validate Paystack amount/currency against our intent."""
+        expected_amount_kobo = int(
+            (Decimal(intent.amount) * Decimal("100")).to_integral_value(
+                rounding=ROUND_HALF_UP
+            )
+        )
+        expected_currency = intent.currency_code.upper()
+        paystack_currency = (currency or "NGN").upper()
+
+        amount_diff = abs(int(amount_kobo) - expected_amount_kobo)
+        if amount_diff > 1:
+            logger.error(
+                "SECURITY: Amount mismatch in %s! Expected %s kobo, got %s kobo. "
+                "Intent: %s, Reference: %s",
+                context,
+                expected_amount_kobo,
+                amount_kobo,
+                intent.intent_id,
+                intent.paystack_reference,
+            )
+            raise ValueError(
+                f"Amount mismatch: expected {expected_amount_kobo} kobo, "
+                f"received {amount_kobo} kobo"
+            )
+
+        if paystack_currency != expected_currency:
+            logger.error(
+                "SECURITY: Currency mismatch in %s! Expected %s, got %s. "
+                "Intent: %s, Reference: %s",
+                context,
+                expected_currency,
+                paystack_currency,
+                intent.intent_id,
+                intent.paystack_reference,
+            )
+            raise ValueError(
+                f"Currency mismatch: expected {expected_currency}, "
+                f"received {paystack_currency}"
+            )
 
     def list_pending_transfers(self) -> list[PaymentIntent]:
         """List pending outbound transfers for the organization."""
@@ -293,26 +393,45 @@ class PaymentService:
         Raises:
             HTTPException: If processing fails
         """
-        # Check if already processed (idempotency)
-        if intent.status == PaymentIntentStatus.COMPLETED:
-            logger.info(f"Payment intent {intent.intent_id} already completed")
-            if intent.customer_payment_id:
-                return intent.customer_payment_id
+        from sqlalchemy import select
+
+        # Re-fetch intent with row-level lock to prevent race conditions
+        # between webhook and manual verification
+        locked_intent = self.db.execute(
+            select(PaymentIntent)
+            .where(PaymentIntent.intent_id == intent.intent_id)
+            .with_for_update(nowait=False)
+        ).scalar_one_or_none()
+
+        if not locked_intent:
+            raise HTTPException(
+                status_code=404,
+                detail="Payment intent not found",
+            )
+
+        # Check if already processed (idempotency) - using locked row
+        if locked_intent.status == PaymentIntentStatus.COMPLETED:
+            logger.info(f"Payment intent {locked_intent.intent_id} already completed")
+            if locked_intent.customer_payment_id:
+                return locked_intent.customer_payment_id
             raise HTTPException(
                 status_code=400,
                 detail="Payment already processed but customer_payment_id missing",
             )
 
         # Only process PENDING or PROCESSING intents
-        if intent.status not in [PaymentIntentStatus.PENDING, PaymentIntentStatus.PROCESSING]:
+        if locked_intent.status not in [PaymentIntentStatus.PENDING, PaymentIntentStatus.PROCESSING]:
             raise HTTPException(
                 status_code=400,
-                detail=f"Cannot process payment with status '{intent.status.value}'",
+                detail=f"Cannot process payment with status '{locked_intent.status.value}'",
             )
 
-        # Update status to PROCESSING
-        intent.status = PaymentIntentStatus.PROCESSING
+        # Update status to PROCESSING using the locked intent
+        locked_intent.status = PaymentIntentStatus.PROCESSING
         self.db.flush()
+
+        # Use locked_intent from here on
+        intent = locked_intent
 
         # Validate source
         if intent.source_type != "INVOICE":
@@ -520,6 +639,36 @@ class PaymentService:
 
         claim_id = coerce_uuid(expense_claim_id)
 
+        # Check for existing active payment intent (idempotency check)
+        active_statuses = [
+            PaymentIntentStatus.PENDING,
+            PaymentIntentStatus.PROCESSING,
+        ]
+        existing_intent = self.db.scalar(
+            select(PaymentIntent).where(
+                PaymentIntent.source_type == "EXPENSE_CLAIM",
+                PaymentIntent.source_id == claim_id,
+                PaymentIntent.status.in_(active_statuses),
+            )
+        )
+
+        if existing_intent:
+            # Check if expired
+            expires_at = existing_intent.expires_at
+            if expires_at and expires_at <= datetime.now(timezone.utc):
+                # Mark as expired and allow new intent
+                existing_intent.status = PaymentIntentStatus.EXPIRED
+                self.db.flush()
+                logger.info(
+                    f"Expired stale payment intent {existing_intent.intent_id} for claim {claim_id}"
+                )
+            else:
+                # Return existing active intent
+                logger.info(
+                    f"Returning existing payment intent {existing_intent.intent_id} for claim {claim_id}"
+                )
+                return existing_intent
+
         # Verify transfers are enabled
         transfers_enabled = resolve_value(
             self.db, SettingDomain.payments, "paystack_transfers_enabled"
@@ -530,8 +679,12 @@ class PaymentService:
                 detail="Paystack transfers are not enabled",
             )
 
-        # Get expense claim
-        claim = self.db.get(ExpenseClaim, claim_id)
+        # Get expense claim with row-level lock to prevent race conditions
+        claim = self.db.scalar(
+            select(ExpenseClaim)
+            .where(ExpenseClaim.claim_id == claim_id)
+            .with_for_update(nowait=False)
+        )
         if not claim:
             raise HTTPException(status_code=404, detail=f"Expense claim {expense_claim_id} not found")
         if claim.organization_id != self.organization_id:
@@ -576,8 +729,12 @@ class PaymentService:
         short_uuid = uuid4().hex[:8]
         reference = f"EXP-{claim.claim_number}-{short_uuid}"
 
-        # Amount in kobo (Naira * 100)
-        amount_kobo = int(claim.net_payable_amount * 100)
+        # Amount in kobo (Naira * 100) - use round to avoid truncation
+        amount_kobo = int(
+            (Decimal(claim.net_payable_amount) * Decimal("100")).to_integral_value(
+                rounding=ROUND_HALF_UP
+            )
+        )
 
         # Build metadata
         intent_metadata = {
@@ -606,6 +763,10 @@ class PaymentService:
                 description=f"Expense reimbursement for {employee.full_name}",
                 metadata=intent_metadata,
             )
+
+        # Store verified account name on claim for audit trail
+        claim.recipient_account_name = account_info.account_name
+        self.db.flush()
 
         # Create payment intent
         intent = PaymentIntent(
@@ -664,6 +825,8 @@ class PaymentService:
         Raises:
             HTTPException: If transfer initiation fails
         """
+        from app.models.expense.expense_claim import ExpenseClaim, ExpenseClaimStatus
+
         if intent.direction != PaymentDirection.OUTBOUND:
             raise HTTPException(
                 status_code=400,
@@ -682,8 +845,40 @@ class PaymentService:
                 detail="Transfer recipient code is missing",
             )
 
-        # Amount in kobo
-        amount_kobo = int(intent.amount * 100)
+        # Check intent expiration
+        if intent.expires_at and intent.expires_at <= datetime.now(timezone.utc):
+            intent.status = PaymentIntentStatus.EXPIRED
+            self.db.flush()
+            raise HTTPException(
+                status_code=400,
+                detail="Payment intent has expired. Please create a new one.",
+            )
+
+        # Lock the expense claim to prevent concurrent modifications
+        # This prevents race conditions where claim is cancelled while transfer is in progress
+        if intent.source_type == "EXPENSE_CLAIM" and intent.source_id:
+            locked_claim = self.db.scalar(
+                select(ExpenseClaim)
+                .where(ExpenseClaim.claim_id == intent.source_id)
+                .with_for_update(nowait=False)
+            )
+            if not locked_claim:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Expense claim not found",
+                )
+            if locked_claim.status != ExpenseClaimStatus.APPROVED:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Cannot initiate transfer - claim status is '{locked_claim.status.value}'",
+                )
+
+        # Amount in kobo - use round to avoid truncation
+        amount_kobo = int(
+            (Decimal(intent.amount) * Decimal("100")).to_integral_value(
+                rounding=ROUND_HALF_UP
+            )
+        )
 
         # Initiate the transfer
         with PaystackClient(paystack_config) as client:
@@ -697,17 +892,62 @@ class PaymentService:
 
         # Update intent with transfer code
         intent.transfer_code = result.transfer_code
-        intent.status = PaymentIntentStatus.PROCESSING
-        self.db.flush()
 
-        logger.info(
-            f"Initiated transfer {result.transfer_code} for intent {intent.intent_id}",
-            extra={
-                "intent_id": str(intent.intent_id),
+        # Check immediate status from Paystack response
+        # Some transfers complete instantly, no need to wait for webhook
+        if result.status == "success":
+            logger.info(
+                f"Transfer {result.transfer_code} completed immediately for intent {intent.intent_id}",
+                extra={
+                    "intent_id": str(intent.intent_id),
+                    "transfer_code": result.transfer_code,
+                    "status": result.status,
+                },
+            )
+            # Process as successful immediately
+            intent.status = PaymentIntentStatus.PROCESSING  # Set first for the lock check
+            self.db.flush()
+            self.process_successful_transfer(
+                intent=intent,
+                completed_at=datetime.now(timezone.utc),
+                gateway_response={
+                    "immediate": True,
+                    "transfer_code": result.transfer_code,
+                    "status": result.status,
+                    "amount": result.amount,
+                    "currency": result.currency,
+                },
+                fee_kobo=None,  # Fee comes in webhook or verify
+            )
+        elif result.status == "failed":
+            logger.warning(
+                f"Transfer {result.transfer_code} failed immediately for intent {intent.intent_id}",
+                extra={
+                    "intent_id": str(intent.intent_id),
+                    "transfer_code": result.transfer_code,
+                    "status": result.status,
+                },
+            )
+            intent.status = PaymentIntentStatus.FAILED
+            intent.gateway_response = {
+                "immediate": True,
                 "transfer_code": result.transfer_code,
-                "amount": str(intent.amount),
-            },
-        )
+                "status": result.status,
+            }
+            self.db.flush()
+        else:
+            # Status is "pending" or other - wait for webhook
+            intent.status = PaymentIntentStatus.PROCESSING
+            self.db.flush()
+            logger.info(
+                f"Initiated transfer {result.transfer_code} for intent {intent.intent_id} (status: {result.status})",
+                extra={
+                    "intent_id": str(intent.intent_id),
+                    "transfer_code": result.transfer_code,
+                    "amount": str(intent.amount),
+                    "status": result.status,
+                },
+            )
 
         return intent
 
@@ -729,19 +969,39 @@ class PaymentService:
             gateway_response: Full Paystack response
             fee_kobo: Transfer fee in kobo (smallest currency unit)
         """
+        from sqlalchemy import select
+
         from app.models.expense.expense_claim import ExpenseClaim, ExpenseClaimStatus
 
-        # Check if already processed
-        if intent.status == PaymentIntentStatus.COMPLETED:
-            logger.info(f"Transfer intent {intent.intent_id} already completed")
+        # Re-fetch intent with row-level lock to prevent race conditions
+        # between webhook and manual polling
+        locked_intent = self.db.execute(
+            select(PaymentIntent)
+            .where(PaymentIntent.intent_id == intent.intent_id)
+            .with_for_update(nowait=False)
+        ).scalar_one_or_none()
+
+        if not locked_intent:
+            logger.warning(
+                "Transfer intent %s not found during processing",
+                intent.intent_id,
+            )
+            raise HTTPException(status_code=404, detail="Transfer intent not found")
+
+        # Check if already processed (using locked row)
+        if locked_intent.status == PaymentIntentStatus.COMPLETED:
+            logger.info(f"Transfer intent {locked_intent.intent_id} already completed")
             return
 
         # Only process PROCESSING intents
-        if intent.status != PaymentIntentStatus.PROCESSING:
+        if locked_intent.status != PaymentIntentStatus.PROCESSING:
             raise HTTPException(
                 status_code=400,
-                detail=f"Cannot complete transfer with status '{intent.status.value}'",
+                detail=f"Cannot complete transfer with status '{locked_intent.status.value}'",
             )
+
+        # Use locked_intent from here on
+        intent = locked_intent
 
         # Update expense claim status
         claim = None
@@ -751,6 +1011,11 @@ class PaymentService:
                 claim.status = ExpenseClaimStatus.PAID
                 claim.paid_on = completed_at.date()
                 claim.payment_reference = intent.paystack_reference
+            else:
+                logger.warning(
+                    f"Expense claim not found for transfer intent {intent.intent_id}. "
+                    f"source_id={intent.source_id}. Payment marked complete but claim not updated."
+                )
 
         # Store fee amount (convert from kobo to Naira)
         fee_amount = None

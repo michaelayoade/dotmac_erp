@@ -17,6 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.auth import AuthProvider
 from app.models.people.hr import EmployeeStatus
+from app.models.people.hr.employee import SalaryMode
 
 
 # =============================================================================
@@ -219,6 +220,8 @@ class EmployeeBase(BaseModel):
     confirmation_date: Optional[date] = None
     status: EmployeeStatus = EmployeeStatus.DRAFT
     cost_center_id: Optional[UUID] = None
+    ctc: Optional[Decimal] = None
+    salary_mode: Optional[SalaryMode] = None
     bank_name: Optional[str] = Field(default=None, max_length=100)
     bank_account_number: Optional[str] = Field(default=None, max_length=30)
     bank_account_name: Optional[str] = Field(default=None, max_length=100)
@@ -252,6 +255,8 @@ class EmployeeUpdate(BaseModel):
     confirmation_date: Optional[date] = None
     status: Optional[EmployeeStatus] = None
     cost_center_id: Optional[UUID] = None
+    ctc: Optional[Decimal] = None
+    salary_mode: Optional[SalaryMode] = None
     bank_name: Optional[str] = Field(default=None, max_length=100)
     bank_account_number: Optional[str] = Field(default=None, max_length=30)
     bank_account_name: Optional[str] = Field(default=None, max_length=100)
@@ -312,6 +317,8 @@ class EmployeeRead(BaseModel):
     confirmation_date: Optional[date] = None
     status: EmployeeStatus
     cost_center_id: Optional[UUID] = None
+    ctc: Optional[Decimal] = None
+    salary_mode: Optional[SalaryMode] = None
     bank_name: Optional[str] = None
     bank_account_number: Optional[str] = None
     bank_account_name: Optional[str] = None

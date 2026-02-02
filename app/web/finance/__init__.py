@@ -20,6 +20,7 @@ from app.web.finance.import_export import router as import_export_router
 from app.web.finance.opening_balance import router as opening_balance_router
 from app.web.finance.help import router as help_router
 from app.web.finance.payments import router as payments_router
+from app.web.finance.remita import router as remita_router
 
 # Independent routers (exported for use in main.py)
 from app.web.finance.exp import router as expense_router
@@ -42,3 +43,4 @@ router.include_router(import_export_router)
 router.include_router(opening_balance_router)
 router.include_router(help_router)
 router.include_router(payments_router)
+router.include_router(remita_router)

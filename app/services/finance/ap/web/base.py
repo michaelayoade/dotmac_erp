@@ -115,7 +115,7 @@ def payment_status_label(status: APPaymentStatus) -> str:
 def supplier_option_view(supplier: Supplier) -> dict:
     """Transform supplier to option/select view."""
     return {
-        "supplier_id": supplier.supplier_id,
+        "supplier_id": str(supplier.supplier_id),
         "supplier_name": supplier_display_name(supplier),
         "supplier_code": supplier.supplier_code,
         "currency_code": supplier.currency_code,
@@ -229,8 +229,11 @@ def invoice_detail_view(invoice: SupplierInvoice, supplier: Optional[Supplier]) 
         "subtotal": format_currency(invoice.subtotal, invoice.currency_code),
         "tax_amount": format_currency(invoice.tax_amount, invoice.currency_code),
         "total_amount": format_currency(invoice.total_amount, invoice.currency_code),
+        "total_amount_raw": float(invoice.total_amount),
         "amount_paid": format_currency(invoice.amount_paid, invoice.currency_code),
+        "amount_paid_raw": float(invoice.amount_paid),
         "balance": format_currency(balance, invoice.currency_code),
+        "balance_raw": float(balance),
         "status": invoice_status_label(invoice.status),
         "is_overdue": (
             invoice.due_date < today
@@ -254,6 +257,7 @@ def payment_detail_view(payment: SupplierPayment, supplier: Optional[Supplier]) 
         "payment_method": payment.payment_method.value,
         "reference_number": payment.reference,
         "amount": format_currency(payment.amount, payment.currency_code),
+        "amount_raw": float(payment.amount),
         "status": payment_status_label(payment.status),
         "currency_code": payment.currency_code,
     }

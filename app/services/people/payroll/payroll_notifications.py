@@ -182,6 +182,105 @@ class PayrollNotificationService:
             action_url=f"/people/payroll/runs/{entry_id}",
         )
 
+    def notify_run_submitted(
+        self,
+        run_id: UUID,
+        org_id: UUID,
+        run_number: str,
+        slip_count: int,
+        total_net_pay: float,
+        currency_code: str,
+        approver_ids: list[UUID],
+    ) -> int:
+        """Notify approvers that a payroll run was submitted."""
+        if not approver_ids:
+            return 0
+
+        title = f"Payroll run submitted: {run_number}"
+        message = (
+            f"{slip_count} payslips submitted for approval. "
+            f"Total net pay: {currency_code} {total_net_pay:,.2f}"
+        )
+        notified = 0
+        for recipient_id in approver_ids:
+            self._notification_service.create(
+                self.db,
+                organization_id=org_id,
+                recipient_id=recipient_id,
+                entity_type=EntityType.PAYROLL,
+                entity_id=run_id,
+                notification_type=NotificationType.SUBMITTED,
+                title=title,
+                message=message,
+                channel=NotificationChannel.IN_APP,
+                action_url=f"/people/payroll/runs/{run_id}",
+            )
+            notified += 1
+        return notified
+
+    def notify_run_approved(
+        self,
+        run_id: UUID,
+        org_id: UUID,
+        run_number: str,
+        approved_by_name: str,
+        slip_count: int,
+        submitter_id: Optional[UUID],
+    ) -> int:
+        """Notify submitter that a payroll run was approved."""
+        if not submitter_id:
+            return 0
+
+        self._notification_service.create(
+            self.db,
+            organization_id=org_id,
+            recipient_id=submitter_id,
+            entity_type=EntityType.PAYROLL,
+            entity_id=run_id,
+            notification_type=NotificationType.APPROVED,
+            title=f"Payroll run approved: {run_number}",
+            message=(
+                f"Approved by {approved_by_name}. "
+                f"{slip_count} payslips are ready for posting."
+            ),
+            channel=NotificationChannel.IN_APP,
+            action_url=f"/people/payroll/runs/{run_id}",
+        )
+        return 1
+
+    def notify_run_cancelled(
+        self,
+        run_id: UUID,
+        org_id: UUID,
+        run_number: str,
+        cancelled_by_name: str,
+        reason: Optional[str],
+        payroll_team_ids: list[UUID],
+    ) -> int:
+        """Notify payroll team that a payroll run was cancelled."""
+        if not payroll_team_ids:
+            return 0
+
+        reason_text = f" Reason: {reason}" if reason else ""
+        title = f"Payroll run cancelled: {run_number}"
+        message = f"Cancelled by {cancelled_by_name}.{reason_text}"
+        notified = 0
+        for recipient_id in payroll_team_ids:
+            self._notification_service.create(
+                self.db,
+                organization_id=org_id,
+                recipient_id=recipient_id,
+                entity_type=EntityType.PAYROLL,
+                entity_id=run_id,
+                notification_type=NotificationType.ALERT,
+                title=title,
+                message=message,
+                channel=NotificationChannel.IN_APP,
+                action_url=f"/people/payroll/runs/{run_id}",
+            )
+            notified += 1
+        return notified
+
 
 # Singleton-ish factory function for service creation
 def get_payroll_notification_service(db: Session) -> PayrollNotificationService:

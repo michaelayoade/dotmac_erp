@@ -54,6 +54,7 @@ class CycleWebService:
         db: Session,
         status: Optional[str] = None,
         year: Optional[str] = None,
+        search: Optional[str] = None,
         page: int = 1,
     ) -> HTMLResponse:
         """Render cycles list page."""
@@ -65,15 +66,19 @@ class CycleWebService:
             org_id,
             status=parse_cycle_status(status),
             year=parse_int(year),
+            search=self._form_text(search) if search else None,
             pagination=pagination,
         )
 
         context = base_context(request, auth, "Appraisal Cycles", "perf", db=db)
         context["request"] = request
+        success = request.query_params.get("success")
         context.update({
             "cycles": result.items,
             "status": status,
             "year": year,
+            "search": search,
+            "success": success,
             "statuses": [s.value for s in AppraisalCycleStatus],
             "page": result.page,
             "total_pages": result.total_pages,
@@ -81,7 +86,7 @@ class CycleWebService:
             "has_prev": result.has_prev,
             "has_next": result.has_next,
         })
-        return templates.TemplateResponse(request, "people/perf/cycles.html", context)
+        return templates.TemplateResponse(request, "people/perf/appraisal_cycles.html", context)
 
     def cycle_new_form_response(
         self,
@@ -97,7 +102,7 @@ class CycleWebService:
             "form_data": {},
             "error": None,
         })
-        return templates.TemplateResponse(request, "people/perf/cycle_form.html", context)
+        return templates.TemplateResponse(request, "people/perf/appraisal_cycle_form.html", context)
 
     async def create_cycle_response(
         self,
@@ -382,12 +387,14 @@ class CycleWebService:
 
         context = base_context(request, auth, "Key Result Areas", "perf", db=db)
         context["request"] = request
+        success = request.query_params.get("success")
         context.update({
             "kras": result.items,
             "search": search,
             "is_active": is_active,
             "department_id": department_id,
             "departments": departments,
+            "success": success,
             "page": result.page,
             "total_pages": result.total_pages,
             "total": result.total,
@@ -639,19 +646,21 @@ class CycleWebService:
 
         context = base_context(request, auth, "Appraisal Templates", "perf", db=db)
         context["request"] = request
+        success = request.query_params.get("success")
         context.update({
             "templates": result.items,
             "search": search,
             "is_active": is_active,
             "department_id": department_id,
             "departments": departments,
+            "success": success,
             "page": result.page,
             "total_pages": result.total_pages,
             "total": result.total,
             "has_prev": result.has_prev,
             "has_next": result.has_next,
         })
-        return templates.TemplateResponse(request, "people/perf/templates.html", context)
+        return templates.TemplateResponse(request, "people/perf/appraisal_templates.html", context)
 
     def template_new_form_response(
         self,
@@ -896,12 +905,14 @@ class CycleWebService:
 
         context = base_context(request, auth, "Scorecards", "perf", db=db)
         context["request"] = request
+        success = request.query_params.get("success")
         context.update({
             "scorecards": result.items,
             "employee_id": employee_id,
             "cycle_id": cycle_id,
             "is_finalized": is_finalized,
             "cycles": cycles,
+            "success": success,
             "page": result.page,
             "total_pages": result.total_pages,
             "total": result.total,

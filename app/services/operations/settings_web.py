@@ -7,7 +7,7 @@ Handles: Support/SLA, Inventory, and Projects settings.
 
 import uuid
 import logging
-from typing import Any, Optional
+from typing import Any, Optional, TypedDict, TYPE_CHECKING
 
 from sqlalchemy.orm import Session
 
@@ -21,6 +21,19 @@ from app.services.settings_spec import (
 from app.schemas.settings import DomainSettingUpdate
 
 logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    from app.models.finance.inv.warehouse import Warehouse
+
+
+class SettingSpec(TypedDict, total=False):
+    type: str
+    default: Any
+    min: int
+    max: int
+    label: str
+    description: str
+    allowed: list[str]
 
 
 # Hub sections configuration
@@ -47,7 +60,7 @@ OPERATIONS_SETTINGS_SECTIONS = [
 
 
 # Settings specs for operations module (could be added to settings_spec.py later)
-OPERATIONS_SETTINGS = {
+OPERATIONS_SETTINGS: dict[str, SettingSpec] = {
     # Support settings
     "support_default_sla_response_hours": {
         "type": "integer",
@@ -231,7 +244,7 @@ class OperationsSettingsWebService:
             }
 
         # Get warehouses for dropdown
-        warehouses = []
+        warehouses: list[Warehouse] = []
         try:
             from sqlalchemy import select
             from app.models.finance.inv.warehouse import Warehouse
@@ -241,7 +254,7 @@ class OperationsSettingsWebService:
                     Warehouse.is_active.is_(True),
                 ).order_by(Warehouse.warehouse_name)
             )
-            warehouses = result.scalars().all()
+            warehouses = list(result.scalars().all())
         except Exception as e:
             logger.debug("Could not load warehouses: %s", e)
 

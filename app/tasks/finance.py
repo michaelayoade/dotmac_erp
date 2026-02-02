@@ -521,3 +521,98 @@ def process_all_finance_reminders() -> dict[str, Any]:
     )
 
     return results
+
+
+@shared_task
+def sync_paystack_transactions(days_back: int = 1) -> dict[str, Any]:
+    """
+    Sync Paystack transactions to bank statements for reconciliation.
+
+    This task fetches transactions and transfers from Paystack and creates
+    bank statement lines for reconciliation.
+
+    Args:
+        days_back: Number of days to sync (default: 1 for daily sync)
+
+    Returns:
+        Dict with sync statistics per organization
+    """
+    from datetime import date, timedelta
+
+    logger.info("Starting Paystack sync for last %d days", days_back)
+
+    results: dict[str, Any] = {
+        "organizations_synced": 0,
+        "total_collections": 0,
+        "total_transfers": 0,
+        "total_credits": "0.00",
+        "total_debits": "0.00",
+        "errors": [],
+    }
+
+    to_date = date.today()
+    from_date = to_date - timedelta(days=days_back)
+
+    with SessionLocal() as db:
+        from app.services.finance.payments.paystack_sync import PaystackSyncService
+
+        # Get all organizations with Paystack configured
+        organizations = db.scalars(
+            select(Organization).where(Organization.is_active.is_(True))
+        ).all()
+
+        total_credits = 0
+        total_debits = 0
+
+        for org in organizations:
+            try:
+                sync_svc = PaystackSyncService(db, org.organization_id)
+
+                # Check if Paystack is configured for this org
+                try:
+                    sync_svc._get_paystack_config()
+                except ValueError:
+                    # Paystack not configured for this org
+                    continue
+
+                result = sync_svc.sync_transactions(from_date, to_date)
+
+                if result.success:
+                    results["organizations_synced"] += 1
+                    results["total_collections"] += result.transactions_synced
+                    results["total_transfers"] += result.transfers_synced
+                    total_credits += float(result.total_credits)
+                    total_debits += float(result.total_debits)
+
+                    logger.info(
+                        "Paystack sync for org %s: %d collections, %d transfers",
+                        org.organization_id,
+                        result.transactions_synced,
+                        result.transfers_synced,
+                    )
+                else:
+                    results["errors"].append(
+                        f"Org {org.organization_id}: {result.message}"
+                    )
+
+            except Exception as e:
+                logger.exception(
+                    "Failed to sync Paystack for org %s", org.organization_id
+                )
+                results["errors"].append(f"Org {org.organization_id}: {str(e)}")
+
+        results["total_credits"] = f"{total_credits:,.2f}"
+        results["total_debits"] = f"{total_debits:,.2f}"
+
+        db.commit()
+
+    logger.info(
+        "Paystack sync complete: %d orgs, %d collections (₦%s), %d transfers (₦%s)",
+        results["organizations_synced"],
+        results["total_collections"],
+        results["total_credits"],
+        results["total_transfers"],
+        results["total_debits"],
+    )
+
+    return results

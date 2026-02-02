@@ -120,3 +120,50 @@ def crm_sync_entities(
         search=search or None,
         page=page,
     )
+
+
+# ============ Inventory Push ============
+
+
+@router.get("/inventory", response_class=HTMLResponse)
+def crm_inventory_push(
+    request: Request,
+    db: Session = Depends(get_db),
+    auth: WebAuthContext = Depends(optional_web_auth),
+):
+    """Inventory push management page."""
+    return crm_sync_web_service.inventory_push_response(request, db, auth)
+
+
+@router.post("/inventory/push", response_class=HTMLResponse)
+async def crm_trigger_inventory_push(
+    request: Request,
+    db: Session = Depends(get_db),
+    auth: WebAuthContext = Depends(optional_web_auth),
+) -> RedirectResponse:
+    """Trigger inventory push to CRM."""
+    form = getattr(request.state, "csrf_form", None)
+    if form is None:
+        form = await request.form()
+    form = _normalize_form(form)
+
+    push_type = form.get("push_type", "full")
+    include_zero_stock = form.get("include_zero_stock") == "on"
+
+    return crm_sync_web_service.trigger_inventory_push_response(
+        request,
+        db,
+        auth,
+        push_type=push_type,
+        include_zero_stock=include_zero_stock,
+    )
+
+
+@router.post("/inventory/health-check", response_class=HTMLResponse)
+def crm_inventory_health_check(
+    request: Request,
+    db: Session = Depends(get_db),
+    auth: WebAuthContext = Depends(optional_web_auth),
+) -> RedirectResponse:
+    """Test CRM inventory webhook connectivity."""
+    return crm_sync_web_service.inventory_health_check_response(request, db, auth)

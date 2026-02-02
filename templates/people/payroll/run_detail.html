@@ -52,6 +52,70 @@
             </p>
         </div>
         <div class="flex flex-wrap items-center gap-2">
+            {% if entry.status.value != "DRAFT" and entry.status.value != "CANCELLED" %}
+            <!-- Bank Upload Modal Trigger -->
+            <div x-data="{ showBankModal: false }">
+                <button @click="showBankModal = true" type="button" class="btn btn-secondary">
+                    <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                    </svg>
+                    Bank Upload
+                </button>
+
+                <!-- Bank Upload Modal -->
+                <div x-show="showBankModal" x-cloak
+                     class="fixed inset-0 z-50 overflow-y-auto"
+                     aria-labelledby="modal-title" role="dialog" aria-modal="true">
+                    <div class="flex min-h-screen items-center justify-center px-4 pt-4 pb-20 text-center sm:p-0">
+                        <div x-show="showBankModal" @click="showBankModal = false"
+                             class="fixed inset-0 bg-slate-500 bg-opacity-75 transition-opacity"></div>
+                        <div x-show="showBankModal"
+                             class="relative transform overflow-hidden rounded-lg bg-white dark:bg-slate-800 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-md">
+                            <div class="px-4 py-5 sm:p-6">
+                                <h3 class="text-lg font-medium text-slate-900 dark:text-white mb-4">
+                                    Download Bank Upload File
+                                </h3>
+                                <form id="bankUploadForm" method="get" action="/people/payroll/runs/{{ entry.entry_id }}/bank-upload">
+                                    <div class="mb-4">
+                                        <label for="source_account" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                                            Source Bank Account (Debit Account)
+                                        </label>
+                                        <select name="source_account" id="source_account" required
+                                                class="form-select w-full rounded-md border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white shadow-sm focus:border-teal-500 focus:ring-teal-500">
+                                            <option value="">-- Select Bank Account --</option>
+                                            {% for account in bank_accounts %}
+                                            <option value="{{ account.bank_account_id }}"
+                                                {{ 'selected' if entry.source_bank_account_id == account.bank_account_id }}>
+                                                {{ account.bank_name }} - {{ account.account_name }} ({{ account.account_number[-4:] }})
+                                            </option>
+                                            {% endfor %}
+                                        </select>
+                                        {% if not bank_accounts %}
+                                        <p class="mt-1 text-sm text-amber-600 dark:text-amber-400">
+                                            No bank accounts found. Please add a bank account in Finance &gt; Banking first.
+                                        </p>
+                                        {% endif %}
+                                    </div>
+                                    <div class="flex justify-end gap-3 mt-6">
+                                        <button type="button" @click="showBankModal = false"
+                                                class="btn btn-secondary">
+                                            Cancel
+                                        </button>
+                                        <button type="submit" class="btn btn-primary"
+                                                {% if not bank_accounts %}disabled{% endif %}>
+                                            <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                                            </svg>
+                                            Download CSV
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
             {% if entry.status.value == "DRAFT" %}
             <form method="post" action="/people/payroll/runs/{{ entry.entry_id }}/generate" class="inline">
                 {{ request.state.csrf_form | safe }}
@@ -92,18 +156,6 @@
                     Approve All Slips
                 </button>
             </form>
-            {% elif entry.status.value == "APPROVED" %}
-            <form method="post" action="/people/payroll/runs/{{ entry.entry_id }}/post" class="inline"
-                x-data="{ showModal: false }">
-                {{ request.state.csrf_form | safe }}
-                <input type="hidden" name="posting_date" value="{{ entry.posting_date.isoformat() if entry.posting_date else '' }}">
-                <button type="submit" class="btn btn-primary">
-                    <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-                    </svg>
-                    Post to GL
-                </button>
-            </form>
             {% endif %}
         </div>
     </div>
@@ -116,15 +168,15 @@
         </div>
         <div class="card p-4">
             <div class="text-sm text-slate-500 dark:text-slate-400">Total Gross Pay</div>
-            <div class="text-2xl font-semibold text-slate-900 dark:text-white font-mono">{{ "{:,.2f}".format(entry.total_gross_pay) }}</div>
+            <div class="text-2xl font-semibold text-slate-900 dark:text-white font-mono">{{ "{:,.2f}".format(entry.total_gross_pay or 0) }}</div>
         </div>
         <div class="card p-4">
             <div class="text-sm text-slate-500 dark:text-slate-400">Total Deductions</div>
-            <div class="text-2xl font-semibold text-rose-600 dark:text-rose-400 font-mono">{{ "{:,.2f}".format(entry.total_deductions) }}</div>
+            <div class="text-2xl font-semibold text-rose-600 dark:text-rose-400 font-mono">{{ "{:,.2f}".format(entry.total_deductions or 0) }}</div>
         </div>
         <div class="card p-4">
             <div class="text-sm text-slate-500 dark:text-slate-400">Net Payable</div>
-            <div class="text-2xl font-semibold text-emerald-600 dark:text-emerald-400 font-mono">{{ "{:,.2f}".format(entry.total_net_pay) }}</div>
+            <div class="text-2xl font-semibold text-emerald-600 dark:text-emerald-400 font-mono">{{ "{:,.2f}".format(entry.total_net_pay or 0) }}</div>
         </div>
     </div>
 
@@ -152,6 +204,18 @@
                 <div class="text-slate-900 dark:text-white">{{ entry.department.department_name }}</div>
             </div>
             {% endif %}
+            {% if entry.source_bank_account %}
+            <div>
+                <div class="text-slate-500 dark:text-slate-400">Payment Bank Account</div>
+                <div class="text-slate-900 dark:text-white">{{ entry.source_bank_account.bank_name }} - {{ entry.source_bank_account.account_number[-4:] }}</div>
+            </div>
+            {% endif %}
+            {% if entry.expense_account %}
+            <div>
+                <div class="text-slate-500 dark:text-slate-400">GL Expense Account</div>
+                <div class="text-slate-900 dark:text-white">{{ entry.expense_account.account_code }} - {{ entry.expense_account.account_name }}</div>
+            </div>
+            {% endif %}
             {% if entry.notes %}
             <div class="md:col-span-2">
                 <div class="text-slate-500 dark:text-slate-400">Notes</div>
@@ -163,17 +227,45 @@
 
     <!-- Salary Slips Table -->
     <div class="card overflow-hidden">
-        <div class="p-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
-            <h2 class="text-lg font-medium text-slate-900 dark:text-white">Salary Slips</h2>
-            {% if slip_status_counts %}
-            <div class="flex gap-2 text-xs">
-                {% for status, count in slip_status_counts.items() %}
-                <span class="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
-                    {{ status | title }}: {{ count }}
-                </span>
-                {% endfor %}
+        <div class="p-4 border-b border-slate-200 dark:border-slate-700 space-y-3">
+            <div class="flex items-center justify-between">
+                <h2 class="text-lg font-medium text-slate-900 dark:text-white">Salary Slips</h2>
+                {% if slip_status_counts %}
+                <div class="flex gap-2 text-xs">
+                    {% for status, count in slip_status_counts.items() %}
+                    <span class="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+                        {{ status | title }}: {{ count }}
+                    </span>
+                    {% endfor %}
+                </div>
+                {% endif %}
             </div>
-            {% endif %}
+            <form method="get" class="flex flex-wrap gap-3 items-end">
+                <div class="flex-1 min-w-[220px] max-w-md">
+                    <label for="slip_search" class="form-label text-xs">Search</label>
+                    <input type="text" id="slip_search" name="search" value="{{ slip_search | default('') }}"
+                        placeholder="Slip number or employee..."
+                        class="form-input w-full">
+                </div>
+                <div class="w-44">
+                    <label for="slip_status" class="form-label text-xs">Status</label>
+                    <select id="slip_status" name="status" class="form-select w-full">
+                        <option value="">All</option>
+                        {% for s in slip_statuses %}
+                        <option value="{{ s }}" {% if slip_status == s %}selected{% endif %}>{{ s | title }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-secondary h-10">Filter</button>
+                {% if slip_search or slip_status %}
+                <a href="/people/payroll/runs/{{ entry.entry_id }}" class="btn btn-ghost h-10">Clear</a>
+                {% endif %}
+                {% if total_slip_count is not none %}
+                <div class="text-xs text-slate-500 dark:text-slate-400 ml-auto">
+                    Showing {{ filtered_slip_count }} of {{ total_slip_count }}
+                </div>
+                {% endif %}
+            </form>
         </div>
 
         {% if slips %}
@@ -235,7 +327,7 @@
                 <tfoot class="bg-slate-50 dark:bg-slate-800/50">
                     <tr>
                         <td colspan="2" class="px-4 py-3 text-sm font-medium text-slate-900 dark:text-white">
-                            Total ({{ slips | length }} slips)
+                            Run Total ({{ total_slip_count or slips | length }} slips)
                         </td>
                         <td class="px-4 py-3 text-right text-sm font-medium text-slate-900 dark:text-white font-mono">
                             {{ "{:,.2f}".format(entry.total_gross_pay) }}

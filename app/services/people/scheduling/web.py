@@ -186,7 +186,9 @@ class SchedulingWebService:
     ) -> HTMLResponse | RedirectResponse:
         """Create a new pattern."""
         org_id = coerce_uuid(auth.organization_id)
-        form_data = await request.form()
+        form_data = getattr(request.state, "csrf_form", None)
+        if form_data is None:
+            form_data = await request.form()
 
         pattern_code = SchedulingWebService._get_form_str(form_data, "pattern_code")
         pattern_name = SchedulingWebService._get_form_str(form_data, "pattern_name")
@@ -207,6 +209,10 @@ class SchedulingWebService:
 
         if not pattern_code or not pattern_name or day_shift_type_id is None:
             shift_types = SchedulingWebService._get_shift_types(db, org_id)
+            if not shift_types:
+                error_message = "No shift types available. Create a shift type first."
+            else:
+                error_message = "Pattern code, name, and day shift type are required."
             ctx = base_context(request, auth, "New Shift Pattern", "people", db=db)
             ctx.update({
                 "shift_types": shift_types,
@@ -220,7 +226,7 @@ class SchedulingWebService:
                     "cycle_weeks": cycle_weeks,
                     "work_days": work_days,
                 },
-                "error": "Pattern code, name, and day shift type are required.",
+                "error": error_message,
             })
             return templates.TemplateResponse("people/scheduling/pattern_form.html", ctx)
 
@@ -574,6 +580,7 @@ class SchedulingWebService:
         ctx = base_context(request, auth, "Generate Schedule", "people", db=db)
         ctx.update({
             "departments": departments,
+            "department_id": "",
             "year_month": date.today().strftime("%Y-%m"),
             "error": None,
             "result": None,
@@ -589,7 +596,9 @@ class SchedulingWebService:
     ) -> HTMLResponse:
         """Generate schedules for a month."""
         org_id = coerce_uuid(auth.organization_id)
-        form_data = await request.form()
+        form_data = getattr(request.state, "csrf_form", None)
+        if form_data is None:
+            form_data = await request.form()
 
         department_id = SchedulingWebService._parse_uuid(
             SchedulingWebService._get_form_str(form_data, "department_id")
@@ -602,6 +611,7 @@ class SchedulingWebService:
             ctx = base_context(request, auth, "Generate Schedule", "people", db=db)
             ctx.update({
                 "departments": departments,
+                "department_id": SchedulingWebService._get_form_str(form_data, "department_id"),
                 "year_month": year_month or date.today().strftime("%Y-%m"),
                 "error": "Department and month are required.",
                 "result": None,
@@ -620,6 +630,7 @@ class SchedulingWebService:
             ctx = base_context(request, auth, "Generate Schedule", "people", db=db)
             ctx.update({
                 "departments": departments,
+                "department_id": SchedulingWebService._get_form_str(form_data, "department_id"),
                 "year_month": year_month,
                 "error": None,
                 "result": result,
@@ -630,6 +641,7 @@ class SchedulingWebService:
             ctx = base_context(request, auth, "Generate Schedule", "people", db=db)
             ctx.update({
                 "departments": departments,
+                "department_id": SchedulingWebService._get_form_str(form_data, "department_id"),
                 "year_month": year_month,
                 "error": str(e),
                 "result": None,
@@ -644,7 +656,9 @@ class SchedulingWebService:
     ) -> RedirectResponse:
         """Publish schedules for a month."""
         org_id = coerce_uuid(auth.organization_id)
-        form_data = await request.form()
+        form_data = getattr(request.state, "csrf_form", None)
+        if form_data is None:
+            form_data = await request.form()
 
         department_id = SchedulingWebService._parse_uuid(
             SchedulingWebService._get_form_str(form_data, "department_id")

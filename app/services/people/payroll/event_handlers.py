@@ -258,7 +258,8 @@ class PayrollEventHandlers:
         try:
             with self._session_factory() as db:
                 from sqlalchemy import select
-                from app.models.rbac import RoleAssignment
+                from app.models.person import Person
+                from app.models.rbac import PersonRole, Role
 
                 run = db.get(PayrollEntry, event.run_id)
                 if not run:
@@ -275,14 +276,21 @@ class PayrollEventHandlers:
                     return
 
                 # Find approvers (users with payroll approval permission)
-                approver_ids = list(db.scalars(
-                    select(RoleAssignment.person_id).where(
-                        RoleAssignment.organization_id == event.organization_id,
-                        RoleAssignment.role_name.in_(
-                            ["payroll_approver", "hr_manager", "finance_manager"]
-                        ),
-                    )
-                ).all())
+                approver_ids = list(
+                    db.scalars(
+                        select(PersonRole.person_id)
+                        .join(Role, PersonRole.role_id == Role.id)
+                        .join(Person, PersonRole.person_id == Person.id)
+                        .where(
+                            Person.organization_id == event.organization_id,
+                            Role.name.in_(
+                                ["payroll_approver", "hr_manager", "finance_manager"]
+                            ),
+                            Role.is_active.is_(True),
+                            Person.is_active.is_(True),
+                        )
+                    ).all()
+                )
 
                 if not approver_ids:
                     logger.warning(
@@ -404,8 +412,8 @@ class PayrollEventHandlers:
         try:
             with self._session_factory() as db:
                 from sqlalchemy import select
-                from app.models.rbac import RoleAssignment
                 from app.models.person import Person
+                from app.models.rbac import PersonRole, Role
 
                 run = db.get(PayrollEntry, event.run_id)
                 if not run:
@@ -430,14 +438,21 @@ class PayrollEventHandlers:
                 )
 
                 # Find payroll team
-                payroll_team_ids = list(db.scalars(
-                    select(RoleAssignment.person_id).where(
-                        RoleAssignment.organization_id == event.organization_id,
-                        RoleAssignment.role_name.in_(
-                            ["payroll_admin", "hr_manager", "payroll_approver"]
-                        ),
-                    )
-                ).all())
+                payroll_team_ids = list(
+                    db.scalars(
+                        select(PersonRole.person_id)
+                        .join(Role, PersonRole.role_id == Role.id)
+                        .join(Person, PersonRole.person_id == Person.id)
+                        .where(
+                            Person.organization_id == event.organization_id,
+                            Role.name.in_(
+                                ["payroll_admin", "hr_manager", "payroll_approver"]
+                            ),
+                            Role.is_active.is_(True),
+                            Person.is_active.is_(True),
+                        )
+                    ).all()
+                )
 
                 notification_service = PayrollNotificationService(db)
                 notified = notification_service.notify_run_cancelled(

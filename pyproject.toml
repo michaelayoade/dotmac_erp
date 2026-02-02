@@ -33,6 +33,7 @@ gunicorn = "^23.0.0"
 weasyprint = "^62.0"
 python-dateutil = "^2.9.0"
 shapely = "^2.0.0"
+msoffcrypto-tool = "^6.0.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "8.2.2"

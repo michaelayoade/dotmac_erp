@@ -189,7 +189,16 @@
                         <option value="false" {% if is_active is sameas false %}selected{% endif %}>Inactive</option>
                     </select>
                 </div>
+                <div class="w-32">
+                    <label for="per_page" class="form-label">Show</label>
+                    <select name="per_page" id="per_page" class="form-select w-full">
+                        {% for size in [25, 50, 75, 100] %}
+                        <option value="{{ size }}" {% if per_page == size %}selected{% endif %}>{{ size }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
                 <button type="submit" class="btn btn-secondary h-10">Filter</button>
+                <button type="submit" class="btn btn-primary h-10">Show</button>
             </div>
         </form>
     </div>

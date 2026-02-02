@@ -191,10 +191,12 @@ class ExpenseService:
             .on_conflict_do_nothing(
                 index_elements=["organization_id", "claim_id", "action_type"],
             )
+            .returning(ExpenseClaimAction.action_id)
         )
         result = self.db.execute(stmt)
+        inserted_action_id = result.scalar_one_or_none()
         self.db.flush()
-        if (result.rowcount or 0) > 0:
+        if inserted_action_id is not None:
             return True
 
         existing = self.db.scalar(

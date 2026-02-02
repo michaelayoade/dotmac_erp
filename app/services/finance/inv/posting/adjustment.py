@@ -83,6 +83,10 @@ def post_adjustment(
 
     inventory_account = get_inventory_account(item, category)
     adjustment_account = category.inventory_adjustment_account_id
+    if not inventory_account:
+        return INVPostingResult(success=False, message="Inventory account not configured")
+    if not adjustment_account:
+        return INVPostingResult(success=False, message="Adjustment account not configured")
 
     journal_lines = []
 

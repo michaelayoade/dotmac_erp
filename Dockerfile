@@ -17,10 +17,23 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        libcairo2 \
+        libgdk-pixbuf-2.0-0 \
+        libglib2.0-0 \
+        libpango-1.0-0 \
+        libpangocairo-1.0-0 \
+        libffi8 \
+        fonts-dejavu-core \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN pip install poetry && poetry config virtualenvs.create false
 
 COPY pyproject.toml poetry.lock ./
 RUN poetry install --only main --no-interaction --no-ansi
+# WeasyPrint 62.x expects pydyf.Stream.transform; pin a compatible pydyf.
+RUN pip install --no-cache-dir "pydyf==0.11.0"
 RUN pip install --no-cache-dir python-multipart
 
 COPY . .

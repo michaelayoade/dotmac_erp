@@ -64,14 +64,49 @@
                     <label class="form-label">
                         Supplier <span class="text-rose-500">*</span>
                     </label>
-                    <select x-model="formData.supplier_id" required class="form-select" @change="onSupplierChange">
-                        <option value="">Select supplier</option>
-                        {% for s in suppliers_list %}
-                        <option value="{{ s.supplier_id }}" data-currency="{{ s.currency_code }}">
-                            {{ s.supplier_code }} - {{ s.supplier_name }}
-                        </option>
-                        {% endfor %}
-                    </select>
+                    <div class="relative" @click.outside="supplierOpen = false">
+                        <div class="relative">
+                            <input
+                                type="text"
+                                x-model="supplierSearch"
+                                @input="onSupplierSearch"
+                                @focus="supplierOpen = true"
+                                @keydown.escape.prevent="supplierOpen = false"
+                                placeholder="Search supplier"
+                                class="form-input pr-10"
+                                role="combobox"
+                                aria-expanded="false"
+                                aria-haspopup="listbox"
+                            >
+                            <button type="button" @click="supplierOpen = !supplierOpen" class="absolute inset-y-0 right-2 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
+                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <input type="hidden" x-model="formData.supplier_id">
+                        <div
+                            x-cloak
+                            x-show="supplierOpen"
+                            x-transition
+                            class="absolute z-20 mt-1 w-full max-h-64 overflow-auto rounded-lg border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-900"
+                            role="listbox"
+                        >
+                            <template x-for="supplier in filteredSuppliers()" :key="supplier.supplier_id">
+                                <button
+                                    type="button"
+                                    class="flex w-full items-center justify-between px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800"
+                                    @click="selectSupplier(supplier)"
+                                >
+                                    <span x-text="supplier.supplier_code + ' - ' + supplier.supplier_name"></span>
+                                    <span class="text-xs text-slate-400" x-text="supplier.currency_code"></span>
+                                </button>
+                            </template>
+                            <div x-show="filteredSuppliers().length === 0" class="px-3 py-2 text-sm text-slate-500">
+                                No suppliers match your search.
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <div>
@@ -147,14 +182,49 @@
                         <template x-for="(line, index) in lines" :key="index">
                             <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
                                 <td class="px-4 py-3">
-                                    <select x-model="line.item_id" @change="onItemChange(index)" class="w-full rounded border border-slate-300 bg-white px-2 py-1.5 text-sm focus:border-primary-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-white">
-                                        <option value="">-- Select Item --</option>
-                                        {% for item in items_list %}
-                                        <option value="{{ item.item_id }}" data-name="{{ item.item_name }}" data-cost="{{ item.standard_cost or 0 }}">
-                                            {{ item.item_code }} - {{ item.item_name }}
-                                        </option>
-                                        {% endfor %}
-                                    </select>
+                                    <div class="relative" @click.outside="line.item_open = false">
+                                        <div class="relative">
+                                            <input
+                                                type="text"
+                                                x-model="line.item_search"
+                                                @input="onItemSearch(line)"
+                                                @focus="line.item_open = true"
+                                                @keydown.escape.prevent="line.item_open = false"
+                                                placeholder="Search item"
+                                                class="w-full rounded border border-slate-300 bg-white px-2 py-1.5 pr-9 text-sm focus:border-primary-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                                                role="combobox"
+                                                aria-expanded="false"
+                                                aria-haspopup="listbox"
+                                            >
+                                            <button type="button" @click="line.item_open = !line.item_open" class="absolute inset-y-0 right-2 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
+                                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                                </svg>
+                                            </button>
+                                        </div>
+                                        <input type="hidden" x-model="line.item_id">
+                                        <div
+                                            x-cloak
+                                            x-show="line.item_open"
+                                            x-transition
+                                            class="absolute z-20 mt-1 w-full max-h-64 overflow-auto rounded-lg border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-900"
+                                            role="listbox"
+                                        >
+                                            <template x-for="item in filteredItems(line.item_search)" :key="item.item_id">
+                                                <button
+                                                    type="button"
+                                                    class="flex w-full items-center justify-between px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800"
+                                                    @click="selectItem(line, item)"
+                                                >
+                                                    <span x-text="item.item_code + ' - ' + item.item_name"></span>
+                                                    <span class="text-xs text-slate-400" x-text="item.standard_cost ? formatCurrency(item.standard_cost) : ''"></span>
+                                                </button>
+                                            </template>
+                                            <div x-show="filteredItems(line.item_search).length === 0" class="px-3 py-2 text-sm text-slate-500">
+                                                No items match your search.
+                                            </div>
+                                        </div>
+                                    </div>
                                 </td>
                                 <td class="px-4 py-3">
                                     <input type="text" x-model="line.description" required class="w-full rounded border border-slate-300 bg-white px-2 py-1.5 text-sm focus:border-primary-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-white" placeholder="Description">
@@ -224,9 +294,15 @@ function purchaseOrderForm() {
     // Initialize with existing data if editing
     const existingOrder = {{ order | tojson | safe if order else 'null' }};
     const existingLines = {{ lines | tojson | safe if lines else '[]' }};
+    const suppliers = {{ suppliers_list | tojson | safe }};
+    const items = {{ items_list | tojson | safe }};
 
     return {
         submitting: false,
+        suppliers,
+        items,
+        supplierSearch: '',
+        supplierOpen: false,
         formData: {
             supplier_id: existingOrder?.supplier_id || '',
             currency_code: existingOrder?.currency_code || '{{ default_currency_code }}',
@@ -238,8 +314,31 @@ function purchaseOrderForm() {
             { item_id: '', description: '', quantity: 1, unit_price: 0, expense_account_id: '' }
         ],
 
+        init() {
+            const selected = this.suppliers.find(s => s.supplier_id === this.formData.supplier_id);
+            if (selected) {
+                this.supplierSearch = `${selected.supplier_code} - ${selected.supplier_name}`;
+            }
+            this.lines = this.lines.map((line) => this.normalizeLine(line));
+        },
+
+        normalizeLine(line) {
+            const normalized = {
+                item_search: '',
+                item_open: false,
+                ...line,
+            };
+            if (normalized.item_id) {
+                const item = this.items.find(i => i.item_id === normalized.item_id);
+                if (item) {
+                    normalized.item_search = `${item.item_code} - ${item.item_name}`;
+                }
+            }
+            return normalized;
+        },
+
         addLine() {
-            this.lines.push({ item_id: '', description: '', quantity: 1, unit_price: 0, expense_account_id: '' });
+            this.lines.push(this.normalizeLine({ item_id: '', description: '', quantity: 1, unit_price: 0, expense_account_id: '' }));
         },
 
         removeLine(index) {
@@ -248,24 +347,56 @@ function purchaseOrderForm() {
             }
         },
 
-        onSupplierChange(event) {
-            const option = event.target.selectedOptions[0];
-            if (option && option.dataset.currency) {
-                this.formData.currency_code = option.dataset.currency;
+        filteredSuppliers() {
+            const query = (this.supplierSearch || '').toLowerCase().trim();
+            if (!query) {
+                return this.suppliers;
             }
+            return this.suppliers.filter((supplier) => {
+                const label = `${supplier.supplier_code} ${supplier.supplier_name}`.toLowerCase();
+                return label.includes(query);
+            });
         },
 
-        onItemChange(index) {
-            const select = document.querySelectorAll('select[x-model="line.item_id"]')[index];
-            if (select) {
-                const option = select.selectedOptions[0];
-                if (option && option.dataset.name) {
-                    this.lines[index].description = option.dataset.name;
-                    if (option.dataset.cost) {
-                        this.lines[index].unit_price = parseFloat(option.dataset.cost) || 0;
-                    }
-                }
+        onSupplierSearch() {
+            this.supplierOpen = true;
+            this.formData.supplier_id = '';
+        },
+
+        selectSupplier(supplier) {
+            this.formData.supplier_id = supplier.supplier_id;
+            this.supplierSearch = `${supplier.supplier_code} - ${supplier.supplier_name}`;
+            if (supplier.currency_code) {
+                this.formData.currency_code = supplier.currency_code;
             }
+            this.supplierOpen = false;
+        },
+
+        filteredItems(search) {
+            const query = (search || '').toLowerCase().trim();
+            if (!query) {
+                return this.items;
+            }
+            return this.items.filter((item) => {
+                const label = `${item.item_code} ${item.item_name}`.toLowerCase();
+                return label.includes(query);
+            });
+        },
+
+        onItemSearch(line) {
+            line.item_open = true;
+            line.item_id = '';
+        },
+
+        selectItem(line, item) {
+            line.item_id = item.item_id;
+            line.item_search = `${item.item_code} - ${item.item_name}`;
+            line.description = item.item_name;
+            if (item.standard_cost !== null && item.standard_cost !== undefined) {
+                line.unit_price = parseFloat(item.standard_cost) || 0;
+            }
+            line.item_open = false;
+            this.calculateLineAmount(this.lines.indexOf(line));
         },
 
         calculateLineAmount(index) {

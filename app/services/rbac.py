@@ -1,5 +1,7 @@
 from fastapi import HTTPException
+from sqlalchemy import select
 from sqlalchemy.orm import Session
+from uuid import UUID
 
 from app.models.person import Person
 from app.models.rbac import Permission, PersonRole, Role, RolePermission
@@ -221,6 +223,34 @@ class RolePermissions(ListResponseMixin):
             raise HTTPException(status_code=404, detail="Role permission not found")
         db.delete(link)
         db.commit()
+
+
+def get_users_with_permission(
+    db: Session,
+    organization_id: UUID,
+    permission_key: str,
+) -> list[PersonRole]:
+    """
+    Get users in an organization with a given permission.
+
+    Returns PersonRole records (use .person_id for recipient ids).
+    """
+    org_id = coerce_uuid(organization_id)
+    stmt = (
+        select(PersonRole)
+        .join(Role, PersonRole.role_id == Role.id)
+        .join(RolePermission, RolePermission.role_id == Role.id)
+        .join(Permission, RolePermission.permission_id == Permission.id)
+        .join(Person, PersonRole.person_id == Person.id)
+        .where(
+            Person.organization_id == org_id,
+            Permission.key == permission_key,
+            Role.is_active.is_(True),
+            Permission.is_active.is_(True),
+            Person.is_active.is_(True),
+        )
+    )
+    return list(db.scalars(stmt).all())
 
 
 class PersonRoles(ListResponseMixin):

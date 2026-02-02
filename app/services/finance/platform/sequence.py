@@ -64,12 +64,20 @@ class SequenceService(ListResponseMixin):
         )
 
         if fy_id:
-            query = query.filter(NumberingSequence.fiscal_year_id == fy_id)
+            sequence = (
+                query.filter(NumberingSequence.fiscal_year_id == fy_id)
+                .with_for_update()
+                .first()
+            )
         else:
-            query = query.filter(NumberingSequence.fiscal_year_id.is_(None))
+            sequence = None
 
-        # Lock the row for update
-        sequence = query.with_for_update().first()
+        if not sequence:
+            sequence = (
+                query.filter(NumberingSequence.fiscal_year_id.is_(None))
+                .with_for_update()
+                .first()
+            )
 
         if not sequence:
             raise HTTPException(

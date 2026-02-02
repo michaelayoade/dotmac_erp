@@ -84,6 +84,8 @@ def post_receipt(
         return INVPostingResult(success=False, message="Item category not found")
 
     inventory_account = get_inventory_account(item, category)
+    if not inventory_account:
+        return INVPostingResult(success=False, message="Inventory account not configured")
 
     journal_lines = [
         # Debit: Inventory
@@ -111,6 +113,8 @@ def post_receipt(
         )
     else:
         # Use inventory adjustment account as GRNI placeholder
+        if not category.inventory_adjustment_account_id:
+            return INVPostingResult(success=False, message="Adjustment account not configured")
         journal_lines.append(
             JournalLineInput(
                 account_id=category.inventory_adjustment_account_id,

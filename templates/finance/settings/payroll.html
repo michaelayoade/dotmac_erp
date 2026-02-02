@@ -1,0 +1,99 @@
+{% extends "finance/base_finance.html" %}
+
+{% block page_title %}Payroll Settings{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+    <a href="/finance/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <a href="/settings" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Settings</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="font-medium text-slate-900 dark:text-white">Payroll</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto space-y-6 stagger-in">
+    <div>
+        <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Payroll Settings</h1>
+        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+            Configure auto-posting to GL and the account used for rounding adjustments.
+        </p>
+    </div>
+
+    {% if request.query_params.get('saved') %}
+    <div class="rounded-lg bg-green-50 border border-green-200 p-4 dark:bg-green-900/20 dark:border-green-800">
+        <div class="flex items-center gap-3">
+            <svg class="h-5 w-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+            </svg>
+            <p class="text-sm text-green-700 dark:text-green-300">Payroll settings updated successfully.</p>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if error %}
+    <div class="rounded-lg bg-red-50 border border-red-200 p-4 dark:bg-red-900/20 dark:border-red-800">
+        <div class="flex items-center gap-3">
+            <svg class="h-5 w-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <p class="text-sm text-red-700 dark:text-red-300">{{ error }}</p>
+        </div>
+    </div>
+    {% endif %}
+
+    <form method="POST" action="/settings/payroll" class="space-y-6">
+        <div class="card p-6 space-y-6">
+            <div>
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Posting behavior</h2>
+                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                    Auto-posting creates the GL journal immediately after payroll approval.
+                </p>
+            </div>
+
+            <label class="flex items-start gap-3 cursor-pointer">
+                {% set auto_post = settings.auto_post_gl_on_approval.value %}
+                <input type="checkbox" name="auto_post_gl_on_approval" class="mt-1" {% if auto_post %}checked{% endif %}>
+                <span>
+                    <span class="block text-sm font-medium text-slate-900 dark:text-white">Auto-post to GL on approval</span>
+                    <span class="block text-xs text-slate-500 dark:text-slate-400">Requires an open fiscal period for the approval date.</span>
+                </span>
+            </label>
+        </div>
+
+        <div class="card p-6 space-y-4">
+            <div>
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Rounding adjustments</h2>
+                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                    For small rounding differences (≤ 5.00), an adjustment line is posted to the account below.
+                </p>
+            </div>
+
+            <div>
+                <label for="payroll_rounding_account_id" class="form-label">Rounding expense account</label>
+                <select id="payroll_rounding_account_id" name="payroll_rounding_account_id" class="form-input form-select">
+                    <option value="">No rounding account</option>
+                    {% for account in expense_accounts %}
+                    <option value="{{ account.account_id }}" {% if settings.payroll_rounding_account_id.value == account.account_id|string %}selected{% endif %}>
+                        {{ account.account_code }} - {{ account.account_name }}
+                    </option>
+                    {% endfor %}
+                </select>
+                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    Leave empty to block posting when journals are unbalanced.
+                </p>
+            </div>
+        </div>
+
+        <div class="flex items-center justify-end gap-3">
+            <a href="/settings" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">Save changes</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

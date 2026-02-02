@@ -460,7 +460,7 @@ def my_attendance_today(
     employee_id = _get_employee_id(db, organization_id, person_id)
 
     svc = AttendanceService(db)
-    record = svc.get_attendance_by_date(organization_id, employee_id, date.today())
+    record = svc.get_attendance_by_date(organization_id, employee_id, svc.get_org_today(organization_id))
     if not record:
         raise HTTPException(status_code=404, detail="Attendance record not found")
     return AttendanceRead.model_validate(record)
@@ -533,8 +533,9 @@ def my_attendance_summary(
             month=month_num,
         )
 
-    today = date.today()
-    return AttendanceService(db).get_employee_monthly_summary(
+    svc = AttendanceService(db)
+    today = svc.get_org_today(organization_id)
+    return svc.get_employee_monthly_summary(
         org_id=organization_id,
         employee_id=employee_id,
         year=today.year,

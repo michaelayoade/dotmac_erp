@@ -89,6 +89,10 @@ def post_issue(
 
     inventory_account = get_inventory_account(item, category)
     cogs_account = get_cogs_account(item, category, expense_account_id)
+    if not inventory_account:
+        return INVPostingResult(success=False, message="Inventory account not configured")
+    if not cogs_account:
+        return INVPostingResult(success=False, message="COGS account not configured")
 
     journal_lines = [
         # Debit: COGS/Expense

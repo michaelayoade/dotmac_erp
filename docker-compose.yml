@@ -40,6 +40,7 @@ services:
       OPENBAO_ADDR: http://openbao:8200
       OPENBAO_TOKEN: ${OPENBAO_TOKEN:-devtoken}
       OPENBAO_ALLOW_INSECURE: "true"
+      GUNICORN_WORKERS: "4"
     depends_on:
       db:
         condition: service_healthy
@@ -51,6 +52,7 @@ services:
       - dotmac_logs:/var/log/dotmac
       - ./static:/app/static:ro
       - ./templates:/app/templates:ro
+      - ./app:/app/app:ro
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/health')"]
       interval: 30s
@@ -86,7 +88,7 @@ services:
         condition: service_healthy
     volumes:
       - .:/app
-    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8002", "--reload"]
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8002"]
 
   worker:
     build: .
@@ -109,6 +111,8 @@ services:
         condition: service_started
       openbao:
         condition: service_healthy
+    volumes:
+      - ./app:/app/app:ro
     command: ["celery", "-A", "app.celery_app", "worker", "-l", "info"]
 
   beat:

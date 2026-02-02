@@ -181,6 +181,9 @@ class EmailProfileService:
                 "password": smtp_password,
                 "use_tls": use_tls,
                 "use_ssl": use_ssl,
+                "from_email": from_email,
+                "from_name": from_name,
+                "reply_to": reply_to,
             }
             is_valid, error_message = validate_smtp_config(config)
             if not is_valid:

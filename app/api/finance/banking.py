@@ -9,7 +9,7 @@ from datetime import date, datetime
 from typing import List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
@@ -18,6 +18,8 @@ from app.services.auth_dependencies import require_tenant_permission
 from app.models.finance.banking.bank_account import BankAccountStatus, BankAccountType
 from app.models.finance.banking.bank_statement import BankStatementStatus
 from app.models.finance.banking.bank_reconciliation import ReconciliationStatus
+from pydantic import ValidationError
+
 from app.schemas.finance.banking import (
     # Bank Account
     BankAccountCreate,
@@ -84,6 +86,41 @@ def _get_user_id(auth: dict) -> UUID:
     return UUID(auth["person_id"])
 
 
+def _normalize_form_payload(data: dict, *, include_booleans: bool) -> dict:
+    normalized: dict = {}
+    for key, value in data.items():
+        if isinstance(value, str):
+            value = value.strip()
+            if value == "":
+                value = None
+        normalized[key] = value
+
+    if include_booleans:
+        for flag in ("allow_overdraft", "is_primary"):
+            if flag in data:
+                raw = data.get(flag)
+                normalized[flag] = str(raw).lower() in ("1", "true", "on", "yes")
+    return normalized
+
+
+async def _bank_account_payload_from_request(request: Request, model_cls):
+    content_type = request.headers.get("content-type", "")
+    if "application/json" in content_type:
+        raw = await request.json()
+    else:
+        form = await request.form()
+        raw = dict(form)
+
+    normalized = _normalize_form_payload(raw, include_booleans=True)
+    if hasattr(model_cls, "model_fields"):
+        allowed = set(model_cls.model_fields.keys())
+        normalized = {key: value for key, value in normalized.items() if key in allowed}
+    try:
+        return model_cls.model_validate(normalized)
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.errors()) from exc
+
+
 # =============================================================================
 # Bank Accounts
 # =============================================================================
@@ -94,14 +131,15 @@ def _get_user_id(auth: dict) -> UUID:
     response_model=BankAccountRead,
     status_code=status.HTTP_201_CREATED,
 )
-def create_bank_account(
-    payload: BankAccountCreate,
+async def create_bank_account(
+    request: Request,
     auth: dict = Depends(require_tenant_permission("banking:accounts:create")),
     db: Session = Depends(get_db),
 ):
     """Create a new bank account."""
     organization_id = _get_org_id(auth)
     user_id = _get_user_id(auth)
+    payload = await _bank_account_payload_from_request(request, BankAccountCreate)
 
     input_data = BankAccountInput(
         bank_name=payload.bank_name,
@@ -175,14 +213,13 @@ def list_bank_accounts(
     return ListResponse(items=accounts, count=total_count, limit=limit, offset=offset)
 
 
-@router.put("/accounts/{bank_account_id}", response_model=BankAccountRead)
-def update_bank_account(
+async def _update_bank_account(
+    request: Request,
     bank_account_id: UUID,
-    payload: BankAccountUpdate,
-    auth: dict = Depends(require_tenant_permission("banking:accounts:update")),
-    db: Session = Depends(get_db),
-):
-    """Update a bank account."""
+    auth: dict,
+    db: Session,
+) -> BankAccountRead:
+    payload = await _bank_account_payload_from_request(request, BankAccountUpdate)
     organization_id = _get_org_id(auth)
     user_id = _get_user_id(auth)
 
@@ -214,7 +251,29 @@ def update_bank_account(
     )
     result = bank_account_service.update(db, organization_id, bank_account_id, input_data, user_id)
     db.commit()
-    return result
+    return BankAccountRead.model_validate(result)
+
+
+@router.put("/accounts/{bank_account_id}", response_model=BankAccountRead)
+async def update_bank_account(
+    request: Request,
+    bank_account_id: UUID,
+    auth: dict = Depends(require_tenant_permission("banking:accounts:update")),
+    db: Session = Depends(get_db),
+):
+    """Update a bank account."""
+    return await _update_bank_account(request, bank_account_id, auth, db)
+
+
+@router.post("/accounts/{bank_account_id}", response_model=BankAccountRead)
+async def update_bank_account_post(
+    request: Request,
+    bank_account_id: UUID,
+    auth: dict = Depends(require_tenant_permission("banking:accounts:update")),
+    db: Session = Depends(get_db),
+):
+    """Update a bank account via form submission."""
+    return await _update_bank_account(request, bank_account_id, auth, db)
 
 
 @router.patch("/accounts/{bank_account_id}/status", response_model=BankAccountRead)

@@ -642,6 +642,7 @@ def create_payroll_entry(
         currency_code=data.currency_code,
         department_id=data.department_id,
         designation_id=data.designation_id,
+        source_bank_account_id=data.bank_account_id,
         notes=data.notes,
     )
     db.commit()
@@ -670,6 +671,8 @@ def update_payroll_entry(
     """Update a payroll entry."""
     svc = PayrollService(db)
     update_data = data.model_dump(exclude_unset=True)
+    if "bank_account_id" in update_data:
+        update_data["source_bank_account_id"] = update_data.pop("bank_account_id")
     entry = svc.update_payroll_entry(organization_id, entry_id, **update_data)
     db.commit()
     return PayrollEntryRead.model_validate(entry)

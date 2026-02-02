@@ -41,12 +41,17 @@ NHF_COMPONENT_CODE = "NHF"
 NHIS_COMPONENT_CODE = "NHIS"
 PAYE_COMPONENT_CODE = "PAYE"
 
+# Statutory deductions withheld from employee pay
 STATUTORY_COMPONENT_CODES = {
     PENSION_COMPONENT_CODE,
-    EMPLOYER_PENSION_COMPONENT_CODE,
     NHF_COMPONENT_CODE,
     NHIS_COMPONENT_CODE,
     PAYE_COMPONENT_CODE,
+}
+
+# Employer contributions (not deducted from employee, but tracked separately)
+EMPLOYER_CONTRIBUTION_CODES = {
+    EMPLOYER_PENSION_COMPONENT_CODE,
 }
 
 
@@ -150,9 +155,17 @@ class SalarySlipService:
         db: Session,
         organization_id: UUID,
         created_by_id: Optional[UUID] = None,
+        include_employer_contributions: bool = False,
     ) -> dict[str, SalaryComponent]:
         """
-        Get or create all statutory components needed for PAYE calculation.
+        Get or create statutory deduction components needed for PAYE calculation.
+
+        Args:
+            db: Database session
+            organization_id: Organization ID
+            created_by_id: User creating components (optional)
+            include_employer_contributions: If True, include employer contribution
+                components like PENSION_EMPLOYER (default: False)
 
         Returns:
             Dictionary mapping component codes to SalaryComponent objects
@@ -160,14 +173,19 @@ class SalarySlipService:
         org_id = coerce_uuid(organization_id)
         components = {}
 
-        # Define statutory components
+        # Define statutory deductions (withheld from employee)
         statutory_defs = [
             (PENSION_COMPONENT_CODE, "Pension Contribution", "PEN", 101),
             (NHF_COMPONENT_CODE, "National Housing Fund", "NHF", 102),
             (NHIS_COMPONENT_CODE, "National Health Insurance", "NHIS", 103),
             (PAYE_COMPONENT_CODE, "Pay As You Earn Tax", "PAYE", 104),
-            (EMPLOYER_PENSION_COMPONENT_CODE, "Employer Pension Contribution", "PEN-ER", 105),
         ]
+
+        # Optionally include employer contributions
+        if include_employer_contributions:
+            statutory_defs.append(
+                (EMPLOYER_PENSION_COMPONENT_CODE, "Employer Pension Contribution", "PEN-ER", 105),
+            )
 
         for code, name, abbr, order in statutory_defs:
             component = SalarySlipService.get_or_create_statutory_component(
@@ -180,16 +198,10 @@ class SalarySlipService:
     @staticmethod
     def generate_slip_number(db: Session, organization_id: UUID) -> str:
         """Generate a unique slip number."""
-        # Simple sequential numbering - can be enhanced with fiscal year prefix
-        from sqlalchemy import func
+        from app.services.people.payroll.numbering import PayrollNumberingService
 
-        count = (
-            db.query(func.count(SalarySlip.slip_id))
-            .filter(SalarySlip.organization_id == organization_id)
-            .scalar()
-        ) or 0
-
-        return f"SLIP-{datetime.now().year}-{(count + 1):05d}"
+        service = PayrollNumberingService(db)
+        return service.generate_slip_number(organization_id)
 
     @staticmethod
     def get_active_assignment(
@@ -219,7 +231,7 @@ class SalarySlipService:
         db: Session,
         organization_id: UUID,
         input: SalarySlipInput,
-        created_by_user_id: UUID,
+        created_by_user_id: Optional[UUID],
     ) -> SalarySlip:
         """
         Create a new salary slip and calculate amounts from structure.
@@ -880,25 +892,6 @@ class SalarySlipService:
         db.commit()
         db.refresh(slip)
 
-        try:
-            from app.services.people.payroll.payroll_notifications import (
-                PayrollNotificationService,
-            )
-
-            notification_service = PayrollNotificationService(db)
-            employee = slip.employee or db.get(Employee, slip.employee_id)
-            if employee:
-                notification_service.notify_payslip_posted(
-                    slip, employee, queue_email=True
-                )
-        except Exception as notify_err:
-            import logging
-            logging.getLogger(__name__).warning(
-                "Payroll approve: failed to notify for slip %s: %s",
-                slip.slip_id,
-                notify_err,
-            )
-
         return slip
 
     @staticmethod
@@ -933,6 +926,25 @@ class SalarySlipService:
         slip.status = SalarySlipStatus.APPROVED
         slip.status_changed_at = datetime.now(timezone.utc)
         slip.status_changed_by_id = user_id
+
+        try:
+            from app.services.people.payroll.payroll_notifications import (
+                PayrollNotificationService,
+            )
+
+            notification_service = PayrollNotificationService(db)
+            employee = slip.employee or db.get(Employee, slip.employee_id)
+            if employee:
+                notification_service.notify_payslip_posted(
+                    slip, employee, queue_email=True
+                )
+        except Exception as notify_err:
+            import logging
+            logging.getLogger(__name__).warning(
+                "Payroll approve: failed to notify for slip %s: %s",
+                slip.slip_id,
+                notify_err,
+            )
 
         db.commit()
         db.refresh(slip)

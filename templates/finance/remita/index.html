@@ -1,0 +1,196 @@
+{% extends "finance/base_finance.html" %}
+
+{% block page_title %}Remita RRRs{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400">
+    <a href="/finance/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white">Remita RRRs</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    {% if success_message %}
+    <div class="rounded-lg bg-emerald-50 p-4 text-sm text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+        <div class="flex items-center gap-2">
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+            </svg>
+            {{ success_message }}
+        </div>
+    </div>
+    {% endif %}
+
+    {% if error_message %}
+    <div class="rounded-lg bg-rose-50 p-4 text-sm text-rose-700 dark:bg-rose-900/30 dark:text-rose-400">
+        <div class="flex items-center gap-2">
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            {{ error_message }}
+        </div>
+    </div>
+    {% endif %}
+
+    {% if not is_configured %}
+    <div class="rounded-lg bg-amber-50 p-4 text-sm text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+        <strong>Warning:</strong> Remita is not configured. Please set REMITA_MERCHANT_ID and REMITA_API_KEY environment variables to enable RRR generation.
+    </div>
+    {% endif %}
+
+    <!-- Header with stats and action -->
+    <div class="flex flex-wrap items-center justify-between gap-4">
+        <div class="flex items-center gap-6">
+            <div>
+                <p class="text-sm text-slate-500 dark:text-slate-400">Pending RRRs</p>
+                <p class="text-2xl font-semibold text-slate-900 dark:text-white">{{ pending_count }}</p>
+            </div>
+            <div>
+                <p class="text-sm text-slate-500 dark:text-slate-400">Pending Amount</p>
+                <p class="text-2xl font-semibold text-amber-600 dark:text-amber-400">
+                    NGN {{ "{:,.2f}".format(pending_amount) }}
+                </p>
+            </div>
+        </div>
+        <div class="flex items-center gap-2">
+            {% if pending_count > 0 and is_configured %}
+            <form method="POST" action="/finance/remita/refresh-all" class="inline">
+                <button type="submit"
+                        class="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700">
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                    </svg>
+                    Refresh All
+                </button>
+            </form>
+            {% endif %}
+            <a href="/finance/remita/generate"
+               class="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                </svg>
+                Generate RRR
+            </a>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="flex flex-wrap items-center gap-4">
+        <form method="GET" class="flex flex-wrap items-center gap-2">
+            <select name="status"
+                    onchange="this.form.submit()"
+                    class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-primary-500 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                <option value="">All Statuses</option>
+                {% for s in statuses %}
+                <option value="{{ s }}" {% if status_filter == s %}selected{% endif %}>{{ s | title }}</option>
+                {% endfor %}
+            </select>
+            <select name="biller"
+                    onchange="this.form.submit()"
+                    class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-primary-500 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                <option value="">All Billers</option>
+                {% for b in billers %}
+                <option value="{{ b.id }}" {% if biller_filter == b.id %}selected{% endif %}>{{ b.name }}</option>
+                {% endfor %}
+            </select>
+            {% if status_filter or biller_filter %}
+            <a href="/finance/remita" class="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300">
+                Clear filters
+            </a>
+            {% endif %}
+        </form>
+    </div>
+
+    <!-- RRR Table -->
+    <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50">
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+                <thead class="bg-slate-50 dark:bg-slate-800">
+                    <tr>
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">RRR</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Biller / Service</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Amount</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Status</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Generated</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Paid</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                    {% for rrr in rrrs %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/70">
+                        <td class="whitespace-nowrap px-4 py-3">
+                            <a href="/finance/remita/{{ rrr.id }}"
+                               class="font-mono text-sm font-medium text-primary-600 hover:underline dark:text-primary-400">
+                                {{ rrr.rrr }}
+                            </a>
+                        </td>
+                        <td class="px-4 py-3">
+                            <div class="text-sm font-medium text-slate-900 dark:text-white">{{ rrr.biller_name }}</div>
+                            <div class="text-sm text-slate-500 dark:text-slate-400">{{ rrr.service_name }}</div>
+                        </td>
+                        <td class="whitespace-nowrap px-4 py-3">
+                            <span class="text-sm font-medium text-slate-900 dark:text-white">
+                                NGN {{ "{:,.2f}".format(rrr.amount) }}
+                            </span>
+                        </td>
+                        <td class="whitespace-nowrap px-4 py-3">
+                            {% set status_colors = {
+                                'pending': 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+                                'paid': 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+                                'expired': 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-400',
+                                'failed': 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400',
+                                'cancelled': 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-400'
+                            } %}
+                            <span class="inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium {{ status_colors.get(rrr.status.value, 'bg-slate-100 text-slate-700') }}">
+                                {{ rrr.status.value | title }}
+                            </span>
+                        </td>
+                        <td class="whitespace-nowrap px-4 py-3 text-sm text-slate-500 dark:text-slate-400">
+                            {{ rrr.generated_at.strftime('%Y-%m-%d %H:%M') }}
+                        </td>
+                        <td class="whitespace-nowrap px-4 py-3 text-sm text-slate-500 dark:text-slate-400">
+                            {% if rrr.paid_at %}
+                            {{ rrr.paid_at.strftime('%Y-%m-%d %H:%M') }}
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6" class="px-4 py-8 text-center text-sm text-slate-500 dark:text-slate-400">
+                            No RRRs found. <a href="/finance/remita/generate" class="text-primary-600 hover:underline dark:text-primary-400">Generate one</a>.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Pagination -->
+    {% if has_prev or has_next %}
+    <nav class="flex items-center justify-center gap-2">
+        {% if has_prev %}
+        <a href="?page={{ current_page - 1 }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if biller_filter %}&biller={{ biller_filter }}{% endif %}"
+           class="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700">
+            Previous
+        </a>
+        {% endif %}
+
+        <span class="text-sm text-slate-500 dark:text-slate-400">
+            Page {{ current_page }}
+        </span>
+
+        {% if has_next %}
+        <a href="?page={{ current_page + 1 }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if biller_filter %}&biller={{ biller_filter }}{% endif %}"
+           class="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700">
+            Next
+        </a>
+        {% endif %}
+    </nav>
+    {% endif %}
+</div>
+{% endblock %}

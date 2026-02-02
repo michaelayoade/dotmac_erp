@@ -315,7 +315,8 @@ class SelfServiceWebService:
             raise
 
         svc = AttendanceService(db)
-        today_record = svc.get_attendance_by_date(org_id, employee_id, date.today())
+        today = svc.get_org_today(org_id)
+        today_record = svc.get_attendance_by_date(org_id, employee_id, today)
 
         if month:
             try:
@@ -324,14 +325,13 @@ class SelfServiceWebService:
                 raise HTTPException(status_code=400, detail="Invalid month format") from exc
             summary = svc.get_employee_monthly_summary(org_id, employee_id, year, month_num)
         else:
-            today = date.today()
             summary = svc.get_employee_monthly_summary(org_id, employee_id, today.year, today.month)
 
         recent = svc.list_attendance(
             org_id,
             employee_id=employee_id,
-            from_date=date.today().replace(day=1),
-            to_date=date.today(),
+            from_date=today.replace(day=1),
+            to_date=today,
             pagination=PaginationParams(offset=0, limit=10),
         )
 

@@ -309,3 +309,222 @@ def crm_health_check() -> dict:
             "crm_url": settings.crm_api_url,
             "message": str(e),
         }
+
+
+# =============================================================================
+# Inventory Push Tasks (ERP → CRM)
+# =============================================================================
+
+
+@shared_task
+def push_inventory_to_crm(
+    organization_id: str | None = None,
+    include_zero_stock: bool = False,
+) -> dict:
+    """
+    Push full inventory snapshot to CRM.
+
+    Args:
+        organization_id: Specific org to push, or None for default org
+        include_zero_stock: Include items with zero available stock
+
+    Returns:
+        Dict with push statistics
+    """
+    from app.services.sync.inventory_push_service import InventoryPushService
+
+    logger.info("Starting inventory push to CRM")
+
+    results: dict[str, Any] = {
+        "task": "push_inventory_to_crm",
+        "success": False,
+        "items_pushed": 0,
+        "errors": [],
+    }
+
+    # Determine organization
+    org_id_str = organization_id or settings.default_organization_id
+    if not org_id_str:
+        logger.error("No organization ID provided and no default configured")
+        results["errors"].append("No organization ID available")
+        return results
+
+    try:
+        org_id = UUID(org_id_str)
+    except ValueError:
+        logger.error("Invalid organization ID: %s", org_id_str)
+        results["errors"].append(f"Invalid organization ID: {org_id_str}")
+        return results
+
+    with SessionLocal() as db:
+        try:
+            with InventoryPushService(db) as service:
+                if not service.is_configured:
+                    results["errors"].append(
+                        "CRM inventory push not configured. "
+                        "Set CRM_INVENTORY_WEBHOOK_URL and CRM_API_TOKEN."
+                    )
+                    return results
+
+                result = service.push_full_inventory(
+                    org_id,
+                    include_zero_stock=include_zero_stock,
+                )
+
+                results["success"] = result.success
+                results["items_pushed"] = result.items_pushed
+                results["errors"] = result.errors
+                if result.crm_response:
+                    results["crm_response"] = result.crm_response
+
+        except Exception as e:
+            logger.exception("Inventory push failed: %s", str(e))
+            results["errors"].append(str(e))
+
+    logger.info(
+        "Inventory push complete: success=%s, items=%d, errors=%d",
+        results["success"],
+        results["items_pushed"],
+        len(results["errors"]),
+    )
+
+    return results
+
+
+@shared_task
+def push_low_stock_alerts_to_crm(organization_id: str | None = None) -> dict:
+    """
+    Push low stock alerts to CRM.
+
+    Sends items below reorder point to CRM for alerting.
+
+    Args:
+        organization_id: Specific org to check, or None for default org
+
+    Returns:
+        Dict with push statistics
+    """
+    from app.services.sync.inventory_push_service import InventoryPushService
+
+    logger.info("Starting low stock alert push to CRM")
+
+    results: dict[str, Any] = {
+        "task": "push_low_stock_alerts_to_crm",
+        "success": False,
+        "items_pushed": 0,
+        "errors": [],
+    }
+
+    # Determine organization
+    org_id_str = organization_id or settings.default_organization_id
+    if not org_id_str:
+        logger.error("No organization ID provided and no default configured")
+        results["errors"].append("No organization ID available")
+        return results
+
+    try:
+        org_id = UUID(org_id_str)
+    except ValueError:
+        logger.error("Invalid organization ID: %s", org_id_str)
+        results["errors"].append(f"Invalid organization ID: {org_id_str}")
+        return results
+
+    with SessionLocal() as db:
+        try:
+            with InventoryPushService(db) as service:
+                if not service.is_configured:
+                    results["errors"].append(
+                        "CRM inventory push not configured. "
+                        "Set CRM_INVENTORY_WEBHOOK_URL and CRM_API_TOKEN."
+                    )
+                    return results
+
+                result = service.push_low_stock_alerts(org_id)
+
+                results["success"] = result.success
+                results["items_pushed"] = result.items_pushed
+                results["errors"] = result.errors
+
+        except Exception as e:
+            logger.exception("Low stock alert push failed: %s", str(e))
+            results["errors"].append(str(e))
+
+    logger.info(
+        "Low stock alert push complete: success=%s, items=%d",
+        results["success"],
+        results["items_pushed"],
+    )
+
+    return results
+
+
+@shared_task
+def push_specific_items_to_crm(
+    organization_id: str,
+    item_ids: list[str],
+) -> dict:
+    """
+    Push specific inventory items to CRM (for event-driven updates).
+
+    Called when stock levels change significantly for specific items.
+
+    Args:
+        organization_id: Organization ID
+        item_ids: List of item ID strings to push
+
+    Returns:
+        Dict with push statistics
+    """
+    from app.services.sync.inventory_push_service import InventoryPushService
+
+    logger.info("Pushing %d specific items to CRM", len(item_ids))
+
+    results: dict[str, Any] = {
+        "task": "push_specific_items_to_crm",
+        "success": False,
+        "items_pushed": 0,
+        "errors": [],
+    }
+
+    try:
+        org_id = UUID(organization_id)
+        uuids = [UUID(item_id) for item_id in item_ids]
+    except ValueError as e:
+        results["errors"].append(f"Invalid UUID: {str(e)}")
+        return results
+
+    with SessionLocal() as db:
+        try:
+            with InventoryPushService(db) as service:
+                if not service.is_configured:
+                    results["errors"].append("CRM inventory push not configured")
+                    return results
+
+                result = service.push_items(org_id, uuids)
+
+                results["success"] = result.success
+                results["items_pushed"] = result.items_pushed
+                results["errors"] = result.errors
+
+        except Exception as e:
+            logger.exception("Specific items push failed: %s", str(e))
+            results["errors"].append(str(e))
+
+    return results
+
+
+@shared_task
+def crm_inventory_health_check() -> dict:
+    """
+    Check CRM inventory webhook connectivity.
+
+    Returns:
+        Dict with health status
+    """
+    from app.services.sync.inventory_push_service import InventoryPushService
+
+    logger.info("Running CRM inventory webhook health check")
+
+    with SessionLocal() as db:
+        with InventoryPushService(db) as service:
+            return service.health_check()

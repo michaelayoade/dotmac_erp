@@ -79,11 +79,14 @@ async def create_employee(
 def view_employee(
     request: Request,
     employee_id: UUID,
+    saved: Optional[str] = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
     """Employee detail page."""
-    return hr_web_service.employee_detail_response(request, auth, db, str(employee_id))
+    return hr_web_service.employee_detail_response(
+        request, auth, db, str(employee_id), saved=bool(saved)
+    )
 
 
 @router.get("/employees/{employee_id}/edit", response_class=HTMLResponse)

@@ -479,6 +479,16 @@ def get_cached_setting(
     return settings_cache.get_setting_value(db, domain, key, default)
 
 
+def get_setting_value(
+    db: Session,
+    domain: SettingDomain,
+    key: str,
+    default: Any = None,
+) -> Any:
+    """Backward-compatible alias for get_cached_setting."""
+    return settings_cache.get_setting_value(db, domain, key, default)
+
+
 def invalidate_setting_cache(domain: SettingDomain, key: Optional[str] = None) -> None:
     """
     Convenience function to invalidate settings cache.

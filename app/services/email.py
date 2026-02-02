@@ -10,7 +10,7 @@ from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email import encoders
-from typing import Generator, Optional
+from typing import Generator, Optional, TypedDict
 
 from sqlalchemy.orm import Session
 
@@ -22,6 +22,18 @@ logger = logging.getLogger(__name__)
 # SMTP Connection Pool configuration
 SMTP_POOL_SIZE = int(os.getenv("SMTP_POOL_SIZE", "5"))
 SMTP_POOL_TIMEOUT = int(os.getenv("SMTP_POOL_TIMEOUT", "30"))
+
+
+class SMTPConfig(TypedDict):
+    host: str
+    port: int
+    username: str | None
+    password: str | None
+    use_tls: bool
+    use_ssl: bool
+    from_email: str
+    from_name: str
+    reply_to: str | None
 
 
 class SMTPConnectionPool:
@@ -39,13 +51,14 @@ class SMTPConnectionPool:
         self._config: dict | None = None
         self._config_hash: str | None = None
 
-    def _get_config_hash(self, config: dict) -> str:
+    def _get_config_hash(self, config: SMTPConfig) -> str:
         """Generate hash of config to detect changes."""
         return f"{config['host']}:{config['port']}:{config.get('username', '')}:{config['use_ssl']}:{config['use_tls']}"
 
-    def _create_connection(self, config: dict) -> smtplib.SMTP | smtplib.SMTP_SSL:
+    def _create_connection(self, config: SMTPConfig) -> smtplib.SMTP | smtplib.SMTP_SSL:
         """Create a new SMTP connection."""
         timeout = SMTP_POOL_TIMEOUT
+        server: smtplib.SMTP | smtplib.SMTP_SSL
         if config["use_ssl"]:
             server = smtplib.SMTP_SSL(config["host"], config["port"], timeout=timeout)
         else:
@@ -77,7 +90,7 @@ class SMTPConnectionPool:
                 pass
 
     @contextmanager
-    def get_connection(self, config: dict) -> Generator[smtplib.SMTP | smtplib.SMTP_SSL, None, None]:
+    def get_connection(self, config: SMTPConfig) -> Generator[smtplib.SMTP | smtplib.SMTP_SSL, None, None]:
         """
         Get an SMTP connection from the pool.
 
@@ -168,13 +181,16 @@ def _get_db_setting(db: Session | None, key: str) -> object | None:
         return None
 
 
-def _get_smtp_config(db: Session | None = None) -> dict:
+def _get_smtp_config(db: Session | None = None) -> SMTPConfig:
     """Get SMTP config from database first, then fall back to environment variables."""
     # Try DB settings first, then env vars, then defaults
-    host = _get_db_setting(db, "smtp_host") or _env_value("SMTP_HOST") or "localhost"
+    host_raw = _get_db_setting(db, "smtp_host") or _env_value("SMTP_HOST") or "localhost"
+    host = str(host_raw)
     port = _get_db_setting(db, "smtp_port") or _env_int("SMTP_PORT", 587)
-    username = _get_db_setting(db, "smtp_username") or _env_value("SMTP_USERNAME")
-    password = _get_db_setting(db, "smtp_password") or _env_value("SMTP_PASSWORD")
+    username_raw = _get_db_setting(db, "smtp_username") or _env_value("SMTP_USERNAME")
+    username = str(username_raw) if username_raw is not None else None
+    password_raw = _get_db_setting(db, "smtp_password") or _env_value("SMTP_PASSWORD")
+    password = str(password_raw) if password_raw is not None else None
 
     # Boolean settings
     use_tls_db = _get_db_setting(db, "smtp_use_tls")
@@ -183,9 +199,12 @@ def _get_smtp_config(db: Session | None = None) -> dict:
     use_ssl_db = _get_db_setting(db, "smtp_use_ssl")
     use_ssl = use_ssl_db if use_ssl_db is not None else _env_bool("SMTP_USE_SSL", False)
 
-    from_email = _get_db_setting(db, "smtp_from_email") or _env_value("SMTP_FROM_EMAIL") or "noreply@example.com"
-    from_name = _get_db_setting(db, "smtp_from_name") or _env_value("SMTP_FROM_NAME") or "Dotmac ERP"
-    reply_to = _get_db_setting(db, "email_reply_to") or _env_value("EMAIL_REPLY_TO")
+    from_email_raw = _get_db_setting(db, "smtp_from_email") or _env_value("SMTP_FROM_EMAIL") or "noreply@example.com"
+    from_email = str(from_email_raw)
+    from_name_raw = _get_db_setting(db, "smtp_from_name") or _env_value("SMTP_FROM_NAME") or "Dotmac ERP"
+    from_name = str(from_name_raw)
+    reply_to_raw = _get_db_setting(db, "email_reply_to") or _env_value("EMAIL_REPLY_TO")
+    reply_to = str(reply_to_raw) if reply_to_raw is not None else None
 
     port_int = 587
     if port is not None:
@@ -207,7 +226,7 @@ def _get_smtp_config(db: Session | None = None) -> dict:
     }
 
 
-def validate_smtp_config(config: dict, timeout_seconds: int = 10) -> tuple[bool, str | None]:
+def validate_smtp_config(config: SMTPConfig, timeout_seconds: int = 10) -> tuple[bool, str | None]:
     """Validate SMTP settings by attempting a connection and (optional) auth."""
     host = str(config.get("host") or "").strip()
     if not host:
@@ -312,8 +331,9 @@ def send_email(
     msg["To"] = to_email
 
     # Add Reply-To header if configured
-    if config.get("reply_to"):
-        msg["Reply-To"] = config["reply_to"]
+    reply_to = config.get("reply_to")
+    if reply_to:
+        msg["Reply-To"] = reply_to
 
     # Create alternative part for text/html body
     msg_alternative = MIMEMultipart("alternative")

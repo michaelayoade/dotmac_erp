@@ -28,7 +28,10 @@ class TestWorkingDaysCalculator:
     @pytest.fixture
     def mock_db(self):
         """Create a mock database session for unit tests."""
-        return MagicMock()
+        db = MagicMock()
+        # Mock scalars().unique().all() to return empty list (triggers default holidays)
+        db.scalars.return_value.unique.return_value.all.return_value = []
+        return db
 
     @pytest.fixture
     def calculator(self, mock_db):

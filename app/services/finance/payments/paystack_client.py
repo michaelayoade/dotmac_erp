@@ -100,9 +100,76 @@ class VerifyTransferResponse:
     currency: str
     transfer_code: str
     recipient_code: str
-    completed_at: Optional[str]
-    reason: Optional[str]  # failure reason if any
-    fee: Optional[int] = None  # Fee in kobo charged for this transfer
+    completed_at: Optional[str] = None
+    reason: Optional[str] = None
+    fee: Optional[int] = None
+
+
+@dataclass
+class TransactionRecord:
+    """A single transaction record from Paystack."""
+
+    id: int
+    reference: str
+    amount: int  # in kobo
+    currency: str
+    status: str
+    paid_at: Optional[str]
+    created_at: str
+    channel: str
+    customer_email: str
+    fees: int
+    metadata: dict
+
+
+@dataclass
+class TransferRecord:
+    """A single transfer record from Paystack."""
+
+    id: int
+    transfer_code: str
+    reference: str
+    amount: int  # in kobo
+    currency: str
+    status: str
+    reason: Optional[str]
+    created_at: str
+    updated_at: Optional[str]
+    recipient_name: str
+    recipient_account_number: str
+    recipient_bank_code: str
+    fees: Optional[int] = None
+
+
+@dataclass
+class SettlementRecord:
+    """A settlement record from Paystack (payout to merchant bank)."""
+
+    id: int
+    settlement_date: str
+    status: str  # pending, success
+    total_amount: int  # in kobo - gross amount settled
+    total_fees: int  # in kobo - fees deducted
+    net_amount: int  # in kobo - amount actually sent to bank
+    currency: str
+    created_at: str
+
+
+@dataclass
+class SettlementTransaction:
+    """A transaction within a settlement."""
+
+    id: int
+    reference: str
+    amount: int  # in kobo (gross)
+    fees: int  # in kobo
+    net_amount: int  # in kobo (amount - fees)
+    currency: str
+    status: str
+    paid_at: Optional[str]
+    created_at: str
+    customer_email: str
+    channel: str
 
 
 @dataclass
@@ -114,6 +181,20 @@ class Bank:
     country: str
     currency: str
     type: str  # nuban, mobile_money
+
+
+@dataclass
+class PaystackCustomer:
+    """A customer in Paystack."""
+
+    id: int
+    customer_code: str
+    email: str
+    first_name: Optional[str]
+    last_name: Optional[str]
+    phone: Optional[str]
+    metadata: dict
+    created_at: str
 
 
 class PaystackClient:
@@ -260,10 +341,22 @@ class PaystackClient:
 
         Returns:
             True if signature is valid, False otherwise
+
+        Raises:
+            ValueError: If webhook secret is not configured (security requirement)
         """
         if not self.config.webhook_secret:
-            logger.warning("Webhook secret not configured, skipping verification")
-            return True
+            logger.error(
+                "SECURITY: Webhook secret not configured - rejecting webhook. "
+                "Set paystack_webhook_secret in payment settings."
+            )
+            raise ValueError(
+                "Webhook secret not configured. Cannot verify webhook authenticity."
+            )
+
+        if not signature:
+            logger.warning("SECURITY: Webhook received without signature header")
+            return False
 
         expected = hmac.new(
             self.config.webhook_secret.encode("utf-8"),
@@ -271,7 +364,12 @@ class PaystackClient:
             hashlib.sha512,
         ).hexdigest()
 
-        return hmac.compare_digest(expected, signature)
+        is_valid = hmac.compare_digest(expected, signature)
+        if not is_valid:
+            logger.warning(
+                "SECURITY: Webhook signature mismatch - possible spoofing attempt"
+            )
+        return is_valid
 
     # =========================================================================
     # Transfer API (for expense reimbursements / payouts)
@@ -527,6 +625,461 @@ class PaystackClient:
             completed_at=d.get("completed_at"),
             reason=d.get("reason"),
             fee=d.get("fee") or d.get("fees"),  # Paystack uses 'fee' or 'fees'
+        )
+
+    def list_transactions(
+        self,
+        from_date: Optional[str] = None,
+        to_date: Optional[str] = None,
+        status: Optional[str] = None,
+        per_page: int = 100,
+        page: int = 1,
+    ) -> list[TransactionRecord]:
+        """
+        List transactions (inbound payments/collections).
+
+        Args:
+            from_date: Start date (ISO format: 2026-01-01T00:00:00.000Z)
+            to_date: End date (ISO format)
+            status: Filter by status (success, failed, abandoned)
+            per_page: Number of records per page (max 100)
+            page: Page number
+
+        Returns:
+            List of TransactionRecord
+        """
+        params: dict = {"perPage": per_page, "page": page}
+        if from_date:
+            params["from"] = from_date
+        if to_date:
+            params["to"] = to_date
+        if status:
+            params["status"] = status
+
+        client = self._get_client()
+        try:
+            response = client.get("/transaction", params=params)
+            response.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            logger.error(f"Paystack list transactions failed: {e.response.text}")
+            raise PaystackError(
+                f"Failed to list transactions: {e.response.text}",
+                status_code=e.response.status_code,
+            )
+        except httpx.RequestError as e:
+            logger.error(f"Paystack request error: {e}")
+            raise PaystackError(f"Request failed: {str(e)}")
+
+        data = response.json()
+        if not data.get("status"):
+            raise PaystackError(data.get("message", "List transactions failed"))
+
+        records = []
+        for t in data.get("data", []):
+            records.append(
+                TransactionRecord(
+                    id=t["id"],
+                    reference=t["reference"],
+                    amount=t["amount"],
+                    currency=t["currency"],
+                    status=t["status"],
+                    paid_at=t.get("paid_at"),
+                    created_at=t["createdAt"],
+                    channel=t.get("channel", ""),
+                    customer_email=t.get("customer", {}).get("email", ""),
+                    fees=t.get("fees", 0),
+                    metadata=t.get("metadata") or {},
+                )
+            )
+        return records
+
+    def list_transfers(
+        self,
+        from_date: Optional[str] = None,
+        to_date: Optional[str] = None,
+        status: Optional[str] = None,
+        per_page: int = 100,
+        page: int = 1,
+    ) -> list[TransferRecord]:
+        """
+        List transfers (outbound payments).
+
+        Args:
+            from_date: Start date (ISO format: 2026-01-01T00:00:00.000Z)
+            to_date: End date (ISO format)
+            status: Filter by status (pending, success, failed)
+            per_page: Number of records per page (max 100)
+            page: Page number
+
+        Returns:
+            List of TransferRecord
+        """
+        params: dict = {"perPage": per_page, "page": page}
+        if from_date:
+            params["from"] = from_date
+        if to_date:
+            params["to"] = to_date
+        if status:
+            params["status"] = status
+
+        client = self._get_client()
+        try:
+            response = client.get("/transfer", params=params)
+            response.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            logger.error(f"Paystack list transfers failed: {e.response.text}")
+            raise PaystackError(
+                f"Failed to list transfers: {e.response.text}",
+                status_code=e.response.status_code,
+            )
+        except httpx.RequestError as e:
+            logger.error(f"Paystack request error: {e}")
+            raise PaystackError(f"Request failed: {str(e)}")
+
+        data = response.json()
+        if not data.get("status"):
+            raise PaystackError(data.get("message", "List transfers failed"))
+
+        records = []
+        for t in data.get("data", []):
+            recipient = t.get("recipient", {})
+            details = recipient.get("details", {})
+            records.append(
+                TransferRecord(
+                    id=t["id"],
+                    transfer_code=t["transfer_code"],
+                    reference=t["reference"],
+                    amount=t["amount"],
+                    currency=t["currency"],
+                    status=t["status"],
+                    reason=t.get("reason"),
+                    created_at=t["createdAt"],
+                    updated_at=t.get("updatedAt"),
+                    recipient_name=recipient.get("name", ""),
+                    recipient_account_number=details.get("account_number", ""),
+                    recipient_bank_code=details.get("bank_code", ""),
+                    fees=t.get("fee") or t.get("fees"),
+                )
+            )
+        return records
+
+    def get_balance(self) -> dict:
+        """
+        Get Paystack account balance.
+
+        Returns:
+            Dict with balance info per currency
+        """
+        client = self._get_client()
+        try:
+            response = client.get("/balance")
+            response.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            logger.error(f"Paystack get balance failed: {e.response.text}")
+            raise PaystackError(
+                f"Failed to get balance: {e.response.text}",
+                status_code=e.response.status_code,
+            )
+        except httpx.RequestError as e:
+            logger.error(f"Paystack request error: {e}")
+            raise PaystackError(f"Request failed: {str(e)}")
+
+        data = response.json()
+        if not data.get("status"):
+            raise PaystackError(data.get("message", "Get balance failed"))
+
+        return data.get("data", [])
+
+    def list_settlements(
+        self,
+        from_date: Optional[str] = None,
+        to_date: Optional[str] = None,
+        status: Optional[str] = None,
+        per_page: int = 100,
+        page: int = 1,
+    ) -> list[SettlementRecord]:
+        """
+        List settlements (payouts to merchant bank account).
+
+        Settlements are automatic payouts from Paystack to the merchant's
+        registered bank account (e.g., UBA).
+
+        Args:
+            from_date: Start date (ISO format: 2026-01-01T00:00:00.000Z)
+            to_date: End date (ISO format)
+            status: Filter by status (pending, success)
+            per_page: Number of records per page (max 100)
+            page: Page number
+
+        Returns:
+            List of SettlementRecord
+        """
+        params: dict = {"perPage": per_page, "page": page}
+        if from_date:
+            params["from"] = from_date
+        if to_date:
+            params["to"] = to_date
+        if status:
+            params["status"] = status
+
+        client = self._get_client()
+        try:
+            response = client.get("/settlement", params=params)
+            response.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            logger.error(f"Paystack list settlements failed: {e.response.text}")
+            raise PaystackError(
+                f"Failed to list settlements: {e.response.text}",
+                status_code=e.response.status_code,
+            )
+        except httpx.RequestError as e:
+            logger.error(f"Paystack request error: {e}")
+            raise PaystackError(f"Request failed: {str(e)}")
+
+        data = response.json()
+        if not data.get("status"):
+            raise PaystackError(data.get("message", "List settlements failed"))
+
+        records = []
+        for s in data.get("data", []):
+            records.append(
+                SettlementRecord(
+                    id=s["id"],
+                    settlement_date=s.get("settlement_date") or s.get("settled_at", ""),
+                    status=s["status"],
+                    total_amount=s.get("total_amount", 0),
+                    total_fees=s.get("total_fees", 0),
+                    net_amount=s.get("total_amount", 0) - s.get("total_fees", 0),
+                    currency=s.get("currency", "NGN"),
+                    created_at=s.get("createdAt", ""),
+                )
+            )
+        return records
+
+    def get_settlement_transactions(
+        self,
+        settlement_id: int,
+        per_page: int = 100,
+        page: int = 1,
+    ) -> list[SettlementTransaction]:
+        """
+        Get transactions that make up a specific settlement.
+
+        Args:
+            settlement_id: The settlement ID
+            per_page: Number of records per page (max 100)
+            page: Page number
+
+        Returns:
+            List of SettlementTransaction
+        """
+        params: dict = {"perPage": per_page, "page": page}
+
+        client = self._get_client()
+        try:
+            response = client.get(f"/settlement/{settlement_id}/transactions", params=params)
+            response.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            logger.error(f"Paystack get settlement transactions failed: {e.response.text}")
+            raise PaystackError(
+                f"Failed to get settlement transactions: {e.response.text}",
+                status_code=e.response.status_code,
+            )
+        except httpx.RequestError as e:
+            logger.error(f"Paystack request error: {e}")
+            raise PaystackError(f"Request failed: {str(e)}")
+
+        data = response.json()
+        if not data.get("status"):
+            raise PaystackError(data.get("message", "Get settlement transactions failed"))
+
+        records = []
+        for t in data.get("data", []):
+            amount = t.get("amount", 0)
+            fees = t.get("fees", 0)
+            records.append(
+                SettlementTransaction(
+                    id=t["id"],
+                    reference=t.get("reference", ""),
+                    amount=amount,
+                    fees=fees,
+                    net_amount=amount - fees,
+                    currency=t.get("currency", "NGN"),
+                    status=t.get("status", ""),
+                    paid_at=t.get("paid_at"),
+                    created_at=t.get("createdAt", ""),
+                    customer_email=t.get("customer", {}).get("email", ""),
+                    channel=t.get("channel", ""),
+                )
+            )
+        return records
+
+    # =========================================================================
+    # Customer API (for better payment tracking)
+    # =========================================================================
+
+    def create_customer(
+        self,
+        email: str,
+        first_name: Optional[str] = None,
+        last_name: Optional[str] = None,
+        phone: Optional[str] = None,
+        metadata: Optional[dict] = None,
+    ) -> PaystackCustomer:
+        """
+        Create a customer in Paystack.
+
+        Args:
+            email: Customer email (required, used as identifier)
+            first_name: Customer first name
+            last_name: Customer last name
+            phone: Customer phone number
+            metadata: Custom metadata (e.g., customer_id, customer_code)
+
+        Returns:
+            PaystackCustomer with customer_code
+        """
+        payload: dict = {"email": email}
+        if first_name:
+            payload["first_name"] = first_name
+        if last_name:
+            payload["last_name"] = last_name
+        if phone:
+            payload["phone"] = phone
+        if metadata:
+            payload["metadata"] = metadata
+
+        client = self._get_client()
+        try:
+            response = client.post("/customer", json=payload)
+            response.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            logger.error(f"Paystack create customer failed: {e.response.text}")
+            raise PaystackError(
+                f"Failed to create customer: {e.response.text}",
+                status_code=e.response.status_code,
+            )
+        except httpx.RequestError as e:
+            logger.error(f"Paystack request error: {e}")
+            raise PaystackError(f"Request failed: {str(e)}")
+
+        data = response.json()
+        if not data.get("status"):
+            raise PaystackError(data.get("message", "Create customer failed"))
+
+        d = data["data"]
+        return PaystackCustomer(
+            id=d["id"],
+            customer_code=d["customer_code"],
+            email=d["email"],
+            first_name=d.get("first_name"),
+            last_name=d.get("last_name"),
+            phone=d.get("phone"),
+            metadata=d.get("metadata") or {},
+            created_at=d.get("createdAt", ""),
+        )
+
+    def update_customer(
+        self,
+        customer_code: str,
+        first_name: Optional[str] = None,
+        last_name: Optional[str] = None,
+        phone: Optional[str] = None,
+        metadata: Optional[dict] = None,
+    ) -> PaystackCustomer:
+        """
+        Update an existing customer in Paystack.
+
+        Args:
+            customer_code: Paystack customer code
+            first_name: Customer first name
+            last_name: Customer last name
+            phone: Customer phone number
+            metadata: Custom metadata to update
+
+        Returns:
+            Updated PaystackCustomer
+        """
+        payload: dict = {}
+        if first_name:
+            payload["first_name"] = first_name
+        if last_name:
+            payload["last_name"] = last_name
+        if phone:
+            payload["phone"] = phone
+        if metadata:
+            payload["metadata"] = metadata
+
+        client = self._get_client()
+        try:
+            response = client.put(f"/customer/{customer_code}", json=payload)
+            response.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            logger.error(f"Paystack update customer failed: {e.response.text}")
+            raise PaystackError(
+                f"Failed to update customer: {e.response.text}",
+                status_code=e.response.status_code,
+            )
+        except httpx.RequestError as e:
+            logger.error(f"Paystack request error: {e}")
+            raise PaystackError(f"Request failed: {str(e)}")
+
+        data = response.json()
+        if not data.get("status"):
+            raise PaystackError(data.get("message", "Update customer failed"))
+
+        d = data["data"]
+        return PaystackCustomer(
+            id=d["id"],
+            customer_code=d["customer_code"],
+            email=d["email"],
+            first_name=d.get("first_name"),
+            last_name=d.get("last_name"),
+            phone=d.get("phone"),
+            metadata=d.get("metadata") or {},
+            created_at=d.get("createdAt", ""),
+        )
+
+    def get_customer(self, email_or_code: str) -> Optional[PaystackCustomer]:
+        """
+        Get a customer by email or customer_code.
+
+        Args:
+            email_or_code: Customer email or Paystack customer_code
+
+        Returns:
+            PaystackCustomer if found, None if not found
+        """
+        client = self._get_client()
+        try:
+            response = client.get(f"/customer/{email_or_code}")
+            response.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                return None
+            logger.error(f"Paystack get customer failed: {e.response.text}")
+            raise PaystackError(
+                f"Failed to get customer: {e.response.text}",
+                status_code=e.response.status_code,
+            )
+        except httpx.RequestError as e:
+            logger.error(f"Paystack request error: {e}")
+            raise PaystackError(f"Request failed: {str(e)}")
+
+        data = response.json()
+        if not data.get("status"):
+            return None
+
+        d = data["data"]
+        return PaystackCustomer(
+            id=d["id"],
+            customer_code=d["customer_code"],
+            email=d["email"],
+            first_name=d.get("first_name"),
+            last_name=d.get("last_name"),
+            phone=d.get("phone"),
+            metadata=d.get("metadata") or {},
+            created_at=d.get("createdAt", ""),
         )
 
     def close(self):

@@ -305,6 +305,12 @@ from app.models.finance.payments import (
     WebhookStatus,
 )
 
+# Remita Integration
+from app.models.finance.remita import (
+    RemitaRRR,
+    RRRStatus,
+)
+
 __all__ = [
     # Platform
     "EventOutbox",
@@ -504,4 +510,7 @@ __all__ = [
     "PaymentIntentStatus",
     "PaymentWebhook",
     "WebhookStatus",
+    # Remita
+    "RemitaRRR",
+    "RRRStatus",
 ]

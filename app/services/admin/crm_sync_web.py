@@ -148,7 +148,7 @@ class CRMSyncWebService:
             return error_response
 
         context = self._base_context(request, auth, "DotMac CRM Sync", "dashboard", db)
-        org_id = uuid.UUID(auth.organization_id) if auth else None
+        org_id = auth.organization_id if auth else None
 
         if org_id:
             # Get config and API key
@@ -193,7 +193,7 @@ class CRMSyncWebService:
             return error_response
 
         context = self._base_context(request, auth, "CRM Integration Settings", "config", db)
-        org_id = uuid.UUID(auth.organization_id) if auth else None
+        org_id = auth.organization_id if auth else None
 
         if org_id:
             config = self._get_crm_config(db, org_id)
@@ -226,7 +226,7 @@ class CRMSyncWebService:
         if error_response:
             return error_response
 
-        org_id = uuid.UUID(auth.organization_id) if auth else None
+        org_id = auth.organization_id if auth else None
         if not org_id:
             return RedirectResponse(
                 url="/admin/sync/crm/config?error=" + quote_plus("No organization"),
@@ -241,7 +241,7 @@ class CRMSyncWebService:
                 integration_type=IntegrationType.DOTMAC_CRM,
                 base_url="https://crm.dotmac.io",  # Default CRM URL
                 is_active=is_active,
-                created_by_user_id=uuid.UUID(auth.person_id) if auth else None,
+                created_by_user_id=auth.person_id if auth else None,
             )
             db.add(config)
         else:
@@ -277,8 +277,8 @@ class CRMSyncWebService:
         if error_response:
             return error_response
 
-        org_id = uuid.UUID(auth.organization_id) if auth else None
-        person_id = uuid.UUID(auth.person_id) if auth else None
+        org_id = auth.organization_id if auth else None
+        person_id = auth.person_id if auth else None
 
         if not org_id or not person_id:
             return RedirectResponse(
@@ -336,7 +336,7 @@ class CRMSyncWebService:
         if error_response:
             return error_response
 
-        org_id = uuid.UUID(auth.organization_id) if auth else None
+        org_id = auth.organization_id if auth else None
         if not org_id:
             return RedirectResponse(
                 url="/admin/sync/crm/config?error=" + quote_plus("No organization"),
@@ -373,7 +373,7 @@ class CRMSyncWebService:
             return error_response
 
         context = self._base_context(request, auth, "Synced CRM Entities", "entities", db)
-        org_id = uuid.UUID(auth.organization_id) if auth else None
+        org_id = auth.organization_id if auth else None
 
         per_page = 25
         offset = (page - 1) * per_page
@@ -422,6 +422,132 @@ class CRMSyncWebService:
             context["total_count"] = 0
 
         return templates.TemplateResponse(request, "admin/sync/crm/entities.html", context)
+
+    # ============ Inventory Push ============
+
+    def inventory_push_response(
+        self,
+        request: Request,
+        db: Session,
+        auth: Optional[WebAuthContext],
+    ) -> HTMLResponse | RedirectResponse:
+        """Render inventory push management page."""
+        from app.config import settings
+
+        error_response = self._require_admin(request, auth)
+        if error_response:
+            return error_response
+
+        context = self._base_context(request, auth, "Inventory Push to CRM", "inventory", db)
+        org_id = auth.organization_id if auth else None
+
+        # Check if push is configured
+        context["is_configured"] = bool(
+            settings.crm_inventory_webhook_url and settings.crm_api_token
+        )
+        context["webhook_url"] = settings.crm_inventory_webhook_url or "Not configured"
+        context["has_api_token"] = bool(settings.crm_api_token)
+
+        # Get inventory stats
+        if org_id:
+            from app.models.finance.inv.item import Item
+            from app.services.finance.inv.balance import InventoryBalanceService
+
+            # Total items
+            total_items = db.scalar(
+                select(func.count(Item.item_id)).where(
+                    Item.organization_id == org_id,
+                    Item.is_active.is_(True),
+                    Item.track_inventory.is_(True),
+                )
+            ) or 0
+
+            # Low stock items
+            low_stock_items = InventoryBalanceService.get_low_stock_items(db, org_id)
+
+            context["total_items"] = total_items
+            context["low_stock_count"] = len(low_stock_items)
+        else:
+            context["total_items"] = 0
+            context["low_stock_count"] = 0
+
+        return templates.TemplateResponse(request, "admin/sync/crm/inventory.html", context)
+
+    def trigger_inventory_push_response(
+        self,
+        request: Request,
+        db: Session,
+        auth: Optional[WebAuthContext],
+        push_type: str = "full",
+        include_zero_stock: bool = False,
+    ) -> RedirectResponse:
+        """Trigger inventory push to CRM."""
+        error_response = self._require_admin(request, auth)
+        if error_response:
+            return error_response  # type: ignore
+
+        org_id = auth.organization_id if auth else None
+
+        if not org_id:
+            return RedirectResponse(
+                url="/admin/sync/crm/inventory?error=" + quote_plus("No organization"),
+                status_code=302,
+            )
+
+        # Trigger the appropriate Celery task
+        from app.tasks.crm import (
+            push_inventory_to_crm,
+            push_low_stock_alerts_to_crm,
+        )
+
+        try:
+            if push_type == "low_stock":
+                push_low_stock_alerts_to_crm.delay(str(org_id))
+                message = "Low stock alert push started"
+            else:
+                push_inventory_to_crm.delay(str(org_id), include_zero_stock)
+                message = "Full inventory push started"
+
+            logger.info("Triggered inventory push: type=%s, org=%s", push_type, org_id)
+
+            return RedirectResponse(
+                url="/admin/sync/crm/inventory?success=" + quote_plus(message),
+                status_code=302,
+            )
+
+        except Exception as e:
+            logger.exception("Failed to trigger inventory push: %s", str(e))
+            return RedirectResponse(
+                url="/admin/sync/crm/inventory?error=" + quote_plus(str(e)),
+                status_code=302,
+            )
+
+    def inventory_health_check_response(
+        self,
+        request: Request,
+        db: Session,
+        auth: Optional[WebAuthContext],
+    ) -> RedirectResponse:
+        """Test CRM inventory webhook connectivity."""
+        error_response = self._require_admin(request, auth)
+        if error_response:
+            return error_response  # type: ignore
+
+        from app.services.sync.inventory_push_service import InventoryPushService
+
+        with InventoryPushService(db) as service:
+            result = service.health_check()
+
+        if result.get("healthy"):
+            return RedirectResponse(
+                url="/admin/sync/crm/inventory?success=" + quote_plus("CRM webhook is healthy"),
+                status_code=302,
+            )
+        else:
+            return RedirectResponse(
+                url="/admin/sync/crm/inventory?error=" + quote_plus(result.get("message", "Unknown error")),
+                status_code=302,
+            )
 
 
 # Singleton instance

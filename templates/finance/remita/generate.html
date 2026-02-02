@@ -1,0 +1,192 @@
+{% extends "finance/base_finance.html" %}
+
+{% block page_title %}Generate RRR{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400">
+    <a href="/finance/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/finance/remita" class="hover:text-primary-600 dark:hover:text-primary-400">Remita RRRs</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white">Generate</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-2xl">
+    <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800/50">
+        <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-6">Generate Remita RRR</h2>
+
+        {% if not is_configured %}
+        <div class="mb-6 rounded-lg bg-amber-50 p-4 text-sm text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+            <strong>Warning:</strong> Remita is not configured. Please set REMITA_MERCHANT_ID and REMITA_API_KEY environment variables before generating RRRs.
+        </div>
+        {% endif %}
+
+        {% if error %}
+        <div class="mb-6 rounded-lg bg-rose-50 p-4 text-sm text-rose-700 dark:bg-rose-900/30 dark:text-rose-400">
+            {{ error }}
+        </div>
+        {% endif %}
+
+        {% if form_data and form_data.source_type and form_data.source_id %}
+        <div class="mb-6 rounded-lg bg-slate-50 p-4 text-sm text-slate-700 dark:bg-slate-800/60 dark:text-slate-300">
+            This RRR will be linked to <span class="font-medium">{{ form_data.source_type }}</span>:
+            <span class="font-mono text-xs">{{ form_data.source_id }}</span>
+        </div>
+        {% endif %}
+
+        <form method="POST" action="/finance/remita/generate" class="space-y-6" x-data="{
+            biller: '{{ form_data.biller_id if form_data else '' }}',
+            serviceTypeId: '{{ form_data.service_type_id if form_data else '' }}',
+            serviceName: '{{ form_data.service_name if form_data else '' }}',
+            services: {{ services_by_biller | tojson }},
+            getServices() {
+                return this.services[this.biller] || [];
+            },
+            hasServices() {
+                return this.getServices().length > 0;
+            },
+            onServiceSelect(event) {
+                this.serviceTypeId = event.target.value;
+                this.serviceName = event.target.options[event.target.selectedIndex].text;
+            }
+        }">
+            {% set payer_defaults = payer_defaults if payer_defaults else {} %}
+            {% if form_data and form_data.source_type and form_data.source_id %}
+            <input type="hidden" name="source_type" value="{{ form_data.source_type }}">
+            <input type="hidden" name="source_id" value="{{ form_data.source_id }}">
+            {% endif %}
+            <!-- Biller Selection -->
+            <div>
+                <label for="biller_id" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    Biller <span class="text-rose-500">*</span>
+                </label>
+                <select name="biller_id" id="biller_id" required
+                        x-model="biller"
+                        @change="$refs.billerName.value = $event.target.options[$event.target.selectedIndex].text"
+                        class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-primary-500 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                    <option value="">Select a biller</option>
+                    {% for b in billers %}
+                    <option value="{{ b.id }}" {% if form_data and form_data.biller_id == b.id %}selected{% endif %}>{{ b.name }}</option>
+                    {% endfor %}
+                </select>
+                <input type="hidden" name="biller_name" x-ref="billerName" value="{{ form_data.biller_name if form_data else '' }}">
+            </div>
+
+            <!-- Service Selection -->
+            <div>
+                <label for="service_type_select" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    Service Type <span class="text-rose-500">*</span>
+                </label>
+                <!-- Dropdown for billers with predefined services -->
+                <select x-show="hasServices()"
+                        id="service_type_select"
+                        x-model="serviceTypeId"
+                        @change="onServiceSelect($event)"
+                        class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-primary-500 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                    <option value="">Select a service</option>
+                    <template x-for="service in getServices()" :key="service.id">
+                        <option :value="service.id" x-text="service.name"></option>
+                    </template>
+                </select>
+                <!-- Text input for custom service type ID -->
+                <input x-show="!hasServices()"
+                       type="text"
+                       id="service_type_input"
+                       x-model="serviceTypeId"
+                       placeholder="Enter service type ID"
+                       class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-primary-500 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                <!-- Hidden fields for form submission -->
+                <input type="hidden" name="service_type_id" :value="serviceTypeId" required>
+                <input type="hidden" name="service_name" :value="serviceName">
+                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    Select from common services or enter a custom service type ID
+                </p>
+            </div>
+
+            <!-- Service Name (for custom/other billers) -->
+            <div x-show="!hasServices() && biller">
+                <label for="service_name_input" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    Service Name <span class="text-rose-500">*</span>
+                </label>
+                <input type="text" id="service_name_input"
+                       x-model="serviceName"
+                       placeholder="e.g., PAYE Tax"
+                       class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-primary-500 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+            </div>
+
+            <!-- Amount -->
+            <div>
+                <label for="amount" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    Amount (NGN) <span class="text-rose-500">*</span>
+                </label>
+                <input type="number" name="amount" id="amount" required
+                       step="0.01" min="0.01"
+                       value="{{ form_data.amount if form_data else '' }}"
+                       placeholder="0.00"
+                       class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-primary-500 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+            </div>
+
+            <!-- Payer Information -->
+            <div class="border-t border-slate-200 dark:border-slate-700 pt-6">
+                <h3 class="text-sm font-medium text-slate-900 dark:text-white mb-4">Payer Information</h3>
+
+                <div class="space-y-4">
+                    <div>
+                        <label for="payer_name" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                            Payer Name <span class="text-rose-500">*</span>
+                        </label>
+                        <input type="text" name="payer_name" id="payer_name" required
+                               value="{{ form_data.payer_name if form_data else payer_defaults.payer_name }}"
+                               placeholder="Company or individual name"
+                               class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-primary-500 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                    </div>
+
+                    <div>
+                        <label for="payer_email" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                            Payer Email <span class="text-rose-500">*</span>
+                        </label>
+                        <input type="email" name="payer_email" id="payer_email" required
+                               value="{{ form_data.payer_email if form_data else payer_defaults.payer_email }}"
+                               placeholder="email@company.com"
+                               class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-primary-500 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                    </div>
+
+                    <div>
+                        <label for="payer_phone" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                            Payer Phone
+                        </label>
+                        <input type="tel" name="payer_phone" id="payer_phone"
+                               value="{{ form_data.payer_phone if form_data else payer_defaults.payer_phone }}"
+                               placeholder="08012345678"
+                               class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-primary-500 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Description -->
+            <div>
+                <label for="description" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    Description <span class="text-rose-500">*</span>
+                </label>
+                <textarea name="description" id="description" required rows="3"
+                          placeholder="Payment description (e.g., PAYE Tax - January 2025)"
+                          class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-primary-500 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">{{ form_data.description if form_data else '' }}</textarea>
+            </div>
+
+            <!-- Actions -->
+            <div class="flex items-center justify-end gap-3 border-t border-slate-200 dark:border-slate-700 pt-6">
+                <a href="/finance/remita"
+                   class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700">
+                    Cancel
+                </a>
+                <button type="submit"
+                        class="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2">
+                    Generate RRR
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

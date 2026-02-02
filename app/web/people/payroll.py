@@ -507,6 +507,17 @@ def delete_run(
     return payroll_web_service.delete_run_response(auth, db, entry_id)
 
 
+@router.get("/runs/{entry_id}/bank-upload")
+def bank_upload(
+    entry_id: str,
+    source_account: Optional[str] = Query(default=None),
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Download bank upload file for payroll run (Zenith format)."""
+    return payroll_web_service.bank_upload_response(auth, db, entry_id, source_account)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Reports
 # ─────────────────────────────────────────────────────────────────────────────

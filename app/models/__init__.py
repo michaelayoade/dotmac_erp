@@ -20,6 +20,11 @@ from app.models.domain_settings import (  # noqa: F401
     SettingValueType,
 )
 from app.models.person import ContactMethod, Gender, Person, PersonStatus  # noqa: F401
+from app.models.batch_operation import (  # noqa: F401
+    BatchOperation,
+    BatchOperationStatus,
+    BatchOperationType,
+)
 from app.models.rbac import Permission, PersonRole, Role, RolePermission  # noqa: F401
 from app.models.scheduler import ScheduleType, ScheduledTask  # noqa: F401
 from app.models.workflow_task import (  # noqa: F401

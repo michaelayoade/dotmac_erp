@@ -196,7 +196,7 @@
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                        <label for="employment_type_id" class="form-label">Employment Type</label>
+                        <label for="employment_type_id" class="form-label">Contract Type</label>
                         <select name="employment_type_id" id="employment_type_id" class="form-input w-full">
                             <option value="">Select Employment Type</option>
                             {% for emp_type in employment_types %}
@@ -215,6 +215,29 @@
                             <option value="{{ grade.grade_id }}"
                                 {{ 'selected' if (employee and employee.grade_id == grade.grade_id) or (form_data.grade_id == grade.grade_id | string) }}>
                                 {{ grade.grade_name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="ctc" class="form-label">Gross (Annual)</label>
+                        <input type="number" name="ctc" id="ctc" step="0.01"
+                            value="{{ employee.ctc if employee and employee.ctc is not none else form_data.ctc | default('', true) }}"
+                            class="form-input w-full"
+                            placeholder="0.00">
+                        <p class="mt-1 text-xs text-slate-500">Used as CTC/gross for payroll setup.</p>
+                    </div>
+                    <div>
+                        <label for="salary_mode" class="form-label">Salary Mode</label>
+                        <select name="salary_mode" id="salary_mode" class="form-input w-full">
+                            <option value="">Select Salary Mode</option>
+                            {% for mode in salary_modes %}
+                            <option value="{{ mode }}"
+                                {{ 'selected' if (employee and employee.salary_mode and employee.salary_mode.value == mode) or (form_data.salary_mode == mode) }}>
+                                {{ mode | title }}
                             </option>
                             {% endfor %}
                         </select>
@@ -405,7 +428,7 @@
                             class="form-input w-full font-mono">
                     </div>
                     <div>
-                        <label for="bank_branch_code" class="form-label">Branch/Sort Code</label>
+                        <label for="bank_branch_code" class="form-label">Bank Code / Sort Code</label>
                         <input type="text" name="bank_branch_code" id="bank_branch_code"
                             value="{{ employee.bank_branch_code if employee else form_data.bank_branch_code | default('', true) }}"
                             class="form-input w-full font-mono">
@@ -432,33 +455,55 @@
         const form = document.getElementById("employee-form");
         const btn = document.getElementById("employee-submit");
         if (!form || !btn) return;
+
         btn.addEventListener("click", async function(event) {
             event.preventDefault();
+
+            // Disable button to prevent double-submit
+            btn.disabled = true;
+            btn.textContent = 'Saving...';
+
             const tokenInput = form.querySelector('input[name="csrf_token"]');
             const tokenMeta = document.querySelector('meta[name="csrf-token"]');
             const token = (tokenInput && tokenInput.value) || (tokenMeta && tokenMeta.getAttribute('content')) || '';
             const headers = token ? { 'X-CSRF-Token': token } : {};
             const body = new FormData(form);
+
             try {
                 const response = await fetch(form.action, {
                     method: "POST",
                     body,
                     headers,
                     credentials: "include",
+                    redirect: "follow",
                 });
-                if (response.redirected) {
-                    window.location.href = response.url;
+
+                // Success - redirect to detail page with success indicator
+                if (response.ok || response.redirected) {
+                    const targetUrl = response.redirected ? response.url : form.action.replace(/\/edit$/, "");
+                    // Add success query param if not already present
+                    const url = new URL(targetUrl, window.location.origin);
+                    url.searchParams.set('saved', '1');
+                    window.location.href = url.toString();
                     return;
                 }
-                if (response.ok) {
-                    window.location.href = form.action.replace(/\/edit$/, "");
-                    return;
-                }
-                console.error("Employee update failed", response.status);
-                alert("Update failed. Please try again.");
+
+                // Handle error responses
+                let errorMsg = `Update failed (status ${response.status})`;
+                try {
+                    const text = await response.text();
+                    if (text) errorMsg += `: ${text.substring(0, 100)}`;
+                } catch (e) {}
+
+                console.error("Employee update failed", response.status, errorMsg);
+                alert(errorMsg);
+                btn.disabled = false;
+                btn.textContent = '{% if employee %}Update{% else %}Create{% endif %} Employee';
             } catch (err) {
                 console.error("Employee update failed", err);
-                alert("Update failed. Please try again.");
+                alert("Update failed: " + err.message);
+                btn.disabled = false;
+                btn.textContent = '{% if employee %}Update{% else %}Create{% endif %} Employee';
             }
         });
     })();

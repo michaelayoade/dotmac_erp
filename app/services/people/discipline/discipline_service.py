@@ -813,11 +813,13 @@ class DisciplineService:
         year = date.today().year
         prefix = f"DC-{year}-"
 
-        # Get the highest existing number for this year with row locking
+        # Get the latest existing number for this year with row locking
         stmt = (
-            select(func.max(DisciplinaryCase.case_number))
+            select(DisciplinaryCase.case_number)
             .where(DisciplinaryCase.organization_id == organization_id)
             .where(DisciplinaryCase.case_number.like(f"{prefix}%"))
+            .order_by(DisciplinaryCase.case_number.desc())
+            .limit(1)
             .with_for_update()
         )
         max_number = self.db.scalar(stmt)

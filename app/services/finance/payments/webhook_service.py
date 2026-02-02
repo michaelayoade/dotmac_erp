@@ -153,12 +153,79 @@ class WebhookService:
         return webhook
 
     def _build_event_id(self, event_type: str, event_data: dict[str, Any]) -> str:
-        """Build unique event ID for idempotency."""
-        # Paystack doesn't provide a unique event ID, so we construct one
-        # from event type, reference, and transaction ID
+        """Build unique event ID for idempotency.
+
+        Uses only event_type and reference (NOT transaction_id) because:
+        - The reference is our idempotency key with Paystack
+        - Transaction IDs can change if Paystack retries internally
+        - We want to prevent duplicate processing of the same payment event
+        """
         reference = event_data.get("reference", "")
-        transaction_id = event_data.get("id", "")
-        return f"{event_type}:{reference}:{transaction_id}"
+        return f"{event_type}:{reference}"
+
+    def _validate_amount_and_currency(
+        self,
+        intent: "PaymentIntent",
+        data: dict[str, Any],
+        event_type: str,
+    ) -> None:
+        """
+        Validate that Paystack's reported amount/currency matches our intent.
+
+        Args:
+            intent: The payment intent we're processing
+            data: Webhook event data from Paystack
+            event_type: The type of event (for logging)
+
+        Raises:
+            ValueError: If amount or currency doesn't match
+        """
+        from decimal import Decimal, ROUND_HALF_UP
+
+        # Paystack sends amount in kobo (smallest unit), we store in currency units
+        raw_amount = data.get("amount", 0)
+        try:
+            paystack_amount_kobo = int(raw_amount)
+        except (TypeError, ValueError):
+            logger.error(
+                "SECURITY: Invalid amount in %s webhook payload: %s",
+                event_type,
+                raw_amount,
+            )
+            raise ValueError("Invalid amount in webhook payload")
+        paystack_currency = data.get("currency", "NGN").upper()
+
+        # Convert our amount to kobo for comparison
+        expected_amount_kobo = int(
+            (Decimal(intent.amount) * Decimal("100")).to_integral_value(
+                rounding=ROUND_HALF_UP
+            )
+        )
+        expected_currency = intent.currency_code.upper()
+
+        # Allow 1 kobo tolerance for rounding differences
+        amount_diff = abs(paystack_amount_kobo - expected_amount_kobo)
+        if amount_diff > 1:
+            logger.error(
+                f"SECURITY: Amount mismatch in {event_type}! "
+                f"Expected {expected_amount_kobo} kobo, got {paystack_amount_kobo} kobo. "
+                f"Intent: {intent.intent_id}, Reference: {intent.paystack_reference}"
+            )
+            raise ValueError(
+                f"Amount mismatch: expected {expected_amount_kobo} kobo, "
+                f"received {paystack_amount_kobo} kobo"
+            )
+
+        if paystack_currency != expected_currency:
+            logger.error(
+                f"SECURITY: Currency mismatch in {event_type}! "
+                f"Expected {expected_currency}, got {paystack_currency}. "
+                f"Intent: {intent.intent_id}, Reference: {intent.paystack_reference}"
+            )
+            raise ValueError(
+                f"Currency mismatch: expected {expected_currency}, "
+                f"received {paystack_currency}"
+            )
 
     def _handle_charge_success(
         self,
@@ -170,6 +237,9 @@ class WebhookService:
 
         Creates customer payment and updates invoice.
         """
+        # Validate amount and currency match what we expected
+        self._validate_amount_and_currency(intent, data, "charge.success")
+
         payment_svc = PaymentService(self.db, intent.organization_id)
 
         # Parse paid_at timestamp
@@ -231,6 +301,9 @@ class WebhookService:
 
         This is for outbound transfers (e.g., expense reimbursements).
         """
+        # Validate amount and currency match what we expected
+        self._validate_amount_and_currency(intent, data, "transfer.success")
+
         payment_svc = PaymentService(self.db, intent.organization_id)
 
         # Parse completed_at timestamp

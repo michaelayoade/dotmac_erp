@@ -12,7 +12,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
-from app.models.people.hr import Employee
+from app.models.people.hr import Employee, EmployeeStatus
 from app.models.people.leave import LeaveApplicationStatus
 from app.services.common import PaginationParams, coerce_uuid
 from app.services.people.leave import LeaveAllocationExistsError, LeaveService
@@ -50,6 +50,31 @@ class LeaveWebService:
             return None
 
     @staticmethod
+    def _parse_int(value: Optional[str]) -> Optional[int]:
+        if value is None:
+            return None
+        value = str(value).strip()
+        if not value:
+            return None
+        try:
+            return int(value)
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _parse_bool(value: Optional[str]) -> Optional[bool]:
+        if value is None:
+            return None
+        value = str(value).strip().lower()
+        if not value:
+            return None
+        if value in {"true", "1", "yes", "y"}:
+            return True
+        if value in {"false", "0", "no", "n"}:
+            return False
+        return None
+
+    @staticmethod
     def _get_form_str(form: Any, key: str, default: str = "") -> str:
         value = form.get(key, default) if form is not None else default
         if isinstance(value, UploadFile) or value is None:
@@ -66,7 +91,10 @@ class LeaveWebService:
                     joinedload(Employee.person),
                     joinedload(Employee.manager).joinedload(Employee.person),
                 )
-                .where(Employee.organization_id == org_id)
+                .where(
+                    Employee.organization_id == org_id,
+                    Employee.status == EmployeeStatus.ACTIVE,
+                )
                 .order_by(Employee.employee_code)
             ).all()
         )
@@ -180,22 +208,27 @@ class LeaveWebService:
         db: Session,
         employee_id: Optional[str] = None,
         leave_type_id: Optional[str] = None,
-        year: Optional[int] = None,
-        is_active: Optional[bool] = None,
+        year: Optional[str] = None,
+        is_active: Optional[str] = None,
         page: int = 1,
+        per_page: int = 25,
         success: Optional[str] = None,
         error: Optional[str] = None,
     ) -> HTMLResponse:
         """Leave allocations list page."""
         org_id = coerce_uuid(auth.organization_id)
-        pagination = PaginationParams.from_page(page, per_page=20)
+        parsed_year = self._parse_int(year)
+        parsed_is_active = self._parse_bool(is_active)
+        allowed_sizes = {25, 50, 75, 100}
+        effective_per_page = per_page if per_page in allowed_sizes else 25
+        pagination = PaginationParams.from_page(page, per_page=effective_per_page)
         svc = LeaveService(db, auth)
         result = svc.list_allocations(
             org_id,
             employee_id=self._parse_uuid(employee_id),
             leave_type_id=self._parse_uuid(leave_type_id),
-            year=year,
-            is_active=is_active,
+            year=parsed_year,
+            is_active=parsed_is_active,
             pagination=pagination,
         )
 
@@ -212,9 +245,10 @@ class LeaveWebService:
                 "today": date.today(),
                 "employee_id": employee_id,
                 "leave_type_id": leave_type_id,
-                "year": year,
-                "is_active": is_active,
+                "year": parsed_year,
+                "is_active": parsed_is_active,
                 "page": result.page,
+                "per_page": effective_per_page,
                 "total_pages": result.total_pages,
                 "total": result.total,
                 "has_prev": result.has_prev,

@@ -37,6 +37,7 @@ class SettingDomain(enum.Enum):
     reporting = "reporting"
     payments = "payments"
     operations = "operations"
+    payroll = "payroll"
 
 
 class SettingChangeAction(enum.Enum):

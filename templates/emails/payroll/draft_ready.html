@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Draft Payroll Ready</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            color: #1e293b;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background-color: #f8fafc;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        .header {
+            background-color: #0d9488;
+            color: white;
+            padding: 24px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+        .content {
+            padding: 24px;
+        }
+        .summary-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        .summary-table th,
+        .summary-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .summary-table th {
+            background-color: #f1f5f9;
+            font-weight: 600;
+            width: 40%;
+        }
+        .alert {
+            padding: 12px 16px;
+            border-radius: 6px;
+            margin: 16px 0;
+        }
+        .alert-warning {
+            background-color: #fef3c7;
+            border-left: 4px solid #f59e0b;
+            color: #92400e;
+        }
+        .alert-info {
+            background-color: #dbeafe;
+            border-left: 4px solid #3b82f6;
+            color: #1e40af;
+        }
+        .btn {
+            display: inline-block;
+            background-color: #0d9488;
+            color: white;
+            padding: 12px 24px;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 600;
+            margin-top: 16px;
+        }
+        .btn:hover {
+            background-color: #0f766e;
+        }
+        .footer {
+            padding: 16px 24px;
+            background-color: #f8fafc;
+            border-top: 1px solid #e2e8f0;
+            font-size: 12px;
+            color: #64748b;
+            text-align: center;
+        }
+        .highlight {
+            color: #0d9488;
+            font-weight: 600;
+        }
+        .warning-text {
+            color: #dc2626;
+        }
+        .success-text {
+            color: #16a34a;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Draft Payroll Ready</h1>
+        </div>
+
+        <div class="content">
+            <p>A draft payroll for <strong class="highlight">{{ period_name }}</strong> has been automatically generated and is ready for review.</p>
+
+            <table class="summary-table">
+                <tr>
+                    <th>Payroll Number</th>
+                    <td>{{ entry.entry_number }}</td>
+                </tr>
+                <tr>
+                    <th>Period</th>
+                    <td>{{ entry.start_date.strftime('%d %b %Y') }} - {{ entry.end_date.strftime('%d %b %Y') }}</td>
+                </tr>
+                <tr>
+                    <th>Employees Included</th>
+                    <td>{{ employee_count }}</td>
+                </tr>
+                <tr>
+                    <th>Total Gross Pay</th>
+                    <td>{{ entry.currency_code }} {{ "{:,.2f}".format(entry.total_gross_pay or 0) }}</td>
+                </tr>
+                <tr>
+                    <th>Total Net Pay</th>
+                    <td>{{ entry.currency_code }} {{ "{:,.2f}".format(entry.total_net_pay or 0) }}</td>
+                </tr>
+                <tr>
+                    <th>Flagged for Review</th>
+                    <td class="{{ 'warning-text' if flagged_count > 0 else 'success-text' }}">
+                        {{ flagged_count }}
+                        {% if flagged_count > 0 %}
+                        (requires attention)
+                        {% else %}
+                        (all clear)
+                        {% endif %}
+                    </td>
+                </tr>
+            </table>
+
+            {% if flagged_count > 0 %}
+            <div class="alert alert-warning">
+                <strong>Attention Required:</strong>
+                {{ flagged_count }} salary slip(s) have been flagged for review due to:
+                <ul style="margin: 8px 0 0 0; padding-left: 20px;">
+                    <li>New hires requiring proration</li>
+                    <li>Employees with missing bank details</li>
+                    <li>Missing tax profiles</li>
+                    <li>Leave without pay deductions</li>
+                </ul>
+            </div>
+            {% endif %}
+
+            {% if incomplete_count > 0 %}
+            <div class="alert alert-info">
+                <strong>Data Completeness:</strong>
+                {{ incomplete_count }} employee(s) have incomplete data that may affect statutory exports (PAYE, Pension, NHF, Bank Upload).
+            </div>
+            {% endif %}
+
+            <p>Please review the payroll and approve it before month end to ensure timely salary payments.</p>
+
+            <p style="text-align: center;">
+                <a href="{{ url }}" class="btn">Review Payroll</a>
+            </p>
+        </div>
+
+        <div class="footer">
+            <p>This is an automated message from {{ org.trading_name or org.legal_name }}.</p>
+            <p>Draft payroll was auto-generated based on your organization's payroll settings.</p>
+            <p style="margin-top: 12px; font-size: 11px;">
+                To adjust auto-generation settings, go to Settings &rarr; Payroll &rarr; Automation.
+            </p>
+        </div>
+    </div>
+</body>
+</html>

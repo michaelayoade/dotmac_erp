@@ -6,7 +6,7 @@ Handles bulk expense reimbursement transfers via Paystack.
 import logging
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional
 from uuid import UUID, uuid4
 
@@ -385,8 +385,12 @@ class BatchTransferService:
 
         item.payment_intent_id = intent.intent_id
 
-        # Initiate transfer
-        amount_kobo = int(item.amount * 100)
+        # Initiate transfer (use Decimal to avoid float precision issues)
+        amount_kobo = int(
+            (Decimal(item.amount) * Decimal("100")).to_integral_value(
+                rounding=ROUND_HALF_UP
+            )
+        )
         result = client.initiate_transfer(
             amount=amount_kobo,
             recipient_code=recipient.recipient_code,

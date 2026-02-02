@@ -350,6 +350,13 @@ class Employee(Base, AuditMixin, SoftDeleteMixin, ERPNextSyncMixin, VersionMixin
         nullable=True,
     )
 
+    # Batch operation tracking (for audit trail of bulk imports/scripts)
+    batch_operation_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("batch_operations.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
         nullable=False,

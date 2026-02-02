@@ -12,10 +12,12 @@ from urllib.parse import quote
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, joinedload
 
+from app.models.finance.banking.bank_account import BankAccount, BankAccountStatus
 from app.models.finance.core_org import Organization
+from app.models.finance.gl.account import Account
 from app.models.people.hr.employee import Employee, EmployeeStatus
 from app.models.people.hr.department import Department
 from app.models.people.hr.designation import Designation
@@ -35,8 +37,10 @@ from .base import (
     parse_int,
     parse_entry_status,
     parse_payroll_frequency,
+    parse_slip_status,
     ENTRY_STATUSES,
     PAYROLL_FREQUENCIES,
+    SLIP_STATUSES,
 )
 
 
@@ -219,6 +223,24 @@ class RunWebService:
             .order_by(SalaryStructure.structure_name)
             .all()
         )
+        bank_accounts = (
+            db.query(BankAccount)
+            .filter(BankAccount.organization_id == org_id)
+            .order_by(BankAccount.bank_name, BankAccount.account_name)
+            .all()
+        )
+
+        # Expense accounts for GL posting (account codes starting with 6)
+        expense_accounts = (
+            db.query(Account)
+            .filter(
+                Account.organization_id == org_id,
+                Account.is_active == True,
+                Account.account_code.like("6%"),
+            )
+            .order_by(Account.account_code)
+            .all()
+        )
 
         today = date.today()
         frequency = self._get_default_frequency(db, org_id)
@@ -233,6 +255,8 @@ class RunWebService:
             "departments": departments,
             "designations": designations,
             "structures": structures,
+            "bank_accounts": bank_accounts,
+            "expense_accounts": expense_accounts,
             "current_year": today.year,
             "current_month": today.month,
             "frequencies": PAYROLL_FREQUENCIES,
@@ -268,6 +292,8 @@ class RunWebService:
         department_id = self._form_text(form.get("department_id"))
         designation_id = self._form_text(form.get("designation_id"))
         structure_id = self._form_text(form.get("structure_id"))
+        bank_account_id = self._form_text(form.get("bank_account_id"))
+        expense_account_id = self._form_text(form.get("expense_account_id"))
         payroll_frequency = self._form_text(form.get("payroll_frequency"))
         currency_code = self._form_text(form.get("currency_code"))
         start_date_str = self._form_text(form.get("start_date"))
@@ -289,6 +315,8 @@ class RunWebService:
                 posting_date=posting_date,
                 start_date=start_date,
                 end_date=end_date,
+                source_bank_account_id=parse_uuid(bank_account_id) if bank_account_id else None,
+                expense_account_id=parse_uuid(expense_account_id) if expense_account_id else None,
                 department_id=parse_uuid(department_id) if department_id else None,
                 designation_id=parse_uuid(designation_id) if designation_id else None,
                 payroll_frequency=parsed_frequency or PayrollFrequency.MONTHLY,
@@ -308,6 +336,8 @@ class RunWebService:
                     "department_id": department_id,
                     "designation_id": designation_id,
                     "structure_id": structure_id,
+                    "bank_account_id": bank_account_id,
+                    "expense_account_id": expense_account_id,
                     "payroll_frequency": payroll_frequency,
                     "currency_code": currency_code,
                     "start_date": start_date_str,
@@ -338,10 +368,43 @@ class RunWebService:
             return RedirectResponse(url="/people/payroll/runs", status_code=303)
 
         # Get associated slips
-        slips = (
+        search = self._form_text(request.query_params.get("search"))
+        status_value = self._form_text(request.query_params.get("status"))
+        status_filter = parse_slip_status(status_value)
+
+        slips_query = (
             db.query(SalarySlip)
             .filter(SalarySlip.payroll_entry_id == e_id)
-            .order_by(SalarySlip.employee_name)
+        )
+        if search:
+            like = f"%{search}%"
+            slips_query = slips_query.filter(
+                or_(
+                    SalarySlip.employee_name.ilike(like),
+                    SalarySlip.slip_number.ilike(like),
+                )
+            )
+        if status_filter:
+            slips_query = slips_query.filter(SalarySlip.status == status_filter)
+
+        slips = slips_query.order_by(SalarySlip.employee_name).all()
+
+        slip_status_counts = {}
+        for status, count in (
+            db.query(SalarySlip.status, func.count())
+            .filter(SalarySlip.payroll_entry_id == e_id)
+            .group_by(SalarySlip.status)
+            .all()
+        ):
+            slip_status_counts[status.value] = count
+
+        total_slips = sum(slip_status_counts.values())
+
+        # Get active bank accounts for bank upload dropdown
+        bank_accounts = (
+            db.query(BankAccount)
+            .filter(BankAccount.organization_id == org_id)
+            .order_by(BankAccount.bank_name, BankAccount.account_name)
             .all()
         )
 
@@ -350,8 +413,15 @@ class RunWebService:
         context.update({
             "entry": entry,
             "slips": slips,
+            "bank_accounts": bank_accounts,
             "success": success,
             "error": error,
+            "slip_search": search,
+            "slip_status": status_value if status_filter else "",
+            "slip_statuses": SLIP_STATUSES,
+            "slip_status_counts": slip_status_counts,
+            "filtered_slip_count": len(slips),
+            "total_slip_count": total_slips,
         })
         return templates.TemplateResponse(request, "people/payroll/run_detail.html", context)
 
@@ -551,6 +621,24 @@ class RunWebService:
             .all()
         )
 
+        bank_accounts = (
+            db.query(BankAccount)
+            .filter(BankAccount.organization_id == org_id)
+            .order_by(BankAccount.bank_name, BankAccount.account_name)
+            .all()
+        )
+
+        expense_accounts = (
+            db.query(Account)
+            .filter(
+                Account.organization_id == org_id,
+                Account.is_active == True,
+                Account.account_code.like("6%"),
+            )
+            .order_by(Account.account_code)
+            .all()
+        )
+
         today = date.today()
         frequency = self._get_default_frequency(db, org_id)
         default_start, default_end = self._get_default_period(frequency, today)
@@ -568,6 +656,8 @@ class RunWebService:
             "departments": departments,
             "designations": designations,
             "structures": structures,
+            "bank_accounts": bank_accounts,
+            "expense_accounts": expense_accounts,
             "current_year": today.year,
             "current_month": today.month,
             "frequencies": PAYROLL_FREQUENCIES,
@@ -580,3 +670,126 @@ class RunWebService:
             "errors": {},
         })
         return templates.TemplateResponse(request, "people/payroll/run_form.html", context)
+
+    def bank_upload_response(
+        self,
+        auth: WebAuthContext,
+        db: Session,
+        entry_id: str,
+        source_account_id: Optional[str] = None,
+    ):
+        """
+        Generate bank upload file for payroll run (Zenith Bank format).
+
+        Args:
+            auth: Web auth context
+            db: Database session
+            entry_id: Payroll entry ID
+            source_account_id: Bank account ID for the debit account
+
+        Returns:
+            StreamingResponse with CSV file
+        """
+        from fastapi.responses import StreamingResponse
+        import io
+
+        from app.services.finance.banking.bank_upload import (
+            BankUploadService,
+            PaymentItem,
+        )
+
+        org_id = coerce_uuid(auth.organization_id)
+        e_id = parse_uuid(entry_id)
+
+        if not e_id:
+            return RedirectResponse(url="/people/payroll/runs", status_code=303)
+
+        entry = db.get(PayrollEntry, e_id)
+        if not entry or entry.organization_id != org_id:
+            return RedirectResponse(url="/people/payroll/runs", status_code=303)
+
+        # Resolve source bank account (prefer run selection, fallback to query param)
+        resolved_source_id = source_account_id or (str(entry.source_bank_account_id) if entry.source_bank_account_id else None)
+        source_account_number = ""
+        if resolved_source_id:
+            sa_id = parse_uuid(resolved_source_id)
+            if sa_id:
+                source_bank = db.get(BankAccount, sa_id)
+                if source_bank and source_bank.organization_id == org_id:
+                    source_account_number = source_bank.account_number or ""
+        if not source_account_number:
+            return RedirectResponse(
+                url=f"/people/payroll/runs/{entry_id}?error=Select a payment bank account to download the file",
+                status_code=303,
+            )
+
+        # Get all salary slips for this entry
+        slips = (
+            db.query(SalarySlip)
+            .filter(SalarySlip.payroll_entry_id == e_id)
+            .filter(SalarySlip.net_pay > 0)
+            .order_by(SalarySlip.employee_name)
+            .all()
+        )
+
+        if not slips:
+            return RedirectResponse(
+                url=f"/people/payroll/runs/{entry_id}?error=No salary slips found",
+                status_code=303,
+            )
+
+        # Convert slips to payment items
+        payment_items: list[PaymentItem] = []
+        for slip in slips:
+            # Skip slips without bank details
+            if not slip.bank_account_number:
+                continue
+
+            base_ref = slip.slip_number or f"SAL-{slip.slip_id.hex[:8].upper()}"
+            suffix = slip.employee.employee_code if slip.employee and slip.employee.employee_code else slip.slip_id.hex[:6].upper()
+
+            payment_items.append(
+                PaymentItem(
+                    reference=f"{base_ref}-{suffix}",
+                    beneficiary_name=slip.bank_account_name or slip.employee_name or "Unknown",
+                    amount=slip.net_pay,
+                    account_number=slip.bank_account_number,
+                    bank_name=slip.bank_name or "",
+                    bank_code=slip.bank_branch_code,
+                    beneficiary_code=slip.employee.employee_code if slip.employee else None,
+                    narration=f"Salary {entry.payroll_month}/{entry.payroll_year}" if entry.payroll_month else "Salary Payment",
+                )
+            )
+
+        if not payment_items:
+            return RedirectResponse(
+                url=f"/people/payroll/runs/{entry_id}?error=No slips with bank details found",
+                status_code=303,
+            )
+
+        # Generate bank upload (Zenith format only)
+        bank_service = BankUploadService(db)
+        payment_date = entry.posting_date or date.today()
+
+        result = bank_service.generate_upload(
+            items=payment_items,
+            source_account_number=source_account_number,
+            payment_date=payment_date,
+            bank_format="zenith",
+            batch_reference=entry.entry_number,
+        )
+
+        # Generate filename with entry info
+        entry_suffix = entry.entry_name.lower().replace(" ", "_") if entry.entry_name else entry.entry_number
+        filename = f"bank_upload_zenith_{entry_suffix}_{payment_date.strftime('%Y%m%d')}.csv"
+
+        # Return as downloadable file
+        return StreamingResponse(
+            io.BytesIO(result.content),
+            media_type=result.content_type,
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "X-Row-Count": str(result.row_count),
+                "X-Total-Amount": str(result.total_amount),
+            },
+        )

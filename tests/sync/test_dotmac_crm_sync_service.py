@@ -161,6 +161,31 @@ class TestSyncProject:
         mock_update_mapping.assert_called_once()
         assert mapping == existing_mapping
 
+    def test_sync_project_recreates_missing_local(self, service, org_id, mock_db):
+        """Missing local project should be recreated and mapping updated."""
+        crm_id = str(uuid.uuid4())
+        existing_mapping = MagicMock()
+        existing_mapping.local_entity_id = uuid.uuid4()
+        mock_db.get.return_value = None
+
+        payload = CRMProjectPayload(
+            crm_id=crm_id,
+            name="Recovered Project",
+            code="PROJ-RECOVER",
+            status="active",
+        )
+
+        with patch.object(service, "_get_mapping", return_value=existing_mapping):
+            with patch.object(service, "_create_project") as mock_create:
+                mock_project = MagicMock()
+                mock_project.project_id = uuid.uuid4()
+                mock_create.return_value = mock_project
+
+                mapping = service.sync_project(org_id, payload)
+
+        assert mapping.local_entity_id == mock_project.project_id
+        mock_create.assert_called_once()
+
 
 class TestSyncTicket:
     """Test ticket sync operations."""
@@ -186,6 +211,31 @@ class TestSyncTicket:
 
         mock_create.assert_called_once()
         mock_db.add.assert_called()
+
+    def test_sync_ticket_recreates_missing_local(self, service, org_id, mock_db):
+        """Missing local ticket should be recreated and mapping updated."""
+        crm_id = str(uuid.uuid4())
+        existing_mapping = MagicMock()
+        existing_mapping.local_entity_id = uuid.uuid4()
+        mock_db.get.return_value = None
+
+        payload = CRMTicketPayload(
+            crm_id=crm_id,
+            subject="Recovered Ticket",
+            ticket_number="TKT-RECOVER",
+            status="open",
+        )
+
+        with patch.object(service, "_get_mapping", return_value=existing_mapping):
+            with patch.object(service, "_create_ticket") as mock_create:
+                mock_ticket = MagicMock()
+                mock_ticket.ticket_id = uuid.uuid4()
+                mock_create.return_value = mock_ticket
+
+                mapping = service.sync_ticket(org_id, payload)
+
+        assert mapping.local_entity_id == mock_ticket.ticket_id
+        mock_create.assert_called_once()
 
     def test_sync_ticket_status_mapping(self, service, org_id, mock_db):
         """Ticket status should be mapped correctly from CRM status."""
@@ -255,6 +305,35 @@ class TestSyncWorkOrder:
         # Verify default project was used
         call_args = mock_create.call_args
         assert call_args[0][2] == default_project_id
+
+    def test_sync_work_order_recreates_missing_local(self, service, org_id, mock_db):
+        """Missing local work order should be recreated and mapping updated."""
+        crm_id = str(uuid.uuid4())
+        default_project_id = uuid.uuid4()
+        existing_mapping = MagicMock()
+        existing_mapping.local_entity_id = uuid.uuid4()
+        mock_db.get.return_value = None
+
+        payload = CRMWorkOrderPayload(
+            crm_id=crm_id,
+            title="Recovered Work Order",
+            status="active",
+        )
+
+        with patch.object(service, "_get_mapping", return_value=existing_mapping):
+            with patch.object(service, "_resolve_project_id", return_value=None):
+                with patch.object(service, "_resolve_ticket_id", return_value=None):
+                    with patch.object(service, "_resolve_employee_id", return_value=None):
+                        with patch.object(service, "_get_or_create_default_project", return_value=default_project_id):
+                            with patch.object(service, "_create_task") as mock_create:
+                                mock_task = MagicMock()
+                                mock_task.task_id = uuid.uuid4()
+                                mock_create.return_value = mock_task
+
+                                mapping = service.sync_work_order(org_id, payload)
+
+        assert mapping.local_entity_id == mock_task.task_id
+        mock_create.assert_called_once()
 
 
 class TestResolveEmployeeId:
@@ -527,3 +606,224 @@ class TestProjectTypeMapping:
 
         result = service._map_project_type(None)
         assert result == ProjectType.CLIENT
+
+
+class TestInventorySync:
+    """Test inventory sync methods for CRM."""
+
+    def test_list_inventory_items_empty(self, service, org_id):
+        """Should return empty list when no items match."""
+        # Mock the database execute to return empty results
+        service.db.execute.return_value.all.return_value = []
+        service.db.scalar.return_value = 0
+
+        result = service.list_inventory_items(org_id)
+
+        assert result.items == []
+        assert result.total_count == 0
+        assert result.has_more is False
+
+    @patch("app.services.finance.inv.balance.InventoryBalanceService")
+    def test_list_inventory_items_with_data(self, mock_balance_class, service, org_id):
+        """Should return items with stock data."""
+        # Create mock item and category
+        mock_item = MagicMock()
+        mock_item.item_id = uuid.uuid4()
+        mock_item.item_code = "ITEM001"
+        mock_item.item_name = "Test Item"
+        mock_item.description = "A test item"
+        mock_item.base_uom = "PCS"
+        mock_item.reorder_point = Decimal("10")
+        mock_item.list_price = Decimal("100.00")
+        mock_item.currency_code = "NGN"
+        mock_item.barcode = "1234567890"
+
+        mock_category = MagicMock()
+        mock_category.category_code = "NETWORK"
+        mock_category.category_name = "Network Equipment"
+
+        # Mock database results
+        service.db.execute.return_value.all.return_value = [(mock_item, mock_category)]
+        service.db.scalar.return_value = 1
+
+        # Mock balance service static methods
+        mock_balance_class.get_on_hand.return_value = Decimal("50")
+        mock_balance_class.get_reserved.return_value = Decimal("5")
+
+        result = service.list_inventory_items(org_id, include_zero_stock=True)
+
+        assert len(result.items) == 1
+        item = result.items[0]
+        assert item.item_code == "ITEM001"
+        assert item.item_name == "Test Item"
+        assert item.category_code == "NETWORK"
+        assert item.quantity_on_hand == Decimal("50")
+        assert item.quantity_reserved == Decimal("5")
+        assert item.quantity_available == Decimal("45")
+
+    def test_get_inventory_item_detail_not_found(self, service, org_id):
+        """Should return None when item not found."""
+        service.db.get.return_value = None
+
+        result = service.get_inventory_item_detail(org_id, uuid.uuid4())
+
+        assert result is None
+
+    @patch("app.services.finance.inv.balance.InventoryBalanceService")
+    def test_get_inventory_item_detail_success(self, mock_balance_class, service, org_id):
+        """Should return detailed item info with warehouse breakdown."""
+        item_id = uuid.uuid4()
+        category_id = uuid.uuid4()
+
+        # Mock item
+        mock_item = MagicMock()
+        mock_item.item_id = item_id
+        mock_item.item_code = "ROUTER001"
+        mock_item.item_name = "Wireless Router"
+        mock_item.description = "High-speed wireless router"
+        mock_item.category_id = category_id
+        mock_item.base_uom = "UNIT"
+        mock_item.reorder_point = Decimal("5")
+        mock_item.list_price = Decimal("25000.00")
+        mock_item.currency_code = "NGN"
+        mock_item.barcode = "RTR-001"
+        mock_item.organization_id = org_id
+
+        # Mock category
+        mock_category = MagicMock()
+        mock_category.category_code = "NETWORK"
+        mock_category.category_name = "Network Equipment"
+
+        # Mock stock summary
+        mock_wh_balance = MagicMock()
+        mock_wh_balance.warehouse_id = uuid.uuid4()
+        mock_wh_balance.warehouse_code = "WH-MAIN"
+        mock_wh_balance.warehouse_name = "Main Warehouse"
+        mock_wh_balance.quantity_on_hand = Decimal("20")
+        mock_wh_balance.quantity_reserved = Decimal("3")
+        mock_wh_balance.quantity_available = Decimal("17")
+
+        mock_summary = MagicMock()
+        mock_summary.total_on_hand = Decimal("20")
+        mock_summary.total_reserved = Decimal("3")
+        mock_summary.total_available = Decimal("17")
+        mock_summary.warehouses = [mock_wh_balance]
+
+        # Configure mocks
+        def mock_get(model, entity_id):
+            if entity_id == item_id:
+                return mock_item
+            if entity_id == category_id:
+                return mock_category
+            return None
+
+        service.db.get.side_effect = mock_get
+        mock_balance_class.get_item_stock_summary.return_value = mock_summary
+
+        result = service.get_inventory_item_detail(org_id, item_id)
+
+        assert result is not None
+        assert result.item_code == "ROUTER001"
+        assert result.item_name == "Wireless Router"
+        assert result.total_on_hand == Decimal("20")
+        assert result.total_reserved == Decimal("3")
+        assert result.total_available == Decimal("17")
+        assert len(result.warehouses) == 1
+        assert result.warehouses[0].warehouse_code == "WH-MAIN"
+        assert result.warehouses[0].warehouse_name == "Main Warehouse"
+
+    @patch("app.services.finance.inv.balance.InventoryBalanceService")
+    def test_list_inventory_items_filtered_pagination(self, mock_balance_class, service, org_id):
+        """Filtered pagination should count and page based on available stock."""
+        mock_item1 = MagicMock()
+        mock_item1.item_id = uuid.uuid4()
+        mock_item1.item_code = "ITEM001"
+        mock_item1.item_name = "Item 1"
+        mock_item1.description = None
+        mock_item1.base_uom = "PCS"
+        mock_item1.reorder_point = Decimal("0")
+        mock_item1.list_price = None
+        mock_item1.currency_code = "NGN"
+        mock_item1.barcode = None
+
+        mock_item2 = MagicMock()
+        mock_item2.item_id = uuid.uuid4()
+        mock_item2.item_code = "ITEM002"
+        mock_item2.item_name = "Item 2"
+        mock_item2.description = None
+        mock_item2.base_uom = "PCS"
+        mock_item2.reorder_point = Decimal("0")
+        mock_item2.list_price = None
+        mock_item2.currency_code = "NGN"
+        mock_item2.barcode = None
+
+        mock_item3 = MagicMock()
+        mock_item3.item_id = uuid.uuid4()
+        mock_item3.item_code = "ITEM003"
+        mock_item3.item_name = "Item 3"
+        mock_item3.description = None
+        mock_item3.base_uom = "PCS"
+        mock_item3.reorder_point = Decimal("0")
+        mock_item3.list_price = None
+        mock_item3.currency_code = "NGN"
+        mock_item3.barcode = None
+
+        mock_category = MagicMock()
+        mock_category.category_code = "CAT"
+        mock_category.category_name = "Category"
+
+        page1 = MagicMock()
+        page1.all.return_value = [(mock_item1, mock_category), (mock_item2, mock_category)]
+        page2 = MagicMock()
+        page2.all.return_value = [(mock_item3, mock_category)]
+        page3 = MagicMock()
+        page3.all.return_value = []
+        service.db.execute.side_effect = [page1, page2, page3]
+
+        def on_hand_side_effect(_db, _org, item_id):
+            if item_id == mock_item1.item_id:
+                return Decimal("0")
+            if item_id == mock_item2.item_id:
+                return Decimal("5")
+            return Decimal("10")
+
+        mock_balance_class.get_on_hand.side_effect = on_hand_side_effect
+        mock_balance_class.get_reserved.return_value = Decimal("0")
+
+        result = service.list_inventory_items(org_id, limit=1)
+
+        assert result.total_count == 2  # item1 filtered out (0 available)
+        assert result.has_more is True
+        assert len(result.items) == 1
+        assert result.items[0].item_code in {"ITEM002", "ITEM003"}
+
+    def test_get_categories(self, service, org_id):
+        """Should return list of categories."""
+        # Mock execute result
+        service.db.execute.return_value.all.return_value = [
+            ("NETWORK", "Network Equipment"),
+            ("CABLES", "Cables and Wiring"),
+        ]
+
+        result = service.get_categories(org_id)
+
+        assert len(result) == 2
+        assert result[0] == {"code": "NETWORK", "name": "Network Equipment"}
+        assert result[1] == {"code": "CABLES", "name": "Cables and Wiring"}
+
+    def test_get_warehouses(self, service, org_id):
+        """Should return list of warehouses."""
+        wh_id1 = uuid.uuid4()
+        wh_id2 = uuid.uuid4()
+
+        service.db.execute.return_value.all.return_value = [
+            (wh_id1, "WH-MAIN", "Main Warehouse"),
+            (wh_id2, "WH-FIELD", "Field Stock"),
+        ]
+
+        result = service.get_warehouses(org_id)
+
+        assert len(result) == 2
+        assert result[0]["code"] == "WH-MAIN"
+        assert result[0]["name"] == "Main Warehouse"
+        assert result[1]["code"] == "WH-FIELD"

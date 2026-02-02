@@ -84,6 +84,13 @@ class Person(Base):
         "metadata", MutableDict.as_mutable(JSON)
     )
 
+    # Batch operation tracking (for audit trail of bulk imports/scripts)
+    batch_operation_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("batch_operations.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )

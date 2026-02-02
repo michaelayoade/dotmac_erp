@@ -348,7 +348,6 @@ class PayrollLifecycle:
             slip=slip,
             posting_date=posting_date,
             posted_by_user_id=user_id,
-            idempotency_key=idempotency_key,
         )
 
         if not gl_result.success:
@@ -818,7 +817,6 @@ class PayrollLifecycle:
             slips=slips,
             posting_date=posting_date,
             posted_by_user_id=user_id,
-            idempotency_key=idempotency_key,
         )
 
         if not gl_result.success:

@@ -315,9 +315,11 @@ class SlipWebService:
                 input=slip_input,
                 created_by_user_id=user_id,
             )
+            db.commit()
             return RedirectResponse(url=f"/people/payroll/slips/{slip.slip_id}", status_code=303)
 
         except Exception as e:
+            db.rollback()
             employees = (
                 db.query(Employee)
                 .filter(
@@ -423,9 +425,11 @@ class SlipWebService:
                 input=slip_input,
                 updated_by_user_id=user_id,
             )
+            db.commit()
             return RedirectResponse(url=f"/people/payroll/slips/{slip.slip_id}", status_code=303)
 
         except Exception as e:
+            db.rollback()
             employees = (
                 db.query(Employee)
                 .filter(
@@ -548,7 +552,9 @@ class SlipWebService:
                 slip_id=coerce_uuid(slip_id),
                 submitted_by_user_id=user_id,
             )
+            db.commit()
         except Exception as e:
+            db.rollback()
             message = getattr(e, "detail", None) or str(e)
             return RedirectResponse(
                 url=f"/people/payroll/slips/{slip_id}?error={quote(message)}",
@@ -574,7 +580,9 @@ class SlipWebService:
                 slip_id=coerce_uuid(slip_id),
                 approved_by_user_id=user_id,
             )
+            db.commit()
         except Exception as e:
+            db.rollback()
             message = getattr(e, "detail", None) or str(e)
             return RedirectResponse(
                 url=f"/people/payroll/slips/{slip_id}?error={quote(message)}",

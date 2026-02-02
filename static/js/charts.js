@@ -12,6 +12,13 @@ const Charts = {
 
   // Format currency using page locale
   formatCurrency(value, currency) {
+    if (currency === false || currency === null || currency === 'none') {
+      return new Intl.NumberFormat('en-US', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
+      }).format(value);
+    }
+
     currency = currency || this.getCurrency();
     return new Intl.NumberFormat('en-US', {
       style: 'currency',

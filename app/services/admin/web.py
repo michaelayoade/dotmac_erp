@@ -593,6 +593,9 @@ class AdminWebService:
         role_ids = role_ids or []
         if isinstance(role_ids, str):
             role_ids = [role_ids]
+        normalized_role_ids = {
+            str(coerce_uuid(role_id)) for role_id in role_ids if role_id
+        }
         must_change_password = _parse_flag(must_change_password)
         email_verified = _parse_flag(email_verified)
 
@@ -668,12 +671,38 @@ class AdminWebService:
                 db.add(credential)
 
             # Update roles
+            current_role_ids = {
+                str(role_id)
+                for (role_id,) in db.query(PersonRole.role_id)
+                .filter(PersonRole.person_id == person.id)
+                .all()
+            }
             db.query(PersonRole).filter(PersonRole.person_id == person.id).delete()
-            for role_id in role_ids:
-                if role_id:
-                    db.add(PersonRole(person_id=person.id, role_id=coerce_uuid(role_id)))
+            for role_id in normalized_role_ids:
+                db.add(PersonRole(person_id=person.id, role_id=coerce_uuid(role_id)))
+
+            roles_changed = current_role_ids != normalized_role_ids
+            session_ids_to_invalidate: list[UUID] = []
+            if roles_changed:
+                active_sessions = (
+                    db.query(AuthSession)
+                    .filter(AuthSession.person_id == person.id)
+                    .filter(AuthSession.status == SessionStatus.active)
+                    .filter(AuthSession.revoked_at.is_(None))
+                    .all()
+                )
+                session_ids_to_invalidate = [session.id for session in active_sessions]
+                for session in active_sessions:
+                    session.status = SessionStatus.revoked
+                    session.revoked_at = datetime.now(timezone.utc)
 
             db.commit()
+
+            if roles_changed and session_ids_to_invalidate:
+                from app.services.auth_dependencies import invalidate_session_cache
+                for session_id in session_ids_to_invalidate:
+                    invalidate_session_cache(session_id)
+
             return person, None
 
         except Exception as e:

@@ -682,6 +682,8 @@ class EmployeeService:
             bank_account_number=data.bank_account_number,
             bank_account_name=data.bank_account_name,
             bank_branch_code=data.bank_sort_code,
+            ctc=data.ctc,
+            salary_mode=data.salary_mode,
             notes=data.notes,
             created_by_id=self.principal.id if self.principal else None,
         )
@@ -822,6 +824,14 @@ class EmployeeService:
             employee.bank_branch_code = data.bank_sort_code
         elif use_provided_fields and "bank_sort_code" in provided_fields:
             employee.bank_branch_code = None
+        if data.ctc is not None:
+            employee.ctc = data.ctc
+        elif use_provided_fields and "ctc" in provided_fields:
+            employee.ctc = None
+        if data.salary_mode is not None:
+            employee.salary_mode = data.salary_mode
+        elif use_provided_fields and "salary_mode" in provided_fields:
+            employee.salary_mode = None
 
         # Personal contact
         if data.personal_email is not None:

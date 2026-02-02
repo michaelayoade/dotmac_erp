@@ -192,6 +192,188 @@ invoices = db.scalars(
 invoices = db.scalars(select(Invoice).where(Invoice.status == "OPEN")).all()
 ```
 
+## Pre-Commit Checklist (MANDATORY)
+
+Before declaring any code complete, run these commands:
+```bash
+poetry run mypy app/path/to/new/files.py --ignore-missing-imports  # Type check new files
+poetry run ruff check app/path/to/new/files.py                      # Lint check
+poetry run ruff format app/path/to/new/files.py                     # Format
+```
+
+## Writing New Code - Process
+
+### Step 1: Study Existing Patterns FIRST
+Before writing ANY new module, find and read a similar existing module:
+```bash
+# For a new service, find similar service
+ls app/services/finance/payments/  # Example: look at paystack_client.py for API client patterns
+
+# For a new model, find similar model
+cat app/models/finance/banking/bank_account.py  # Example: see existing model structure
+
+# For web routes, check existing patterns
+cat app/web/finance/payments.py  # Example: see route patterns
+```
+
+### Step 2: Match Existing Conventions
+- **Imports**: Copy import style from existing files in same directory
+- **Type hints**: Use same style (`Optional[X]` vs `X | None`, `List[X]` vs `list[X]`)
+- **Docstrings**: Match existing docstring format
+- **Error handling**: Use same exception patterns
+
+### Step 3: Verify Before Completion
+Run mypy on your new files BEFORE saying "done":
+```bash
+poetry run mypy app/services/new_module/ --ignore-missing-imports
+```
+
+## Clean Code Patterns
+
+### Before Referencing Model Fields
+ALWAYS read the model file to verify field names. Each model has its own primary key naming:
+```python
+# WRONG - assuming generic 'id'
+claim.id  # ExpenseClaim uses claim_id
+invoice.id  # SupplierInvoice uses invoice_id
+
+# CORRECT - check the model first
+claim.claim_id
+invoice.invoice_id
+payment.payment_id
+```
+
+### Cross-Module Integration Pattern
+When one module needs to trigger actions in another, use a dispatcher/handler:
+```python
+# app/services/remita/source_handler.py
+class RemitaSourceHandler:
+    """Dispatches RRR events to source entity handlers."""
+
+    def handle_rrr_paid(self, rrr: RemitaRRR) -> None:
+        handler_map = {
+            "ap_invoice": self._handle_ap_invoice_paid,
+            "payroll_run": self._handle_payroll_run_paid,
+        }
+        handler = handler_map.get(rrr.source_type)
+        if handler:
+            handler(rrr)
+```
+
+### Generic Source Linking Pattern
+For features that can link to multiple entity types:
+```python
+# In model - generic source fields
+source_type: Mapped[Optional[str]] = mapped_column(String(50))  # "ap_invoice", "payroll_run"
+source_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True))
+
+# In service - validation helper
+def _resolve_source(self, org_id: UUID, source_type: str, source_id: UUID):
+    type_map = {
+        "ap_invoice": SupplierInvoice,
+        "payroll_run": PayrollEntry,
+    }
+    model = type_map.get(source_type)
+    if not model:
+        raise ValueError("Invalid source type")
+    entity = self.db.get(model, source_id)
+    if not entity or entity.organization_id != org_id:
+        raise ValueError("Source not found or access denied")
+    return entity
+```
+
+### Graceful Error Handling in Side Effects
+When a side effect fails, don't fail the main operation:
+```python
+def mark_paid(self, rrr_id: UUID, reference: str) -> RemitaRRR:
+    rrr.status = RRRStatus.paid
+    rrr.payment_reference = reference
+    self.db.flush()
+
+    # Side effect - don't fail main operation if this fails
+    try:
+        self._notify_source_paid(rrr)
+    except Exception as e:
+        logger.exception(f"Failed to notify source: {e}")
+        # Continue - RRR is still marked paid
+
+    return rrr
+```
+
+### Import Inside Functions to Avoid Circular Imports
+For cross-module dependencies, import inside the function:
+```python
+def _handle_paid(self, rrr: RemitaRRR) -> None:
+    # Import here to avoid circular import at module load
+    from app.services.remita.source_handler import get_source_handler
+
+    handler = get_source_handler(self.db)
+    handler.handle_rrr_paid(rrr)
+```
+
+### Web Service Context Pattern
+For complex pages, build context in a dedicated web service method:
+```python
+# app/services/module/web/module_web.py
+class ModuleWebService:
+    def detail_context(self, org_id: UUID, entity_id: UUID) -> dict:
+        entity = self._get_or_404(entity_id)
+        related = self._get_related(entity)
+        actions = self._available_actions(entity)
+
+        return {
+            "entity": entity,
+            "related": related,
+            "can_edit": actions.can_edit,
+            "can_delete": actions.can_delete,
+        }
+
+# In route - just call web service
+@router.get("/{id}")
+def detail(id: UUID, auth: WebAuthContext, db: Session):
+    context = base_context(request, auth, "Title", "section", db=db)
+    context.update(ModuleWebService(db).detail_context(auth.organization_id, id))
+    return templates.TemplateResponse(request, "template.html", context)
+```
+
+### Reusable Template Partials
+For UI components used across pages, create Jinja2 macros:
+```html
+{# templates/finance/remita/_generate_modal.html #}
+{% macro rrr_modal(amount, source_type=None, source_id=None) %}
+<div class="modal">
+    <form method="POST" action="/finance/remita/generate">
+        <input type="hidden" name="amount" value="{{ amount }}">
+        {% if source_type %}
+        <input type="hidden" name="source_type" value="{{ source_type }}">
+        <input type="hidden" name="source_id" value="{{ source_id }}">
+        {% endif %}
+        <!-- Form fields -->
+    </form>
+</div>
+{% endmacro %}
+
+{# Usage in another template #}
+{% from "finance/remita/_generate_modal.html" import rrr_modal %}
+{{ rrr_modal(invoice.amount, "ap_invoice", invoice.invoice_id) }}
+```
+
+### Payer/Org Defaults Pattern
+For forms that need organization defaults:
+```python
+def generate_form_context_with_org(self, organization_id: UUID) -> dict:
+    from app.models.finance.core_org.organization import Organization
+
+    org = self.db.get(Organization, organization_id)
+    context = self.generate_form_context()
+    context["payer_defaults"] = {
+        "payer_name": org.trading_name or org.legal_name or "",
+        "payer_email": org.contact_email or "",
+        "payer_phone": org.contact_phone or "",
+    }
+    return context
+```
+
 ## Common Gotchas
 
 ### Database
@@ -209,11 +391,62 @@ invoices = db.scalars(select(Invoice).where(Invoice.status == "OPEN")).all()
 - Common fixes:
   - Missing return type: add `-> ReturnType`
   - Optional access: use `if x is not None:` before accessing
+  - Nullable fields: use `Optional[X]` for fields that can be None
 
-### Migrations
-- Always review auto-generated migrations before running
-- Test migrations on a copy of prod data structure
-- Naming: `YYYYMMDD_description.py`
+### Migrations - Idempotent Pattern (REQUIRED)
+All migrations MUST be idempotent - safe to run multiple times:
+```python
+def upgrade() -> None:
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+
+    # Check table exists before creating
+    if not inspector.has_table("my_table", schema="my_schema"):
+        op.create_table(...)
+
+    # Check column exists before adding
+    if inspector.has_table("my_table", schema="my_schema"):
+        columns = {col["name"] for col in inspector.get_columns("my_table", schema="my_schema")}
+        if "new_column" not in columns:
+            op.add_column(...)
+
+    # Check enum exists before creating
+    existing_enums = [e["name"] for e in inspector.get_enums(schema="my_schema")]
+    if "my_enum" not in existing_enums:
+        my_enum.create(bind)
+
+    # Check index exists before creating
+    indexes = {idx["name"] for idx in inspector.get_indexes("my_table", schema="my_schema")}
+    if "ix_my_index" not in indexes:
+        op.create_index(...)
+
+def downgrade() -> None:
+    # Same pattern - check before dropping
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+
+    if inspector.has_table("my_table", schema="my_schema"):
+        op.drop_table(...)
+```
+
+### External Integrations
+For any external API integration (Remita, Paystack, etc.):
+1. Add configuration to `app/config.py` with empty string defaults
+2. Add `is_configured()` method that checks if credentials are set
+3. Raise clear error if trying to use unconfigured service
+4. Show warning in UI when not configured
+
+```python
+# In service
+def is_configured(self) -> bool:
+    return bool(settings.api_key and settings.api_secret)
+
+@property
+def client(self):
+    if not self.is_configured():
+        raise ValueError("Service not configured. Set API_KEY and API_SECRET.")
+    return self._create_client()
+```
 
 ## Discipline Module
 

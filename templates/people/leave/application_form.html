@@ -106,7 +106,6 @@
 
                 <!-- Balance Display -->
                 <div x-show="balances.length > 0" x-transition class="mt-4 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
-                    <h3 class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">Leave Balances</h3>
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
                         <template x-for="bal in balances" :key="bal.leave_type_id">
                             <div class="text-center p-3 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">

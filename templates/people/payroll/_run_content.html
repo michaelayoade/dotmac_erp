@@ -120,22 +120,6 @@
                     Approve All Slips
                 </button>
             </form>
-            {% elif entry.status.value == "APPROVED" %}
-            <form method="post" action="/people/payroll/runs/{{ entry.entry_id }}/post"
-                  hx-post="/people/payroll/runs/{{ entry.entry_id }}/post"
-                  hx-target="#run-content"
-                  hx-swap="outerHTML"
-                  class="inline"
-                  title="Posts approved slips to the General Ledger">
-                {{ request.state.csrf_form | safe }}
-                <input type="hidden" name="posting_date" value="{{ entry.posting_date.isoformat() if entry.posting_date else '' }}">
-                <button type="submit" class="btn btn-primary" data-loading-disable>
-                    <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-                    </svg>
-                    Post to GL
-                </button>
-            </form>
             {% elif entry.status.value == "POSTED" %}
             {% if entry.payslips_email_status %}
             <form method="post" action="/people/payroll/runs/{{ entry.entry_id }}/send-payslips?force=true"
@@ -185,9 +169,9 @@
         {% elif entry.status.value == "SLIPS_CREATED" %}
         Next step: submit slips for approval, or use “Submit &amp; Approve” if you’re the approver.
         {% elif entry.status.value == "SUBMITTED" %}
-        Next step: approve the run to enable posting to GL.
+        Next step: approve the run to auto-post to GL.
         {% elif entry.status.value == "APPROVED" %}
-        Next step: post to GL to finalize this run.
+        Posting to GL runs automatically after approval.
         {% elif entry.status.value == "CANCELLED" %}
         This run is cancelled and cannot be changed.
         {% endif %}
@@ -265,6 +249,16 @@
                 <div class="text-slate-900 dark:text-white">{{ entry.currency_code }}</div>
             </div>
             <div>
+                <div class="text-slate-500 dark:text-slate-400">Payment Account</div>
+                <div class="text-slate-900 dark:text-white">
+                    {% if entry.source_bank_account %}
+                    {{ entry.source_bank_account.bank_name }} - {{ entry.source_bank_account.account_name }} ({{ entry.source_bank_account.account_number[-4:] }})
+                    {% else %}
+                    -
+                    {% endif %}
+                </div>
+            </div>
+            <div>
                 <div class="text-slate-500 dark:text-slate-400">Created</div>
                 <div class="text-slate-900 dark:text-white">{{ entry.created_at.strftime('%d %b %Y %H:%M') if entry.created_at else '-' }}</div>
             </div>
@@ -323,17 +317,11 @@
                         </svg>
                         <span class="font-medium text-slate-900 dark:text-white">Bank Upload</span>
                     </div>
-                    <p class="text-xs text-slate-500 dark:text-slate-400 mb-3">CSV for bank bulk payment upload</p>
-                    <div class="space-y-1">
-                        <a href="/api/v1/payroll/entries/{{ entry.entry_id }}/exports/bank-upload?bank_format=zenith"
-                           class="block text-sm text-violet-600 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300">
-                            ↓ Zenith Format
-                        </a>
-                        <a href="/api/v1/payroll/entries/{{ entry.entry_id }}/exports/bank-upload?bank_format=generic"
-                           class="block text-sm text-violet-600 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300">
-                            ↓ Generic Format
-                        </a>
-                    </div>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mb-3">CSV for bank bulk payment upload (Zenith format)</p>
+                    <a href="/people/payroll/runs/{{ entry.entry_id }}/bank-upload"
+                       class="inline-flex items-center text-sm text-violet-600 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300">
+                        ↓ Download Bank Upload
+                    </a>
                 </div>
 
                 <!-- PAYE Schedule -->

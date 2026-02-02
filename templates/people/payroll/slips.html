@@ -231,7 +231,7 @@
         </div>
         <div class="flex gap-2">
             {% if has_prev %}
-            <a href="?page={{ page - 1 }}&search={{ search | default('') }}&status={{ status | default('') }}" class="btn btn-secondary btn-sm">
+            <a href="?page={{ page - 1 }}{% if search %}&search={{ search }}{% endif %}{% if status %}&status={{ status }}{% endif %}" class="btn btn-secondary btn-sm">
                 <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
                 </svg>
@@ -239,7 +239,7 @@
             </a>
             {% endif %}
             {% if has_next %}
-            <a href="?page={{ page + 1 }}&search={{ search | default('') }}&status={{ status | default('') }}" class="btn btn-secondary btn-sm">
+            <a href="?page={{ page + 1 }}{% if search %}&search={{ search }}{% endif %}{% if status %}&status={{ status }}{% endif %}" class="btn btn-secondary btn-sm">
                 Next
                 <svg class="h-4 w-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>

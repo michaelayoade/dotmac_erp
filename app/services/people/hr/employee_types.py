@@ -12,6 +12,7 @@ from decimal import Decimal, InvalidOperation
 from typing import TYPE_CHECKING, Any, Dict, List, Mapping, Optional, Tuple, Union
 
 from app.models.people.hr import EmployeeStatus as EmploymentStatus
+from app.models.people.hr.employee import SalaryMode
 from app.models.person import Gender
 
 if TYPE_CHECKING:
@@ -174,6 +175,9 @@ class EmployeeCreateData:
     confirmation_date: Optional[date] = None
     # Status
     status: Optional[EmploymentStatus] = None
+    # Compensation
+    ctc: Optional[Decimal] = None
+    salary_mode: Optional[SalaryMode] = None
     # Personal contact (separate from Person's work email/phone)
     personal_email: Optional[str] = None
     personal_phone: Optional[str] = None
@@ -209,6 +213,9 @@ class EmployeeUpdateData:
     probation_end_date: Optional[date] = None
     confirmation_date: Optional[date] = None
     status: Optional[EmploymentStatus] = None
+    # Compensation
+    ctc: Optional[Decimal] = None
+    salary_mode: Optional[SalaryMode] = None
     # Personal contact (separate from Person's work email/phone)
     personal_email: Optional[str] = None
     personal_phone: Optional[str] = None

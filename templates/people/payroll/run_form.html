@@ -107,6 +107,38 @@
                         <option value="EUR">EUR - Euro</option>
                     </select>
                 </div>
+                <div>
+                    <label for="bank_account_id" class="form-label">Payment Bank Account</label>
+                    <select name="bank_account_id" id="bank_account_id" class="form-select w-full" {% if bank_accounts %}required{% endif %}>
+                        <option value="">Select bank account</option>
+                        {% for account in bank_accounts %}
+                        <option value="{{ account.bank_account_id }}"
+                            {{ 'selected' if (run and run.source_bank_account_id == account.bank_account_id) or (form_data.bank_account_id == account.bank_account_id | string) }}>
+                            {{ account.bank_name }} - {{ account.account_name }} ({{ account.account_number[-4:] }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                    {% if not bank_accounts %}
+                    <p class="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                        No bank accounts found. Add a bank account in Finance &gt; Banking.
+                    </p>
+                    {% endif %}
+                </div>
+                <div>
+                    <label for="expense_account_id" class="form-label">GL Expense Account</label>
+                    <select name="expense_account_id" id="expense_account_id" class="form-select w-full">
+                        <option value="">Use org default</option>
+                        {% for account in expense_accounts %}
+                        <option value="{{ account.account_id }}"
+                            {{ 'selected' if (run and run.expense_account_id == account.account_id) or (form_data.expense_account_id == account.account_id | string) }}>
+                            {{ account.account_code }} - {{ account.account_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                        Override for GL posting. Use 6000 for permanent, 6004 for contract.
+                    </p>
+                </div>
             </div>
         </div>
 
@@ -192,7 +224,7 @@
             </svg>
             <div class="flex items-center gap-2">
                 <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-emerald-200 dark:bg-emerald-800 text-emerald-700 dark:text-emerald-300 font-medium text-xs">5</span>
-                <span class="text-slate-600 dark:text-slate-400">Post to GL</span>
+                <span class="text-slate-600 dark:text-slate-400">Auto-post to GL</span>
             </div>
         </div>
     </div>

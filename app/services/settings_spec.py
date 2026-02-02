@@ -537,6 +537,44 @@ SETTINGS_SPECS: list[SettingSpec] = [
         value_type=SettingValueType.string,
         default=None,
     ),
+    # Payroll Domain Settings
+    SettingSpec(
+        domain=SettingDomain.payroll,
+        key="auto_generate_enabled",
+        env_var=None,
+        value_type=SettingValueType.boolean,
+        default=False,
+    ),
+    SettingSpec(
+        domain=SettingDomain.payroll,
+        key="auto_generate_days_before",
+        env_var=None,
+        value_type=SettingValueType.integer,
+        default=5,
+        min_value=1,
+        max_value=15,
+    ),
+    SettingSpec(
+        domain=SettingDomain.payroll,
+        key="auto_generate_notify_emails",
+        env_var=None,
+        value_type=SettingValueType.json,
+        default=[],
+    ),
+    SettingSpec(
+        domain=SettingDomain.payroll,
+        key="auto_post_gl_on_approval",
+        env_var=None,
+        value_type=SettingValueType.boolean,
+        default=True,
+    ),
+    SettingSpec(
+        domain=SettingDomain.payroll,
+        key="payroll_rounding_account_id",
+        env_var=None,
+        value_type=SettingValueType.string,
+        default=None,
+    ),
 ]
 
 DOMAIN_SETTINGS_SERVICE = {
@@ -548,6 +586,7 @@ DOMAIN_SETTINGS_SERVICE = {
     SettingDomain.features: settings_service.features_settings,
     SettingDomain.reporting: settings_service.reporting_settings,
     SettingDomain.payments: settings_service.payments_settings,
+    SettingDomain.payroll: settings_service.payroll_settings,
 }
 
 

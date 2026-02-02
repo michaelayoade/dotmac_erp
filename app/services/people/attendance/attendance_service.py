@@ -5,7 +5,7 @@ Adapted from DotMac People for the unified ERP platform.
 """
 from __future__ import annotations
 
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone, tzinfo as dt_tzinfo
 from decimal import Decimal
 import math
 from typing import TYPE_CHECKING, Any, List, Optional, Sequence
@@ -13,6 +13,7 @@ from uuid import UUID
 
 from sqlalchemy import and_, case, func, literal_column, or_, select
 from sqlalchemy.orm import Session
+from zoneinfo import ZoneInfo
 
 from app.models.people.attendance import (
     Attendance,
@@ -197,6 +198,30 @@ class AttendanceService:
             return value.replace(tzinfo=timezone.utc)
         return value
 
+    def _org_timezone_name(self, org_id: UUID) -> str:
+        org = self.db.get(Organization, org_id)
+        if org and org.timezone:
+            return org.timezone
+        return "UTC"
+
+    def _org_tzinfo(self, org_id: UUID) -> dt_tzinfo:
+        tz_name = self._org_timezone_name(org_id)
+        try:
+            return ZoneInfo(tz_name)
+        except Exception:
+            return timezone.utc
+
+    def _now_in_org_tz(self, org_id: UUID) -> datetime:
+        return datetime.now(tz=self._org_tzinfo(org_id))
+
+    def get_org_today(self, org_id: UUID) -> date:
+        return self._now_in_org_tz(org_id).date()
+
+    def _normalize_in_org_tz(self, org_id: UUID, value: datetime) -> datetime:
+        if value.tzinfo is None:
+            return value.replace(tzinfo=self._org_tzinfo(org_id))
+        return value
+
     @staticmethod
     def _now_like(reference: Optional[datetime] = None) -> datetime:
         """Return timezone-aware now, using reference tz when available."""
@@ -208,7 +233,7 @@ class AttendanceService:
     def _combine_date_time(
         day: date,
         clock: time,
-        tzinfo: Optional[timezone],
+        tzinfo: Optional[dt_tzinfo],
     ) -> datetime:
         dt = datetime.combine(day, clock)
         if tzinfo is not None:
@@ -669,7 +694,11 @@ class AttendanceService:
         longitude: Optional[float] = None,
     ) -> Attendance:
         """Record employee check-in."""
-        now = check_in_time or self._now_like()
+        now = (
+            self._normalize_in_org_tz(org_id, check_in_time)
+            if check_in_time
+            else self._now_in_org_tz(org_id)
+        )
         today = now.date()
 
         # Check if already checked in
@@ -691,7 +720,7 @@ class AttendanceService:
         late_entry = False
         if shift_type_id:
             shift = self.get_shift_type(org_id, shift_type_id)
-            tzinfo = now.tzinfo if isinstance(now.tzinfo, timezone) else None
+            tzinfo = now.tzinfo
             shift_start = self._combine_date_time(
                 today, shift.start_time, tzinfo
             )
@@ -729,7 +758,11 @@ class AttendanceService:
         longitude: Optional[float] = None,
     ) -> Attendance:
         """Record employee check-out."""
-        now = check_out_time or self._now_like()
+        now = (
+            self._normalize_in_org_tz(org_id, check_out_time)
+            if check_out_time
+            else self._now_in_org_tz(org_id)
+        )
         today = now.date()
 
         attendance = self.get_attendance_by_date(org_id, employee_id, today)
@@ -751,7 +784,7 @@ class AttendanceService:
         early_exit = False
         if attendance.shift_type_id:
             shift = self.get_shift_type(org_id, attendance.shift_type_id)
-            tzinfo = now.tzinfo if isinstance(now.tzinfo, timezone) else None
+            tzinfo = now.tzinfo
             shift_end = self._combine_date_time(
                 today, shift.end_time, tzinfo
             )
@@ -790,11 +823,19 @@ class AttendanceService:
                 f"Attendance already checked in at {attendance.check_in}"
             )
 
-        now = check_in_time or self._now_like(attendance.check_in)
+        if check_in_time:
+            tzinfo = attendance.check_in.tzinfo if attendance.check_in else None
+            if check_in_time.tzinfo is None:
+                check_in_time = check_in_time.replace(
+                    tzinfo=tzinfo or self._org_tzinfo(org_id)
+                )
+            now = check_in_time
+        else:
+            now = self._now_like(attendance.check_in)
         late_entry = False
         if attendance.shift_type_id:
             shift = self.get_shift_type(org_id, attendance.shift_type_id)
-            tzinfo = now.tzinfo if isinstance(now.tzinfo, timezone) else None
+            tzinfo = now.tzinfo
             shift_start = self._combine_date_time(
                 attendance.attendance_date, shift.start_time, tzinfo
             )
@@ -827,11 +868,19 @@ class AttendanceService:
                 f"Attendance already checked out at {attendance.check_out}"
             )
 
-        now = check_out_time or self._now_like(attendance.check_in)
+        if check_out_time:
+            tzinfo = attendance.check_in.tzinfo if attendance.check_in else None
+            if check_out_time.tzinfo is None:
+                check_out_time = check_out_time.replace(
+                    tzinfo=tzinfo or self._org_tzinfo(org_id)
+                )
+            now = check_out_time
+        else:
+            now = self._now_like(attendance.check_in)
         early_exit = False
         if attendance.shift_type_id:
             shift = self.get_shift_type(org_id, attendance.shift_type_id)
-            tzinfo = now.tzinfo if isinstance(now.tzinfo, timezone) else None
+            tzinfo = now.tzinfo
             shift_end = self._combine_date_time(
                 attendance.attendance_date, shift.end_time, tzinfo
             )
@@ -1315,7 +1364,7 @@ class AttendanceService:
 
     def get_attendance_stats(self, org_id: UUID) -> dict:
         """Get attendance statistics for dashboard."""
-        today = date.today()
+        today = self.get_org_today(org_id)
 
         # Today's attendance
         today_present = self.db.scalar(
@@ -1370,7 +1419,7 @@ class AttendanceService:
         from app.models.person import Person
         from app.models.person import Person
 
-        today = date.today()
+        today = self.get_org_today(org_id)
         if not start_date:
             start_date = today.replace(day=1)
         if not end_date:
@@ -1439,7 +1488,7 @@ class AttendanceService:
         from app.models.people.hr import Employee, Department
         from app.models.person import Person
 
-        today = date.today()
+        today = self.get_org_today(org_id)
         if not start_date:
             start_date = today.replace(day=1)
         if not end_date:
@@ -1525,7 +1574,7 @@ class AttendanceService:
         from app.models.people.hr import Employee, Department
         from app.models.person import Person
 
-        today = date.today()
+        today = self.get_org_today(org_id)
         if not start_date:
             start_date = today.replace(day=1)
         if not end_date:
@@ -1595,7 +1644,7 @@ class AttendanceService:
         """
         from dateutil.relativedelta import relativedelta
 
-        today = date.today()
+        today = self.get_org_today(org_id)
         end_date = today.replace(day=1)
         start_date = end_date - relativedelta(months=months - 1)
 

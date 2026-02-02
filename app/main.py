@@ -75,6 +75,7 @@ from app.telemetry import setup_otel
 from app.errors import register_error_handlers
 from app.web.csrf import csrf_middleware
 from app.middleware.rate_limit import rate_limit_middleware
+from app.middleware.csp import add_unsafe_eval_to_csp
 from app.startup import log_startup_info, validate_startup
 
 
@@ -119,6 +120,15 @@ register_error_handlers(app)
 # Rate limiting must come before CSRF to reject early
 app.middleware("http")(rate_limit_middleware)
 app.middleware("http")(csrf_middleware)
+
+
+@app.middleware("http")
+async def csp_middleware(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["Content-Security-Policy"] = add_unsafe_eval_to_csp(
+        response.headers.get("Content-Security-Policy")
+    )
+    return response
 
 
 # Sensitive parameter names to redact from audit logs

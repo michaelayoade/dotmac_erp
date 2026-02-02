@@ -37,6 +37,18 @@ from app.tasks.performance import (
     complete_cycle,
 )
 
+from app.tasks.finance import (
+    sync_paystack_transactions,
+)
+
+# Register additional task modules used via .delay()
+from app.tasks.audit import log_audit_event
+from app.tasks.payroll import (
+    send_payslip_email,
+    process_payroll_entry_notifications,
+)
+from app.tasks.email import send_email_async
+
 __all__ = [
     # ERPNext sync tasks
     "run_full_erpnext_sync",
@@ -69,4 +81,13 @@ __all__ = [
     "sync_all_cycle_progress",
     "activate_cycle",
     "complete_cycle",
+    # Audit tasks
+    "log_audit_event",
+    # Payroll tasks
+    "send_payslip_email",
+    "process_payroll_entry_notifications",
+    # Email tasks
+    "send_email_async",
+    # Finance tasks
+    "sync_paystack_transactions",
 ]

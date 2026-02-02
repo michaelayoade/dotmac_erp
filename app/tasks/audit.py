@@ -92,8 +92,8 @@ def log_audit_event(
             db.commit()
 
             result["success"] = True
-            result["event_id"] = str(event.event_id)
-            logger.debug("Audit event logged: %s", event.event_id)
+            result["event_id"] = str(event.id)
+            logger.debug("Audit event logged: %s", event.id)
 
     except Exception as e:
         logger.exception("Failed to log audit event")

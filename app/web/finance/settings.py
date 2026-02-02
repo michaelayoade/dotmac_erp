@@ -53,6 +53,12 @@ async def settings_index(
                 "url": "/settings/reports",
                 "icon": "document-text",
             },
+            {
+                "title": "Payroll Settings",
+                "description": "Auto-posting behavior and rounding account for payroll journals.",
+                "url": "/settings/payroll",
+                "icon": "cog",
+            },
         ],
         "admin_settings_url": "/admin/settings/hub",
     })
@@ -202,6 +208,49 @@ async def update_automation_settings(
         return templates.TemplateResponse(request, "finance/settings/automation_settings.html", context)
 
     return RedirectResponse(url="/settings/automation-settings?saved=1", status_code=303)
+
+
+# ========== Payroll Settings ==========
+
+@router.get("/payroll", response_class=HTMLResponse)
+async def payroll_settings(
+    request: Request,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Payroll settings page."""
+    result = settings_web_service.get_payroll_settings_context(db, auth.organization_id)
+
+    context = base_context(request, auth, "Payroll Settings", "settings", db=db)
+    context.update(result)
+
+    return templates.TemplateResponse(request, "finance/settings/payroll.html", context)
+
+
+@router.post("/payroll", response_class=HTMLResponse)
+async def update_payroll_settings(
+    request: Request,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Update payroll settings."""
+    form_data = getattr(request.state, "csrf_form", None)
+    if form_data is None:
+        form_data = await request.form()
+    data = dict(form_data)
+
+    success, error = settings_web_service.update_payroll_settings(
+        db, auth.organization_id, data
+    )
+
+    if not success:
+        result = settings_web_service.get_payroll_settings_context(db, auth.organization_id)
+        context = base_context(request, auth, "Payroll Settings", "settings", db=db)
+        context.update(result)
+        context["error"] = error
+        return templates.TemplateResponse(request, "finance/settings/payroll.html", context)
+
+    return RedirectResponse(url="/settings/payroll?saved=1", status_code=303)
 
 
 # ========== Report Settings ==========

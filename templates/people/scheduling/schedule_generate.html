@@ -50,7 +50,7 @@
                 <select name="department_id" id="department_id" required class="form-select w-full">
                     <option value="">Select department...</option>
                     {% for dept in departments %}
-                    <option value="{{ dept.department_id }}">{{ dept.department_name }}</option>
+                    <option value="{{ dept.department_id }}" {% if department_id == dept.department_id|string %}selected{% endif %}>{{ dept.department_name }}</option>
                     {% endfor %}
                 </select>
                 <p class="text-xs text-slate-500 mt-1">Generate schedules for all employees with pattern assignments in this department.</p>

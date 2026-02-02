@@ -6,7 +6,7 @@ Creates GL journal entries from salary slips and payroll runs.
 import logging
 import uuid
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Optional
 
@@ -19,6 +19,9 @@ from app.models.people.payroll import (
     PayrollEntry,
     PayrollEntryStatus,
 )
+from app.models.domain_settings import SettingDomain
+from app.services.common import coerce_uuid
+from app.services.settings_cache import get_cached_setting
 
 logger = logging.getLogger(__name__)
 
@@ -104,7 +107,7 @@ class PayrollGLAdapter:
             from app.models.finance.gl.journal_entry import JournalType
 
             # Build journal entry lines
-            lines = []
+            lines: list[JournalLineInput] = []
 
             # DEBITS: Earnings (Salary Expense accounts)
             for earning in slip.earnings:
@@ -158,8 +161,8 @@ class PayrollGLAdapter:
                 )
 
             # Validate debits = credits
-            total_debits = sum(line.debit_amount for line in lines)
-            total_credits = sum(line.credit_amount for line in lines)
+            total_debits = sum((line.debit_amount for line in lines), Decimal("0"))
+            total_credits = sum((line.credit_amount for line in lines), Decimal("0"))
             if total_debits != total_credits:
                 logger.warning(
                     f"Salary slip {slip_id} debits ({total_debits}) != credits ({total_credits})"
@@ -236,6 +239,7 @@ class PayrollGLAdapter:
         posting_date: date,
         user_id: uuid.UUID,
         consolidated: bool = False,
+        posted_at: datetime | None = None,
     ) -> GLPostingResult:
         """
         Post an entire payroll run to GL.
@@ -278,7 +282,7 @@ class PayrollGLAdapter:
             if consolidated:
                 # Consolidated posting: ONE journal entry for entire payroll run
                 return PayrollGLAdapter._post_payroll_run_consolidated(
-                    db, org_id, payroll, slips, posting_date, user_id
+                    db, org_id, payroll, slips, posting_date, user_id, posted_at
                 )
 
             # Post each slip individually
@@ -387,6 +391,7 @@ class PayrollGLAdapter:
         slips: list[SalarySlip],
         posting_date: date,
         user_id: uuid.UUID,
+        posted_at: datetime | None = None,
     ) -> GLPostingResult:
         """
         Post payroll run as ONE consolidated journal entry.
@@ -501,19 +506,48 @@ class PayrollGLAdapter:
                 description=f"Payroll {period_ref} - Net Pay ({len(slips)} employees)",
             ))
 
-            # Validate debits = credits
-            total_debits = sum(line.debit_amount for line in lines)
-            total_credits = sum(line.credit_amount for line in lines)
-            if total_debits != total_credits:
-                diff = total_debits - total_credits
-                logger.error(
-                    f"Payroll run {payroll.entry_id} is unbalanced: "
-                    f"debits={total_debits}, credits={total_credits}, diff={diff}"
+            # Validate debits = credits, allow small rounding adjustment if configured
+            total_debits = sum((line.debit_amount for line in lines), Decimal("0"))
+            total_credits = sum((line.credit_amount for line in lines), Decimal("0"))
+            diff = total_debits - total_credits
+            if diff != 0:
+                rounding_account_id = None
+                rounding_account_id_raw = get_cached_setting(
+                    db, SettingDomain.payroll, "payroll_rounding_account_id", None
                 )
-                return GLPostingResult(
-                    success=False,
-                    error_message=f"Journal entry would be unbalanced by {diff}. Check deduction configurations."
-                )
+                if rounding_account_id_raw:
+                    try:
+                        rounding_account_id = coerce_uuid(
+                            rounding_account_id_raw, raise_http=False
+                        )
+                    except Exception:
+                        rounding_account_id = None
+                if rounding_account_id:
+                    max_rounding = Decimal("5.00")
+                    if abs(diff) <= max_rounding:
+                        lines.append(
+                            JournalLineInput(
+                                account_id=rounding_account_id,
+                                debit_amount=Decimal("0.00") if diff > 0 else abs(diff),
+                                credit_amount=abs(diff) if diff > 0 else Decimal("0.00"),
+                                description=f"Payroll {period_ref} - Rounding Adjustment",
+                            )
+                        )
+                        total_debits = sum((line.debit_amount for line in lines), Decimal("0"))
+                        total_credits = sum((line.credit_amount for line in lines), Decimal("0"))
+                        diff = total_debits - total_credits
+                if diff != 0:
+                    logger.error(
+                        f"Payroll run {payroll.entry_id} is unbalanced: "
+                        f"debits={total_debits}, credits={total_credits}, diff={diff}"
+                    )
+                    return GLPostingResult(
+                        success=False,
+                        error_message=(
+                            f"Journal entry would be unbalanced by {diff}. "
+                            "Check deduction configurations."
+                        ),
+                    )
 
             # Create journal entry
             journal_input = JournalInput(
@@ -535,10 +569,11 @@ class PayrollGLAdapter:
             # Link journal to payroll entry
             payroll.journal_entry_id = journal.journal_entry_id
             payroll.status = PayrollEntryStatus.POSTED
+            payroll.status_changed_at = posted_at or datetime.now(timezone.utc)
+            payroll.status_changed_by_id = user_id
 
             # Update all slips to POSTED with same journal reference
-            from datetime import datetime, timezone
-            now = datetime.now(timezone.utc)
+            now = posted_at or datetime.now(timezone.utc)
             for slip in slips:
                 slip.status = SalarySlipStatus.POSTED
                 slip.journal_entry_id = journal.journal_entry_id

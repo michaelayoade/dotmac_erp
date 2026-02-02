@@ -40,7 +40,15 @@
             </div>
             <div class="flex items-center gap-3">
                 <span class="badge badge-neutral">{{ claim.status.value if claim.status else 'DRAFT' }}</span>
-                {% if can_paystack %}
+                {% if has_active_payment %}
+                <span class="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm text-blue-700 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
+                    <svg class="h-4 w-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                    </svg>
+                    Payment Processing
+                </span>
+                <a href="/finance/payments/transfers" class="btn btn-secondary">View Transfer</a>
+                {% elif can_paystack %}
                 <a href="/finance/payments/reimburse/{{ claim.claim_id }}" class="btn btn-primary" onclick="return confirm('Pay this claim via Paystack now?');">
                     Pay with Paystack
                 </a>

@@ -182,6 +182,8 @@ class DisciplineWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
+        error: Optional[str] = None,
+        form_data: Optional[dict] = None,
     ) -> HTMLResponse:
         """Render new case form."""
         org_id = coerce_uuid(auth.organization_id)
@@ -196,6 +198,8 @@ class DisciplineWebService:
             "employees": employees,
             "violation_types": [v.value for v in ViolationType],
             "severities": [s.value for s in SeverityLevel],
+            "error": error,
+            "form_data": form_data or {},
         })
         return templates.TemplateResponse(
             request, "people/hr/discipline/case_form.html", context

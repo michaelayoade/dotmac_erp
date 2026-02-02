@@ -25,6 +25,7 @@ from app.models.finance.ap.supplier_invoice import (
 from app.models.finance.ap.supplier_invoice_line import SupplierInvoiceLine
 from app.models.finance.gl.journal_entry import JournalEntry, JournalStatus, JournalType
 from app.services.common import coerce_uuid
+from app.services.finance.ap.posting.helpers import determine_debit_account
 from app.services.finance.gl.journal import JournalInput, JournalLineInput, JournalService
 from app.services.finance.gl.ledger_posting import LedgerPostingService, PostingRequest
 from app.services.finance.platform.saga_factory import register_saga
@@ -224,9 +225,7 @@ class APInvoicePostingSaga(SagaOrchestrator):
 
         for inv_line in lines:
             # Determine debit account
-            account_id = APPostingAdapter._determine_debit_account(
-                db, org_id, inv_line, supplier
-            )
+            account_id = determine_debit_account(db, org_id, inv_line, supplier)
             if not account_id:
                 return StepResult(
                     success=False,

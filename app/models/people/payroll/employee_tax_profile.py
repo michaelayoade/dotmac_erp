@@ -91,6 +91,21 @@ class EmployeeTaxProfile(Base, AuditMixin):
         nullable=True,
         comment="State for PAYE remittance",
     )
+    rsa_pin: Mapped[Optional[str]] = mapped_column(
+        String(20),
+        nullable=True,
+        comment="Retirement Savings Account PIN",
+    )
+    pfa_code: Mapped[Optional[str]] = mapped_column(
+        String(10),
+        nullable=True,
+        comment="PFA code from pfa_directory",
+    )
+    nhf_number: Mapped[Optional[str]] = mapped_column(
+        String(20),
+        nullable=True,
+        comment="NHF registration number",
+    )
 
     # Rent relief (NTA 2025: 20% of rent, max ₦500,000)
     annual_rent: Mapped[Decimal] = mapped_column(

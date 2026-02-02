@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 from datetime import date, datetime
+from decimal import Decimal, InvalidOperation
 from typing import Any, Optional
 from uuid import UUID
 
@@ -26,6 +27,7 @@ from app.models.people.hr import (
     EmployeeStatus,
     EmploymentType,
 )
+from app.models.people.hr.employee import SalaryMode
 from app.models.people.payroll.salary_assignment import SalaryStructureAssignment
 from app.models.people.payroll.employee_tax_profile import EmployeeTaxProfile
 from app.models.person import Gender, Person
@@ -236,6 +238,24 @@ class HRWebService:
         bank_account_name = self._form_str(form, "bank_account_name")
         bank_account_number = self._form_str(form, "bank_account_number")
         bank_branch_code = self._form_str(form, "bank_branch_code")
+        ctc_raw = self._form_str(form, "ctc")
+        salary_mode_raw = self._form_str(form, "salary_mode")
+        ctc = self._parse_decimal(ctc_raw)
+        salary_mode = self._parse_salary_mode(salary_mode_raw)
+        ctc_raw = self._form_str(form, "ctc")
+        salary_mode_raw = self._form_str(form, "salary_mode")
+        ctc = self._parse_decimal(ctc_raw)
+        salary_mode = self._parse_salary_mode(salary_mode_raw)
+        ctc_raw = self._form_str(form, "ctc")
+        salary_mode_raw = self._form_str(form, "salary_mode")
+        ctc = self._parse_decimal(ctc_raw)
+        salary_mode = self._parse_salary_mode(salary_mode_raw)
+        ctc = self._parse_decimal(self._form_str(form, "ctc"))
+        salary_mode = self._parse_salary_mode(self._form_str(form, "salary_mode"))
+        ctc_raw = self._form_str(form, "ctc")
+        salary_mode_raw = self._form_str(form, "salary_mode")
+        ctc = self._parse_decimal(ctc_raw)
+        salary_mode = self._parse_salary_mode(salary_mode_raw)
 
         if (not linked_person_id and (not first_name or not last_name or not email)) or not date_of_joining:
             errors = {
@@ -279,6 +299,8 @@ class HRWebService:
                     "bank_account_name": bank_account_name,
                     "bank_account_number": bank_account_number,
                     "bank_branch_code": bank_branch_code,
+                    "ctc": ctc_raw,
+                    "salary_mode": salary_mode_raw,
                     "notes": notes,
                 },
                 errors=errors,
@@ -337,6 +359,8 @@ class HRWebService:
                         "bank_account_name": bank_account_name,
                         "bank_account_number": bank_account_number,
                         "bank_branch_code": bank_branch_code,
+                        "ctc": ctc_raw,
+                        "salary_mode": salary_mode_raw,
                     },
                 )
             person = existing_person
@@ -379,6 +403,8 @@ class HRWebService:
                             "bank_account_name": bank_account_name,
                             "bank_account_number": bank_account_number,
                             "bank_branch_code": bank_branch_code,
+                            "ctc": ctc_raw,
+                            "salary_mode": salary_mode_raw,
                             "notes": notes,
                         },
                     )
@@ -426,6 +452,8 @@ class HRWebService:
             bank_account_name=bank_account_name,
             bank_account_number=bank_account_number,
             bank_sort_code=bank_branch_code,
+            ctc=ctc,
+            salary_mode=salary_mode,
             notes=notes or None,
         )
 
@@ -478,6 +506,10 @@ class HRWebService:
         bank_account_name = self._form_str(form, "bank_account_name")
         bank_account_number = self._form_str(form, "bank_account_number")
         bank_branch_code = self._form_str(form, "bank_branch_code")
+        ctc_raw = self._form_str(form, "ctc")
+        salary_mode_raw = self._form_str(form, "salary_mode")
+        ctc = self._parse_decimal(ctc_raw)
+        salary_mode = self._parse_salary_mode(salary_mode_raw)
 
         status_enum = None
         if status:
@@ -512,6 +544,8 @@ class HRWebService:
             "bank_account_name",
             "bank_account_number",
             "bank_sort_code",
+            "ctc",
+            "salary_mode",
             "notes",
         }
 
@@ -537,6 +571,8 @@ class HRWebService:
             bank_account_name=bank_account_name or None,
             bank_account_number=bank_account_number or None,
             bank_sort_code=bank_branch_code or None,
+            ctc=ctc,
+            salary_mode=salary_mode,
             notes=notes or None,
             provided_fields=provided_fields,
         )
@@ -767,6 +803,7 @@ class HRWebService:
         auth: WebAuthContext,
         db: Session,
         employee_id: str,
+        saved: bool = False,
     ) -> HTMLResponse:
         """Render employee detail page."""
         org_id = coerce_uuid(auth.organization_id)
@@ -774,6 +811,7 @@ class HRWebService:
 
         employee = svc.get_employee(coerce_uuid(employee_id))
         context = self._employee_detail_context(request, auth, db, employee)
+        context["saved"] = saved
 
         return templates.TemplateResponse(
             request,
@@ -902,6 +940,7 @@ class HRWebService:
             "shift_types": shift_types,
             "user_accounts": user_accounts,
             "statuses": [s.value for s in EmployeeStatus],
+            "salary_modes": [m.value for m in SalaryMode],
             "genders": [g.value for g in Gender],
             "error": error,
             "errors": errors or {},
@@ -929,6 +968,26 @@ class HRWebService:
             return None
         try:
             return datetime.strptime(value, "%Y-%m-%d").date()
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _parse_decimal(value: str) -> Optional[Decimal]:
+        """Parse a decimal value from form input."""
+        if not value:
+            return None
+        try:
+            return Decimal(value.replace(",", ""))
+        except (InvalidOperation, ValueError):
+            return None
+
+    @staticmethod
+    def _parse_salary_mode(value: str) -> Optional[SalaryMode]:
+        """Parse salary mode enum from form input."""
+        if not value:
+            return None
+        try:
+            return SalaryMode(value.upper())
         except ValueError:
             return None
 
@@ -1029,6 +1088,7 @@ class HRWebService:
             "shift_types": shift_types,
             "user_accounts": user_accounts,
             "statuses": [s.value for s in EmployeeStatus],
+            "salary_modes": [m.value for m in SalaryMode],
             "genders": [g.value for g in Gender],
             "errors": {},
             "form_data": {},

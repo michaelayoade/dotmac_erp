@@ -12,7 +12,10 @@ from typing import Any, Optional
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.domain_settings import SettingDomain
+from app.models.domain_settings import SettingDomain, SettingValueType
+from app.schemas.settings import DomainSettingUpdate
+from app.services.domain_settings import DomainSettings
+from app.services.settings_cache import get_cached_setting
 from app.models.finance.core_org import Organization
 from app.services.settings_spec import (
     DOMAIN_SETTINGS_SERVICE,
@@ -202,9 +205,18 @@ class AdminSettingsWebService:
         except Exception:
             pass
 
+        email_logo_url = get_cached_setting(
+            db, SettingDomain.email, "email_logo_url", ""
+        )
+        report_logo_url = get_cached_setting(
+            db, SettingDomain.reporting, "report_logo_url", ""
+        )
+
         return {
             "organization": org,
             "branding": branding,
+            "email_logo_url": email_logo_url or "",
+            "report_logo_url": report_logo_url or "",
         }
 
     def update_branding(
@@ -232,14 +244,24 @@ class AdminSettingsWebService:
             ).scalar_one_or_none()
 
             branding_fields = [
-                "primary_color",
-                "secondary_color",
-                "accent_color",
+                "display_name",
+                "tagline",
+                "brand_mark",
+                "logo_url",
+                "logo_dark_url",
                 "favicon_url",
-                "email_logo_url",
-                "report_logo_url",
-                "email_header_html",
-                "email_footer_html",
+                "primary_color",
+                "accent_color",
+                "success_color",
+                "warning_color",
+                "danger_color",
+                "font_family_display",
+                "font_family_body",
+                "font_family_mono",
+                "border_radius",
+                "button_style",
+                "sidebar_style",
+                "custom_css",
             ]
 
             if branding:
@@ -257,6 +279,31 @@ class AdminSettingsWebService:
                     db.add(branding)
         except Exception as e:
             logger.debug("OrganizationBranding model unavailable: %s", e)
+
+        email_logo_url = (data.get("email_logo_url") or "").strip()
+        report_logo_url = (data.get("report_logo_url") or "").strip()
+
+        email_settings = DomainSettings(SettingDomain.email)
+        reporting_settings = DomainSettings(SettingDomain.reporting)
+
+        email_settings.upsert_by_key(
+            db,
+            "email_logo_url",
+            DomainSettingUpdate(
+                value_type=SettingValueType.string,
+                value_text=email_logo_url or None,
+                is_active=bool(email_logo_url),
+            ),
+        )
+        reporting_settings.upsert_by_key(
+            db,
+            "report_logo_url",
+            DomainSettingUpdate(
+                value_type=SettingValueType.string,
+                value_text=report_logo_url or None,
+                is_active=bool(report_logo_url),
+            ),
+        )
 
         db.commit()
         return True, None

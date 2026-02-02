@@ -66,8 +66,12 @@ def _format_currency(
     amount: Optional[Decimal],
     currency: str = settings.default_presentation_currency_code,
 ) -> str:
+    """Format currency amount with symbol and thousands separator.
+
+    Returns dash for None values to indicate no data available.
+    """
     if amount is None:
-        return ""
+        return "—"
     value = Decimal(str(amount))
     return f"{currency} {value:,.2f}"
 
@@ -129,6 +133,7 @@ def _parse_reconciliation_status(value: Optional[str]) -> Optional[Reconciliatio
 
 
 def _account_view(account: BankAccount) -> dict:
+    currency = account.currency_code or "NGN"
     return {
         "bank_account_id": account.bank_account_id,
         "bank_name": account.bank_name,
@@ -139,19 +144,19 @@ def _account_view(account: BankAccount) -> dict:
         "account_number": account.account_number,
         "account_type": account.account_type.value if account.account_type else "",
         "iban": account.iban,
-        "currency_code": account.currency_code,
+        "currency_code": currency,
         "gl_account_id": account.gl_account_id,
         "status": account.status.value if account.status else "",
-        "last_statement_balance": account.last_statement_balance,
+        "last_statement_balance": _format_currency(account.last_statement_balance, currency),
         "last_statement_date": _format_date(account.last_statement_date),
         "last_reconciled_date": _format_date(account.last_reconciled_date),
-        "last_reconciled_balance": account.last_reconciled_balance,
+        "last_reconciled_balance": _format_currency(account.last_reconciled_balance, currency),
         "contact_name": account.contact_name,
         "contact_phone": account.contact_phone,
         "contact_email": account.contact_email,
         "notes": account.notes,
         "allow_overdraft": account.allow_overdraft,
-        "overdraft_limit": account.overdraft_limit,
+        "overdraft_limit": _format_currency(account.overdraft_limit, currency) if account.overdraft_limit else None,
     }
 
 

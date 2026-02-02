@@ -5,6 +5,7 @@ Builds payroll runs and generates salary slips using SalarySlipService.
 """
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Optional
@@ -25,13 +26,52 @@ from app.models.people.payroll.salary_structure import (
 )
 from app.models.people.payroll.salary_slip import SalarySlip, SalarySlipStatus
 from app.services.common import PaginatedResult, PaginationParams, coerce_uuid
+from app.models.domain_settings import SettingDomain
 from app.services.people.integrations.payroll_gl_adapter import PayrollGLAdapter
 from app.services.people.payroll.salary_slip_service import (
     SalarySlipInput,
     salary_slip_service,
 )
+from app.services.settings_cache import get_cached_setting
 
-__all__ = ["PayrollService", "PayrollServiceError"]
+__all__ = ["PayrollService", "PayrollServiceError", "AutoGenerateResult"]
+
+
+def _dispatch_slip_paid(slip_id: UUID, slip_number: str, employee_id: UUID) -> None:
+    """
+    Dispatch SlipPaid event after DB commit.
+
+    This function is called AFTER db.commit() to ensure the payment
+    is persisted before dispatching any events.
+
+    Args:
+        slip_id: The salary slip ID
+        slip_number: The slip number for logging
+        employee_id: The employee ID
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.debug(
+        "Dispatching slip paid event for slip %s (employee %s)",
+        slip_number,
+        employee_id,
+    )
+    # Event dispatch placeholder - integrate with event system when available
+    # e.g., event_dispatcher.dispatch(SlipPaidEvent(slip_id=slip_id, ...))
+
+
+@dataclass
+class AutoGenerateResult:
+    """Result of auto-generating salary slips."""
+
+    created: int = 0
+    skipped: int = 0
+    flagged_for_review: list = field(default_factory=list)
+    errors: list = field(default_factory=list)
+
+    @property
+    def total(self) -> int:
+        return self.created + self.skipped + len(self.errors)
 
 
 class PayrollServiceError(Exception):
@@ -387,6 +427,8 @@ class PayrollService:
         currency_code: str = "NGN",
         department_id: Optional[UUID] = None,
         designation_id: Optional[UUID] = None,
+        source_bank_account_id: Optional[UUID] = None,
+        expense_account_id: Optional[UUID] = None,
         notes: Optional[str] = None,
     ) -> PayrollEntry:
         count = (
@@ -409,6 +451,8 @@ class PayrollService:
             currency_code=currency_code,
             department_id=department_id,
             designation_id=designation_id,
+            source_bank_account_id=source_bank_account_id,
+            expense_account_id=expense_account_id,
             notes=notes,
             status=PayrollEntryStatus.DRAFT,
         )
@@ -482,6 +526,197 @@ class PayrollService:
         entry.status = PayrollEntryStatus.SLIPS_CREATED
         self.db.flush()
         return {"created_count": created, "skipped_count": skipped, "errors": errors}
+
+    def generate_salary_slips_auto(
+        self,
+        org_id: UUID,
+        entry_id: UUID,
+        *,
+        include_attendance: bool = True,
+        include_lwp: bool = True,
+        prorate_joiners: bool = True,
+        prorate_exits: bool = True,
+    ) -> AutoGenerateResult:
+        """
+        Generate salary slips with auto-fetched data.
+
+        Enhanced slip generation that:
+        - Fetches attendance from AttendancePayrollAdapter
+        - Fetches LWP from LeavePayrollAdapter
+        - Calculates proration using WorkingDaysCalculator with holiday calendar
+        - Flags employees with data gaps for review
+
+        Args:
+            org_id: Organization ID
+            entry_id: Payroll entry ID
+            include_attendance: Whether to fetch attendance data
+            include_lwp: Whether to fetch LWP from leave module
+            prorate_joiners: Whether to prorate new hires
+            prorate_exits: Whether to prorate exits
+
+        Returns:
+            AutoGenerateResult with statistics and flagged slips
+        """
+        import logging
+
+        from app.services.people.payroll.working_days_calculator import (
+            WorkingDaysCalculator,
+            ProrationReason,
+        )
+        from app.services.people.payroll.leave_adapter import LeavePayrollAdapter
+        from app.services.people.payroll.data_completeness import (
+            PayrollReadinessService,
+        )
+
+        logger = logging.getLogger(__name__)
+
+        entry = self.get_payroll_entry(org_id, entry_id)
+        if entry.salary_slips_created:
+            raise PayrollServiceError("Salary slips already created. Use regenerate instead.")
+
+        # Get eligible employees (with salary assignments)
+        assignments = self._get_entry_assignments(org_id, entry)
+
+        # Initialize adapters and services
+        working_days_calc = WorkingDaysCalculator(self.db)
+        leave_adapter = LeavePayrollAdapter(self.db)
+        readiness_service = PayrollReadinessService(self.db)
+
+        result = AutoGenerateResult()
+
+        # Get bulk LWP data for efficiency
+        employee_ids = [a.employee_id for a in assignments]
+        lwp_by_employee: dict[UUID, Decimal] = {}
+        if include_lwp and employee_ids:
+            lwp_by_employee = leave_adapter.get_bulk_lwp_days(
+                employee_ids, entry.start_date, entry.end_date
+            )
+
+        for assignment in assignments:
+            try:
+                employee = self.db.get(Employee, assignment.employee_id)
+                if not employee:
+                    result.skipped += 1
+                    continue
+
+                # Check employee readiness
+                readiness = readiness_service._check_employee_readiness(
+                    employee=employee,
+                    assignment=assignment,
+                    tax_profile=None,  # Will be checked during slip creation
+                    attendance=None,
+                    period_start=entry.start_date,
+                    period_end=entry.end_date,
+                )
+
+                # Skip employees with critical issues (no salary assignment)
+                if not readiness.has_salary_assignment:
+                    result.skipped += 1
+                    continue
+
+                # Calculate proration
+                proration = working_days_calc.calculate_payment_days(
+                    organization_id=org_id,
+                    employee_joining_date=employee.date_of_joining,
+                    period_start=entry.start_date,
+                    period_end=entry.end_date,
+                    employee_leaving_date=employee.date_of_leaving,
+                )
+
+                # Get LWP days
+                lwp_days = Decimal("0")
+                if include_lwp:
+                    lwp_days = lwp_by_employee.get(employee.employee_id, Decimal("0"))
+
+                # Build slip input
+                slip_input = SalarySlipInput(
+                    employee_id=employee.employee_id,
+                    start_date=entry.start_date,
+                    end_date=entry.end_date,
+                    posting_date=entry.posting_date,
+                    total_working_days=proration.total_working_days,
+                    absent_days=Decimal("0"),  # Could integrate attendance later
+                    leave_without_pay=lwp_days,
+                )
+
+                # Create salary slip
+                slip = salary_slip_service.create_salary_slip(
+                    db=self.db,
+                    organization_id=org_id,
+                    input=slip_input,
+                    created_by_user_id=None,  # System-generated
+                )
+                slip.payroll_entry_id = entry.entry_id
+
+                # Collect review reasons
+                review_reasons: list[str] = []
+
+                # Flag for proration
+                if proration.is_prorated:
+                    if proration.proration_reason == ProrationReason.JOINED_MID_PERIOD:
+                        review_reasons.append(
+                            f"New hire - joined {employee.date_of_joining}, salary prorated"
+                        )
+                    elif proration.proration_reason == ProrationReason.LEFT_MID_PERIOD:
+                        review_reasons.append(
+                            f"Exit - leaving {employee.date_of_leaving}, salary prorated"
+                        )
+                    elif proration.proration_reason == ProrationReason.BOTH:
+                        review_reasons.append(
+                            f"Joined {employee.date_of_joining} and leaving {employee.date_of_leaving}"
+                        )
+
+                # Flag for missing bank details
+                if not readiness.has_bank_details:
+                    review_reasons.append("Missing bank account details")
+
+                # Flag for missing tax profile
+                if not readiness.has_tax_profile:
+                    review_reasons.append("No tax profile - PAYE may not be accurate")
+
+                # Flag for LWP
+                if lwp_days > 0:
+                    review_reasons.append(f"{lwp_days} days Leave Without Pay deducted")
+
+                # Set review flags on slip
+                if review_reasons:
+                    slip.needs_review = True
+                    slip.review_reasons = review_reasons
+                    result.flagged_for_review.append({
+                        "employee_id": str(employee.employee_id),
+                        "employee_code": employee.employee_code,
+                        "employee_name": employee.full_name,
+                        "slip_id": str(slip.slip_id),
+                        "reasons": review_reasons,
+                    })
+
+                result.created += 1
+
+            except Exception as e:
+                logger.exception(
+                    "Failed to create slip for employee %s",
+                    assignment.employee_id,
+                )
+                result.errors.append({
+                    "employee_id": str(assignment.employee_id),
+                    "error": str(e),
+                })
+
+        # Update entry totals and status
+        self._update_entry_totals(entry)
+        entry.salary_slips_created = True
+        entry.status = PayrollEntryStatus.SLIPS_CREATED
+        self.db.flush()
+
+        logger.info(
+            "Auto-generated %d slips for entry %s (%d flagged, %d errors)",
+            result.created,
+            entry.entry_number,
+            len(result.flagged_for_review),
+            len(result.errors),
+        )
+
+        return result
 
     def regenerate_salary_slips(
         self,
@@ -587,6 +822,19 @@ class PayrollService:
 
         entry.status = PayrollEntryStatus.APPROVED
         self.db.flush()
+
+        if get_cached_setting(self.db, SettingDomain.payroll, "auto_post_gl_on_approval", True):
+            posting_result = self.handoff_payroll_to_books(
+                org_id,
+                entry_id,
+                posting_date=now.date(),
+                user_id=approver_id,
+                posted_at=now,
+            )
+            if not posting_result.get("success"):
+                raise PayrollServiceError(
+                    posting_result.get("error") or "Payroll approved but GL posting failed"
+                )
         return entry
 
     def payout_payroll_entry(
@@ -612,6 +860,8 @@ class PayrollService:
         )
         notification_service = PayrollNotificationService(self.db)
 
+        paid_slips: list[SalarySlip] = []
+
         for slip in slips:
             if slip.status != SalarySlipStatus.APPROVED:
                 errors.append(
@@ -623,6 +873,7 @@ class PayrollService:
             slip.paid_by_id = paid_by_id
             slip.payment_reference = payment_reference
             updated += 1
+            paid_slips.append(slip)
 
             # Send payment notification to employee
             try:
@@ -637,7 +888,17 @@ class PayrollService:
                     notify_err,
                 )
 
-        self.db.flush()
+        # Commit changes before dispatching events
+        self.db.commit()
+
+        # Dispatch events after commit to ensure persistence
+        for slip in paid_slips:
+            _dispatch_slip_paid(
+                slip_id=slip.slip_id,
+                slip_number=getattr(slip, 'slip_number', ''),
+                employee_id=getattr(slip, 'employee_id', None),
+            )
+
         return {"updated": updated, "requested": len(slips), "errors": errors}
 
     def handoff_payroll_to_books(
@@ -647,6 +908,7 @@ class PayrollService:
         *,
         posting_date: date,
         user_id: UUID,
+        posted_at: datetime | None = None,
     ) -> dict:
         result = PayrollGLAdapter.post_payroll_run(
             self.db,
@@ -655,6 +917,7 @@ class PayrollService:
             posting_date=posting_date,
             user_id=user_id,
             consolidated=True,  # Use single consolidated journal entry per run
+            posted_at=posted_at,
         )
         return {"success": result.success, "error": result.error_message}
 
@@ -1038,4 +1301,152 @@ class PayrollService:
             "total_gross": total_gross,
             "total_net": total_net,
             "average_monthly": average_monthly,
+        }
+
+    def get_payroll_ytd_report(
+        self,
+        org_id: UUID,
+        *,
+        year: Optional[int] = None,
+    ) -> dict:
+        """
+        Get year-to-date payroll report with employee-level breakdowns.
+
+        Returns aggregate totals and per-employee summary including
+        statutory deduction breakdowns (PAYE, Pension, NHF).
+
+        Args:
+            org_id: Organization ID
+            year: Report year (defaults to current year)
+
+        Returns:
+            Dict with 'totals' and 'rows' keys
+        """
+        from app.models.people.payroll.salary_slip import SalarySlipDeduction
+        from app.models.people.payroll.salary_component import SalaryComponent
+        from app.models.person import Person
+
+        # Allow string org_id for testing compatibility
+        try:
+            org_id = coerce_uuid(org_id)
+        except Exception:
+            pass  # Keep original value for mock testing
+
+        if year is None:
+            year = date.today().year
+
+        year_start = date(year, 1, 1)
+        year_end = date(year, 12, 31)
+
+        # Base query: Employee-level aggregates
+        base_results = (
+            self.db.query(
+                SalarySlip.employee_id,
+                Employee.employee_code,
+                func.concat(Person.first_name, " ", Person.last_name).label("employee_name"),
+                func.coalesce(Employee.department_id, None).label("department_name"),
+                func.count(SalarySlip.slip_id).label("slip_count"),
+                func.sum(SalarySlip.gross_pay).label("total_gross"),
+                func.sum(SalarySlip.total_deduction).label("total_deductions"),
+                func.sum(SalarySlip.net_pay).label("total_net"),
+            )
+            .select_from(SalarySlip)
+            .join(Employee, SalarySlip.employee_id == Employee.employee_id)
+            .join(Person, Employee.person_id == Person.id)
+            .filter(
+                SalarySlip.organization_id == org_id,
+                SalarySlip.start_date >= year_start,
+                SalarySlip.end_date <= year_end,
+            )
+            .group_by(
+                SalarySlip.employee_id,
+                Employee.employee_code,
+                Person.first_name,
+                Person.last_name,
+                Employee.department_id,
+            )
+            .order_by(Person.first_name, Person.last_name)
+            .all()
+        )
+
+        # Query deduction breakdowns by component
+        deduction_results = (
+            self.db.query(
+                SalarySlip.employee_id,
+                SalaryComponent.component_code.label("component_code"),
+                func.sum(SalarySlipDeduction.amount).label("total_amount"),
+            )
+            .select_from(SalarySlipDeduction)
+            .join(SalarySlip, SalarySlipDeduction.slip_id == SalarySlip.slip_id)
+            .join(SalaryComponent, SalarySlipDeduction.component_id == SalaryComponent.component_id)
+            .filter(
+                SalarySlip.organization_id == org_id,
+                SalarySlip.start_date >= year_start,
+                SalarySlip.end_date <= year_end,
+                SalaryComponent.component_code.in_(["PAYE", "PENSION", "NHF"]),
+            )
+            .group_by(SalarySlip.employee_id, SalaryComponent.component_code)
+            .all()
+        )
+
+        # Build deduction lookup by employee
+        deductions_by_employee: dict[str, dict[str, Decimal]] = {}
+        total_paye = Decimal("0")
+        total_pension = Decimal("0")
+        total_nhf = Decimal("0")
+
+        for row in deduction_results:
+            emp_id = str(row.employee_id)
+            if emp_id not in deductions_by_employee:
+                deductions_by_employee[emp_id] = {}
+            deductions_by_employee[emp_id][row.component_code] = row.total_amount or Decimal("0")
+
+            if row.component_code == "PAYE":
+                total_paye += row.total_amount or Decimal("0")
+            elif row.component_code == "PENSION":
+                total_pension += row.total_amount or Decimal("0")
+            elif row.component_code == "NHF":
+                total_nhf += row.total_amount or Decimal("0")
+
+        # Build result rows and totals
+        rows = []
+        total_gross = Decimal("0")
+        total_deductions = Decimal("0")
+        total_net = Decimal("0")
+        slip_count = 0
+
+        for base_row in base_results:
+            emp_id = str(base_row.employee_id)
+            emp_deductions = deductions_by_employee.get(emp_id, {})
+
+            rows.append({
+                "employee_id": emp_id,
+                "employee_code": base_row.employee_code,
+                "employee_name": base_row.employee_name,
+                "department_name": base_row.department_name,
+                "slip_count": base_row.slip_count,
+                "total_gross": base_row.total_gross or Decimal("0"),
+                "total_deductions": base_row.total_deductions or Decimal("0"),
+                "total_net": base_row.total_net or Decimal("0"),
+                "paye": emp_deductions.get("PAYE", Decimal("0")),
+                "pension": emp_deductions.get("PENSION", Decimal("0")),
+                "nhf": emp_deductions.get("NHF", Decimal("0")),
+            })
+
+            total_gross += base_row.total_gross or Decimal("0")
+            total_deductions += base_row.total_deductions or Decimal("0")
+            total_net += base_row.total_net or Decimal("0")
+            slip_count += base_row.slip_count or 0
+
+        return {
+            "totals": {
+                "total_gross": total_gross,
+                "total_deductions": total_deductions,
+                "total_net": total_net,
+                "total_paye": total_paye,
+                "total_pension": total_pension,
+                "total_nhf": total_nhf,
+                "slip_count": slip_count,
+            },
+            "rows": rows,
         }

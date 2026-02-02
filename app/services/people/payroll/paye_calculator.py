@@ -126,6 +126,27 @@ class PAYEBreakdown:
     def effective_rate_percent(self) -> Decimal:
         return self.effective_rate * 100
 
+    # Aliases for TaxResult interface compatibility
+    @property
+    def monthly_social_security(self) -> Decimal:
+        """Alias for monthly_nhf (NHF is Nigeria's social security equivalent)."""
+        return self.monthly_nhf
+
+    @property
+    def monthly_health_insurance(self) -> Decimal:
+        """Alias for monthly_nhis (NHIS is Nigeria's health insurance)."""
+        return self.monthly_nhis
+
+    @property
+    def total_monthly_deductions(self) -> Decimal:
+        """Total monthly statutory deductions (tax + pension + nhf + nhis)."""
+        return (
+            self.monthly_tax
+            + self.monthly_pension
+            + self.monthly_nhf
+            + self.monthly_nhis
+        )
+
     def to_dict(self) -> dict:
         """Convert to dictionary for JSON serialization."""
         return {

@@ -5,7 +5,7 @@ Provides context and update functions for settings UI pages.
 """
 import uuid
 import logging
-from typing import Any, Optional
+from typing import Any, Optional, cast
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,6 +20,7 @@ from app.services.settings_spec import (
     get_spec,
 )
 from app.schemas.settings import DomainSettingUpdate
+from app.services.email import SMTPConfig
 
 logger = logging.getLogger(__name__)
 
@@ -338,7 +339,7 @@ class SettingsWebService:
         from app.services.settings_spec import coerce_value
 
 
-        candidate_config = _get_smtp_config(db)
+        candidate_config: dict[str, object] = dict(_get_smtp_config(db))
         has_smtp_change = False
         smtp_field_map = {
             "smtp_host": "host",
@@ -392,7 +393,7 @@ class SettingsWebService:
             pending_updates.append((key, payload))
 
         if smtp_fields_seen or has_smtp_change:
-            ok, error = validate_smtp_config(candidate_config)
+            ok, error = validate_smtp_config(cast(SMTPConfig, candidate_config))
             if not ok:
                 return False, error
 
@@ -530,6 +531,89 @@ class SettingsWebService:
             payload = DomainSettingUpdate(
                 value_type=spec.value_type,
                 value_text=str(value) if value is not None else None,
+            )
+            service.upsert_by_key(db, key, payload)
+
+        db.commit()
+        return True, None
+
+    # ========== Payroll Settings ==========
+
+    def get_payroll_settings_context(
+        self, db, organization_id: uuid.UUID
+    ) -> dict[str, Any]:
+        """Get payroll settings for the form."""
+        from sqlalchemy import select
+        from app.models.finance.gl.account import Account
+        from app.models.finance.gl.account_category import AccountCategory, IFRSCategory
+
+        specs = list_specs(SettingDomain.payroll)
+        settings = {}
+
+        for spec in specs:
+            value = resolve_value(db, SettingDomain.payroll, spec.key)
+            settings[spec.key] = {
+                "value": value if not spec.is_secret else "",
+                "default": spec.default,
+                "type": spec.value_type.value,
+                "is_secret": spec.is_secret,
+                "has_value": value is not None and value != "",
+            }
+
+        expense_accounts = db.execute(
+            select(Account)
+            .join(AccountCategory, Account.category_id == AccountCategory.category_id)
+            .where(
+                Account.organization_id == organization_id,
+                AccountCategory.ifrs_category == IFRSCategory.EXPENSES,
+                Account.is_active.is_(True),
+                Account.is_posting_allowed.is_(True),
+            )
+            .order_by(Account.account_code)
+        ).scalars().all()
+
+        return {
+            "settings": settings,
+            "specs": specs,
+            "expense_accounts": expense_accounts,
+        }
+
+    def update_payroll_settings(
+        self, db, organization_id: uuid.UUID, data: dict[str, Any]
+    ) -> tuple[bool, Optional[str]]:
+        """Update payroll settings."""
+        from app.services.settings_spec import coerce_value
+
+        service = DOMAIN_SETTINGS_SERVICE.get(SettingDomain.payroll)
+        if not service:
+            return False, "Payroll settings service not found"
+
+        # Validate UUID fields
+        uuid_fields = ["payroll_rounding_account_id"]
+        for field in uuid_fields:
+            value = data.get(field)
+            if value and value.strip():
+                try:
+                    uuid.UUID(value.strip())
+                except ValueError:
+                    return False, f"{field}: Must be a valid UUID"
+
+        # Ensure unchecked checkboxes are persisted as false
+        data.setdefault("auto_post_gl_on_approval", "false")
+
+        for key, value in data.items():
+            spec = get_spec(SettingDomain.payroll, key)
+            if not spec:
+                continue
+
+            coerced, error = coerce_value(spec, value)
+            if error:
+                return False, f"{key}: {error}"
+
+            payload = DomainSettingUpdate(
+                value_type=spec.value_type,
+                value_text=str(coerced) if coerced is not None else None,
+                is_secret=spec.is_secret,
             )
             service.upsert_by_key(db, key, payload)
 
