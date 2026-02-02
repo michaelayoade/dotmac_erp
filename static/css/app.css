@@ -2891,6 +2891,13 @@ video {
         padding-top: 15vh;
     }
 
+/* Ensure overlay is non-interactive when hidden */
+.command-palette-overlay[x-cloak],
+.command-palette-overlay[style*="display: none"] {
+        pointer-events: none;
+        visibility: hidden;
+    }
+
 .command-palette {
         width: 100%;
         max-width: 560px;
