@@ -1,0 +1,124 @@
+{% extends "operations/base_operations.html" %}
+{% from "components/macros.html" import pagination, action_buttons %}
+
+{% block page_title %}Fuel Logs{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+    <a href="/operations/dashboard" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Operations</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <a href="/operations/fleet" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Fleet</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="font-medium text-slate-900 dark:text-white">Fuel Logs</span>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<a href="/operations/fleet/fuel/new" class="btn btn-primary">
+    <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+    </svg>
+    Record Fuel
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6 stagger-in">
+    <!-- Filters -->
+    <div class="card p-4">
+        <form method="get" action="/operations/fleet/fuel" class="flex flex-wrap items-center gap-4">
+            <select name="vehicle_id" class="form-select">
+                <option value="">All Vehicles</option>
+                {% for v in vehicles %}
+                <option value="{{ v.vehicle_id }}" {{ 'selected' if vehicle_id|string == v.vehicle_id|string else '' }}>{{ v.registration_number }}</option>
+                {% endfor %}
+            </select>
+            <input type="date" name="from_date" value="{{ from_date }}" class="form-input" placeholder="From">
+            <input type="date" name="to_date" value="{{ to_date }}" class="form-input" placeholder="To">
+            <button type="submit" class="btn btn-secondary">Filter</button>
+            {% if vehicle_id or from_date or to_date %}
+            <a href="/operations/fleet/fuel" class="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400">Clear</a>
+            {% endif %}
+        </form>
+    </div>
+
+    <!-- Fuel Logs Table -->
+    <div class="card">
+        <div class="table-container">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Vehicle</th>
+                        <th class="text-right">Quantity (L)</th>
+                        <th class="text-right">Price/L</th>
+                        <th class="text-right">Total Cost</th>
+                        <th class="text-right">Odometer</th>
+                        <th>Station</th>
+                        <th class="text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in logs %}
+                    <tr class="group hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                        <td class="text-sm text-slate-600 dark:text-slate-400">
+                            {{ log.fuel_date.strftime('%b %d, %Y') }}
+                        </td>
+                        <td>
+                            <a href="/operations/fleet/vehicles/{{ log.vehicle_id }}" class="font-mono text-sm font-semibold text-teal-600 hover:text-teal-700 dark:text-teal-400">
+                                {{ log.vehicle.registration_number }}
+                            </a>
+                        </td>
+                        <td class="text-right font-mono text-sm text-slate-900 dark:text-white">
+                            {{ "{:.2f}".format(log.quantity_liters) }}
+                        </td>
+                        <td class="text-right font-mono text-sm text-slate-600 dark:text-slate-400">
+                            {{ "{:.2f}".format(log.price_per_liter) }}
+                        </td>
+                        <td class="text-right font-mono text-sm font-medium text-slate-900 dark:text-white">
+                            {{ "{:,.2f}".format(log.total_cost) }}
+                        </td>
+                        <td class="text-right font-mono text-sm text-slate-600 dark:text-slate-400">
+                            {{ "{:,.0f}".format(log.odometer_km) }} km
+                        </td>
+                        <td class="text-sm text-slate-600 dark:text-slate-400">
+                            {{ log.fuel_station or '-' }}
+                        </td>
+                        <td class="text-right">
+                            {{ action_buttons(edit_href="/operations/fleet/fuel/" ~ log.fuel_log_id ~ "/edit") }}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="8" class="py-16">
+                            <div class="text-center">
+                                <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 mb-4">
+                                    <svg class="h-8 w-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z"/>
+                                    </svg>
+                                </div>
+                                <h3 class="text-lg font-semibold text-slate-700 dark:text-slate-300 mb-1">No fuel records</h3>
+                                <p class="text-sm text-slate-500 dark:text-slate-400">Record your first fuel purchase</p>
+                                <a href="/operations/fleet/fuel/new" class="btn btn-primary mt-4">
+                                    <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                                    </svg>
+                                    Record Fuel
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if total_pages > 1 %}
+        {{ pagination(page=page, total_pages=total_pages, total_count=total, limit=limit) }}
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

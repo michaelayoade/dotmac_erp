@@ -12,7 +12,7 @@ const Charts = {
 
   // Format currency using page locale
   formatCurrency(value, currency) {
-    if (currency === false || currency === null || currency === 'none') {
+    if (currency === false || currency === null || currency === 'none' || currency === 'false') {
       return new Intl.NumberFormat('en-US', {
         minimumFractionDigits: 0,
         maximumFractionDigits: 0
@@ -26,6 +26,16 @@ const Charts = {
       minimumFractionDigits: 0,
       maximumFractionDigits: 0
     }).format(value);
+  },
+
+  formatValue(value, currency, format) {
+    if (format === 'number') {
+      return new Intl.NumberFormat('en-US', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
+      }).format(value);
+    }
+    return this.formatCurrency(value, currency);
   },
 
   // Default color palettes
@@ -250,7 +260,7 @@ const Charts = {
   },
 
   // Create trend line chart (revenue vs expenses style)
-  trendLine(canvas, { labels, datasets, currency }) {
+  trendLine(canvas, { labels, datasets, currency, format }) {
     const theme = this.getThemeColors();
     const defaultColors = [
       { border: 'rgba(13, 148, 136, 1)', bg: 'rgba(13, 148, 136, 0.1)' },
@@ -287,7 +297,7 @@ const Charts = {
             ticks: {
               color: theme.text,
               font: { size: 11 },
-              callback: (v) => Charts.formatCurrency(v, currency)
+              callback: (v) => Charts.formatValue(v, currency, format)
             }
           }
         },
@@ -296,7 +306,7 @@ const Charts = {
           tooltip: {
             ...this.getTooltipConfig(),
             callbacks: {
-              label: (ctx) => `${ctx.dataset.label}: ${Charts.formatCurrency(ctx.raw, currency)}`
+              label: (ctx) => `${ctx.dataset.label}: ${Charts.formatValue(ctx.raw, currency, format)}`
             }
           }
         }
@@ -348,7 +358,7 @@ const Charts = {
   },
 
   // Create horizontal bar chart (top customers/suppliers style)
-  horizontalBar(canvas, { labels, data, color, currency }) {
+  horizontalBar(canvas, { labels, data, color, currency, format }) {
     const theme = this.getThemeColors();
     const barColor = color || 'rgba(20, 184, 166, 0.85)';
 
@@ -372,7 +382,7 @@ const Charts = {
             grid: { color: theme.grid },
             ticks: {
               color: theme.text,
-              callback: (v) => Charts.formatCurrency(v, currency)
+              callback: (v) => Charts.formatValue(v, currency, format)
             }
           },
           y: {
@@ -385,7 +395,7 @@ const Charts = {
           tooltip: {
             ...this.getTooltipConfig(),
             callbacks: {
-              label: (ctx) => Charts.formatCurrency(ctx.raw, currency)
+              label: (ctx) => Charts.formatValue(ctx.raw, currency, format)
             }
           }
         }

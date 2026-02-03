@@ -20,6 +20,11 @@ def list_employees(
     search: Optional[str] = None,
     status: Optional[str] = None,
     department_id: Optional[str] = None,
+    designation_id: Optional[str] = None,
+    date_of_joining_from: Optional[str] = None,
+    date_of_joining_to: Optional[str] = None,
+    date_of_leaving_from: Optional[str] = None,
+    date_of_leaving_to: Optional[str] = None,
     page: int = Query(default=1, ge=1),
     success: Optional[str] = None,
     error: Optional[str] = None,
@@ -28,7 +33,20 @@ def list_employees(
 ):
     """Employee list page."""
     return hr_web_service.list_employees_response(
-        request, auth, db, search, status, department_id, page, success, error
+        request,
+        auth,
+        db,
+        search,
+        status,
+        department_id,
+        designation_id,
+        date_of_joining_from,
+        date_of_joining_to,
+        date_of_leaving_from,
+        date_of_leaving_to,
+        page,
+        success,
+        error,
     )
 
 

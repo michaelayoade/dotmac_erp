@@ -150,6 +150,67 @@ def my_leave_detail(
     )
 
 
+@router.get("/tax-info", response_class=HTMLResponse)
+def my_tax_info(
+    request: Request,
+    success: Optional[str] = None,
+    error: Optional[str] = None,
+    auth: WebAuthContext = Depends(require_self_service_access),
+    db: Session = Depends(get_db),
+):
+    """Self-service tax, bank, and personal info page."""
+    return self_service_web_service.tax_info_response(
+        request,
+        auth,
+        db,
+        success=success,
+        error=error,
+    )
+
+
+@router.post("/tax-info")
+async def update_tax_info(
+    request: Request,
+    auth: WebAuthContext = Depends(require_self_service_access),
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    """Submit a change request for tax, bank, and personal info."""
+    form = getattr(request.state, "csrf_form", None)
+    if form is None:
+        form = await request.form()
+
+    payload = {
+        "phone": _safe_form_text(form.get("phone")) or None,
+        "date_of_birth": _coerce_iso_date(form.get("date_of_birth"), "date_of_birth"),
+        "gender": _safe_form_text(form.get("gender")) or None,
+        "address_line1": _safe_form_text(form.get("address_line1")) or None,
+        "address_line2": _safe_form_text(form.get("address_line2")) or None,
+        "city": _safe_form_text(form.get("city")) or None,
+        "region": _safe_form_text(form.get("region")) or None,
+        "postal_code": _safe_form_text(form.get("postal_code")) or None,
+        "country_code": _safe_form_text(form.get("country_code")) or None,
+        "personal_email": _safe_form_text(form.get("personal_email")) or None,
+        "personal_phone": _safe_form_text(form.get("personal_phone")) or None,
+        "emergency_contact_name": _safe_form_text(form.get("emergency_contact_name")) or None,
+        "emergency_contact_phone": _safe_form_text(form.get("emergency_contact_phone")) or None,
+        "bank_name": _safe_form_text(form.get("bank_name")) or None,
+        "bank_account_number": _safe_form_text(form.get("bank_account_number")) or None,
+        "bank_account_name": _safe_form_text(form.get("bank_account_name")) or None,
+        "bank_branch_code": _safe_form_text(form.get("bank_branch_code")) or None,
+        "tin": _safe_form_text(form.get("tin")) or None,
+        "tax_state": _safe_form_text(form.get("tax_state")) or None,
+        "rsa_pin": _safe_form_text(form.get("rsa_pin")) or None,
+        "pfa_code": _safe_form_text(form.get("pfa_code")) or None,
+        "nhf_number": _safe_form_text(form.get("nhf_number")) or None,
+    }
+
+    return self_service_web_service.tax_info_submit_response(
+        auth,
+        db,
+        payload=payload,
+    )
+
+
 @router.post("/leave/{application_id}/cancel")
 def cancel_leave(
     application_id: UUID,

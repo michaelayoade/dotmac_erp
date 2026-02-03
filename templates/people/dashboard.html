@@ -179,6 +179,7 @@
                 <canvas data-chart="trendLine" data-chart-config='{{ {
                     "labels": chart_data.headcount_trend | map(attribute="month") | list,
                     "currency": false,
+                    "format": "number",
                     "datasets": [
                         {"label": "Headcount", "data": chart_data.headcount_trend | map(attribute="count") | list, "color": "rgba(139, 92, 246, 1)", "fill": "rgba(139, 92, 246, 0.1)"},
                         {"label": "Hires", "data": chart_data.headcount_trend | map(attribute="hires") | list, "color": "rgba(16, 185, 129, 1)", "fill": "rgba(16, 185, 129, 0.1)"},
@@ -245,7 +246,8 @@
                     "labels": chart_data.tenure_distribution | map(attribute="range") | list,
                     "data": chart_data.tenure_distribution | map(attribute="count") | list,
                     "color": "rgba(139, 92, 246, 0.85)",
-                    "currency": false
+                    "currency": false,
+                    "format": "number"
                 } | tojson }}'></canvas>
             </div>
             {% else %}
@@ -265,7 +267,8 @@
                     "labels": chart_data.age_distribution | map(attribute="range") | list,
                     "data": chart_data.age_distribution | map(attribute="count") | list,
                     "color": "rgba(59, 130, 246, 0.85)",
-                    "currency": false
+                    "currency": false,
+                    "format": "number"
                 } | tojson }}'></canvas>
             </div>
             {% else %}
@@ -307,7 +310,8 @@
                     "labels": chart_data.employment_type_distribution | map(attribute="type") | list,
                     "data": chart_data.employment_type_distribution | map(attribute="count") | list,
                     "color": "rgba(16, 185, 129, 0.85)",
-                    "currency": false
+                    "currency": false,
+                    "format": "number"
                 } | tojson }}'></canvas>
             </div>
             {% else %}

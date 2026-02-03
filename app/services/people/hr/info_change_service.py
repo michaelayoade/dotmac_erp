@@ -16,6 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.people.hr.employee import Employee
+from app.models.person import Gender as PersonGender, Person
 from app.models.people.hr.info_change_request import (
     EmployeeInfoChangeRequest,
     InfoChangeStatus,
@@ -23,6 +24,10 @@ from app.models.people.hr.info_change_request import (
 )
 from app.models.people.payroll.employee_tax_profile import EmployeeTaxProfile
 from app.models.notification import EntityType, NotificationChannel, NotificationType
+from app.models.person import Person
+from app.models.rbac import PersonRole, Role
+from app.services.email import send_email
+from app.config import settings
 from app.services.notification import NotificationService
 
 if TYPE_CHECKING:
@@ -175,6 +180,36 @@ class InfoChangeService:
         if "bank_branch_code" in proposed:
             previous["bank_branch_code"] = employee.bank_branch_code
 
+        # Personal/contact fields from Person/Employee
+        person = employee.person
+        if person:
+            if "phone" in proposed:
+                previous["phone"] = person.phone
+            if "date_of_birth" in proposed:
+                previous["date_of_birth"] = person.date_of_birth.isoformat() if person.date_of_birth else None
+            if "gender" in proposed:
+                previous["gender"] = person.gender.value if person.gender else None
+            if "address_line1" in proposed:
+                previous["address_line1"] = person.address_line1
+            if "address_line2" in proposed:
+                previous["address_line2"] = person.address_line2
+            if "city" in proposed:
+                previous["city"] = person.city
+            if "region" in proposed:
+                previous["region"] = person.region
+            if "postal_code" in proposed:
+                previous["postal_code"] = person.postal_code
+            if "country_code" in proposed:
+                previous["country_code"] = person.country_code
+        if "personal_email" in proposed:
+            previous["personal_email"] = employee.personal_email
+        if "personal_phone" in proposed:
+            previous["personal_phone"] = employee.personal_phone
+        if "emergency_contact_name" in proposed:
+            previous["emergency_contact_name"] = employee.emergency_contact_name
+        if "emergency_contact_phone" in proposed:
+            previous["emergency_contact_phone"] = employee.emergency_contact_phone
+
         # Tax/pension/NHF fields from tax profile
         if tax_profile:
             if "tin" in proposed:
@@ -304,11 +339,71 @@ class InfoChangeService:
 
         changes = request.proposed_changes
 
+        def _clean_text(value: object) -> Optional[str]:
+            if value is None:
+                return None
+            text = str(value).strip()
+            if not text:
+                return None
+            if text.lower() in {"none", "null"}:
+                return None
+            return text
+
         # Apply bank changes to employee
         bank_fields = ["bank_name", "bank_account_number", "bank_account_name", "bank_branch_code"]
         for field in bank_fields:
             if field in changes:
-                setattr(employee, field, changes[field])
+                setattr(employee, field, _clean_text(changes[field]))
+
+        # Apply personal/contact changes
+        person = employee.person or self.db.get(Person, employee.person_id)
+        if person:
+            person_fields = [
+                "phone",
+                "address_line1",
+                "address_line2",
+                "city",
+                "region",
+                "postal_code",
+                "country_code",
+            ]
+            for field in person_fields:
+                if field in changes:
+                    value = _clean_text(changes[field])
+                    if field == "country_code" and value:
+                        value = value.upper()
+                        if len(value) != 2:
+                            value = None
+                    setattr(person, field, value)
+            if "date_of_birth" in changes:
+                value = changes.get("date_of_birth")
+                if isinstance(value, str) and value:
+                    try:
+                        from datetime import date as dt_date
+
+                        person.date_of_birth = dt_date.fromisoformat(value)
+                    except ValueError:
+                        person.date_of_birth = None
+                else:
+                    person.date_of_birth = None
+            if "gender" in changes:
+                value = changes.get("gender")
+                if value:
+                    try:
+                        person.gender = PersonGender(value)
+                    except Exception:
+                        person.gender = None
+                else:
+                    person.gender = None
+        employee_fields = [
+            "personal_email",
+            "personal_phone",
+            "emergency_contact_name",
+            "emergency_contact_phone",
+        ]
+        for field in employee_fields:
+            if field in changes:
+                setattr(employee, field, _clean_text(changes[field]))
 
         # Apply tax/pension/NHF changes to tax profile
         tax_fields = ["tin", "tax_state", "rsa_pin", "pfa_code", "nhf_number"]
@@ -336,9 +431,9 @@ class InfoChangeService:
                 )
                 self.db.add(tax_profile)
 
-            # Apply changes
-            for field, value in tax_changes.items():
-                setattr(tax_profile, field, value)
+        # Apply changes
+        for field, value in tax_changes.items():
+            setattr(tax_profile, field, _clean_text(value))
 
         self.db.flush()
 
@@ -442,14 +537,59 @@ class InfoChangeService:
     # Notifications
     # =========================================================================
 
+    def _get_admin_recipients(self, organization_id: UUID) -> list[Person]:
+        """Get active admin users for an organization."""
+        stmt = (
+            select(Person.id)
+            .join(PersonRole, PersonRole.person_id == Person.id)
+            .join(Role, PersonRole.role_id == Role.id)
+            .where(
+                Person.organization_id == organization_id,
+                Person.is_active.is_(True),
+                Role.name.in_(["admin", "hr_manager"]),
+                Role.is_active.is_(True),
+            )
+            .distinct()
+        )
+        person_ids = list(self.db.scalars(stmt).all())
+        if not person_ids:
+            return []
+        return list(
+            self.db.scalars(select(Person).where(Person.id.in_(person_ids))).all()
+        )
+
+    def _build_app_url(self, path: str) -> str:
+        base = settings.app_url.rstrip("/")
+        if not path.startswith("/"):
+            path = f"/{path}"
+        return f"{base}{path}"
+
+    def _send_email_safe(
+        self,
+        to_email: Optional[str],
+        subject: str,
+        body_html: str,
+        body_text: str,
+    ) -> None:
+        if not to_email:
+            return
+        try:
+            send_email(self.db, to_email, subject, body_html, body_text)
+        except Exception as exc:
+            logger.warning("Failed to send info change email to %s: %s", to_email, exc)
+
     def _notify_pending_request(
         self,
         request: EmployeeInfoChangeRequest,
         employee: Employee,
     ) -> None:
         """Notify HR about a pending change request."""
-        # Get HR users who should review
-        # For now, notify the employee's manager if they have one
+        action_path = f"/people/hr/info-changes/{request.request_id}"
+        action_url = self._build_app_url(action_path)
+        change_label = request.change_type.value.lower().replace("_", " ")
+        employee_name = employee.full_name or employee.employee_code
+
+        # Notify the employee's manager if they have one
         if employee.reports_to_id:
             manager = self.db.get(Employee, employee.reports_to_id)
             if manager and manager.person_id:
@@ -463,15 +603,47 @@ class InfoChangeService:
                         notification_type=NotificationType.SUBMITTED,
                         title="Employee Info Update Request",
                         message=(
-                            f"{employee.first_name} {employee.last_name} has requested "
-                            f"an update to their {request.change_type.value.lower().replace('_', ' ')}. "
+                            f"{employee_name} has requested an update to their {change_label}. "
                             "Please review and approve/reject."
                         ),
-                        channel=NotificationChannel.BOTH,
-                        action_url=f"/people/hr/change-requests/{request.request_id}",
+                        channel=NotificationChannel.IN_APP,
+                        action_url=action_path,
                     )
                 except Exception as e:
                     logger.warning("Failed to notify manager: %s", e)
+
+        # Notify admins
+        admin_recipients = self._get_admin_recipients(request.organization_id)
+        for admin in admin_recipients:
+            try:
+                self.notification_service.create(
+                    self.db,
+                    organization_id=request.organization_id,
+                    recipient_id=admin.id,
+                    entity_type=EntityType.EMPLOYEE,
+                    entity_id=request.request_id,
+                    notification_type=NotificationType.SUBMITTED,
+                    title="Employee Info Update Request",
+                    message=(
+                        f"{employee_name} has requested an update to their {change_label}. "
+                        "Please review and approve/reject."
+                    ),
+                    channel=NotificationChannel.IN_APP,
+                    action_url=action_path,
+                )
+            except Exception as e:
+                logger.warning("Failed to notify admin %s: %s", admin.id, e)
+
+            subject = "Employee info change request submitted"
+            body_text = (
+                f"{employee_name} submitted a request to update their {change_label}.\n"
+                f"Review request: {action_url}"
+            )
+            body_html = (
+                f"<p>{employee_name} submitted a request to update their {change_label}.</p>"
+                f"<p><a href=\"{action_url}\">Review request</a></p>"
+            )
+            self._send_email_safe(admin.email, subject, body_html, body_text)
 
     def _notify_decision(
         self,
@@ -485,6 +657,10 @@ class InfoChangeService:
 
         status = "approved" if approved else "rejected"
         notification_type = NotificationType.APPROVED if approved else NotificationType.REJECTED
+        action_path = "/people/self/tax-info"
+        action_url = self._build_app_url(action_path)
+        change_label = request.change_type.value.lower().replace("_", " ")
+        employee_email = employee.work_email or employee.personal_email
 
         try:
             self.notification_service.create(
@@ -496,12 +672,26 @@ class InfoChangeService:
                 notification_type=notification_type,
                 title=f"Info Update {status.title()}",
                 message=(
-                    f"Your request to update your {request.change_type.value.lower().replace('_', ' ')} "
+                    f"Your request to update your {change_label} "
                     f"has been {status}."
                     + (f" Reason: {request.reviewer_notes}" if request.reviewer_notes else "")
                 ),
-                channel=NotificationChannel.BOTH,
-                action_url="/people/self/tax-info",
+                channel=NotificationChannel.IN_APP,
+                action_url=action_path,
             )
         except Exception as e:
             logger.warning("Failed to notify employee of decision: %s", e)
+
+        subject = f"Your info change request was {status}"
+        reason_line = f"\nReason: {request.reviewer_notes}" if request.reviewer_notes else ""
+        body_text = (
+            f"Your request to update your {change_label} was {status}."
+            f"{reason_line}\n"
+            f"View details: {action_url}"
+        )
+        body_html = (
+            f"<p>Your request to update your {change_label} was {status}.</p>"
+            f"{f'<p>Reason: {request.reviewer_notes}</p>' if request.reviewer_notes else ''}"
+            f"<p><a href=\"{action_url}\">View details</a></p>"
+        )
+        self._send_email_safe(employee_email, subject, body_html, body_text)

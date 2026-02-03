@@ -253,6 +253,12 @@ class EmployeeService:
         if filters.date_of_joining_to:
             stmt = stmt.where(Employee.date_of_joining <= filters.date_of_joining_to)
 
+        if filters.date_of_leaving_from:
+            stmt = stmt.where(Employee.date_of_leaving >= filters.date_of_leaving_from)
+
+        if filters.date_of_leaving_to:
+            stmt = stmt.where(Employee.date_of_leaving <= filters.date_of_leaving_to)
+
         # Default ordering
         stmt = stmt.order_by(Employee.employee_code.asc())
 

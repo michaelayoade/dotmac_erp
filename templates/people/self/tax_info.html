@@ -120,6 +120,134 @@
         {{ request.state.csrf_form | safe }}
         <fieldset {% if has_pending %}disabled{% endif %}>
 
+        <!-- Personal Information -->
+        <div class="card">
+            <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Personal Information</h2>
+                <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Basic details about you</p>
+            </div>
+            <div class="p-6 space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="phone" class="form-label">Phone Number</label>
+                        <input type="text" name="phone" id="phone"
+                            value="{{ person.phone | default('', true) if person else '' }}"
+                            placeholder="e.g., 08012345678"
+                            class="form-input w-full">
+                    </div>
+                    <div>
+                        <label for="date_of_birth" class="form-label">Date of Birth</label>
+                        <input type="date" name="date_of_birth" id="date_of_birth"
+                            value="{{ person.date_of_birth.isoformat() if person and person.date_of_birth else '' }}"
+                            class="form-input w-full">
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="gender" class="form-label">Gender</label>
+                        <select name="gender" id="gender" class="form-select w-full">
+                            <option value="">-- Select --</option>
+                            <option value="female" {% if person and person.gender and person.gender.value == 'female' %}selected{% endif %}>Female</option>
+                            <option value="male" {% if person and person.gender and person.gender.value == 'male' %}selected{% endif %}>Male</option>
+                            <option value="non_binary" {% if person and person.gender and person.gender.value == 'non_binary' %}selected{% endif %}>Non-binary</option>
+                            <option value="other" {% if person and person.gender and person.gender.value == 'other' %}selected{% endif %}>Other</option>
+                            <option value="unknown" {% if person and person.gender and person.gender.value == 'unknown' %}selected{% endif %}>Prefer not to say</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Address -->
+        <div class="card">
+            <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Address</h2>
+                <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Where you currently live</p>
+            </div>
+            <div class="p-6 space-y-4">
+                <div>
+                    <label for="address_line1" class="form-label">Address Line 1</label>
+                    <input type="text" name="address_line1" id="address_line1"
+                        value="{{ person.address_line1 | default('', true) if person else '' }}"
+                        class="form-input w-full">
+                </div>
+                <div>
+                    <label for="address_line2" class="form-label">Address Line 2</label>
+                    <input type="text" name="address_line2" id="address_line2"
+                        value="{{ person.address_line2 | default('', true) if person else '' }}"
+                        class="form-input w-full">
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label for="city" class="form-label">City</label>
+                        <input type="text" name="city" id="city"
+                            value="{{ person.city | default('', true) if person else '' }}"
+                            class="form-input w-full">
+                    </div>
+                    <div>
+                        <label for="region" class="form-label">State</label>
+                        <input type="text" name="region" id="region"
+                            value="{{ person.region | default('', true) if person else '' }}"
+                            class="form-input w-full">
+                    </div>
+                    <div>
+                        <label for="postal_code" class="form-label">Postal Code</label>
+                        <input type="text" name="postal_code" id="postal_code"
+                            value="{{ person.postal_code | default('', true) if person else '' }}"
+                            class="form-input w-full">
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="country_code" class="form-label">Country Code</label>
+                        <input type="text" name="country_code" id="country_code"
+                            value="{{ person.country_code | default('', true) if person else '' }}"
+                            placeholder="NG"
+                            maxlength="2"
+                            class="form-input w-full">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Personal Contact & Emergency -->
+        <div class="card">
+            <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Personal Contact & Emergency</h2>
+                <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">How we can reach you and your emergency contact</p>
+            </div>
+            <div class="p-6 space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="personal_email" class="form-label">Personal Email</label>
+                        <input type="email" name="personal_email" id="personal_email"
+                            value="{{ employee.personal_email | default('', true) }}"
+                            class="form-input w-full">
+                    </div>
+                    <div>
+                        <label for="personal_phone" class="form-label">Personal Phone</label>
+                        <input type="text" name="personal_phone" id="personal_phone"
+                            value="{{ employee.personal_phone | default('', true) }}"
+                            class="form-input w-full">
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="emergency_contact_name" class="form-label">Emergency Contact Name</label>
+                        <input type="text" name="emergency_contact_name" id="emergency_contact_name"
+                            value="{{ employee.emergency_contact_name | default('', true) }}"
+                            class="form-input w-full">
+                    </div>
+                    <div>
+                        <label for="emergency_contact_phone" class="form-label">Emergency Contact Phone</label>
+                        <input type="text" name="emergency_contact_phone" id="emergency_contact_phone"
+                            value="{{ employee.emergency_contact_phone | default('', true) }}"
+                            class="form-input w-full">
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Bank Details -->
         <div class="card">
             <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
@@ -142,7 +270,7 @@
                     <div>
                         <label for="bank_account_number" class="form-label">Account Number <span class="text-rose-500">*</span></label>
                         <input type="text" name="bank_account_number" id="bank_account_number"
-                            value="{{ employee.bank_account_number or '' }}"
+                            value="{{ employee.bank_account_number | default('', true) }}"
                             placeholder="0123456789"
                             maxlength="10"
                             pattern="[0-9]{10}"
@@ -150,13 +278,22 @@
                         <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">10-digit NUBAN account number</p>
                     </div>
                 </div>
-                <div>
-                    <label for="bank_account_name" class="form-label">Account Name</label>
-                    <input type="text" name="bank_account_name" id="bank_account_name"
-                        value="{{ employee.bank_account_name or '' }}"
-                        placeholder="As shown on your bank statement"
-                        class="form-input w-full">
-                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Should match your bank records</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="bank_account_name" class="form-label">Account Name</label>
+                        <input type="text" name="bank_account_name" id="bank_account_name"
+                            value="{{ employee.bank_account_name | default('', true) }}"
+                            placeholder="As shown on your bank statement"
+                            class="form-input w-full">
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Should match your bank records</p>
+                    </div>
+                    <div>
+                        <label for="bank_branch_code" class="form-label">Bank Branch Code</label>
+                        <input type="text" name="bank_branch_code" id="bank_branch_code"
+                            value="{{ employee.bank_branch_code | default('', true) }}"
+                            placeholder="Optional"
+                            class="form-input w-full">
+                    </div>
                 </div>
             </div>
         </div>
@@ -172,7 +309,7 @@
                     <div>
                         <label for="tin" class="form-label">Tax Identification Number (TIN)</label>
                         <input type="text" name="tin" id="tin"
-                            value="{{ tax_profile.tin if tax_profile else '' }}"
+                            value="{{ tax_profile.tin | default('', true) if tax_profile else '' }}"
                             placeholder="e.g., 12345678-0001"
                             class="form-input w-full font-mono">
                         <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
@@ -208,7 +345,7 @@
                     <div>
                         <label for="rsa_pin" class="form-label">RSA PIN</label>
                         <input type="text" name="rsa_pin" id="rsa_pin"
-                            value="{{ tax_profile.rsa_pin if tax_profile else '' }}"
+                            value="{{ tax_profile.rsa_pin | default('', true) if tax_profile else '' }}"
                             placeholder="e.g., PEN100012345678"
                             class="form-input w-full font-mono">
                         <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Retirement Savings Account PIN from your PFA</p>
@@ -238,7 +375,7 @@
                 <div class="max-w-md">
                     <label for="nhf_number" class="form-label">NHF Number</label>
                     <input type="text" name="nhf_number" id="nhf_number"
-                        value="{{ tax_profile.nhf_number if tax_profile else '' }}"
+                        value="{{ tax_profile.nhf_number | default('', true) if tax_profile else '' }}"
                         placeholder="e.g., NHF12345678"
                         class="form-input w-full font-mono">
                     <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Your NHF registration number from FMBN</p>

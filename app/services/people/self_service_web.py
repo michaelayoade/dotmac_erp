@@ -21,6 +21,11 @@ from app.models.people.exp import ExpenseClaim, ExpenseClaimStatus, ExpenseClaim
 from app.models.people.hr.employee import Employee
 from app.models.people.leave import LeaveApplication, LeaveApplicationStatus
 from app.models.people.payroll.salary_slip import SalarySlip, SalarySlipStatus
+from app.models.people.payroll.employee_tax_profile import EmployeeTaxProfile
+from app.models.finance.core_org.pfa_directory import PFADirectory
+from app.models.person import Gender as PersonGender
+from app.services.finance.banking.bank_directory import BankDirectoryService
+from app.services.people.hr.info_change_service import InfoChangeService
 from app.services.common import PaginationParams, coerce_uuid
 from app.services.people.attendance import AttendanceService
 from app.services.people.expense import ExpenseService
@@ -35,6 +40,17 @@ from app.web.deps import base_context, WebAuthContext
 
 class SelfServiceWebService:
     """View service for employee self-service pages."""
+
+    @staticmethod
+    def _nigeria_states() -> list[str]:
+        return [
+            "Abia", "Adamawa", "Akwa Ibom", "Anambra", "Bauchi", "Bayelsa", "Benue",
+            "Borno", "Cross River", "Delta", "Ebonyi", "Edo", "Ekiti", "Enugu",
+            "Gombe", "Imo", "Jigawa", "Kaduna", "Kano", "Katsina", "Kebbi",
+            "Kogi", "Kwara", "Lagos", "Nasarawa", "Niger", "Ogun", "Ondo",
+            "Osun", "Oyo", "Plateau", "Rivers", "Sokoto", "Taraba", "Yobe", "Zamfara",
+            "FCT",
+        ]
 
     @staticmethod
     def _get_employee_id(
@@ -154,6 +170,238 @@ class SelfServiceWebService:
         except Exception:
             # Project model may not exist
             return []
+
+    def tax_info_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        *,
+        success: Optional[str] = None,
+        error: Optional[str] = None,
+    ) -> HTMLResponse:
+        """Self-service tax, bank, and personal info page."""
+        org_id = coerce_uuid(auth.organization_id)
+        person_id = coerce_uuid(auth.person_id)
+        try:
+            employee_id = self._get_employee_id(db, org_id, person_id)
+        except HTTPException as exc:
+            if exc.status_code == 404:
+                return self._employee_required_response(
+                    request,
+                    auth,
+                    db,
+                    "Tax & Bank Info",
+                    "self-tax-info",
+                    detail=exc.detail,
+                )
+            raise
+
+        employee = (
+            db.query(Employee)
+            .options(joinedload(Employee.person))
+            .filter(Employee.employee_id == employee_id)
+            .first()
+        )
+
+        tax_profile = db.scalar(
+            select(EmployeeTaxProfile)
+            .where(
+                EmployeeTaxProfile.employee_id == employee_id,
+                EmployeeTaxProfile.effective_to.is_(None),
+            )
+            .order_by(EmployeeTaxProfile.effective_from.desc())
+            .limit(1)
+        )
+
+        banks = BankDirectoryService(db).list_active_banks()
+        pfas = list(
+            db.scalars(
+                select(PFADirectory)
+                .where(PFADirectory.is_active.is_(True))
+                .order_by(PFADirectory.pfa_name)
+            ).all()
+        )
+
+        info_change_service = InfoChangeService(db)
+        has_pending = info_change_service.has_pending_request(org_id, employee_id)
+        recent_requests = info_change_service.get_employee_requests(
+            org_id,
+            employee_id,
+            include_resolved=True,
+            limit=10,
+        )
+
+        context = base_context(request, auth, "Tax & Bank Info", "self-tax-info", db=db)
+        context.update(
+            {
+                "employee": employee,
+                "person": employee.person if employee else None,
+                "tax_profile": tax_profile,
+                "banks": banks,
+                "pfas": pfas,
+                "nigeria_states": self._nigeria_states(),
+                "has_pending": has_pending,
+                "recent_requests": recent_requests,
+                "success": success,
+                "error": error,
+            }
+        )
+        context["has_team_approvals"] = self._has_team_approvals(
+            db, org_id, person_id, employee_id=employee_id
+        )
+        context["can_team_leave"] = context["has_team_approvals"]
+        context["can_team_expenses"] = context["has_team_approvals"]
+        return templates.TemplateResponse(request, "people/self/tax_info.html", context)
+
+    def tax_info_submit_response(
+        self,
+        auth: WebAuthContext,
+        db: Session,
+        *,
+        payload: dict[str, Optional[object]],
+    ) -> RedirectResponse:
+        """Submit a change request for tax, bank, and personal info."""
+        org_id = coerce_uuid(auth.organization_id)
+        person_id = coerce_uuid(auth.person_id)
+        employee_id = self._get_employee_id(db, org_id, person_id)
+
+        info_change_service = InfoChangeService(db)
+        if info_change_service.has_pending_request(org_id, employee_id):
+            return RedirectResponse(
+                url="/people/self/tax-info?error=You+already+have+a+pending+request",
+                status_code=303,
+            )
+
+        employee = (
+            db.query(Employee)
+            .options(joinedload(Employee.person))
+            .filter(Employee.employee_id == employee_id)
+            .first()
+        )
+        if not employee:
+            return RedirectResponse(
+                url="/people/self/tax-info?error=Employee+profile+not+found",
+                status_code=303,
+            )
+
+        person = employee.person
+        tax_profile = db.scalar(
+            select(EmployeeTaxProfile)
+            .where(
+                EmployeeTaxProfile.employee_id == employee_id,
+                EmployeeTaxProfile.effective_to.is_(None),
+            )
+            .order_by(EmployeeTaxProfile.effective_from.desc())
+            .limit(1)
+        )
+
+        def _normalize(value: Optional[object]) -> Optional[str]:
+            if value is None:
+                return None
+            value = str(value).strip()
+            if not value:
+                return None
+            if value.lower() in {"none", "null"}:
+                return None
+            return value
+
+        proposed_changes: dict[str, object] = {}
+
+        # Person fields
+        if person:
+            phone = _normalize(payload.get("phone"))
+            if phone != (person.phone or None):
+                proposed_changes["phone"] = phone
+
+            dob = payload.get("date_of_birth")
+            current_dob = person.date_of_birth
+            if dob != current_dob:
+                proposed_changes["date_of_birth"] = (
+                    dob.isoformat() if isinstance(dob, date) else None
+                )
+
+            gender_value = _normalize(payload.get("gender"))
+            if gender_value:
+                try:
+                    gender = PersonGender(gender_value)
+                except Exception:
+                    return RedirectResponse(
+                        url="/people/self/tax-info?error=Invalid+gender+value",
+                        status_code=303,
+                    )
+            else:
+                gender = None
+            if (person.gender or None) != gender:
+                proposed_changes["gender"] = gender.value if gender else None
+
+            for field in [
+                "address_line1",
+                "address_line2",
+                "city",
+                "region",
+                "postal_code",
+                "country_code",
+            ]:
+                new_val = _normalize(payload.get(field))
+                if field == "country_code" and new_val:
+                    new_val = new_val.upper()
+                    if len(new_val) != 2:
+                        return RedirectResponse(
+                            url="/people/self/tax-info?error=Country+code+must+be+2+letters",
+                            status_code=303,
+                        )
+                current_val = getattr(person, field)
+                if new_val != (current_val or None):
+                    proposed_changes[field] = new_val
+
+        # Employee contact fields
+        for field in [
+            "personal_email",
+            "personal_phone",
+            "emergency_contact_name",
+            "emergency_contact_phone",
+        ]:
+            new_val = _normalize(payload.get(field))
+            current_val = getattr(employee, field)
+            if new_val != (current_val or None):
+                proposed_changes[field] = new_val
+
+        # Bank fields
+        for field in [
+            "bank_name",
+            "bank_account_number",
+            "bank_account_name",
+            "bank_branch_code",
+        ]:
+            new_val = _normalize(payload.get(field))
+            current_val = getattr(employee, field)
+            if new_val != (current_val or None):
+                proposed_changes[field] = new_val
+
+        # Tax/pension fields
+        for field in ["tin", "tax_state", "rsa_pin", "pfa_code", "nhf_number"]:
+            new_val = _normalize(payload.get(field))
+            current_val = getattr(tax_profile, field) if tax_profile else None
+            if new_val != (current_val or None):
+                proposed_changes[field] = new_val
+
+        if not proposed_changes:
+            return RedirectResponse(
+                url="/people/self/tax-info?error=No+changes+detected",
+                status_code=303,
+            )
+
+        info_change_service.submit_change_request(
+            organization_id=org_id,
+            employee_id=employee_id,
+            proposed_changes=proposed_changes,
+        )
+        db.commit()
+        return RedirectResponse(
+            url="/people/self/tax-info?success=Change+request+submitted",
+            status_code=303,
+        )
 
     @staticmethod
     def _get_tasks_for_dropdown(

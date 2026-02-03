@@ -174,6 +174,35 @@
                 <span x-show="!sidebarCollapsed" class="truncate" x-cloak>Support Tickets</span>
             </a>
 
+            <!-- Section Divider: Fleet -->
+            <div class="pt-4 pb-2" x-show="!sidebarCollapsed" x-cloak>
+                <span class="px-3 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Fleet</span>
+            </div>
+
+            <!-- Fleet Management Module -->
+            <div x-data="{ open: ['fleet','fleet_vehicles','fleet_maintenance','fleet_fuel','fleet_incidents','fleet_reservations','fleet_documents'].includes(activeModule) }">
+                <button @click="open = !open"
+                        :class="['fleet','fleet_vehicles','fleet_maintenance','fleet_fuel','fleet_incidents','fleet_reservations','fleet_documents'].includes(activeModule) ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
+                        class="flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 font-medium transition-all">
+                    <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
+                    </svg>
+                    <span x-show="!sidebarCollapsed" class="flex-1 truncate text-left" x-cloak>Fleet</span>
+                    <svg x-show="!sidebarCollapsed" class="h-4 w-4 transition-transform duration-200" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24" x-cloak>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                </button>
+                <div x-show="open && !sidebarCollapsed" x-collapse x-cloak class="ml-8 mt-1 space-y-0.5">
+                    <a href="/operations/fleet" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Dashboard</a>
+                    <a href="/operations/fleet/vehicles" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Vehicles</a>
+                    <a href="/operations/fleet/maintenance" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Maintenance</a>
+                    <a href="/operations/fleet/fuel" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Fuel Logs</a>
+                    <a href="/operations/fleet/incidents" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Incidents</a>
+                    <a href="/operations/fleet/reservations" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Reservations</a>
+                    <a href="/operations/fleet/documents" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Documents</a>
+                </div>
+            </div>
+
             <!-- Section Divider: Projects -->
             <div class="pt-4 pb-2" x-show="!sidebarCollapsed" x-cloak>
                 <span class="px-3 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Projects</span>

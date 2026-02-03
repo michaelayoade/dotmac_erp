@@ -145,6 +145,8 @@ class EmployeeFilters:
     search: Optional[str] = None  # Name, email, employee_code
     date_of_joining_from: Optional[date] = None
     date_of_joining_to: Optional[date] = None
+    date_of_leaving_from: Optional[date] = None
+    date_of_leaving_to: Optional[date] = None
     include_deleted: bool = False
     sort_key: Optional[str] = None
     sort_dir: Optional[str] = None

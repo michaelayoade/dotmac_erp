@@ -56,6 +56,7 @@ from app.api.pm import router as pm_router
 from app.api.crm import router as crm_router
 from app.api.crm import webhook_router as crm_webhook_router
 from app.api.sync.dotmac_crm import router as crm_sync_router
+from app.api.fleet import router as fleet_router
 from app.api.careers import router as careers_api_router
 from app.web.careers import router as careers_web_router
 from app.web.onboarding_portal import router as onboarding_portal_router
@@ -359,6 +360,9 @@ _include_api_router(support_router, dependencies=[Depends(require_tenant_auth)])
 
 # Project Management (Operations module)
 _include_api_router(pm_router, dependencies=[Depends(require_tenant_auth)])
+
+# Fleet Management (Operations module)
+_include_api_router(fleet_router, dependencies=[Depends(require_tenant_auth)])
 
 # CRM Integration (sync from crm.dotmac.io)
 _include_api_router(crm_router, dependencies=[Depends(require_tenant_auth)])

@@ -1,0 +1,131 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}Info Change Request{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr/info-changes" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Info Change Requests</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">Request</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+            <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">Info Change Request</h1>
+            <p class="text-sm text-slate-500 dark:text-slate-400">Review and approve employee updates.</p>
+        </div>
+        <div>
+            {% if request_item.status.value == 'PENDING' %}
+            <span class="inline-flex rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-800 dark:bg-amber-900/50 dark:text-amber-300">Pending</span>
+            {% elif request_item.status.value == 'APPROVED' %}
+            <span class="inline-flex rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300">Approved</span>
+            {% elif request_item.status.value == 'REJECTED' %}
+            <span class="inline-flex rounded-full bg-rose-100 px-2.5 py-1 text-xs font-medium text-rose-800 dark:bg-rose-900/50 dark:text-rose-300">Rejected</span>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if success %}
+    <div class="rounded-lg bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 p-4">
+        <p class="text-sm text-emerald-700 dark:text-emerald-300">{{ success }}</p>
+    </div>
+    {% endif %}
+    {% if error %}
+    <div class="rounded-lg bg-rose-50 dark:bg-rose-900/30 border border-rose-200 dark:border-rose-800 p-4">
+        <p class="text-sm text-rose-700 dark:text-rose-300">{{ error }}</p>
+    </div>
+    {% endif %}
+
+    <div class="card">
+        <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Request Details</h2>
+        </div>
+        <div class="p-6 space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                <div>
+                    <p class="text-slate-500 dark:text-slate-400">Employee</p>
+                    <p class="text-slate-900 dark:text-white font-medium">
+                        {{ request_item.employee.full_name if request_item.employee else request_item.employee_id }}
+                    </p>
+                </div>
+                <div>
+                    <p class="text-slate-500 dark:text-slate-400">Change Type</p>
+                    <p class="text-slate-900 dark:text-white font-medium">
+                        {{ request_item.change_type.value | replace('_', ' ') | title }}
+                    </p>
+                </div>
+                <div>
+                    <p class="text-slate-500 dark:text-slate-400">Submitted</p>
+                    <p class="text-slate-900 dark:text-white font-medium">
+                        {{ request_item.created_at.strftime('%b %d, %Y %H:%M') if request_item.created_at else '-' }}
+                    </p>
+                </div>
+                <div>
+                    <p class="text-slate-500 dark:text-slate-400">Status</p>
+                    <p class="text-slate-900 dark:text-white font-medium">{{ request_item.status.value }}</p>
+                </div>
+            </div>
+            {% if request_item.requester_notes %}
+            <div class="pt-2">
+                <p class="text-slate-500 dark:text-slate-400 text-sm">Requester Notes</p>
+                <p class="text-slate-900 dark:text-white text-sm">{{ request_item.requester_notes }}</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="card overflow-hidden">
+        <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Changes</h2>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+                <thead>
+                    <tr class="bg-slate-50 dark:bg-slate-800/50">
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Field</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Previous</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Proposed</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                    {% for key, value in request_item.proposed_changes.items() %}
+                    <tr>
+                        <td class="px-4 py-3 text-sm text-slate-700 dark:text-slate-300">
+                            {{ key | replace('_', ' ') | title }}
+                        </td>
+                        <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">
+                            {{ request_item.previous_values.get(key, '-') }}
+                        </td>
+                        <td class="px-4 py-3 text-sm text-slate-700 dark:text-slate-300">
+                            {{ value if value is not none else '-' }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {% if request_item.status.value == 'PENDING' %}
+    <div class="card p-6">
+        <form method="post" action="/people/hr/info-changes/{{ request_item.request_id }}/approve" class="flex flex-col md:flex-row gap-3">
+            {{ request.state.csrf_form | safe }}
+            <input type="text" name="reviewer_notes" class="form-input w-full" placeholder="Optional approval note">
+            <button type="submit" class="btn btn-primary">Approve</button>
+        </form>
+        <form method="post" action="/people/hr/info-changes/{{ request_item.request_id }}/reject" class="flex flex-col md:flex-row gap-3 mt-3">
+            {{ request.state.csrf_form | safe }}
+            <input type="text" name="reviewer_notes" class="form-input w-full" placeholder="Optional rejection note">
+            <button type="submit" class="btn btn-secondary">Reject</button>
+        </form>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

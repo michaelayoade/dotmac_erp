@@ -460,6 +460,12 @@ def base_context(
     org_branding = None
     if db and auth.organization_id:
         org_branding = org_brand_context(db, auth.organization_id)
+        try:
+            from app.services.finance.platform.currency_context import get_currency_context
+        except Exception:
+            get_currency_context = None  # type: ignore[assignment]
+    else:
+        get_currency_context = None  # type: ignore[assignment]
 
     # Auto-fetch notifications if db session available and user is authenticated
     if notifications is None and db and auth.is_authenticated and auth.person_id:
@@ -527,7 +533,7 @@ def base_context(
         ]
     )
 
-    return {
+    context = {
         "request": request,
         "title": page_title,
         "page_title": page_title,
@@ -541,6 +547,12 @@ def base_context(
         "csrf_token": getattr(request.state, "csrf_token", ""),
         "notifications": notifications or [],
     }
+    if db and auth.organization_id and get_currency_context:
+        try:
+            context.update(get_currency_context(db, str(auth.organization_id)))
+        except Exception:
+            pass
+    return context
 
 
 class WebAuthContext:

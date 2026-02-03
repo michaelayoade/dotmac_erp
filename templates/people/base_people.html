@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block head %}
-<meta name="currency" content="{{ presentation_currency_code | default('USD') }}">
+<meta name="currency" content="NGN">
 {% endblock %}
 
 {% block body %}
@@ -115,9 +115,9 @@
                 <span class="px-3 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Manage</span>
             </div>
 
-            <div x-data="{ open: ['employees','departments','designations','employment-types','grades','locations','skills','competencies','job-descriptions','onboarding','handbook'].includes(activeModule) }">
+            <div x-data="{ open: ['employees','departments','designations','employment-types','grades','locations','skills','competencies','job-descriptions','onboarding','handbook','info-changes'].includes(activeModule) }">
                 <button @click="open = !open"
-                        :class="['employees','departments','designations','employment-types','grades','locations','skills','competencies','job-descriptions','onboarding','handbook'].includes(activeModule) ? 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-900/30 dark:text-violet-300 dark:border-violet-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
+                        :class="['employees','departments','designations','employment-types','grades','locations','skills','competencies','job-descriptions','onboarding','handbook','info-changes'].includes(activeModule) ? 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-900/30 dark:text-violet-300 dark:border-violet-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
                         class="flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 font-medium transition-all">
                     <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
@@ -129,6 +129,7 @@
                 </button>
                 <div x-show="open && !sidebarCollapsed" x-collapse x-cloak class="ml-8 mt-1 space-y-0.5">
                     <a href="/people/hr/employees" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Employees</a>
+                    <a href="/people/hr/info-changes" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Info Change Requests</a>
                     <a href="/people/hr/departments" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Departments</a>
                     <a href="/people/hr/designations" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Designations</a>
                     <a href="/people/hr/employment-types" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Employment Types</a>
@@ -309,9 +310,9 @@
                 </div>
             </div>
 
-            <div x-data="{ open: ['self-attendance','self-leave','self-payslips','self-expenses','self-discipline','self-team-leave','self-team-expenses'].includes(activeModule) }">
+            <div x-data="{ open: ['self-attendance','self-leave','self-payslips','self-expenses','self-tax-info','self-discipline','self-team-leave','self-team-expenses'].includes(activeModule) }">
                 <button @click="open = !open"
-                        :class="['self-attendance','self-leave','self-payslips','self-expenses','self-discipline','self-team-leave','self-team-expenses'].includes(activeModule) ? 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-900/30 dark:text-violet-300 dark:border-violet-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
+                        :class="['self-attendance','self-leave','self-payslips','self-expenses','self-tax-info','self-discipline','self-team-leave','self-team-expenses'].includes(activeModule) ? 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-900/30 dark:text-violet-300 dark:border-violet-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
                         class="flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 font-medium transition-all">
                     <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 11c0 1.104-.895 2-2 2s-2-.896-2-2 .895-2 2-2 2 .896 2 2zm0 0c0 1.104.895 2 2 2s2-.896 2-2-.895-2-2-2-2 .896-2 2zm9 1c0 4.418-4.03 8-9 8s-9-3.582-9-8 4.03-8 9-8 9 3.582 9 8z"/>
@@ -326,6 +327,7 @@
                     <a href="/people/self/leave" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">My Leave</a>
                     <a href="/people/self/payslips" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">My Payslips</a>
                     <a href="/people/self/expenses" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">My Expenses</a>
+                    <a href="/people/self/tax-info" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">My Info</a>
                     <a href="/people/self/discipline" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">My Discipline Cases</a>
                     {% if can_team_leave %}
                     <a href="/people/self/team/leave" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Team Leave</a>
@@ -421,6 +423,15 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/>
                 </svg>
                 <span x-show="!sidebarCollapsed" class="truncate" x-cloak>My Expenses</span>
+            </a>
+
+            <a href="/people/self/tax-info"
+               :class="activeModule === 'self-tax-info' ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
+               class="flex items-center gap-3 rounded-lg border px-3 py-2.5 font-medium transition-all">
+                <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <span x-show="!sidebarCollapsed" class="truncate" x-cloak>My Info</span>
             </a>
 
             <a href="/people/self/discipline"

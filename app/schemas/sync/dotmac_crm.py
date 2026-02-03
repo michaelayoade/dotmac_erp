@@ -186,9 +186,13 @@ class InventoryItemStock(BaseModel):
     category_code: Optional[str] = None
     category_name: Optional[str] = None
     base_uom: str
+    # Aliases for Omni ERP client compatibility
+    stock_uom: str
     quantity_on_hand: Decimal
     quantity_reserved: Decimal
     quantity_available: Decimal
+    on_hand: Decimal
+    reserved: Decimal
     reorder_point: Optional[Decimal] = None
     list_price: Optional[Decimal] = None
     currency_code: str = "NGN"

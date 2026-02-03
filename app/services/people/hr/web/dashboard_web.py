@@ -12,7 +12,7 @@ from uuid import UUID
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse
-from sqlalchemy import and_, extract, func, select
+from sqlalchemy import and_, extract, func, select, or_
 from sqlalchemy.orm import Session
 
 from app.models.people.hr import (
@@ -274,6 +274,10 @@ class PeopleDashboardService:
                         Employee.organization_id == org_id,
                         Employee.is_deleted.is_(False),
                         Employee.date_of_joining <= month_end,
+                        or_(
+                            Employee.date_of_leaving.is_(None),
+                            Employee.date_of_leaving > month_end,
+                        ),
                     )
                 )
             ) or 0

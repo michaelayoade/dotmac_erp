@@ -18,6 +18,7 @@ from app.web.operations.inv import router as inv_router
 from app.web.operations.projects import router as projects_router
 from app.web.operations.settings import router as settings_router
 from app.web.operations.support import router as support_router
+from app.web.fleet import router as fleet_router
 
 # Create main operations web router
 router = APIRouter(prefix="/operations", tags=["operations-web"])
@@ -33,6 +34,9 @@ router.include_router(projects_router)
 
 # Support/Helpdesk routes
 router.include_router(support_router)
+
+# Fleet Management routes
+router.include_router(fleet_router)
 
 # Settings routes
 router.include_router(settings_router)

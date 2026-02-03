@@ -80,6 +80,7 @@ class ExpenseDashboardService:
             "recent_claims": recent_claims,
             "selected_period": period,
             "currency_zero": currency_zero,
+            "presentation_currency_code": currency,
         }
 
         return templates.TemplateResponse(
@@ -126,6 +127,7 @@ class ExpenseDashboardService:
             "recent_claims": recent_claims,
             "selected_period": period,
             "currency_zero": currency_zero,
+            "presentation_currency_code": currency,
         }
 
         return templates.TemplateResponse(

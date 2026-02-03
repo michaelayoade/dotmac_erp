@@ -1,0 +1,109 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}Info Change Requests{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">Info Change Requests</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+            <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">Info Change Requests</h1>
+            <p class="text-sm text-slate-500 dark:text-slate-400">Review employee-submitted updates before applying.</p>
+        </div>
+    </div>
+
+    <div class="card">
+        <form method="get" class="p-4">
+            <div class="flex flex-wrap items-end gap-4">
+                <div class="w-44">
+                    <label for="status" class="form-label">Status</label>
+                    <select name="status" id="status" class="form-select w-full">
+                        <option value="" {% if not status %}selected{% endif %}>All</option>
+                        {% for s in statuses %}
+                        <option value="{{ s }}" {% if status == s %}selected{% endif %}>{{ s | replace('_', ' ') | title }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="w-52">
+                    <label for="change_type" class="form-label">Change Type</label>
+                    <select name="change_type" id="change_type" class="form-select w-full">
+                        <option value="" {% if not change_type %}selected{% endif %}>All</option>
+                        {% for t in types %}
+                        <option value="{{ t }}" {% if change_type == t %}selected{% endif %}>{{ t | replace('_', ' ') | title }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="w-64">
+                    <label for="employee_id" class="form-label">Employee ID</label>
+                    <input type="text" name="employee_id" id="employee_id" value="{{ employee_id | default('') }}" class="form-input w-full" placeholder="UUID">
+                </div>
+                <div class="w-28">
+                    <label for="limit" class="form-label">Limit</label>
+                    <input type="number" name="limit" id="limit" value="{{ limit | default(50) }}" min="1" max="200" class="form-input w-full">
+                </div>
+                <button type="submit" class="btn btn-secondary h-10">Filter</button>
+            </div>
+        </form>
+    </div>
+
+    {% if requests %}
+    <div class="card overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+                <thead>
+                    <tr class="bg-slate-50 dark:bg-slate-800/50">
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Employee</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Type</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Status</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Submitted</th>
+                        <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                    {% for req in requests %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                        <td class="px-4 py-3 text-sm text-slate-700 dark:text-slate-300">
+                            {{ req.employee.full_name if req.employee else req.employee_id }}
+                        </td>
+                        <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">
+                            {{ req.change_type.value | replace('_', ' ') | title }}
+                        </td>
+                        <td class="px-4 py-3">
+                            {% if req.status.value == 'PENDING' %}
+                            <span class="inline-flex rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-800 dark:bg-amber-900/50 dark:text-amber-300">Pending</span>
+                            {% elif req.status.value == 'APPROVED' %}
+                            <span class="inline-flex rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300">Approved</span>
+                            {% elif req.status.value == 'REJECTED' %}
+                            <span class="inline-flex rounded-full bg-rose-100 px-2.5 py-1 text-xs font-medium text-rose-800 dark:bg-rose-900/50 dark:text-rose-300">Rejected</span>
+                            {% else %}
+                            <span class="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-300">{{ req.status.value | title }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">
+                            {{ req.created_at.strftime('%b %d, %Y %H:%M') if req.created_at else '-' }}
+                        </td>
+                        <td class="px-4 py-3 text-right">
+                            <a href="/people/hr/info-changes/{{ req.request_id }}" class="text-sm text-violet-600 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300">Review</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% else %}
+    <div class="card p-8 text-center">
+        <p class="text-slate-500 dark:text-slate-400">No change requests found.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

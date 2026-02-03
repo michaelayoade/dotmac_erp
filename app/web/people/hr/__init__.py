@@ -25,6 +25,7 @@ from .job_descriptions import router as job_descriptions_router
 from .discipline import router as discipline_router
 from .onboarding_admin import router as onboarding_admin_router
 from .handbook import router as handbook_router
+from .info_changes import router as info_changes_router
 
 # Main HR router that includes all sub-routers
 router = APIRouter(prefix="/hr", tags=["hr-web"])
@@ -41,3 +42,4 @@ router.include_router(job_descriptions_router)
 router.include_router(discipline_router)
 router.include_router(onboarding_admin_router)
 router.include_router(handbook_router)
+router.include_router(info_changes_router)

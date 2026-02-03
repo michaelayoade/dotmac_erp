@@ -13,7 +13,7 @@ from decimal import Decimal
 from typing import Optional, cast
 from uuid import UUID
 
-from sqlalchemy import and_, func, or_
+from sqlalchemy import and_, case, func, or_
 from sqlalchemy.orm import Session
 
 from app.models.finance.inv.item import Item, CostingMethod
@@ -106,18 +106,24 @@ class InventoryBalanceService:
         # Build transaction sum query
         query = db.query(
             func.sum(
-                func.case(
-                    (InventoryTransaction.transaction_type.in_([
-                        TransactionType.RECEIPT,
-                        TransactionType.RETURN,
-                        TransactionType.ASSEMBLY,
-                    ]), InventoryTransaction.quantity),
-                    (InventoryTransaction.transaction_type.in_([
-                        TransactionType.ISSUE,
-                        TransactionType.SALE,
-                        TransactionType.SCRAP,
-                        TransactionType.DISASSEMBLY,
-                    ]), -InventoryTransaction.quantity),
+                case(
+                    (
+                        InventoryTransaction.transaction_type.in_([
+                            TransactionType.RECEIPT,
+                            TransactionType.RETURN,
+                            TransactionType.ASSEMBLY,
+                        ]),
+                        InventoryTransaction.quantity,
+                    ),
+                    (
+                        InventoryTransaction.transaction_type.in_([
+                            TransactionType.ISSUE,
+                            TransactionType.SALE,
+                            TransactionType.SCRAP,
+                            TransactionType.DISASSEMBLY,
+                        ]),
+                        -InventoryTransaction.quantity,
+                    ),
                     else_=InventoryTransaction.quantity,
                 )
             )
