@@ -3,6 +3,7 @@ Fleet Web Service - Context builders for HTML routes.
 
 Provides methods to build template context for fleet management pages.
 """
+
 import logging
 from typing import Any, Dict, Optional
 from uuid import UUID
@@ -41,6 +42,10 @@ class FleetWebService:
     def __init__(self, db: Session):
         self.db = db
 
+    # ─────────────────────────────────────────────────────────────
+    # Dashboard
+    # ─────────────────────────────────────────────────────────────
+
     def dashboard_context(self, organization_id: UUID) -> Dict[str, Any]:
         """Build context for fleet dashboard page."""
         org_id = coerce_uuid(organization_id)
@@ -53,43 +58,44 @@ class FleetWebService:
         # Get summary statistics
         summary = vehicle_service.get_fleet_summary()
 
-        # Get due maintenance
-        due_maintenance = maintenance_service.get_due_maintenance(days_ahead=7)
+        # Get top items for dashboard widgets (SQL LIMIT)
+        due_maintenance = maintenance_service.get_due_maintenance(days_ahead=7, limit=5)
+        expiring_docs = document_service.get_expiring_documents(days_before=30, limit=5)
+        pending_reservations = reservation_service.get_pending_reservations(limit=5)
+        active_reservations = reservation_service.get_active_reservations(limit=10)
+        open_incidents = incident_service.get_open_incidents(limit=5)
 
-        # Get expiring documents
-        expiring_docs = document_service.get_expiring_documents(days_before=30)
-
-        # Get pending reservations
-        pending_reservations = reservation_service.get_pending_reservations()
-
-        # Get active reservations
-        active_reservations = reservation_service.get_active_reservations()
-
-        # Get open incidents
-        open_incidents = incident_service.get_open_incidents()
+        # Get full counts separately (lightweight count queries)
+        all_due = maintenance_service.get_due_maintenance(days_ahead=7)
+        all_expiring = document_service.get_expiring_documents(days_before=30)
+        all_pending = reservation_service.get_pending_reservations()
 
         return {
             "summary": summary,
-            "due_maintenance": due_maintenance[:5],
-            "due_maintenance_count": len(due_maintenance),
-            "expiring_documents": expiring_docs[:5],
-            "expiring_documents_count": len(expiring_docs),
-            "pending_reservations": pending_reservations[:5],
-            "pending_reservations_count": len(pending_reservations),
+            "due_maintenance": due_maintenance,
+            "due_maintenance_count": len(all_due),
+            "expiring_documents": expiring_docs,
+            "expiring_documents_count": len(all_expiring),
+            "pending_reservations": pending_reservations,
+            "pending_reservations_count": len(all_pending),
             "active_reservations": active_reservations,
-            "open_incidents": open_incidents[:5],
+            "open_incidents": open_incidents,
             "open_incidents_count": len(open_incidents),
         }
 
-    def vehicles_list_context(
+    # ─────────────────────────────────────────────────────────────
+    # Vehicles
+    # ─────────────────────────────────────────────────────────────
+
+    def vehicle_list_context(
         self,
         organization_id: UUID,
         *,
         status: Optional[str] = None,
         vehicle_type: Optional[str] = None,
-        assignment_type: Optional[str] = None,
-        search: Optional[str] = None,
-        page: int = 1,
+        department_id: Optional[UUID] = None,
+        offset: int = 0,
+        limit: int = 25,
     ) -> Dict[str, Any]:
         """Build context for vehicles list page."""
         org_id = coerce_uuid(organization_id)
@@ -98,15 +104,12 @@ class FleetWebService:
         # Parse filters
         status_filter = VehicleStatus(status) if status else None
         type_filter = VehicleType(vehicle_type) if vehicle_type else None
-        assignment_filter = AssignmentType(assignment_type) if assignment_type else None
 
         # Get vehicles
-        params = PaginationParams.from_page(page, per_page=25)
+        params = PaginationParams(offset=offset, limit=limit)
         result = service.list_vehicles(
             status=status_filter,
             vehicle_type=type_filter,
-            assignment_type=assignment_filter,
-            search=search,
             params=params,
         )
 
@@ -126,23 +129,34 @@ class FleetWebService:
             "assignment_types": [a.value for a in AssignmentType],
             "current_status": status,
             "current_type": vehicle_type,
-            "current_assignment": assignment_type,
-            "search": search,
+            "current_department_id": department_id,
         }
 
-    def vehicle_form_context(self, organization_id: UUID) -> Dict[str, Any]:
+    def vehicle_form_context(
+        self,
+        organization_id: UUID,
+        vehicle_id: Optional[UUID] = None,
+    ) -> Dict[str, Any]:
         """Build context for vehicle create/edit form."""
-        return {
+        org_id = coerce_uuid(organization_id)
+        context: Dict[str, Any] = {
             "vehicle_types": [t.value for t in VehicleType],
             "fuel_types": [f.value for f in FuelType],
             "ownership_types": [o.value for o in OwnershipType],
             "assignment_types": [a.value for a in AssignmentType],
+            "vehicle": None,
         }
+
+        if vehicle_id:
+            service = VehicleService(self.db, org_id)
+            context["vehicle"] = service.get_or_raise(vehicle_id)
+
+        return context
 
     def vehicle_detail_context(
         self,
         organization_id: UUID,
-        vehicle_id: str,
+        vehicle_id: UUID,
     ) -> Dict[str, Any]:
         """Build context for vehicle detail page."""
         org_id = coerce_uuid(organization_id)
@@ -209,25 +223,32 @@ class FleetWebService:
             "statuses": [s.value for s in VehicleStatus],
         }
 
+    # ─────────────────────────────────────────────────────────────
+    # Maintenance
+    # ─────────────────────────────────────────────────────────────
+
     def maintenance_list_context(
         self,
         organization_id: UUID,
         *,
+        vehicle_id: Optional[UUID] = None,
         status: Optional[str] = None,
-        vehicle_id: Optional[str] = None,
-        page: int = 1,
+        maintenance_type: Optional[str] = None,
+        offset: int = 0,
+        limit: int = 25,
     ) -> Dict[str, Any]:
         """Build context for maintenance list page."""
         org_id = coerce_uuid(organization_id)
         service = MaintenanceService(self.db, org_id)
 
         status_filter = MaintenanceStatus(status) if status else None
-        vid = coerce_uuid(vehicle_id, raise_http=False) if vehicle_id else None
+        type_filter = MaintenanceType(maintenance_type) if maintenance_type else None
 
-        params = PaginationParams.from_page(page, per_page=25)
+        params = PaginationParams(offset=offset, limit=limit)
         result = service.list_records(
-            vehicle_id=vid,
+            vehicle_id=vehicle_id,
             status=status_filter,
+            maintenance_type=type_filter,
             params=params,
         )
 
@@ -241,30 +262,73 @@ class FleetWebService:
             "statuses": [s.value for s in MaintenanceStatus],
             "maintenance_types": [t.value for t in MaintenanceType],
             "current_status": status,
+            "current_maintenance_type": maintenance_type,
             "current_vehicle_id": vehicle_id,
         }
 
-    def fuel_logs_context(
+    def maintenance_form_context(
         self,
         organization_id: UUID,
         *,
-        vehicle_id: Optional[str] = None,
-        page: int = 1,
+        vehicle_id: Optional[UUID] = None,
+    ) -> Dict[str, Any]:
+        """Build context for maintenance create form."""
+        org_id = coerce_uuid(organization_id)
+        vehicle_service = VehicleService(self.db, org_id)
+
+        # Get active vehicles for dropdown
+        vehicles_result = vehicle_service.list_vehicles(
+            status=VehicleStatus.ACTIVE,
+            params=PaginationParams(limit=200),
+        )
+
+        context: Dict[str, Any] = {
+            "vehicles": vehicles_result.items,
+            "maintenance_types": [t.value for t in MaintenanceType],
+            "selected_vehicle_id": vehicle_id,
+        }
+
+        return context
+
+    def maintenance_detail_context(
+        self,
+        organization_id: UUID,
+        record_id: UUID,
+    ) -> Dict[str, Any]:
+        """Build context for maintenance detail page."""
+        org_id = coerce_uuid(organization_id)
+        service = MaintenanceService(self.db, org_id)
+        record = service.get_or_raise(record_id)
+
+        return {
+            "record": record,
+            "statuses": [s.value for s in MaintenanceStatus],
+        }
+
+    # ─────────────────────────────────────────────────────────────
+    # Fuel Logs
+    # ─────────────────────────────────────────────────────────────
+
+    def fuel_list_context(
+        self,
+        organization_id: UUID,
+        *,
+        vehicle_id: Optional[UUID] = None,
+        offset: int = 0,
+        limit: int = 25,
     ) -> Dict[str, Any]:
         """Build context for fuel logs page."""
         org_id = coerce_uuid(organization_id)
         service = FuelService(self.db, org_id)
 
-        vid = coerce_uuid(vehicle_id, raise_http=False) if vehicle_id else None
-
-        params = PaginationParams.from_page(page, per_page=25)
+        params = PaginationParams(offset=offset, limit=limit)
         result = service.list_logs(
-            vehicle_id=vid,
+            vehicle_id=vehicle_id,
             params=params,
         )
 
         # Get monthly summary
-        monthly_summary = service.get_monthly_summary(vehicle_id=vid)
+        monthly_summary = service.get_monthly_summary(vehicle_id=vehicle_id)
 
         return {
             "fuel_logs": result.items,
@@ -278,30 +342,58 @@ class FleetWebService:
             "current_vehicle_id": vehicle_id,
         }
 
-    def incidents_context(
+    def fuel_form_context(
         self,
         organization_id: UUID,
         *,
-        status: Optional[str] = None,
-        vehicle_id: Optional[str] = None,
-        page: int = 1,
+        vehicle_id: Optional[UUID] = None,
     ) -> Dict[str, Any]:
-        """Build context for incidents page."""
+        """Build context for fuel log create form."""
+        org_id = coerce_uuid(organization_id)
+        vehicle_service = VehicleService(self.db, org_id)
+
+        vehicles_result = vehicle_service.list_vehicles(
+            status=VehicleStatus.ACTIVE,
+            params=PaginationParams(limit=200),
+        )
+
+        return {
+            "vehicles": vehicles_result.items,
+            "fuel_types": [f.value for f in FuelType],
+            "selected_vehicle_id": vehicle_id,
+        }
+
+    # ─────────────────────────────────────────────────────────────
+    # Incidents
+    # ─────────────────────────────────────────────────────────────
+
+    def incident_list_context(
+        self,
+        organization_id: UUID,
+        *,
+        vehicle_id: Optional[UUID] = None,
+        status: Optional[str] = None,
+        severity: Optional[str] = None,
+        offset: int = 0,
+        limit: int = 25,
+    ) -> Dict[str, Any]:
+        """Build context for incidents list page."""
         org_id = coerce_uuid(organization_id)
         service = IncidentService(self.db, org_id)
 
         status_filter = IncidentStatus(status) if status else None
-        vid = coerce_uuid(vehicle_id, raise_http=False) if vehicle_id else None
+        severity_filter = IncidentSeverity(severity) if severity else None
 
-        params = PaginationParams.from_page(page, per_page=25)
+        params = PaginationParams(offset=offset, limit=limit)
         result = service.list_incidents(
-            vehicle_id=vid,
+            vehicle_id=vehicle_id,
             status=status_filter,
+            severity=severity_filter,
             params=params,
         )
 
         # Get cost summary
-        cost_summary = service.get_cost_summary(vehicle_id=vid)
+        cost_summary = service.get_cost_summary(vehicle_id=vehicle_id)
 
         return {
             "incidents": result.items,
@@ -315,25 +407,70 @@ class FleetWebService:
             "incident_types": [t.value for t in IncidentType],
             "severities": [s.value for s in IncidentSeverity],
             "current_status": status,
+            "current_severity": severity,
             "current_vehicle_id": vehicle_id,
         }
 
-    def reservations_context(
+    def incident_form_context(
         self,
         organization_id: UUID,
         *,
-        status: Optional[str] = None,
-        page: int = 1,
+        vehicle_id: Optional[UUID] = None,
     ) -> Dict[str, Any]:
-        """Build context for reservations page."""
+        """Build context for incident report form."""
+        org_id = coerce_uuid(organization_id)
+        vehicle_service = VehicleService(self.db, org_id)
+
+        vehicles_result = vehicle_service.list_vehicles(
+            include_disposed=False,
+            params=PaginationParams(limit=200),
+        )
+
+        return {
+            "vehicles": vehicles_result.items,
+            "incident_types": [t.value for t in IncidentType],
+            "severities": [s.value for s in IncidentSeverity],
+            "selected_vehicle_id": vehicle_id,
+        }
+
+    def incident_detail_context(
+        self,
+        organization_id: UUID,
+        incident_id: UUID,
+    ) -> Dict[str, Any]:
+        """Build context for incident detail page."""
+        org_id = coerce_uuid(organization_id)
+        service = IncidentService(self.db, org_id)
+        incident = service.get_or_raise(incident_id)
+
+        return {
+            "incident": incident,
+            "statuses": [s.value for s in IncidentStatus],
+        }
+
+    # ─────────────────────────────────────────────────────────────
+    # Reservations
+    # ─────────────────────────────────────────────────────────────
+
+    def reservation_list_context(
+        self,
+        organization_id: UUID,
+        *,
+        vehicle_id: Optional[UUID] = None,
+        status: Optional[str] = None,
+        offset: int = 0,
+        limit: int = 25,
+    ) -> Dict[str, Any]:
+        """Build context for reservations list page."""
         org_id = coerce_uuid(organization_id)
         service = ReservationService(self.db, org_id)
         vehicle_service = VehicleService(self.db, org_id)
 
         status_filter = ReservationStatus(status) if status else None
 
-        params = PaginationParams.from_page(page, per_page=25)
+        params = PaginationParams(offset=offset, limit=limit)
         result = service.list_reservations(
+            vehicle_id=vehicle_id,
             status=status_filter,
             params=params,
         )
@@ -341,7 +478,7 @@ class FleetWebService:
         # Get pending count
         pending = service.get_pending_reservations()
 
-        # Get pool vehicles for new reservations
+        # Get pool vehicles for reference
         pool_vehicles = vehicle_service.list_vehicles(
             assignment_type=AssignmentType.POOL,
             status=VehicleStatus.ACTIVE,
@@ -359,27 +496,70 @@ class FleetWebService:
             "pool_vehicles": pool_vehicles.items,
             "statuses": [s.value for s in ReservationStatus],
             "current_status": status,
+            "current_vehicle_id": vehicle_id,
         }
 
-    def documents_context(
+    def reservation_form_context(
+        self,
+        organization_id: UUID,
+    ) -> Dict[str, Any]:
+        """Build context for reservation create form."""
+        org_id = coerce_uuid(organization_id)
+        vehicle_service = VehicleService(self.db, org_id)
+
+        # Get available pool vehicles
+        pool_vehicles = vehicle_service.list_vehicles(
+            assignment_type=AssignmentType.POOL,
+            status=VehicleStatus.ACTIVE,
+            params=PaginationParams(limit=100),
+        )
+
+        return {
+            "pool_vehicles": pool_vehicles.items,
+        }
+
+    def reservation_detail_context(
+        self,
+        organization_id: UUID,
+        reservation_id: UUID,
+    ) -> Dict[str, Any]:
+        """Build context for reservation detail page."""
+        org_id = coerce_uuid(organization_id)
+        service = ReservationService(self.db, org_id)
+        reservation = service.get_or_raise(reservation_id)
+
+        return {
+            "reservation": reservation,
+            "statuses": [s.value for s in ReservationStatus],
+        }
+
+    # ─────────────────────────────────────────────────────────────
+    # Documents
+    # ─────────────────────────────────────────────────────────────
+
+    def document_list_context(
         self,
         organization_id: UUID,
         *,
-        vehicle_id: Optional[str] = None,
+        vehicle_id: Optional[UUID] = None,
         document_type: Optional[str] = None,
-        page: int = 1,
+        expired_only: bool = False,
+        expiring_soon: bool = False,
+        offset: int = 0,
+        limit: int = 25,
     ) -> Dict[str, Any]:
-        """Build context for documents page."""
+        """Build context for documents list page."""
         org_id = coerce_uuid(organization_id)
         service = DocumentService(self.db, org_id)
 
-        vid = coerce_uuid(vehicle_id, raise_http=False) if vehicle_id else None
         type_filter = DocumentType(document_type) if document_type else None
 
-        params = PaginationParams.from_page(page, per_page=25)
+        params = PaginationParams(offset=offset, limit=limit)
         result = service.list_documents(
-            vehicle_id=vid,
+            vehicle_id=vehicle_id,
             document_type=type_filter,
+            expired_only=expired_only,
+            expiring_soon=expiring_soon,
             params=params,
         )
 
@@ -399,4 +579,40 @@ class FleetWebService:
             "document_types": [t.value for t in DocumentType],
             "current_type": document_type,
             "current_vehicle_id": vehicle_id,
+        }
+
+    def document_form_context(
+        self,
+        organization_id: UUID,
+        *,
+        vehicle_id: Optional[UUID] = None,
+    ) -> Dict[str, Any]:
+        """Build context for document create form."""
+        org_id = coerce_uuid(organization_id)
+        vehicle_service = VehicleService(self.db, org_id)
+
+        vehicles_result = vehicle_service.list_vehicles(
+            include_disposed=False,
+            params=PaginationParams(limit=200),
+        )
+
+        return {
+            "vehicles": vehicles_result.items,
+            "document_types": [t.value for t in DocumentType],
+            "selected_vehicle_id": vehicle_id,
+        }
+
+    def document_detail_context(
+        self,
+        organization_id: UUID,
+        document_id: UUID,
+    ) -> Dict[str, Any]:
+        """Build context for document detail page."""
+        org_id = coerce_uuid(organization_id)
+        service = DocumentService(self.db, org_id)
+        doc = service.get_or_raise(document_id)
+
+        return {
+            "document": doc,
+            "document_types": [t.value for t in DocumentType],
         }

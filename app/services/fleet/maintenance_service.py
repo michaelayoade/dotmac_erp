@@ -3,6 +3,7 @@ Maintenance Service - Vehicle maintenance management.
 
 Handles maintenance scheduling, tracking, and completion.
 """
+
 import logging
 from datetime import date
 from decimal import Decimal
@@ -15,7 +16,11 @@ from sqlalchemy.orm import Session, selectinload
 from app.models.fleet.enums import MaintenanceStatus, MaintenanceType, VehicleStatus
 from app.models.fleet.maintenance import MaintenanceRecord
 from app.models.fleet.vehicle import Vehicle
-from app.schemas.fleet.maintenance import MaintenanceComplete, MaintenanceCreate, MaintenanceUpdate
+from app.schemas.fleet.maintenance import (
+    MaintenanceComplete,
+    MaintenanceCreate,
+    MaintenanceUpdate,
+)
 from app.services.common import (
     NotFoundError,
     PaginatedResult,
@@ -96,7 +101,9 @@ class MaintenanceService:
 
         return paginate(self.db, stmt, params)
 
-    def get_due_maintenance(self, days_ahead: int = 7) -> List[MaintenanceRecord]:
+    def get_due_maintenance(
+        self, days_ahead: int = 7, *, limit: Optional[int] = None
+    ) -> List[MaintenanceRecord]:
         """Get maintenance records due within the specified days."""
         from datetime import timedelta
 
@@ -111,9 +118,13 @@ class MaintenanceService:
             .options(selectinload(MaintenanceRecord.vehicle))
             .order_by(MaintenanceRecord.scheduled_date.asc())
         )
+        if limit is not None:
+            stmt = stmt.limit(limit)
         return list(self.db.scalars(stmt).all())
 
-    def get_overdue_maintenance(self) -> List[MaintenanceRecord]:
+    def get_overdue_maintenance(
+        self, *, limit: Optional[int] = None
+    ) -> List[MaintenanceRecord]:
         """Get overdue maintenance records."""
         stmt = (
             select(MaintenanceRecord)
@@ -125,6 +136,8 @@ class MaintenanceService:
             .options(selectinload(MaintenanceRecord.vehicle))
             .order_by(MaintenanceRecord.scheduled_date.asc())
         )
+        if limit is not None:
+            stmt = stmt.limit(limit)
         return list(self.db.scalars(stmt).all())
 
     def create(self, data: MaintenanceCreate) -> MaintenanceRecord:
@@ -149,7 +162,9 @@ class MaintenanceService:
         )
         return record
 
-    def update(self, maintenance_id: UUID, data: MaintenanceUpdate) -> MaintenanceRecord:
+    def update(
+        self, maintenance_id: UUID, data: MaintenanceUpdate
+    ) -> MaintenanceRecord:
         """Update a maintenance record."""
         record = self.get_or_raise(maintenance_id)
 
@@ -188,8 +203,13 @@ class MaintenanceService:
         """Complete a maintenance record."""
         record = self.get_or_raise(maintenance_id)
 
-        if record.status not in (MaintenanceStatus.SCHEDULED, MaintenanceStatus.IN_PROGRESS):
-            raise ValidationError("Can only complete scheduled or in-progress maintenance")
+        if record.status not in (
+            MaintenanceStatus.SCHEDULED,
+            MaintenanceStatus.IN_PROGRESS,
+        ):
+            raise ValidationError(
+                "Can only complete scheduled or in-progress maintenance"
+            )
 
         record.status = MaintenanceStatus.COMPLETED
         record.completed_date = data.completed_date or date.today()
@@ -203,25 +223,29 @@ class MaintenanceService:
         record.next_service_date = data.next_service_date
 
         # Update vehicle odometer if provided
-        if data.odometer_at_service:
-            vehicle = self.db.get(Vehicle, record.vehicle_id)
-            if vehicle and data.odometer_at_service > vehicle.current_odometer:
+        vehicle = self.db.get(Vehicle, record.vehicle_id)
+        if vehicle and data.odometer_at_service:
+            if data.odometer_at_service > vehicle.current_odometer:
                 vehicle.current_odometer = data.odometer_at_service
                 vehicle.last_odometer_date = record.completed_date
 
-            # Return vehicle to active status if it was in maintenance
-            if vehicle and vehicle.status == VehicleStatus.MAINTENANCE:
-                vehicle.status = VehicleStatus.ACTIVE
+        # Return vehicle to active status if it was in maintenance
+        if vehicle and vehicle.status == VehicleStatus.MAINTENANCE:
+            vehicle.status = VehicleStatus.ACTIVE
 
         logger.info("Completed maintenance %s", maintenance_id)
         return record
 
-    def cancel(self, maintenance_id: UUID, reason: Optional[str] = None) -> MaintenanceRecord:
+    def cancel(
+        self, maintenance_id: UUID, reason: Optional[str] = None
+    ) -> MaintenanceRecord:
         """Cancel a maintenance record."""
         record = self.get_or_raise(maintenance_id)
 
         if record.status in (MaintenanceStatus.COMPLETED, MaintenanceStatus.CANCELLED):
-            raise ValidationError("Cannot cancel completed or already cancelled maintenance")
+            raise ValidationError(
+                "Cannot cancel completed or already cancelled maintenance"
+            )
 
         record.status = MaintenanceStatus.CANCELLED
         if reason:

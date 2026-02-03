@@ -3,12 +3,13 @@ Reservation Service - Pool vehicle reservation management.
 
 Handles reservation requests, approvals, and vehicle checkouts.
 """
+
 import logging
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Dict, List, Optional
 from uuid import UUID
 
-from sqlalchemy import and_, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.fleet.enums import AssignmentType, ReservationStatus, VehicleStatus
@@ -110,7 +111,9 @@ class ReservationService:
 
         return paginate(self.db, stmt, params)
 
-    def get_pending_reservations(self) -> List[VehicleReservation]:
+    def get_pending_reservations(
+        self, *, limit: Optional[int] = None
+    ) -> List[VehicleReservation]:
         """Get all pending reservations awaiting approval."""
         stmt = (
             select(VehicleReservation)
@@ -124,9 +127,13 @@ class ReservationService:
             )
             .order_by(VehicleReservation.start_datetime.asc())
         )
+        if limit is not None:
+            stmt = stmt.limit(limit)
         return list(self.db.scalars(stmt).all())
 
-    def get_active_reservations(self) -> List[VehicleReservation]:
+    def get_active_reservations(
+        self, *, limit: Optional[int] = None
+    ) -> List[VehicleReservation]:
         """Get all currently active reservations."""
         stmt = (
             select(VehicleReservation)
@@ -137,6 +144,8 @@ class ReservationService:
             .options(selectinload(VehicleReservation.vehicle))
             .order_by(VehicleReservation.actual_end_datetime.asc().nullslast())
         )
+        if limit is not None:
+            stmt = stmt.limit(limit)
         return list(self.db.scalars(stmt).all())
 
     def check_availability(
@@ -181,14 +190,16 @@ class ReservationService:
         if data.start_datetime >= data.end_datetime:
             raise ValidationError("End time must be after start time")
 
-        if data.start_datetime < datetime.now():
+        if data.start_datetime < datetime.now(timezone.utc):
             raise ValidationError("Cannot create reservation in the past")
 
         # Check availability
         if not self.check_availability(
             data.vehicle_id, data.start_datetime, data.end_datetime
         ):
-            raise ConflictError("Vehicle is not available for the requested time period")
+            raise ConflictError(
+                "Vehicle is not available for the requested time period"
+            )
 
         reservation = VehicleReservation(
             organization_id=self.organization_id,
@@ -222,15 +233,13 @@ class ReservationService:
         new_end = data.end_datetime or reservation.end_datetime
         new_vehicle = data.vehicle_id or reservation.vehicle_id
 
-        if (
-            data.start_datetime
-            or data.end_datetime
-            or data.vehicle_id
-        ):
+        if data.start_datetime or data.end_datetime or data.vehicle_id:
             if not self.check_availability(
                 new_vehicle, new_start, new_end, exclude_reservation_id=reservation_id
             ):
-                raise ConflictError("Vehicle is not available for the requested time period")
+                raise ConflictError(
+                    "Vehicle is not available for the requested time period"
+                )
 
         update_data = data.model_dump(exclude_unset=True)
         for field, value in update_data.items():
@@ -239,6 +248,16 @@ class ReservationService:
         logger.info("Updated reservation %s", reservation_id)
         return reservation
 
+    def _validate_transition(
+        self, current: ReservationStatus, target: ReservationStatus
+    ) -> None:
+        """Validate a status transition against the transition map."""
+        allowed = RESERVATION_STATUS_TRANSITIONS.get(current, set())
+        if target not in allowed:
+            raise ValidationError(
+                f"Cannot transition from {current.value} to {target.value}"
+            )
+
     def approve(
         self,
         reservation_id: UUID,
@@ -246,9 +265,7 @@ class ReservationService:
     ) -> VehicleReservation:
         """Approve a reservation request."""
         reservation = self.get_or_raise(reservation_id)
-
-        if reservation.status != ReservationStatus.PENDING:
-            raise ValidationError("Can only approve pending reservations")
+        self._validate_transition(reservation.status, ReservationStatus.APPROVED)
 
         # Verify availability again
         if not self.check_availability(
@@ -261,7 +278,7 @@ class ReservationService:
 
         reservation.status = ReservationStatus.APPROVED
         reservation.approved_by_id = approved_by_id
-        reservation.approved_at = datetime.now()
+        reservation.approved_at = datetime.now(timezone.utc)
 
         logger.info("Approved reservation %s", reservation_id)
         return reservation
@@ -273,9 +290,7 @@ class ReservationService:
     ) -> VehicleReservation:
         """Reject a reservation request."""
         reservation = self.get_or_raise(reservation_id)
-
-        if reservation.status != ReservationStatus.PENDING:
-            raise ValidationError("Can only reject pending reservations")
+        self._validate_transition(reservation.status, ReservationStatus.REJECTED)
 
         reservation.status = ReservationStatus.REJECTED
         reservation.rejection_reason = reason
@@ -290,12 +305,12 @@ class ReservationService:
     ) -> VehicleReservation:
         """Check out vehicle (start the reservation)."""
         reservation = self.get_or_raise(reservation_id)
-
-        if reservation.status != ReservationStatus.APPROVED:
-            raise ValidationError("Can only check out approved reservations")
+        self._validate_transition(reservation.status, ReservationStatus.ACTIVE)
 
         reservation.status = ReservationStatus.ACTIVE
-        reservation.actual_start_datetime = data.actual_start_datetime or datetime.now()
+        reservation.actual_start_datetime = data.actual_start_datetime or datetime.now(
+            timezone.utc
+        )
         reservation.start_odometer = data.start_odometer
 
         # Update vehicle status
@@ -313,12 +328,12 @@ class ReservationService:
     ) -> VehicleReservation:
         """Check in vehicle (complete the reservation)."""
         reservation = self.get_or_raise(reservation_id)
-
-        if reservation.status != ReservationStatus.ACTIVE:
-            raise ValidationError("Can only check in active reservations")
+        self._validate_transition(reservation.status, ReservationStatus.COMPLETED)
 
         reservation.status = ReservationStatus.COMPLETED
-        reservation.actual_end_datetime = data.actual_end_datetime or datetime.now()
+        reservation.actual_end_datetime = data.actual_end_datetime or datetime.now(
+            timezone.utc
+        )
         reservation.end_odometer = data.end_odometer
 
         if data.notes:
@@ -328,7 +343,10 @@ class ReservationService:
         vehicle = self.db.get(Vehicle, reservation.vehicle_id)
         if vehicle:
             vehicle.status = VehicleStatus.ACTIVE
-            if data.end_odometer > vehicle.current_odometer:
+            if (
+                data.end_odometer is not None
+                and data.end_odometer > vehicle.current_odometer
+            ):
                 vehicle.current_odometer = data.end_odometer
                 vehicle.last_odometer_date = date.today()
 
@@ -350,9 +368,7 @@ class ReservationService:
     def mark_no_show(self, reservation_id: UUID) -> VehicleReservation:
         """Mark reservation as no-show (employee didn't pick up)."""
         reservation = self.get_or_raise(reservation_id)
-
-        if reservation.status != ReservationStatus.APPROVED:
-            raise ValidationError("Can only mark approved reservations as no-show")
+        self._validate_transition(reservation.status, ReservationStatus.NO_SHOW)
 
         reservation.status = ReservationStatus.NO_SHOW
 

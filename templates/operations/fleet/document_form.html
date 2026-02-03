@@ -1,0 +1,152 @@
+{% extends "operations/base_operations.html" %}
+
+{% block page_title %}Add Document{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+    <a href="/operations/dashboard" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Operations</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <a href="/operations/fleet" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Fleet</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <a href="/operations/fleet/documents" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Documents</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="font-medium text-slate-900 dark:text-white">Add</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <form method="POST" action="/api/fleet/documents" class="space-y-6">
+        <!-- Vehicle & Type -->
+        <div class="card">
+            <div class="px-4 py-3 border-b border-slate-100 dark:border-slate-800">
+                <h3 class="font-semibold text-slate-900 dark:text-white">Document Details</h3>
+            </div>
+            <div class="p-4 space-y-4">
+                <div class="grid gap-4 sm:grid-cols-2">
+                    <div>
+                        <label for="vehicle_id" class="form-label">Vehicle <span class="text-rose-500">*</span></label>
+                        <select id="vehicle_id" name="vehicle_id" required class="form-select">
+                            <option value="">Select vehicle...</option>
+                            {% for v in vehicles %}
+                            <option value="{{ v.vehicle_id }}" {{ 'selected' if selected_vehicle_id and selected_vehicle_id|string == v.vehicle_id|string else '' }}>
+                                {{ v.registration_number }} - {{ v.make }} {{ v.model }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label for="document_type" class="form-label">Document Type <span class="text-rose-500">*</span></label>
+                        <select id="document_type" name="document_type" required class="form-select">
+                            <option value="">Select type...</option>
+                            {% for dt in document_types %}
+                            <option value="{{ dt }}">{{ dt | replace('_', ' ') | title }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid gap-4 sm:grid-cols-2">
+                    <div>
+                        <label for="document_number" class="form-label">Document Number</label>
+                        <input type="text" id="document_number" name="document_number"
+                               placeholder="Policy/certificate number"
+                               class="form-input font-mono">
+                    </div>
+                    <div>
+                        <label for="description" class="form-label">Description <span class="text-rose-500">*</span></label>
+                        <input type="text" id="description" name="description" required
+                               placeholder="Brief description"
+                               class="form-input">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Validity & Provider -->
+        <div class="card">
+            <div class="px-4 py-3 border-b border-slate-100 dark:border-slate-800">
+                <h3 class="font-semibold text-slate-900 dark:text-white">Validity & Provider</h3>
+            </div>
+            <div class="p-4 space-y-4">
+                <div class="grid gap-4 sm:grid-cols-2">
+                    <div>
+                        <label for="issue_date" class="form-label">Issue Date</label>
+                        <input type="date" id="issue_date" name="issue_date" class="form-input">
+                    </div>
+                    <div>
+                        <label for="expiry_date" class="form-label">Expiry Date</label>
+                        <input type="date" id="expiry_date" name="expiry_date" class="form-input">
+                    </div>
+                </div>
+
+                <div class="grid gap-4 sm:grid-cols-2">
+                    <div>
+                        <label for="provider_name" class="form-label">Provider / Issuing Authority</label>
+                        <input type="text" id="provider_name" name="provider_name"
+                               placeholder="Insurance company, authority name"
+                               class="form-input">
+                    </div>
+                    <div>
+                        <label for="policy_number" class="form-label">Policy Number</label>
+                        <input type="text" id="policy_number" name="policy_number"
+                               placeholder="Insurance policy number"
+                               class="form-input font-mono">
+                    </div>
+                </div>
+
+                <div class="grid gap-4 sm:grid-cols-2">
+                    <div>
+                        <label for="coverage_amount" class="form-label">Coverage Amount</label>
+                        <input type="number" id="coverage_amount" name="coverage_amount"
+                               min="0" step="0.01" placeholder="0.00"
+                               class="form-input">
+                    </div>
+                    <div>
+                        <label for="premium_amount" class="form-label">Premium Amount</label>
+                        <input type="number" id="premium_amount" name="premium_amount"
+                               min="0" step="0.01" placeholder="0.00"
+                               class="form-input">
+                    </div>
+                </div>
+
+                <div>
+                    <label for="reminder_days_before" class="form-label">Reminder Days Before Expiry</label>
+                    <input type="number" id="reminder_days_before" name="reminder_days_before"
+                           value="30" min="1" max="365"
+                           class="form-input w-32">
+                </div>
+            </div>
+        </div>
+
+        <!-- Notes -->
+        <div class="card">
+            <div class="px-4 py-3 border-b border-slate-100 dark:border-slate-800">
+                <h3 class="font-semibold text-slate-900 dark:text-white">Notes</h3>
+            </div>
+            <div class="p-4">
+                <textarea id="notes" name="notes" rows="3"
+                          placeholder="Additional notes..."
+                          class="form-textarea"></textarea>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex items-center justify-end gap-3">
+            <a href="/operations/fleet/documents" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">
+                <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                </svg>
+                Add Document
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

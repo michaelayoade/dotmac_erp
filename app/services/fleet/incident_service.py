@@ -3,13 +3,14 @@ Incident Service - Vehicle incident management.
 
 Handles incident reporting, investigation, and resolution.
 """
+
 import logging
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Dict, List, Optional
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.fleet.enums import IncidentSeverity, IncidentStatus, IncidentType
@@ -121,7 +122,9 @@ class IncidentService:
 
         return paginate(self.db, stmt, params)
 
-    def get_open_incidents(self) -> List[VehicleIncident]:
+    def get_open_incidents(
+        self, *, limit: Optional[int] = None
+    ) -> List[VehicleIncident]:
         """Get all open (non-closed) incidents."""
         stmt = (
             select(VehicleIncident)
@@ -133,6 +136,8 @@ class IncidentService:
             .options(selectinload(VehicleIncident.vehicle))
             .order_by(VehicleIncident.incident_date.desc())
         )
+        if limit is not None:
+            stmt = stmt.limit(limit)
         return list(self.db.scalars(stmt).all())
 
     def create(self, data: IncidentCreate) -> VehicleIncident:
@@ -201,8 +206,11 @@ class IncidentService:
         """Resolve an incident."""
         incident = self.get_or_raise(incident_id)
 
-        if incident.status == IncidentStatus.CLOSED:
-            raise ValidationError("Incident is already closed")
+        allowed = INCIDENT_STATUS_TRANSITIONS.get(incident.status, set())
+        if IncidentStatus.RESOLVED not in allowed:
+            raise ValidationError(
+                f"Cannot resolve incident in {incident.status.value} status"
+            )
 
         incident.status = IncidentStatus.RESOLVED
         incident.resolution_date = data.resolution_date or date.today()
@@ -224,8 +232,11 @@ class IncidentService:
         """Close an incident."""
         incident = self.get_or_raise(incident_id)
 
-        if incident.status == IncidentStatus.CLOSED:
-            raise ValidationError("Incident is already closed")
+        allowed = INCIDENT_STATUS_TRANSITIONS.get(incident.status, set())
+        if IncidentStatus.CLOSED not in allowed:
+            raise ValidationError(
+                f"Cannot close incident in {incident.status.value} status"
+            )
 
         incident.status = IncidentStatus.CLOSED
         if not incident.resolution_date:
@@ -238,31 +249,42 @@ class IncidentService:
         """Soft delete an incident."""
         incident = self.get_or_raise(incident_id)
         incident.is_deleted = True
-        incident.deleted_at = datetime.now()
+        incident.deleted_at = datetime.now(timezone.utc)
 
         logger.info("Soft deleted incident %s", incident_id)
         return incident
 
     def get_cost_summary(self, vehicle_id: Optional[UUID] = None) -> dict:
-        """Get incident cost summary."""
-        stmt = select(VehicleIncident).where(
+        """Get incident cost summary using SQL aggregation."""
+        base_filter = (
             VehicleIncident.organization_id == self.organization_id,
             VehicleIncident.is_deleted == False,  # noqa: E712
         )
 
+        stmt = select(
+            func.count(VehicleIncident.incident_id).label("total_incidents"),
+            func.coalesce(
+                func.sum(VehicleIncident.actual_repair_cost), Decimal(0)
+            ).label("total_repair_cost"),
+            func.coalesce(func.sum(VehicleIncident.other_costs), Decimal(0)).label(
+                "total_other_costs"
+            ),
+            func.coalesce(func.sum(VehicleIncident.insurance_payout), Decimal(0)).label(
+                "total_insurance_payout"
+            ),
+        ).where(*base_filter)
+
         if vehicle_id:
             stmt = stmt.where(VehicleIncident.vehicle_id == vehicle_id)
 
-        incidents = list(self.db.scalars(stmt).all())
-
-        total_repair = sum(i.actual_repair_cost or Decimal(0) for i in incidents)
-        total_other = sum(i.other_costs or Decimal(0) for i in incidents)
-        total_payout = sum(i.insurance_payout or Decimal(0) for i in incidents)
+        row = self.db.execute(stmt).one()
 
         return {
-            "total_incidents": len(incidents),
-            "total_repair_cost": total_repair,
-            "total_other_costs": total_other,
-            "total_insurance_payout": total_payout,
-            "net_cost": total_repair + total_other - total_payout,
+            "total_incidents": row.total_incidents,
+            "total_repair_cost": row.total_repair_cost,
+            "total_other_costs": row.total_other_costs,
+            "total_insurance_payout": row.total_insurance_payout,
+            "net_cost": row.total_repair_cost
+            + row.total_other_costs
+            - row.total_insurance_payout,
         }

@@ -3,13 +3,14 @@ Vehicle Service - Core fleet management operations.
 
 Handles vehicle CRUD, status transitions, odometer updates, and fleet statistics.
 """
+
 import logging
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Dict, List, Optional
 from uuid import UUID
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import case, extract, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.fleet.enums import (
@@ -363,8 +364,12 @@ class VehicleService:
         """Dispose of a vehicle (sell, scrap, trade-in)."""
         vehicle = self.get_or_raise(vehicle_id)
 
-        if vehicle.status == VehicleStatus.DISPOSED:
-            raise ValidationError("Vehicle is already disposed")
+        # Validate transition via the status map (same as change_status)
+        allowed = VEHICLE_STATUS_TRANSITIONS.get(vehicle.status, set())
+        if VehicleStatus.DISPOSED not in allowed:
+            raise ValidationError(
+                f"Cannot dispose vehicle in {vehicle.status.value} status"
+            )
 
         vehicle.status = VehicleStatus.DISPOSED
         vehicle.disposal_date = date.today()
@@ -385,7 +390,7 @@ class VehicleService:
         """Soft delete a vehicle."""
         vehicle = self.get_or_raise(vehicle_id)
         vehicle.is_deleted = True
-        vehicle.deleted_at = datetime.now()
+        vehicle.deleted_at = datetime.now(timezone.utc)
 
         logger.info("Soft deleted vehicle %s", vehicle.vehicle_code)
         return vehicle
@@ -395,48 +400,105 @@ class VehicleService:
     # ─────────────────────────────────────────────────────────────
 
     def get_fleet_summary(self) -> Dict:
-        """Get overall fleet statistics."""
-        # Get all non-deleted vehicles
-        stmt = select(Vehicle).where(
+        """Get overall fleet statistics using SQL aggregations."""
+        not_disposed = Vehicle.status != VehicleStatus.DISPOSED
+        base_filter = (
             Vehicle.organization_id == self.organization_id,
             Vehicle.is_deleted == False,  # noqa: E712
         )
-        vehicles = list(self.db.scalars(stmt).all())
 
-        # Calculate totals
-        active_vehicles = [v for v in vehicles if v.status != VehicleStatus.DISPOSED]
+        stmt = select(
+            # Total non-disposed vehicles
+            func.count(case((not_disposed, Vehicle.vehicle_id))).label(
+                "total_vehicles"
+            ),
+            # Status counts
+            func.count(
+                case((Vehicle.status == VehicleStatus.ACTIVE, Vehicle.vehicle_id))
+            ).label("active"),
+            func.count(
+                case((Vehicle.status == VehicleStatus.MAINTENANCE, Vehicle.vehicle_id))
+            ).label("in_maintenance"),
+            func.count(
+                case(
+                    (
+                        Vehicle.status == VehicleStatus.OUT_OF_SERVICE,
+                        Vehicle.vehicle_id,
+                    )
+                )
+            ).label("out_of_service"),
+            func.count(
+                case((Vehicle.status == VehicleStatus.DISPOSED, Vehicle.vehicle_id))
+            ).label("disposed"),
+            # Ownership counts (non-disposed only)
+            func.count(
+                case(
+                    (
+                        (not_disposed)
+                        & (Vehicle.ownership_type == OwnershipType.OWNED),
+                        Vehicle.vehicle_id,
+                    )
+                )
+            ).label("owned_count"),
+            func.count(
+                case(
+                    (
+                        (not_disposed)
+                        & (Vehicle.ownership_type == OwnershipType.LEASED),
+                        Vehicle.vehicle_id,
+                    )
+                )
+            ).label("leased_count"),
+            # Financial aggregations (non-disposed only)
+            func.coalesce(
+                func.sum(
+                    case(
+                        (
+                            (not_disposed)
+                            & (Vehicle.ownership_type == OwnershipType.OWNED),
+                            Vehicle.purchase_price,
+                        )
+                    )
+                ),
+                Decimal(0),
+            ).label("total_owned_value"),
+            func.coalesce(
+                func.sum(
+                    case(
+                        (
+                            (not_disposed)
+                            & (Vehicle.ownership_type == OwnershipType.LEASED),
+                            Vehicle.lease_monthly_cost,
+                        )
+                    )
+                ),
+                Decimal(0),
+            ).label("monthly_lease_cost"),
+            # Average age (non-disposed only)
+            func.coalesce(
+                func.avg(
+                    case(
+                        (
+                            not_disposed,
+                            extract("year", func.current_date()) - Vehicle.year,
+                        )
+                    )
+                ),
+                0,
+            ).label("avg_age_years"),
+        ).where(*base_filter)
 
-        total_value = sum(
-            v.purchase_price or Decimal(0)
-            for v in active_vehicles
-            if v.ownership_type == OwnershipType.OWNED
-        )
-
-        monthly_lease = sum(
-            v.lease_monthly_cost or Decimal(0)
-            for v in active_vehicles
-            if v.ownership_type == OwnershipType.LEASED
-        )
-
-        status_counts = self.count_by_status()
+        row = self.db.execute(stmt).one()
 
         return {
-            "total_vehicles": len(active_vehicles),
-            "active": status_counts.get("ACTIVE", 0),
-            "in_maintenance": status_counts.get("MAINTENANCE", 0),
-            "out_of_service": status_counts.get("OUT_OF_SERVICE", 0),
-            "disposed": status_counts.get("DISPOSED", 0),
-            "owned_count": sum(
-                1 for v in active_vehicles if v.ownership_type == OwnershipType.OWNED
-            ),
-            "leased_count": sum(
-                1 for v in active_vehicles if v.ownership_type == OwnershipType.LEASED
-            ),
-            "total_owned_value": total_value,
-            "monthly_lease_cost": monthly_lease,
-            "avg_age_years": (
-                sum(v.age_years for v in active_vehicles) / len(active_vehicles)
-                if active_vehicles
-                else 0
-            ),
+            "total_vehicles": row.total_vehicles,
+            "active": row.active,
+            "in_maintenance": row.in_maintenance,
+            "out_of_service": row.out_of_service,
+            "disposed": row.disposed,
+            "owned_count": row.owned_count,
+            "leased_count": row.leased_count,
+            "total_owned_value": row.total_owned_value,
+            "monthly_lease_cost": row.monthly_lease_cost,
+            "avg_age_years": float(row.avg_age_years),
         }

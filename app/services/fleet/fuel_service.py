@@ -3,6 +3,7 @@ Fuel Service - Fuel logging and efficiency tracking.
 
 Handles fuel log entries and consumption analysis.
 """
+
 import logging
 from datetime import date
 from decimal import Decimal
@@ -159,8 +160,12 @@ class FuelService:
         # Calculate totals
         total_distance = logs[-1].odometer_reading - logs[0].odometer_reading
         # Sum fuel from all fills except the first (that fuel was from before our period)
-        total_fuel = sum((log.quantity_liters for log in logs[1:]), Decimal("0"))
-        total_cost = sum((log.total_cost for log in logs[1:]), Decimal("0"))
+        total_fuel = sum(
+            (log.quantity_liters or Decimal("0") for log in logs[1:]), Decimal("0")
+        )
+        total_cost = sum(
+            (log.total_cost or Decimal("0") for log in logs[1:]), Decimal("0")
+        )
 
         if total_fuel <= 0 or total_distance <= 0:
             return None

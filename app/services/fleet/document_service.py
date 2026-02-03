@@ -3,6 +3,7 @@ Document Service - Vehicle document management.
 
 Handles document tracking, expiry monitoring, and reminders.
 """
+
 import logging
 from datetime import date, timedelta
 from typing import List, Optional
@@ -78,7 +79,9 @@ class DocumentService:
 
         return paginate(self.db, stmt, params)
 
-    def get_expiring_documents(self, days_before: int = 30) -> List[VehicleDocument]:
+    def get_expiring_documents(
+        self, days_before: int = 30, *, limit: Optional[int] = None
+    ) -> List[VehicleDocument]:
         """Get documents expiring within specified days."""
         cutoff = date.today() + timedelta(days=days_before)
         stmt = (
@@ -93,9 +96,13 @@ class DocumentService:
             .options(selectinload(VehicleDocument.vehicle))
             .order_by(VehicleDocument.expiry_date.asc())
         )
+        if limit is not None:
+            stmt = stmt.limit(limit)
         return list(self.db.scalars(stmt).all())
 
-    def get_expired_documents(self) -> List[VehicleDocument]:
+    def get_expired_documents(
+        self, *, limit: Optional[int] = None
+    ) -> List[VehicleDocument]:
         """Get all expired documents."""
         stmt = (
             select(VehicleDocument)
@@ -106,6 +113,8 @@ class DocumentService:
             .options(selectinload(VehicleDocument.vehicle))
             .order_by(VehicleDocument.expiry_date.asc())
         )
+        if limit is not None:
+            stmt = stmt.limit(limit)
         return list(self.db.scalars(stmt).all())
 
     def create(self, data: DocumentCreate) -> VehicleDocument:
@@ -158,60 +167,18 @@ class DocumentService:
         doc.reminder_sent = True
         return doc
 
-    def check_expiring_documents(self, days_before: int = 30) -> List[VehicleDocument]:
-        """Check for expiring documents and send notifications."""
+    def get_fleet_managers(self) -> List[UUID]:
+        """Get list of fleet manager user IDs scoped to the current organization."""
         # Import here to avoid circular imports
-        from app.services.notification import NotificationService
-        from app.models.notification import (
-            EntityType,
-            NotificationChannel,
-            NotificationType,
-        )
-
-        expiring = self.get_expiring_documents(days_before)
-        notification_service = NotificationService()
-
-        for doc in expiring:
-            if doc.reminder_sent:
-                continue
-
-            # Find fleet managers to notify
-            recipients = self._get_fleet_managers()
-
-            for recipient_id in recipients:
-                try:
-                    notification_service.create(
-                        self.db,
-                        organization_id=self.organization_id,
-                        recipient_id=recipient_id,
-                        entity_type=EntityType.SYSTEM,
-                        entity_id=doc.document_id,
-                        notification_type=NotificationType.DUE_SOON,
-                        title="Vehicle Document Expiring",
-                        message=(
-                            f"{doc.document_type.value} for "
-                            f"{doc.vehicle.registration_number} "
-                            f"expires on {doc.expiry_date}"
-                        ),
-                        channel=NotificationChannel.BOTH,
-                        action_url=f"/operations/fleet/vehicles/{doc.vehicle_id}",
-                    )
-                except Exception as e:
-                    logger.exception("Failed to send document expiry notification: %s", e)
-
-            doc.reminder_sent = True
-
-        return expiring
-
-    def _get_fleet_managers(self) -> List[UUID]:
-        """Get list of fleet manager user IDs."""
-        # Import here to avoid circular imports
+        from app.models.person import Person
         from app.models.rbac import PersonRole, Role
 
         stmt = (
             select(PersonRole.person_id)
             .join(Role, PersonRole.role_id == Role.id)
+            .join(Person, PersonRole.person_id == Person.id)
             .where(
+                Person.organization_id == self.organization_id,
                 Role.name.in_(["fleet_manager", "operations_manager", "admin"]),
                 Role.is_active.is_(True),
             )
