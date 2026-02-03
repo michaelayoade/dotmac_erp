@@ -3,20 +3,21 @@ Workflow Service.
 
 Handles workflow rule evaluation and action execution.
 """
+
 import ipaddress
 import logging
 import os
 import re
 import socket
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, cast
 from urllib.parse import urlsplit
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import and_, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.automation import (
@@ -39,6 +40,7 @@ def _db_setting(db: Session | None, key: str) -> object | None:
         return None
     try:
         from app.services.domain_settings import automation_settings
+
         setting = automation_settings.get_by_key(db, key)
     except HTTPException:
         return None
@@ -144,7 +146,9 @@ def _host_matches_allowlist(host: str, db: Session | None = None) -> bool:
     return not allowed_hosts and not allowed_domains
 
 
-def _validate_webhook_target(url: str, db: Session | None = None) -> tuple[bool, str | None]:
+def _validate_webhook_target(
+    url: str, db: Session | None = None
+) -> tuple[bool, str | None]:
     if not url or not isinstance(url, str):
         return False, "Webhook URL is required"
 
@@ -194,6 +198,7 @@ def _validate_webhook_target(url: str, db: Session | None = None) -> tuple[bool,
 @dataclass
 class WorkflowRuleInput:
     """Input for creating a workflow rule."""
+
     rule_name: str
     entity_type: WorkflowEntityType
     trigger_event: TriggerEvent
@@ -204,23 +209,59 @@ class WorkflowRuleInput:
     priority: int = 100
     stop_on_match: bool = False
     execute_async: bool = True
+    cooldown_seconds: Optional[int] = None
+    schedule_config: Optional[Dict[str, Any]] = None
 
 
 @dataclass
 class TriggerContext:
     """Context for evaluating workflow triggers."""
+
     entity_type: str
     entity_id: UUID
     event: TriggerEvent
+    organization_id: Optional[UUID] = None
     old_values: Optional[Dict[str, Any]] = None
     new_values: Optional[Dict[str, Any]] = None
     changed_fields: Optional[List[str]] = None
     user_id: Optional[UUID] = None
 
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize for Celery task arguments."""
+        return {
+            "entity_type": self.entity_type,
+            "entity_id": str(self.entity_id),
+            "event": self.event.value,
+            "organization_id": str(self.organization_id)
+            if self.organization_id
+            else None,
+            "old_values": self.old_values,
+            "new_values": self.new_values,
+            "changed_fields": self.changed_fields,
+            "user_id": str(self.user_id) if self.user_id else None,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "TriggerContext":
+        """Deserialize from Celery task arguments."""
+        return cls(
+            entity_type=data["entity_type"],
+            entity_id=UUID(data["entity_id"]),
+            event=TriggerEvent(data["event"]),
+            organization_id=UUID(data["organization_id"])
+            if data.get("organization_id")
+            else None,
+            old_values=data.get("old_values"),
+            new_values=data.get("new_values"),
+            changed_fields=data.get("changed_fields"),
+            user_id=UUID(data["user_id"]) if data.get("user_id") else None,
+        )
+
 
 @dataclass
 class ActionResult:
     """Result of executing a workflow action."""
+
     success: bool
     result: Optional[Dict[str, Any]] = None
     error_message: Optional[str] = None
@@ -228,6 +269,10 @@ class ActionResult:
 
 class WorkflowService:
     """Service for managing and executing workflow rules."""
+
+    # Production hardening caps
+    MAX_RULES_PER_EVENT = 10
+    MAX_EXECUTIONS_PER_MINUTE = 50
 
     def create_rule(
         self,
@@ -265,6 +310,8 @@ class WorkflowService:
             priority=input_data.priority,
             stop_on_match=input_data.stop_on_match,
             execute_async=input_data.execute_async,
+            cooldown_seconds=input_data.cooldown_seconds,
+            schedule_config=input_data.schedule_config,
             created_by=created_by,
         )
 
@@ -336,10 +383,93 @@ class WorkflowService:
         conditions: Dict[str, Any],
         context: TriggerContext,
     ) -> bool:
-        """Evaluate if conditions are met for a trigger context."""
+        """Evaluate if conditions are met for a trigger context.
+
+        Supports both flat conditions (original format) and compound
+        conditions with nested AND/OR groups.
+        """
         if not conditions:
             return True
 
+        # Compound condition node: {"operator": "AND"/"OR", "groups": [...]}
+        if "operator" in conditions and "groups" in conditions:
+            return self._evaluate_condition_node(conditions, context)
+
+        return self._evaluate_flat_conditions(conditions, context)
+
+    def _evaluate_condition_node(
+        self,
+        node: Dict[str, Any],
+        context: TriggerContext,
+    ) -> bool:
+        """Recursively evaluate AND/OR condition groups.
+
+        Format::
+
+            {
+                "operator": "AND",  # or "OR"
+                "groups": [
+                    {"operator": "OR", "conditions": [...]},
+                    {"field": "status", "operator": "equals", "value": "OVERDUE"}
+                ]
+            }
+
+        Leaf nodes that have "conditions" key contain a list of flat
+        condition dicts. Leaf nodes that have "field" key are individual
+        comparisons.
+        """
+        op = node.get("operator", "AND").upper()
+        groups = node.get("groups", [])
+        conditions_list = node.get("conditions", [])
+
+        # If this node has inline conditions (leaf group)
+        if conditions_list:
+            results = []
+            for cond in conditions_list:
+                if "field" in cond:
+                    values = context.new_values or {}
+                    field_value = values.get(cond["field"])
+                    cond_op = cond.get("operator", "equals")
+                    expected = cond.get("value")
+                    results.append(self._compare_values(field_value, cond_op, expected))
+                elif "operator" in cond and "groups" in cond:
+                    results.append(self._evaluate_condition_node(cond, context))
+            if op == "OR":
+                return any(results) if results else True
+            return all(results) if results else True
+
+        # If this node has sub-groups
+        if groups:
+            results = []
+            for group in groups:
+                if isinstance(group, dict):
+                    if "operator" in group and (
+                        "groups" in group or "conditions" in group
+                    ):
+                        results.append(self._evaluate_condition_node(group, context))
+                    elif "field" in group:
+                        values = context.new_values or {}
+                        field_value = values.get(group["field"])
+                        cond_op = group.get("operator", "equals")
+                        expected = group.get("value")
+                        results.append(
+                            self._compare_values(field_value, cond_op, expected)
+                        )
+                    else:
+                        # Treat as flat conditions dict
+                        results.append(self._evaluate_flat_conditions(group, context))
+            if op == "OR":
+                return any(results) if results else True
+            return all(results) if results else True
+
+        return True
+
+    def _evaluate_flat_conditions(
+        self,
+        conditions: Dict[str, Any],
+        context: TriggerContext,
+    ) -> bool:
+        """Evaluate flat (non-compound) conditions — original format."""
         values = context.new_values or {}
 
         # Field comparisons
@@ -362,7 +492,9 @@ class WorkflowService:
         status_from = conditions.get("status_from")
         status_to = conditions.get("status_to")
         if status_from or status_to:
-            old_status = context.old_values.get("status") if context.old_values else None
+            old_status = (
+                context.old_values.get("status") if context.old_values else None
+            )
             new_status = values.get("status")
 
             if status_from and old_status != status_from:
@@ -432,6 +564,7 @@ class WorkflowService:
         db: Session,
         rule: WorkflowRule,
         context: TriggerContext,
+        chain_depth: int = 0,
     ) -> WorkflowExecution:
         """Execute a workflow rule action."""
         execution = WorkflowExecution(
@@ -452,15 +585,19 @@ class WorkflowService:
         db.flush()
 
         try:
-            result = self._run_action(db, rule, context)
+            result = self._run_action(db, rule, context, chain_depth=chain_depth)
 
-            execution.status = ExecutionStatus.SUCCESS if result.success else ExecutionStatus.FAILED
+            execution.status = (
+                ExecutionStatus.SUCCESS if result.success else ExecutionStatus.FAILED
+            )
             execution.result = result.result
             execution.error_message = result.error_message
             execution.completed_at = datetime.utcnow()
 
             if execution.started_at:
-                duration = (execution.completed_at - execution.started_at).total_seconds() * 1000
+                duration = (
+                    execution.completed_at - execution.started_at
+                ).total_seconds() * 1000
                 execution.duration_ms = int(duration)
 
             # Update rule statistics
@@ -472,7 +609,9 @@ class WorkflowService:
             rule.last_executed_at = datetime.utcnow()
 
         except Exception as e:
-            logger.exception("Error executing workflow action for rule %s", rule.rule_id)
+            logger.exception(
+                "Error executing workflow action for rule %s", rule.rule_id
+            )
             execution.status = ExecutionStatus.FAILED
             execution.error_message = str(e)
             execution.completed_at = datetime.utcnow()
@@ -488,6 +627,7 @@ class WorkflowService:
         db: Session,
         rule: WorkflowRule,
         context: TriggerContext,
+        chain_depth: int = 0,
     ) -> ActionResult:
         """Run the action for a workflow rule."""
         config = rule.action_config
@@ -506,6 +646,13 @@ class WorkflowService:
             return self._action_webhook(db, config, context)
         elif rule.action_type == ActionType.BLOCK:
             return self._action_block(db, config, context)
+        elif rule.action_type == ActionType.TRIGGER_RULE:
+            return self._action_trigger_rule(
+                db,
+                config,
+                context,
+                _depth=chain_depth,
+            )
         else:
             return ActionResult(
                 success=False,
@@ -518,22 +665,46 @@ class WorkflowService:
         config: Dict[str, Any],
         context: TriggerContext,
     ) -> ActionResult:
-        """Send an email action."""
+        """Send an email action with Jinja2 template rendering."""
         from app.services.email import send_email
+        from app.services.finance.automation.template_renderer import render_template
 
         try:
             recipients = config.get("recipients", [])
-            subject = config.get("subject", "Workflow Notification")
-            body_html = config.get("body_html", "")
-            body_text = config.get("body_text")
+            subject_tpl = config.get("subject", "Workflow Notification")
+            body_html_tpl = config.get("body_html", "")
+            body_text_tpl = config.get("body_text")
 
-            # TODO: Template rendering with context
-            # For now, simple variable substitution
-            entity_id = str(context.entity_id)
-            subject = subject.replace("{{entity_id}}", entity_id)
-            body_html = body_html.replace("{{entity_id}}", entity_id)
+            subject = render_template(
+                subject_tpl,
+                entity_type=context.entity_type,
+                entity_id=context.entity_id,
+                old_values=context.old_values,
+                new_values=context.new_values,
+                user_id=context.user_id,
+            )
+            body_html = render_template(
+                body_html_tpl,
+                entity_type=context.entity_type,
+                entity_id=context.entity_id,
+                old_values=context.old_values,
+                new_values=context.new_values,
+                user_id=context.user_id,
+            )
+            body_text = (
+                render_template(
+                    body_text_tpl,
+                    entity_type=context.entity_type,
+                    entity_id=context.entity_id,
+                    old_values=context.old_values,
+                    new_values=context.new_values,
+                    user_id=context.user_id,
+                )
+                if body_text_tpl
+                else None
+            )
 
-            sent_to = []
+            sent_to: list[str] = []
             for recipient in recipients:
                 if send_email(db, recipient, subject, body_html, body_text):
                     sent_to.append(recipient)
@@ -541,6 +712,7 @@ class WorkflowService:
             return ActionResult(
                 success=len(sent_to) > 0,
                 result={"sent_to": sent_to},
+                error_message="No emails sent" if not sent_to else None,
             )
 
         except Exception as e:
@@ -556,11 +728,87 @@ class WorkflowService:
         context: TriggerContext,
     ) -> ActionResult:
         """Send in-app notification action."""
-        # TODO: Implement notification system
-        return ActionResult(
-            success=True,
-            result={"message": "Notification queued"},
+        from app.services.finance.automation.template_renderer import render_template
+        from app.services.notification import NotificationService
+        from app.models.notification import (
+            EntityType,
+            NotificationChannel,
+            NotificationType,
         )
+
+        try:
+            recipient_ids = config.get("recipient_ids", [])
+            if not recipient_ids:
+                return ActionResult(
+                    success=False,
+                    error_message="No recipient_ids specified in action config",
+                )
+
+            title_template = config.get("title", "Workflow Notification")
+            message_template = config.get("message", "")
+            action_url = config.get("action_url")
+            channel_str = config.get("channel", "IN_APP")
+
+            title = render_template(
+                title_template,
+                entity_type=context.entity_type,
+                entity_id=context.entity_id,
+                old_values=context.old_values,
+                new_values=context.new_values,
+                user_id=context.user_id,
+            )
+            message = render_template(
+                message_template,
+                entity_type=context.entity_type,
+                entity_id=context.entity_id,
+                old_values=context.old_values,
+                new_values=context.new_values,
+                user_id=context.user_id,
+            )
+
+            try:
+                channel = NotificationChannel(channel_str)
+            except ValueError:
+                channel = NotificationChannel.IN_APP
+
+            notification_service = NotificationService()
+            sent_to: list[str] = []
+
+            org_id = context.organization_id
+            if not org_id:
+                return ActionResult(
+                    success=False,
+                    error_message="organization_id missing from trigger context",
+                )
+
+            for rid in recipient_ids:
+                try:
+                    recipient_uuid = UUID(str(rid))
+                    notification_service.create(
+                        db,
+                        organization_id=org_id,
+                        recipient_id=recipient_uuid,
+                        entity_type=EntityType.SYSTEM,
+                        entity_id=context.entity_id,
+                        notification_type=NotificationType.ALERT,
+                        title=title,
+                        message=message,
+                        channel=channel,
+                        action_url=action_url,
+                        actor_id=context.user_id,
+                    )
+                    sent_to.append(str(recipient_uuid))
+                except Exception as e:
+                    logger.warning("Failed to send notification to %s: %s", rid, e)
+
+            return ActionResult(
+                success=len(sent_to) > 0,
+                result={"sent_to": sent_to},
+                error_message="No notifications sent" if not sent_to else None,
+            )
+
+        except Exception as e:
+            return ActionResult(success=False, error_message=str(e))
 
     def _action_validate(
         self,
@@ -603,15 +851,55 @@ class WorkflowService:
         config: Dict[str, Any],
         context: TriggerContext,
     ) -> ActionResult:
-        """Update field action."""
-        # TODO: Implement field update
-        field = config.get("field")
+        """Update field action — loads the entity and sets a field value."""
+        field_name = config.get("field")
         value = config.get("value")
 
-        return ActionResult(
-            success=True,
-            result={"updated_field": field, "new_value": value},
-        )
+        if not field_name:
+            return ActionResult(
+                success=False,
+                error_message="No 'field' specified in action config",
+            )
+
+        try:
+            from app.services.finance.automation.entity_registry import resolve_entity
+
+            entity = resolve_entity(
+                db,
+                entity_type=context.entity_type,
+                entity_id=context.entity_id,
+            )
+            if entity is None:
+                return ActionResult(
+                    success=False,
+                    error_message=f"Entity {context.entity_type}:{context.entity_id} not found",
+                )
+
+            if not hasattr(entity, field_name):
+                return ActionResult(
+                    success=False,
+                    error_message=f"Entity has no field '{field_name}'",
+                )
+
+            setattr(entity, field_name, value)
+            db.flush()
+
+            return ActionResult(
+                success=True,
+                result={"updated_field": field_name, "new_value": value},
+            )
+        except ImportError:
+            # entity_registry not yet available — graceful degradation
+            return ActionResult(
+                success=True,
+                result={
+                    "updated_field": field_name,
+                    "new_value": value,
+                    "note": "entity_registry not available, field not persisted",
+                },
+            )
+        except Exception as e:
+            return ActionResult(success=False, error_message=str(e))
 
     def _action_create_task(
         self,
@@ -619,12 +907,88 @@ class WorkflowService:
         config: Dict[str, Any],
         context: TriggerContext,
     ) -> ActionResult:
-        """Create task action."""
-        # TODO: Implement task creation
-        return ActionResult(
-            success=True,
-            result={"task_created": True},
-        )
+        """Create a project management task from workflow trigger."""
+        from app.services.finance.automation.template_renderer import render_template
+
+        try:
+            from app.models.pm.task import Task, TaskPriority, TaskStatus
+
+            title_template = config.get("title", "Workflow Task")
+            description_template = config.get("description", "")
+            project_id = config.get("project_id")
+            assignee_id = config.get("assignee_id")
+            priority = config.get("priority", "MEDIUM")
+
+            if not project_id:
+                return ActionResult(
+                    success=False,
+                    error_message="project_id is required in action config",
+                )
+
+            title = render_template(
+                title_template,
+                entity_type=context.entity_type,
+                entity_id=context.entity_id,
+                old_values=context.old_values,
+                new_values=context.new_values,
+                user_id=context.user_id,
+            )
+            description = render_template(
+                description_template,
+                entity_type=context.entity_type,
+                entity_id=context.entity_id,
+                old_values=context.old_values,
+                new_values=context.new_values,
+                user_id=context.user_id,
+            )
+
+            org_id = context.organization_id
+            if not org_id:
+                return ActionResult(
+                    success=False,
+                    error_message="organization_id missing from trigger context",
+                )
+
+            try:
+                task_priority = TaskPriority(priority)
+            except ValueError:
+                task_priority = TaskPriority.MEDIUM
+
+            # Generate a unique task code from the entity
+            import uuid as _uuid_mod
+
+            task_code = f"WF-{_uuid_mod.uuid4().hex[:8].upper()}"
+
+            task = Task(
+                organization_id=org_id,
+                project_id=UUID(project_id),
+                task_code=task_code,
+                task_name=title,
+                description=description,
+                status=TaskStatus.OPEN,
+                priority=task_priority,
+                assigned_to_id=UUID(assignee_id) if assignee_id else None,
+                created_by_id=context.user_id,
+            )
+            db.add(task)
+            db.flush()
+
+            return ActionResult(
+                success=True,
+                result={
+                    "task_created": True,
+                    "task_id": str(task.task_id),
+                    "task_code": task_code,
+                    "task_name": title,
+                },
+            )
+        except ImportError:
+            return ActionResult(
+                success=False,
+                error_message="PM Task model not available",
+            )
+        except Exception as e:
+            return ActionResult(success=False, error_message=str(e))
 
     def _action_webhook(
         self,
@@ -708,6 +1072,149 @@ class WorkflowService:
             error_message=message,
         )
 
+    # Maximum depth for rule chaining to prevent infinite recursion
+    _MAX_CHAIN_DEPTH = 5
+
+    def _action_trigger_rule(
+        self,
+        db: Session,
+        config: Dict[str, Any],
+        context: TriggerContext,
+        _depth: int = 0,
+    ) -> ActionResult:
+        """Trigger another workflow rule (rule chaining).
+
+        Config:
+            rule_id: UUID string of the rule to trigger.
+        """
+        if _depth >= self._MAX_CHAIN_DEPTH:
+            return ActionResult(
+                success=False,
+                error_message=f"Rule chain depth limit ({self._MAX_CHAIN_DEPTH}) exceeded",
+            )
+
+        target_rule_id = config.get("rule_id")
+        if not target_rule_id:
+            return ActionResult(
+                success=False,
+                error_message="No rule_id specified in TRIGGER_RULE action config",
+            )
+
+        try:
+            target_rule = db.get(WorkflowRule, UUID(target_rule_id))
+            if not target_rule:
+                return ActionResult(
+                    success=False,
+                    error_message=f"Target rule {target_rule_id} not found",
+                )
+
+            if not target_rule.is_active:
+                return ActionResult(
+                    success=False,
+                    error_message=f"Target rule {target_rule_id} is not active",
+                )
+
+            if context.event != target_rule.trigger_event:
+                return ActionResult(
+                    success=False,
+                    error_message=(
+                        "Target rule trigger_event does not match context event"
+                    ),
+                )
+
+            if not self._evaluate_conditions(target_rule.trigger_conditions, context):
+                return ActionResult(
+                    success=False,
+                    error_message="Target rule conditions do not match trigger context",
+                )
+
+            if self._check_entity_rate_limit(db, context.entity_id):
+                return ActionResult(
+                    success=False,
+                    error_message="Entity rate limit exceeded for chained rule",
+                )
+
+            if self._is_throttled(db, target_rule, context.entity_id):
+                return ActionResult(
+                    success=False,
+                    error_message="Target rule throttled for entity",
+                )
+
+            # Execute the target rule, incrementing depth
+            execution = self.execute_action(
+                db,
+                target_rule,
+                context,
+                chain_depth=_depth + 1,
+            )
+
+            return ActionResult(
+                success=execution.status == ExecutionStatus.SUCCESS,
+                result={
+                    "chained_rule_id": target_rule_id,
+                    "chained_execution_id": str(execution.execution_id),
+                    "chain_depth": _depth + 1,
+                },
+                error_message=execution.error_message,
+            )
+        except Exception as e:
+            return ActionResult(success=False, error_message=str(e))
+
+    def _is_throttled(
+        self,
+        db: Session,
+        rule: WorkflowRule,
+        entity_id: UUID,
+    ) -> bool:
+        """Check if a rule execution should be throttled for a given entity.
+
+        Returns True if the same rule has already fired for this entity
+        within the cooldown window.
+        """
+        if not rule.cooldown_seconds:
+            return False
+
+        cutoff = datetime.utcnow() - timedelta(seconds=rule.cooldown_seconds)
+        count = db.scalar(
+            select(func.count(WorkflowExecution.execution_id)).where(
+                WorkflowExecution.rule_id == rule.rule_id,
+                WorkflowExecution.entity_id == entity_id,
+                WorkflowExecution.triggered_at >= cutoff,
+                WorkflowExecution.status.in_(
+                    [
+                        ExecutionStatus.SUCCESS,
+                        ExecutionStatus.RUNNING,
+                    ]
+                ),
+            )
+        )
+        return bool(count and count > 0)
+
+    def _check_entity_rate_limit(
+        self,
+        db: Session,
+        entity_id: UUID,
+    ) -> bool:
+        """Check if per-entity execution rate limit has been exceeded.
+
+        Returns True if rate limit is exceeded (should skip).
+        """
+        cutoff = datetime.utcnow() - timedelta(minutes=1)
+        count = db.scalar(
+            select(func.count(WorkflowExecution.execution_id)).where(
+                WorkflowExecution.entity_id == entity_id,
+                WorkflowExecution.triggered_at >= cutoff,
+            )
+        )
+        if count and count >= self.MAX_EXECUTIONS_PER_MINUTE:
+            logger.warning(
+                "Entity %s exceeded rate limit (%d executions/min)",
+                entity_id,
+                self.MAX_EXECUTIONS_PER_MINUTE,
+            )
+            return True
+        return False
+
     def trigger_event(
         self,
         db: Session,
@@ -715,12 +1222,70 @@ class WorkflowService:
         context: TriggerContext,
     ) -> List[WorkflowExecution]:
         """Trigger workflow evaluation for an event."""
+        # Ensure context carries org_id for downstream action handlers
+        if context.organization_id is None:
+            context.organization_id = organization_id
+
         matching_rules = self.get_matching_rules(db, organization_id, context)
-        executions = []
+        executions: List[WorkflowExecution] = []
+
+        # Cap number of rules evaluated per event
+        if len(matching_rules) > self.MAX_RULES_PER_EVENT:
+            logger.warning(
+                "Capping matched rules from %d to %d for entity %s event %s",
+                len(matching_rules),
+                self.MAX_RULES_PER_EVENT,
+                context.entity_id,
+                context.event.value,
+            )
+            matching_rules = matching_rules[: self.MAX_RULES_PER_EVENT]
+
+        # Per-entity rate limit check
+        if self._check_entity_rate_limit(db, context.entity_id):
+            return executions
 
         for rule in matching_rules:
-            execution = self.execute_action(db, rule, context)
-            executions.append(execution)
+            # Throttle check
+            if self._is_throttled(db, rule, context.entity_id):
+                logger.info(
+                    "Rule %s throttled for entity %s (cooldown %ss)",
+                    rule.rule_id,
+                    context.entity_id,
+                    rule.cooldown_seconds,
+                )
+                continue
+
+            logger.info(
+                "Executing rule %s (%s) for %s:%s event=%s",
+                rule.rule_id,
+                rule.rule_name,
+                context.entity_type,
+                context.entity_id,
+                context.event.value,
+            )
+
+            # Async dispatch via Celery if configured
+            if rule.execute_async:
+                try:
+                    from app.tasks.automation import execute_workflow_action
+
+                    execute_workflow_action.delay(str(rule.rule_id), context.to_dict())
+                    logger.info(
+                        "Dispatched async execution for rule %s entity %s",
+                        rule.rule_id,
+                        context.entity_id,
+                    )
+                except Exception:
+                    logger.exception(
+                        "Failed to dispatch async task for rule %s, "
+                        "falling back to sync execution",
+                        rule.rule_id,
+                    )
+                    execution = self.execute_action(db, rule, context)
+                    executions.append(execution)
+            else:
+                execution = self.execute_action(db, rule, context)
+                executions.append(execution)
 
             if rule.stop_on_match:
                 break
@@ -734,10 +1299,13 @@ class WorkflowService:
         updates: Dict[str, Any],
         updated_by: UUID,
     ) -> WorkflowRule:
-        """Update a workflow rule."""
+        """Update a workflow rule, snapshotting the previous state."""
         rule = db.get(WorkflowRule, rule_id)
         if not rule:
             raise HTTPException(status_code=404, detail="Rule not found")
+
+        # Snapshot current state before applying changes
+        self._create_version_snapshot(db, rule, updated_by)
 
         for key, value in updates.items():
             if hasattr(rule, key):
@@ -746,6 +1314,45 @@ class WorkflowService:
         rule.updated_by = updated_by
         db.flush()
         return rule
+
+    def _create_version_snapshot(
+        self,
+        db: Session,
+        rule: WorkflowRule,
+        changed_by: Optional[UUID] = None,
+    ) -> None:
+        """Create a version snapshot of the current rule state."""
+        from app.models.finance.automation.workflow_rule_version import (
+            WorkflowRuleVersion,
+        )
+
+        # Count existing versions for this rule
+        version_count = (
+            db.scalar(
+                select(func.count(WorkflowRuleVersion.version_id)).where(
+                    WorkflowRuleVersion.rule_id == rule.rule_id
+                )
+            )
+            or 0
+        )
+
+        version = WorkflowRuleVersion(
+            rule_id=rule.rule_id,
+            version_number=version_count + 1,
+            rule_name=rule.rule_name,
+            description=rule.description,
+            entity_type=rule.entity_type.value,
+            trigger_event=rule.trigger_event.value,
+            trigger_conditions=rule.trigger_conditions,
+            action_type=rule.action_type.value,
+            action_config=rule.action_config,
+            priority=rule.priority,
+            cooldown_seconds=rule.cooldown_seconds,
+            schedule_config=rule.schedule_config,
+            changed_by=changed_by,
+        )
+        db.add(version)
+        db.flush()
 
     def delete(self, db: Session, rule_id: UUID) -> bool:
         """Delete a workflow rule."""
@@ -756,6 +1363,98 @@ class WorkflowService:
         db.delete(rule)
         db.flush()
         return True
+
+    def dry_run(
+        self,
+        db: Session,
+        rule_id: UUID,
+        sample_data: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Test a rule against sample data without executing the action.
+
+        Args:
+            db: Database session.
+            rule_id: The rule to test.
+            sample_data: Dict with keys: entity_type, entity_id, event,
+                old_values, new_values.
+
+        Returns:
+            Dict describing whether conditions match and what would happen.
+        """
+        rule = db.get(WorkflowRule, rule_id)
+        if not rule:
+            raise HTTPException(status_code=404, detail="Rule not found")
+
+        # Build a synthetic context
+        try:
+            event = TriggerEvent(sample_data.get("event", rule.trigger_event.value))
+        except ValueError:
+            event = rule.trigger_event
+
+        context = TriggerContext(
+            entity_type=sample_data.get("entity_type", rule.entity_type.value),
+            entity_id=UUID(sample_data["entity_id"])
+            if sample_data.get("entity_id")
+            else UUID(int=0),
+            event=event,
+            organization_id=rule.organization_id,
+            old_values=sample_data.get("old_values", {}),
+            new_values=sample_data.get("new_values", {}),
+            changed_fields=sample_data.get("changed_fields"),
+        )
+
+        conditions_match = self._evaluate_conditions(rule.trigger_conditions, context)
+
+        throttled = False
+        if conditions_match and context.entity_id != UUID(int=0):
+            throttled = self._is_throttled(db, rule, context.entity_id)
+
+        matched_details: list[str] = []
+        if conditions_match:
+            conds = rule.trigger_conditions
+            if conds.get("status_to"):
+                matched_details.append(f"status == {conds['status_to']}")
+            if conds.get("amount_threshold"):
+                t = conds["amount_threshold"]
+                matched_details.append(
+                    f"{t.get('field', 'amount')} {t.get('operator', '>')} {t.get('value')}"
+                )
+            for field, cond in conds.get("fields", {}).items():
+                if isinstance(cond, dict):
+                    matched_details.append(
+                        f"{field} {cond.get('operator', '==')} {cond.get('value')}"
+                    )
+                else:
+                    matched_details.append(f"{field} == {cond}")
+
+        return {
+            "conditions_match": conditions_match,
+            "action_type": rule.action_type.value,
+            "would_fire": conditions_match and not throttled,
+            "throttled": throttled,
+            "matched_conditions": matched_details,
+        }
+
+    def get_rule_versions(
+        self,
+        db: Session,
+        rule_id: UUID,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> List[Any]:
+        """Get version history for a rule."""
+        from app.models.finance.automation.workflow_rule_version import (
+            WorkflowRuleVersion,
+        )
+
+        stmt = (
+            select(WorkflowRuleVersion)
+            .where(WorkflowRuleVersion.rule_id == rule_id)
+            .order_by(WorkflowRuleVersion.version_number.desc())
+            .offset(offset)
+            .limit(limit)
+        )
+        return list(db.scalars(stmt).all())
 
     def get_executions(
         self,

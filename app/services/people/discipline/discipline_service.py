@@ -335,8 +335,25 @@ class DisciplineService:
         case.query_issued_date = date.today()
         case.response_due_date = data.response_due_date
 
+        old_status = case.status.value if case.status else "DRAFT"
         self._update_status(case, CaseStatus.QUERY_ISSUED, issued_by_id)
         self.db.flush()
+
+        # Fire workflow automation event
+        try:
+            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            fire_workflow_event(
+                db=self.db,
+                organization_id=case.organization_id,
+                entity_type="DISCIPLINARY_CASE",
+                entity_id=case.case_id,
+                event="ON_STATUS_CHANGE",
+                old_values={"status": old_status},
+                new_values={"status": "QUERY_ISSUED"},
+                user_id=issued_by_id,
+            )
+        except Exception:
+            pass
 
         logger.info(
             "Query issued for case %s, response due %s",
@@ -442,8 +459,25 @@ class DisciplineService:
         if data.panel_chair_id:
             case.panel_chair_id = data.panel_chair_id
 
+        old_status = case.status.value if case.status else "DRAFT"
         self._update_status(case, CaseStatus.HEARING_SCHEDULED, scheduled_by_id)
         self.db.flush()
+
+        # Fire workflow automation event
+        try:
+            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            fire_workflow_event(
+                db=self.db,
+                organization_id=case.organization_id,
+                entity_type="DISCIPLINARY_CASE",
+                entity_id=case.case_id,
+                event="ON_STATUS_CHANGE",
+                old_values={"status": old_status},
+                new_values={"status": "HEARING_SCHEDULED"},
+                user_id=scheduled_by_id,
+            )
+        except Exception:
+            pass
 
         logger.info(
             "Hearing scheduled for case %s on %s",
@@ -523,8 +557,25 @@ class DisciplineService:
             )
             self.db.add(action)
 
+        old_status = case.status.value if case.status else "DRAFT"
         self._update_status(case, CaseStatus.DECISION_MADE, decided_by_id)
         self.db.flush()
+
+        # Fire workflow automation event
+        try:
+            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            fire_workflow_event(
+                db=self.db,
+                organization_id=case.organization_id,
+                entity_type="DISCIPLINARY_CASE",
+                entity_id=case.case_id,
+                event="ON_STATUS_CHANGE",
+                old_values={"status": old_status},
+                new_values={"status": "DECISION_MADE"},
+                user_id=decided_by_id,
+            )
+        except Exception:
+            pass
 
         logger.info(
             "Decision recorded for case %s with %d action(s)",
@@ -570,9 +621,25 @@ class DisciplineService:
         if case.appeal_deadline and date.today() > case.appeal_deadline:
             raise ValidationError("Appeal deadline has passed")
 
+        old_status = case.status.value if case.status else "DRAFT"
         case.appeal_reason = data.appeal_reason
         self._update_status(case, CaseStatus.APPEAL_FILED)
         self.db.flush()
+
+        # Fire workflow automation event
+        try:
+            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            fire_workflow_event(
+                db=self.db,
+                organization_id=case.organization_id,
+                entity_type="DISCIPLINARY_CASE",
+                entity_id=case.case_id,
+                event="ON_STATUS_CHANGE",
+                old_values={"status": old_status},
+                new_values={"status": "APPEAL_FILED"},
+            )
+        except Exception:
+            pass
 
         logger.info("Appeal filed for case %s", case.case_number)
 
@@ -653,9 +720,26 @@ class DisciplineService:
         if case.status not in allowed_statuses:
             raise ValidationError(f"Cannot close case from {case.status.value} status")
 
+        old_status = case.status.value if case.status else "DRAFT"
         case.closed_date = date.today()
         self._update_status(case, CaseStatus.CLOSED, closed_by_id)
         self.db.flush()
+
+        # Fire workflow automation event
+        try:
+            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            fire_workflow_event(
+                db=self.db,
+                organization_id=case.organization_id,
+                entity_type="DISCIPLINARY_CASE",
+                entity_id=case.case_id,
+                event="ON_STATUS_CHANGE",
+                old_values={"status": old_status},
+                new_values={"status": "CLOSED"},
+                user_id=closed_by_id,
+            )
+        except Exception:
+            pass
 
         logger.info("Case %s closed", case.case_number)
         return case

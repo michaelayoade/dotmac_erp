@@ -1,0 +1,63 @@
+{% extends "finance/base_finance.html" %}
+
+{% block page_title %}Version History — {{ rule.rule_name }}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/automation" class="hover:text-teal-600 dark:hover:text-teal-400">Automation</a>
+    <span class="mx-2">/</span>
+    <a href="/automation/workflows" class="hover:text-teal-600 dark:hover:text-teal-400">Workflows</a>
+    <span class="mx-2">/</span>
+    <a href="/automation/workflows/{{ rule.rule_id }}" class="hover:text-teal-600 dark:hover:text-teal-400">{{ rule.rule_name }}</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white">Versions</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50">
+        <div class="border-b border-slate-200 px-6 py-4 dark:border-slate-700">
+            <h3 class="font-semibold text-slate-900 dark:text-white">Version History</h3>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                Each edit creates a snapshot of the rule's previous configuration.
+            </p>
+        </div>
+        <div class="divide-y divide-slate-200 dark:divide-slate-700">
+            {% for v in versions %}
+            <div class="px-6 py-4">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <span class="inline-flex items-center justify-center h-8 w-8 rounded-full bg-teal-100 text-sm font-bold text-teal-700 dark:bg-teal-900/30 dark:text-teal-400">
+                            v{{ v.version_number }}
+                        </span>
+                        <div>
+                            <p class="font-medium text-slate-900 dark:text-white">{{ v.rule_name }}</p>
+                            {% if v.change_summary %}
+                            <p class="text-sm text-slate-500 dark:text-slate-400">{{ v.change_summary }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <span class="text-sm text-slate-500 dark:text-slate-400">{{ v.created_at }}</span>
+                </div>
+                <div class="mt-3 flex gap-4 text-xs text-slate-500 dark:text-slate-400">
+                    <span>Entity: {{ v.entity_type }}</span>
+                    <span>Trigger: {{ v.trigger_event }}</span>
+                    <span>Action: {{ v.action_type }}</span>
+                    <span>Priority: {{ v.priority }}</span>
+                    {% if v.cooldown_seconds %}
+                    <span>Cooldown: {{ v.cooldown_seconds }}s</span>
+                    {% endif %}
+                </div>
+            </div>
+            {% else %}
+            <div class="px-6 py-8 text-center">
+                <p class="text-sm text-slate-500 dark:text-slate-400">No version history yet. Versions are created when rules are edited.</p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -221,6 +221,19 @@ class PayrollLifecycle:
             user_id,
         )
 
+        # Fire workflow automation event
+        try:
+            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            fire_workflow_event(
+                db=self.db, organization_id=slip.organization_id,
+                entity_type="SALARY_SLIP", entity_id=slip.slip_id,
+                event="ON_STATUS_CHANGE",
+                old_values={"status": previous.value},
+                new_values={"status": "SUBMITTED"}, user_id=user_id,
+            )
+        except Exception:
+            pass
+
         # Commit before emitting event so handlers see committed state
         event_org_id = slip.organization_id
         event_slip_id = slip.slip_id
@@ -280,6 +293,19 @@ class PayrollLifecycle:
             slip.gross_pay,
             slip.net_pay,
         )
+
+        # Fire workflow automation event
+        try:
+            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            fire_workflow_event(
+                db=self.db, organization_id=slip.organization_id,
+                entity_type="SALARY_SLIP", entity_id=slip.slip_id,
+                event="ON_APPROVAL",
+                old_values={"status": previous.value},
+                new_values={"status": "APPROVED"}, user_id=user_id,
+            )
+        except Exception:
+            pass
 
         # Commit before emitting event so handlers see committed state
         event_org_id = slip.organization_id
@@ -644,6 +670,19 @@ class PayrollLifecycle:
             user_id,
         )
 
+        # Fire workflow automation event
+        try:
+            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            fire_workflow_event(
+                db=self.db, organization_id=run.organization_id,
+                entity_type="PAYROLL_RUN", entity_id=run.entry_id,
+                event="ON_STATUS_CHANGE",
+                old_values={"status": previous.value},
+                new_values={"status": "SUBMITTED"}, user_id=user_id,
+            )
+        except Exception:
+            pass
+
         # Commit before emitting event so handlers see committed state
         event_org_id = run.organization_id
         event_run_id = run.entry_id
@@ -701,6 +740,19 @@ class PayrollLifecycle:
             PayrollEntryStatus.APPROVED.value,
             user_id,
         )
+
+        # Fire workflow automation event
+        try:
+            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            fire_workflow_event(
+                db=self.db, organization_id=run.organization_id,
+                entity_type="PAYROLL_RUN", entity_id=run.entry_id,
+                event="ON_APPROVAL",
+                old_values={"status": previous.value},
+                new_values={"status": "APPROVED"}, user_id=user_id,
+            )
+        except Exception:
+            pass
 
         # Commit before emitting event so handlers see committed state
         event_org_id = run.organization_id

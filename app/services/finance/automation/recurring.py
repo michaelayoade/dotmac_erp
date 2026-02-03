@@ -3,6 +3,7 @@ Recurring Transaction Service.
 
 Handles recurring template management and transaction generation.
 """
+
 import logging
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
@@ -31,6 +32,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class RecurringTemplateInput:
     """Input for creating a recurring template."""
+
     template_name: str
     entity_type: RecurringEntityType
     template_data: Dict[str, Any]
@@ -50,6 +52,7 @@ class RecurringTemplateInput:
 @dataclass
 class GenerationResult:
     """Result of generating a recurring transaction."""
+
     success: bool
     entity_type: Optional[str] = None
     entity_id: Optional[UUID] = None
@@ -192,7 +195,9 @@ class RecurringService:
         template_data = {
             "customer_id": str(invoice.customer_id),
             "currency_code": invoice.currency_code,
-            "payment_terms_id": str(invoice.payment_terms_id) if invoice.payment_terms_id else None,
+            "payment_terms_id": str(invoice.payment_terms_id)
+            if invoice.payment_terms_id
+            else None,
             "ar_control_account_id": str(invoice.ar_control_account_id),
             "billing_address": invoice.billing_address,
             "shipping_address": invoice.shipping_address,
@@ -312,12 +317,16 @@ class RecurringService:
         template_data = {
             "description": expense.description,
             "expense_account_id": str(expense.expense_account_id),
-            "payment_account_id": str(expense.payment_account_id) if expense.payment_account_id else None,
+            "payment_account_id": str(expense.payment_account_id)
+            if expense.payment_account_id
+            else None,
             "amount": str(expense.amount),
             "currency_code": expense.currency_code,
             "tax_code_id": str(expense.tax_code_id) if expense.tax_code_id else None,
             "project_id": str(expense.project_id) if expense.project_id else None,
-            "cost_center_id": str(expense.cost_center_id) if expense.cost_center_id else None,
+            "cost_center_id": str(expense.cost_center_id)
+            if expense.cost_center_id
+            else None,
             "payment_method": expense.payment_method.value,
             "payee": expense.payee,
         }
@@ -383,7 +392,9 @@ class RecurringService:
 
         return list(db.execute(query).scalars().all())
 
-    def get_due_templates(self, db: Session, as_of_date: Optional[date] = None) -> List[RecurringTemplate]:
+    def get_due_templates(
+        self, db: Session, as_of_date: Optional[date] = None
+    ) -> List[RecurringTemplate]:
         """Get all templates due for generation."""
         check_date = as_of_date or date.today()
 
@@ -402,7 +413,12 @@ class RecurringService:
         template: RecurringTemplate,
     ) -> GenerationResult:
         """Generate an invoice from a template."""
-        from app.models.finance.ar import Invoice, InvoiceLine, InvoiceStatus, InvoiceType
+        from app.models.finance.ar import (
+            Invoice,
+            InvoiceLine,
+            InvoiceStatus,
+            InvoiceType,
+        )
         from app.services.finance.numbering import numbering_service
 
         try:
@@ -482,7 +498,9 @@ class RecurringService:
             )
 
         except Exception as e:
-            logger.exception("Failed to generate invoice from template %s", template.template_id)
+            logger.exception(
+                "Failed to generate invoice from template %s", template.template_id
+            )
             return GenerationResult(
                 success=False,
                 error_message=str(e),
@@ -510,15 +528,21 @@ class RecurringService:
                 description=data.get("description", "Recurring expense"),
                 expense_date=date.today(),
                 expense_account_id=UUID(data["expense_account_id"]),
-                payment_account_id=UUID(data["payment_account_id"]) if data.get("payment_account_id") else None,
+                payment_account_id=UUID(data["payment_account_id"])
+                if data.get("payment_account_id")
+                else None,
                 amount=Decimal(data.get("amount", "0")),
                 currency_code=data.get(
                     "currency_code",
                     settings.default_functional_currency_code,
                 ),
-                tax_code_id=UUID(data["tax_code_id"]) if data.get("tax_code_id") else None,
+                tax_code_id=UUID(data["tax_code_id"])
+                if data.get("tax_code_id")
+                else None,
                 project_id=UUID(data["project_id"]) if data.get("project_id") else None,
-                cost_center_id=UUID(data["cost_center_id"]) if data.get("cost_center_id") else None,
+                cost_center_id=UUID(data["cost_center_id"])
+                if data.get("cost_center_id")
+                else None,
                 payment_method=PaymentMethod(data.get("payment_method", "CASH")),
                 payee=data.get("payee"),
                 status=ExpenseStatus.DRAFT,
@@ -535,7 +559,9 @@ class RecurringService:
             )
 
         except Exception as e:
-            logger.exception("Failed to generate expense from template %s", template.template_id)
+            logger.exception(
+                "Failed to generate expense from template %s", template.template_id
+            )
             return GenerationResult(
                 success=False,
                 error_message=str(e),
@@ -573,7 +599,10 @@ class RecurringService:
             db.flush()
             return log
 
-        if template.occurrences_limit and template.occurrences_count >= template.occurrences_limit:
+        if (
+            template.occurrences_limit
+            and template.occurrences_count >= template.occurrences_limit
+        ):
             template.status = RecurringStatus.COMPLETED
             log = RecurringLog(
                 template_id=template.template_id,
@@ -601,7 +630,9 @@ class RecurringService:
         log = RecurringLog(
             template_id=template.template_id,
             scheduled_date=scheduled_date,
-            status=RecurringLogStatus.SUCCESS if result.success else RecurringLogStatus.FAILED,
+            status=RecurringLogStatus.SUCCESS
+            if result.success
+            else RecurringLogStatus.FAILED,
             generated_entity_type=result.entity_type,
             generated_entity_id=result.entity_id,
             generated_entity_number=result.entity_number,

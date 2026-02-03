@@ -180,6 +180,20 @@ class SalesOrderService:
         so.submitted_at = datetime.utcnow()
 
         db.flush()
+
+        try:
+            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            fire_workflow_event(
+                db=db, organization_id=so.organization_id,
+                entity_type="SALES_ORDER", entity_id=so.order_id,
+                event="ON_STATUS_CHANGE",
+                old_values={"status": "DRAFT"},
+                new_values={"status": "SUBMITTED"},
+                user_id=coerce_uuid(submitted_by),
+            )
+        except Exception:
+            pass
+
         return so
 
     @staticmethod
@@ -201,6 +215,20 @@ class SalesOrderService:
         so.approved_at = datetime.utcnow()
 
         db.flush()
+
+        try:
+            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            fire_workflow_event(
+                db=db, organization_id=so.organization_id,
+                entity_type="SALES_ORDER", entity_id=so.order_id,
+                event="ON_APPROVAL",
+                old_values={"status": "SUBMITTED"},
+                new_values={"status": "APPROVED"},
+                user_id=coerce_uuid(approved_by),
+            )
+        except Exception:
+            pass
+
         return so
 
     @staticmethod

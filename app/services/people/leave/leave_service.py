@@ -1085,6 +1085,23 @@ class LeaveService:
             allocation.leaves_used += application.total_leave_days
 
         self.db.flush()
+
+        # Fire workflow automation event
+        try:
+            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            fire_workflow_event(
+                db=self.db,
+                organization_id=org_id,
+                entity_type="LEAVE_REQUEST",
+                entity_id=application.application_id,
+                event="ON_APPROVAL",
+                old_values={"status": "SUBMITTED"},
+                new_values={"status": "APPROVED"},
+                user_id=approver_id,
+            )
+        except Exception:
+            pass
+
         return application
 
     def bulk_approve_applications(
@@ -1132,6 +1149,23 @@ class LeaveService:
         application.rejection_reason = reason
 
         self.db.flush()
+
+        # Fire workflow automation event
+        try:
+            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            fire_workflow_event(
+                db=self.db,
+                organization_id=org_id,
+                entity_type="LEAVE_REQUEST",
+                entity_id=application.application_id,
+                event="ON_REJECTION",
+                old_values={"status": "SUBMITTED"},
+                new_values={"status": "REJECTED", "rejection_reason": reason},
+                user_id=approver_id,
+            )
+        except Exception:
+            pass
+
         return application
 
     def bulk_reject_applications(
@@ -1190,9 +1224,26 @@ class LeaveService:
                     allocation.leaves_used - application.total_leave_days,
                 )
 
+        old_status = application.status.value
         application.status = LeaveApplicationStatus.CANCELLED
 
         self.db.flush()
+
+        # Fire workflow automation event
+        try:
+            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            fire_workflow_event(
+                db=self.db,
+                organization_id=org_id,
+                entity_type="LEAVE_REQUEST",
+                entity_id=application.application_id,
+                event="ON_STATUS_CHANGE",
+                old_values={"status": old_status},
+                new_values={"status": "CANCELLED"},
+            )
+        except Exception:
+            pass
+
         return application
 
     def update_application(
