@@ -14,7 +14,6 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
-from app.models.finance.core_config.numbering_sequence import SequenceType
 from app.models.finance.inv import (
     Item,
     MaterialRequest,
@@ -534,6 +533,7 @@ class MaterialRequestWebService:
                     "warehouse_name": wh.warehouse_name if wh else None,
                     "requested_qty": _format_quantity(item.requested_qty),
                     "ordered_qty": _format_quantity(item.ordered_qty),
+                    "ordered_qty_value": float(item.ordered_qty or 0),
                     "pending_qty": _format_quantity(
                         item.requested_qty - item.ordered_qty
                     ),
@@ -576,8 +576,13 @@ class MaterialRequestWebService:
                     MaterialRequestStatus.DRAFT,
                     MaterialRequestStatus.SUBMITTED,
                 ],
+                "can_delete": (
+                    request.status == MaterialRequestStatus.DRAFT
+                    and not request.erpnext_id
+                ),
                 "items": detail_items,
             },
+            "material_request_items": detail_items,
         }
 
     def report_context(
@@ -739,13 +744,14 @@ class MaterialRequestWebService:
         items: Optional[list[dict]] = None,
     ) -> MaterialRequest:
         """Create a material request from form data."""
-        from app.services.finance.platform.sequence import sequence_service
+        from app.services.finance.inv.material_request_numbering import (
+            material_request_numbering_service,
+        )
 
         # Generate request number
-        request_number = sequence_service.get_next_number(
+        request_number = material_request_numbering_service.get_next_number(
             self.db,
             self.organization_id,
-            SequenceType.MATERIAL_REQUEST,
         )
 
         # Parse date
@@ -908,6 +914,23 @@ class MaterialRequestWebService:
         request.updated_by_id = user_id
 
         return request
+
+    def delete_request(
+        self,
+        request_id: str,
+    ) -> None:
+        """Delete a material request (draft, non-synced only)."""
+        request = self.db.get(MaterialRequest, coerce_uuid(request_id))
+        if not request or request.organization_id != self.organization_id:
+            raise ValueError("Material request not found")
+
+        if request.status != MaterialRequestStatus.DRAFT:
+            raise ValueError("Only draft requests can be deleted")
+
+        if request.erpnext_id:
+            raise ValueError("Synced requests cannot be deleted")
+
+        self.db.delete(request)
 
     def dashboard_context(self) -> dict:
         """Get material request metrics for dashboard widget."""

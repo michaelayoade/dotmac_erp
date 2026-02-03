@@ -6,7 +6,7 @@ Provides view-focused data and operations for attendance web routes.
 
 from __future__ import annotations
 
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timezone
 from decimal import Decimal
 from typing import Any, Optional, cast
 from uuid import UUID
@@ -150,6 +150,15 @@ class AttendanceWebService:
             pagination=pagination,
         )
 
+        org_tzinfo = svc.get_org_tzinfo(org_id)
+
+        def _format_time(value: Optional[datetime]) -> str:
+            if not value:
+                return "-"
+            if value.tzinfo is None:
+                value = value.replace(tzinfo=timezone.utc)
+            return value.astimezone(org_tzinfo).strftime("%H:%M")
+
         records = []
         for record in result.items:
             employee = record.employee
@@ -163,6 +172,8 @@ class AttendanceWebService:
                     "status": record.status.value,
                     "check_in": record.check_in,
                     "check_out": record.check_out,
+                    "check_in_display": _format_time(record.check_in),
+                    "check_out_display": _format_time(record.check_out),
                     "working_hours": record.working_hours,
                     "overtime_hours": record.overtime_hours,
                     "shift_name": shift_type.shift_name if shift_type else "-",

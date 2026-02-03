@@ -13,7 +13,12 @@ from sqlalchemy.orm import Session
 from app.services.finance.inv.web import inv_web_service
 from app.services.operations.inv_web import operations_inv_web_service
 from app.services.finance.inv.material_request_web import MaterialRequestWebService
-from app.web.deps import get_db, require_operations_access, WebAuthContext
+from app.web.deps import (
+    get_db,
+    require_operations_access,
+    require_web_permission,
+    WebAuthContext,
+)
 
 
 router = APIRouter(prefix="/inv", tags=["operations-inv-web"])
@@ -743,6 +748,9 @@ def material_request_list(
     project_id: Optional[str] = None,
     page: int = 1,
     limit: int = 50,
+    _perm: WebAuthContext = Depends(
+        require_web_permission("inv:material_requests:read")
+    ),
     auth: WebAuthContext = Depends(require_operations_access),
     db: Session = Depends(get_db),
 ):
@@ -764,6 +772,9 @@ def material_request_list(
 @router.get("/material-requests/new", response_class=HTMLResponse)
 def new_material_request_form(
     request: Request,
+    _perm: WebAuthContext = Depends(
+        require_web_permission("inv:material_requests:create")
+    ),
     auth: WebAuthContext = Depends(require_operations_access),
     db: Session = Depends(get_db),
 ):
@@ -791,14 +802,19 @@ def material_request_requested_by_search(
 @router.post("/material-requests/new", response_class=HTMLResponse)
 async def create_material_request(
     request: Request,
+    _perm: WebAuthContext = Depends(
+        require_web_permission("inv:material_requests:create")
+    ),
     auth: WebAuthContext = Depends(require_operations_access),
     db: Session = Depends(get_db),
 ):
     """Create new material request."""
-    form = await request.form()
+    form = getattr(request.state, "csrf_form", None)
+    if form is None:
+        form = await request.form()
     return operations_inv_web_service.create_material_request_response(
         request=request,
-        form_data=dict(form),
+        form_data=form,
         auth=auth,
         db=db,
     )
@@ -810,6 +826,9 @@ def material_request_report(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     group_by: str = Query(default="status", pattern="^(status|type)$"),
+    _perm: WebAuthContext = Depends(
+        require_web_permission("inv:material_requests:read")
+    ),
     auth: WebAuthContext = Depends(require_operations_access),
     db: Session = Depends(get_db),
 ):
@@ -828,6 +847,9 @@ def material_request_report(
 def material_request_detail(
     request: Request,
     request_id: str,
+    _perm: WebAuthContext = Depends(
+        require_web_permission("inv:material_requests:read")
+    ),
     auth: WebAuthContext = Depends(require_operations_access),
     db: Session = Depends(get_db),
 ):
@@ -844,6 +866,9 @@ def material_request_detail(
 def edit_material_request_form(
     request: Request,
     request_id: str,
+    _perm: WebAuthContext = Depends(
+        require_web_permission("inv:material_requests:create")
+    ),
     auth: WebAuthContext = Depends(require_operations_access),
     db: Session = Depends(get_db),
 ):
@@ -860,15 +885,20 @@ def edit_material_request_form(
 async def update_material_request(
     request: Request,
     request_id: str,
+    _perm: WebAuthContext = Depends(
+        require_web_permission("inv:material_requests:create")
+    ),
     auth: WebAuthContext = Depends(require_operations_access),
     db: Session = Depends(get_db),
 ):
     """Update material request."""
-    form = await request.form()
+    form = getattr(request.state, "csrf_form", None)
+    if form is None:
+        form = await request.form()
     return operations_inv_web_service.update_material_request_response(
         request=request,
         request_id=request_id,
-        form_data=dict(form),
+        form_data=form,
         auth=auth,
         db=db,
     )
@@ -878,6 +908,9 @@ async def update_material_request(
 def submit_material_request(
     request: Request,
     request_id: str,
+    _perm: WebAuthContext = Depends(
+        require_web_permission("inv:material_requests:submit")
+    ),
     auth: WebAuthContext = Depends(require_operations_access),
     db: Session = Depends(get_db),
 ):
@@ -893,11 +926,32 @@ def submit_material_request(
 def cancel_material_request(
     request: Request,
     request_id: str,
+    _perm: WebAuthContext = Depends(
+        require_web_permission("inv:material_requests:submit")
+    ),
     auth: WebAuthContext = Depends(require_operations_access),
     db: Session = Depends(get_db),
 ):
     """Cancel material request."""
     return operations_inv_web_service.cancel_material_request_response(
+        request_id=request_id,
+        auth=auth,
+        db=db,
+    )
+
+
+@router.post("/material-requests/{request_id}/delete", response_class=HTMLResponse)
+def delete_material_request(
+    request: Request,
+    request_id: str,
+    _perm: WebAuthContext = Depends(
+        require_web_permission("inv:material_requests:delete")
+    ),
+    auth: WebAuthContext = Depends(require_operations_access),
+    db: Session = Depends(get_db),
+):
+    """Delete material request."""
+    return operations_inv_web_service.delete_material_request_response(
         request_id=request_id,
         auth=auth,
         db=db,

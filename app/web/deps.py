@@ -572,6 +572,7 @@ def base_context(
         "brand": org_branding or brand_context(),
         "org_branding": org_branding,
         "active_module": active_module,
+        "auth": auth,
         "user": auth.user,
         "accessible_modules": auth.accessible_modules,
         "can_team_leave": can_team_leave,

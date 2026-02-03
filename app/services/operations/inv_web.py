@@ -28,6 +28,22 @@ def _safe_form_text(value: object) -> str:
     return str(value)
 
 
+def _form_value(form_data: object, key: str) -> object:
+    """Get a form value that may be a list or multimap entry."""
+    if form_data is None:
+        return None
+    getter = getattr(form_data, "get", None)
+    if callable(getter):
+        value = getter(key)
+    elif isinstance(form_data, dict):
+        value = form_data.get(key)
+    else:
+        return None
+    if isinstance(value, (list, tuple)):
+        return value[-1] if value else None
+    return value
+
+
 class OperationsInventoryWebService:
     """Service layer for operations inventory web routes."""
 
@@ -98,16 +114,16 @@ class OperationsInventoryWebService:
         assert org_id is not None
         assert user_id is not None
 
-        request_type = _safe_form_text(form_data.get("request_type", "PURCHASE"))
-        schedule_date = _safe_form_text(form_data.get("schedule_date")) or None
+        request_type = _safe_form_text(_form_value(form_data, "request_type") or "PURCHASE")
+        schedule_date = _safe_form_text(_form_value(form_data, "schedule_date")) or None
         default_warehouse_id = (
-            _safe_form_text(form_data.get("default_warehouse_id")) or None
+            _safe_form_text(_form_value(form_data, "default_warehouse_id")) or None
         )
-        requested_by_id = _safe_form_text(form_data.get("requested_by_id")) or None
-        remarks = _safe_form_text(form_data.get("remarks")) or None
+        requested_by_id = _safe_form_text(_form_value(form_data, "requested_by_id")) or None
+        remarks = _safe_form_text(_form_value(form_data, "remarks")) or None
 
         # Parse items from JSON
-        items_json = _safe_form_text(form_data.get("items_json", "[]"))
+        items_json = _safe_form_text(_form_value(form_data, "items_json") or "[]")
         try:
             items = json.loads(items_json) if items_json else []
         except json.JSONDecodeError:
@@ -218,16 +234,16 @@ class OperationsInventoryWebService:
         assert org_id is not None
         assert user_id is not None
 
-        request_type = _safe_form_text(form_data.get("request_type", "PURCHASE"))
-        schedule_date = _safe_form_text(form_data.get("schedule_date")) or None
+        request_type = _safe_form_text(_form_value(form_data, "request_type") or "PURCHASE")
+        schedule_date = _safe_form_text(_form_value(form_data, "schedule_date")) or None
         default_warehouse_id = (
-            _safe_form_text(form_data.get("default_warehouse_id")) or None
+            _safe_form_text(_form_value(form_data, "default_warehouse_id")) or None
         )
-        requested_by_id = _safe_form_text(form_data.get("requested_by_id")) or None
-        remarks = _safe_form_text(form_data.get("remarks")) or None
+        requested_by_id = _safe_form_text(_form_value(form_data, "requested_by_id")) or None
+        remarks = _safe_form_text(_form_value(form_data, "remarks")) or None
 
         # Parse items from JSON
-        items_json = _safe_form_text(form_data.get("items_json", "[]"))
+        items_json = _safe_form_text(_form_value(form_data, "items_json") or "[]")
         try:
             items = json.loads(items_json) if items_json else []
         except json.JSONDecodeError:
@@ -309,6 +325,27 @@ class OperationsInventoryWebService:
         return RedirectResponse(
             f"/operations/inv/material-requests/{request_id}", status_code=303
         )
+
+    def delete_material_request_response(
+        self,
+        request_id: str,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> RedirectResponse:
+        """Delete a material request."""
+        org_id = auth.organization_id
+        assert org_id is not None
+        service = MaterialRequestWebService(db, org_id)
+        try:
+            service.delete_request(request_id=request_id)
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            logger.warning("Failed to delete material request %s: %s", request_id, e)
+            return RedirectResponse(
+                f"/operations/inv/material-requests/{request_id}", status_code=303
+            )
+        return RedirectResponse("/operations/inv/material-requests", status_code=303)
 
     def transaction_detail_response(
         self,

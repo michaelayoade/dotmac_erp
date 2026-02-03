@@ -17,7 +17,7 @@
 {% endblock %}
 
 {% block header_actions %}
-{% if material_request.can_edit %}
+{% if material_request.can_edit and auth is defined and (auth.is_admin or auth.has_permission('inv:material_requests:create')) %}
 <a href="/operations/inv/material-requests/{{ material_request.request_id }}/edit" class="btn btn-secondary">
     <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
@@ -171,7 +171,7 @@
         <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
             <h3 class="font-semibold text-slate-900 dark:text-white">Request Items</h3>
         </div>
-        {% if material_request.items %}
+        {% if material_request_items %}
         <div class="table-container">
             <table class="table">
                 <thead>
@@ -187,7 +187,7 @@
                     </tr>
                 </thead>
                 <tbody>
-                    {% for item in material_request.items %}
+                    {% for item in material_request_items %}
                     <tr>
                         <td class="text-slate-400 font-mono text-sm">{{ loop.index }}</td>
                         <td>
@@ -197,7 +197,7 @@
                         <td class="text-slate-500">{{ item.warehouse_name or '-' }}</td>
                         <td class="text-right font-mono text-slate-900 dark:text-white">{{ item.requested_qty }}</td>
                         <td class="text-right font-mono">
-                            {% if item.ordered_qty > 0 %}
+                        {% if item.ordered_qty_value > 0 %}
                             <span class="text-emerald-600 dark:text-emerald-400">{{ item.ordered_qty }}</span>
                             {% else %}
                             <span class="text-slate-400">0</span>
@@ -236,7 +236,7 @@
     <div class="card p-6">
         <h3 class="font-semibold text-slate-900 dark:text-white mb-4">Actions</h3>
         <div class="flex flex-wrap gap-3">
-            {% if material_request.can_submit %}
+{% if material_request.can_submit and auth is defined and auth.is_admin %}
             <form method="post" action="/operations/inv/material-requests/{{ material_request.request_id }}/submit" class="inline">
                 <button type="submit" class="btn btn-warning">
                     <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -247,13 +247,24 @@
             </form>
             {% endif %}
 
-            {% if material_request.can_cancel %}
+{% if material_request.can_cancel and auth is defined and auth.is_admin %}
             <form method="post" action="/operations/inv/material-requests/{{ material_request.request_id }}/cancel" class="inline" onsubmit="return confirm('Are you sure you want to cancel this request?')">
                 <button type="submit" class="btn btn-secondary text-rose-600 hover:text-rose-700">
                     <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                     </svg>
                     Cancel Request
+                </button>
+            </form>
+            {% endif %}
+
+{% if material_request.can_delete and auth is defined and auth.is_admin %}
+            <form method="post" action="/operations/inv/material-requests/{{ material_request.request_id }}/delete" class="inline" onsubmit="return confirm('Delete this material request? This cannot be undone.')">
+                <button type="submit" class="btn btn-secondary text-rose-600 hover:text-rose-700">
+                    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                    </svg>
+                    Delete Request
                 </button>
             </form>
             {% endif %}

@@ -34,6 +34,7 @@ DEFAULT_PREFIXES = {
     SequenceType.SUPPORT_TICKET: "",
     SequenceType.PROJECT: "PROJ",
     SequenceType.TASK: "TASK-",
+    SequenceType.MATERIAL_REQUEST: "MR",
 }
 
 DEFAULT_SEQUENCE_CONFIGS = {
