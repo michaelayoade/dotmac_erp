@@ -102,6 +102,25 @@ def register_error_handlers(app) -> None:
                     message = "Status is required."
             path = request.url.path
             if request.method == "POST":
+                if path.startswith("/people/hr/discipline/"):
+                    parts = path.strip("/").split("/")
+                    case_id = parts[3] if len(parts) > 3 else ""
+                    if errors:
+                        field = errors[0].get("loc", [])
+                        field_name = field[-1] if field else None
+                        if field_name == "query_text":
+                            message = "Query text is required."
+                        elif field_name == "response_due_date":
+                            message = "Response due date is required."
+                        elif field_name == "hearing_date":
+                            message = "Hearing date is required."
+                        elif field_name == "decision_summary":
+                            message = "Decision summary is required."
+                    if case_id:
+                        return RedirectResponse(
+                            url=f"/people/hr/discipline/{case_id}?error={quote(message)}",
+                            status_code=303,
+                        )
                 if path == "/operations/support/tickets":
                     return RedirectResponse(
                         url=f"/operations/support/tickets/new?error={quote(message)}",

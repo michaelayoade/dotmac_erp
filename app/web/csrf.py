@@ -5,6 +5,7 @@ import secrets
 from urllib.parse import urlsplit
 
 from fastapi import HTTPException, Request
+import logging
 from starlette.middleware.base import RequestResponseEndpoint
 from starlette.responses import Response
 
@@ -13,6 +14,8 @@ CSRF_HEADER_NAME = "x-csrf-token"
 CSRF_FORM_FIELD = "csrf_token"
 
 _SAFE_METHODS = {"GET", "HEAD", "OPTIONS", "TRACE"}
+
+logger = logging.getLogger(__name__)
 
 
 def _default_port(scheme: str | None) -> int | None:
@@ -185,12 +188,29 @@ async def csrf_middleware(request: Request, call_next: RequestResponseEndpoint) 
         set_csrf_cookie = True
 
     origin = request.headers.get("origin") or request.headers.get("referer")
-    if not origin or origin == "null" or not _origin_matches_request(request, origin):
+    if origin and (origin == "null" or not _origin_matches_request(request, origin)):
+        logger.warning(
+            "CSRF origin mismatch: path=%s origin=%s host=%s",
+            request.url.path,
+            origin,
+            request.headers.get("host"),
+        )
         raise HTTPException(status_code=400, detail="Invalid CSRF origin")
 
     if request_token is None:
         request_token = await _extract_csrf_token(request)
-    if not request_token or request_token != csrf_cookie:
+    if not request_token:
+        logger.warning(
+            "CSRF token missing: path=%s has_cookie=%s",
+            request.url.path,
+            bool(csrf_cookie),
+        )
+        raise HTTPException(status_code=400, detail="Missing CSRF token")
+    if request_token != csrf_cookie:
+        logger.warning(
+            "CSRF token mismatch: path=%s",
+            request.url.path,
+        )
         raise HTTPException(status_code=400, detail="Invalid CSRF token")
 
     response = await call_next(request)

@@ -7,11 +7,12 @@ HTML template routes for Items and Inventory Transactions.
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Form, Query, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy.orm import Session
 
 from app.services.finance.inv.web import inv_web_service
 from app.services.operations.inv_web import operations_inv_web_service
+from app.services.finance.inv.material_request_web import MaterialRequestWebService
 from app.web.deps import get_db, require_operations_access, WebAuthContext
 
 
@@ -30,7 +31,9 @@ def list_items(
     db: Session = Depends(get_db),
 ):
     """Items list page."""
-    return inv_web_service.list_items_response(request, auth, search, category, status, page, limit, db)
+    return inv_web_service.list_items_response(
+        request, auth, search, category, status, page, limit, db
+    )
 
 
 @router.get("/items/new", response_class=HTMLResponse)
@@ -293,7 +296,9 @@ def list_categories(
     db: Session = Depends(get_db),
 ):
     """Item categories list page."""
-    return inv_web_service.list_categories_response(request, auth, search, status, page, limit, db)
+    return inv_web_service.list_categories_response(
+        request, auth, search, status, page, limit, db
+    )
 
 
 @router.get("/categories/new", response_class=HTMLResponse)
@@ -391,7 +396,9 @@ def toggle_category_status(
     db: Session = Depends(get_db),
 ):
     """Toggle category active/inactive status."""
-    return inv_web_service.toggle_category_status_response(request, auth, category_id, db)
+    return inv_web_service.toggle_category_status_response(
+        request, auth, category_id, db
+    )
 
 
 # ============================================================================
@@ -410,7 +417,9 @@ def list_warehouses(
     db: Session = Depends(get_db),
 ):
     """Warehouses list page."""
-    return inv_web_service.list_warehouses_response(request, auth, search, status, page, limit, db)
+    return inv_web_service.list_warehouses_response(
+        request, auth, search, status, page, limit, db
+    )
 
 
 @router.get("/warehouses/new", response_class=HTMLResponse)
@@ -547,7 +556,9 @@ def toggle_warehouse_status(
     db: Session = Depends(get_db),
 ):
     """Toggle warehouse active/inactive status."""
-    return inv_web_service.toggle_warehouse_status_response(request, auth, warehouse_id, db)
+    return inv_web_service.toggle_warehouse_status_response(
+        request, auth, warehouse_id, db
+    )
 
 
 # ============================================================================
@@ -581,8 +592,18 @@ def create_receipt_transaction(
 ):
     """Create a manual inventory receipt."""
     return inv_web_service.create_transaction_response(
-        request, auth, "RECEIPT", item_id, warehouse_id, quantity,
-        unit_cost, transaction_date, reference, notes, lot_number, db
+        request,
+        auth,
+        "RECEIPT",
+        item_id,
+        warehouse_id,
+        quantity,
+        unit_cost,
+        transaction_date,
+        reference,
+        notes,
+        lot_number,
+        db,
     )
 
 
@@ -612,8 +633,18 @@ def create_issue_transaction(
 ):
     """Create a manual inventory issue."""
     return inv_web_service.create_transaction_response(
-        request, auth, "ISSUE", item_id, warehouse_id, quantity,
-        unit_cost, transaction_date, reference, notes, lot_number, db
+        request,
+        auth,
+        "ISSUE",
+        item_id,
+        warehouse_id,
+        quantity,
+        unit_cost,
+        transaction_date,
+        reference,
+        notes,
+        lot_number,
+        db,
     )
 
 
@@ -643,8 +674,17 @@ def create_transfer_transaction(
 ):
     """Create an inventory transfer."""
     return inv_web_service.create_transfer_response(
-        request, auth, item_id, from_warehouse_id, to_warehouse_id,
-        quantity, transaction_date, reference, notes, lot_number, db
+        request,
+        auth,
+        item_id,
+        from_warehouse_id,
+        to_warehouse_id,
+        quantity,
+        transaction_date,
+        reference,
+        notes,
+        lot_number,
+        db,
     )
 
 
@@ -674,8 +714,17 @@ def create_adjustment_transaction(
 ):
     """Create an inventory adjustment."""
     return inv_web_service.create_adjustment_response(
-        request, auth, item_id, warehouse_id, quantity, unit_cost,
-        transaction_date, adjustment_type, reason, reference, db
+        request,
+        auth,
+        item_id,
+        warehouse_id,
+        quantity,
+        unit_cost,
+        transaction_date,
+        adjustment_type,
+        reason,
+        reference,
+        db,
     )
 
 
@@ -692,6 +741,8 @@ def material_request_list(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     project_id: Optional[str] = None,
+    page: int = 1,
+    limit: int = 50,
     auth: WebAuthContext = Depends(require_operations_access),
     db: Session = Depends(get_db),
 ):
@@ -705,6 +756,8 @@ def material_request_list(
         start_date=start_date,
         end_date=end_date,
         project_id=project_id,
+        page=max(1, page),
+        limit=min(max(10, limit), 500),
     )
 
 
@@ -722,6 +775,19 @@ def new_material_request_form(
     )
 
 
+@router.get("/material-requests/requested-by/search")
+def material_request_requested_by_search(
+    q: str = Query(..., min_length=1),
+    limit: int = Query(default=8, ge=1, le=20),
+    auth: WebAuthContext = Depends(require_operations_access),
+    db: Session = Depends(get_db),
+):
+    """Search active employees for requested-by typeahead."""
+    service = MaterialRequestWebService(db, auth.organization_id)
+    payload = service.requested_by_typeahead(query=q, limit=limit)
+    return JSONResponse(payload)
+
+
 @router.post("/material-requests/new", response_class=HTMLResponse)
 async def create_material_request(
     request: Request,
@@ -729,8 +795,10 @@ async def create_material_request(
     db: Session = Depends(get_db),
 ):
     """Create new material request."""
-    return await operations_inv_web_service.create_material_request_response(
+    form = await request.form()
+    return operations_inv_web_service.create_material_request_response(
         request=request,
+        form_data=dict(form),
         auth=auth,
         db=db,
     )
@@ -796,9 +864,11 @@ async def update_material_request(
     db: Session = Depends(get_db),
 ):
     """Update material request."""
-    return await operations_inv_web_service.update_material_request_response(
+    form = await request.form()
+    return operations_inv_web_service.update_material_request_response(
         request=request,
         request_id=request_id,
+        form_data=dict(form),
         auth=auth,
         db=db,
     )

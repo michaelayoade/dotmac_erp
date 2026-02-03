@@ -27,6 +27,8 @@
 </a>
 {% endblock %}
 
+{% from "components/macros.html" import pagination %}
+
 {% block content %}
 <div class="space-y-6">
     <!-- Filters -->
@@ -187,6 +189,13 @@
                 </tbody>
             </table>
         </div>
+        {{ pagination(page, total_pages, total_count, limit, filters={
+            "status": filter_status or "",
+            "request_type": filter_request_type or "",
+            "start_date": filter_start_date or "",
+            "end_date": filter_end_date or "",
+            "project_id": filter_project_id or "",
+        }) }}
         {% else %}
         <div class="empty-state p-12">
             <div class="empty-state-icon">

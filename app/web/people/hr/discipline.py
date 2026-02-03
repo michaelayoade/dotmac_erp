@@ -10,7 +10,7 @@ from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy.orm import Session
 
 from app.services.people.discipline.web import discipline_web_service
@@ -65,6 +65,23 @@ def new_case_form(
     )
 
 
+@router.get("/employees/search")
+def discipline_employee_search(
+    q: str = Query(..., min_length=1),
+    limit: int = Query(default=8, ge=1, le=20),
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Search active employees for discipline typeahead."""
+    payload = discipline_web_service.employee_typeahead(
+        db=db,
+        organization_id=str(auth.organization_id),
+        query=q,
+        limit=limit,
+    )
+    return JSONResponse(payload)
+
+
 @router.post("/new")
 def create_case(
     request: Request,
@@ -80,6 +97,8 @@ def create_case(
 ):
     """Create a new disciplinary case."""
     form = getattr(request.state, "csrf_form", None)
+    employee_name: Optional[str] = None
+    reported_by_name: Optional[str] = None
     if form:
         # Prefer CSRF-parsed form data when available (middleware may consume body).
         employee_id = form.get("employee_id") or employee_id
@@ -89,6 +108,8 @@ def create_case(
         description = form.get("description") or description
         incident_date = form.get("incident_date") or incident_date
         reported_by_id = form.get("reported_by_id") or reported_by_id
+        employee_name = form.get("employee_name") or employee_name
+        reported_by_name = form.get("reported_by_name") or reported_by_name
 
     if not employee_id or not violation_type or not severity or not subject:
         db.rollback()
@@ -99,12 +120,14 @@ def create_case(
             error="Employee, violation type, severity, and subject are required.",
             form_data={
                 "employee_id": employee_id or "",
+                "employee_name": employee_name or "",
                 "violation_type": violation_type or "",
                 "severity": severity or "",
                 "subject": subject or "",
                 "description": description or "",
                 "incident_date": incident_date or "",
                 "reported_by_id": reported_by_id or "",
+                "reported_by_name": reported_by_name or "",
             },
         )
     try:
@@ -129,12 +152,14 @@ def create_case(
             error=message,
             form_data={
                 "employee_id": employee_id or "",
+                "employee_name": employee_name or "",
                 "violation_type": violation_type or "",
                 "severity": severity or "",
                 "subject": subject or "",
                 "description": description or "",
                 "incident_date": incident_date or "",
                 "reported_by_id": reported_by_id or "",
+                "reported_by_name": reported_by_name or "",
             },
         )
 

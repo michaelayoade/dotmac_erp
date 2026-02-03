@@ -1,6 +1,7 @@
 """
 Numbering Sequence Model - Core Config.
 """
+
 import enum
 import uuid
 from datetime import datetime
@@ -43,10 +44,12 @@ class SequenceType(str, enum.Enum):
     SUPPORT_TICKET = "SUPPORT_TICKET"
     PROJECT = "PROJECT"
     TASK = "TASK"
+    MATERIAL_REQUEST = "MATERIAL_REQUEST"
 
 
 class ResetFrequency(str, enum.Enum):
     """When to reset the sequence counter."""
+
     NEVER = "NEVER"
     YEARLY = "YEARLY"
     MONTHLY = "MONTHLY"
@@ -98,7 +101,9 @@ class NumberingSequence(Base):
     # Date inclusion
     include_year: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     include_month: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    year_format: Mapped[int] = mapped_column(Integer, nullable=False, default=4)  # 2 or 4
+    year_format: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=4
+    )  # 2 or 4
 
     # Current sequence tracking
     current_number: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
@@ -113,7 +118,9 @@ class NumberingSequence(Base):
     )
 
     # Legacy field (for backward compatibility)
-    fiscal_year_reset: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    fiscal_year_reset: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
     fiscal_year_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
@@ -138,6 +145,7 @@ class NumberingSequence(Base):
     def preview(self) -> str:
         """Generate a preview of the number format."""
         from datetime import date
+
         today = date.today()
         parts = []
 
@@ -157,7 +165,7 @@ class NumberingSequence(Base):
         if self.include_year or self.include_month:
             seq_part = f"{self.separator}{'0' * self.min_digits}"
         else:
-            seq_part = '0' * self.min_digits
+            seq_part = "0" * self.min_digits
 
         parts.append(seq_part[1:] if seq_part.startswith(self.separator) else seq_part)
 
@@ -169,7 +177,9 @@ class NumberingSequence(Base):
             # prefix + year + month + separator + seq + suffix
             result = self.prefix
             if self.include_year:
-                result += str(today.year) if self.year_format == 4 else str(today.year)[-2:]
+                result += (
+                    str(today.year) if self.year_format == 4 else str(today.year)[-2:]
+                )
             if self.include_month:
                 result += f"{today.month:02d}"
             result += self.separator + "0001"

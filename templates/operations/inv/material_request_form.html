@@ -62,14 +62,24 @@
                 </div>
                 <div>
                     <label class="form-label">Requested By</label>
-                    <select name="requested_by_id" class="form-input form-select">
-                        <option value="">Select employee...</option>
-                        {% for emp in employees %}
-                        <option value="{{ emp.employee_id }}" {% if material_request and material_request.requested_by_id == emp.employee_id %}selected{% endif %}>
-                            {{ emp.full_name }}
-                        </option>
-                        {% endfor %}
-                    </select>
+                    <div class="relative" data-typeahead-url="/operations/inv/material-requests/requested-by/search" data-typeahead-min="2" data-typeahead-limit="8">
+                        <input
+                            type="text"
+                            name="requested_by_name"
+                            value="{{ material_request.requested_by_name if material_request else '' }}"
+                            class="form-input"
+                            placeholder="Search active employee..."
+                            autocomplete="off"
+                            data-typeahead-input
+                        >
+                        <input
+                            type="hidden"
+                            name="requested_by_id"
+                            value="{{ material_request.requested_by_id if material_request else '' }}"
+                            data-typeahead-hidden
+                        >
+                        <div data-typeahead-results></div>
+                    </div>
                 </div>
             </div>
             <div class="mt-6">

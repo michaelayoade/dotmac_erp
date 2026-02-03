@@ -14,6 +14,7 @@ from uuid import UUID
 
 from fastapi import HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
+from urllib.parse import quote
 from sqlalchemy.orm import Session
 
 from app.models.people.discipline import (
@@ -23,12 +24,13 @@ from app.models.people.discipline import (
     ActionType,
     DocumentType,
 )
-from app.services.common import coerce_uuid
+from app.services.common import coerce_uuid, ValidationError
 from app.services.people.discipline import DisciplineService
 from app.services.common import PaginationParams
 from app.services.people.hr import EmployeeService
 from app.services.people.hr.employee_types import EmployeeFilters
-from app.models.people.hr.employee import EmployeeStatus
+from app.models.people.hr import Employee, EmployeeStatus
+from app.models.person import Person
 from app.schemas.people.discipline import (
     DisciplinaryCaseCreate,
     DisciplinaryCaseUpdate,
@@ -188,22 +190,86 @@ class DisciplineWebService:
         """Render new case form."""
         org_id = coerce_uuid(auth.organization_id)
         employee_service = EmployeeService(db, org_id)
-        employees = employee_service.list_employees(
-            filters=EmployeeFilters(status=EmployeeStatus.ACTIVE),
-            pagination=PaginationParams(limit=500),
-        ).items
+        working_form_data = dict(form_data or {})
+        employee_name = working_form_data.get("employee_name", "")
+        reported_by_name = working_form_data.get("reported_by_name", "")
+
+        def _employee_label(emp: Employee) -> str:
+            name = emp.person.name if emp.person else ""
+            if emp.employee_code:
+                return f"{name} ({emp.employee_code})" if name else emp.employee_code
+            return name
+
+        if not employee_name and working_form_data.get("employee_id"):
+            try:
+                employee = employee_service.get_employee(UUID(working_form_data["employee_id"]))
+                employee_name = _employee_label(employee)
+            except Exception:
+                employee_name = ""
+
+        if not reported_by_name and working_form_data.get("reported_by_id"):
+            try:
+                reporter = employee_service.get_employee(UUID(working_form_data["reported_by_id"]))
+                reported_by_name = _employee_label(reporter)
+            except Exception:
+                reported_by_name = ""
+
+        working_form_data["employee_name"] = employee_name
+        working_form_data["reported_by_name"] = reported_by_name
 
         context = base_context(request, auth, "New Disciplinary Case", "hr-discipline", db=db)
         context.update({
-            "employees": employees,
             "violation_types": [v.value for v in ViolationType],
             "severities": [s.value for s in SeverityLevel],
             "error": error,
-            "form_data": form_data or {},
+            "form_data": working_form_data,
         })
         return templates.TemplateResponse(
             request, "people/hr/discipline/case_form.html", context
         )
+
+    @staticmethod
+    def employee_typeahead(
+        db: Session,
+        organization_id: str,
+        query: str,
+        limit: int = 8,
+    ) -> dict:
+        """Search active employees for discipline typeahead fields."""
+        org_id = coerce_uuid(organization_id)
+        search_term = f"%{query.strip()}%"
+        employees = (
+            db.query(Employee)
+            .join(Person, Person.id == Employee.person_id)
+            .filter(
+                Employee.organization_id == org_id,
+                Employee.status == EmployeeStatus.ACTIVE,
+            )
+            .filter(
+                (Person.first_name.ilike(search_term))
+                | (Person.last_name.ilike(search_term))
+                | (Person.email.ilike(search_term))
+                | (Employee.employee_code.ilike(search_term))
+            )
+            .order_by(Person.first_name.asc(), Person.last_name.asc())
+            .limit(limit)
+            .all()
+        )
+        items = []
+        for employee in employees:
+            name = employee.person.name if employee.person else ""
+            label = name
+            if employee.employee_code:
+                label = f"{name} ({employee.employee_code})" if name else employee.employee_code
+            items.append(
+                {
+                    "ref": str(employee.employee_id),
+                    "label": label,
+                    "name": name,
+                    "employee_code": employee.employee_code or "",
+                }
+            )
+        return {"items": items}
 
     def case_create_response(
         self,
@@ -264,18 +330,32 @@ class DisciplineWebService:
         if case.organization_id != org_id:
             raise HTTPException(status_code=404, detail="Case not found")
 
-        data = IssueQueryRequest(
-            query_text=query_text,
-            response_due_date=date.fromisoformat(response_due_date),
-        )
-
-        service.issue_query(case_id, data, issued_by_id=person_id)
-        db.commit()
-
-        return RedirectResponse(
-            url=f"/people/hr/discipline/{case_id}?success=query_issued",
-            status_code=303,
-        )
+        try:
+            due_date = date.fromisoformat(response_due_date)
+            data = IssueQueryRequest(
+                query_text=query_text,
+                response_due_date=due_date,
+            )
+            service.issue_query(case_id, data, issued_by_id=person_id)
+            db.commit()
+            return RedirectResponse(
+                url=f"/people/hr/discipline/{case_id}?success=query_issued",
+                status_code=303,
+            )
+        except ValueError:
+            db.rollback()
+            message = quote("Response due date is invalid.")
+            return RedirectResponse(
+                url=f"/people/hr/discipline/{case_id}?error={message}",
+                status_code=303,
+            )
+        except ValidationError as exc:
+            db.rollback()
+            message = quote(exc.message or "Unable to issue query.")
+            return RedirectResponse(
+                url=f"/people/hr/discipline/{case_id}?error={message}",
+                status_code=303,
+            )
 
     def schedule_hearing_response(
         self,

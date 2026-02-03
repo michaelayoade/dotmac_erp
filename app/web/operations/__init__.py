@@ -8,6 +8,7 @@ Route structure:
 - /operations/inv/*       - Inventory management pages
 - /operations/projects/*  - Project management pages
 - /operations/support/*   - Support/Helpdesk pages
+- /operations/fleet/*     - Fleet management pages
 - /operations/settings/*  - Operations settings pages
 """
 
@@ -36,7 +37,7 @@ router.include_router(projects_router)
 router.include_router(support_router)
 
 # Fleet Management routes
-router.include_router(fleet_router)
+router.include_router(fleet_router, prefix="/fleet")
 
 # Settings routes
 router.include_router(settings_router)

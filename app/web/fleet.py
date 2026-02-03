@@ -14,9 +14,10 @@ from sqlalchemy.orm import Session
 from app.db import SessionLocal
 from app.services.common import NotFoundError, ValidationError
 from app.services.fleet.web.fleet_web import FleetWebService
-from app.web.deps import WebAuthContext, base_context, require_operations_access, templates
+from app.templates import templates
+from app.web.deps import WebAuthContext, base_context, require_operations_access
 
-router = APIRouter(prefix="/fleet", tags=["fleet-web"])
+router = APIRouter(tags=["fleet-web"])
 
 
 def get_db():

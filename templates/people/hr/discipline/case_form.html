@@ -47,16 +47,29 @@
             </div>
             <div class="card-body space-y-6">
                 <div>
-                    <label for="employee_id" class="form-label required">Employee</label>
-                    <select id="employee_id" name="employee_id" class="form-select w-full" required>
-                        <option value="">Select Employee</option>
-                        {% for emp in employees %}
-                        <option value="{{ emp.employee_id }}" {% if form_data.get('employee_id') == emp.employee_id | string %}selected{% endif %}>
-                            {{ emp.full_name }} ({{ emp.employee_number }})
-                        </option>
-                        {% endfor %}
-                    </select>
-                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Select the employee involved in the violation</p>
+                    <label for="employee_name" class="form-label required">Employee</label>
+                    <div class="relative" data-typeahead-url="/people/hr/discipline/employees/search" data-typeahead-min="2" data-typeahead-limit="8">
+                        <input
+                            type="text"
+                            id="employee_name"
+                            name="employee_name"
+                            class="form-input w-full"
+                            placeholder="Search employee..."
+                            autocomplete="off"
+                            required
+                            value="{{ form_data.get('employee_name', '') }}"
+                            data-typeahead-input
+                        >
+                        <input
+                            type="hidden"
+                            id="employee_id"
+                            name="employee_id"
+                            value="{{ form_data.get('employee_id', '') }}"
+                            data-typeahead-hidden
+                        >
+                        <div data-typeahead-results></div>
+                    </div>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Search and select the employee involved in the violation</p>
                 </div>
             </div>
         </div>
@@ -110,15 +123,27 @@
                                value="{{ form_data.get('incident_date', '') }}">
                     </div>
                     <div>
-                        <label for="reported_by_id" class="form-label">Reported By</label>
-                        <select id="reported_by_id" name="reported_by_id" class="form-select w-full">
-                            <option value="">Select Reporter</option>
-                            {% for emp in employees %}
-                            <option value="{{ emp.employee_id }}" {% if form_data.get('reported_by_id') == emp.employee_id | string %}selected{% endif %}>
-                                {{ emp.full_name }}
-                            </option>
-                            {% endfor %}
-                        </select>
+                        <label for="reported_by_name" class="form-label">Reported By</label>
+                        <div class="relative" data-typeahead-url="/people/hr/discipline/employees/search" data-typeahead-min="2" data-typeahead-limit="8">
+                            <input
+                                type="text"
+                                id="reported_by_name"
+                                name="reported_by_name"
+                                class="form-input w-full"
+                                placeholder="Search employee..."
+                                autocomplete="off"
+                                value="{{ form_data.get('reported_by_name', '') }}"
+                                data-typeahead-input
+                            >
+                            <input
+                                type="hidden"
+                                id="reported_by_id"
+                                name="reported_by_id"
+                                value="{{ form_data.get('reported_by_id', '') }}"
+                                data-typeahead-hidden
+                            >
+                            <div data-typeahead-results></div>
+                        </div>
                     </div>
                 </div>
             </div>

@@ -382,10 +382,22 @@ def landing_content() -> dict:
             "title": "Real-time reporting & insights",
             "subtitle": "Dashboards and reports that update as transactions happen across all modules.",
             "cards": [
-                {"title": "Financial Reports", "subtitle": "P&L, balance sheet, cash flow"},
-                {"title": "HR Analytics", "subtitle": "Headcount, attrition, payroll costs"},
-                {"title": "Operations Metrics", "subtitle": "Inventory, procurement, fulfillment"},
-                {"title": "Custom Dashboards", "subtitle": "Build reports for your KPIs"},
+                {
+                    "title": "Financial Reports",
+                    "subtitle": "P&L, balance sheet, cash flow",
+                },
+                {
+                    "title": "HR Analytics",
+                    "subtitle": "Headcount, attrition, payroll costs",
+                },
+                {
+                    "title": "Operations Metrics",
+                    "subtitle": "Inventory, procurement, fulfillment",
+                },
+                {
+                    "title": "Custom Dashboards",
+                    "subtitle": "Build reports for your KPIs",
+                },
             ],
         },
         "security": {
@@ -461,7 +473,9 @@ def base_context(
     if db and auth.organization_id:
         org_branding = org_brand_context(db, auth.organization_id)
         try:
-            from app.services.finance.platform.currency_context import get_currency_context
+            from app.services.finance.platform.currency_context import (
+                get_currency_context,
+            )
         except Exception:
             get_currency_context = None  # type: ignore[assignment]
     else:
@@ -490,22 +504,40 @@ def base_context(
 
             def _notification_type_to_display(entity_type, notification_type) -> str:
                 from app.models.notification import NotificationType
-                if notification_type in (NotificationType.MENTION, NotificationType.COMMENT, NotificationType.REPLY):
+
+                if notification_type in (
+                    NotificationType.MENTION,
+                    NotificationType.COMMENT,
+                    NotificationType.REPLY,
+                ):
                     return "mention"
-                elif notification_type in (NotificationType.APPROVED, NotificationType.COMPLETED, NotificationType.RESOLVED):
+                elif notification_type in (
+                    NotificationType.APPROVED,
+                    NotificationType.COMPLETED,
+                    NotificationType.RESOLVED,
+                ):
                     return "payment"
-                elif notification_type in (NotificationType.REJECTED, NotificationType.OVERDUE, NotificationType.ALERT):
+                elif notification_type in (
+                    NotificationType.REJECTED,
+                    NotificationType.OVERDUE,
+                    NotificationType.ALERT,
+                ):
                     return "alert"
                 else:
                     return "info"
 
             raw_notifications = notification_service.list_notifications(
-                db, recipient_id=auth.person_id, organization_id=auth.organization_id, limit=5
+                db,
+                recipient_id=auth.person_id,
+                organization_id=auth.organization_id,
+                limit=5,
             )
             notifications = [
                 {
                     "id": str(n.notification_id),
-                    "type": _notification_type_to_display(n.entity_type, n.notification_type),
+                    "type": _notification_type_to_display(
+                        n.entity_type, n.notification_type
+                    ),
                     "title": n.title,
                     "message": n.message,
                     "url": n.action_url or "#",
@@ -547,7 +579,7 @@ def base_context(
         "csrf_token": getattr(request.state, "csrf_token", ""),
         "notifications": notifications or [],
     }
-    if db and auth.organization_id and get_currency_context:
+    if db and auth.organization_id and get_currency_context is not None:
         try:
             context.update(get_currency_context(db, str(auth.organization_id)))
         except Exception:
@@ -690,9 +722,15 @@ def _extract_bearer_token(authorization: str | None) -> str | None:
     return None
 
 
-def _normalize_roles_scopes(roles: list[str], scopes: list[str]) -> tuple[list[str], list[str]]:
-    normalized_roles = [str(role).strip().lower() for role in roles if str(role).strip()]
-    normalized_scopes = [str(scope).strip().lower() for scope in scopes if str(scope).strip()]
+def _normalize_roles_scopes(
+    roles: list[str], scopes: list[str]
+) -> tuple[list[str], list[str]]:
+    normalized_roles = [
+        str(role).strip().lower() for role in roles if str(role).strip()
+    ]
+    normalized_scopes = [
+        str(scope).strip().lower() for scope in scopes if str(scope).strip()
+    ]
     return normalized_roles, normalized_scopes
 
 
@@ -797,7 +835,9 @@ def require_web_auth(
 
         # Check for activity timeout (session idle too long)
         if is_session_inactive(session, now):
-            raise HTTPException(status_code=401, detail="Session expired due to inactivity")
+            raise HTTPException(
+                status_code=401, detail="Session expired due to inactivity"
+            )
 
         # Update session activity in auth database
         if auth_db:
@@ -832,21 +872,26 @@ def require_web_auth(
     last_name = _clean_name(person.last_name)
     base_name = f"{first_name} {last_name}".strip()
     user_name = display_name or base_name or _clean_name(person.email) or "User"
-    initials = "".join(word[0].upper() for word in user_name.split()[:2]) if user_name else "US"
+    initials = (
+        "".join(word[0].upper() for word in user_name.split()[:2])
+        if user_name
+        else "US"
+    )
 
     roles_value = payload.get("roles")
     roles = [str(role) for role in roles_value] if isinstance(roles_value, list) else []
     scopes_value = payload.get("scopes")
-    scopes = [str(scope) for scope in scopes_value] if isinstance(scopes_value, list) else []
+    scopes = (
+        [str(scope) for scope in scopes_value] if isinstance(scopes_value, list) else []
+    )
     roles, scopes = _normalize_roles_scopes(roles, scopes)
     roles = _ensure_admin_role(db, person_uuid, roles)
 
     # Look up employee_id for the person (may be None if person is not an employee)
     from sqlalchemy import select
     from app.models.people.hr.employee import Employee
-    employee = db.scalar(
-        select(Employee).where(Employee.person_id == person_uuid)
-    )
+
+    employee = db.scalar(select(Employee).where(Employee.person_id == person_uuid))
     employee_id = employee.employee_id if employee else None
 
     return WebAuthContext(
@@ -954,21 +999,26 @@ def optional_web_auth(
     last_name = _clean_name(person.last_name)
     base_name = f"{first_name} {last_name}".strip()
     user_name = display_name or base_name or _clean_name(person.email) or "User"
-    initials = "".join(word[0].upper() for word in user_name.split()[:2]) if user_name else "US"
+    initials = (
+        "".join(word[0].upper() for word in user_name.split()[:2])
+        if user_name
+        else "US"
+    )
 
     roles_value = payload.get("roles")
     roles = [str(role) for role in roles_value] if isinstance(roles_value, list) else []
     scopes_value = payload.get("scopes")
-    scopes = [str(scope) for scope in scopes_value] if isinstance(scopes_value, list) else []
+    scopes = (
+        [str(scope) for scope in scopes_value] if isinstance(scopes_value, list) else []
+    )
     roles, scopes = _normalize_roles_scopes(roles, scopes)
     roles = _ensure_admin_role(db, person_uuid, roles)
 
     # Look up employee_id for the person (may be None if person is not an employee)
     from sqlalchemy import select
     from app.models.people.hr.employee import Employee
-    employee = db.scalar(
-        select(Employee).where(Employee.person_id == person_uuid)
-    )
+
+    employee = db.scalar(select(Employee).where(Employee.person_id == person_uuid))
     employee_id = employee.employee_id if employee else None
 
     return WebAuthContext(
@@ -1085,7 +1135,9 @@ def require_self_service_access(
 
     Allows users with self-service access or full HR module access.
     """
-    if not auth.has_module_access("self_service") and not auth.has_module_access("people"):
+    if not auth.has_module_access("self_service") and not auth.has_module_access(
+        "people"
+    ):
         raise HTTPException(
             status_code=403,
             detail="Self-service access required",
@@ -1143,6 +1195,7 @@ def require_module_access(module: str):
         ):
             ...
     """
+
     def _require_module_access(
         auth: WebAuthContext = Depends(require_web_auth),
     ) -> WebAuthContext:
@@ -1168,6 +1221,7 @@ def require_web_permission(permission: str):
         ):
             ...
     """
+
     def _require_permission(
         auth: WebAuthContext = Depends(require_web_auth),
     ) -> WebAuthContext:
@@ -1192,6 +1246,7 @@ def require_any_web_permission(permissions: list[str]):
         ):
             ...
     """
+
     def _require_any_permission(
         auth: WebAuthContext = Depends(require_web_auth),
     ) -> WebAuthContext:

@@ -128,7 +128,7 @@
                         <p class="text-xs text-slate-500">{{ material_request.created_at }}</p>
                     </div>
                 </div>
-                {% if material_request.submitted_at %}
+                {% if material_request.status != 'DRAFT' and material_request.updated_at %}
                 <div class="flex items-center gap-3">
                     <div class="flex h-8 w-8 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/30">
                         <svg class="h-4 w-4 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -137,7 +137,7 @@
                     </div>
                     <div>
                         <p class="text-sm text-slate-900 dark:text-white">Submitted</p>
-                        <p class="text-xs text-slate-500">{{ material_request.submitted_at }}</p>
+                        <p class="text-xs text-slate-500">{{ material_request.updated_at }}</p>
                     </div>
                 </div>
                 {% endif %}

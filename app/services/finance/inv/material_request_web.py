@@ -3,159 +3,249 @@ Material Request Web View Service.
 
 Provides view-focused data for material request web routes.
 """
+
+import json
+import logging
 from datetime import date, datetime
-from decimal import Decimal
-from typing import Any, Optional, TypedDict
+from decimal import Decimal, InvalidOperation
+from typing import Any, Dict, Optional
 from uuid import UUID
 
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.models.finance.core_config.numbering_sequence import SequenceType
 from app.models.finance.inv import (
+    Item,
     MaterialRequest,
     MaterialRequestItem,
-    MaterialRequestType,
     MaterialRequestStatus,
-    Item,
+    MaterialRequestType,
     Warehouse,
 )
 from app.models.finance.core_org.project import Project, ProjectStatus
-from app.models.people.hr import Employee
+from app.models.people.hr import Employee, EmployeeStatus
 from app.models.person import Person
-from app.config import settings
-from app.services.common import coerce_uuid
+from app.services.common import PaginationParams, coerce_uuid, paginate
+
+logger = logging.getLogger(__name__)
 
 
-def _format_currency(
-    amount: Optional[Decimal],
-    currency: str = settings.default_presentation_currency_code,
-) -> str:
-    if amount is None:
-        return "0.00"
-    value = Decimal(str(amount))
-    return f"{value:,.2f}"
+# Valid material request status transitions
+MATERIAL_REQUEST_STATUS_TRANSITIONS: Dict[MaterialRequestStatus, set] = {
+    MaterialRequestStatus.DRAFT: {
+        MaterialRequestStatus.SUBMITTED,
+        MaterialRequestStatus.CANCELLED,
+    },
+    MaterialRequestStatus.SUBMITTED: {
+        MaterialRequestStatus.PARTIALLY_ORDERED,
+        MaterialRequestStatus.ORDERED,
+        MaterialRequestStatus.ISSUED,
+        MaterialRequestStatus.TRANSFERRED,
+        MaterialRequestStatus.CANCELLED,
+    },
+    MaterialRequestStatus.PARTIALLY_ORDERED: {
+        MaterialRequestStatus.ORDERED,
+        MaterialRequestStatus.ISSUED,
+        MaterialRequestStatus.TRANSFERRED,
+        MaterialRequestStatus.CANCELLED,
+    },
+    MaterialRequestStatus.ORDERED: set(),  # Terminal
+    MaterialRequestStatus.ISSUED: set(),  # Terminal
+    MaterialRequestStatus.TRANSFERRED: set(),  # Terminal
+    MaterialRequestStatus.CANCELLED: set(),  # Terminal
+}
 
 
 def _format_date(value: Optional[date]) -> str:
     return value.strftime("%Y-%m-%d") if value else ""
 
 
-class _GroupTotals(TypedDict):
-    count: int
-    items: int
-    qty: Decimal
-    ordered: Decimal
-
-
 def _format_datetime(value: Optional[datetime]) -> str:
     return value.strftime("%Y-%m-%d %H:%M") if value else ""
+
+
+def _format_quantity(qty: Optional[Decimal]) -> str:
+    """Format a quantity for display."""
+    if qty is None:
+        return "0.00"
+    return f"{Decimal(str(qty)):,.2f}"
 
 
 class MaterialRequestWebService:
     """View service for material request web routes."""
 
-    @staticmethod
+    def __init__(self, db: Session, organization_id: UUID):
+        self.db = db
+        self.organization_id = organization_id
+
+    def _validate_transition(
+        self, current: MaterialRequestStatus, target: MaterialRequestStatus
+    ) -> None:
+        """Validate a status transition against the transition map."""
+        allowed = MATERIAL_REQUEST_STATUS_TRANSITIONS.get(current, set())
+        if target not in allowed:
+            raise ValueError(
+                f"Cannot transition from {current.value} to {target.value}"
+            )
+
+    def _batch_load_warehouses(
+        self,
+        warehouse_ids: list[UUID],
+    ) -> dict[UUID, Any]:
+        """Batch load warehouses by IDs."""
+        if not warehouse_ids:
+            return {}
+        unique_ids = list(set(warehouse_ids))
+        stmt = select(Warehouse).where(
+            Warehouse.warehouse_id.in_(unique_ids),
+            Warehouse.organization_id == self.organization_id,
+        )
+        warehouses = list(self.db.scalars(stmt).all())
+        return {w.warehouse_id: w for w in warehouses}
+
+    def _batch_load_employee_names(
+        self,
+        employee_ids: list[UUID],
+    ) -> dict[UUID, str]:
+        """Batch load employee display names by IDs."""
+        if not employee_ids:
+            return {}
+        unique_ids = list(set(employee_ids))
+        stmt = (
+            select(Employee)
+            .options(selectinload(Employee.person))
+            .where(
+                Employee.employee_id.in_(unique_ids),
+                Employee.organization_id == self.organization_id,
+            )
+        )
+        employees = list(self.db.scalars(stmt).all())
+        return {
+            emp.employee_id: (emp.person.name if emp.person else "")
+            for emp in employees
+        }
+
     def list_context(
-        db: Session,
-        organization_id: str,
+        self,
+        *,
         status: Optional[str] = None,
         request_type: Optional[str] = None,
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
         project_id: Optional[str] = None,
+        page: int = 1,
+        limit: int = 50,
     ) -> dict:
         """Get context for material request list page."""
-        org_id = coerce_uuid(organization_id)
-
-        query = (
-            db.query(MaterialRequest)
-            .options(
-                joinedload(MaterialRequest.items),
-            )
-            .filter(MaterialRequest.organization_id == org_id)
+        stmt = (
+            select(MaterialRequest)
+            .options(selectinload(MaterialRequest.items))
+            .where(MaterialRequest.organization_id == self.organization_id)
         )
 
         if status:
             try:
-                query = query.filter(MaterialRequest.status == MaterialRequestStatus(status))
+                stmt = stmt.where(
+                    MaterialRequest.status == MaterialRequestStatus(status)
+                )
             except ValueError:
                 pass
 
         if request_type:
             try:
-                query = query.filter(MaterialRequest.request_type == MaterialRequestType(request_type))
+                stmt = stmt.where(
+                    MaterialRequest.request_type == MaterialRequestType(request_type)
+                )
             except ValueError:
                 pass
 
         if start_date:
-            query = query.filter(MaterialRequest.schedule_date >= start_date)
+            stmt = stmt.where(MaterialRequest.schedule_date >= start_date)
 
         if end_date:
-            query = query.filter(MaterialRequest.schedule_date <= end_date)
+            stmt = stmt.where(MaterialRequest.schedule_date <= end_date)
 
-        requests = query.order_by(MaterialRequest.created_at.desc()).limit(100).all()
+        if project_id:
+            stmt = stmt.where(
+                MaterialRequest.request_id.in_(
+                    select(MaterialRequestItem.request_id).where(
+                        MaterialRequestItem.project_id == coerce_uuid(project_id)
+                    )
+                )
+            )
+
+        stmt = stmt.order_by(MaterialRequest.created_at.desc())
+        pagination_params = PaginationParams.from_page(page, limit)
+        result = paginate(self.db, stmt, pagination_params)
+        requests = result.items
+
+        # Batch load related data to avoid N+1 queries
+        warehouse_ids = [
+            r.default_warehouse_id for r in requests if r.default_warehouse_id
+        ]
+        employee_ids = [r.requested_by_id for r in requests if r.requested_by_id]
+        warehouses_map = self._batch_load_warehouses(warehouse_ids)
+        employees_map = self._batch_load_employee_names(employee_ids)
 
         items = []
         for req in requests:
             total_qty = (
                 sum((item.requested_qty for item in req.items), Decimal("0"))
-                if req.items else Decimal("0")
+                if req.items
+                else Decimal("0")
             )
             total_ordered = (
                 sum((item.ordered_qty for item in req.items), Decimal("0"))
-                if req.items else Decimal("0")
+                if req.items
+                else Decimal("0")
             )
-            # Get warehouse name
-            warehouse_name = None
-            if req.default_warehouse_id:
-                wh = db.get(Warehouse, req.default_warehouse_id)
-                if wh:
-                    warehouse_name = wh.warehouse_name
+            wh = (
+                warehouses_map.get(req.default_warehouse_id)
+                if req.default_warehouse_id
+                else None
+            )
+            requested_by_name = (
+                employees_map.get(req.requested_by_id) if req.requested_by_id else None
+            )
 
-            # Get requested by name
-            requested_by_name = None
-            if req.requested_by_id:
-                emp = (
-                    db.query(Employee)
-                    .join(Person, Person.id == Employee.person_id)
-                    .filter(Employee.employee_id == req.requested_by_id)
-                    .first()
-                )
-                if emp and emp.person:
-                    requested_by_name = emp.person.name
+            items.append(
+                {
+                    "request_id": str(req.request_id),
+                    "request_number": req.request_number,
+                    "request_type": req.request_type.value,
+                    "status": req.status.value,
+                    "schedule_date": _format_date(req.schedule_date),
+                    "remarks": (
+                        (req.remarks or "")[:100] + "..."
+                        if req.remarks and len(req.remarks) > 100
+                        else (req.remarks or "-")
+                    ),
+                    "item_count": len(req.items) if req.items else 0,
+                    "total_qty": _format_quantity(total_qty),
+                    "total_ordered": _format_quantity(total_ordered),
+                    "created_at": _format_datetime(req.created_at),
+                    "warehouse_name": wh.warehouse_name if wh else None,
+                    "requested_by_name": requested_by_name,
+                }
+            )
 
-            items.append({
-                "request_id": str(req.request_id),
-                "request_number": req.request_number,
-                "request_type": req.request_type.value,
-                "status": req.status.value,
-                "schedule_date": _format_date(req.schedule_date),
-                "remarks": (req.remarks or "")[:100] + "..." if req.remarks and len(req.remarks) > 100 else (req.remarks or "-"),
-                "item_count": len(req.items) if req.items else 0,
-                "total_qty": _format_currency(total_qty),
-                "total_ordered": _format_currency(total_ordered),
-                "created_at": _format_datetime(req.created_at),
-                "warehouse_name": warehouse_name,
-                "requested_by_name": requested_by_name,
-            })
-
-        # Status counts
-        status_counts = (
-            db.query(MaterialRequest.status, func.count())
-            .filter(MaterialRequest.organization_id == org_id)
+        # Status counts via SQL
+        status_stmt = (
+            select(MaterialRequest.status, func.count())
+            .where(MaterialRequest.organization_id == self.organization_id)
             .group_by(MaterialRequest.status)
-            .all()
         )
+        status_counts = self.db.execute(status_stmt).all()
         counts = {s.value: c for s, c in status_counts}
 
-        # Type counts
-        type_counts = (
-            db.query(MaterialRequest.request_type, func.count())
-            .filter(MaterialRequest.organization_id == org_id)
+        # Type counts via SQL
+        type_stmt = (
+            select(MaterialRequest.request_type, func.count())
+            .where(MaterialRequest.organization_id == self.organization_id)
             .group_by(MaterialRequest.request_type)
-            .all()
         )
+        type_counts = self.db.execute(type_stmt).all()
         type_count_dict = {t.value: c for t, c in type_counts}
 
         return {
@@ -169,27 +259,29 @@ class MaterialRequestWebService:
             "type_counts": type_count_dict,
             "statuses": [s.value for s in MaterialRequestStatus],
             "request_types": [t.value for t in MaterialRequestType],
+            "page": result.page,
+            "total_pages": result.total_pages,
+            "total_count": result.total,
+            "limit": limit,
+            "has_next": result.has_next,
+            "has_prev": result.has_prev,
         }
 
-    @staticmethod
     def form_context(
-        db: Session,
-        organization_id: str,
+        self,
         request_id: Optional[str] = None,
     ) -> dict:
         """Get context for material request form (new/edit)."""
-        org_id = coerce_uuid(organization_id)
-
         # Get items for selection
-        items = (
-            db.query(Item)
-            .filter(
-                Item.organization_id == org_id,
+        item_stmt = (
+            select(Item)
+            .where(
+                Item.organization_id == self.organization_id,
                 Item.is_active.is_(True),
             )
             .order_by(Item.item_code)
-            .all()
         )
+        items = list(self.db.scalars(item_stmt).all())
 
         item_options = [
             {
@@ -202,15 +294,15 @@ class MaterialRequestWebService:
         ]
 
         # Get warehouses
-        warehouses = (
-            db.query(Warehouse)
-            .filter(
-                Warehouse.organization_id == org_id,
+        wh_stmt = (
+            select(Warehouse)
+            .where(
+                Warehouse.organization_id == self.organization_id,
                 Warehouse.is_active.is_(True),
             )
             .order_by(Warehouse.warehouse_code)
-            .all()
         )
+        warehouses = list(self.db.scalars(wh_stmt).all())
 
         warehouse_options = [
             {
@@ -222,15 +314,15 @@ class MaterialRequestWebService:
         ]
 
         # Get active projects
-        projects = (
-            db.query(Project)
-            .filter(
-                Project.organization_id == org_id,
+        proj_stmt = (
+            select(Project)
+            .where(
+                Project.organization_id == self.organization_id,
                 Project.status == ProjectStatus.ACTIVE,
             )
             .order_by(Project.project_code)
-            .all()
         )
+        projects = list(self.db.scalars(proj_stmt).all())
 
         project_options = [
             {
@@ -241,30 +333,10 @@ class MaterialRequestWebService:
             for p in projects
         ]
 
-        # Get employees for requested_by selection
-        employees = (
-            db.query(Employee)
-            .join(Person, Person.id == Employee.person_id)
-            .filter(Employee.organization_id == org_id)
-            .order_by(Person.first_name, Person.last_name)
-            .all()
-        )
-
-        employee_options = [
-            {
-                "employee_id": str(e.employee_id),
-                "employee_code": e.employee_code or "",
-                "full_name": e.person.name if e.person else "",
-            }
-            for e in employees
-        ]
-
-        import json
         context: dict[str, Any] = {
             "inventory_items": item_options,
             "warehouses": warehouse_options,
             "projects": project_options,
-            "employees": employee_options,
             "request_types": [t.value for t in MaterialRequestType],
             "today": _format_date(date.today()),
             "material_request": None,
@@ -273,37 +345,52 @@ class MaterialRequestWebService:
 
         # If editing, load request data
         if request_id:
-            material_request = (
-                db.query(MaterialRequest)
-                .options(
-                    joinedload(MaterialRequest.items).joinedload(MaterialRequestItem.request),
-                )
-                .filter(
+            mr_stmt = (
+                select(MaterialRequest)
+                .options(joinedload(MaterialRequest.items))
+                .where(
                     MaterialRequest.request_id == coerce_uuid(request_id),
-                    MaterialRequest.organization_id == org_id,
+                    MaterialRequest.organization_id == self.organization_id,
                 )
-                .first()
             )
+            material_request = self.db.scalar(mr_stmt)
             if material_request:
+                requested_by_name = ""
+                if material_request.requested_by_id:
+                    names = self._batch_load_employee_names(
+                        [material_request.requested_by_id]
+                    )
+                    requested_by_name = names.get(material_request.requested_by_id, "")
                 context["material_request"] = {
                     "request_id": str(material_request.request_id),
                     "request_number": material_request.request_number,
                     "request_type": material_request.request_type.value,
                     "status": material_request.status.value,
                     "schedule_date": _format_date(material_request.schedule_date),
-                    "default_warehouse_id": str(material_request.default_warehouse_id) if material_request.default_warehouse_id else "",
-                    "requested_by_id": str(material_request.requested_by_id) if material_request.requested_by_id else "",
+                    "default_warehouse_id": (
+                        str(material_request.default_warehouse_id)
+                        if material_request.default_warehouse_id
+                        else ""
+                    ),
+                    "requested_by_id": (
+                        str(material_request.requested_by_id)
+                        if material_request.requested_by_id
+                        else ""
+                    ),
+                    "requested_by_name": requested_by_name,
                     "remarks": material_request.remarks or "",
                     "can_edit": material_request.status == MaterialRequestStatus.DRAFT,
                 }
                 request_items = [
                     {
                         "item_id": str(item.inventory_item_id),
-                        "warehouse_id": str(item.warehouse_id) if item.warehouse_id else "",
+                        "warehouse_id": (
+                            str(item.warehouse_id) if item.warehouse_id else ""
+                        ),
                         "qty": float(item.requested_qty),
                         "uom": item.uom or "Nos",
                         "schedule_date": _format_date(item.schedule_date),
-                        "project_id": str(item.project_id) if item.project_id else "",
+                        "project_id": (str(item.project_id) if item.project_id else ""),
                     }
                     for item in sorted(material_request.items, key=lambda x: x.sequence)
                 ]
@@ -311,89 +398,125 @@ class MaterialRequestWebService:
 
         return context
 
-    @staticmethod
+    def requested_by_typeahead(
+        self,
+        query: str,
+        limit: int = 8,
+    ) -> dict:
+        """Search active employees for requested-by typeahead."""
+        search_term = f"%{query.strip()}%"
+        stmt = (
+            select(Employee)
+            .join(Person, Person.id == Employee.person_id)
+            .options(selectinload(Employee.person))
+            .where(
+                Employee.organization_id == self.organization_id,
+                Employee.status == EmployeeStatus.ACTIVE,
+            )
+            .where(
+                (Person.first_name.ilike(search_term))
+                | (Person.last_name.ilike(search_term))
+                | (Person.email.ilike(search_term))
+                | (Employee.employee_code.ilike(search_term))
+            )
+            .order_by(Person.first_name.asc(), Person.last_name.asc())
+            .limit(limit)
+        )
+        employees = list(self.db.scalars(stmt).all())
+        items = []
+        for employee in employees:
+            name = employee.person.name if employee.person else ""
+            label = name
+            if employee.employee_code:
+                label = (
+                    f"{name} ({employee.employee_code})"
+                    if name
+                    else employee.employee_code
+                )
+            items.append(
+                {
+                    "ref": str(employee.employee_id),
+                    "label": label,
+                    "name": name,
+                    "employee_code": employee.employee_code or "",
+                }
+            )
+        return {"items": items}
+
     def detail_context(
-        db: Session,
-        organization_id: str,
+        self,
         request_id: str,
     ) -> dict:
         """Get context for material request detail page."""
-        org_id = coerce_uuid(organization_id)
-        request = (
-            db.query(MaterialRequest)
-            .options(
-                joinedload(MaterialRequest.items),
-            )
-            .filter(
+        mr_stmt = (
+            select(MaterialRequest)
+            .options(joinedload(MaterialRequest.items))
+            .where(
                 MaterialRequest.request_id == coerce_uuid(request_id),
-                MaterialRequest.organization_id == org_id,
+                MaterialRequest.organization_id == self.organization_id,
             )
-            .first()
         )
+        request = self.db.scalar(mr_stmt)
 
         if not request:
             return {"material_request": None}
 
-        # Get related data for items
+        # Batch load related data for items
         item_ids = [item.inventory_item_id for item in request.items]
-        warehouse_ids = [item.warehouse_id for item in request.items if item.warehouse_id]
+        warehouse_ids = [
+            item.warehouse_id for item in request.items if item.warehouse_id
+        ]
         project_ids = [item.project_id for item in request.items if item.project_id]
 
-        items_map = {}
+        items_map: dict[UUID, Any] = {}
         if item_ids:
-            inv_items = db.query(Item).filter(
+            inv_stmt = select(Item).where(
                 Item.item_id.in_(item_ids),
-                Item.organization_id == org_id,
-            ).all()
+                Item.organization_id == self.organization_id,
+            )
+            inv_items = list(self.db.scalars(inv_stmt).all())
             items_map = {i.item_id: i for i in inv_items}
 
-        warehouses_map = {}
+        warehouses_map: dict[UUID, Any] = {}
         if warehouse_ids:
-            wh_list = db.query(Warehouse).filter(
+            wh_stmt = select(Warehouse).where(
                 Warehouse.warehouse_id.in_(warehouse_ids),
-                Warehouse.organization_id == org_id,
-            ).all()
+                Warehouse.organization_id == self.organization_id,
+            )
+            wh_list = list(self.db.scalars(wh_stmt).all())
             warehouses_map = {w.warehouse_id: w for w in wh_list}
 
-        projects_map = {}
+        projects_map: dict[UUID, Any] = {}
         if project_ids:
-            proj_list = db.query(Project).filter(
+            proj_stmt = select(Project).where(
                 Project.project_id.in_(project_ids),
-                Project.organization_id == org_id,
-            ).all()
+                Project.organization_id == self.organization_id,
+            )
+            proj_list = list(self.db.scalars(proj_stmt).all())
             projects_map = {p.project_id: p for p in proj_list}
 
         # Get default warehouse and requested by names
         default_warehouse_name = None
         if request.default_warehouse_id:
-            wh = db.query(Warehouse).filter(
-                Warehouse.warehouse_id == request.default_warehouse_id,
-                Warehouse.organization_id == org_id,
-            ).first()
+            wh_map = self._batch_load_warehouses([request.default_warehouse_id])
+            wh = wh_map.get(request.default_warehouse_id)
             if wh:
                 default_warehouse_name = f"{wh.warehouse_code} - {wh.warehouse_name}"
 
         requested_by_name = None
         if request.requested_by_id:
-            emp = (
-                db.query(Employee)
-                .join(Person, Person.id == Employee.person_id)
-                .filter(
-                    Employee.employee_id == request.requested_by_id,
-                    Employee.organization_id == org_id,
-                )
-                .first()
-            )
-            if emp and emp.person:
-                requested_by_name = emp.person.name
+            emp_map = self._batch_load_employee_names([request.requested_by_id])
+            requested_by_name = emp_map.get(request.requested_by_id)
 
         total_qty = (
             sum((item.requested_qty for item in request.items), Decimal("0"))
-            if request.items else Decimal("0")
+            if request.items
+            else Decimal("0")
         )
         total_ordered = (
             sum((item.ordered_qty for item in request.items), Decimal("0"))
-            if request.items else Decimal("0")
+            if request.items
+            else Decimal("0")
         )
 
         detail_items = []
@@ -402,21 +525,25 @@ class MaterialRequestWebService:
             wh = warehouses_map.get(item.warehouse_id) if item.warehouse_id else None
             proj = projects_map.get(item.project_id) if item.project_id else None
 
-            detail_items.append({
-                "item_id": str(item.item_id),
-                "item_code": inv_item.item_code if inv_item else "Unknown",
-                "item_name": inv_item.item_name if inv_item else "Unknown Item",
-                "warehouse_code": wh.warehouse_code if wh else None,
-                "warehouse_name": wh.warehouse_name if wh else None,
-                "requested_qty": _format_currency(item.requested_qty),
-                "ordered_qty": _format_currency(item.ordered_qty),
-                "pending_qty": _format_currency(item.requested_qty - item.ordered_qty),
-                "uom": item.uom or (inv_item.base_uom if inv_item else ""),
-                "schedule_date": _format_date(item.schedule_date),
-                "project_code": proj.project_code if proj else None,
-                "project_name": proj.project_name if proj else None,
-                "sequence": item.sequence,
-            })
+            detail_items.append(
+                {
+                    "item_id": str(item.item_id),
+                    "item_code": inv_item.item_code if inv_item else "Unknown",
+                    "item_name": (inv_item.item_name if inv_item else "Unknown Item"),
+                    "warehouse_code": wh.warehouse_code if wh else None,
+                    "warehouse_name": wh.warehouse_name if wh else None,
+                    "requested_qty": _format_quantity(item.requested_qty),
+                    "ordered_qty": _format_quantity(item.ordered_qty),
+                    "pending_qty": _format_quantity(
+                        item.requested_qty - item.ordered_qty
+                    ),
+                    "uom": item.uom or (inv_item.base_uom if inv_item else ""),
+                    "schedule_date": _format_date(item.schedule_date),
+                    "project_code": proj.project_code if proj else None,
+                    "project_name": proj.project_name if proj else None,
+                    "sequence": item.sequence,
+                }
+            )
 
         return {
             "material_request": {
@@ -428,126 +555,171 @@ class MaterialRequestWebService:
                 "warehouse_name": default_warehouse_name,
                 "requested_by_name": requested_by_name,
                 "remarks": request.remarks or "-",
-                "total_requested_qty": _format_currency(total_qty),
-                "total_ordered_qty": _format_currency(total_ordered),
-                "total_pending": _format_currency(total_qty - total_ordered),
+                "total_requested_qty": _format_quantity(total_qty),
+                "total_ordered_qty": _format_quantity(total_ordered),
+                "total_pending": _format_quantity(total_qty - total_ordered),
                 "total_items": len(request.items),
                 "created_at": _format_datetime(request.created_at),
-                "updated_at": _format_datetime(request.updated_at) if request.updated_at else None,
-                "last_synced_at": _format_datetime(request.last_synced_at) if request.last_synced_at else None,
+                "updated_at": (
+                    _format_datetime(request.updated_at) if request.updated_at else None
+                ),
+                "last_synced_at": (
+                    _format_datetime(request.last_synced_at)
+                    if request.last_synced_at
+                    else None
+                ),
                 "erpnext_id": request.erpnext_id,
                 "can_edit": request.status == MaterialRequestStatus.DRAFT,
                 "can_submit": request.status == MaterialRequestStatus.DRAFT,
-                "can_cancel": request.status in [MaterialRequestStatus.DRAFT, MaterialRequestStatus.SUBMITTED],
+                "can_cancel": request.status
+                in [
+                    MaterialRequestStatus.DRAFT,
+                    MaterialRequestStatus.SUBMITTED,
+                ],
                 "items": detail_items,
             },
         }
 
-    @staticmethod
     def report_context(
-        db: Session,
-        organization_id: str,
+        self,
+        *,
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
         group_by: str = "status",
     ) -> dict:
-        """Get context for material request report page."""
-        org_id = coerce_uuid(organization_id)
-
-        query = db.query(MaterialRequest).filter(MaterialRequest.organization_id == org_id)
-
+        """Get context for material request report page using SQL aggregation."""
+        base_filter = [MaterialRequest.organization_id == self.organization_id]
         if start_date:
-            query = query.filter(MaterialRequest.schedule_date >= start_date)
+            base_filter.append(MaterialRequest.schedule_date >= start_date)
         if end_date:
-            query = query.filter(MaterialRequest.schedule_date <= end_date)
+            base_filter.append(MaterialRequest.schedule_date <= end_date)
 
-        requests = query.options(joinedload(MaterialRequest.items)).order_by(MaterialRequest.created_at.desc()).all()
+        # Summary stats via SQL aggregation
+        pending_statuses = [
+            MaterialRequestStatus.DRAFT,
+            MaterialRequestStatus.SUBMITTED,
+            MaterialRequestStatus.PARTIALLY_ORDERED,
+        ]
+        completed_statuses = [
+            MaterialRequestStatus.ORDERED,
+            MaterialRequestStatus.ISSUED,
+            MaterialRequestStatus.TRANSFERRED,
+        ]
 
-        # Calculate totals
-        total_requests = len(requests)
-        total_items = sum(len(r.items) for r in requests)
-        total_qty = sum(
-            (sum((item.requested_qty for item in r.items), Decimal("0")) for r in requests),
-            Decimal("0"),
+        summary_stmt = (
+            select(
+                func.count(func.distinct(MaterialRequest.request_id)).label(
+                    "total_requests"
+                ),
+                func.count(MaterialRequestItem.item_id).label("total_items"),
+                func.coalesce(
+                    func.sum(MaterialRequestItem.requested_qty), Decimal("0")
+                ).label("total_qty"),
+                func.coalesce(
+                    func.sum(MaterialRequestItem.ordered_qty), Decimal("0")
+                ).label("total_ordered"),
+            )
+            .select_from(MaterialRequest)
+            .outerjoin(
+                MaterialRequestItem,
+                MaterialRequestItem.request_id == MaterialRequest.request_id,
+            )
+            .where(*base_filter)
         )
-        total_ordered = sum(
-            (sum((item.ordered_qty for item in r.items), Decimal("0")) for r in requests),
-            Decimal("0"),
+        summary_row = self.db.execute(summary_stmt).one()
+
+        # Pending/completed counts via status counts
+        status_count_stmt = (
+            select(MaterialRequest.status, func.count())
+            .where(*base_filter)
+            .group_by(MaterialRequest.status)
+        )
+        status_rows = self.db.execute(status_count_stmt).all()
+        status_counts = {s: c for s, c in status_rows}
+
+        pending_requests = sum(status_counts.get(s, 0) for s in pending_statuses)
+        completed_requests = sum(status_counts.get(s, 0) for s in completed_statuses)
+
+        # Group data via SQL aggregation
+        group_col = (
+            MaterialRequest.request_type
+            if group_by == "type"
+            else MaterialRequest.status
         )
 
-        # Calculate pending and completed
-        pending_requests = sum(1 for r in requests if r.status in [
-            MaterialRequestStatus.DRAFT, MaterialRequestStatus.SUBMITTED, MaterialRequestStatus.PARTIALLY_ORDERED
-        ])
-        completed_requests = sum(1 for r in requests if r.status in [
-            MaterialRequestStatus.ORDERED, MaterialRequestStatus.ISSUED, MaterialRequestStatus.TRANSFERRED
-        ])
+        group_stmt = (
+            select(
+                group_col.label("group_key"),
+                func.count(func.distinct(MaterialRequest.request_id)).label(
+                    "request_count"
+                ),
+                func.count(MaterialRequestItem.item_id).label("item_count"),
+                func.coalesce(
+                    func.sum(MaterialRequestItem.requested_qty), Decimal("0")
+                ).label("requested_qty"),
+                func.coalesce(
+                    func.sum(MaterialRequestItem.ordered_qty), Decimal("0")
+                ).label("ordered_qty"),
+            )
+            .select_from(MaterialRequest)
+            .outerjoin(
+                MaterialRequestItem,
+                MaterialRequestItem.request_id == MaterialRequest.request_id,
+            )
+            .where(*base_filter)
+            .group_by(group_col)
+        )
+        group_rows = self.db.execute(group_stmt).all()
 
-        # Group data based on group_by parameter
-        grouped_data: dict[str, _GroupTotals] = {}
-        if group_by == "status":
-            for req in requests:
-                key = req.status.value
-                if key not in grouped_data:
-                    grouped_data[key] = {"count": 0, "items": 0, "qty": Decimal("0"), "ordered": Decimal("0")}
-                grouped_data[key]["count"] += 1
-                grouped_data[key]["items"] += len(req.items)
-                grouped_data[key]["qty"] += sum(item.requested_qty for item in req.items)
-                grouped_data[key]["ordered"] += sum(item.ordered_qty for item in req.items)
-        elif group_by == "type":
-            for req in requests:
-                key = req.request_type.value
-                if key not in grouped_data:
-                    grouped_data[key] = {"count": 0, "items": 0, "qty": Decimal("0"), "ordered": Decimal("0")}
-                grouped_data[key]["count"] += 1
-                grouped_data[key]["items"] += len(req.items)
-                grouped_data[key]["qty"] += sum(item.requested_qty for item in req.items)
-                grouped_data[key]["ordered"] += sum(item.ordered_qty for item in req.items)
+        formatted_groups = [
+            {
+                "group_key": row.group_key.value,
+                "request_count": row.request_count,
+                "item_count": row.item_count,
+                "requested_qty": float(row.requested_qty),
+                "ordered_qty": float(row.ordered_qty),
+            }
+            for row in group_rows
+        ]
 
-        # Format grouped data for template
-        formatted_groups = []
-        for key, data in grouped_data.items():
-            formatted_groups.append({
-                "group_key": key,
-                "request_count": data["count"],
-                "item_count": data["items"],
-                "requested_qty": float(data["qty"]),
-                "ordered_qty": float(data["ordered"]),
-            })
+        # Recent requests with batch employee loading
+        recent_stmt = (
+            select(MaterialRequest)
+            .options(selectinload(MaterialRequest.items))
+            .where(*base_filter)
+            .order_by(MaterialRequest.created_at.desc())
+            .limit(10)
+        )
+        recent_requests_raw = list(self.db.scalars(recent_stmt).all())
 
-        # Build recent requests for display
-        recent_requests = []
-        for req in requests[:10]:
-            # Get requested by name
-            requested_by_name = None
-            if req.requested_by_id:
-                emp = (
-                    db.query(Employee)
-                    .join(Person, Person.id == Employee.person_id)
-                    .filter(Employee.employee_id == req.requested_by_id)
-                    .first()
-                )
-                if emp and emp.person:
-                    requested_by_name = emp.person.name
+        employee_ids = [
+            r.requested_by_id for r in recent_requests_raw if r.requested_by_id
+        ]
+        emp_names = self._batch_load_employee_names(employee_ids)
 
-            recent_requests.append({
+        recent_requests = [
+            {
                 "request_id": str(req.request_id),
                 "request_number": req.request_number,
                 "request_type": req.request_type.value,
                 "status": req.status.value,
                 "schedule_date": _format_date(req.schedule_date),
                 "item_count": len(req.items) if req.items else 0,
-                "requested_by_name": requested_by_name,
-            })
+                "requested_by_name": (
+                    emp_names.get(req.requested_by_id) if req.requested_by_id else None
+                ),
+            }
+            for req in recent_requests_raw
+        ]
 
         return {
             "summary": {
-                "total_requests": total_requests,
+                "total_requests": summary_row.total_requests,
                 "pending_requests": pending_requests,
                 "completed_requests": completed_requests,
-                "total_items": total_items,
-                "total_requested_qty": float(total_qty),
-                "total_ordered_qty": float(total_ordered),
+                "total_items": summary_row.total_items,
+                "total_requested_qty": float(summary_row.total_qty),
+                "total_ordered_qty": float(summary_row.total_ordered),
             },
             "grouped_data": formatted_groups,
             "recent_requests": recent_requests,
@@ -556,10 +728,8 @@ class MaterialRequestWebService:
             "filter_end_date": end_date or "",
         }
 
-    @staticmethod
     def create_from_form(
-        db: Session,
-        organization_id: UUID,
+        self,
         user_id: UUID,
         request_type: str,
         schedule_date: Optional[str] = None,
@@ -573,9 +743,9 @@ class MaterialRequestWebService:
 
         # Generate request number
         request_number = sequence_service.get_next_number(
-            db,
-            organization_id,
-            SequenceType.PURCHASE_ORDER,
+            self.db,
+            self.organization_id,
+            SequenceType.MATERIAL_REQUEST,
         )
 
         # Parse date
@@ -585,55 +755,29 @@ class MaterialRequestWebService:
 
         # Create request
         request = MaterialRequest(
-            organization_id=organization_id,
+            organization_id=self.organization_id,
             request_number=request_number,
             request_type=MaterialRequestType(request_type),
             status=MaterialRequestStatus.DRAFT,
             schedule_date=parsed_date,
-            default_warehouse_id=coerce_uuid(default_warehouse_id) if default_warehouse_id else None,
-            requested_by_id=coerce_uuid(requested_by_id) if requested_by_id else None,
+            default_warehouse_id=(
+                coerce_uuid(default_warehouse_id) if default_warehouse_id else None
+            ),
+            requested_by_id=(coerce_uuid(requested_by_id) if requested_by_id else None),
             remarks=remarks,
             created_by_id=user_id,
         )
 
-        db.add(request)
-        db.flush()
+        self.db.add(request)
+        self.db.flush()
 
         # Add items
-        if items:
-            for seq, item_data in enumerate(items, 1):
-                item_schedule = None
-                if item_data.get("schedule_date"):
-                    item_schedule = datetime.strptime(item_data["schedule_date"], "%Y-%m-%d").date()
-
-                # Support both item_id and inventory_item_id for flexibility
-                inv_item_id = item_data.get("item_id") or item_data.get("inventory_item_id")
-                if not inv_item_id:
-                    continue
-
-                # Support both qty and requested_qty
-                qty = item_data.get("qty") or item_data.get("requested_qty") or "0"
-
-                item = MaterialRequestItem(
-                    organization_id=organization_id,
-                    request_id=request.request_id,
-                    inventory_item_id=coerce_uuid(inv_item_id),
-                    warehouse_id=coerce_uuid(item_data.get("warehouse_id")) if item_data.get("warehouse_id") else None,
-                    requested_qty=Decimal(str(qty)),
-                    ordered_qty=Decimal("0"),
-                    uom=item_data.get("uom"),
-                    schedule_date=item_schedule,
-                    project_id=coerce_uuid(item_data.get("project_id")) if item_data.get("project_id") else None,
-                    sequence=seq,
-                )
-                db.add(item)
+        self._add_items_from_form(request.request_id, items)
 
         return request
 
-    @staticmethod
     def update_from_form(
-        db: Session,
-        organization_id: UUID,
+        self,
         user_id: UUID,
         request_id: str,
         request_type: str,
@@ -644,8 +788,8 @@ class MaterialRequestWebService:
         items: Optional[list[dict]] = None,
     ) -> MaterialRequest:
         """Update a material request from form data."""
-        request = db.get(MaterialRequest, coerce_uuid(request_id))
-        if not request or request.organization_id != organization_id:
+        request = self.db.get(MaterialRequest, coerce_uuid(request_id))
+        if not request or request.organization_id != self.organization_id:
             raise ValueError("Material request not found")
 
         if request.status != MaterialRequestStatus.DRAFT:
@@ -659,61 +803,86 @@ class MaterialRequestWebService:
         # Update request
         request.request_type = MaterialRequestType(request_type)
         request.schedule_date = parsed_date
-        request.default_warehouse_id = coerce_uuid(default_warehouse_id) if default_warehouse_id else None
-        request.requested_by_id = coerce_uuid(requested_by_id) if requested_by_id else None
+        request.default_warehouse_id = (
+            coerce_uuid(default_warehouse_id) if default_warehouse_id else None
+        )
+        request.requested_by_id = (
+            coerce_uuid(requested_by_id) if requested_by_id else None
+        )
         request.remarks = remarks
         request.updated_by_id = user_id
 
-        # Delete existing items
+        # Delete existing items and recreate
         for item in request.items:
-            db.delete(item)
-        db.flush()
+            self.db.delete(item)
+        self.db.flush()
 
-        # Add new items
-        if items:
-            for seq, item_data in enumerate(items, 1):
-                item_schedule = None
-                if item_data.get("schedule_date"):
-                    item_schedule = datetime.strptime(item_data["schedule_date"], "%Y-%m-%d").date()
-
-                # Support both item_id and inventory_item_id for flexibility
-                inv_item_id = item_data.get("item_id") or item_data.get("inventory_item_id")
-                if not inv_item_id:
-                    continue
-
-                # Support both qty and requested_qty
-                qty = item_data.get("qty") or item_data.get("requested_qty") or "0"
-
-                item = MaterialRequestItem(
-                    organization_id=organization_id,
-                    request_id=request.request_id,
-                    inventory_item_id=coerce_uuid(inv_item_id),
-                    warehouse_id=coerce_uuid(item_data.get("warehouse_id")) if item_data.get("warehouse_id") else None,
-                    requested_qty=Decimal(str(qty)),
-                    ordered_qty=Decimal("0"),
-                    uom=item_data.get("uom"),
-                    schedule_date=item_schedule,
-                    project_id=coerce_uuid(item_data.get("project_id")) if item_data.get("project_id") else None,
-                    sequence=seq,
-                )
-                db.add(item)
+        self._add_items_from_form(request.request_id, items)
 
         return request
 
-    @staticmethod
+    def _add_items_from_form(
+        self,
+        request_id: UUID,
+        items: Optional[list[dict]],
+    ) -> None:
+        """Parse and add line items from form data with validation."""
+        if not items:
+            return
+
+        for seq, item_data in enumerate(items, 1):
+            item_schedule = None
+            if item_data.get("schedule_date"):
+                item_schedule = datetime.strptime(
+                    item_data["schedule_date"], "%Y-%m-%d"
+                ).date()
+
+            inv_item_id = item_data.get("item_id") or item_data.get("inventory_item_id")
+            if not inv_item_id:
+                continue
+
+            # Parse and validate quantity
+            raw_qty = item_data.get("qty") or item_data.get("requested_qty") or "0"
+            try:
+                qty_value = Decimal(str(raw_qty))
+            except (InvalidOperation, ValueError) as e:
+                raise ValueError(f"Invalid quantity value: {raw_qty}") from e
+            if qty_value <= 0:
+                raise ValueError(f"Item quantity must be positive, got {qty_value}")
+
+            item = MaterialRequestItem(
+                organization_id=self.organization_id,
+                request_id=request_id,
+                inventory_item_id=coerce_uuid(inv_item_id),
+                warehouse_id=(
+                    coerce_uuid(item_data.get("warehouse_id"))
+                    if item_data.get("warehouse_id")
+                    else None
+                ),
+                requested_qty=qty_value,
+                ordered_qty=Decimal("0"),
+                uom=item_data.get("uom"),
+                schedule_date=item_schedule,
+                project_id=(
+                    coerce_uuid(item_data.get("project_id"))
+                    if item_data.get("project_id")
+                    else None
+                ),
+                sequence=seq,
+            )
+            self.db.add(item)
+
     def submit_request(
-        db: Session,
-        organization_id: UUID,
+        self,
         user_id: UUID,
         request_id: str,
     ) -> MaterialRequest:
         """Submit a material request."""
-        request = db.get(MaterialRequest, coerce_uuid(request_id))
-        if not request or request.organization_id != organization_id:
+        request = self.db.get(MaterialRequest, coerce_uuid(request_id))
+        if not request or request.organization_id != self.organization_id:
             raise ValueError("Material request not found")
 
-        if request.status != MaterialRequestStatus.DRAFT:
-            raise ValueError("Only draft requests can be submitted")
+        self._validate_transition(request.status, MaterialRequestStatus.SUBMITTED)
 
         if not request.items:
             raise ValueError("Cannot submit request without items")
@@ -723,75 +892,74 @@ class MaterialRequestWebService:
 
         return request
 
-    @staticmethod
     def cancel_request(
-        db: Session,
-        organization_id: UUID,
+        self,
         user_id: UUID,
         request_id: str,
     ) -> MaterialRequest:
         """Cancel a material request."""
-        request = db.get(MaterialRequest, coerce_uuid(request_id))
-        if not request or request.organization_id != organization_id:
+        request = self.db.get(MaterialRequest, coerce_uuid(request_id))
+        if not request or request.organization_id != self.organization_id:
             raise ValueError("Material request not found")
 
-        if request.status not in [MaterialRequestStatus.DRAFT, MaterialRequestStatus.SUBMITTED]:
-            raise ValueError("Only draft or submitted requests can be cancelled")
+        self._validate_transition(request.status, MaterialRequestStatus.CANCELLED)
 
         request.status = MaterialRequestStatus.CANCELLED
         request.updated_by_id = user_id
 
         return request
 
-    @staticmethod
-    def dashboard_context(db: Session, organization_id: str) -> dict:
+    def dashboard_context(self) -> dict:
         """Get material request metrics for dashboard widget."""
-        org_id = coerce_uuid(organization_id)
-
-        # Status counts
-        status_counts = (
-            db.query(MaterialRequest.status, func.count())
-            .filter(MaterialRequest.organization_id == org_id)
+        # Status counts via SQL
+        status_stmt = (
+            select(MaterialRequest.status, func.count())
+            .where(MaterialRequest.organization_id == self.organization_id)
             .group_by(MaterialRequest.status)
-            .all()
         )
+        status_counts = self.db.execute(status_stmt).all()
         counts = {s.value: c for s, c in status_counts}
 
-        # Calculate totals
         total_requests = sum(counts.values())
         draft_count = counts.get("DRAFT", 0)
         submitted_count = counts.get("SUBMITTED", 0)
-        pending_count = draft_count + submitted_count + counts.get("PARTIALLY_ORDERED", 0)
+        pending_count = (
+            draft_count + submitted_count + counts.get("PARTIALLY_ORDERED", 0)
+        )
         completed_count = (
             counts.get("ORDERED", 0)
             + counts.get("ISSUED", 0)
             + counts.get("TRANSFERRED", 0)
         )
 
-        # Get recent pending requests (draft or submitted)
-        recent_pending = (
-            db.query(MaterialRequest)
-            .filter(
-                MaterialRequest.organization_id == org_id,
-                MaterialRequest.status.in_([
-                    MaterialRequestStatus.DRAFT,
-                    MaterialRequestStatus.SUBMITTED,
-                    MaterialRequestStatus.PARTIALLY_ORDERED,
-                ]),
+        # Recent pending requests with item counts via single query
+        pending_stmt = (
+            select(
+                MaterialRequest,
+                func.count(MaterialRequestItem.item_id).label("item_count"),
             )
+            .outerjoin(
+                MaterialRequestItem,
+                MaterialRequestItem.request_id == MaterialRequest.request_id,
+            )
+            .where(
+                MaterialRequest.organization_id == self.organization_id,
+                MaterialRequest.status.in_(
+                    [
+                        MaterialRequestStatus.DRAFT,
+                        MaterialRequestStatus.SUBMITTED,
+                        MaterialRequestStatus.PARTIALLY_ORDERED,
+                    ]
+                ),
+            )
+            .group_by(MaterialRequest.request_id)
             .order_by(MaterialRequest.created_at.desc())
             .limit(5)
-            .all()
         )
+        pending_rows = self.db.execute(pending_stmt).all()
 
-        recent_pending_list = []
-        for req in recent_pending:
-            item_count = (
-                db.query(func.count())
-                .filter(MaterialRequestItem.request_id == req.request_id)
-                .scalar()
-            )
-            recent_pending_list.append({
+        recent_pending_list = [
+            {
                 "request_id": str(req.request_id),
                 "request_number": req.request_number,
                 "request_type": req.request_type.value,
@@ -799,7 +967,9 @@ class MaterialRequestWebService:
                 "status_label": req.status.value.replace("_", " ").title(),
                 "schedule_date": _format_date(req.schedule_date),
                 "item_count": item_count,
-            })
+            }
+            for req, item_count in pending_rows
+        ]
 
         return {
             "material_request_stats": {
@@ -813,4 +983,13 @@ class MaterialRequestWebService:
         }
 
 
-material_request_web_service = MaterialRequestWebService()
+class _MaterialRequestWebFacade:
+    """Facade to match dashboard usage patterns in other web services."""
+
+    @staticmethod
+    def dashboard_context(db: Session, organization_id: str) -> dict:
+        service = MaterialRequestWebService(db, coerce_uuid(organization_id))
+        return service.dashboard_context()
+
+
+material_request_web_service = _MaterialRequestWebFacade()

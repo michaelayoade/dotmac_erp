@@ -8,6 +8,7 @@ import logging
 from typing import Any, Dict, Optional
 from uuid import UUID
 
+from sqlalchemy import inspect
 from sqlalchemy.orm import Session
 
 from app.models.fleet.enums import (
@@ -24,6 +25,7 @@ from app.models.fleet.enums import (
     VehicleStatus,
     VehicleType,
 )
+from app.services.common import NotFoundError
 from app.services.common import PaginationParams, coerce_uuid
 from app.services.fleet.assignment_service import AssignmentService
 from app.services.fleet.document_service import DocumentService
@@ -42,12 +44,43 @@ class FleetWebService:
     def __init__(self, db: Session):
         self.db = db
 
+    def _fleet_tables_ready(self) -> bool:
+        """Check if fleet schema tables exist to avoid hard failures."""
+        try:
+            inspector = inspect(self.db.get_bind())
+            return inspector.has_table("vehicle", schema="fleet")
+        except Exception:
+            logger.exception("Failed to inspect fleet schema tables")
+            return False
+
+    def _empty_list_context(self) -> Dict[str, Any]:
+        return {
+            "total": 0,
+            "page": 1,
+            "total_pages": 1,
+            "has_next": False,
+            "has_prev": False,
+        }
+
     # ─────────────────────────────────────────────────────────────
     # Dashboard
     # ─────────────────────────────────────────────────────────────
 
     def dashboard_context(self, organization_id: UUID) -> Dict[str, Any]:
         """Build context for fleet dashboard page."""
+        if not self._fleet_tables_ready():
+            return {
+                "summary": {},
+                "due_maintenance": [],
+                "due_maintenance_count": 0,
+                "expiring_documents": [],
+                "expiring_documents_count": 0,
+                "pending_reservations": [],
+                "pending_reservations_count": 0,
+                "active_reservations": [],
+                "open_incidents": [],
+                "open_incidents_count": 0,
+            }
         org_id = coerce_uuid(organization_id)
         vehicle_service = VehicleService(self.db, org_id)
         maintenance_service = MaintenanceService(self.db, org_id)
@@ -98,6 +131,21 @@ class FleetWebService:
         limit: int = 25,
     ) -> Dict[str, Any]:
         """Build context for vehicles list page."""
+        if not self._fleet_tables_ready():
+            context = self._empty_list_context()
+            context.update(
+                {
+                    "vehicles": [],
+                    "status_counts": {},
+                    "statuses": [s.value for s in VehicleStatus],
+                    "vehicle_types": [t.value for t in VehicleType],
+                    "assignment_types": [a.value for a in AssignmentType],
+                    "current_status": status,
+                    "current_type": vehicle_type,
+                    "current_department_id": department_id,
+                }
+            )
+            return context
         org_id = coerce_uuid(organization_id)
         service = VehicleService(self.db, org_id)
 
@@ -138,6 +186,14 @@ class FleetWebService:
         vehicle_id: Optional[UUID] = None,
     ) -> Dict[str, Any]:
         """Build context for vehicle create/edit form."""
+        if not self._fleet_tables_ready():
+            return {
+                "vehicle_types": [t.value for t in VehicleType],
+                "fuel_types": [f.value for f in FuelType],
+                "ownership_types": [o.value for o in OwnershipType],
+                "assignment_types": [a.value for a in AssignmentType],
+                "vehicle": None,
+            }
         org_id = coerce_uuid(organization_id)
         context: Dict[str, Any] = {
             "vehicle_types": [t.value for t in VehicleType],
@@ -159,6 +215,8 @@ class FleetWebService:
         vehicle_id: UUID,
     ) -> Dict[str, Any]:
         """Build context for vehicle detail page."""
+        if not self._fleet_tables_ready():
+            raise NotFoundError("Fleet module not initialized.")
         org_id = coerce_uuid(organization_id)
         vid = coerce_uuid(vehicle_id)
 
@@ -238,6 +296,19 @@ class FleetWebService:
         limit: int = 25,
     ) -> Dict[str, Any]:
         """Build context for maintenance list page."""
+        if not self._fleet_tables_ready():
+            context = self._empty_list_context()
+            context.update(
+                {
+                    "maintenance_records": [],
+                    "statuses": [s.value for s in MaintenanceStatus],
+                    "maintenance_types": [t.value for t in MaintenanceType],
+                    "current_status": status,
+                    "current_maintenance_type": maintenance_type,
+                    "current_vehicle_id": vehicle_id,
+                }
+            )
+            return context
         org_id = coerce_uuid(organization_id)
         service = MaintenanceService(self.db, org_id)
 
@@ -273,6 +344,12 @@ class FleetWebService:
         vehicle_id: Optional[UUID] = None,
     ) -> Dict[str, Any]:
         """Build context for maintenance create form."""
+        if not self._fleet_tables_ready():
+            return {
+                "vehicles": [],
+                "maintenance_types": [t.value for t in MaintenanceType],
+                "selected_vehicle_id": vehicle_id,
+            }
         org_id = coerce_uuid(organization_id)
         vehicle_service = VehicleService(self.db, org_id)
 
@@ -296,6 +373,8 @@ class FleetWebService:
         record_id: UUID,
     ) -> Dict[str, Any]:
         """Build context for maintenance detail page."""
+        if not self._fleet_tables_ready():
+            raise NotFoundError("Fleet module not initialized.")
         org_id = coerce_uuid(organization_id)
         service = MaintenanceService(self.db, org_id)
         record = service.get_or_raise(record_id)
@@ -318,6 +397,17 @@ class FleetWebService:
         limit: int = 25,
     ) -> Dict[str, Any]:
         """Build context for fuel logs page."""
+        if not self._fleet_tables_ready():
+            context = self._empty_list_context()
+            context.update(
+                {
+                    "fuel_logs": [],
+                    "monthly_summary": [],
+                    "fuel_types": [f.value for f in FuelType],
+                    "current_vehicle_id": vehicle_id,
+                }
+            )
+            return context
         org_id = coerce_uuid(organization_id)
         service = FuelService(self.db, org_id)
 
@@ -349,6 +439,12 @@ class FleetWebService:
         vehicle_id: Optional[UUID] = None,
     ) -> Dict[str, Any]:
         """Build context for fuel log create form."""
+        if not self._fleet_tables_ready():
+            return {
+                "vehicles": [],
+                "fuel_types": [f.value for f in FuelType],
+                "selected_vehicle_id": vehicle_id,
+            }
         org_id = coerce_uuid(organization_id)
         vehicle_service = VehicleService(self.db, org_id)
 
@@ -378,6 +474,21 @@ class FleetWebService:
         limit: int = 25,
     ) -> Dict[str, Any]:
         """Build context for incidents list page."""
+        if not self._fleet_tables_ready():
+            context = self._empty_list_context()
+            context.update(
+                {
+                    "incidents": [],
+                    "cost_summary": {},
+                    "statuses": [s.value for s in IncidentStatus],
+                    "incident_types": [t.value for t in IncidentType],
+                    "severities": [s.value for s in IncidentSeverity],
+                    "current_status": status,
+                    "current_severity": severity,
+                    "current_vehicle_id": vehicle_id,
+                }
+            )
+            return context
         org_id = coerce_uuid(organization_id)
         service = IncidentService(self.db, org_id)
 
@@ -418,6 +529,13 @@ class FleetWebService:
         vehicle_id: Optional[UUID] = None,
     ) -> Dict[str, Any]:
         """Build context for incident report form."""
+        if not self._fleet_tables_ready():
+            return {
+                "vehicles": [],
+                "incident_types": [t.value for t in IncidentType],
+                "severities": [s.value for s in IncidentSeverity],
+                "selected_vehicle_id": vehicle_id,
+            }
         org_id = coerce_uuid(organization_id)
         vehicle_service = VehicleService(self.db, org_id)
 
@@ -439,6 +557,8 @@ class FleetWebService:
         incident_id: UUID,
     ) -> Dict[str, Any]:
         """Build context for incident detail page."""
+        if not self._fleet_tables_ready():
+            raise NotFoundError("Fleet module not initialized.")
         org_id = coerce_uuid(organization_id)
         service = IncidentService(self.db, org_id)
         incident = service.get_or_raise(incident_id)
@@ -462,6 +582,19 @@ class FleetWebService:
         limit: int = 25,
     ) -> Dict[str, Any]:
         """Build context for reservations list page."""
+        if not self._fleet_tables_ready():
+            context = self._empty_list_context()
+            context.update(
+                {
+                    "reservations": [],
+                    "pending_count": 0,
+                    "pool_vehicles": [],
+                    "statuses": [s.value for s in ReservationStatus],
+                    "current_status": status,
+                    "current_vehicle_id": vehicle_id,
+                }
+            )
+            return context
         org_id = coerce_uuid(organization_id)
         service = ReservationService(self.db, org_id)
         vehicle_service = VehicleService(self.db, org_id)
@@ -504,6 +637,8 @@ class FleetWebService:
         organization_id: UUID,
     ) -> Dict[str, Any]:
         """Build context for reservation create form."""
+        if not self._fleet_tables_ready():
+            return {"pool_vehicles": []}
         org_id = coerce_uuid(organization_id)
         vehicle_service = VehicleService(self.db, org_id)
 
@@ -524,6 +659,8 @@ class FleetWebService:
         reservation_id: UUID,
     ) -> Dict[str, Any]:
         """Build context for reservation detail page."""
+        if not self._fleet_tables_ready():
+            raise NotFoundError("Fleet module not initialized.")
         org_id = coerce_uuid(organization_id)
         service = ReservationService(self.db, org_id)
         reservation = service.get_or_raise(reservation_id)
@@ -549,6 +686,19 @@ class FleetWebService:
         limit: int = 25,
     ) -> Dict[str, Any]:
         """Build context for documents list page."""
+        if not self._fleet_tables_ready():
+            context = self._empty_list_context()
+            context.update(
+                {
+                    "documents": [],
+                    "expiring_count": 0,
+                    "expired_count": 0,
+                    "document_types": [t.value for t in DocumentType],
+                    "current_type": document_type,
+                    "current_vehicle_id": vehicle_id,
+                }
+            )
+            return context
         org_id = coerce_uuid(organization_id)
         service = DocumentService(self.db, org_id)
 
@@ -588,6 +738,12 @@ class FleetWebService:
         vehicle_id: Optional[UUID] = None,
     ) -> Dict[str, Any]:
         """Build context for document create form."""
+        if not self._fleet_tables_ready():
+            return {
+                "vehicles": [],
+                "document_types": [t.value for t in DocumentType],
+                "selected_vehicle_id": vehicle_id,
+            }
         org_id = coerce_uuid(organization_id)
         vehicle_service = VehicleService(self.db, org_id)
 
@@ -608,6 +764,8 @@ class FleetWebService:
         document_id: UUID,
     ) -> Dict[str, Any]:
         """Build context for document detail page."""
+        if not self._fleet_tables_ready():
+            raise NotFoundError("Fleet module not initialized.")
         org_id = coerce_uuid(organization_id)
         service = DocumentService(self.db, org_id)
         doc = service.get_or_raise(document_id)
