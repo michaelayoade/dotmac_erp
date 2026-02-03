@@ -3,9 +3,9 @@ from decimal import Decimal
 import uuid
 from unittest.mock import MagicMock
 
-from app.models.finance.fa.asset import Asset
-from app.models.finance.fa.asset_category import AssetCategory
-from app.services.finance.fa.fa_posting_adapter import FAPostingAdapter
+from app.models.fixed_assets.asset import Asset
+from app.models.fixed_assets.asset_category import AssetCategory
+from app.services.fixed_assets.fa_posting_adapter import FAPostingAdapter
 from app.services.finance.gl.journal import JournalService
 from app.services.finance.gl.ledger_posting import LedgerPostingService, PostingResult
 from app.services.finance.platform import org_context_service

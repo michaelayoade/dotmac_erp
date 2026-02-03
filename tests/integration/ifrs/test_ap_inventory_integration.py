@@ -18,7 +18,7 @@ from app.models.finance.ap.purchase_order import PurchaseOrder, POStatus
 from app.models.finance.ap.purchase_order_line import PurchaseOrderLine
 from app.models.finance.ap.goods_receipt import GoodsReceipt, ReceiptStatus
 from app.models.finance.ap.goods_receipt_line import GoodsReceiptLine
-from app.models.finance.inv.item import CostingMethod
+from app.models.inventory.item import CostingMethod
 
 
 class TestGoodsReceiptInventoryIntegration:
@@ -147,7 +147,7 @@ class TestGoodsReceiptInventoryIntegration:
         assert gr_line.quantity_accepted == Decimal("50")
 
         # Check inventory transaction was created
-        from app.models.finance.inv.inventory_transaction import InventoryTransaction
+        from app.models.inventory.inventory_transaction import InventoryTransaction
 
         txn = db.query(InventoryTransaction).filter(
             InventoryTransaction.source_document_type == "GOODS_RECEIPT",

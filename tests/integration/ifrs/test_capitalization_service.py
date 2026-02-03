@@ -13,8 +13,8 @@ from sqlalchemy.orm import Session
 
 from app.models.finance.ap.supplier_invoice import SupplierInvoiceStatus
 from app.models.finance.ap.supplier_invoice_line import SupplierInvoiceLine
-from app.models.finance.fa.asset import Asset, AssetStatus
-from app.services.finance.fa.capitalization import CapitalizationService
+from app.models.fixed_assets.asset import Asset, AssetStatus
+from app.services.fixed_assets.capitalization import CapitalizationService
 
 
 class TestValidateCapitalizationThreshold:

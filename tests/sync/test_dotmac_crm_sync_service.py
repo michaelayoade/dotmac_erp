@@ -623,7 +623,7 @@ class TestInventorySync:
         assert result.total_count == 0
         assert result.has_more is False
 
-    @patch("app.services.finance.inv.balance.InventoryBalanceService")
+    @patch("app.services.inventory.balance.InventoryBalanceService")
     def test_list_inventory_items_with_data(self, mock_balance_class, service, org_id):
         """Should return items with stock data."""
         # Create mock item and category
@@ -669,7 +669,7 @@ class TestInventorySync:
 
         assert result is None
 
-    @patch("app.services.finance.inv.balance.InventoryBalanceService")
+    @patch("app.services.inventory.balance.InventoryBalanceService")
     def test_get_inventory_item_detail_success(self, mock_balance_class, service, org_id):
         """Should return detailed item info with warehouse breakdown."""
         item_id = uuid.uuid4()
@@ -732,7 +732,7 @@ class TestInventorySync:
         assert result.warehouses[0].warehouse_code == "WH-MAIN"
         assert result.warehouses[0].warehouse_name == "Main Warehouse"
 
-    @patch("app.services.finance.inv.balance.InventoryBalanceService")
+    @patch("app.services.inventory.balance.InventoryBalanceService")
     def test_list_inventory_items_filtered_pagination(self, mock_balance_class, service, org_id):
         """Filtered pagination should count and page based on available stock."""
         mock_item1 = MagicMock()

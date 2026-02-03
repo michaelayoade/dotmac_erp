@@ -12,8 +12,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi import HTTPException
 
-from app.models.finance.inv.price_list import PriceListType
-from app.services.finance.inv.price_list import (
+from app.models.inventory.price_list import PriceListType
+from app.services.inventory.price_list import (
     PriceListService,
     PriceListInput,
     PriceListItemInput,
@@ -807,7 +807,7 @@ class TestModuleInstance:
 
     def test_singleton_instance_exists(self):
         """Should have module-level price_list_service instance."""
-        from app.services.finance.inv.price_list import price_list_service
+        from app.services.inventory.price_list import price_list_service
 
         assert price_list_service is not None
         assert isinstance(price_list_service, PriceListService)

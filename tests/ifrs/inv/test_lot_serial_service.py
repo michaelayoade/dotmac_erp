@@ -9,7 +9,7 @@ from uuid import uuid4
 
 import pytest
 
-from app.services.finance.inv.lot_serial import (
+from app.services.inventory.lot_serial import (
     LotSerialService,
     LotInput,
 )

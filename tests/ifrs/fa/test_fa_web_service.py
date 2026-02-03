@@ -15,72 +15,72 @@ class TestFAWebServiceHelpers:
 
     def test_format_date_with_value(self):
         """Test date formatting with valid date."""
-        from app.services.finance.fa.web import _format_date
+        from app.services.fixed_assets.web import _format_date
 
         result = _format_date(date(2024, 1, 15))
         assert result == "2024-01-15"
 
     def test_format_date_none(self):
         """Test date formatting with None."""
-        from app.services.finance.fa.web import _format_date
+        from app.services.fixed_assets.web import _format_date
 
         result = _format_date(None)
         assert result == ""
 
     def test_format_currency_usd(self):
         """Test currency formatting for USD."""
-        from app.services.finance.fa.web import _format_currency
+        from app.services.fixed_assets.web import _format_currency
 
         result = _format_currency(Decimal("1234.56"), "USD")
         assert result == "$1,234.56"
 
     def test_format_currency_other(self):
         """Test currency formatting for other currencies."""
-        from app.services.finance.fa.web import _format_currency
+        from app.services.fixed_assets.web import _format_currency
 
         result = _format_currency(Decimal("1234.56"), "EUR")
         assert result == "EUR 1,234.56"
 
     def test_format_currency_none(self):
         """Test currency formatting with None."""
-        from app.services.finance.fa.web import _format_currency
+        from app.services.fixed_assets.web import _format_currency
 
         result = _format_currency(None)
         assert result == ""
 
     def test_parse_status_valid(self):
         """Test status parsing with valid value."""
-        from app.services.finance.fa.web import _parse_status
-        from app.models.finance.fa.asset import AssetStatus
+        from app.services.fixed_assets.web import _parse_status
+        from app.models.fixed_assets.asset import AssetStatus
 
         result = _parse_status("ACTIVE")
         assert result == AssetStatus.ACTIVE
 
     def test_parse_status_lowercase(self):
         """Test status parsing with lowercase value."""
-        from app.services.finance.fa.web import _parse_status
-        from app.models.finance.fa.asset import AssetStatus
+        from app.services.fixed_assets.web import _parse_status
+        from app.models.fixed_assets.asset import AssetStatus
 
         result = _parse_status("active")
         assert result == AssetStatus.ACTIVE
 
     def test_parse_status_none(self):
         """Test status parsing with None."""
-        from app.services.finance.fa.web import _parse_status
+        from app.services.fixed_assets.web import _parse_status
 
         result = _parse_status(None)
         assert result is None
 
     def test_parse_status_invalid(self):
         """Test status parsing with invalid value."""
-        from app.services.finance.fa.web import _parse_status
+        from app.services.fixed_assets.web import _parse_status
 
         result = _parse_status("INVALID_STATUS")
         assert result is None
 
     def test_try_uuid_valid(self):
         """Test UUID parsing with valid value."""
-        from app.services.finance.fa.web import _try_uuid
+        from app.services.fixed_assets.web import _try_uuid
 
         test_uuid = uuid.uuid4()
         result = _try_uuid(str(test_uuid))
@@ -88,14 +88,14 @@ class TestFAWebServiceHelpers:
 
     def test_try_uuid_none(self):
         """Test UUID parsing with None."""
-        from app.services.finance.fa.web import _try_uuid
+        from app.services.fixed_assets.web import _try_uuid
 
         result = _try_uuid(None)
         assert result is None
 
     def test_try_uuid_invalid(self):
         """Test UUID parsing with invalid value."""
-        from app.services.finance.fa.web import _try_uuid
+        from app.services.fixed_assets.web import _try_uuid
 
         result = _try_uuid("not-a-uuid")
         assert result is None
@@ -105,7 +105,7 @@ class MockAsset:
     """Mock Asset for testing."""
 
     def __init__(self, **kwargs):
-        from app.models.finance.fa.asset import AssetStatus
+        from app.models.fixed_assets.asset import AssetStatus
 
         self.asset_id = kwargs.get("asset_id", uuid.uuid4())
         self.organization_id = kwargs.get("organization_id", uuid.uuid4())
@@ -136,7 +136,7 @@ class MockDepreciationRun:
     """Mock DepreciationRun for testing."""
 
     def __init__(self, **kwargs):
-        from app.models.finance.fa.depreciation_run import DepreciationRunStatus
+        from app.models.fixed_assets.depreciation_run import DepreciationRunStatus
 
         self.run_id = kwargs.get("run_id", uuid.uuid4())
         self.organization_id = kwargs.get("organization_id", uuid.uuid4())
@@ -164,8 +164,8 @@ class TestFAWebServiceListAssets:
 
     def test_list_assets_context_success(self):
         """Test successful assets list context."""
-        from app.services.finance.fa.web import FixedAssetWebService
-        from app.models.finance.fa.asset import AssetStatus
+        from app.services.fixed_assets.web import FixedAssetWebService
+        from app.models.fixed_assets.asset import AssetStatus
 
         mock_db = MagicMock()
         org_id = uuid.uuid4()
@@ -202,7 +202,7 @@ class TestFAWebServiceListAssets:
 
     def test_list_assets_context_with_search(self):
         """Test assets list context with search filter."""
-        from app.services.finance.fa.web import FixedAssetWebService
+        from app.services.fixed_assets.web import FixedAssetWebService
 
         mock_db = MagicMock()
         org_id = uuid.uuid4()
@@ -233,7 +233,7 @@ class TestFAWebServiceListAssets:
 
     def test_list_assets_context_with_status(self):
         """Test assets list context with status filter."""
-        from app.services.finance.fa.web import FixedAssetWebService
+        from app.services.fixed_assets.web import FixedAssetWebService
 
         mock_db = MagicMock()
         org_id = uuid.uuid4()
@@ -263,7 +263,7 @@ class TestFAWebServiceListAssets:
 
     def test_list_assets_context_with_category_uuid(self):
         """Test assets list context with category UUID filter."""
-        from app.services.finance.fa.web import FixedAssetWebService
+        from app.services.fixed_assets.web import FixedAssetWebService
 
         mock_db = MagicMock()
         org_id = uuid.uuid4()
@@ -294,7 +294,7 @@ class TestFAWebServiceListAssets:
 
     def test_list_assets_context_with_category_code(self):
         """Test assets list context with category code filter."""
-        from app.services.finance.fa.web import FixedAssetWebService
+        from app.services.fixed_assets.web import FixedAssetWebService
 
         mock_db = MagicMock()
         org_id = uuid.uuid4()
@@ -328,7 +328,7 @@ class TestFAWebServiceDepreciation:
 
     def test_depreciation_context_success(self):
         """Test successful depreciation context."""
-        from app.services.finance.fa.web import FixedAssetWebService
+        from app.services.fixed_assets.web import FixedAssetWebService
 
         mock_db = MagicMock()
         org_id = uuid.uuid4()
@@ -361,7 +361,7 @@ class TestFAWebServiceDepreciation:
 
     def test_depreciation_context_with_period_filter(self):
         """Test depreciation context with period filter."""
-        from app.services.finance.fa.web import FixedAssetWebService
+        from app.services.fixed_assets.web import FixedAssetWebService
 
         mock_db = MagicMock()
         org_id = uuid.uuid4()
@@ -390,7 +390,7 @@ class TestFAWebServiceDepreciation:
 
     def test_depreciation_context_pagination(self):
         """Test depreciation context pagination."""
-        from app.services.finance.fa.web import FixedAssetWebService
+        from app.services.fixed_assets.web import FixedAssetWebService
 
         mock_db = MagicMock()
         org_id = uuid.uuid4()

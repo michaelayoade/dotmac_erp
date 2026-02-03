@@ -22,8 +22,8 @@ class TestAssetDisposalService:
 
     def test_create_disposal_success(self, mock_db, org_id, mock_asset, user_id):
         """Test successful disposal creation."""
-        from app.services.finance.fa.disposal import AssetDisposalService, DisposalInput
-        from app.models.finance.fa.asset_disposal import DisposalType
+        from app.services.fixed_assets.disposal import AssetDisposalService, DisposalInput
+        from app.models.fixed_assets.asset_disposal import DisposalType
 
         mock_asset.status = MockAssetStatus.ACTIVE
         mock_asset.net_book_value = Decimal("3000")
@@ -50,8 +50,8 @@ class TestAssetDisposalService:
 
     def test_create_disposal_asset_not_found(self, mock_db, org_id, user_id):
         """Test disposal creation fails when asset not found."""
-        from app.services.finance.fa.disposal import AssetDisposalService, DisposalInput
-        from app.models.finance.fa.asset_disposal import DisposalType
+        from app.services.fixed_assets.disposal import AssetDisposalService, DisposalInput
+        from app.models.fixed_assets.asset_disposal import DisposalType
         from fastapi import HTTPException
 
         mock_db.get.return_value = None
@@ -71,8 +71,8 @@ class TestAssetDisposalService:
 
     def test_create_disposal_asset_already_disposed(self, mock_db, org_id, mock_asset, user_id):
         """Test disposal creation fails for already disposed asset."""
-        from app.services.finance.fa.disposal import AssetDisposalService, DisposalInput
-        from app.models.finance.fa.asset_disposal import DisposalType
+        from app.services.fixed_assets.disposal import AssetDisposalService, DisposalInput
+        from app.models.fixed_assets.asset_disposal import DisposalType
         from fastapi import HTTPException
 
         mock_asset.status = MockAssetStatus.DISPOSED
@@ -95,8 +95,8 @@ class TestAssetDisposalService:
 
     def test_create_disposal_asset_draft_status(self, mock_db, org_id, mock_asset, user_id):
         """Test disposal creation fails for draft asset."""
-        from app.services.finance.fa.disposal import AssetDisposalService, DisposalInput
-        from app.models.finance.fa.asset_disposal import DisposalType
+        from app.services.fixed_assets.disposal import AssetDisposalService, DisposalInput
+        from app.models.fixed_assets.asset_disposal import DisposalType
         from fastapi import HTTPException
 
         mock_asset.status = MockAssetStatus.DRAFT
@@ -119,8 +119,8 @@ class TestAssetDisposalService:
 
     def test_calculate_gain_on_disposal(self, mock_db, org_id, mock_asset, user_id):
         """Test gain calculation on disposal."""
-        from app.services.finance.fa.disposal import AssetDisposalService, DisposalInput
-        from app.models.finance.fa.asset_disposal import DisposalType
+        from app.services.fixed_assets.disposal import AssetDisposalService, DisposalInput
+        from app.models.fixed_assets.asset_disposal import DisposalType
 
         mock_asset.status = MockAssetStatus.ACTIVE
         mock_asset.net_book_value = Decimal("3000")
@@ -148,8 +148,8 @@ class TestAssetDisposalService:
 
     def test_calculate_loss_on_disposal(self, mock_db, org_id, mock_asset, user_id):
         """Test loss calculation on disposal."""
-        from app.services.finance.fa.disposal import AssetDisposalService, DisposalInput
-        from app.models.finance.fa.asset_disposal import DisposalType
+        from app.services.fixed_assets.disposal import AssetDisposalService, DisposalInput
+        from app.models.fixed_assets.asset_disposal import DisposalType
 
         mock_asset.status = MockAssetStatus.ACTIVE
         mock_asset.net_book_value = Decimal("5000")
@@ -177,7 +177,7 @@ class TestAssetDisposalService:
 
     def test_approve_disposal_success(self, mock_db, org_id, mock_asset, user_id):
         """Test successful disposal approval."""
-        from app.services.finance.fa.disposal import AssetDisposalService
+        from app.services.fixed_assets.disposal import AssetDisposalService
 
         creator_id = uuid.uuid4()
         disposal = MockAssetDisposal(
@@ -200,7 +200,7 @@ class TestAssetDisposalService:
 
     def test_approve_disposal_not_found(self, mock_db, org_id, user_id):
         """Test approving non-existent disposal fails."""
-        from app.services.finance.fa.disposal import AssetDisposalService
+        from app.services.fixed_assets.disposal import AssetDisposalService
         from fastapi import HTTPException
 
         mock_db.get.return_value = None
@@ -212,7 +212,7 @@ class TestAssetDisposalService:
 
     def test_approve_disposal_already_approved(self, mock_db, org_id, mock_asset, user_id):
         """Test approving already approved disposal fails."""
-        from app.services.finance.fa.disposal import AssetDisposalService
+        from app.services.fixed_assets.disposal import AssetDisposalService
         from fastapi import HTTPException
 
         disposal = MockAssetDisposal(
@@ -232,7 +232,7 @@ class TestAssetDisposalService:
 
     def test_approve_disposal_sod_violation(self, mock_db, org_id, mock_asset, user_id):
         """Test creator cannot approve own disposal (SoD)."""
-        from app.services.finance.fa.disposal import AssetDisposalService
+        from app.services.fixed_assets.disposal import AssetDisposalService
         from fastapi import HTTPException
 
         disposal = MockAssetDisposal(
@@ -253,8 +253,8 @@ class TestAssetDisposalService:
 
     def test_create_disposal_write_off(self, mock_db, org_id, mock_asset, user_id):
         """Test creating a write-off disposal (zero proceeds)."""
-        from app.services.finance.fa.disposal import AssetDisposalService, DisposalInput
-        from app.models.finance.fa.asset_disposal import DisposalType
+        from app.services.fixed_assets.disposal import AssetDisposalService, DisposalInput
+        from app.models.fixed_assets.asset_disposal import DisposalType
 
         mock_asset.status = MockAssetStatus.ACTIVE
         mock_asset.net_book_value = Decimal("3000")
