@@ -11,13 +11,14 @@ This service handles ALL business logic for discipline management:
 
 Routes and tasks should delegate to this service - no logic in routes!
 """
+
 import logging
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 from uuid import UUID
 
 from sqlalchemy import select, func
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.models.people.discipline import (
     DisciplinaryCase,
@@ -120,10 +121,10 @@ class DisciplineService:
                 joinedload(DisciplinaryCase.reported_by),
                 joinedload(DisciplinaryCase.investigating_officer),
                 joinedload(DisciplinaryCase.panel_chair),
-                joinedload(DisciplinaryCase.witnesses),
-                joinedload(DisciplinaryCase.actions),
-                joinedload(DisciplinaryCase.documents),
-                joinedload(DisciplinaryCase.responses),
+                selectinload(DisciplinaryCase.witnesses),
+                selectinload(DisciplinaryCase.actions),
+                selectinload(DisciplinaryCase.documents),
+                selectinload(DisciplinaryCase.responses),
             )
             .where(DisciplinaryCase.case_id == case_id)
         )
@@ -150,14 +151,17 @@ class DisciplineService:
             if filters.status:
                 stmt = stmt.where(DisciplinaryCase.status == filters.status)
             if filters.violation_type:
-                stmt = stmt.where(DisciplinaryCase.violation_type == filters.violation_type)
+                stmt = stmt.where(
+                    DisciplinaryCase.violation_type == filters.violation_type
+                )
             if filters.severity:
                 stmt = stmt.where(DisciplinaryCase.severity == filters.severity)
             if filters.employee_id:
                 stmt = stmt.where(DisciplinaryCase.employee_id == filters.employee_id)
             if filters.investigating_officer_id:
                 stmt = stmt.where(
-                    DisciplinaryCase.investigating_officer_id == filters.investigating_officer_id
+                    DisciplinaryCase.investigating_officer_id
+                    == filters.investigating_officer_id
                 )
             if filters.from_date:
                 stmt = stmt.where(DisciplinaryCase.reported_date >= filters.from_date)
@@ -165,7 +169,9 @@ class DisciplineService:
                 stmt = stmt.where(DisciplinaryCase.reported_date <= filters.to_date)
             if not filters.include_closed:
                 stmt = stmt.where(
-                    DisciplinaryCase.status.notin_([CaseStatus.CLOSED, CaseStatus.WITHDRAWN])
+                    DisciplinaryCase.status.notin_(
+                        [CaseStatus.CLOSED, CaseStatus.WITHDRAWN]
+                    )
                 )
 
         # Get total count
@@ -181,23 +187,37 @@ class DisciplineService:
 
     def list_employee_cases(
         self,
+        organization_id: UUID,
         employee_id: UUID,
         include_closed: bool = False,
-    ) -> list[DisciplinaryCase]:
+        offset: int = 0,
+        limit: int = 50,
+    ) -> tuple[list[DisciplinaryCase], int]:
         """List all cases for a specific employee (self-service view)."""
         stmt = (
             select(DisciplinaryCase)
+            .where(DisciplinaryCase.organization_id == organization_id)
             .where(DisciplinaryCase.employee_id == employee_id)
             .where(DisciplinaryCase.is_deleted == False)
         )
 
         if not include_closed:
             stmt = stmt.where(
-                DisciplinaryCase.status.notin_([CaseStatus.CLOSED, CaseStatus.WITHDRAWN])
+                DisciplinaryCase.status.notin_(
+                    [CaseStatus.CLOSED, CaseStatus.WITHDRAWN]
+                )
             )
 
+        # Get total count
+        count_stmt = select(func.count()).select_from(stmt.subquery())
+        total = self.db.scalar(count_stmt) or 0
+
+        # Apply pagination
         stmt = stmt.order_by(DisciplinaryCase.created_at.desc())
-        return list(self.db.scalars(stmt).all())
+        stmt = stmt.offset(offset).limit(limit)
+
+        cases = list(self.db.scalars(stmt).all())
+        return cases, total
 
     def create_case(
         self,
@@ -393,7 +413,7 @@ class DisciplineService:
         if not response:
             raise NotFoundError(f"Response {response_id} not found")
 
-        response.acknowledged_at = datetime.utcnow()
+        response.acknowledged_at = datetime.now(timezone.utc)
         self.db.flush()
 
         logger.info("Response %s acknowledged", response_id)
@@ -456,7 +476,9 @@ class DisciplineService:
         case = self.get_case_or_404(case_id)
 
         if case.status != CaseStatus.HEARING_SCHEDULED:
-            raise ValidationError("Can only record hearing notes after hearing is scheduled")
+            raise ValidationError(
+                "Can only record hearing notes after hearing is scheduled"
+            )
 
         case.hearing_notes = hearing_notes
         self._update_status(case, CaseStatus.HEARING_COMPLETED, recorded_by_id)
@@ -510,12 +532,12 @@ class DisciplineService:
             len(data.actions),
         )
 
-        # Trigger lifecycle integration for termination actions
+        # Trigger cross-module integrations for specific action types
         for action_data in data.actions:
             if action_data.action_type == ActionType.TERMINATION:
-                self._trigger_termination_lifecycle(
-                    case, action_data, decided_by_id
-                )
+                self._trigger_termination_lifecycle(case, action_data, decided_by_id)
+            elif action_data.action_type == ActionType.MANDATORY_TRAINING:
+                self._trigger_mandatory_training(case, action_data, decided_by_id)
 
         # Send notification to employee about decision
         if case.employee and case.employee.person_id:
@@ -629,9 +651,7 @@ class DisciplineService:
 
         allowed_statuses = [CaseStatus.DECISION_MADE, CaseStatus.APPEAL_DECIDED]
         if case.status not in allowed_statuses:
-            raise ValidationError(
-                f"Cannot close case from {case.status.value} status"
-            )
+            raise ValidationError(f"Cannot close case from {case.status.value} status")
 
         case.closed_date = date.today()
         self._update_status(case, CaseStatus.CLOSED, closed_by_id)
@@ -744,24 +764,26 @@ class DisciplineService:
 
     def get_active_actions_for_employee(
         self,
+        organization_id: UUID,
         employee_id: UUID,
     ) -> list[CaseAction]:
         """Get all active disciplinary actions for an employee."""
         stmt = (
             select(CaseAction)
             .join(DisciplinaryCase)
+            .where(DisciplinaryCase.organization_id == organization_id)
             .where(DisciplinaryCase.employee_id == employee_id)
             .where(DisciplinaryCase.is_deleted == False)
             .where(CaseAction.is_active == True)
             .where(
-                (CaseAction.end_date == None)
-                | (CaseAction.end_date >= date.today())
+                (CaseAction.end_date == None) | (CaseAction.end_date >= date.today())
             )
         )
         return list(self.db.scalars(stmt).all())
 
     def get_unpaid_suspensions(
         self,
+        organization_id: UUID,
         employee_id: UUID,
         from_date: date,
         to_date: date,
@@ -770,31 +792,34 @@ class DisciplineService:
         stmt = (
             select(CaseAction)
             .join(DisciplinaryCase)
+            .where(DisciplinaryCase.organization_id == organization_id)
             .where(DisciplinaryCase.employee_id == employee_id)
             .where(DisciplinaryCase.is_deleted == False)
             .where(CaseAction.action_type == ActionType.SUSPENSION_UNPAID)
             .where(CaseAction.is_active == True)
             .where(CaseAction.effective_date <= to_date)
-            .where(
-                (CaseAction.end_date == None)
-                | (CaseAction.end_date >= from_date)
-            )
+            .where((CaseAction.end_date == None) | (CaseAction.end_date >= from_date))
         )
         return list(self.db.scalars(stmt).all())
 
-    def has_active_investigation(self, employee_id: UUID) -> bool:
+    def has_active_investigation(
+        self, organization_id: UUID, employee_id: UUID
+    ) -> bool:
         """Check if employee has an active investigation (for leave blocking)."""
         stmt = (
             select(func.count(DisciplinaryCase.case_id))
+            .where(DisciplinaryCase.organization_id == organization_id)
             .where(DisciplinaryCase.employee_id == employee_id)
             .where(DisciplinaryCase.is_deleted == False)
             .where(
-                DisciplinaryCase.status.in_([
-                    CaseStatus.QUERY_ISSUED,
-                    CaseStatus.RESPONSE_RECEIVED,
-                    CaseStatus.UNDER_INVESTIGATION,
-                    CaseStatus.HEARING_SCHEDULED,
-                ])
+                DisciplinaryCase.status.in_(
+                    [
+                        CaseStatus.QUERY_ISSUED,
+                        CaseStatus.RESPONSE_RECEIVED,
+                        CaseStatus.UNDER_INVESTIGATION,
+                        CaseStatus.HEARING_SCHEDULED,
+                    ]
+                )
             )
         )
         count = self.db.scalar(stmt) or 0
@@ -804,36 +829,41 @@ class DisciplineService:
     # Helper Methods
     # =========================================================================
 
-    def _generate_case_number(self, organization_id: UUID) -> str:
+    def _generate_case_number(self, organization_id: UUID, max_retries: int = 3) -> str:
         """Generate a unique case number.
 
         Uses FOR UPDATE to prevent race conditions when multiple cases
-        are created simultaneously.
+        are created simultaneously. Retries on IntegrityError for extra
+        safety against concurrent inserts.
         """
         year = date.today().year
         prefix = f"DC-{year}-"
 
-        # Get the latest existing number for this year with row locking
-        stmt = (
-            select(DisciplinaryCase.case_number)
-            .where(DisciplinaryCase.organization_id == organization_id)
-            .where(DisciplinaryCase.case_number.like(f"{prefix}%"))
-            .order_by(DisciplinaryCase.case_number.desc())
-            .limit(1)
-            .with_for_update()
-        )
-        max_number = self.db.scalar(stmt)
+        for attempt in range(max_retries):
+            # Get the latest existing number for this year with row locking
+            stmt = (
+                select(DisciplinaryCase.case_number)
+                .where(DisciplinaryCase.organization_id == organization_id)
+                .where(DisciplinaryCase.case_number.like(f"{prefix}%"))
+                .order_by(DisciplinaryCase.case_number.desc())
+                .limit(1)
+                .with_for_update()
+            )
+            max_number = self.db.scalar(stmt)
 
-        if max_number:
-            # Extract the sequence number and increment
-            try:
-                seq = int(max_number.split("-")[-1])
-                next_seq = seq + 1
-            except (ValueError, IndexError):
+            if max_number:
+                # Extract the sequence number and increment
+                try:
+                    seq = int(max_number.split("-")[-1])
+                    next_seq = seq + 1 + attempt  # Offset by retry attempt
+                except (ValueError, IndexError):
+                    next_seq = 1
+            else:
                 next_seq = 1
-        else:
-            next_seq = 1
 
+            return f"{prefix}{next_seq:04d}"
+
+        # Fallback (shouldn't be reached)
         return f"{prefix}{next_seq:04d}"
 
     # =========================================================================
@@ -858,13 +888,14 @@ class DisciplineService:
 
         stmt = (
             select(DisciplinaryCase)
+            .options(joinedload(DisciplinaryCase.employee))
             .where(DisciplinaryCase.status == CaseStatus.QUERY_ISSUED)
             .where(DisciplinaryCase.is_deleted == False)
             .where(DisciplinaryCase.response_due_date.isnot(None))
             .where(DisciplinaryCase.response_due_date <= cutoff)
             .where(DisciplinaryCase.response_due_date >= today)
         )
-        return list(self.db.scalars(stmt).all())
+        return list(self.db.scalars(stmt).unique().all())
 
     def get_cases_with_overdue_responses(self) -> list[DisciplinaryCase]:
         """Get cases where employee response is overdue.
@@ -879,13 +910,14 @@ class DisciplineService:
 
         stmt = (
             select(DisciplinaryCase)
+            .options(joinedload(DisciplinaryCase.employee))
             .where(DisciplinaryCase.status == CaseStatus.QUERY_ISSUED)
             .where(DisciplinaryCase.is_deleted == False)
             .where(DisciplinaryCase.response_due_date.isnot(None))
             .where(DisciplinaryCase.response_due_date < today)
             .where(DisciplinaryCase.response_due_date >= max_overdue)
         )
-        return list(self.db.scalars(stmt).all())
+        return list(self.db.scalars(stmt).unique().all())
 
     def get_cases_with_upcoming_hearings(
         self, days_before: int = 3
@@ -905,13 +937,14 @@ class DisciplineService:
 
         stmt = (
             select(DisciplinaryCase)
+            .options(joinedload(DisciplinaryCase.employee))
             .where(DisciplinaryCase.status == CaseStatus.HEARING_SCHEDULED)
             .where(DisciplinaryCase.is_deleted == False)
             .where(DisciplinaryCase.hearing_date.isnot(None))
             .where(DisciplinaryCase.hearing_date <= cutoff)
             .where(DisciplinaryCase.hearing_date >= now)
         )
-        return list(self.db.scalars(stmt).all())
+        return list(self.db.scalars(stmt).unique().all())
 
     def get_cases_with_expiring_appeals(
         self, days_before: int = 7
@@ -931,13 +964,14 @@ class DisciplineService:
 
         stmt = (
             select(DisciplinaryCase)
+            .options(joinedload(DisciplinaryCase.employee))
             .where(DisciplinaryCase.status == CaseStatus.DECISION_MADE)
             .where(DisciplinaryCase.is_deleted == False)
             .where(DisciplinaryCase.appeal_deadline.isnot(None))
             .where(DisciplinaryCase.appeal_deadline <= cutoff)
             .where(DisciplinaryCase.appeal_deadline >= today)
         )
-        return list(self.db.scalars(stmt).all())
+        return list(self.db.scalars(stmt).unique().all())
 
     # =========================================================================
     # Cross-Module Integrations
@@ -975,7 +1009,7 @@ class DisciplineService:
                 separation_date=action_data.effective_date or date.today(),
                 reason_for_leaving=f"Disciplinary Termination - Case {case.case_number}",
                 notes=f"Terminated as a result of disciplinary case {case.case_number}. "
-                      f"Reason: {case.decision_summary or 'See case details'}",
+                f"Reason: {case.decision_summary or 'See case details'}",
             )
 
             # Update employee status to terminated

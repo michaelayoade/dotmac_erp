@@ -24,7 +24,10 @@ from app.models.people.payroll.salary_slip import (
     SalarySlipDeduction,
     SalarySlipStatus,
 )
-from app.models.people.payroll.salary_component import SalaryComponent, SalaryComponentType
+from app.models.people.payroll.salary_component import (
+    SalaryComponent,
+    SalaryComponentType,
+)
 from app.models.people.payroll.salary_structure import SalaryStructure
 from app.models.people.payroll.salary_assignment import SalaryStructureAssignment
 from app.models.people.hr.employee import Employee, EmployeeStatus
@@ -86,10 +89,16 @@ class SalarySlipService:
         if employment_type is None and employee.employment_type_id:
             employment_type = db.get(EmploymentType, employee.employment_type_id)
 
-        type_code = (employment_type.type_code or "").strip().lower() if employment_type else ""
-        type_name = (employment_type.type_name or "").strip().lower() if employment_type else ""
+        type_code = (
+            (employment_type.type_code or "").strip().lower() if employment_type else ""
+        )
+        type_name = (
+            (employment_type.type_name or "").strip().lower() if employment_type else ""
+        )
         is_contract = type_code == "contract" or type_name == "contract"
-        is_contract_structure = (structure.structure_name or "").strip().lower() == "contract staff"
+        is_contract_structure = (
+            structure.structure_name or ""
+        ).strip().lower() == "contract staff"
         return is_contract or is_contract_structure
 
     @staticmethod
@@ -184,7 +193,12 @@ class SalarySlipService:
         # Optionally include employer contributions
         if include_employer_contributions:
             statutory_defs.append(
-                (EMPLOYER_PENSION_COMPONENT_CODE, "Employer Pension Contribution", "PEN-ER", 105),
+                (
+                    EMPLOYER_PENSION_COMPONENT_CODE,
+                    "Employer Pension Contribution",
+                    "PEN-ER",
+                    105,
+                ),
             )
 
         for code, name, abbr, order in statutory_defs:
@@ -261,7 +275,7 @@ class SalarySlipService:
         if employee.status not in {EmployeeStatus.ACTIVE, EmployeeStatus.ON_LEAVE}:
             raise HTTPException(
                 status_code=400,
-                detail=f"Cannot generate slip for employee with status: {employee.status.value}"
+                detail=f"Cannot generate slip for employee with status: {employee.status.value}",
             )
 
         # Check for existing slip in period
@@ -280,7 +294,7 @@ class SalarySlipService:
         if existing:
             raise HTTPException(
                 status_code=400,
-                detail=f"Salary slip already exists for this period: {existing.slip_number}"
+                detail=f"Salary slip already exists for this period: {existing.slip_number}",
             )
 
         # Get active salary structure assignment
@@ -291,15 +305,12 @@ class SalarySlipService:
         if not assignment:
             raise HTTPException(
                 status_code=400,
-                detail="No active salary structure assignment for employee"
+                detail="No active salary structure assignment for employee",
             )
 
         structure = db.get(SalaryStructure, assignment.structure_id)
         if not structure:
-            raise HTTPException(
-                status_code=404,
-                detail="Salary structure not found"
-            )
+            raise HTTPException(status_code=404, detail="Salary structure not found")
 
         # Calculate working days
         total_working_days = input.total_working_days
@@ -391,14 +402,19 @@ class SalarySlipService:
             )
             db.add(earning_line)
 
-            if not component.statistical_component and not component.do_not_include_in_total:
+            if (
+                not component.statistical_component
+                and not component.do_not_include_in_total
+            ):
                 gross_pay += amount
 
         # If no BASIC component found, use base_amount from assignment
         if basic_pay == 0:
             basic_pay = base_amount
 
-        skip_deductions = SalarySlipService._is_contract_staff_employee(db, employee, structure)
+        skip_deductions = SalarySlipService._is_contract_staff_employee(
+            db, employee, structure
+        )
 
         # Calculate PAYE and statutory deductions
         total_deduction = Decimal("0")
@@ -422,8 +438,18 @@ class SalarySlipService:
 
             # Add statutory deductions from PAYE calculation
             statutory_deductions = [
-                (PENSION_COMPONENT_CODE, paye_breakdown.monthly_pension, "Pension (8% of Basic)", False),
-                (NHF_COMPONENT_CODE, paye_breakdown.monthly_nhf, "NHF (2.5% of Basic)", False),
+                (
+                    PENSION_COMPONENT_CODE,
+                    paye_breakdown.monthly_pension,
+                    "Pension (8% of Basic)",
+                    False,
+                ),
+                (
+                    NHF_COMPONENT_CODE,
+                    paye_breakdown.monthly_nhf,
+                    "NHF (2.5% of Basic)",
+                    False,
+                ),
                 (NHIS_COMPONENT_CODE, paye_breakdown.monthly_nhis, "NHIS", False),
                 (PAYE_COMPONENT_CODE, paye_breakdown.monthly_tax, "PAYE Tax", False),
                 (
@@ -458,19 +484,25 @@ class SalarySlipService:
                 component = struct_deduction.component
 
                 # Skip statutory components - they're calculated by PAYE
-                if component.is_statutory or component.component_code in STATUTORY_COMPONENT_CODES:
+                if (
+                    component.is_statutory
+                    or component.component_code in STATUTORY_COMPONENT_CODES
+                ):
                     continue
 
                 # Calculate amount
-                if struct_deduction.amount_based_on_formula and struct_deduction.formula:
+                if (
+                    struct_deduction.amount_based_on_formula
+                    and struct_deduction.formula
+                ):
                     amount = SalarySlipService._evaluate_formula(
-                    struct_deduction.formula,
-                    base=base_amount,
-                    variable=variable_amount,
-                    gross=gross_pay,
-                    payment_days=payment_days,
-                    total_days=total_working_days,
-                )
+                        struct_deduction.formula,
+                        base=base_amount,
+                        variable=variable_amount,
+                        gross=gross_pay,
+                        payment_days=payment_days,
+                        total_days=total_working_days,
+                    )
                 else:
                     amount = struct_deduction.amount
 
@@ -487,7 +519,10 @@ class SalarySlipService:
                 )
                 db.add(deduction_line)
 
-                if not component.statistical_component and not component.do_not_include_in_total:
+                if (
+                    not component.statistical_component
+                    and not component.do_not_include_in_total
+                ):
                     total_deduction += amount
 
         # Add unpaid suspension deduction if applicable
@@ -495,7 +530,7 @@ class SalarySlipService:
 
         discipline_service = DisciplineService(db)
         unpaid_suspensions = discipline_service.get_unpaid_suspensions(
-            emp_id, input.start_date, input.end_date
+            org_id, emp_id, input.start_date, input.end_date
         )
 
         if unpaid_suspensions:
@@ -511,21 +546,27 @@ class SalarySlipService:
 
             if total_suspension_days > 0:
                 # Calculate daily rate and deduction
-                daily_rate = gross_pay / total_working_days if total_working_days > 0 else Decimal("0")
+                daily_rate = (
+                    gross_pay / total_working_days
+                    if total_working_days > 0
+                    else Decimal("0")
+                )
                 suspension_deduction = (daily_rate * total_suspension_days).quantize(
                     Decimal("0.01"), rounding=ROUND_HALF_UP
                 )
 
                 if suspension_deduction > 0:
                     # Get or create suspension deduction component
-                    susp_component = SalarySlipService.get_or_create_statutory_component(
-                        db,
-                        org_id,
-                        "SUSPENSION_DEDUCT",
-                        "Unpaid Suspension",
-                        "SUSP",
-                        display_order=900,
-                        created_by_id=user_id,
+                    susp_component = (
+                        SalarySlipService.get_or_create_statutory_component(
+                            db,
+                            org_id,
+                            "SUSPENSION_DEDUCT",
+                            "Unpaid Suspension",
+                            "SUSP",
+                            display_order=900,
+                            created_by_id=user_id,
+                        )
                     )
 
                     deduction_line = SalarySlipDeduction(
@@ -584,7 +625,9 @@ class SalarySlipService:
             raise HTTPException(status_code=404, detail="Salary slip not found")
 
         if slip.status != SalarySlipStatus.DRAFT:
-            raise HTTPException(status_code=400, detail="Only draft slips can be edited")
+            raise HTTPException(
+                status_code=400, detail="Only draft slips can be edited"
+            )
 
         emp_id = coerce_uuid(input.employee_id)
         employee = db.get(Employee, emp_id)
@@ -594,7 +637,7 @@ class SalarySlipService:
         if employee.status not in {EmployeeStatus.ACTIVE, EmployeeStatus.ON_LEAVE}:
             raise HTTPException(
                 status_code=400,
-                detail=f"Cannot generate slip for employee with status: {employee.status.value}"
+                detail=f"Cannot generate slip for employee with status: {employee.status.value}",
             )
 
         existing = (
@@ -612,7 +655,7 @@ class SalarySlipService:
         if existing:
             raise HTTPException(
                 status_code=400,
-                detail=f"Salary slip already exists for this period: {existing.slip_number}"
+                detail=f"Salary slip already exists for this period: {existing.slip_number}",
             )
 
         assignment = SalarySlipService.get_active_assignment(
@@ -621,7 +664,7 @@ class SalarySlipService:
         if not assignment:
             raise HTTPException(
                 status_code=400,
-                detail="No active salary structure assignment for employee"
+                detail="No active salary structure assignment for employee",
             )
 
         structure = db.get(SalaryStructure, assignment.structure_id)
@@ -700,13 +743,18 @@ class SalarySlipService:
                 )
             )
 
-            if not component.statistical_component and not component.do_not_include_in_total:
+            if (
+                not component.statistical_component
+                and not component.do_not_include_in_total
+            ):
                 gross_pay += amount
 
         if basic_pay == 0:
             basic_pay = base_amount
 
-        skip_deductions = SalarySlipService._is_contract_staff_employee(db, employee, structure)
+        skip_deductions = SalarySlipService._is_contract_staff_employee(
+            db, employee, structure
+        )
         total_deduction = Decimal("0")
 
         if not skip_deductions and gross_pay > 0:
@@ -724,8 +772,18 @@ class SalarySlipService:
             )
 
             statutory_deductions = [
-                (PENSION_COMPONENT_CODE, paye_breakdown.monthly_pension, "Pension (8% of Basic)", False),
-                (NHF_COMPONENT_CODE, paye_breakdown.monthly_nhf, "NHF (2.5% of Basic)", False),
+                (
+                    PENSION_COMPONENT_CODE,
+                    paye_breakdown.monthly_pension,
+                    "Pension (8% of Basic)",
+                    False,
+                ),
+                (
+                    NHF_COMPONENT_CODE,
+                    paye_breakdown.monthly_nhf,
+                    "NHF (2.5% of Basic)",
+                    False,
+                ),
                 (NHIS_COMPONENT_CODE, paye_breakdown.monthly_nhis, "NHIS", False),
                 (PAYE_COMPONENT_CODE, paye_breakdown.monthly_tax, "PAYE Tax", False),
                 (
@@ -745,7 +803,9 @@ class SalarySlipService:
                             component_id=component.component_id,
                             component_name=component.component_name,
                             abbr=component.abbr,
-                            amount=amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP),
+                            amount=amount.quantize(
+                                Decimal("0.01"), rounding=ROUND_HALF_UP
+                            ),
                             default_amount=amount,
                             statistical_component=is_statistical,
                             do_not_include_in_total=is_statistical,
@@ -759,18 +819,24 @@ class SalarySlipService:
             for struct_deduction in structure.deductions:
                 component = struct_deduction.component
 
-                if component.is_statutory or component.component_code in STATUTORY_COMPONENT_CODES:
+                if (
+                    component.is_statutory
+                    or component.component_code in STATUTORY_COMPONENT_CODES
+                ):
                     continue
 
-                if struct_deduction.amount_based_on_formula and struct_deduction.formula:
+                if (
+                    struct_deduction.amount_based_on_formula
+                    and struct_deduction.formula
+                ):
                     amount = SalarySlipService._evaluate_formula(
-                    struct_deduction.formula,
-                    base=base_amount,
-                    variable=variable_amount,
-                    gross=gross_pay,
-                    payment_days=payment_days,
-                    total_days=total_working_days,
-                )
+                        struct_deduction.formula,
+                        base=base_amount,
+                        variable=variable_amount,
+                        gross=gross_pay,
+                        payment_days=payment_days,
+                        total_days=total_working_days,
+                    )
                 else:
                     amount = struct_deduction.amount
 
@@ -788,7 +854,10 @@ class SalarySlipService:
                     )
                 )
 
-                if not component.statistical_component and not component.do_not_include_in_total:
+                if (
+                    not component.statistical_component
+                    and not component.do_not_include_in_total
+                ):
                     total_deduction += amount
 
         net_pay = gross_pay - total_deduction
@@ -843,15 +912,29 @@ class SalarySlipService:
                 return gross
             elif safe_formula in {"variable", "var"}:
                 return variable
-            elif safe_formula in {"base + variable", "base+variable", "base + var", "base+var"}:
+            elif safe_formula in {
+                "base + variable",
+                "base+variable",
+                "base + var",
+                "base+var",
+            }:
                 return base + variable
-            elif safe_formula in {"base - variable", "base-variable", "base - var", "base-var"}:
+            elif safe_formula in {
+                "base - variable",
+                "base-variable",
+                "base - var",
+                "base-var",
+            }:
                 return base - variable
             elif safe_formula.startswith("base *"):
                 multiplier = safe_formula.replace("base *", "").strip()
                 return base * Decimal(multiplier)
-            elif safe_formula.startswith("variable *") or safe_formula.startswith("var *"):
-                multiplier = safe_formula.replace("variable *", "").replace("var *", "").strip()
+            elif safe_formula.startswith("variable *") or safe_formula.startswith(
+                "var *"
+            ):
+                multiplier = (
+                    safe_formula.replace("variable *", "").replace("var *", "").strip()
+                )
                 return variable * Decimal(multiplier)
             elif safe_formula.startswith("gross *"):
                 multiplier = safe_formula.replace("gross *", "").strip()
@@ -882,7 +965,7 @@ class SalarySlipService:
         if slip.status != SalarySlipStatus.DRAFT:
             raise HTTPException(
                 status_code=400,
-                detail=f"Cannot submit slip with status: {slip.status.value}"
+                detail=f"Cannot submit slip with status: {slip.status.value}",
             )
 
         slip.status = SalarySlipStatus.SUBMITTED
@@ -913,14 +996,14 @@ class SalarySlipService:
         if slip.status != SalarySlipStatus.SUBMITTED:
             raise HTTPException(
                 status_code=400,
-                detail=f"Cannot approve slip with status: {slip.status.value}"
+                detail=f"Cannot approve slip with status: {slip.status.value}",
             )
 
         # SoD check - creator cannot approve
         if slip.created_by_id == user_id:
             raise HTTPException(
                 status_code=403,
-                detail="Segregation of duties: creator cannot approve their own slip"
+                detail="Segregation of duties: creator cannot approve their own slip",
             )
 
         slip.status = SalarySlipStatus.APPROVED
@@ -940,6 +1023,7 @@ class SalarySlipService:
                 )
         except Exception as notify_err:
             import logging
+
             logging.getLogger(__name__).warning(
                 "Payroll approve: failed to notify for slip %s: %s",
                 slip.slip_id,
@@ -989,8 +1073,7 @@ class SalarySlipService:
             query = query.filter(SalarySlip.end_date <= to_date)
 
         return (
-            query
-            .order_by(SalarySlip.created_at.desc())
+            query.order_by(SalarySlip.created_at.desc())
             .limit(limit)
             .offset(offset)
             .all()

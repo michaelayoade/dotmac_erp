@@ -206,7 +206,10 @@ class TestWorkflowTransitions:
     """Tests for case workflow state transitions."""
 
     def test_issue_query_from_draft_succeeds(
-        self, organization_id: uuid.UUID, case_id: uuid.UUID, mock_employee: MockEmployee
+        self,
+        organization_id: uuid.UUID,
+        case_id: uuid.UUID,
+        mock_employee: MockEmployee,
     ):
         """Test issuing query from DRAFT status."""
         mock_case = MockDisciplinaryCase(
@@ -218,14 +221,18 @@ class TestWorkflowTransitions:
         db = create_mock_db_session(get_returns={case_id: mock_case})
 
         service = DisciplineService(db)
-        with patch.object(service, "_generate_case_number", return_value="DC-2026-0001"):
+        with patch.object(
+            service, "_generate_case_number", return_value="DC-2026-0001"
+        ):
             data = IssueQueryRequest(
                 query_text="Please explain your actions.",
                 response_due_date=date.today() + timedelta(days=7),
             )
 
             # Patch notification to avoid actual notification
-            with patch("app.services.people.discipline.discipline_service.notification_service"):
+            with patch(
+                "app.services.people.discipline.discipline_service.notification_service"
+            ):
                 result = service.issue_query(case_id, data)
 
         assert result.status == CaseStatus.QUERY_ISSUED
@@ -254,7 +261,10 @@ class TestWorkflowTransitions:
             service.issue_query(case_id, data)
 
     def test_record_response_updates_status(
-        self, organization_id: uuid.UUID, case_id: uuid.UUID, mock_employee: MockEmployee
+        self,
+        organization_id: uuid.UUID,
+        case_id: uuid.UUID,
+        mock_employee: MockEmployee,
     ):
         """Test recording response updates status to RESPONSE_RECEIVED."""
         mock_case = MockDisciplinaryCase(
@@ -269,7 +279,9 @@ class TestWorkflowTransitions:
         service = DisciplineService(db)
         data = CaseResponseCreate(response_text="I apologize for my actions.")
 
-        with patch("app.services.people.discipline.discipline_service.notification_service"):
+        with patch(
+            "app.services.people.discipline.discipline_service.notification_service"
+        ):
             result = service.record_response(case_id, data)
 
         assert mock_case.status == CaseStatus.RESPONSE_RECEIVED
@@ -278,7 +290,10 @@ class TestWorkflowTransitions:
         db.add.assert_called_once()
 
     def test_schedule_hearing_from_response_received(
-        self, organization_id: uuid.UUID, case_id: uuid.UUID, mock_employee: MockEmployee
+        self,
+        organization_id: uuid.UUID,
+        case_id: uuid.UUID,
+        mock_employee: MockEmployee,
     ):
         """Test scheduling hearing from RESPONSE_RECEIVED status."""
         mock_case = MockDisciplinaryCase(
@@ -296,7 +311,9 @@ class TestWorkflowTransitions:
             hearing_location="Conference Room A",
         )
 
-        with patch("app.services.people.discipline.discipline_service.notification_service"):
+        with patch(
+            "app.services.people.discipline.discipline_service.notification_service"
+        ):
             result = service.schedule_hearing(case_id, data)
 
         assert result.status == CaseStatus.HEARING_SCHEDULED
@@ -324,7 +341,10 @@ class TestWorkflowTransitions:
         assert result.hearing_notes == "Employee presented mitigating circumstances."
 
     def test_record_decision_creates_actions(
-        self, organization_id: uuid.UUID, case_id: uuid.UUID, mock_employee: MockEmployee
+        self,
+        organization_id: uuid.UUID,
+        case_id: uuid.UUID,
+        mock_employee: MockEmployee,
     ):
         """Test recording decision creates action records."""
         mock_case = MockDisciplinaryCase(
@@ -347,7 +367,9 @@ class TestWorkflowTransitions:
             ],
         )
 
-        with patch("app.services.people.discipline.discipline_service.notification_service"):
+        with patch(
+            "app.services.people.discipline.discipline_service.notification_service"
+        ):
             result = service.record_decision(case_id, data)
 
         assert result.status == CaseStatus.DECISION_MADE
@@ -357,7 +379,10 @@ class TestWorkflowTransitions:
         assert db.add.call_count >= 1
 
     def test_file_appeal_within_deadline(
-        self, organization_id: uuid.UUID, case_id: uuid.UUID, mock_employee: MockEmployee
+        self,
+        organization_id: uuid.UUID,
+        case_id: uuid.UUID,
+        mock_employee: MockEmployee,
     ):
         """Test filing appeal within deadline succeeds."""
         mock_case = MockDisciplinaryCase(
@@ -373,7 +398,9 @@ class TestWorkflowTransitions:
         service = DisciplineService(db)
         data = FileAppealRequest(appeal_reason="The decision was too harsh.")
 
-        with patch("app.services.people.discipline.discipline_service.notification_service"):
+        with patch(
+            "app.services.people.discipline.discipline_service.notification_service"
+        ):
             result = service.file_appeal(case_id, data)
 
         assert result.status == CaseStatus.APPEAL_FILED
@@ -398,7 +425,10 @@ class TestWorkflowTransitions:
             service.file_appeal(case_id, data)
 
     def test_decide_appeal_revises_actions(
-        self, organization_id: uuid.UUID, case_id: uuid.UUID, mock_employee: MockEmployee
+        self,
+        organization_id: uuid.UUID,
+        case_id: uuid.UUID,
+        mock_employee: MockEmployee,
     ):
         """Test appeal decision can revise original actions."""
         existing_action = MockCaseAction(
@@ -427,7 +457,9 @@ class TestWorkflowTransitions:
             ],
         )
 
-        with patch("app.services.people.discipline.discipline_service.notification_service"):
+        with patch(
+            "app.services.people.discipline.discipline_service.notification_service"
+        ):
             result = service.decide_appeal(case_id, data)
 
         assert result.status == CaseStatus.APPEAL_DECIDED
@@ -494,9 +526,7 @@ class TestWorkflowTransitions:
 class TestWitnessManagement:
     """Tests for witness-related operations."""
 
-    def test_add_internal_witness(
-        self, organization_id: uuid.UUID, case_id: uuid.UUID
-    ):
+    def test_add_internal_witness(self, organization_id: uuid.UUID, case_id: uuid.UUID):
         """Test adding an internal (employee) witness."""
         mock_case = MockDisciplinaryCase(
             case_id=case_id,
@@ -516,9 +546,7 @@ class TestWitnessManagement:
         db.add.assert_called_once()
         db.flush.assert_called_once()
 
-    def test_add_external_witness(
-        self, organization_id: uuid.UUID, case_id: uuid.UUID
-    ):
+    def test_add_external_witness(self, organization_id: uuid.UUID, case_id: uuid.UUID):
         """Test adding an external witness."""
         mock_case = MockDisciplinaryCase(
             case_id=case_id,
@@ -559,7 +587,9 @@ class TestWitnessManagement:
 class TestIntegrationQueries:
     """Tests for queries used by other modules (payroll, leave, etc.)."""
 
-    def test_get_active_actions_for_employee(self, employee_id: uuid.UUID):
+    def test_get_active_actions_for_employee(
+        self, organization_id: uuid.UUID, employee_id: uuid.UUID
+    ):
         """Test getting active disciplinary actions for an employee."""
         db = create_mock_db_session(
             scalars_returns=[
@@ -568,12 +598,14 @@ class TestIntegrationQueries:
         )
 
         service = DisciplineService(db)
-        result = service.get_active_actions_for_employee(employee_id)
+        result = service.get_active_actions_for_employee(organization_id, employee_id)
 
         assert len(result) == 1
         assert result[0].action_type == ActionType.WRITTEN_WARNING
 
-    def test_get_unpaid_suspensions_date_range(self, employee_id: uuid.UUID):
+    def test_get_unpaid_suspensions_date_range(
+        self, organization_id: uuid.UUID, employee_id: uuid.UUID
+    ):
         """Test getting unpaid suspensions within date range."""
         suspension = MockCaseAction(
             action_type=ActionType.SUSPENSION_UNPAID,
@@ -584,6 +616,7 @@ class TestIntegrationQueries:
 
         service = DisciplineService(db)
         result = service.get_unpaid_suspensions(
+            organization_id,
             employee_id,
             from_date=date.today() - timedelta(days=10),
             to_date=date.today() + timedelta(days=10),
@@ -592,23 +625,25 @@ class TestIntegrationQueries:
         assert len(result) == 1
         assert result[0].action_type == ActionType.SUSPENSION_UNPAID
 
-    def test_has_active_investigation_returns_true(self, employee_id: uuid.UUID):
+    def test_has_active_investigation_returns_true(
+        self, organization_id: uuid.UUID, employee_id: uuid.UUID
+    ):
         """Test has_active_investigation returns True when investigation exists."""
         db = create_mock_db_session(scalar_returns=1)
 
         service = DisciplineService(db)
-        result = service.has_active_investigation(employee_id)
+        result = service.has_active_investigation(organization_id, employee_id)
 
         assert result is True
 
     def test_has_active_investigation_closed_case_returns_false(
-        self, employee_id: uuid.UUID
+        self, organization_id: uuid.UUID, employee_id: uuid.UUID
     ):
         """Test has_active_investigation returns False for closed cases only."""
         db = create_mock_db_session(scalar_returns=0)
 
         service = DisciplineService(db)
-        result = service.has_active_investigation(employee_id)
+        result = service.has_active_investigation(organization_id, employee_id)
 
         assert result is False
 
@@ -723,7 +758,7 @@ class TestListCases:
         assert total == 1
 
     def test_list_employee_cases_excludes_closed_by_default(
-        self, employee_id: uuid.UUID
+        self, organization_id: uuid.UUID, employee_id: uuid.UUID
     ):
         """Test list_employee_cases excludes closed cases by default."""
         open_case = MockDisciplinaryCase(
@@ -735,8 +770,11 @@ class TestListCases:
 
         db = MagicMock()
         db.scalars.return_value = mock_result
+        db.scalar.return_value = 1
 
         service = DisciplineService(db)
-        cases = service.list_employee_cases(employee_id, include_closed=False)
+        cases, total = service.list_employee_cases(
+            organization_id, employee_id, include_closed=False
+        )
 
         assert len(cases) == 1

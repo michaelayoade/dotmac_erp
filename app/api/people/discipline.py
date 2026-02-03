@@ -3,11 +3,21 @@ Discipline Management API Router.
 
 Thin API wrapper for Discipline Management endpoints. All business logic is in services.
 """
+
 from datetime import date
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, status, UploadFile
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    status,
+    UploadFile,
+)
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_organization_id, require_tenant_auth
@@ -83,7 +93,9 @@ def list_cases(
         to_date=to_date,
         include_closed=include_closed,
     )
-    cases, total = service.list_cases(org_id, filters=filters, offset=offset, limit=limit)
+    cases, total = service.list_cases(
+        org_id, filters=filters, offset=offset, limit=limit
+    )
 
     # Convert to response models with employee names
     items = []
@@ -100,7 +112,9 @@ def list_cases(
     )
 
 
-@router.post("/cases", response_model=DisciplinaryCaseRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/cases", response_model=DisciplinaryCaseRead, status_code=status.HTTP_201_CREATED
+)
 def create_case(
     data: DisciplinaryCaseCreate,
     org_id: UUID = Depends(require_organization_id),
@@ -342,7 +356,11 @@ def withdraw_case(
 # =============================================================================
 
 
-@router.post("/cases/{case_id}/witnesses", response_model=CaseWitnessRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/cases/{case_id}/witnesses",
+    response_model=CaseWitnessRead,
+    status_code=status.HTTP_201_CREATED,
+)
 def add_witness(
     case_id: UUID,
     data: CaseWitnessCreate,
@@ -366,7 +384,9 @@ def add_witness(
 # =============================================================================
 
 
-@router.get("/employees/{employee_id}/active-actions", response_model=list[CaseActionRead])
+@router.get(
+    "/employees/{employee_id}/active-actions", response_model=list[CaseActionRead]
+)
 def get_employee_active_actions(
     employee_id: UUID,
     org_id: UUID = Depends(require_organization_id),
@@ -374,7 +394,7 @@ def get_employee_active_actions(
 ):
     """Get active disciplinary actions for an employee."""
     service = DisciplineService(db)
-    actions = service.get_active_actions_for_employee(employee_id)
+    actions = service.get_active_actions_for_employee(org_id, employee_id)
     return [CaseActionRead.model_validate(a) for a in actions]
 
 
@@ -386,7 +406,7 @@ def check_active_investigation(
 ):
     """Check if employee has an active disciplinary investigation."""
     service = DisciplineService(db)
-    has_investigation = service.has_active_investigation(employee_id)
+    has_investigation = service.has_active_investigation(org_id, employee_id)
     return {"has_active_investigation": has_investigation}
 
 
@@ -403,11 +423,16 @@ def upload_document(
     title: Optional[str] = Form(None),
     description: Optional[str] = Form(None),
     org_id: UUID = Depends(require_organization_id),
+    auth: dict = Depends(require_tenant_auth),
     db: Session = Depends(get_db),
 ):
     """Upload a document to a disciplinary case."""
-    from app.services.people.discipline.attachment_service import DisciplineAttachmentService
+    from app.services.people.discipline.attachment_service import (
+        DisciplineAttachmentService,
+    )
     from app.models.people.discipline import DocumentType as DocType
+
+    person_id = UUID(auth["person_id"])
 
     # Parse document type
     try:
@@ -428,7 +453,7 @@ def upload_document(
             file_name=file.filename or "document",
             content_type=file.content_type or "application/octet-stream",
             document_type=doc_type,
-            uploaded_by_id=org_id,  # TODO: Get actual user ID from auth
+            uploaded_by_id=person_id,
             title=title,
             description=description,
         )
@@ -457,7 +482,9 @@ def download_document(
 ):
     """Download a document from a disciplinary case."""
     from fastapi.responses import FileResponse
-    from app.services.people.discipline.attachment_service import DisciplineAttachmentService
+    from app.services.people.discipline.attachment_service import (
+        DisciplineAttachmentService,
+    )
 
     service = DisciplineAttachmentService(db)
     document = service.get_document(org_id, document_id)
@@ -483,7 +510,9 @@ def download_document(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.delete("/cases/{case_id}/documents/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/cases/{case_id}/documents/{document_id}", status_code=status.HTTP_204_NO_CONTENT
+)
 def delete_document(
     case_id: UUID,
     document_id: UUID,
@@ -491,7 +520,9 @@ def delete_document(
     db: Session = Depends(get_db),
 ):
     """Delete a document from a disciplinary case."""
-    from app.services.people.discipline.attachment_service import DisciplineAttachmentService
+    from app.services.people.discipline.attachment_service import (
+        DisciplineAttachmentService,
+    )
 
     service = DisciplineAttachmentService(db)
     document = service.get_document(org_id, document_id)
@@ -523,6 +554,7 @@ def generate_query_letter(
     policy_violated: Optional[str] = Form(None),
     response_instructions: Optional[str] = Form(None),
     org_id: UUID = Depends(require_organization_id),
+    auth: dict = Depends(require_tenant_auth),
     db: Session = Depends(get_db),
 ):
     """Generate a query (show cause) letter PDF for a case."""
@@ -534,12 +566,13 @@ def generate_query_letter(
         InvalidCaseStateError,
     )
 
+    person_id = UUID(auth["person_id"])
     service = DisciplineLetterService(db)
 
     try:
         pdf_bytes, doc_record = service.generate_query_letter(
             case_id=case_id,
-            user_id=org_id,  # TODO: Get actual user ID from auth
+            user_id=person_id,
             signatory_name=signatory_name,
             signatory_title=signatory_title,
             organization_name=organization_name,
@@ -572,6 +605,7 @@ def generate_warning_letter(
     organization_name: Optional[str] = Form(None),
     improvement_deadline: Optional[str] = Form(None),
     org_id: UUID = Depends(require_organization_id),
+    auth: dict = Depends(require_tenant_auth),
     db: Session = Depends(get_db),
 ):
     """Generate a warning letter PDF for a specific action."""
@@ -585,6 +619,7 @@ def generate_warning_letter(
         InvalidCaseStateError,
     )
 
+    person_id = UUID(auth["person_id"])
     service = DisciplineLetterService(db)
 
     # Parse improvement deadline if provided
@@ -602,7 +637,7 @@ def generate_warning_letter(
         pdf_bytes, doc_record = service.generate_warning_letter(
             case_id=case_id,
             action_id=action_id,
-            user_id=org_id,
+            user_id=person_id,
             signatory_name=signatory_name,
             signatory_title=signatory_title,
             expected_improvement=expected_improvement,
@@ -636,6 +671,7 @@ def generate_termination_letter(
     case_summary: str = Form(...),
     organization_name: Optional[str] = Form(None),
     org_id: UUID = Depends(require_organization_id),
+    auth: dict = Depends(require_tenant_auth),
     db: Session = Depends(get_db),
 ):
     """Generate a termination letter PDF for a disciplinary termination."""
@@ -648,13 +684,14 @@ def generate_termination_letter(
         InvalidCaseStateError,
     )
 
+    person_id = UUID(auth["person_id"])
     service = DisciplineLetterService(db)
 
     try:
         pdf_bytes, doc_record = service.generate_termination_letter(
             case_id=case_id,
             action_id=action_id,
-            user_id=org_id,
+            user_id=person_id,
             signatory_name=signatory_name,
             signatory_title=signatory_title,
             case_summary=case_summary,

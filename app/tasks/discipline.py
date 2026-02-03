@@ -8,13 +8,20 @@ Handles:
 """
 
 import logging
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 from typing import TypedDict
+from uuid import UUID
 
 from celery import shared_task
+from sqlalchemy import select, func
 
 from app.db import SessionLocal
-from app.models.notification import EntityType, NotificationType, NotificationChannel
+from app.models.notification import (
+    EntityType,
+    Notification,
+    NotificationChannel,
+    NotificationType,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -305,6 +312,24 @@ def process_all_discipline_reminders() -> dict:
 # =============================================================================
 
 
+def _notification_sent_today(
+    db,
+    case_id: UUID,
+    notification_type: NotificationType,
+) -> bool:
+    """Check if a notification of this type was already sent today for this case."""
+    today_start = datetime.combine(date.today(), datetime.min.time())
+    count = db.scalar(
+        select(func.count(Notification.notification_id)).where(
+            Notification.entity_id == case_id,
+            Notification.entity_type == EntityType.DISCIPLINE,
+            Notification.notification_type == notification_type,
+            Notification.created_at >= today_start,
+        )
+    )
+    return (count or 0) > 0
+
+
 def _send_response_reminder(
     db,
     notification_service,
@@ -312,6 +337,13 @@ def _send_response_reminder(
     days_until_due: int,
 ) -> None:
     """Send a reminder for pending response."""
+    notification_type = NotificationType.REMINDER
+    if days_until_due <= 1:
+        notification_type = NotificationType.DUE_SOON
+
+    if _notification_sent_today(db, case.case_id, notification_type):
+        return
+
     if days_until_due == 0:
         title = f"Response Due Today - {case.case_number}"
         message = (
@@ -355,6 +387,9 @@ def _send_overdue_response_reminder(
     days_overdue: int,
 ) -> None:
     """Send a reminder for overdue response."""
+    if _notification_sent_today(db, case.case_id, NotificationType.OVERDUE):
+        return
+
     title = f"Response Overdue - {case.case_number}"
     message = (
         f"Your response to disciplinary case {case.case_number} is {days_overdue} "
@@ -383,6 +418,9 @@ def _send_hearing_reminder(
     days_until: int,
 ) -> None:
     """Send a reminder for upcoming hearing."""
+    if _notification_sent_today(db, case.case_id, NotificationType.REMINDER):
+        return
+
     hearing_date_str = case.hearing_date.strftime("%B %d, %Y at %I:%M %p")
     location_str = f" at {case.hearing_location}" if case.hearing_location else ""
 
@@ -426,6 +464,13 @@ def _send_appeal_deadline_reminder(
     days_until_deadline: int,
 ) -> None:
     """Send a reminder for expiring appeal deadline."""
+    notification_type = NotificationType.REMINDER
+    if days_until_deadline <= 1:
+        notification_type = NotificationType.DUE_SOON
+
+    if _notification_sent_today(db, case.case_id, notification_type):
+        return
+
     deadline_str = case.appeal_deadline.strftime("%B %d, %Y")
 
     if days_until_deadline == 0:

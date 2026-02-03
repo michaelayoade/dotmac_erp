@@ -10,6 +10,7 @@ from datetime import date
 from typing import Optional
 from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.finance.automation.document_template import TemplateType
@@ -79,17 +80,17 @@ class DisciplineLetterService:
 
         Loads employee, actions, witnesses for context building.
         """
-        return (
-            self.db.query(DisciplinaryCase)
+        stmt = (
+            select(DisciplinaryCase)
             .options(
                 joinedload(DisciplinaryCase.employee),
                 joinedload(DisciplinaryCase.reported_by),
                 joinedload(DisciplinaryCase.actions),
                 joinedload(DisciplinaryCase.witnesses),
             )
-            .filter(DisciplinaryCase.case_id == case_id)
-            .first()
+            .where(DisciplinaryCase.case_id == case_id)
         )
+        return self.db.scalar(stmt)
 
     def generate_query_letter(
         self,
@@ -376,7 +377,9 @@ class DisciplineLetterService:
             )
 
         if not case.decision_summary:
-            raise InvalidCaseStateError("Cannot generate decision letter without decision summary.")
+            raise InvalidCaseStateError(
+                "Cannot generate decision letter without decision summary."
+            )
 
         # Build context
         context = self._build_decision_context(
@@ -583,8 +586,12 @@ class DisciplineLetterService:
             employee_name=employee.full_name if employee else "Employee",
             employee_code=employee.employee_code if employee else "",
             employee_address=None,  # Could be added from employee record
-            job_title=employee.designation.designation_name if employee and employee.designation else None,
-            department_name=employee.department.department_name if employee and employee.department else None,
+            job_title=employee.designation.designation_name
+            if employee and employee.designation
+            else None,
+            department_name=employee.department.department_name
+            if employee and employee.department
+            else None,
             # Violation details
             violation_type=case.violation_type.value if case.violation_type else "",
             violation_severity=case.severity.value if case.severity else "",
@@ -633,11 +640,15 @@ class DisciplineLetterService:
                     ActionType.WRITTEN_WARNING,
                     ActionType.FINAL_WARNING,
                 ):
-                    previous_warnings.append({
-                        "type": prev_action.action_type.value,
-                        "date": prev_action.effective_date.isoformat() if prev_action.effective_date else None,
-                        "summary": prev_action.description,
-                    })
+                    previous_warnings.append(
+                        {
+                            "type": prev_action.action_type.value,
+                            "date": prev_action.effective_date.isoformat()
+                            if prev_action.effective_date
+                            else None,
+                            "summary": prev_action.description,
+                        }
+                    )
 
         return WarningLetterContext(
             # Case info
@@ -646,8 +657,12 @@ class DisciplineLetterService:
             employee_name=employee.full_name if employee else "Employee",
             employee_code=employee.employee_code if employee else "",
             employee_address=None,
-            job_title=employee.designation.designation_name if employee and employee.designation else None,
-            department_name=employee.department.department_name if employee and employee.department else None,
+            job_title=employee.designation.designation_name
+            if employee and employee.designation
+            else None,
+            department_name=employee.department.department_name
+            if employee and employee.department
+            else None,
             # Warning details
             warning_type=action.action_type.value,
             warning_description=action.description or "",
@@ -697,12 +712,18 @@ class DisciplineLetterService:
         actions = []
         for action in case.actions:
             if action.is_active:
-                actions.append({
-                    "type": action.action_type.value,
-                    "description": action.description,
-                    "effective_date": action.effective_date.isoformat() if action.effective_date else None,
-                    "end_date": action.end_date.isoformat() if action.end_date else None,
-                })
+                actions.append(
+                    {
+                        "type": action.action_type.value,
+                        "description": action.description,
+                        "effective_date": action.effective_date.isoformat()
+                        if action.effective_date
+                        else None,
+                        "end_date": action.end_date.isoformat()
+                        if action.end_date
+                        else None,
+                    }
+                )
 
         return DecisionLetterContext(
             # Case info
@@ -711,8 +732,12 @@ class DisciplineLetterService:
             employee_name=employee.full_name if employee else "Employee",
             employee_code=employee.employee_code if employee else "",
             employee_address=None,
-            job_title=employee.designation.designation_name if employee and employee.designation else None,
-            department_name=employee.department.department_name if employee and employee.department else None,
+            job_title=employee.designation.designation_name
+            if employee and employee.designation
+            else None,
+            department_name=employee.department.department_name
+            if employee and employee.department
+            else None,
             # Investigation summary
             investigation_summary=case.description or "",
             hearing_date=case.hearing_date.date() if case.hearing_date else None,
@@ -759,11 +784,15 @@ class DisciplineLetterService:
         previous_actions = []
         for prev_action in case.actions:
             if prev_action.action_id != action.action_id:
-                previous_actions.append({
-                    "type": prev_action.action_type.value,
-                    "date": prev_action.effective_date.isoformat() if prev_action.effective_date else None,
-                    "description": prev_action.description,
-                })
+                previous_actions.append(
+                    {
+                        "type": prev_action.action_type.value,
+                        "date": prev_action.effective_date.isoformat()
+                        if prev_action.effective_date
+                        else None,
+                        "description": prev_action.description,
+                    }
+                )
 
         return DisciplineTerminationLetterContext(
             # Case info
@@ -772,8 +801,12 @@ class DisciplineLetterService:
             employee_name=employee.full_name if employee else "Employee",
             employee_code=employee.employee_code if employee else "",
             employee_address=None,
-            job_title=employee.designation.designation_name if employee and employee.designation else None,
-            department_name=employee.department.department_name if employee and employee.department else None,
+            job_title=employee.designation.designation_name
+            if employee and employee.designation
+            else None,
+            department_name=employee.department.department_name
+            if employee and employee.department
+            else None,
             # Termination details
             termination_date=action.effective_date or date.today(),
             last_working_day=action.effective_date or date.today(),

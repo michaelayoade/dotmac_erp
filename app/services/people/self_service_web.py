@@ -1,6 +1,7 @@
 """
 Self-service web view service for employees and managers.
 """
+
 from __future__ import annotations
 
 from datetime import date
@@ -44,11 +45,42 @@ class SelfServiceWebService:
     @staticmethod
     def _nigeria_states() -> list[str]:
         return [
-            "Abia", "Adamawa", "Akwa Ibom", "Anambra", "Bauchi", "Bayelsa", "Benue",
-            "Borno", "Cross River", "Delta", "Ebonyi", "Edo", "Ekiti", "Enugu",
-            "Gombe", "Imo", "Jigawa", "Kaduna", "Kano", "Katsina", "Kebbi",
-            "Kogi", "Kwara", "Lagos", "Nasarawa", "Niger", "Ogun", "Ondo",
-            "Osun", "Oyo", "Plateau", "Rivers", "Sokoto", "Taraba", "Yobe", "Zamfara",
+            "Abia",
+            "Adamawa",
+            "Akwa Ibom",
+            "Anambra",
+            "Bauchi",
+            "Bayelsa",
+            "Benue",
+            "Borno",
+            "Cross River",
+            "Delta",
+            "Ebonyi",
+            "Edo",
+            "Ekiti",
+            "Enugu",
+            "Gombe",
+            "Imo",
+            "Jigawa",
+            "Kaduna",
+            "Kano",
+            "Katsina",
+            "Kebbi",
+            "Kogi",
+            "Kwara",
+            "Lagos",
+            "Nasarawa",
+            "Niger",
+            "Ogun",
+            "Ondo",
+            "Osun",
+            "Oyo",
+            "Plateau",
+            "Rivers",
+            "Sokoto",
+            "Taraba",
+            "Yobe",
+            "Zamfara",
             "FCT",
         ]
 
@@ -57,7 +89,9 @@ class SelfServiceWebService:
         db: Session, org_id: Optional[UUID], person_id: Optional[UUID]
     ) -> UUID:
         if org_id is None or person_id is None:
-            raise HTTPException(status_code=403, detail="Missing organization or person context")
+            raise HTTPException(
+                status_code=403, detail="Missing organization or person context"
+            )
         employee = (
             db.query(Employee)
             .filter(Employee.organization_id == org_id)
@@ -83,7 +117,9 @@ class SelfServiceWebService:
         context["can_team_leave"] = False
         context["can_team_expenses"] = False
         context["error"] = detail or "Employee profile not found."
-        return templates.TemplateResponse(request, "people/self/employee_required.html", context)
+        return templates.TemplateResponse(
+            request, "people/self/employee_required.html", context
+        )
 
     @staticmethod
     def _has_team_approvals(
@@ -125,15 +161,21 @@ class SelfServiceWebService:
         """Get open/active support tickets for expense linking."""
         from app.models.support.ticket import Ticket, TicketStatus
 
-        tickets = db.execute(
-            select(Ticket)
-            .where(
-                Ticket.organization_id == org_id,
-                Ticket.status.in_([TicketStatus.OPEN, TicketStatus.REPLIED, TicketStatus.ON_HOLD]),
+        tickets = (
+            db.execute(
+                select(Ticket)
+                .where(
+                    Ticket.organization_id == org_id,
+                    Ticket.status.in_(
+                        [TicketStatus.OPEN, TicketStatus.REPLIED, TicketStatus.ON_HOLD]
+                    ),
+                )
+                .order_by(Ticket.opening_date.desc())
+                .limit(100)
             )
-            .order_by(Ticket.opening_date.desc())
-            .limit(100)
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
         return [
             {
@@ -150,14 +192,18 @@ class SelfServiceWebService:
         try:
             from app.models.finance.core_org.project import Project, ProjectStatus
 
-            projects = db.execute(
-                select(Project)
-                .where(
-                    Project.organization_id == org_id,
-                    Project.status == ProjectStatus.ACTIVE,
+            projects = (
+                db.execute(
+                    select(Project)
+                    .where(
+                        Project.organization_id == org_id,
+                        Project.status == ProjectStatus.ACTIVE,
+                    )
+                    .order_by(Project.project_code)
                 )
-                .order_by(Project.project_code)
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
 
             return [
                 {
@@ -570,10 +616,16 @@ class SelfServiceWebService:
             try:
                 year, month_num = [int(part) for part in month.split("-", 1)]
             except ValueError as exc:
-                raise HTTPException(status_code=400, detail="Invalid month format") from exc
-            summary = svc.get_employee_monthly_summary(org_id, employee_id, year, month_num)
+                raise HTTPException(
+                    status_code=400, detail="Invalid month format"
+                ) from exc
+            summary = svc.get_employee_monthly_summary(
+                org_id, employee_id, year, month_num
+            )
         else:
-            summary = svc.get_employee_monthly_summary(org_id, employee_id, today.year, today.month)
+            summary = svc.get_employee_monthly_summary(
+                org_id, employee_id, today.year, today.month
+            )
 
         recent = svc.list_attendance(
             org_id,
@@ -597,7 +649,9 @@ class SelfServiceWebService:
         )
         context["can_team_leave"] = context["has_team_approvals"]
         context["can_team_expenses"] = context["has_team_approvals"]
-        return templates.TemplateResponse(request, "people/self/attendance.html", context)
+        return templates.TemplateResponse(
+            request, "people/self/attendance.html", context
+        )
 
     def check_in_response(
         self,
@@ -686,7 +740,9 @@ class SelfServiceWebService:
             employee_id=employee_id,
             pagination=PaginationParams(offset=0, limit=15),
         )
-        leave_types = svc.list_leave_types(org_id, is_active=True, pagination=None).items
+        leave_types = svc.list_leave_types(
+            org_id, is_active=True, pagination=None
+        ).items
 
         context = base_context(request, auth, "My Leave", "self-leave", db=db)
         context.update(
@@ -739,7 +795,9 @@ class SelfServiceWebService:
         )
         context["can_team_leave"] = context["has_team_approvals"]
         context["can_team_expenses"] = context["has_team_approvals"]
-        return templates.TemplateResponse(request, "people/self/leave_detail.html", context)
+        return templates.TemplateResponse(
+            request, "people/self/leave_detail.html", context
+        )
 
     def leave_cancel_response(
         self,
@@ -841,8 +899,12 @@ class SelfServiceWebService:
                 "selected_ticket_id": selected_ticket_id,
                 "selected_project_id": selected_project_id,
                 "selected_task_id": selected_task_id,
-                "employee_bank_code": (employee.bank_branch_code if employee else "") or "",
-                "employee_bank_account_number": (employee.bank_account_number if employee else "") or "",
+                "employee_bank_code": (employee.bank_branch_code if employee else "")
+                or "",
+                "employee_bank_account_number": (
+                    employee.bank_account_number if employee else ""
+                )
+                or "",
             }
         )
         context["has_team_approvals"] = self._has_team_approvals(
@@ -880,7 +942,9 @@ class SelfServiceWebService:
         try:
             amount = Decimal(claimed_amount)
         except (InvalidOperation, TypeError) as exc:
-            raise HTTPException(status_code=400, detail="Invalid claimed amount") from exc
+            raise HTTPException(
+                status_code=400, detail="Invalid claimed amount"
+            ) from exc
 
         resolved_receipt_url = receipt_url.strip() if receipt_url else None
         if receipt_file:
@@ -904,7 +968,9 @@ class SelfServiceWebService:
                     "description": description.strip(),
                     "claimed_amount": amount,
                     "receipt_url": resolved_receipt_url,
-                    "receipt_number": receipt_number.strip() if receipt_number else None,
+                    "receipt_number": receipt_number.strip()
+                    if receipt_number
+                    else None,
                 }
             ],
         )
@@ -939,7 +1005,9 @@ class SelfServiceWebService:
             db, org_id, str(claim.project_id) if claim.project_id else None
         )
 
-        context = base_context(request, auth, "Edit Expense Claim", "self-expenses", db=db)
+        context = base_context(
+            request, auth, "Edit Expense Claim", "self-expenses", db=db
+        )
         context.update(
             {
                 "claim": claim,
@@ -955,7 +1023,9 @@ class SelfServiceWebService:
         )
         context["can_team_leave"] = context["has_team_approvals"]
         context["can_team_expenses"] = context["has_team_approvals"]
-        return templates.TemplateResponse(request, "people/self/expense_claim_edit.html", context)
+        return templates.TemplateResponse(
+            request, "people/self/expense_claim_edit.html", context
+        )
 
     def expense_claim_update_response(
         self,
@@ -979,7 +1049,9 @@ class SelfServiceWebService:
         if claim.employee_id != employee_id:
             raise HTTPException(status_code=403, detail="Forbidden")
         if claim.status != ExpenseClaimStatus.DRAFT:
-            raise HTTPException(status_code=400, detail="Only draft claims can be edited")
+            raise HTTPException(
+                status_code=400, detail="Only draft claims can be edited"
+            )
 
         svc.update_claim(
             org_id,
@@ -1059,13 +1131,17 @@ class SelfServiceWebService:
                 try:
                     status_value = LeaveApplicationStatus(status)
                 except ValueError as exc:
-                    raise HTTPException(status_code=400, detail="Invalid status") from exc
+                    raise HTTPException(
+                        status_code=400, detail="Invalid status"
+                    ) from exc
                 query = query.where(LeaveApplication.status == status_value)
             query = query.order_by(LeaveApplication.from_date.desc())
             count_query = select(func.count()).select_from(query.subquery())
             total = db.scalar(count_query) or 0
             items = list(
-                db.scalars(query.offset(pagination.offset).limit(pagination.limit)).all()
+                db.scalars(
+                    query.offset(pagination.offset).limit(pagination.limit)
+                ).all()
             )
 
         total_pages = (total + pagination.limit - 1) // pagination.limit if total else 1
@@ -1085,7 +1161,9 @@ class SelfServiceWebService:
         context["has_team_approvals"] = True
         context["can_team_leave"] = True
         context["can_team_expenses"] = True
-        return templates.TemplateResponse(request, "people/self/team_leave.html", context)
+        return templates.TemplateResponse(
+            request, "people/self/team_leave.html", context
+        )
 
     def team_leave_approve_response(
         self,
@@ -1189,7 +1267,9 @@ class SelfServiceWebService:
             query = (
                 select(ExpenseClaim)
                 .options(
-                    joinedload(ExpenseClaim.items).joinedload(ExpenseClaimItem.category),
+                    joinedload(ExpenseClaim.items).joinedload(
+                        ExpenseClaimItem.category
+                    ),
                     joinedload(ExpenseClaim.employee),
                 )
                 .where(
@@ -1201,7 +1281,9 @@ class SelfServiceWebService:
                 try:
                     status_value = ExpenseClaimStatus(status)
                 except ValueError as exc:
-                    raise HTTPException(status_code=400, detail="Invalid status") from exc
+                    raise HTTPException(
+                        status_code=400, detail="Invalid status"
+                    ) from exc
                 query = query.where(ExpenseClaim.status == status_value)
             query = query.order_by(ExpenseClaim.claim_date.desc())
             count_query = select(func.count()).select_from(
@@ -1224,11 +1306,15 @@ class SelfServiceWebService:
                 )
             total = db.scalar(count_query) or 0
             items = list(
-                db.scalars(query.offset(pagination.offset).limit(pagination.limit)).unique().all()
+                db.scalars(query.offset(pagination.offset).limit(pagination.limit))
+                .unique()
+                .all()
             )
 
         total_pages = (total + pagination.limit - 1) // pagination.limit if total else 1
-        context = base_context(request, auth, "Team Expenses", "self-team-expenses", db=db)
+        context = base_context(
+            request, auth, "Team Expenses", "self-team-expenses", db=db
+        )
         context.update(
             {
                 "claims": items,
@@ -1244,7 +1330,9 @@ class SelfServiceWebService:
         context["has_team_approvals"] = True
         context["can_team_leave"] = True
         context["can_team_expenses"] = True
-        return templates.TemplateResponse(request, "people/self/team_expenses.html", context)
+        return templates.TemplateResponse(
+            request, "people/self/team_expenses.html", context
+        )
 
     def team_expense_approve_response(
         self,
@@ -1306,7 +1394,6 @@ class SelfServiceWebService:
         db.commit()
         return RedirectResponse(url="/people/self/team/expenses", status_code=302)
 
-
     # ============ Payslips Self-Service ============
 
     def payslips_response(
@@ -1338,16 +1425,15 @@ class SelfServiceWebService:
         pagination = PaginationParams.from_page(page, per_page=12)
 
         # Query salary slips for this employee
-        query = (
-            db.query(SalarySlip)
-            .filter(
-                SalarySlip.organization_id == org_id,
-                SalarySlip.employee_id == employee_id,
-                SalarySlip.status.in_([
+        query = db.query(SalarySlip).filter(
+            SalarySlip.organization_id == org_id,
+            SalarySlip.employee_id == employee_id,
+            SalarySlip.status.in_(
+                [
                     SalarySlipStatus.POSTED,
                     SalarySlipStatus.PAID,
-                ]),
-            )
+                ]
+            ),
         )
 
         if year:
@@ -1457,7 +1543,9 @@ class SelfServiceWebService:
                 as_of_date=slip.start_date,
             )
 
-        context = base_context(request, auth, f"Payslip {slip.slip_number}", "self-payslips", db=db)
+        context = base_context(
+            request, auth, f"Payslip {slip.slip_number}", "self-payslips", db=db
+        )
         context.update(
             {
                 "slip": slip,
@@ -1469,7 +1557,9 @@ class SelfServiceWebService:
         )
         context["can_team_leave"] = context["has_team_approvals"]
         context["can_team_expenses"] = context["has_team_approvals"]
-        return templates.TemplateResponse(request, "people/self/payslip_detail.html", context)
+        return templates.TemplateResponse(
+            request, "people/self/payslip_detail.html", context
+        )
 
     # =========================================================================
     # Discipline Self-Service
@@ -1484,7 +1574,7 @@ class SelfServiceWebService:
         include_closed: bool = False,
     ) -> HTMLResponse:
         """Self-service disciplinary cases list."""
-        org_id = auth.organization_id
+        org_id = coerce_uuid(auth.organization_id)
         person_id = auth.person_id
 
         try:
@@ -1497,8 +1587,8 @@ class SelfServiceWebService:
         from app.services.people.discipline import DisciplineService
 
         discipline_service = DisciplineService(db)
-        cases = discipline_service.list_employee_cases(
-            employee_id, include_closed=include_closed
+        cases, _total = discipline_service.list_employee_cases(
+            org_id, employee_id, include_closed=include_closed
         )
 
         # Mark cases that need response
@@ -1506,7 +1596,8 @@ class SelfServiceWebService:
             setattr(
                 case,
                 "has_pending_response",
-                case.status.value == "QUERY_ISSUED" and case.response_due_date is not None,
+                case.status.value == "QUERY_ISSUED"
+                and case.response_due_date is not None,
             )
 
         context = base_context(request, auth, "Discipline", "self-discipline", db=db)
@@ -1521,7 +1612,9 @@ class SelfServiceWebService:
         )
         context["can_team_leave"] = context["has_team_approvals"]
         context["can_team_expenses"] = context["has_team_approvals"]
-        return templates.TemplateResponse(request, "people/self/discipline.html", context)
+        return templates.TemplateResponse(
+            request, "people/self/discipline.html", context
+        )
 
     def discipline_case_detail_response(
         self,

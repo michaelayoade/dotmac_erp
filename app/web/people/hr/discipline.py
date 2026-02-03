@@ -9,8 +9,18 @@ Provides HTML template routes for discipline case management:
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    Request,
+    UploadFile,
+)
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from urllib.parse import quote
 from sqlalchemy.orm import Session
 
 from app.services.people.discipline.web import discipline_web_service
@@ -187,13 +197,25 @@ def case_detail(
 
 @router.post("/{case_id}/issue-query")
 def issue_query(
+    request: Request,
     case_id: UUID,
-    query_text: str = Form(...),
-    response_due_date: str = Form(...),
+    query_text: Optional[str] = Form(None),
+    response_due_date: Optional[str] = Form(None),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
     """Issue a query to the employee."""
+    form = getattr(request.state, "csrf_form", None)
+    if form:
+        query_text = form.get("query_text") or query_text
+        response_due_date = form.get("response_due_date") or response_due_date
+
+    if not query_text or not response_due_date:
+        message = quote("Query text and response due date are required.")
+        return RedirectResponse(
+            url=f"/people/hr/discipline/{case_id}?error={message}",
+            status_code=303,
+        )
     return discipline_web_service.issue_query_response(
         auth=auth,
         db=db,
@@ -205,14 +227,27 @@ def issue_query(
 
 @router.post("/{case_id}/schedule-hearing")
 def schedule_hearing(
+    request: Request,
     case_id: UUID,
-    hearing_date: str = Form(...),
+    hearing_date: Optional[str] = Form(None),
     hearing_location: Optional[str] = Form(None),
     panel_chair_id: Optional[str] = Form(None),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
     """Schedule a disciplinary hearing."""
+    form = getattr(request.state, "csrf_form", None)
+    if form:
+        hearing_date = form.get("hearing_date") or hearing_date
+        hearing_location = form.get("hearing_location") or hearing_location
+        panel_chair_id = form.get("panel_chair_id") or panel_chair_id
+
+    if not hearing_date:
+        message = quote("Hearing date is required.")
+        return RedirectResponse(
+            url=f"/people/hr/discipline/{case_id}?error={message}",
+            status_code=303,
+        )
     return discipline_web_service.schedule_hearing_response(
         auth=auth,
         db=db,
@@ -225,12 +260,23 @@ def schedule_hearing(
 
 @router.post("/{case_id}/record-hearing")
 def record_hearing(
+    request: Request,
     case_id: UUID,
-    hearing_notes: str = Form(...),
+    hearing_notes: Optional[str] = Form(None),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
     """Record hearing notes."""
+    form = getattr(request.state, "csrf_form", None)
+    if form:
+        hearing_notes = form.get("hearing_notes") or hearing_notes
+
+    if not hearing_notes:
+        message = quote("Hearing notes are required.")
+        return RedirectResponse(
+            url=f"/people/hr/discipline/{case_id}?error={message}",
+            status_code=303,
+        )
     return discipline_web_service.record_hearing_response(
         auth=auth,
         db=db,
@@ -241,8 +287,9 @@ def record_hearing(
 
 @router.post("/{case_id}/decision")
 def record_decision(
+    request: Request,
     case_id: UUID,
-    decision_summary: str = Form(...),
+    decision_summary: Optional[str] = Form(None),
     action_type: Optional[str] = Form(None),
     action_description: Optional[str] = Form(None),
     effective_date: Optional[str] = Form(None),
@@ -251,6 +298,20 @@ def record_decision(
     db: Session = Depends(get_db),
 ):
     """Record decision and actions."""
+    form = getattr(request.state, "csrf_form", None)
+    if form:
+        decision_summary = form.get("decision_summary") or decision_summary
+        action_type = form.get("action_type") or action_type
+        action_description = form.get("action_description") or action_description
+        effective_date = form.get("effective_date") or effective_date
+        end_date = form.get("end_date") or end_date
+
+    if not decision_summary:
+        message = quote("Decision summary is required.")
+        return RedirectResponse(
+            url=f"/people/hr/discipline/{case_id}?error={message}",
+            status_code=303,
+        )
     return discipline_web_service.record_decision_response(
         auth=auth,
         db=db,
@@ -298,6 +359,7 @@ def withdraw_case(
 
 @router.post("/{case_id}/witnesses")
 def add_witness(
+    request: Request,
     case_id: UUID,
     employee_id: Optional[str] = Form(None),
     external_name: Optional[str] = Form(None),
@@ -306,6 +368,11 @@ def add_witness(
     db: Session = Depends(get_db),
 ):
     """Add a witness to a case."""
+    form = getattr(request.state, "csrf_form", None)
+    if form:
+        employee_id = form.get("employee_id") or employee_id
+        external_name = form.get("external_name") or external_name
+        external_contact = form.get("external_contact") or external_contact
     return discipline_web_service.add_witness_response(
         auth=auth,
         db=db,
@@ -350,7 +417,9 @@ def upload_document(
 ):
     """Upload a document to a disciplinary case."""
     from fastapi.responses import RedirectResponse
-    from app.services.people.discipline.attachment_service import DisciplineAttachmentService
+    from app.services.people.discipline.attachment_service import (
+        DisciplineAttachmentService,
+    )
     from app.models.people.discipline import DocumentType as DocType
 
     # Parse document type
@@ -366,7 +435,7 @@ def upload_document(
 
     try:
         service.save_file(
-            organization_id=auth.org_id,
+            organization_id=auth.organization_id,
             case_id=case_id,
             file_content=file.file,
             file_name=file.filename or "document",
@@ -398,10 +467,12 @@ def download_document(
 ):
     """Download a document from a disciplinary case."""
     from fastapi.responses import FileResponse
-    from app.services.people.discipline.attachment_service import DisciplineAttachmentService
+    from app.services.people.discipline.attachment_service import (
+        DisciplineAttachmentService,
+    )
 
     service = DisciplineAttachmentService(db)
-    document = service.get_document(auth.org_id, document_id)
+    document = service.get_document(auth.organization_id, document_id)
 
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
@@ -432,10 +503,12 @@ def delete_document(
 ):
     """Delete a document from a disciplinary case."""
     from fastapi.responses import RedirectResponse
-    from app.services.people.discipline.attachment_service import DisciplineAttachmentService
+    from app.services.people.discipline.attachment_service import (
+        DisciplineAttachmentService,
+    )
 
     service = DisciplineAttachmentService(db)
-    document = service.get_document(auth.org_id, document_id)
+    document = service.get_document(auth.organization_id, document_id)
 
     if not document or document.case_id != case_id:
         return RedirectResponse(
@@ -443,7 +516,7 @@ def delete_document(
             status_code=303,
         )
 
-    deleted = service.delete(auth.org_id, document_id)
+    deleted = service.delete(auth.organization_id, document_id)
     if deleted:
         db.commit()
 

@@ -25,6 +25,7 @@ from app.models.people.discipline import (
     DocumentType,
 )
 from app.services.common import coerce_uuid, ValidationError
+from pydantic import ValidationError as PydanticValidationError
 from app.services.people.discipline import DisciplineService
 from app.services.common import PaginationParams
 from app.services.people.hr import EmployeeService
@@ -62,7 +63,12 @@ def parse_date(value: Optional[str]) -> Optional[date]:
     if not value or value.strip() == "":
         return None
     try:
-        return date.fromisoformat(value.strip())
+        clean_value = value.strip()
+        try:
+            return date.fromisoformat(clean_value)
+        except ValueError:
+            # Accept full ISO datetime strings and coerce to date.
+            return datetime.fromisoformat(clean_value).date()
     except (ValueError, TypeError):
         return None
 
@@ -112,28 +118,36 @@ class DisciplineWebService:
             include_closed=include_closed,
         )
 
-        cases, total = service.list_cases(org_id, filters=filters, offset=offset, limit=limit)
+        cases, total = service.list_cases(
+            org_id, filters=filters, offset=offset, limit=limit
+        )
 
         total_pages = (total + limit - 1) // limit if total > 0 else 1
 
-        context = base_context(request, auth, "Disciplinary Cases", "hr-discipline", db=db)
-        context.update({
-            "cases": cases,
-            "status": status,
-            "violation_type": violation_type,
-            "severity": severity,
-            "employee_id": employee_id,
-            "include_closed": include_closed,
-            "statuses": [s.value for s in CaseStatus],
-            "violation_types": [v.value for v in ViolationType],
-            "severities": [s.value for s in SeverityLevel],
-            "page": page,
-            "total_pages": total_pages,
-            "total": total,
-            "has_prev": page > 1,
-            "has_next": page < total_pages,
-        })
-        return templates.TemplateResponse(request, "people/hr/discipline/cases.html", context)
+        context = base_context(
+            request, auth, "Disciplinary Cases", "hr-discipline", db=db
+        )
+        context.update(
+            {
+                "cases": cases,
+                "status": status,
+                "violation_type": violation_type,
+                "severity": severity,
+                "employee_id": employee_id,
+                "include_closed": include_closed,
+                "statuses": [s.value for s in CaseStatus],
+                "violation_types": [v.value for v in ViolationType],
+                "severities": [s.value for s in SeverityLevel],
+                "page": page,
+                "total_pages": total_pages,
+                "total": total,
+                "has_prev": page > 1,
+                "has_next": page < total_pages,
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/hr/discipline/cases.html", context
+        )
 
     def case_detail_response(
         self,
@@ -164,13 +178,15 @@ class DisciplineWebService:
         context = base_context(
             request, auth, f"Case {case.case_number}", "hr-discipline", db=db
         )
-        context.update({
-            "case": case,
-            "employees": employees,
-            "statuses": [s.value for s in CaseStatus],
-            "action_types": [a.value for a in ActionType],
-            "document_types": [d.value for d in DocumentType],
-        })
+        context.update(
+            {
+                "case": case,
+                "employees": employees,
+                "statuses": [s.value for s in CaseStatus],
+                "action_types": [a.value for a in ActionType],
+                "document_types": [d.value for d in DocumentType],
+            }
+        )
         return templates.TemplateResponse(
             request, "people/hr/discipline/case_detail.html", context
         )
@@ -202,14 +218,18 @@ class DisciplineWebService:
 
         if not employee_name and working_form_data.get("employee_id"):
             try:
-                employee = employee_service.get_employee(UUID(working_form_data["employee_id"]))
+                employee = employee_service.get_employee(
+                    UUID(working_form_data["employee_id"])
+                )
                 employee_name = _employee_label(employee)
             except Exception:
                 employee_name = ""
 
         if not reported_by_name and working_form_data.get("reported_by_id"):
             try:
-                reporter = employee_service.get_employee(UUID(working_form_data["reported_by_id"]))
+                reporter = employee_service.get_employee(
+                    UUID(working_form_data["reported_by_id"])
+                )
                 reported_by_name = _employee_label(reporter)
             except Exception:
                 reported_by_name = ""
@@ -217,13 +237,17 @@ class DisciplineWebService:
         working_form_data["employee_name"] = employee_name
         working_form_data["reported_by_name"] = reported_by_name
 
-        context = base_context(request, auth, "New Disciplinary Case", "hr-discipline", db=db)
-        context.update({
-            "violation_types": [v.value for v in ViolationType],
-            "severities": [s.value for s in SeverityLevel],
-            "error": error,
-            "form_data": working_form_data,
-        })
+        context = base_context(
+            request, auth, "New Disciplinary Case", "hr-discipline", db=db
+        )
+        context.update(
+            {
+                "violation_types": [v.value for v in ViolationType],
+                "severities": [s.value for s in SeverityLevel],
+                "error": error,
+                "form_data": working_form_data,
+            }
+        )
         return templates.TemplateResponse(
             request, "people/hr/discipline/case_form.html", context
         )
@@ -236,16 +260,20 @@ class DisciplineWebService:
         limit: int = 8,
     ) -> dict:
         """Search active employees for discipline typeahead fields."""
+        from sqlalchemy import select as sa_select
+        from sqlalchemy.orm import joinedload as jl
+
         org_id = coerce_uuid(organization_id)
         search_term = f"%{query.strip()}%"
-        employees = (
-            db.query(Employee)
+        stmt = (
+            sa_select(Employee)
             .join(Person, Person.id == Employee.person_id)
-            .filter(
+            .options(jl(Employee.person))
+            .where(
                 Employee.organization_id == org_id,
                 Employee.status == EmployeeStatus.ACTIVE,
             )
-            .filter(
+            .where(
                 (Person.first_name.ilike(search_term))
                 | (Person.last_name.ilike(search_term))
                 | (Person.email.ilike(search_term))
@@ -253,14 +281,18 @@ class DisciplineWebService:
             )
             .order_by(Person.first_name.asc(), Person.last_name.asc())
             .limit(limit)
-            .all()
         )
+        employees = list(db.scalars(stmt).unique().all())
         items = []
         for employee in employees:
             name = employee.person.name if employee.person else ""
             label = name
             if employee.employee_code:
-                label = f"{name} ({employee.employee_code})" if name else employee.employee_code
+                label = (
+                    f"{name} ({employee.employee_code})"
+                    if name
+                    else employee.employee_code
+                )
             items.append(
                 {
                     "ref": str(employee.employee_id),
@@ -331,11 +363,28 @@ class DisciplineWebService:
             raise HTTPException(status_code=404, detail="Case not found")
 
         try:
-            due_date = date.fromisoformat(response_due_date)
-            data = IssueQueryRequest(
-                query_text=query_text,
-                response_due_date=due_date,
-            )
+            due_date = parse_date(response_due_date)
+            if not due_date:
+                raise ValueError("invalid response due date")
+            try:
+                data = IssueQueryRequest(
+                    query_text=query_text,
+                    response_due_date=due_date,
+                )
+            except PydanticValidationError as exc:
+                db.rollback()
+                message = "Please check the form and try again."
+                for err in exc.errors():
+                    if err.get("loc", [None])[-1] == "query_text":
+                        message = "Query text must be at least 10 characters."
+                        break
+                    if err.get("loc", [None])[-1] == "response_due_date":
+                        message = "Response due date is invalid."
+                        break
+                return RedirectResponse(
+                    url=f"/people/hr/discipline/{case_id}?error={quote(message)}",
+                    status_code=303,
+                )
             service.issue_query(case_id, data, issued_by_id=person_id)
             db.commit()
             return RedirectResponse(
@@ -376,19 +425,32 @@ class DisciplineWebService:
         if case.organization_id != org_id:
             raise HTTPException(status_code=404, detail="Case not found")
 
-        data = ScheduleHearingRequest(
-            hearing_date=datetime.fromisoformat(hearing_date),
-            hearing_location=hearing_location,
-            panel_chair_id=parse_uuid(panel_chair_id),
-        )
-
-        service.schedule_hearing(case_id, data, scheduled_by_id=person_id)
-        db.commit()
-
-        return RedirectResponse(
-            url=f"/people/hr/discipline/{case_id}?success=hearing_scheduled",
-            status_code=303,
-        )
+        try:
+            data = ScheduleHearingRequest(
+                hearing_date=datetime.fromisoformat(hearing_date),
+                hearing_location=hearing_location,
+                panel_chair_id=parse_uuid(panel_chair_id),
+            )
+            service.schedule_hearing(case_id, data, scheduled_by_id=person_id)
+            db.commit()
+            return RedirectResponse(
+                url=f"/people/hr/discipline/{case_id}?success=hearing_scheduled",
+                status_code=303,
+            )
+        except ValueError:
+            db.rollback()
+            message = quote("Hearing date is invalid.")
+            return RedirectResponse(
+                url=f"/people/hr/discipline/{case_id}?error={message}",
+                status_code=303,
+            )
+        except ValidationError as exc:
+            db.rollback()
+            message = quote(exc.message or "Unable to schedule hearing.")
+            return RedirectResponse(
+                url=f"/people/hr/discipline/{case_id}?error={message}",
+                status_code=303,
+            )
 
     def record_hearing_response(
         self,
@@ -436,29 +498,44 @@ class DisciplineWebService:
         if case.organization_id != org_id:
             raise HTTPException(status_code=404, detail="Case not found")
 
-        actions = []
-        if action_type:
-            actions.append(
-                CaseActionCreate(
-                    action_type=ActionType(action_type),
-                    description=action_description,
-                    effective_date=parse_date(effective_date) or date.today(),
-                    end_date=parse_date(end_date),
+        try:
+            actions = []
+            if action_type:
+                actions.append(
+                    CaseActionCreate(
+                        action_type=ActionType(action_type),
+                        description=action_description,
+                        effective_date=parse_date(effective_date) or date.today(),
+                        end_date=parse_date(end_date),
+                    )
                 )
+
+            data = RecordDecisionRequest(
+                decision_summary=decision_summary,
+                actions=actions,
             )
 
-        data = RecordDecisionRequest(
-            decision_summary=decision_summary,
-            actions=actions,
-        )
+            service.record_decision(case_id, data, decided_by_id=person_id)
+            db.commit()
 
-        service.record_decision(case_id, data, decided_by_id=person_id)
-        db.commit()
-
-        return RedirectResponse(
-            url=f"/people/hr/discipline/{case_id}?success=decision_recorded",
-            status_code=303,
-        )
+            return RedirectResponse(
+                url=f"/people/hr/discipline/{case_id}?success=decision_recorded",
+                status_code=303,
+            )
+        except ValueError:
+            db.rollback()
+            message = quote("Invalid data provided for decision.")
+            return RedirectResponse(
+                url=f"/people/hr/discipline/{case_id}?error={message}",
+                status_code=303,
+            )
+        except ValidationError as exc:
+            db.rollback()
+            message = quote(exc.message or "Unable to record decision.")
+            return RedirectResponse(
+                url=f"/people/hr/discipline/{case_id}?error={message}",
+                status_code=303,
+            )
 
     def close_case_response(
         self,

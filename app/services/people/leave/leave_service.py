@@ -3,6 +3,7 @@
 Handles leave types, allocations, applications, and holiday lists.
 Adapted from DotMac People for the unified ERP platform.
 """
+
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta, timezone
@@ -151,14 +152,17 @@ class LeaveService:
         """Generate the next leave application number."""
         year = date.today().year
         prefix = f"LV-{year}-"
-        count = self.db.scalar(
-            select(func.count())
-            .select_from(LeaveApplication)
-            .where(
-                LeaveApplication.organization_id == org_id,
-                LeaveApplication.application_number.like(f"{prefix}%"),
+        count = (
+            self.db.scalar(
+                select(func.count())
+                .select_from(LeaveApplication)
+                .where(
+                    LeaveApplication.organization_id == org_id,
+                    LeaveApplication.application_number.like(f"{prefix}%"),
+                )
             )
-        ) or 0
+            or 0
+        )
         return f"{prefix}{count + 1:05d}"
 
     def __init__(
@@ -428,7 +432,9 @@ class LeaveService:
         if holidays is not None:
             # Replace holidays to match the submitted list.
             self.db.execute(
-                delete(Holiday).where(Holiday.holiday_list_id == holiday_list.holiday_list_id)
+                delete(Holiday).where(
+                    Holiday.holiday_list_id == holiday_list.holiday_list_id
+                )
             )
             # Keep relationship state consistent after bulk delete.
             holiday_list.holidays = []
@@ -494,7 +500,9 @@ class LeaveService:
             )
         )
         if not holiday:
-            raise LeaveServiceError(f"Holiday {holiday_id} not found in list {holiday_list_id}")
+            raise LeaveServiceError(
+                f"Holiday {holiday_id} not found in list {holiday_list_id}"
+            )
 
         self.db.delete(holiday)
         self.db.flush()
@@ -535,9 +543,7 @@ class LeaveService:
         pagination: Optional[PaginationParams] = None,
     ) -> PaginatedResult[LeaveAllocation]:
         """List leave allocations."""
-        query = select(LeaveAllocation).where(
-            LeaveAllocation.organization_id == org_id
-        )
+        query = select(LeaveAllocation).where(LeaveAllocation.organization_id == org_id)
 
         if employee_id:
             query = query.where(LeaveAllocation.employee_id == employee_id)
@@ -761,16 +767,20 @@ class LeaveService:
         """Get all leave balances for an employee."""
         check_date = as_of_date or date.today()
 
-        allocations = self.db.scalars(
-            select(LeaveAllocation)
-            .options(joinedload(LeaveAllocation.leave_type))
-            .where(
-                LeaveAllocation.organization_id == org_id,
-                LeaveAllocation.employee_id == employee_id,
-                LeaveAllocation.from_date <= check_date,
-                LeaveAllocation.to_date >= check_date,
+        allocations = (
+            self.db.scalars(
+                select(LeaveAllocation)
+                .options(joinedload(LeaveAllocation.leave_type))
+                .where(
+                    LeaveAllocation.organization_id == org_id,
+                    LeaveAllocation.employee_id == employee_id,
+                    LeaveAllocation.from_date <= check_date,
+                    LeaveAllocation.to_date >= check_date,
+                )
             )
-        ).unique().all()
+            .unique()
+            .all()
+        )
 
         balances = []
         for alloc in allocations:
@@ -780,18 +790,24 @@ class LeaveService:
                 - alloc.leaves_encashed
                 - alloc.leaves_expired
             )
-            balances.append({
-                "leave_type_id": alloc.leave_type_id,
-                "leave_type_code": alloc.leave_type.leave_type_code if alloc.leave_type else None,
-                "leave_type_name": alloc.leave_type.leave_type_name if alloc.leave_type else None,
-                "total_allocated": alloc.total_leaves_allocated,
-                "leaves_used": alloc.leaves_used,
-                "leaves_encashed": alloc.leaves_encashed,
-                "leaves_expired": alloc.leaves_expired,
-                "balance": balance,
-                "from_date": alloc.from_date,
-                "to_date": alloc.to_date,
-            })
+            balances.append(
+                {
+                    "leave_type_id": alloc.leave_type_id,
+                    "leave_type_code": alloc.leave_type.leave_type_code
+                    if alloc.leave_type
+                    else None,
+                    "leave_type_name": alloc.leave_type.leave_type_name
+                    if alloc.leave_type
+                    else None,
+                    "total_allocated": alloc.total_leaves_allocated,
+                    "leaves_used": alloc.leaves_used,
+                    "leaves_encashed": alloc.leaves_encashed,
+                    "leaves_expired": alloc.leaves_expired,
+                    "balance": balance,
+                    "from_date": alloc.from_date,
+                    "to_date": alloc.to_date,
+                }
+            )
 
         return balances
 
@@ -862,7 +878,9 @@ class LeaveService:
     ) -> PaginatedResult[LeaveApplication]:
         """List leave applications for a set of employees."""
         if not employee_ids:
-            return PaginatedResult(items=[], total=0, offset=0, limit=pagination.limit if pagination else 0)
+            return PaginatedResult(
+                items=[], total=0, offset=0, limit=pagination.limit if pagination else 0
+            )
 
         query = select(LeaveApplication).where(
             LeaveApplication.organization_id == org_id,
@@ -928,7 +946,9 @@ class LeaveService:
             # Skip weekends (Saturday=5, Sunday=6)
             if current.weekday() < 5:
                 # Check if it's a holiday
-                if include_holidays or not self.is_holiday(org_id, current, holiday_list_id):
+                if include_holidays or not self.is_holiday(
+                    org_id, current, holiday_list_id
+                ):
                     total_days += Decimal("1")
 
             current += timedelta(days=1)
@@ -974,10 +994,12 @@ class LeaveService:
             select(LeaveApplication).where(
                 LeaveApplication.organization_id == org_id,
                 LeaveApplication.employee_id == employee_id,
-                LeaveApplication.status.in_([
-                    LeaveApplicationStatus.SUBMITTED,
-                    LeaveApplicationStatus.APPROVED,
-                ]),
+                LeaveApplication.status.in_(
+                    [
+                        LeaveApplicationStatus.SUBMITTED,
+                        LeaveApplicationStatus.APPROVED,
+                    ]
+                ),
                 or_(
                     and_(
                         LeaveApplication.from_date <= from_date,
@@ -1003,7 +1025,7 @@ class LeaveService:
         from app.services.people.discipline import DisciplineService
 
         discipline_service = DisciplineService(self.db)
-        if discipline_service.has_active_investigation(employee_id):
+        if discipline_service.has_active_investigation(org_id, employee_id):
             raise LeaveServiceError(
                 "Leave applications are restricted during an active disciplinary investigation"
             )
@@ -1191,7 +1213,8 @@ class LeaveService:
             LeaveApplicationStatus.SUBMITTED,
         ):
             raise LeaveApplicationStatusError(
-                application.status.value, "updated (only DRAFT or SUBMITTED can be edited)"
+                application.status.value,
+                "updated (only DRAFT or SUBMITTED can be edited)",
             )
 
         # Track if dates changed for recalculation
@@ -1258,31 +1281,40 @@ class LeaveService:
         today = date.today()
 
         # Pending applications
-        pending_count = self.db.scalar(
-            select(func.count(LeaveApplication.application_id)).where(
-                LeaveApplication.organization_id == org_id,
-                LeaveApplication.status == LeaveApplicationStatus.SUBMITTED,
+        pending_count = (
+            self.db.scalar(
+                select(func.count(LeaveApplication.application_id)).where(
+                    LeaveApplication.organization_id == org_id,
+                    LeaveApplication.status == LeaveApplicationStatus.SUBMITTED,
+                )
             )
-        ) or 0
+            or 0
+        )
 
         # On leave today
-        on_leave_today = self.db.scalar(
-            select(func.count(LeaveApplication.application_id)).where(
-                LeaveApplication.organization_id == org_id,
-                LeaveApplication.status == LeaveApplicationStatus.APPROVED,
-                LeaveApplication.from_date <= today,
-                LeaveApplication.to_date >= today,
+        on_leave_today = (
+            self.db.scalar(
+                select(func.count(LeaveApplication.application_id)).where(
+                    LeaveApplication.organization_id == org_id,
+                    LeaveApplication.status == LeaveApplicationStatus.APPROVED,
+                    LeaveApplication.from_date <= today,
+                    LeaveApplication.to_date >= today,
+                )
             )
-        ) or 0
+            or 0
+        )
 
         # Applications this month
         month_start = datetime.combine(today.replace(day=1), datetime.min.time())
-        applications_this_month = self.db.scalar(
-            select(func.count(LeaveApplication.application_id)).where(
-                LeaveApplication.organization_id == org_id,
-                LeaveApplication.created_at >= month_start,
+        applications_this_month = (
+            self.db.scalar(
+                select(func.count(LeaveApplication.application_id)).where(
+                    LeaveApplication.organization_id == org_id,
+                    LeaveApplication.created_at >= month_start,
+                )
             )
-        ) or 0
+            or 0
+        )
 
         return {
             "pending_applications": pending_count,
@@ -1320,7 +1352,10 @@ class LeaveService:
                 Department.department_name.label("department_name"),
                 LeaveType.leave_type_name,
                 LeaveType.leave_type_id,
-                func.sum(LeaveAllocation.new_leaves_allocated + LeaveAllocation.carry_forward_leaves).label("total_allocated"),
+                func.sum(
+                    LeaveAllocation.new_leaves_allocated
+                    + LeaveAllocation.carry_forward_leaves
+                ).label("total_allocated"),
                 func.sum(LeaveAllocation.leaves_used).label("leaves_used"),
                 func.sum(
                     LeaveAllocation.new_leaves_allocated
@@ -1366,13 +1401,17 @@ class LeaveService:
                     "total_used": Decimal("0"),
                     "total_balance": Decimal("0"),
                 }
-            employees_dict[emp_id]["leave_balances"].append({
-                "leave_type_name": row.leave_type_name,
-                "allocated": row.total_allocated or Decimal("0"),
-                "used": row.leaves_used or Decimal("0"),
-                "balance": row.balance or Decimal("0"),
-            })
-            employees_dict[emp_id]["total_allocated"] += row.total_allocated or Decimal("0")
+            employees_dict[emp_id]["leave_balances"].append(
+                {
+                    "leave_type_name": row.leave_type_name,
+                    "allocated": row.total_allocated or Decimal("0"),
+                    "used": row.leaves_used or Decimal("0"),
+                    "balance": row.balance or Decimal("0"),
+                }
+            )
+            employees_dict[emp_id]["total_allocated"] += row.total_allocated or Decimal(
+                "0"
+            )
             employees_dict[emp_id]["total_used"] += row.leaves_used or Decimal("0")
             employees_dict[emp_id]["total_balance"] += row.balance or Decimal("0")
 
@@ -1408,14 +1447,21 @@ class LeaveService:
                 func.count(LeaveApplication.application_id).label("application_count"),
                 func.sum(LeaveApplication.total_leave_days).label("total_days"),
             )
-            .join(LeaveApplication, LeaveApplication.leave_type_id == LeaveType.leave_type_id)
+            .join(
+                LeaveApplication,
+                LeaveApplication.leave_type_id == LeaveType.leave_type_id,
+            )
             .filter(
                 LeaveApplication.organization_id == org_id,
                 LeaveApplication.status == LeaveApplicationStatus.APPROVED,
                 LeaveApplication.from_date >= start_date,
                 LeaveApplication.to_date <= end_date,
             )
-            .group_by(LeaveType.leave_type_id, LeaveType.leave_type_code, LeaveType.leave_type_name)
+            .group_by(
+                LeaveType.leave_type_id,
+                LeaveType.leave_type_code,
+                LeaveType.leave_type_name,
+            )
             .order_by(func.sum(LeaveApplication.total_leave_days).desc())
             .all()
         )
@@ -1426,12 +1472,14 @@ class LeaveService:
 
         for row in results:
             days = row.total_days or Decimal("0")
-            leave_types.append({
-                "leave_type_code": row.leave_type_code,
-                "leave_type_name": row.leave_type_name,
-                "application_count": row.application_count,
-                "total_days": days,
-            })
+            leave_types.append(
+                {
+                    "leave_type_code": row.leave_type_code,
+                    "leave_type_name": row.leave_type_name,
+                    "application_count": row.application_count,
+                    "total_days": days,
+                }
+            )
             total_applications += row.application_count
             total_days += days
 
@@ -1503,16 +1551,18 @@ class LeaveService:
 
         leave_events = []
         for app, first_name, last_name, dept_name, leave_type_name in results:
-            leave_events.append({
-                "application_id": str(app.application_id),
-                "employee_name": f"{first_name} {last_name}",
-                "department_name": dept_name or "No Department",
-                "leave_type_name": leave_type_name,
-                "from_date": app.from_date.isoformat(),
-                "to_date": app.to_date.isoformat(),
-                "total_days": float(app.total_leave_days),
-                "half_day": app.half_day,
-            })
+            leave_events.append(
+                {
+                    "application_id": str(app.application_id),
+                    "employee_name": f"{first_name} {last_name}",
+                    "department_name": dept_name or "No Department",
+                    "leave_type_name": leave_type_name,
+                    "from_date": app.from_date.isoformat(),
+                    "to_date": app.to_date.isoformat(),
+                    "total_days": float(app.total_leave_days),
+                    "half_day": app.half_day,
+                }
+            )
 
         return {
             "start_date": start_date,
@@ -1547,12 +1597,18 @@ class LeaveService:
                 func.sum(LeaveApplication.total_leave_days).label("total_days"),
                 func.count(
                     case(
-                        (LeaveApplication.status == LeaveApplicationStatus.APPROVED, LeaveApplication.application_id),
+                        (
+                            LeaveApplication.status == LeaveApplicationStatus.APPROVED,
+                            LeaveApplication.application_id,
+                        ),
                     )
                 ).label("approved_count"),
                 func.count(
                     case(
-                        (LeaveApplication.status == LeaveApplicationStatus.REJECTED, LeaveApplication.application_id),
+                        (
+                            LeaveApplication.status == LeaveApplicationStatus.REJECTED,
+                            LeaveApplication.application_id,
+                        ),
                     )
                 ).label("rejected_count"),
             )
@@ -1592,19 +1648,23 @@ class LeaveService:
                 total_applications += monthly_data[month_key]["application_count"]
                 total_days += monthly_data[month_key]["total_days"]
             else:
-                months_list.append({
-                    "month": month_key,
-                    "month_label": current.strftime("%b %Y"),
-                    "application_count": 0,
-                    "total_days": Decimal("0"),
-                    "approved_count": 0,
-                    "rejected_count": 0,
-                })
+                months_list.append(
+                    {
+                        "month": month_key,
+                        "month_label": current.strftime("%b %Y"),
+                        "application_count": 0,
+                        "total_days": Decimal("0"),
+                        "approved_count": 0,
+                        "rejected_count": 0,
+                    }
+                )
             current = current + relativedelta(months=1)
 
         num_months = len(months_list)
         average_monthly_apps = total_applications / num_months if num_months > 0 else 0
-        average_monthly_days = total_days / num_months if num_months > 0 else Decimal("0")
+        average_monthly_days = (
+            total_days / num_months if num_months > 0 else Decimal("0")
+        )
 
         return {
             "months": months_list,
@@ -1643,13 +1703,13 @@ class LeaveService:
 
         for leave in leaves:
             # Get leave type to check if it's LWP
-            leave_type = getattr(leave, 'leave_type', None)
-            if leave_type and not getattr(leave_type, 'is_lwp', False):
+            leave_type = getattr(leave, "leave_type", None)
+            if leave_type and not getattr(leave_type, "is_lwp", False):
                 continue
 
             # Get leave dates
-            leave_start = getattr(leave, 'from_date', None)
-            leave_end = getattr(leave, 'to_date', None)
+            leave_start = getattr(leave, "from_date", None)
+            leave_end = getattr(leave, "to_date", None)
 
             if not leave_start or not leave_end:
                 continue
@@ -1666,8 +1726,8 @@ class LeaveService:
             overlap_days = (overlap_end - overlap_start).days + 1
 
             # Handle half-day leaves
-            is_half_day = getattr(leave, 'half_day', False)
-            half_day_date = getattr(leave, 'half_day_date', None)
+            is_half_day = getattr(leave, "half_day", False)
+            half_day_date = getattr(leave, "half_day_date", None)
 
             if is_half_day and half_day_date:
                 # Half-day leave only counts if the half-day date is in the overlap

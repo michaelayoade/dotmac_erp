@@ -8,8 +8,6 @@ Provides secure file storage with MIME type validation.
 import hashlib
 import logging
 import os
-import re
-import shutil
 import uuid
 from pathlib import Path
 from typing import BinaryIO, Optional
@@ -23,7 +21,9 @@ logger = logging.getLogger(__name__)
 
 # Configuration
 UPLOAD_BASE_DIR = os.getenv("DISCIPLINE_UPLOAD_DIR", "uploads/discipline")
-MAX_FILE_SIZE = int(os.getenv("MAX_DISCIPLINE_FILE_SIZE", 10 * 1024 * 1024))  # 10MB default
+MAX_FILE_SIZE = int(
+    os.getenv("MAX_DISCIPLINE_FILE_SIZE", 10 * 1024 * 1024)
+)  # 10MB default
 
 # Allowed MIME types for discipline documents
 ALLOWED_CONTENT_TYPES = {
@@ -227,17 +227,26 @@ class DisciplineAttachmentService:
         upload_dir = self.get_upload_path(org_id, case_uuid)
         file_path = upload_dir / unique_name
 
-        # Save file
-        with open(file_path, "wb") as f:
-            shutil.copyfileobj(file_content, f)
+        # Read file content into memory with size limit to prevent disk exhaustion
+        chunks = []
+        bytes_read = 0
+        while True:
+            chunk = file_content.read(8192)
+            if not chunk:
+                break
+            bytes_read += len(chunk)
+            if bytes_read > MAX_FILE_SIZE:
+                raise ValidationError(
+                    f"File size exceeds maximum allowed ({_format_file_size(MAX_FILE_SIZE)})"
+                )
+            chunks.append(chunk)
 
-        # Get file size and validate
-        file_size = file_path.stat().st_size
-        if file_size > MAX_FILE_SIZE:
-            file_path.unlink()  # Delete the file
-            raise ValidationError(
-                f"File size exceeds maximum allowed ({_format_file_size(MAX_FILE_SIZE)})"
-            )
+        file_size = bytes_read
+
+        # Write validated content to disk
+        with open(file_path, "wb") as f:
+            for chunk in chunks:
+                f.write(chunk)
 
         # Create document record
         relative_path = f"{org_id}/{case_uuid}/{unique_name}"
