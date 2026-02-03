@@ -1,0 +1,201 @@
+{% extends "operations/base_operations.html" %}
+
+{% block page_title %}{{ 'Edit Material Request' if material_request else 'New Material Request' }}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 mt-1">
+    <a href="/operations/dashboard" class="hover:text-slate-700 dark:hover:text-slate-300">Operations</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <a href="/inventory/material-requests" class="hover:text-slate-700 dark:hover:text-slate-300">Material Requests</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="text-slate-700 dark:text-slate-300">{{ 'Edit' if material_request else 'New' }}</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto" x-data="materialRequestForm()">
+    {% if error %}
+    <div class="mb-6 p-4 rounded-lg bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800">
+        <p class="text-sm text-rose-700 dark:text-rose-300">{{ error }}</p>
+    </div>
+    {% endif %}
+
+    <form method="post" class="space-y-6">
+        <!-- Header Info -->
+        <div class="card p-6">
+            <h3 class="font-semibold text-slate-900 dark:text-white mb-4">Request Details</h3>
+            <div class="grid gap-6 sm:grid-cols-2">
+                <div>
+                    <label class="form-label required">Request Type</label>
+                    <select name="request_type" x-model="requestType" required class="form-input form-select">
+                        <option value="PURCHASE" {% if material_request and material_request.request_type == 'PURCHASE' %}selected{% endif %}>Purchase</option>
+                        <option value="TRANSFER" {% if material_request and material_request.request_type == 'TRANSFER' %}selected{% endif %}>Material Transfer</option>
+                        <option value="ISSUE" {% if material_request and material_request.request_type == 'ISSUE' %}selected{% endif %}>Material Issue</option>
+                        <option value="MANUFACTURE" {% if material_request and material_request.request_type == 'MANUFACTURE' %}selected{% endif %}>Manufacture</option>
+                    </select>
+                    <p class="text-xs text-slate-400 mt-1" x-show="requestType === 'PURCHASE'">Request to purchase items from suppliers</p>
+                    <p class="text-xs text-slate-400 mt-1" x-show="requestType === 'TRANSFER'">Request to transfer items between warehouses</p>
+                    <p class="text-xs text-slate-400 mt-1" x-show="requestType === 'ISSUE'">Request to issue items from stock</p>
+                    <p class="text-xs text-slate-400 mt-1" x-show="requestType === 'MANUFACTURE'">Request items to be manufactured</p>
+                </div>
+                <div>
+                    <label class="form-label required">Schedule Date</label>
+                    <input type="date" name="schedule_date" value="{{ material_request.schedule_date if material_request else today }}" required class="form-input">
+                    <p class="text-xs text-slate-400 mt-1">Date when items are required</p>
+                </div>
+            </div>
+            <div class="grid gap-6 sm:grid-cols-2 mt-6">
+                <div>
+                    <label class="form-label">Default Warehouse</label>
+                    <select name="default_warehouse_id" class="form-input form-select">
+                        <option value="">Select warehouse...</option>
+                        {% for wh in warehouses %}
+                        <option value="{{ wh.warehouse_id }}" {% if material_request and material_request.default_warehouse_id == wh.warehouse_id %}selected{% endif %}>
+                            {{ wh.warehouse_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label">Requested By</label>
+                    <select name="requested_by_id" class="form-input form-select">
+                        <option value="">Select employee...</option>
+                        {% for emp in employees %}
+                        <option value="{{ emp.employee_id }}" {% if material_request and material_request.requested_by_id == emp.employee_id %}selected{% endif %}>
+                            {{ emp.full_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="mt-6">
+                <label class="form-label">Remarks</label>
+                <textarea name="remarks" rows="2" class="form-input" placeholder="Additional notes...">{{ material_request.remarks if material_request else '' }}</textarea>
+            </div>
+        </div>
+
+        <!-- Items Section -->
+        <div class="card p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="font-semibold text-slate-900 dark:text-white">Request Items</h3>
+                <button type="button" @click="addItem()" class="btn btn-secondary btn-sm">
+                    <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                    </svg>
+                    Add Item
+                </button>
+            </div>
+
+            <!-- Items Table -->
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="border-b border-slate-200 dark:border-slate-700">
+                            <th class="text-left py-2 px-2 font-medium text-slate-500">Item</th>
+                            <th class="text-left py-2 px-2 font-medium text-slate-500">Warehouse</th>
+                            <th class="text-right py-2 px-2 font-medium text-slate-500">Qty</th>
+                            <th class="text-left py-2 px-2 font-medium text-slate-500">UOM</th>
+                            <th class="text-left py-2 px-2 font-medium text-slate-500">Date</th>
+                            <th class="text-left py-2 px-2 font-medium text-slate-500">Project</th>
+                            <th class="w-10"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="(item, index) in items" :key="index">
+                            <tr class="border-b border-slate-100 dark:border-slate-800">
+                                <td class="py-2 px-2">
+                                    <select x-model="item.item_id" required class="form-input form-select text-sm py-1.5">
+                                        <option value="">Select item...</option>
+                                        {% for inv_item in inventory_items %}
+                                        <option value="{{ inv_item.item_id }}">{{ inv_item.item_code }} - {{ inv_item.item_name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </td>
+                                <td class="py-2 px-2">
+                                    <select x-model="item.warehouse_id" class="form-input form-select text-sm py-1.5">
+                                        <option value="">Default</option>
+                                        {% for wh in warehouses %}
+                                        <option value="{{ wh.warehouse_id }}">{{ wh.warehouse_name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </td>
+                                <td class="py-2 px-2">
+                                    <input type="number" x-model="item.qty" min="0.01" step="0.01" required class="form-input text-sm py-1.5 w-24 text-right font-mono">
+                                </td>
+                                <td class="py-2 px-2">
+                                    <input type="text" x-model="item.uom" class="form-input text-sm py-1.5 w-20" placeholder="Nos">
+                                </td>
+                                <td class="py-2 px-2">
+                                    <input type="date" x-model="item.schedule_date" class="form-input text-sm py-1.5">
+                                </td>
+                                <td class="py-2 px-2">
+                                    <select x-model="item.project_id" class="form-input form-select text-sm py-1.5">
+                                        <option value="">None</option>
+                                        {% for proj in projects %}
+                                        <option value="{{ proj.project_id }}">{{ proj.project_code }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </td>
+                                <td class="py-2 px-2">
+                                    <button type="button" @click="removeItem(index)" class="p-1 text-slate-400 hover:text-rose-500 transition-colors" title="Remove">
+                                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                        </svg>
+                                    </button>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Empty State -->
+            <div x-show="items.length === 0" class="text-center py-8 text-slate-500">
+                <p>No items added yet. Click "Add Item" to add items to this request.</p>
+            </div>
+
+            <!-- Hidden input for JSON items -->
+            <input type="hidden" name="items_json" :value="JSON.stringify(items)">
+        </div>
+
+        <!-- Actions -->
+        <div class="flex items-center justify-between">
+            <a href="/inventory/material-requests" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">
+                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                </svg>
+                {{ 'Update Request' if material_request else 'Create Request' }}
+            </button>
+        </div>
+    </form>
+</div>
+
+<script>
+function materialRequestForm() {
+    return {
+        requestType: '{{ material_request.request_type if material_request else "PURCHASE" }}',
+        items: {{ items_json | default('[]') | safe }},
+
+        addItem() {
+            this.items.push({
+                item_id: '',
+                warehouse_id: '',
+                qty: 1,
+                uom: 'Nos',
+                schedule_date: '',
+                project_id: ''
+            });
+        },
+
+        removeItem(index) {
+            this.items.splice(index, 1);
+        }
+    }
+}
+</script>
+{% endblock %}

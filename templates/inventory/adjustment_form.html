@@ -1,0 +1,145 @@
+{% extends "operations/base_operations.html" %}
+
+{% block page_title %}New Inventory Adjustment{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+    <a href="/dashboard" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Dashboard</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <a href="/inventory/transactions" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Transactions</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="font-medium text-slate-900 dark:text-white">New Adjustment</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto pb-12">
+    <!-- Page Header -->
+    <div class="mb-10 stagger-in">
+        <h1 class="text-3xl font-bold text-slate-900 dark:text-white font-display tracking-tight">
+            New Inventory Adjustment
+        </h1>
+        <p class="mt-2 text-lg text-slate-600 dark:text-slate-400">
+            Adjust inventory quantities for count variances, damage, etc.
+        </p>
+    </div>
+
+    <form method="post" action="/inventory/transactions/adjustment/new" class="space-y-8">
+        <!-- Transaction Details -->
+        <div class="card stagger-in" style="animation-delay: 50ms;">
+            <div class="card-header border-b border-slate-100 dark:border-slate-700">
+                <div class="flex items-center gap-4">
+                    <div class="card-icon bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display">Adjustment Details</h2>
+                        <p class="text-sm text-slate-500 dark:text-slate-400">Correct inventory discrepancies</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-6 grid gap-6 sm:grid-cols-2">
+                <div>
+                    <label class="form-label">Item <span class="text-rose-500">*</span></label>
+                    <select name="item_id" required class="form-select">
+                        <option value="">Select item</option>
+                        {% for item in items_list %}
+                        <option value="{{ item.item_id }}" data-cost="{{ item.average_cost }}">
+                            {{ item.item_code }} - {{ item.item_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label class="form-label">Warehouse <span class="text-rose-500">*</span></label>
+                    <select name="warehouse_id" required class="form-select">
+                        <option value="">Select warehouse</option>
+                        {% for wh in warehouses_list %}
+                        <option value="{{ wh.warehouse_id }}">{{ wh.warehouse_code }} - {{ wh.warehouse_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label class="form-label">Adjustment Type <span class="text-rose-500">*</span></label>
+                    <select name="adjustment_type" required class="form-select">
+                        <option value="">Select type</option>
+                        <option value="INCREASE">Increase (add to inventory)</option>
+                        <option value="DECREASE">Decrease (remove from inventory)</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="form-label">Quantity <span class="text-rose-500">*</span></label>
+                    <input type="number" name="quantity" required min="0.0001" step="any" placeholder="0" class="form-input">
+                    <p class="form-hint">Always enter positive quantity</p>
+                </div>
+
+                <div>
+                    <label class="form-label">Unit Cost <span class="text-rose-500">*</span></label>
+                    <input type="number" name="unit_cost" required min="0" step="any" placeholder="0.00" class="form-input">
+                    <p class="form-hint">Used for inventory valuation</p>
+                </div>
+
+                <div>
+                    <label class="form-label">Transaction Date <span class="text-rose-500">*</span></label>
+                    <input type="date" name="transaction_date" value="{{ today }}" required class="form-input">
+                </div>
+
+                <div>
+                    <label class="form-label">Reason <span class="text-rose-500">*</span></label>
+                    <select name="reason" required class="form-select">
+                        <option value="">Select reason</option>
+                        <option value="Physical Count">Physical Count Variance</option>
+                        <option value="Damaged">Damaged Goods</option>
+                        <option value="Expired">Expired Stock</option>
+                        <option value="Theft">Theft/Loss</option>
+                        <option value="Found">Stock Found</option>
+                        <option value="Correction">Data Entry Correction</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="form-label">Reference</label>
+                    <input type="text" name="reference" placeholder="Count sheet number, etc." class="form-input">
+                </div>
+            </div>
+        </div>
+
+        <!-- Warning Banner -->
+        <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-900/20 stagger-in" style="animation-delay: 75ms;">
+            <div class="flex items-start gap-3">
+                <svg class="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                </svg>
+                <div>
+                    <h4 class="font-medium text-amber-800 dark:text-amber-300">Adjustment Impact</h4>
+                    <p class="mt-1 text-sm text-amber-700 dark:text-amber-400">
+                        Inventory adjustments affect your stock valuation and will generate GL entries to the inventory adjustment account.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex justify-end gap-4 stagger-in" style="animation-delay: 100ms;">
+            <a href="/inventory/transactions" class="btn-secondary">Cancel</a>
+            <button type="submit" class="btn-primary">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                </svg>
+                Record Adjustment
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

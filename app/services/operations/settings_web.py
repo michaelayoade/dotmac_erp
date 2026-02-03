@@ -23,7 +23,7 @@ from app.schemas.settings import DomainSettingUpdate
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    from app.models.finance.inv.warehouse import Warehouse
+    from app.models.inventory.warehouse import Warehouse
 
 
 class SettingSpec(TypedDict, total=False):
@@ -247,7 +247,7 @@ class OperationsSettingsWebService:
         warehouses: list[Warehouse] = []
         try:
             from sqlalchemy import select
-            from app.models.finance.inv.warehouse import Warehouse
+            from app.models.inventory.warehouse import Warehouse
             result = db.execute(
                 select(Warehouse).where(
                     Warehouse.organization_id == organization_id,

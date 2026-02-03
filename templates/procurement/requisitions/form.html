@@ -1,0 +1,49 @@
+{% extends "operations/base_operations.html" %}
+
+{% block page_title %}New Requisition{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+    <a href="/procurement" class="hover:text-amber-600 transition-colors">Procurement</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+    <a href="/procurement/requisitions" class="hover:text-amber-600 transition-colors">Requisitions</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+    <span class="font-medium text-slate-900 dark:text-white">New</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl stagger-in">
+    <div class="card p-6">
+        <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Create Purchase Requisition</h2>
+        <form method="post" class="space-y-4">
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Requisition Number</label>
+                    <input type="text" name="requisition_number" required class="input-field" placeholder="PR-2025-001">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Date</label>
+                    <input type="date" name="requisition_date" required class="input-field">
+                </div>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Urgency</label>
+                <select name="urgency" required class="input-field">
+                    {% for u in urgency_levels %}
+                    <option value="{{ u.value }}">{{ u.value }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Justification</label>
+                <textarea name="justification" rows="3" class="input-field" placeholder="Describe the business need for this requisition..."></textarea>
+            </div>
+            <div class="flex justify-end gap-3 pt-4">
+                <a href="/procurement/requisitions" class="btn btn-secondary">Cancel</a>
+                <button type="submit" class="btn btn-primary">Create Requisition</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

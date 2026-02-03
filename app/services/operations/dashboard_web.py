@@ -11,8 +11,8 @@ from datetime import datetime, timedelta
 
 from sqlalchemy.orm import Session
 
-from app.services.finance.inv.web import inv_web_service
-from app.services.finance.inv.material_request_web import material_request_web_service
+from app.services.inventory.web import inv_web_service
+from app.services.inventory.material_request_web import material_request_web_service
 from app.services.support.web import support_web_service
 
 
@@ -77,7 +77,7 @@ class OperationsDashboardWebService:
             context["recent_open_tickets"] = []
 
         try:
-            from app.models.finance.inv.inventory_count import InventoryCount, CountStatus
+            from app.models.inventory.inventory_count import InventoryCount, CountStatus
 
             count_stats = {
                 "draft": db.query(InventoryCount).filter(
@@ -98,8 +98,8 @@ class OperationsDashboardWebService:
             context["count_stats"] = None
 
         try:
-            from app.models.finance.inv.inventory_lot import InventoryLot
-            from app.models.finance.inv.item import Item
+            from app.models.inventory.inventory_lot import InventoryLot
+            from app.models.inventory.item import Item
 
             now = datetime.now().date()
             expiring_soon = now + timedelta(days=30)

@@ -21,10 +21,10 @@ from app.models.finance.ap.goods_receipt_line import GoodsReceiptLine
 from app.models.finance.ap.purchase_order import PurchaseOrder, POStatus
 from app.models.finance.ap.purchase_order_line import PurchaseOrderLine
 from app.models.finance.core_config.numbering_sequence import SequenceType
-from app.models.finance.inv.item import Item
-from app.models.finance.inv.inventory_transaction import TransactionType
+from app.models.inventory.item import Item
+from app.models.inventory.inventory_transaction import TransactionType
 from app.services.common import coerce_uuid
-from app.services.finance.inv.transaction import (
+from app.services.inventory.transaction import (
     InventoryTransactionService,
     TransactionInput,
 )

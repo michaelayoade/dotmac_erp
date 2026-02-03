@@ -199,7 +199,7 @@ def process_document_expiry_notifications() -> dict[str, Any]:
                             title=title,
                             message=message,
                             channel=NotificationChannel.BOTH,
-                            action_url=f"/operations/fleet/documents/{doc.document_id}",
+                            action_url=f"/fleet/documents/{doc.document_id}",
                         )
                         results["notifications_sent"] += 1
 
@@ -316,7 +316,7 @@ def process_maintenance_due_notifications() -> dict[str, Any]:
                             title=title,
                             message=message,
                             channel=NotificationChannel.BOTH,
-                            action_url=f"/operations/fleet/maintenance/{record.maintenance_id}",
+                            action_url=f"/fleet/maintenance/{record.maintenance_id}",
                         )
                         results["notifications_sent"] += 1
 

@@ -8,7 +8,7 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models.finance.fa.asset import Asset, AssetStatus
+from app.models.fixed_assets.asset import Asset, AssetStatus
 from app.models.people.assets.assignment import AssetAssignment, AssignmentStatus, AssetCondition
 from app.models.people.hr.employee import Employee
 from app.services.common import (

@@ -28,7 +28,7 @@ from app.models.finance.core_org.cost_center import CostCenter
 from app.models.finance.core_org.project import Project
 from app.models.finance.core_org.reporting_segment import ReportingSegment
 from app.models.finance.gl.account import Account
-from app.models.finance.inv.item import Item
+from app.models.inventory.item import Item
 from app.models.finance.tax.tax_code import TaxCode
 from app.models.finance.ar.invoice_line_tax import InvoiceLineTax
 from app.services.common import coerce_uuid

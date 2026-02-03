@@ -17,8 +17,8 @@ from sqlalchemy.orm import Session
 from app.models.finance.ap.supplier import Supplier
 from app.models.finance.ap.supplier_invoice import SupplierInvoice
 from app.models.finance.ap.supplier_invoice_line import SupplierInvoiceLine
-from app.models.finance.inv.item import Item
-from app.models.finance.inv.item_category import ItemCategory
+from app.models.inventory.item import Item
+from app.models.inventory.item_category import ItemCategory
 from app.services.finance.tax.tax_transaction import tax_transaction_service
 
 
@@ -271,7 +271,7 @@ def create_assets_for_capitalizable_lines(
         supplier: Supplier for asset linkage
         user_id: User creating the assets
     """
-    from app.services.finance.fa.capitalization import CapitalizationService
+    from app.services.fixed_assets.capitalization import CapitalizationService
 
     # Check if any lines are capitalizable
     capitalizable_lines = [

@@ -393,9 +393,9 @@ class DotMacCRMSyncService:
             InventoryListResponse with items and pagination info
         """
         # Import here to avoid circular imports
-        from app.models.finance.inv.item import Item
-        from app.models.finance.inv.item_category import ItemCategory
-        from app.services.finance.inv.balance import InventoryBalanceService
+        from app.models.inventory.item import Item
+        from app.models.inventory.item_category import ItemCategory
+        from app.services.inventory.balance import InventoryBalanceService
 
         # Build base query for active inventory items
         stmt = (
@@ -568,9 +568,9 @@ class DotMacCRMSyncService:
         Returns:
             InventoryItemDetail with warehouse-level stock, or None if not found
         """
-        from app.models.finance.inv.item import Item
-        from app.models.finance.inv.item_category import ItemCategory
-        from app.services.finance.inv.balance import InventoryBalanceService
+        from app.models.inventory.item import Item
+        from app.models.inventory.item_category import ItemCategory
+        from app.services.inventory.balance import InventoryBalanceService
 
         # Get item
         item = self.db.get(Item, item_id)
@@ -631,7 +631,7 @@ class DotMacCRMSyncService:
         Returns:
             List of {code, name} dicts
         """
-        from app.models.finance.inv.item_category import ItemCategory
+        from app.models.inventory.item_category import ItemCategory
 
         stmt = (
             select(ItemCategory.category_code, ItemCategory.category_name)
@@ -651,7 +651,7 @@ class DotMacCRMSyncService:
         Returns:
             List of {warehouse_id, code, name} dicts
         """
-        from app.models.finance.inv.warehouse import Warehouse
+        from app.models.inventory.warehouse import Warehouse
 
         stmt = (
             select(Warehouse.warehouse_id, Warehouse.warehouse_code, Warehouse.warehouse_name)

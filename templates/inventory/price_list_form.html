@@ -1,0 +1,200 @@
+{% extends "operations/base_operations.html" %}
+
+{% block page_title %}{{ 'Edit Price List' if price_list else 'New Price List' }}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+    <a href="/operations/dashboard" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Dashboard</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <a href="/inventory/price-lists" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Price Lists</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="font-medium text-slate-900 dark:text-white">{{ 'Edit' if price_list else 'New' }}</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto" x-data="priceListForm()">
+    <form method="post" action="{{ '/inventory/price-lists/' ~ price_list.price_list_id ~ '/edit' if price_list else '/inventory/price-lists/new' }}" class="space-y-6">
+        {% if error %}
+        <div class="rounded-lg bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 p-4">
+            <p class="text-sm text-rose-700 dark:text-rose-300">{{ error }}</p>
+        </div>
+        {% endif %}
+
+        <div class="card p-6 space-y-6">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Price List Details</h2>
+
+            <div class="grid gap-6 sm:grid-cols-2">
+                <div>
+                    <label for="price_list_name" class="form-label">Name <span class="text-rose-500">*</span></label>
+                    <input type="text" id="price_list_name" name="price_list_name"
+                           value="{{ price_list.price_list_name if price_list else '' }}"
+                           class="form-input" required>
+                </div>
+                <div>
+                    <label for="price_list_code" class="form-label">Code</label>
+                    <input type="text" id="price_list_code" name="price_list_code"
+                           value="{{ price_list.price_list_code if price_list else '' }}"
+                           class="form-input font-mono">
+                </div>
+            </div>
+
+            <div class="grid gap-6 sm:grid-cols-2">
+                <div>
+                    <label for="price_list_type" class="form-label">Type <span class="text-rose-500">*</span></label>
+                    <select id="price_list_type" name="price_list_type" class="form-select" required>
+                        <option value="SALES" {{ 'selected' if price_list and price_list.price_list_type.value == 'SALES' else '' }}>Sales</option>
+                        <option value="PURCHASE" {{ 'selected' if price_list and price_list.price_list_type.value == 'PURCHASE' else '' }}>Purchase</option>
+                        <option value="TRANSFER" {{ 'selected' if price_list and price_list.price_list_type.value == 'TRANSFER' else '' }}>Transfer</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="currency_code" class="form-label">Currency <span class="text-rose-500">*</span></label>
+                    <select id="currency_code" name="currency_code" class="form-select" required>
+                        {% for currency in currencies | default([]) %}
+                        <option value="{{ currency.currency_code }}" {{ 'selected' if price_list and price_list.currency_code == currency.currency_code else ('selected' if loop.first else '') }}>
+                            {{ currency.currency_code }} - {{ currency.currency_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="grid gap-6 sm:grid-cols-2">
+                <div>
+                    <label for="effective_from" class="form-label">Effective From</label>
+                    <input type="date" id="effective_from" name="effective_from"
+                           value="{{ price_list.effective_from.strftime('%Y-%m-%d') if price_list and price_list.effective_from else '' }}"
+                           class="form-input">
+                </div>
+                <div>
+                    <label for="effective_to" class="form-label">Effective To</label>
+                    <input type="date" id="effective_to" name="effective_to"
+                           value="{{ price_list.effective_to.strftime('%Y-%m-%d') if price_list and price_list.effective_to else '' }}"
+                           class="form-input">
+                </div>
+            </div>
+
+            <div class="grid gap-6 sm:grid-cols-2">
+                <div>
+                    <label for="markup_percentage" class="form-label">Default Markup %</label>
+                    <input type="number" id="markup_percentage" name="markup_percentage" step="0.01"
+                           value="{{ price_list.markup_percentage if price_list else '' }}"
+                           class="form-input">
+                    <p class="form-hint">Applied when no specific price is set</p>
+                </div>
+                <div class="flex items-end">
+                    <label class="flex items-center gap-2 cursor-pointer pb-2">
+                        <input type="checkbox" name="is_default" value="1" class="form-checkbox"
+                               {{ 'checked' if price_list and price_list.is_default else '' }}>
+                        <span class="text-sm text-slate-700 dark:text-slate-300">Set as default price list</span>
+                    </label>
+                </div>
+            </div>
+
+            <div>
+                <label for="description" class="form-label">Description</label>
+                <textarea id="description" name="description" rows="2" class="form-textarea">{{ price_list.description if price_list else '' }}</textarea>
+            </div>
+        </div>
+
+        <!-- Price Items Section -->
+        <div class="card p-6 space-y-4">
+            <div class="flex items-center justify-between">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Item Prices</h2>
+                <button type="button" @click="addItem()" class="btn btn-sm btn-secondary">
+                    <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                    </svg>
+                    Add Item
+                </button>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead>
+                        <tr class="border-b border-slate-200 dark:border-slate-700">
+                            <th class="text-left text-xs font-medium uppercase tracking-wider text-slate-500 pb-3">Item</th>
+                            <th class="text-right text-xs font-medium uppercase tracking-wider text-slate-500 pb-3 w-28">Price</th>
+                            <th class="text-right text-xs font-medium uppercase tracking-wider text-slate-500 pb-3 w-24">Min Qty</th>
+                            <th class="text-right text-xs font-medium uppercase tracking-wider text-slate-500 pb-3 w-24">Discount %</th>
+                            <th class="w-12"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="(item, index) in items" :key="index">
+                            <tr class="border-b border-slate-100 dark:border-slate-800">
+                                <td class="py-3 pr-3">
+                                    <select x-model="item.item_id" :name="'items[' + index + '][item_id]'" class="form-select w-full" required>
+                                        <option value="">Select Item</option>
+                                        {% for itm in inventory_items | default([]) %}
+                                        <option value="{{ itm.item_id }}">{{ itm.item_code }} - {{ itm.item_name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </td>
+                                <td class="py-3 px-2">
+                                    <input type="number" x-model="item.price" :name="'items[' + index + '][price]'"
+                                           step="0.01" min="0" class="form-input text-right" required>
+                                </td>
+                                <td class="py-3 px-2">
+                                    <input type="number" x-model="item.min_quantity" :name="'items[' + index + '][min_quantity]'"
+                                           step="1" min="1" class="form-input text-right">
+                                </td>
+                                <td class="py-3 px-2">
+                                    <input type="number" x-model="item.discount_percent" :name="'items[' + index + '][discount_percent]'"
+                                           step="0.01" min="0" max="100" class="form-input text-right">
+                                </td>
+                                <td class="py-3 pl-2">
+                                    <button type="button" @click="removeItem(index)" class="text-slate-400 hover:text-rose-500">
+                                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                        </svg>
+                                    </button>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+
+            <p x-show="items.length === 0" class="text-center py-8 text-slate-500">
+                No items added. Click "Add Item" to add prices to this list.
+            </p>
+
+            <input type="hidden" name="items_json" :value="JSON.stringify(items)">
+        </div>
+
+        <div class="flex items-center justify-end gap-3">
+            <a href="/inventory/price-lists" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">
+                {{ 'Update Price List' if price_list else 'Create Price List' }}
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function priceListForm() {
+    return {
+        items: {{ (price_list.items | map(attribute='__dict__') | list | tojson) if price_list and price_list.items else '[]' | safe }},
+        addItem() {
+            this.items.push({
+                item_id: '',
+                price: 0,
+                min_quantity: 1,
+                discount_percent: 0
+            });
+        },
+        removeItem(index) {
+            this.items.splice(index, 1);
+        }
+    }
+}
+</script>
+{% endblock %}

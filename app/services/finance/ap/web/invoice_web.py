@@ -288,8 +288,8 @@ class InvoiceWebService:
     ) -> dict:
         """Get context for invoice create form."""
         from app.models.finance.tax.tax_code import TaxCode
-        from app.models.finance.inv.item import Item
-        from app.models.finance.fa.asset_category import AssetCategory
+        from app.models.inventory.item import Item
+        from app.models.fixed_assets.asset_category import AssetCategory
 
         logger.debug(
             "invoice_form_context: org=%s supplier_id=%s po_id=%s",

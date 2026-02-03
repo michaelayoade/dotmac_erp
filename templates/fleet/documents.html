@@ -1,0 +1,205 @@
+{% extends "operations/base_operations.html" %}
+{% from "components/macros.html" import status_badge, pagination, action_buttons %}
+
+{% block page_title %}Documents{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+    <a href="/operations/dashboard" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Operations</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <a href="/fleet" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Fleet</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="font-medium text-slate-900 dark:text-white">Documents</span>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<a href="/fleet/documents/new" class="btn btn-primary">
+    <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+    </svg>
+    Add Document
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6 stagger-in">
+    <!-- Stats -->
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div class="card p-4">
+            <div class="flex items-center gap-3">
+                <div class="card-icon bg-teal-50 text-teal-600 dark:bg-teal-900/30 dark:text-teal-400">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ total }}</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Total Documents</p>
+                </div>
+            </div>
+        </div>
+        <div class="card p-4">
+            <div class="flex items-center gap-3">
+                <div class="card-icon bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ documents|rejectattr('is_expired')|list|length }}</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Valid</p>
+                </div>
+            </div>
+        </div>
+        <div class="card p-4">
+            <div class="flex items-center gap-3">
+                <div class="card-icon bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ documents|selectattr('days_until_expiry')|selectattr('days_until_expiry', 'le', 30)|list|length }}</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Expiring Soon</p>
+                </div>
+            </div>
+        </div>
+        <div class="card p-4">
+            <div class="flex items-center gap-3">
+                <div class="card-icon bg-rose-50 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ documents|selectattr('is_expired')|list|length }}</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Expired</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="card p-4">
+        <form method="get" action="/fleet/documents" class="flex flex-wrap items-center gap-4">
+            <select name="document_type" class="form-select">
+                <option value="">All Types</option>
+                {% for dt in document_types %}
+                <option value="{{ dt.value }}" {{ 'selected' if document_type == dt.value else '' }}>{{ dt.value | replace('_', ' ') | title }}</option>
+                {% endfor %}
+            </select>
+            <select name="vehicle_id" class="form-select">
+                <option value="">All Vehicles</option>
+                {% for v in vehicles %}
+                <option value="{{ v.vehicle_id }}" {{ 'selected' if vehicle_id|string == v.vehicle_id|string else '' }}>{{ v.registration_number }}</option>
+                {% endfor %}
+            </select>
+            <label class="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" name="expired_only" value="true" {{ 'checked' if expired_only else '' }} class="form-checkbox">
+                <span class="text-sm text-slate-600 dark:text-slate-400">Expired only</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" name="expiring_soon" value="true" {{ 'checked' if expiring_soon else '' }} class="form-checkbox">
+                <span class="text-sm text-slate-600 dark:text-slate-400">Expiring soon</span>
+            </label>
+            <button type="submit" class="btn btn-secondary">Filter</button>
+            {% if document_type or vehicle_id or expired_only or expiring_soon %}
+            <a href="/fleet/documents" class="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400">Clear</a>
+            {% endif %}
+        </form>
+    </div>
+
+    <!-- Documents Table -->
+    <div class="card">
+        <div class="table-container">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Vehicle</th>
+                        <th>Type</th>
+                        <th>Document Number</th>
+                        <th>Issue Date</th>
+                        <th>Expiry Date</th>
+                        <th>Status</th>
+                        <th class="text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for doc in documents %}
+                    <tr class="group hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                        <td>
+                            <a href="/fleet/vehicles/{{ doc.vehicle_id }}" class="font-mono text-sm font-semibold text-teal-600 hover:text-teal-700 dark:text-teal-400">
+                                {{ doc.vehicle.registration_number }}
+                            </a>
+                        </td>
+                        <td>
+                            <span class="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-300">
+                                {{ doc.document_type | replace('_', ' ') | title }}
+                            </span>
+                        </td>
+                        <td class="font-mono text-sm text-slate-900 dark:text-white">
+                            {{ doc.document_number }}
+                        </td>
+                        <td class="text-sm text-slate-600 dark:text-slate-400">
+                            {{ doc.issue_date.strftime('%b %d, %Y') if doc.issue_date else '-' }}
+                        </td>
+                        <td class="text-sm">
+                            {% if doc.expiry_date %}
+                            <span class="{% if doc.is_expired %}text-rose-600 dark:text-rose-400{% elif doc.days_until_expiry and doc.days_until_expiry <= 30 %}text-amber-600 dark:text-amber-400{% else %}text-slate-600 dark:text-slate-400{% endif %}">
+                                {{ doc.expiry_date.strftime('%b %d, %Y') }}
+                            </span>
+                            {% else %}
+                            <span class="text-slate-400">No Expiry</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if doc.is_expired %}
+                            <span class="inline-flex items-center rounded-full bg-rose-100 px-2.5 py-0.5 text-xs font-medium text-rose-700 dark:bg-rose-900/30 dark:text-rose-400">Expired</span>
+                            {% elif doc.days_until_expiry and doc.days_until_expiry <= 30 %}
+                            <span class="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">Expiring Soon</span>
+                            {% else %}
+                            <span class="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">Valid</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-right">
+                            {{ action_buttons(
+                                view_href="/fleet/documents/" ~ doc.document_id,
+                                edit_href="/fleet/documents/" ~ doc.document_id ~ "/edit"
+                            ) }}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="py-16">
+                            <div class="text-center">
+                                <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 mb-4">
+                                    <svg class="h-8 w-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                    </svg>
+                                </div>
+                                <h3 class="text-lg font-semibold text-slate-700 dark:text-slate-300 mb-1">No documents</h3>
+                                <p class="text-sm text-slate-500 dark:text-slate-400">Add your first vehicle document</p>
+                                <a href="/fleet/documents/new" class="btn btn-primary mt-4">
+                                    <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                                    </svg>
+                                    Add Document
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if total_pages > 1 %}
+        {{ pagination(page=page, total_pages=total_pages, total_count=total, limit=limit) }}
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

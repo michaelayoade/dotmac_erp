@@ -450,8 +450,8 @@ class CRMSyncWebService:
 
         # Get inventory stats
         if org_id:
-            from app.models.finance.inv.item import Item
-            from app.services.finance.inv.balance import InventoryBalanceService
+            from app.models.inventory.item import Item
+            from app.services.inventory.balance import InventoryBalanceService
 
             # Total items
             total_items = db.scalar(

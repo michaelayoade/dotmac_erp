@@ -24,6 +24,7 @@ FEATURE_RECURRING_TRANSACTIONS = "enable_recurring_transactions"
 FEATURE_INVENTORY = "enable_inventory"
 FEATURE_FIXED_ASSETS = "enable_fixed_assets"
 FEATURE_LEASES = "enable_leases"
+FEATURE_PROCUREMENT = "enable_procurement"
 
 # Human-readable feature names for error messages
 FEATURE_LABELS = {
@@ -35,6 +36,7 @@ FEATURE_LABELS = {
     FEATURE_INVENTORY: "Inventory",
     FEATURE_FIXED_ASSETS: "Fixed Assets",
     FEATURE_LEASES: "Leases",
+    FEATURE_PROCUREMENT: "Procurement Management",
 }
 
 # Cache for defaults derived from settings specs (lazy initialization)
@@ -72,6 +74,7 @@ def _get_feature_defaults() -> Dict[str, bool]:
             FEATURE_INVENTORY: True,
             FEATURE_FIXED_ASSETS: True,
             FEATURE_LEASES: False,
+            FEATURE_PROCUREMENT: True,
         }
         return _feature_defaults_cache
 

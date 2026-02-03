@@ -1,0 +1,130 @@
+{% extends "operations/base_operations.html" %}
+
+{% block page_title %}Requisition {{ requisition.requisition_number }}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+    <a href="/procurement" class="hover:text-amber-600 transition-colors">Procurement</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+    <a href="/procurement/requisitions" class="hover:text-amber-600 transition-colors">Requisitions</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+    <span class="font-medium text-slate-900 dark:text-white">{{ requisition.requisition_number }}</span>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+{% if requisition.status.value == 'DRAFT' %}
+<form method="post" action="/procurement/requisitions/{{ requisition.requisition_id }}/submit" class="inline">
+    <button type="submit" class="btn btn-primary">
+        <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        Submit for Approval
+    </button>
+</form>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6 stagger-in">
+    <!-- Header Card -->
+    <div class="card p-6">
+        <div class="flex justify-between items-start mb-4">
+            <div>
+                <h2 class="text-xl font-semibold text-slate-900 dark:text-white">{{ requisition.requisition_number }}</h2>
+                <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">{{ requisition.requisition_date }}</p>
+            </div>
+            {% set label, color = status_labels.get(requisition.status, ("Unknown", "slate")) %}
+            <span class="inline-flex items-center rounded-full px-3 py-1 text-sm font-medium bg-{{ color }}-100 text-{{ color }}-700 dark:bg-{{ color }}-900/30 dark:text-{{ color }}-400">{{ label }}</span>
+        </div>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+            <div>
+                <span class="text-slate-500 dark:text-slate-400">Urgency:</span>
+                <p class="font-semibold text-slate-900 dark:text-white">
+                    <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium {% if requisition.urgency.value == 'EMERGENCY' %}bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400{% elif requisition.urgency.value == 'URGENT' %}bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400{% else %}bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400{% endif %}">{{ requisition.urgency.value }}</span>
+                </p>
+            </div>
+            <div>
+                <span class="text-slate-500 dark:text-slate-400">Total Amount:</span>
+                <p class="font-semibold text-slate-900 dark:text-white">{{ "{:,.2f}".format(requisition.total_estimated_amount) }}</p>
+            </div>
+            <div>
+                <span class="text-slate-500 dark:text-slate-400">Lines:</span>
+                <p class="font-semibold text-slate-900 dark:text-white">{{ lines | length }}</p>
+            </div>
+            <div>
+                <span class="text-slate-500 dark:text-slate-400">Created:</span>
+                <p class="font-semibold text-slate-900 dark:text-white">{{ requisition.created_at.strftime('%Y-%m-%d') }}</p>
+            </div>
+        </div>
+        {% if requisition.justification %}
+        <div class="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+            <span class="text-sm text-slate-500 dark:text-slate-400">Justification:</span>
+            <p class="text-sm text-slate-900 dark:text-white mt-1">{{ requisition.justification }}</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Requisition Lines -->
+    <div class="card">
+        <div class="p-4 border-b border-slate-200 dark:border-slate-700">
+            <h3 class="font-semibold text-slate-900 dark:text-white">Requisition Lines</h3>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="bg-slate-50 dark:bg-slate-800/50">
+                    <tr>
+                        <th class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">#</th>
+                        <th class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Description</th>
+                        <th class="px-4 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Qty</th>
+                        <th class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">UOM</th>
+                        <th class="px-4 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Unit Price</th>
+                        <th class="px-4 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Total</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                    {% for line in lines %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                        <td class="px-4 py-3 text-slate-600 dark:text-slate-400">{{ line.line_number }}</td>
+                        <td class="px-4 py-3 text-slate-900 dark:text-white">{{ line.description }}</td>
+                        <td class="px-4 py-3 text-right text-slate-600 dark:text-slate-400">{{ line.quantity }}</td>
+                        <td class="px-4 py-3 text-slate-600 dark:text-slate-400">{{ line.unit_of_measure }}</td>
+                        <td class="px-4 py-3 text-right text-slate-600 dark:text-slate-400">{{ "{:,.2f}".format(line.estimated_unit_price) }}</td>
+                        <td class="px-4 py-3 text-right font-medium text-slate-900 dark:text-white">{{ "{:,.2f}".format(line.estimated_total_price) }}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="6" class="px-4 py-8 text-center text-slate-500 dark:text-slate-400">No lines.</td></tr>
+                    {% endfor %}
+                </tbody>
+                {% if lines %}
+                <tfoot class="bg-slate-50 dark:bg-slate-800/50">
+                    <tr>
+                        <td colspan="5" class="px-4 py-3 text-right font-semibold text-slate-700 dark:text-slate-300">Total:</td>
+                        <td class="px-4 py-3 text-right font-bold text-slate-900 dark:text-white">{{ "{:,.2f}".format(requisition.total_estimated_amount) }}</td>
+                    </tr>
+                </tfoot>
+                {% endif %}
+            </table>
+        </div>
+    </div>
+
+    <!-- Approval History -->
+    {% if approvals %}
+    <div class="card">
+        <div class="p-4 border-b border-slate-200 dark:border-slate-700">
+            <h3 class="font-semibold text-slate-900 dark:text-white">Approval History</h3>
+        </div>
+        <div class="p-4 space-y-3">
+            {% for approval in approvals %}
+            <div class="flex items-center gap-3 text-sm">
+                <div class="flex-shrink-0 w-2 h-2 rounded-full {% if approval.decision == 'APPROVED' %}bg-emerald-500{% elif approval.decision == 'REJECTED' %}bg-rose-500{% else %}bg-amber-500{% endif %}"></div>
+                <div>
+                    <span class="font-medium text-slate-900 dark:text-white">{{ approval.decision }}</span>
+                    <span class="text-slate-500 dark:text-slate-400">by {{ approval.approver_name }} on {{ approval.decided_at.strftime('%Y-%m-%d %H:%M') if approval.decided_at else 'Pending' }}</span>
+                    {% if approval.comments %}<p class="text-slate-500 dark:text-slate-400 mt-0.5">{{ approval.comments }}</p>{% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

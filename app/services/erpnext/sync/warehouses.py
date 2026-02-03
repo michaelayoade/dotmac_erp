@@ -8,7 +8,7 @@ from typing import Any, Optional
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.finance.inv.warehouse import Warehouse
+from app.models.inventory.warehouse import Warehouse
 from app.services.erpnext.mappings.warehouses import WarehouseMapping
 
 from .base import BaseSyncService

@@ -1,0 +1,201 @@
+{% extends "operations/base_operations.html" %}
+{% from "components/macros.html" import pagination, empty_state %}
+
+{% block page_title %}Lots & Serial Numbers{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+    <a href="/operations/dashboard" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Dashboard</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="font-medium text-slate-900 dark:text-white">Lots & Serial Numbers</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6 stagger-in">
+    <!-- Stats Row -->
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div class="card p-4">
+            <div class="flex items-center gap-3">
+                <div class="card-icon bg-teal-50 text-teal-600 dark:bg-teal-900/30 dark:text-teal-400">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ total_count | default(0) }}</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Total Lots</p>
+                </div>
+            </div>
+        </div>
+        <div class="card p-4">
+            <div class="flex items-center gap-3">
+                <div class="card-icon bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ available_count | default(0) }}</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Available</p>
+                </div>
+            </div>
+        </div>
+        <div class="card p-4">
+            <div class="flex items-center gap-3">
+                <div class="card-icon bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ expiring_count | default(0) }}</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Expiring Soon</p>
+                </div>
+            </div>
+        </div>
+        <div class="card p-4">
+            <div class="flex items-center gap-3">
+                <div class="card-icon bg-rose-50 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ quarantine_count | default(0) }}</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Quarantined</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Expiring Soon Alert -->
+    {% if expiring_lots | default([]) | length > 0 %}
+    <div class="rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-4">
+        <div class="flex items-start gap-3">
+            <svg class="h-5 w-5 text-amber-500 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+            </svg>
+            <div>
+                <p class="font-medium text-amber-800 dark:text-amber-300">Lots Expiring Within 30 Days</p>
+                <p class="mt-1 text-sm text-amber-700 dark:text-amber-400">{{ expiring_lots | length }} lot(s) will expire soon. Review and take action.</p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Search & Filters -->
+    <div class="card p-4">
+        <form method="get" action="/inventory/lots" class="flex flex-wrap items-center gap-4">
+            <div class="relative flex-1 min-w-[200px]">
+                <svg class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                </svg>
+                <input type="text" name="search" value="{{ search | default('') }}"
+                       placeholder="Search by lot number or item..."
+                       class="form-input pl-10 w-full">
+            </div>
+            <select name="status" class="form-select">
+                <option value="">All Status</option>
+                <option value="available" {{ 'selected' if status == 'available' else '' }}>Available</option>
+                <option value="quarantine" {{ 'selected' if status == 'quarantine' else '' }}>Quarantined</option>
+                <option value="expired" {{ 'selected' if status == 'expired' else '' }}>Expired</option>
+                <option value="depleted" {{ 'selected' if status == 'depleted' else '' }}>Depleted</option>
+            </select>
+            <select name="warehouse" class="form-select">
+                <option value="">All Warehouses</option>
+                {% for wh in warehouses | default([]) %}
+                <option value="{{ wh.warehouse_id }}" {{ 'selected' if warehouse == wh.warehouse_id|string else '' }}>
+                    {{ wh.warehouse_name }}
+                </option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-secondary">Filter</button>
+            <a href="/inventory/lots" class="btn btn-ghost">Clear</a>
+        </form>
+    </div>
+
+    <!-- Lots Table -->
+    <div class="card overflow-hidden">
+        {% if lots | default([]) | length > 0 %}
+        <div class="overflow-x-auto">
+            <table class="table-ledger">
+                <thead>
+                    <tr>
+                        <th>Lot Number</th>
+                        <th>Item</th>
+                        <th>Warehouse</th>
+                        <th class="text-right">Initial Qty</th>
+                        <th class="text-right">Remaining</th>
+                        <th>Expiry Date</th>
+                        <th>Status</th>
+                        <th class="w-12"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for lot in lots %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer"
+                        onclick="window.location='/inventory/lots/{{ lot.lot_id }}'">
+                        <td class="font-medium font-mono text-slate-900 dark:text-white">{{ lot.lot_number }}</td>
+                        <td>
+                            <div class="flex flex-col">
+                                <span class="text-xs font-mono text-slate-500">{{ lot.item.item_code if lot.item else '-' }}</span>
+                                <span>{{ lot.item.item_name if lot.item else '-' }}</span>
+                            </div>
+                        </td>
+                        <td>{{ lot.warehouse.warehouse_name if lot.warehouse else '-' }}</td>
+                        <td class="text-right font-mono">{{ '{:,.2f}'.format(lot.initial_quantity or 0) }}</td>
+                        <td class="text-right font-mono {{ 'text-rose-600' if (lot.remaining_quantity or 0) <= 0 else '' }}">
+                            {{ '{:,.2f}'.format(lot.remaining_quantity or 0) }}
+                        </td>
+                        <td class="{{ 'text-rose-600 font-medium' if lot.expiry_date and lot.expiry_date < now else ('text-amber-600' if lot.expiry_date and (lot.expiry_date - now).days <= 30 else '') }}">
+                            {{ lot.expiry_date.strftime('%Y-%m-%d') if lot.expiry_date else '-' }}
+                        </td>
+                        <td>
+                            {% if lot.is_quarantined %}
+                            <span class="inline-flex items-center rounded-full bg-rose-100 px-2.5 py-0.5 text-xs font-medium text-rose-700 dark:bg-rose-900/30 dark:text-rose-400">
+                                Quarantined
+                            </span>
+                            {% elif lot.expiry_date and lot.expiry_date < now %}
+                            <span class="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-400">
+                                Expired
+                            </span>
+                            {% elif (lot.remaining_quantity or 0) <= 0 %}
+                            <span class="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-400">
+                                Depleted
+                            </span>
+                            {% else %}
+                            <span class="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+                                Available
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="/inventory/lots/{{ lot.lot_id }}" class="text-slate-400 hover:text-amber-600 dark:hover:text-amber-400">
+                                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                                </svg>
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        {{ empty_state(
+            title="No lots tracked yet",
+            description="Lots are created automatically when receiving inventory with lot tracking enabled.",
+            action_url="/inventory/items",
+            action_label="View Items"
+        ) }}
+        {% endif %}
+    </div>
+
+    {% if lots | default([]) | length > 0 %}
+    {{ pagination(page, total_pages, '/inventory/lots') }}
+    {% endif %}
+</div>
+{% endblock %}

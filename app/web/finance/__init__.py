@@ -10,8 +10,8 @@ from app.web.finance.dashboard import router as dashboard_router
 from app.web.finance.gl import router as gl_router
 from app.web.finance.ap import router as ap_router
 from app.web.finance.ar import router as ar_router
-from app.web.finance.fa import router as fa_router
 from app.web.finance.banking import router as banking_router
+from app.web.finance.ipsas import router as ipsas_router
 from app.web.finance.tax import router as tax_router
 from app.web.finance.reports import router as reports_router
 from app.web.finance.quote import router as quote_router
@@ -33,8 +33,8 @@ router.include_router(dashboard_router)
 router.include_router(gl_router)
 router.include_router(ap_router)
 router.include_router(ar_router)
-router.include_router(fa_router)
 router.include_router(banking_router)
+router.include_router(ipsas_router)
 router.include_router(tax_router)
 router.include_router(reports_router)
 router.include_router(quote_router)

@@ -1,0 +1,155 @@
+{% extends "operations/base_operations.html" %}
+
+{% block page_title %}Bid Evaluation - {{ rfq.rfq_number }}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+    <a href="/procurement" class="hover:text-amber-600 transition-colors">Procurement</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+    <a href="/procurement/rfqs" class="hover:text-amber-600 transition-colors">RFQs</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+    <a href="/procurement/rfqs/{{ rfq.rfq_id }}" class="hover:text-amber-600 transition-colors">{{ rfq.rfq_number }}</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+    <span class="font-medium text-slate-900 dark:text-white">Evaluation</span>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+{% if can_finalize %}
+<form method="post" action="/procurement/evaluations/{{ rfq.rfq_id }}/finalize" class="inline">
+    <button type="submit" class="btn btn-primary">
+        <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+        Finalize Evaluation
+    </button>
+</form>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6 stagger-in">
+    <!-- RFQ Summary -->
+    <div class="card p-6">
+        <div class="flex justify-between items-start mb-4">
+            <div>
+                <h2 class="text-xl font-semibold text-slate-900 dark:text-white">{{ rfq.title }}</h2>
+                <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">{{ rfq.rfq_number }} | Method: {{ rfq.procurement_method.value }}</p>
+            </div>
+            {% set label, color = status_labels.get(rfq.status, ("Unknown", "slate")) %}
+            <span class="inline-flex items-center rounded-full px-3 py-1 text-sm font-medium bg-{{ color }}-100 text-{{ color }}-700 dark:bg-{{ color }}-900/30 dark:text-{{ color }}-400">{{ label }}</span>
+        </div>
+        <div class="grid grid-cols-3 gap-4 text-sm">
+            <div>
+                <span class="text-slate-500 dark:text-slate-400">Closing Date:</span>
+                <p class="font-semibold text-slate-900 dark:text-white">{{ rfq.closing_date }}</p>
+            </div>
+            <div>
+                <span class="text-slate-500 dark:text-slate-400">Responses:</span>
+                <p class="font-semibold text-slate-900 dark:text-white">{{ responses | length }}</p>
+            </div>
+            <div>
+                <span class="text-slate-500 dark:text-slate-400">Criteria:</span>
+                <p class="font-semibold text-slate-900 dark:text-white">{{ criteria | length }}</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Evaluation Criteria -->
+    {% if criteria %}
+    <div class="card">
+        <div class="p-4 border-b border-slate-200 dark:border-slate-700">
+            <h3 class="font-semibold text-slate-900 dark:text-white">Evaluation Criteria</h3>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="bg-slate-50 dark:bg-slate-800/50">
+                    <tr>
+                        <th class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Criterion</th>
+                        <th class="px-4 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Weight (%)</th>
+                        <th class="px-4 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Max Score</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                    {% for c in criteria %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                        <td class="px-4 py-3 text-slate-900 dark:text-white">{{ c.name }}</td>
+                        <td class="px-4 py-3 text-right text-slate-600 dark:text-slate-400">{{ c.weight }}</td>
+                        <td class="px-4 py-3 text-right text-slate-600 dark:text-slate-400">{{ c.max_score }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Comparison Matrix -->
+    {% if responses %}
+    <div class="card">
+        <div class="p-4 border-b border-slate-200 dark:border-slate-700">
+            <h3 class="font-semibold text-slate-900 dark:text-white">Response Comparison Matrix</h3>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="bg-slate-50 dark:bg-slate-800/50">
+                    <tr>
+                        <th class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Criterion</th>
+                        {% for resp in responses %}
+                        <th class="px-4 py-3 text-center font-medium text-slate-600 dark:text-slate-400">{{ resp.vendor_name }}</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                    {% for c in criteria %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                        <td class="px-4 py-3 font-medium text-slate-900 dark:text-white">{{ c.name }} <span class="text-xs text-slate-400">({{ c.weight }}%)</span></td>
+                        {% for resp in responses %}
+                        <td class="px-4 py-3 text-center">
+                            {% set score = scores.get((resp.response_id, c.criterion_id), None) %}
+                            {% if score is not none %}
+                            <span class="font-semibold {% if score >= c.max_score * 0.8 %}text-emerald-600 dark:text-emerald-400{% elif score >= c.max_score * 0.5 %}text-amber-600 dark:text-amber-400{% else %}text-rose-600 dark:text-rose-400{% endif %}">{{ score }}</span>
+                            <span class="text-xs text-slate-400">/ {{ c.max_score }}</span>
+                            {% else %}
+                            <span class="text-slate-400">-</span>
+                            {% endif %}
+                        </td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                    <!-- Quoted Amount Row -->
+                    <tr class="bg-slate-50 dark:bg-slate-800/50">
+                        <td class="px-4 py-3 font-semibold text-slate-900 dark:text-white">Quoted Amount</td>
+                        {% for resp in responses %}
+                        <td class="px-4 py-3 text-center font-semibold text-slate-900 dark:text-white">{{ "{:,.2f}".format(resp.total_amount) }}</td>
+                        {% endfor %}
+                    </tr>
+                    <!-- Total Weighted Score Row -->
+                    <tr class="bg-blue-50 dark:bg-blue-900/20">
+                        <td class="px-4 py-3 font-bold text-blue-900 dark:text-blue-300">Total Weighted Score</td>
+                        {% for resp in responses %}
+                        <td class="px-4 py-3 text-center font-bold text-blue-900 dark:text-blue-300">{{ "{:.1f}".format(total_scores.get(resp.response_id, 0)) }}</td>
+                        {% endfor %}
+                    </tr>
+                    <!-- Rank Row -->
+                    <tr class="bg-emerald-50 dark:bg-emerald-900/20">
+                        <td class="px-4 py-3 font-bold text-emerald-900 dark:text-emerald-300">Rank</td>
+                        {% for resp in responses %}
+                        <td class="px-4 py-3 text-center font-bold text-emerald-900 dark:text-emerald-300">
+                            {% if ranks.get(resp.response_id) == 1 %}
+                            <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-bold bg-emerald-200 text-emerald-800 dark:bg-emerald-800 dark:text-emerald-200">#1 Recommended</span>
+                            {% else %}
+                            #{{ ranks.get(resp.response_id, '-') }}
+                            {% endif %}
+                        </td>
+                        {% endfor %}
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% else %}
+    <div class="card p-8 text-center">
+        <p class="text-slate-500 dark:text-slate-400">No vendor responses to evaluate yet.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

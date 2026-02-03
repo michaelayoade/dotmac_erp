@@ -34,7 +34,7 @@ from app.models.finance.core_org.cost_center import CostCenter
 from app.models.finance.core_org.project import Project
 from app.models.finance.core_org.reporting_segment import ReportingSegment
 from app.models.finance.gl.account import Account
-from app.models.finance.inv.item import Item, CostingMethod
+from app.models.inventory.item import Item, CostingMethod
 from app.models.finance.tax.tax_code import TaxCode
 from app.services.common import coerce_uuid
 from app.services.finance.platform.sequence import SequenceService
@@ -1090,11 +1090,11 @@ class SupplierInvoiceService(ListResponseMixin):
             # For weighted average items, recalculate average cost
             if item.costing_method == CostingMethod.WEIGHTED_AVERAGE:
                 # Get current inventory quantity
-                from app.services.finance.inv.transaction import InventoryTransactionService
+                from app.services.inventory.transaction import InventoryTransactionService
 
                 # Sum quantity across all warehouses
                 total_qty = Decimal("0")
-                from app.models.finance.inv.warehouse import Warehouse
+                from app.models.inventory.warehouse import Warehouse
                 warehouses = db.query(Warehouse).filter(
                     Warehouse.organization_id == organization_id,
                     Warehouse.is_active == True,

@@ -10,7 +10,7 @@ from fastapi import Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
-from app.services.finance.inv.material_request_web import MaterialRequestWebService
+from app.services.inventory.material_request_web import MaterialRequestWebService
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
 
@@ -66,7 +66,7 @@ class OperationsInventoryWebService:
             )
         )
         return templates.TemplateResponse(
-            request, "operations/inv/material_requests.html", context
+            request, "inventory/material_requests.html", context
         )
 
     def new_material_request_form_response(
@@ -82,7 +82,7 @@ class OperationsInventoryWebService:
         service = self._mr_service(db, auth)
         context.update(service.form_context())
         return templates.TemplateResponse(
-            request, "operations/inv/material_request_form.html", context
+            request, "inventory/material_request_form.html", context
         )
 
     def create_material_request_response(
@@ -126,7 +126,7 @@ class OperationsInventoryWebService:
             )
             db.commit()
             return RedirectResponse(
-                f"/operations/inv/material-requests/{mr.request_id}", status_code=303
+                f"/inventory/material-requests/{mr.request_id}", status_code=303
             )
         except Exception as e:
             db.rollback()
@@ -136,7 +136,7 @@ class OperationsInventoryWebService:
             context.update(service.form_context())
             context["error"] = str(e)
             return templates.TemplateResponse(
-                request, "operations/inv/material_request_form.html", context
+                request, "inventory/material_request_form.html", context
             )
 
     def material_request_report_response(
@@ -161,7 +161,7 @@ class OperationsInventoryWebService:
             )
         )
         return templates.TemplateResponse(
-            request, "operations/inv/material_request_report.html", context
+            request, "inventory/material_request_report.html", context
         )
 
     def material_request_detail_response(
@@ -177,10 +177,10 @@ class OperationsInventoryWebService:
         context.update(service.detail_context(request_id))
         if not context.get("material_request"):
             return RedirectResponse(
-                "/operations/inv/material-requests", status_code=302
+                "/inventory/material-requests", status_code=302
             )
         return templates.TemplateResponse(
-            request, "operations/inv/material_request_detail.html", context
+            request, "inventory/material_request_detail.html", context
         )
 
     def edit_material_request_form_response(
@@ -198,10 +198,10 @@ class OperationsInventoryWebService:
         context.update(service.form_context(request_id=request_id))
         if not context.get("material_request"):
             return RedirectResponse(
-                "/operations/inv/material-requests", status_code=302
+                "/inventory/material-requests", status_code=302
             )
         return templates.TemplateResponse(
-            request, "operations/inv/material_request_form.html", context
+            request, "inventory/material_request_form.html", context
         )
 
     def update_material_request_response(
@@ -247,7 +247,7 @@ class OperationsInventoryWebService:
             )
             db.commit()
             return RedirectResponse(
-                f"/operations/inv/material-requests/{mr.request_id}", status_code=303
+                f"/inventory/material-requests/{mr.request_id}", status_code=303
             )
         except Exception as e:
             db.rollback()
@@ -257,7 +257,7 @@ class OperationsInventoryWebService:
             context.update(service.form_context(request_id))
             context["error"] = str(e)
             return templates.TemplateResponse(
-                request, "operations/inv/material_request_form.html", context
+                request, "inventory/material_request_form.html", context
             )
 
     def submit_material_request_response(
@@ -282,7 +282,7 @@ class OperationsInventoryWebService:
             db.rollback()
             logger.warning("Failed to submit material request %s: %s", request_id, e)
         return RedirectResponse(
-            f"/operations/inv/material-requests/{request_id}", status_code=303
+            f"/inventory/material-requests/{request_id}", status_code=303
         )
 
     def cancel_material_request_response(
@@ -307,7 +307,7 @@ class OperationsInventoryWebService:
             db.rollback()
             logger.warning("Failed to cancel material request %s: %s", request_id, e)
         return RedirectResponse(
-            f"/operations/inv/material-requests/{request_id}", status_code=303
+            f"/inventory/material-requests/{request_id}", status_code=303
         )
 
     def transaction_detail_response(
@@ -319,21 +319,21 @@ class OperationsInventoryWebService:
     ) -> HTMLResponse | RedirectResponse:
         """Inventory transaction detail page."""
         from uuid import UUID as UUID_Type
-        from app.models.finance.inv.inventory_transaction import InventoryTransaction
-        from app.models.finance.inv.item import Item
-        from app.models.finance.inv.warehouse import Warehouse
-        from app.models.finance.inv.inventory_lot import InventoryLot
+        from app.models.inventory.inventory_transaction import InventoryTransaction
+        from app.models.inventory.item import Item
+        from app.models.inventory.warehouse import Warehouse
+        from app.models.inventory.inventory_lot import InventoryLot
 
         context = base_context(request, auth, "Transaction Detail", "inv")
 
         try:
             txn_id = UUID_Type(transaction_id)
         except ValueError:
-            return RedirectResponse("/operations/inv/transactions", status_code=302)
+            return RedirectResponse("/inventory/transactions", status_code=302)
 
         txn = db.get(InventoryTransaction, txn_id)
         if not txn or txn.organization_id != auth.organization_id:
-            return RedirectResponse("/operations/inv/transactions", status_code=302)
+            return RedirectResponse("/inventory/transactions", status_code=302)
 
         item = db.get(Item, txn.item_id) if txn.item_id else None
         warehouse = db.get(Warehouse, txn.warehouse_id) if txn.warehouse_id else None
@@ -344,7 +344,7 @@ class OperationsInventoryWebService:
         context["warehouse"] = warehouse
         context["lot"] = lot
         return templates.TemplateResponse(
-            request, "operations/inv/transaction_detail.html", context
+            request, "inventory/transaction_detail.html", context
         )
 
 

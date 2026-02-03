@@ -223,7 +223,7 @@ class DropdownService:
         Returns:
             List of warehouse dicts with id, code, name
         """
-        from app.models.finance.inv.warehouse import Warehouse
+        from app.models.inventory.warehouse import Warehouse
 
         org_id = coerce_uuid(organization_id)
 

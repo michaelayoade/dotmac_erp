@@ -35,8 +35,6 @@ from app.api.finance import (
     gl_router,
     ap_router,
     ar_router,
-    fa_router,
-    inv_router,
     lease_router,
     tax_router,
     cons_router,
@@ -47,6 +45,7 @@ from app.api.finance import (
     search_router,
     payments_router,
     payments_webhook_router,
+    ipsas_router,
 )
 from app.api.people import router as people_hr_router
 from app.api.expense import router as expense_router
@@ -57,9 +56,15 @@ from app.api.crm import router as crm_router
 from app.api.crm import webhook_router as crm_webhook_router
 from app.api.sync.dotmac_crm import router as crm_sync_router
 from app.api.fleet import router as fleet_router
+from app.api.fixed_assets import router as fa_api_router
+from app.api.inventory import router as inv_api_router
+from app.api.procurement import router as procurement_router
 from app.api.careers import router as careers_api_router
 from app.web.careers import router as careers_web_router
 from app.web.onboarding_portal import router as onboarding_portal_router
+from app.web.fixed_assets import router as fixed_assets_web_router
+from app.web.inventory import router as inventory_web_router
+from app.web.procurement import router as procurement_web_router
 from app.db import SessionLocal
 from app.services import audit as audit_service
 from app.api.deps import require_role, require_user_auth, require_tenant_auth
@@ -109,6 +114,37 @@ def ar_customers_redirect(request: Request):
     if query:
         url = f"{url}?{query}"
     return RedirectResponse(url=url, status_code=302)
+
+# Backward-compatibility redirects for restructured modules
+@app.get("/finance/fa/{path:path}", include_in_schema=False)
+def fa_redirect(request: Request, path: str):
+    """Redirect old FA paths to new /fixed-assets/ prefix."""
+    query = request.url.query
+    url = f"/fixed-assets/{path}"
+    if query:
+        url = f"{url}?{query}"
+    return RedirectResponse(url=url, status_code=301)
+
+
+@app.get("/operations/inv/{path:path}", include_in_schema=False)
+def inv_redirect(request: Request, path: str):
+    """Redirect old inventory paths to new /inventory/ prefix."""
+    query = request.url.query
+    url = f"/inventory/{path}"
+    if query:
+        url = f"{url}?{query}"
+    return RedirectResponse(url=url, status_code=301)
+
+
+@app.get("/operations/fleet/{path:path}", include_in_schema=False)
+def fleet_redirect(request: Request, path: str):
+    """Redirect old fleet paths to new /fleet/ prefix."""
+    query = request.url.query
+    url = f"/fleet/{path}"
+    if query:
+        url = f"{url}?{query}"
+    return RedirectResponse(url=url, status_code=301)
+
 
 _AUDIT_SETTINGS_CACHE: dict | None = None
 _AUDIT_SETTINGS_CACHE_AT: float | None = None
@@ -334,8 +370,6 @@ app.include_router(workflow_tasks_web_router)
 _include_api_router(gl_router, dependencies=[Depends(require_tenant_auth)])
 _include_api_router(ap_router, dependencies=[Depends(require_tenant_auth)])
 _include_api_router(ar_router, dependencies=[Depends(require_tenant_auth)])
-_include_api_router(fa_router, dependencies=[Depends(require_tenant_auth)])
-_include_api_router(inv_router, dependencies=[Depends(require_tenant_auth)])
 _include_api_router(lease_router, dependencies=[Depends(require_tenant_auth)])
 _include_api_router(tax_router, dependencies=[Depends(require_tenant_auth)])
 _include_api_router(cons_router, dependencies=[Depends(require_tenant_auth)])
@@ -377,6 +411,17 @@ app.include_router(careers_web_router)  # Web UI routes
 
 # Public Onboarding Self-Service Portal (token-based auth, no login required)
 app.include_router(onboarding_portal_router)  # Web UI routes
+
+# Standalone module web routes (restructured from finance/operations)
+app.include_router(fixed_assets_web_router)   # /fixed-assets/* web routes
+app.include_router(inventory_web_router)      # /inventory/* web routes
+app.include_router(procurement_web_router)    # /procurement/* web routes
+
+# Standalone module API routes
+_include_api_router(fa_api_router, dependencies=[Depends(require_tenant_auth)])
+_include_api_router(inv_api_router, dependencies=[Depends(require_tenant_auth)])
+_include_api_router(procurement_router, dependencies=[Depends(require_tenant_auth)])
+_include_api_router(ipsas_router, dependencies=[Depends(require_tenant_auth)])
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 

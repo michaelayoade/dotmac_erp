@@ -1,0 +1,179 @@
+{% extends "operations/base_operations.html" %}
+
+{% block page_title %}Vendor Prequalification - {{ vendor.supplier_name }}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+    <a href="/procurement" class="hover:text-amber-600 transition-colors">Procurement</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+    <a href="/procurement/vendors" class="hover:text-amber-600 transition-colors">Vendors</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+    <span class="font-medium text-slate-900 dark:text-white">{{ vendor.supplier_name }}</span>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+{% if vendor.status.value == 'UNDER_REVIEW' %}
+<div class="flex gap-2">
+    <form method="post" action="/procurement/vendors/{{ vendor.prequalification_id }}/approve" class="inline">
+        <button type="submit" class="btn btn-primary">
+            <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+            Approve
+        </button>
+    </form>
+    <form method="post" action="/procurement/vendors/{{ vendor.prequalification_id }}/reject" class="inline">
+        <button type="submit" class="btn btn-secondary text-rose-600 hover:text-rose-700">
+            <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+            Reject
+        </button>
+    </form>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6 stagger-in">
+    <!-- Vendor Header -->
+    <div class="card p-6">
+        <div class="flex justify-between items-start mb-4">
+            <div>
+                <h2 class="text-xl font-semibold text-slate-900 dark:text-white">{{ vendor.supplier_name }}</h2>
+                {% if vendor.registration_number %}<p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Reg: {{ vendor.registration_number }}</p>{% endif %}
+            </div>
+            {% set label, color = status_labels.get(vendor.status, ("Unknown", "slate")) %}
+            <span class="inline-flex items-center rounded-full px-3 py-1 text-sm font-medium bg-{{ color }}-100 text-{{ color }}-700 dark:bg-{{ color }}-900/30 dark:text-{{ color }}-400">{{ label }}</span>
+        </div>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+            <div>
+                <span class="text-slate-500 dark:text-slate-400">Overall Score:</span>
+                <p class="font-semibold text-slate-900 dark:text-white">
+                    {% if vendor.overall_score is not none %}
+                    <span class="{% if vendor.overall_score >= 80 %}text-emerald-600 dark:text-emerald-400{% elif vendor.overall_score >= 60 %}text-amber-600 dark:text-amber-400{% else %}text-rose-600 dark:text-rose-400{% endif %}">{{ "{:.0f}".format(vendor.overall_score) }}%</span>
+                    {% else %}-{% endif %}
+                </p>
+            </div>
+            <div>
+                <span class="text-slate-500 dark:text-slate-400">Valid From:</span>
+                <p class="font-semibold text-slate-900 dark:text-white">{{ vendor.valid_from or '-' }}</p>
+            </div>
+            <div>
+                <span class="text-slate-500 dark:text-slate-400">Valid To:</span>
+                <p class="font-semibold text-slate-900 dark:text-white">{{ vendor.valid_to or '-' }}</p>
+            </div>
+            <div>
+                <span class="text-slate-500 dark:text-slate-400">Reviewed:</span>
+                <p class="font-semibold text-slate-900 dark:text-white">{{ vendor.reviewed_at.strftime('%Y-%m-%d') if vendor.reviewed_at else 'Pending' }}</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Compliance Checklist -->
+    <div class="card">
+        <div class="p-4 border-b border-slate-200 dark:border-slate-700">
+            <h3 class="font-semibold text-slate-900 dark:text-white">Compliance Checklist</h3>
+        </div>
+        <div class="p-4 space-y-3">
+            {% for item in checklist %}
+            <div class="flex items-center justify-between p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50">
+                <div class="flex items-center gap-3">
+                    {% if item.compliant %}
+                    <div class="flex-shrink-0 w-6 h-6 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
+                        <svg class="h-4 w-4 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                    </div>
+                    {% elif item.compliant is none %}
+                    <div class="flex-shrink-0 w-6 h-6 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center">
+                        <svg class="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01"/></svg>
+                    </div>
+                    {% else %}
+                    <div class="flex-shrink-0 w-6 h-6 rounded-full bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center">
+                        <svg class="h-4 w-4 text-rose-600 dark:text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </div>
+                    {% endif %}
+                    <div>
+                        <p class="text-sm font-medium text-slate-900 dark:text-white">{{ item.requirement }}</p>
+                        {% if item.notes %}<p class="text-xs text-slate-500 dark:text-slate-400">{{ item.notes }}</p>{% endif %}
+                    </div>
+                </div>
+                <span class="text-xs font-medium {% if item.compliant %}text-emerald-600 dark:text-emerald-400{% elif item.compliant is none %}text-slate-400{% else %}text-rose-600 dark:text-rose-400{% endif %}">
+                    {% if item.compliant %}Compliant{% elif item.compliant is none %}Pending{% else %}Non-Compliant{% endif %}
+                </span>
+            </div>
+            {% else %}
+            <p class="text-center text-slate-500 dark:text-slate-400 py-4">No compliance checklist items defined.</p>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Qualification Scores -->
+    {% if qualification_scores %}
+    <div class="card">
+        <div class="p-4 border-b border-slate-200 dark:border-slate-700">
+            <h3 class="font-semibold text-slate-900 dark:text-white">Qualification Scores</h3>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="bg-slate-50 dark:bg-slate-800/50">
+                    <tr>
+                        <th class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Category</th>
+                        <th class="px-4 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Weight (%)</th>
+                        <th class="px-4 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Score</th>
+                        <th class="px-4 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Weighted</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                    {% for qs in qualification_scores %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                        <td class="px-4 py-3 text-slate-900 dark:text-white">{{ qs.category }}</td>
+                        <td class="px-4 py-3 text-right text-slate-600 dark:text-slate-400">{{ qs.weight }}</td>
+                        <td class="px-4 py-3 text-right">
+                            <span class="font-semibold {% if qs.score >= 80 %}text-emerald-600 dark:text-emerald-400{% elif qs.score >= 60 %}text-amber-600 dark:text-amber-400{% else %}text-rose-600 dark:text-rose-400{% endif %}">{{ qs.score }}</span>
+                        </td>
+                        <td class="px-4 py-3 text-right font-medium text-slate-900 dark:text-white">{{ "{:.1f}".format(qs.score * qs.weight / 100) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot class="bg-blue-50 dark:bg-blue-900/20">
+                    <tr>
+                        <td colspan="3" class="px-4 py-3 text-right font-bold text-blue-900 dark:text-blue-300">Overall Score:</td>
+                        <td class="px-4 py-3 text-right font-bold text-blue-900 dark:text-blue-300">{{ "{:.1f}".format(vendor.overall_score or 0) }}%</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Past Performance -->
+    {% if past_contracts %}
+    <div class="card">
+        <div class="p-4 border-b border-slate-200 dark:border-slate-700">
+            <h3 class="font-semibold text-slate-900 dark:text-white">Past Contracts</h3>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="bg-slate-50 dark:bg-slate-800/50">
+                    <tr>
+                        <th class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Contract</th>
+                        <th class="px-4 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Value</th>
+                        <th class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Period</th>
+                        <th class="px-4 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Rating</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                    {% for pc in past_contracts %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                        <td class="px-4 py-3 text-slate-900 dark:text-white">{{ pc.title }}</td>
+                        <td class="px-4 py-3 text-right font-medium text-slate-900 dark:text-white">{{ "{:,.2f}".format(pc.value) }}</td>
+                        <td class="px-4 py-3 text-slate-600 dark:text-slate-400">{{ pc.start_date }} - {{ pc.end_date }}</td>
+                        <td class="px-4 py-3 text-right">
+                            <span class="font-semibold {% if pc.rating >= 4 %}text-emerald-600 dark:text-emerald-400{% elif pc.rating >= 3 %}text-amber-600 dark:text-amber-400{% else %}text-rose-600 dark:text-rose-400{% endif %}">{{ pc.rating }}/5</span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

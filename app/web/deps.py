@@ -24,6 +24,7 @@ from app.services.auth_flow import decode_access_token
 from app.services.auth_dependencies import is_session_inactive
 from app.services.common import coerce_uuid
 from app.services.finance.branding import BrandingService, CSSGenerator
+from app.templates import templates  # noqa: F401 - re-exported for web routes
 
 
 def _get_auth_db_for_sso() -> Session | None:
@@ -248,7 +249,7 @@ def landing_content() -> dict:
                     "title": "Operations",
                     "description": "Inventory, procurement, and workflow automation connected to finance.",
                     "cta_label": "Explore operations",
-                    "cta_href": "/finance/inv/items",
+                    "cta_href": "/inventory/items",
                 },
             ],
         },
@@ -290,7 +291,7 @@ def landing_content() -> dict:
                     "title": "Fixed Assets",
                     "description": "Asset register and depreciation schedules.",
                     "cta_label": "View assets",
-                    "cta_href": "/finance/fa/assets",
+                    "cta_href": "/fixed-assets/assets",
                 },
                 {
                     "key": "banking",

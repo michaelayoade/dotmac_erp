@@ -1,0 +1,184 @@
+{% extends "operations/base_operations.html" %}
+{% from "components/macros.html" import status_badge, pagination, action_buttons %}
+
+{% block page_title %}Incidents{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+    <a href="/operations/dashboard" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Operations</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <a href="/fleet" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Fleet</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="font-medium text-slate-900 dark:text-white">Incidents</span>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<a href="/fleet/incidents/new" class="btn btn-primary">
+    <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+    </svg>
+    Report Incident
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6 stagger-in">
+    <!-- Stats -->
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div class="card p-4">
+            <div class="flex items-center gap-3">
+                <div class="card-icon bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ incidents|selectattr('status', 'equalto', 'reported')|list|length }}</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Reported</p>
+                </div>
+            </div>
+        </div>
+        <div class="card p-4">
+            <div class="flex items-center gap-3">
+                <div class="card-icon bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ incidents|selectattr('status', 'equalto', 'under_investigation')|list|length }}</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Under Investigation</p>
+                </div>
+            </div>
+        </div>
+        <div class="card p-4">
+            <div class="flex items-center gap-3">
+                <div class="card-icon bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ incidents|selectattr('status', 'equalto', 'resolved')|list|length }}</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Resolved</p>
+                </div>
+            </div>
+        </div>
+        <div class="card p-4">
+            <div class="flex items-center gap-3">
+                <div class="card-icon bg-rose-50 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ incidents|selectattr('severity', 'in', ['critical', 'high'])|list|length }}</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">High Severity</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="card p-4">
+        <form method="get" action="/fleet/incidents" class="flex flex-wrap items-center gap-4">
+            <select name="status" class="form-select">
+                <option value="">All Status</option>
+                {% for s in statuses %}
+                <option value="{{ s.value }}" {{ 'selected' if status == s.value else '' }}>{{ s.value | replace('_', ' ') | title }}</option>
+                {% endfor %}
+            </select>
+            <select name="severity" class="form-select">
+                <option value="">All Severity</option>
+                {% for sev in severities %}
+                <option value="{{ sev.value }}" {{ 'selected' if severity == sev.value else '' }}>{{ sev.value | title }}</option>
+                {% endfor %}
+            </select>
+            <select name="vehicle_id" class="form-select">
+                <option value="">All Vehicles</option>
+                {% for v in vehicles %}
+                <option value="{{ v.vehicle_id }}" {{ 'selected' if vehicle_id|string == v.vehicle_id|string else '' }}>{{ v.registration_number }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-secondary">Filter</button>
+            {% if status or severity or vehicle_id %}
+            <a href="/fleet/incidents" class="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400">Clear</a>
+            {% endif %}
+        </form>
+    </div>
+
+    <!-- Incidents Table -->
+    <div class="card">
+        <div class="table-container">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Vehicle</th>
+                        <th>Type</th>
+                        <th>Severity</th>
+                        <th>Description</th>
+                        <th>Status</th>
+                        <th class="text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for incident in incidents %}
+                    <tr class="group hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                        <td class="text-sm text-slate-600 dark:text-slate-400">
+                            {{ incident.incident_date.strftime('%b %d, %Y') }}
+                        </td>
+                        <td>
+                            <a href="/fleet/vehicles/{{ incident.vehicle_id }}" class="font-mono text-sm font-semibold text-teal-600 hover:text-teal-700 dark:text-teal-400">
+                                {{ incident.vehicle.registration_number }}
+                            </a>
+                        </td>
+                        <td>
+                            <span class="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-300">
+                                {{ incident.incident_type | replace('_', ' ') | title }}
+                            </span>
+                        </td>
+                        <td>
+                            {% set severity_colors = {'critical': 'rose', 'high': 'orange', 'medium': 'amber', 'low': 'slate'} %}
+                            {% set color = severity_colors.get(incident.severity, 'slate') %}
+                            <span class="inline-flex items-center rounded-md bg-{{ color }}-100 px-2 py-0.5 text-xs font-medium text-{{ color }}-600 dark:bg-{{ color }}-900/30 dark:text-{{ color }}-400">
+                                {{ incident.severity | title }}
+                            </span>
+                        </td>
+                        <td class="max-w-xs truncate text-sm text-slate-600 dark:text-slate-400">
+                            {{ incident.description }}
+                        </td>
+                        <td>{{ status_badge(incident.status, 'sm') }}</td>
+                        <td class="text-right">
+                            {{ action_buttons(view_href="/fleet/incidents/" ~ incident.incident_id) }}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="py-16">
+                            <div class="text-center">
+                                <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 mb-4">
+                                    <svg class="h-8 w-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                    </svg>
+                                </div>
+                                <h3 class="text-lg font-semibold text-slate-700 dark:text-slate-300 mb-1">No incidents reported</h3>
+                                <p class="text-sm text-slate-500 dark:text-slate-400">Your fleet is running safely</p>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if total_pages > 1 %}
+        {{ pagination(page=page, total_pages=total_pages, total_count=total, limit=limit) }}
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -907,8 +907,8 @@ class APWebService:
         po_id: Optional[str] = None,
     ) -> dict:
         from app.models.finance.tax.tax_code import TaxCode, TaxType
-        from app.models.finance.inv.item import Item
-        from app.models.finance.fa.asset_category import AssetCategory
+        from app.models.inventory.item import Item
+        from app.models.fixed_assets.asset_category import AssetCategory
 
         org_id = coerce_uuid(organization_id)
         suppliers_list = [
@@ -1884,7 +1884,7 @@ class APWebService:
         expense_accounts = _get_accounts(db, org_id, IFRSCategory.EXPENSES)
 
         # Get inventory items for selection
-        from app.models.finance.inv.item import Item
+        from app.models.inventory.item import Item
         items = (
             db.query(Item)
             .filter(
@@ -2263,7 +2263,7 @@ class APWebService:
                         })
 
         # Get warehouses for selection
-        from app.models.finance.inv.warehouse import Warehouse
+        from app.models.inventory.warehouse import Warehouse
         warehouses = (
             db.query(Warehouse)
             .filter(

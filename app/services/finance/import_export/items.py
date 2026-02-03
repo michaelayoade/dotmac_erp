@@ -11,8 +11,8 @@ from uuid import UUID, uuid4
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.finance.inv.item import Item, ItemType, CostingMethod
-from app.models.finance.inv.item_category import ItemCategory
+from app.models.inventory.item import Item, ItemType, CostingMethod
+from app.models.inventory.item_category import ItemCategory
 
 from .base import BaseImporter, FieldMapping, ImportConfig
 

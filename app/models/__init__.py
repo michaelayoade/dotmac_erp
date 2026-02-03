@@ -46,6 +46,9 @@ import app.models.support as support  # noqa: F401
 # Project Management Models - Tasks, Milestones, Resource Allocation, Time Tracking
 import app.models.pm as pm  # noqa: F401
 
+# Procurement Models - PPA 2007 compliance
+import app.models.procurement as procurement  # noqa: F401
+
 # Sync Models - External system sync state tracking
 from app.models.sync import (  # noqa: F401
     IntegrationConfig,
