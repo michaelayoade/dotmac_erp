@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 from datetime import date, datetime
 from typing import Optional
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -187,9 +187,11 @@ class DisciplineWebService:
                 "document_types": [d.value for d in DocumentType],
             }
         )
-        return templates.TemplateResponse(
+        response = templates.TemplateResponse(
             request, "people/hr/discipline/case_detail.html", context
         )
+        response.headers["Cache-Control"] = "no-store"
+        return response
 
     # ─────────────────────────────────────────────────────────────────────────
     # Case Creation
@@ -248,9 +250,11 @@ class DisciplineWebService:
                 "form_data": working_form_data,
             }
         )
-        return templates.TemplateResponse(
+        response = templates.TemplateResponse(
             request, "people/hr/discipline/case_form.html", context
         )
+        response.headers["Cache-Control"] = "no-store"
+        return response
 
     @staticmethod
     def employee_typeahead(
@@ -401,6 +405,23 @@ class DisciplineWebService:
         except ValidationError as exc:
             db.rollback()
             message = quote(exc.message or "Unable to issue query.")
+            return RedirectResponse(
+                url=f"/people/hr/discipline/{case_id}?error={message}",
+                status_code=303,
+            )
+        except Exception:
+            db.rollback()
+            error_id = uuid4()
+            logger.exception(
+                "Issue query failed. error_id=%s case_id=%s org_id=%s person_id=%s",
+                error_id,
+                case_id,
+                org_id,
+                person_id,
+            )
+            message = quote(
+                f"Unable to issue query. Please try again. Error ID: {error_id}"
+            )
             return RedirectResponse(
                 url=f"/people/hr/discipline/{case_id}?error={message}",
                 status_code=303,

@@ -303,6 +303,18 @@ class RecruitmentService:
         opening = self.get_job_opening(org_id, job_opening_id)
         opening.status = JobOpeningStatus.CLOSED
         self.db.flush()
+
+        try:
+            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            fire_workflow_event(
+                db=self.db, organization_id=org_id,
+                entity_type="RECRUITMENT", entity_id=opening.job_opening_id,
+                event="ON_STATUS_CHANGE",
+                old_values={}, new_values={"status": "CLOSED"},
+            )
+        except Exception:
+            pass
+
         return opening
 
     def hold_job_opening(self, org_id: UUID, job_opening_id: UUID) -> JobOpening:

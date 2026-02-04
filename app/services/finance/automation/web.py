@@ -135,7 +135,9 @@ def _recurring_list_view(template: RecurringTemplate, generated_count: int) -> d
     }
 
 
-def _recurring_detail_view(template: RecurringTemplate, logs: List[RecurringLog]) -> dict:
+def _recurring_detail_view(
+    template: RecurringTemplate, logs: List[RecurringLog]
+) -> dict:
     return {
         "template_id": str(template.template_id),
         "template_name": template.template_name,
@@ -180,7 +182,9 @@ def _recurring_log_view(log: RecurringLog) -> dict:
         "status": log.status.value,
         "status_color": status_colors.get(log.status, "slate"),
         "generated_entity_type": log.generated_entity_type,
-        "generated_entity_id": str(log.generated_entity_id) if log.generated_entity_id else None,
+        "generated_entity_id": str(log.generated_entity_id)
+        if log.generated_entity_id
+        else None,
         "generated_entity_number": log.generated_entity_number,
         "error_message": log.error_message,
     }
@@ -205,6 +209,22 @@ def _workflow_entity_type_label(entity_type: WorkflowEntityType) -> str:
         WorkflowEntityType.PURCHASE_ORDER: "Purchase Order",
         WorkflowEntityType.BANK_TRANSACTION: "Bank Transaction",
         WorkflowEntityType.RECONCILIATION: "Reconciliation",
+        WorkflowEntityType.CREDIT_NOTE: "Credit Note",
+        WorkflowEntityType.CASH_ADVANCE: "Cash Advance",
+        WorkflowEntityType.ASSET_DISPOSAL: "Asset Disposal",
+        WorkflowEntityType.EMPLOYEE: "Employee",
+        WorkflowEntityType.LEAVE_REQUEST: "Leave Request",
+        WorkflowEntityType.DISCIPLINARY_CASE: "Disciplinary Case",
+        WorkflowEntityType.PERFORMANCE_APPRAISAL: "Performance Appraisal",
+        WorkflowEntityType.PAYROLL_RUN: "Payroll Run",
+        WorkflowEntityType.PAYROLL_ENTRY: "Payroll Entry",
+        WorkflowEntityType.SALARY_SLIP: "Salary Slip",
+        WorkflowEntityType.LOAN: "Loan",
+        WorkflowEntityType.RECRUITMENT: "Recruitment",
+        WorkflowEntityType.FLEET_VEHICLE: "Fleet Vehicle",
+        WorkflowEntityType.FLEET_RESERVATION: "Fleet Reservation",
+        WorkflowEntityType.FLEET_MAINTENANCE: "Fleet Maintenance",
+        WorkflowEntityType.FLEET_INCIDENT: "Fleet Incident",
     }
     return labels.get(entity_type, entity_type.value)
 
@@ -221,6 +241,7 @@ def _trigger_event_label(event: TriggerEvent) -> str:
         TriggerEvent.ON_DUE_DATE: "On Due Date",
         TriggerEvent.ON_OVERDUE: "When Overdue",
         TriggerEvent.ON_THRESHOLD: "When Threshold Met",
+        TriggerEvent.ON_SCHEDULE: "On Schedule",
     }
     return labels.get(event, event.value)
 
@@ -234,6 +255,7 @@ def _action_type_label(action_type: ActionType) -> str:
         ActionType.CREATE_TASK: "Create Task",
         ActionType.WEBHOOK: "Call Webhook",
         ActionType.BLOCK: "Block Action",
+        ActionType.TRIGGER_RULE: "Trigger Rule",
     }
     return labels.get(action_type, action_type.value)
 
@@ -247,6 +269,7 @@ def _action_type_icon(action_type: ActionType) -> str:
         ActionType.CREATE_TASK: "clipboard-list",
         ActionType.WEBHOOK: "globe-alt",
         ActionType.BLOCK: "ban",
+        ActionType.TRIGGER_RULE: "arrow-path",
     }
     return icons.get(action_type, "cog")
 
@@ -274,10 +297,14 @@ def _workflow_list_view(rule: WorkflowRule) -> dict:
             else 0
         ),
         "last_executed_at": _format_datetime(rule.last_executed_at),
+        "cooldown_seconds": rule.cooldown_seconds,
+        "schedule_config": rule.schedule_config,
     }
 
 
-def _workflow_detail_view(rule: WorkflowRule, executions: List[WorkflowExecution]) -> dict:
+def _workflow_detail_view(
+    rule: WorkflowRule, executions: List[WorkflowExecution]
+) -> dict:
     return {
         "rule_id": str(rule.rule_id),
         "rule_name": rule.rule_name,
@@ -293,6 +320,8 @@ def _workflow_detail_view(rule: WorkflowRule, executions: List[WorkflowExecution
         "priority": rule.priority,
         "stop_on_match": rule.stop_on_match,
         "execute_async": rule.execute_async,
+        "cooldown_seconds": rule.cooldown_seconds,
+        "schedule_config": rule.schedule_config,
         "is_active": rule.is_active,
         "execution_count": rule.execution_count,
         "success_count": rule.success_count,
@@ -560,13 +589,14 @@ class AutomationWebService:
                 .where(RecurringLog.template_id.in_(template_ids))
                 .group_by(RecurringLog.template_id)
             )
-            counts = {row.template_id: row.generation_count for row in db.execute(count_subq)}
+            counts = {
+                row.template_id: row.generation_count for row in db.execute(count_subq)
+            }
         else:
             counts = {}
 
         items = [
-            _recurring_list_view(t, counts.get(t.template_id, 0))
-            for t in templates
+            _recurring_list_view(t, counts.get(t.template_id, 0)) for t in templates
         ]
 
         return {
@@ -651,7 +681,9 @@ class AutomationWebService:
             schedule_config=schedule_config,
             start_date=_parse_date(form_data.get("start_date")) or date.today(),
             end_date=_parse_date(form_data.get("end_date")),
-            occurrences_limit=int(form_data["occurrences_limit"]) if form_data.get("occurrences_limit") else None,
+            occurrences_limit=int(form_data["occurrences_limit"])
+            if form_data.get("occurrences_limit")
+            else None,
             auto_post=form_data.get("auto_post") == "on",
             auto_send=form_data.get("auto_send") == "on",
             days_before_due=int(form_data.get("days_before_due", 30)),
@@ -771,9 +803,7 @@ class AutomationWebService:
         if not rule:
             return {"rule": None, "error": "Rule not found"}
 
-        executions = workflow_service.get_executions(
-            db, rule_id=rule.rule_id, limit=20
-        )
+        executions = workflow_service.get_executions(db, rule_id=rule.rule_id, limit=20)
 
         return {
             "rule": _workflow_detail_view(rule, executions),
@@ -781,6 +811,24 @@ class AutomationWebService:
 
     def build_workflow_input(self, form_data: dict) -> WorkflowRuleInput:
         """Build WorkflowRuleInput from form data."""
+        cooldown = None
+        if form_data.get("cooldown_seconds"):
+            try:
+                cooldown = int(form_data["cooldown_seconds"])
+            except (ValueError, TypeError):
+                pass
+
+        schedule_config = None
+        if form_data.get("schedule_config"):
+            schedule_config = form_data["schedule_config"]
+            if isinstance(schedule_config, str):
+                import json
+
+                try:
+                    schedule_config = json.loads(schedule_config)
+                except json.JSONDecodeError:
+                    schedule_config = None
+
         return WorkflowRuleInput(
             rule_name=form_data["rule_name"],
             entity_type=WorkflowEntityType(form_data["entity_type"]),
@@ -792,6 +840,8 @@ class AutomationWebService:
             priority=int(form_data.get("priority", 100)),
             stop_on_match=form_data.get("stop_on_match") == "on",
             execute_async=form_data.get("execute_async") != "off",
+            cooldown_seconds=cooldown,
+            schedule_config=schedule_config,
         )
 
     # -------------------------------------------------------------------------
@@ -919,7 +969,9 @@ class AutomationWebService:
             validation_message=form_data.get("validation_message"),
             min_value=form_data.get("min_value"),
             max_value=form_data.get("max_value"),
-            max_length=int(form_data["max_length"]) if form_data.get("max_length") else None,
+            max_length=int(form_data["max_length"])
+            if form_data.get("max_length")
+            else None,
             display_order=int(form_data.get("display_order", 0)),
             section_name=form_data.get("section_name"),
             placeholder=form_data.get("placeholder"),
@@ -1094,10 +1146,14 @@ class AutomationWebService:
 
         template.template_name = data.get("template_name", template.template_name)
         template.description = data.get("description")
-        template.template_content = data.get("template_content", template.template_content)
+        template.template_content = data.get(
+            "template_content", template.template_content
+        )
         template.css_styles = data.get("css_styles")
         template.page_size = data.get("page_size", template.page_size)
-        template.page_orientation = data.get("page_orientation", template.page_orientation)
+        template.page_orientation = data.get(
+            "page_orientation", template.page_orientation
+        )
         template.email_subject = data.get("email_subject")
         template.email_from_name = data.get("email_from_name")
         template.is_default = data.get("is_default") == "on"
@@ -1127,6 +1183,181 @@ class AutomationWebService:
             db.flush()
             return True
         return False
+
+    # -------------------------------------------------------------------------
+    # Workflow Version History
+    # -------------------------------------------------------------------------
+
+    def workflow_versions_context(
+        self,
+        db: Session,
+        organization_id: str,
+        rule_id: str,
+    ) -> dict:
+        """Get context for workflow rule version history page."""
+        rule = workflow_service.get(db, coerce_uuid(rule_id))
+        if not rule:
+            return {"rule": None, "error": "Rule not found"}
+
+        versions = workflow_service.get_rule_versions(db, rule.rule_id)
+        version_items = []
+        for v in versions:
+            version_items.append(
+                {
+                    "version_id": str(v.version_id),
+                    "version_number": v.version_number,
+                    "rule_name": v.rule_name,
+                    "entity_type": v.entity_type,
+                    "trigger_event": v.trigger_event,
+                    "action_type": v.action_type,
+                    "priority": v.priority,
+                    "cooldown_seconds": v.cooldown_seconds,
+                    "change_summary": v.change_summary,
+                    "changed_by": str(v.changed_by) if v.changed_by else None,
+                    "created_at": _format_datetime(v.created_at),
+                }
+            )
+
+        return {
+            "rule": _workflow_detail_view(rule, []),
+            "versions": version_items,
+        }
+
+    # -------------------------------------------------------------------------
+    # Workflow Monitoring Dashboard
+    # -------------------------------------------------------------------------
+
+    def workflow_monitoring_context(
+        self,
+        db: Session,
+        organization_id: str,
+    ) -> dict:
+        """Get context for workflow monitoring dashboard."""
+        from datetime import timedelta
+
+        org_id = coerce_uuid(organization_id)
+        now = datetime.utcnow()
+        one_hour_ago = now - timedelta(hours=1)
+        one_day_ago = now - timedelta(days=1)
+
+        # Total rules for org
+        total_rules = (
+            db.execute(
+                select(func.count()).select_from(
+                    select(WorkflowRule)
+                    .where(WorkflowRule.organization_id == org_id)
+                    .subquery()
+                )
+            ).scalar()
+            or 0
+        )
+
+        active_rules = (
+            db.execute(
+                select(func.count()).select_from(
+                    select(WorkflowRule)
+                    .where(
+                        WorkflowRule.organization_id == org_id,
+                        WorkflowRule.is_active.is_(True),
+                    )
+                    .subquery()
+                )
+            ).scalar()
+            or 0
+        )
+
+        # Executions in last hour
+        # Join through rule to filter by org
+        exec_hour_query = (
+            select(func.count())
+            .select_from(WorkflowExecution)
+            .join(WorkflowRule, WorkflowExecution.rule_id == WorkflowRule.rule_id)
+            .where(
+                WorkflowRule.organization_id == org_id,
+                WorkflowExecution.triggered_at >= one_hour_ago,
+            )
+        )
+        executions_last_hour = db.execute(exec_hour_query).scalar() or 0
+
+        # Executions in last day
+        exec_day_query = (
+            select(func.count())
+            .select_from(WorkflowExecution)
+            .join(WorkflowRule, WorkflowExecution.rule_id == WorkflowRule.rule_id)
+            .where(
+                WorkflowRule.organization_id == org_id,
+                WorkflowExecution.triggered_at >= one_day_ago,
+            )
+        )
+        executions_last_day = db.execute(exec_day_query).scalar() or 0
+
+        # Failures in last day
+        failures_query = (
+            select(func.count())
+            .select_from(WorkflowExecution)
+            .join(WorkflowRule, WorkflowExecution.rule_id == WorkflowRule.rule_id)
+            .where(
+                WorkflowRule.organization_id == org_id,
+                WorkflowExecution.triggered_at >= one_day_ago,
+                WorkflowExecution.status == ExecutionStatus.FAILED,
+            )
+        )
+        failures_last_day = db.execute(failures_query).scalar() or 0
+
+        failure_rate = (
+            round(failures_last_day / executions_last_day * 100, 1)
+            if executions_last_day > 0
+            else 0.0
+        )
+
+        # Top failing rules (last 24h)
+        top_failing_query = (
+            select(
+                WorkflowRule.rule_id,
+                WorkflowRule.rule_name,
+                func.count().label("failure_count"),
+            )
+            .join(WorkflowExecution, WorkflowExecution.rule_id == WorkflowRule.rule_id)
+            .where(
+                WorkflowRule.organization_id == org_id,
+                WorkflowExecution.triggered_at >= one_day_ago,
+                WorkflowExecution.status == ExecutionStatus.FAILED,
+            )
+            .group_by(WorkflowRule.rule_id, WorkflowRule.rule_name)
+            .order_by(func.count().desc())
+            .limit(5)
+        )
+        top_failing = [
+            {
+                "rule_id": str(row.rule_id),
+                "rule_name": row.rule_name,
+                "failure_count": row.failure_count,
+            }
+            for row in db.execute(top_failing_query)
+        ]
+
+        # Recent executions
+        recent_query = (
+            select(WorkflowExecution)
+            .join(WorkflowRule, WorkflowExecution.rule_id == WorkflowRule.rule_id)
+            .where(WorkflowRule.organization_id == org_id)
+            .order_by(WorkflowExecution.triggered_at.desc())
+            .limit(20)
+        )
+        recent_executions = [
+            _execution_view(ex) for ex in db.execute(recent_query).scalars().all()
+        ]
+
+        return {
+            "total_rules": total_rules,
+            "active_rules": active_rules,
+            "executions_last_hour": executions_last_hour,
+            "executions_last_day": executions_last_day,
+            "failures_last_day": failures_last_day,
+            "failure_rate": failure_rate,
+            "top_failing": top_failing,
+            "recent_executions": recent_executions,
+        }
 
 
 # Singleton instance

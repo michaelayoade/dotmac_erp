@@ -7,7 +7,8 @@ Business logic for bid evaluation and scoring.
 import logging
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, List, Optional, Tuple
+from datetime import timezone
+from typing import List, Optional, Tuple
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -16,6 +17,7 @@ from sqlalchemy.orm import Session
 from app.models.procurement.bid_evaluation import BidEvaluation
 from app.models.procurement.bid_evaluation_score import BidEvaluationScore
 from app.models.procurement.enums import EvaluationStatus
+from app.schemas.procurement.evaluation import EvaluationCreate, EvaluationScoreCreate
 from app.services.common import NotFoundError, ValidationError
 
 logger = logging.getLogger(__name__)
@@ -67,7 +69,7 @@ class BidEvaluationService:
     def create(
         self,
         organization_id: UUID,
-        data: Any,
+        data: EvaluationCreate,
     ) -> BidEvaluation:
         """Create a new bid evaluation."""
         evaluation = BidEvaluation(
@@ -101,7 +103,7 @@ class BidEvaluationService:
         self,
         organization_id: UUID,
         evaluation_id: UUID,
-        score_data: Any,
+        score_data: EvaluationScoreCreate,
     ) -> BidEvaluationScore:
         """Add or update a score for a bid."""
         evaluation = self.get_by_id(organization_id, evaluation_id)
@@ -158,7 +160,7 @@ class BidEvaluationService:
 
         evaluation.status = EvaluationStatus.APPROVED
         evaluation.approved_by_user_id = approved_by_user_id
-        evaluation.approved_at = datetime.utcnow()
+        evaluation.approved_at = datetime.now(timezone.utc)
         self.db.flush()
         logger.info("Approved evaluation %s", evaluation_id)
         return evaluation

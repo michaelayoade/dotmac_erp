@@ -29,6 +29,7 @@ from app.db import Base
 
 class WorkflowEntityType(str, enum.Enum):
     """Entity types that can trigger workflows."""
+    # Finance
     INVOICE = "INVOICE"
     BILL = "BILL"
     EXPENSE = "EXPENSE"
@@ -41,6 +42,24 @@ class WorkflowEntityType(str, enum.Enum):
     PURCHASE_ORDER = "PURCHASE_ORDER"
     BANK_TRANSACTION = "BANK_TRANSACTION"
     RECONCILIATION = "RECONCILIATION"
+    CREDIT_NOTE = "CREDIT_NOTE"
+    CASH_ADVANCE = "CASH_ADVANCE"
+    ASSET_DISPOSAL = "ASSET_DISPOSAL"
+    # People / HR
+    EMPLOYEE = "EMPLOYEE"
+    LEAVE_REQUEST = "LEAVE_REQUEST"
+    DISCIPLINARY_CASE = "DISCIPLINARY_CASE"
+    PERFORMANCE_APPRAISAL = "PERFORMANCE_APPRAISAL"
+    PAYROLL_RUN = "PAYROLL_RUN"
+    PAYROLL_ENTRY = "PAYROLL_ENTRY"
+    SALARY_SLIP = "SALARY_SLIP"
+    LOAN = "LOAN"
+    RECRUITMENT = "RECRUITMENT"
+    # Fleet / Operations
+    FLEET_VEHICLE = "FLEET_VEHICLE"
+    FLEET_RESERVATION = "FLEET_RESERVATION"
+    FLEET_MAINTENANCE = "FLEET_MAINTENANCE"
+    FLEET_INCIDENT = "FLEET_INCIDENT"
 
 
 class TriggerEvent(str, enum.Enum):
@@ -55,6 +74,7 @@ class TriggerEvent(str, enum.Enum):
     ON_DUE_DATE = "ON_DUE_DATE"
     ON_OVERDUE = "ON_OVERDUE"
     ON_THRESHOLD = "ON_THRESHOLD"
+    ON_SCHEDULE = "ON_SCHEDULE"
 
 
 class ActionType(str, enum.Enum):
@@ -66,6 +86,7 @@ class ActionType(str, enum.Enum):
     CREATE_TASK = "CREATE_TASK"
     WEBHOOK = "WEBHOOK"
     BLOCK = "BLOCK"
+    TRIGGER_RULE = "TRIGGER_RULE"
 
 
 class WorkflowRule(Base):
@@ -147,6 +168,18 @@ class WorkflowRule(Base):
         nullable=False,
         default=True,
         comment="Execute action asynchronously via Celery",
+    )
+    cooldown_seconds: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        nullable=True,
+        default=None,
+        comment="Minimum seconds between executions for the same entity",
+    )
+    schedule_config: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSONB,
+        nullable=True,
+        default=None,
+        comment="Schedule configuration for ON_SCHEDULE rules: interval_minutes, entity_query",
     )
 
     # Statistics

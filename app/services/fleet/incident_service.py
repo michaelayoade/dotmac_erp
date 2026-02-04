@@ -225,6 +225,17 @@ class IncidentService:
         if data.insurance_payout is not None:
             incident.insurance_payout = data.insurance_payout
 
+        try:
+            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            fire_workflow_event(
+                db=self.db, organization_id=self.organization_id,
+                entity_type="FLEET_INCIDENT", entity_id=incident.incident_id,
+                event="ON_STATUS_CHANGE",
+                old_values={}, new_values={"status": "RESOLVED"},
+            )
+        except Exception:
+            pass
+
         logger.info("Resolved incident %s", incident_id)
         return incident
 
@@ -241,6 +252,17 @@ class IncidentService:
         incident.status = IncidentStatus.CLOSED
         if not incident.resolution_date:
             incident.resolution_date = date.today()
+
+        try:
+            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            fire_workflow_event(
+                db=self.db, organization_id=self.organization_id,
+                entity_type="FLEET_INCIDENT", entity_id=incident.incident_id,
+                event="ON_STATUS_CHANGE",
+                old_values={}, new_values={"status": "CLOSED"},
+            )
+        except Exception:
+            pass
 
         logger.info("Closed incident %s", incident_id)
         return incident

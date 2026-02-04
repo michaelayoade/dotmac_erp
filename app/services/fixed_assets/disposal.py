@@ -191,6 +191,18 @@ class AssetDisposalService(ListResponseMixin):
         asset.disposal_proceeds = disposal.net_proceeds
         asset.disposal_gain_loss = disposal.gain_loss_on_disposal
 
+        try:
+            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            fire_workflow_event(
+                db=db, organization_id=org_id,
+                entity_type="ASSET_DISPOSAL", entity_id=disposal.disposal_id,
+                event="ON_APPROVAL",
+                old_values={}, new_values={"status": "DISPOSED"},
+                user_id=user_id,
+            )
+        except Exception:
+            pass
+
         db.commit()
         db.refresh(disposal)
 

@@ -44,10 +44,10 @@
                 {% endif %}
             </p>
             <div class="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                Check-in: {{ today_record.check_in.strftime("%H:%M") if today_record and today_record.check_in else "-" }}
+                Check-in: {{ today_check_in_display }}
             </div>
             <div class="text-xs text-slate-500 dark:text-slate-400">
-                Check-out: {{ today_record.check_out.strftime("%H:%M") if today_record and today_record.check_out else "-" }}
+                Check-out: {{ today_check_out_display }}
             </div>
         </div>
         <div class="card p-5">
@@ -83,10 +83,10 @@
                         <td class="px-4 py-3 text-sm text-slate-700 dark:text-slate-300">{{ rec.attendance_date }}</td>
                         <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">{{ rec.status.value }}</td>
                         <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">
-                            {{ rec.check_in.strftime("%H:%M") if rec.check_in else "-" }}
+                            {{ rec.check_in_display }}
                         </td>
                         <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">
-                            {{ rec.check_out.strftime("%H:%M") if rec.check_out else "-" }}
+                            {{ rec.check_out_display }}
                         </td>
                         <td class="px-4 py-3 text-right text-sm text-slate-700 dark:text-slate-300 font-mono">
                             {{ rec.working_hours if rec.working_hours is not none else "-" }}

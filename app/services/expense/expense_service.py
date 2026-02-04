@@ -715,6 +715,22 @@ class ExpenseService:
             claim.status = ExpenseClaimStatus.SUBMITTED
             self.db.flush()
 
+            # Fire workflow automation event
+            try:
+                from app.services.finance.automation.event_dispatcher import fire_workflow_event
+                fire_workflow_event(
+                    db=self.db,
+                    organization_id=org_id,
+                    entity_type="EXPENSE",
+                    entity_id=claim.claim_id,
+                    event="ON_STATUS_CHANGE",
+                    old_values={"status": "DRAFT"},
+                    new_values={"status": "SUBMITTED"},
+                    user_id=claim.employee_id,
+                )
+            except Exception:
+                pass  # Side effect — never breaks the main operation
+
             # Include any receipt warnings
             warning_msg = "; ".join(receipt_warnings) if receipt_warnings else None
 
@@ -873,6 +889,26 @@ class ExpenseService:
                 notification_service.notify_claim_approved(claim, approver_name=approver_name)
 
             self.db.flush()
+
+            # Fire workflow automation event
+            try:
+                from app.services.finance.automation.event_dispatcher import fire_workflow_event
+                fire_workflow_event(
+                    db=self.db,
+                    organization_id=org_id,
+                    entity_type="EXPENSE",
+                    entity_id=claim.claim_id,
+                    event="ON_APPROVAL",
+                    old_values={"status": "SUBMITTED"},
+                    new_values={
+                        "status": "APPROVED",
+                        "total_approved_amount": str(claim.total_approved_amount),
+                    },
+                    user_id=approver_id,
+                )
+            except Exception:
+                pass
+
             self._set_action_status(
                 org_id,
                 claim_id,
@@ -950,6 +986,23 @@ class ExpenseService:
                 )
 
             self.db.flush()
+
+            # Fire workflow automation event
+            try:
+                from app.services.finance.automation.event_dispatcher import fire_workflow_event
+                fire_workflow_event(
+                    db=self.db,
+                    organization_id=org_id,
+                    entity_type="EXPENSE",
+                    entity_id=claim.claim_id,
+                    event="ON_REJECTION",
+                    old_values={"status": "SUBMITTED"},
+                    new_values={"status": "REJECTED", "rejection_reason": reason},
+                    user_id=approver_id,
+                )
+            except Exception:
+                pass
+
             self._set_action_status(
                 org_id,
                 claim_id,

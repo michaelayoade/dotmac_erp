@@ -24,6 +24,16 @@
         </div>
     </div>
     {% endif %}
+    {% if request.query_params.get('error') %}
+    <div class="p-4 rounded-lg bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-800">
+        <div class="flex items-center gap-2 text-red-700 dark:text-red-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span>{{ request.query_params.get('error') }}</span>
+        </div>
+    </div>
+    {% endif %}
 
     <div class="grid gap-6 lg:grid-cols-3">
         <!-- Main Content -->
@@ -406,7 +416,7 @@
                         <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
                         <div>
                             <label class="label required">Query Text</label>
-                            <textarea name="query_text" class="input" rows="3" required placeholder="Formal query to the employee..."></textarea>
+                            <textarea name="query_text" class="input" rows="3" required minlength="10" placeholder="Formal query to the employee..."></textarea>
                         </div>
                         <div>
                             <label class="label required">Response Due</label>

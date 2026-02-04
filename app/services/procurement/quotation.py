@@ -5,7 +5,7 @@ Business logic for vendor bid/quotation management.
 """
 
 import logging
-from typing import Any, List, Optional
+from typing import List, Optional
 from uuid import UUID
 
 from sqlalchemy import select
@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.models.procurement.quotation_response import QuotationResponse
 from app.models.procurement.quotation_response_line import QuotationResponseLine
+from app.schemas.procurement.quotation import QuotationResponseCreate, QuotationResponseUpdate
 from app.services.common import NotFoundError
 
 logger = logging.getLogger(__name__)
@@ -55,7 +56,7 @@ class QuotationResponseService:
     def create(
         self,
         organization_id: UUID,
-        data: Any,
+        data: QuotationResponseCreate,
         created_by_user_id: Optional[UUID] = None,
     ) -> QuotationResponse:
         """Record a vendor's quotation response."""
@@ -96,7 +97,7 @@ class QuotationResponseService:
         self,
         organization_id: UUID,
         response_id: UUID,
-        data: Any,
+        data: QuotationResponseUpdate,
     ) -> QuotationResponse:
         """Update a quotation response."""
         response = self.get_by_id(organization_id, response_id)

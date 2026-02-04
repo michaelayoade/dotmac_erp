@@ -7,6 +7,7 @@ Business logic for procurement plan management.
 import logging
 from datetime import datetime
 from decimal import Decimal
+from datetime import timezone
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
@@ -16,6 +17,7 @@ from sqlalchemy.orm import Session
 from app.models.procurement.enums import ProcurementPlanStatus
 from app.models.procurement.procurement_plan import ProcurementPlan
 from app.models.procurement.procurement_plan_item import ProcurementPlanItem
+from app.schemas.procurement.procurement_plan import ProcurementPlanCreate, ProcurementPlanUpdate
 from app.services.common import NotFoundError, ValidationError
 from app.services.procurement.thresholds import determine_procurement_method
 
@@ -90,7 +92,7 @@ class ProcurementPlanService:
     def create(
         self,
         organization_id: UUID,
-        data: Any,
+        data: ProcurementPlanCreate,
         created_by_user_id: UUID,
     ) -> ProcurementPlan:
         """Create a new procurement plan."""
@@ -133,7 +135,7 @@ class ProcurementPlanService:
         self,
         organization_id: UUID,
         plan_id: UUID,
-        data: Any,
+        data: ProcurementPlanUpdate,
     ) -> ProcurementPlan:
         """Update a procurement plan."""
         plan = self.get_by_id(organization_id, plan_id)
@@ -176,7 +178,7 @@ class ProcurementPlanService:
 
         plan.status = ProcurementPlanStatus.APPROVED
         plan.approved_by_user_id = approved_by_user_id
-        plan.approved_at = datetime.utcnow()
+        plan.approved_at = datetime.now(timezone.utc)
         self.db.flush()
         logger.info("Approved procurement plan %s", plan.plan_number)
         return plan

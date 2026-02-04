@@ -252,10 +252,10 @@
                         </td>
                         <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">{{ rec.shift_name }}</td>
                         <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">
-                            {{ rec.check_in.strftime("%H:%M") if rec.check_in else "-" }}
+                            {{ rec.check_in_display if rec.check_in_display is defined else (rec.check_in.strftime("%H:%M") if rec.check_in else "-") }}
                         </td>
                         <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">
-                            {{ rec.check_out.strftime("%H:%M") if rec.check_out else "-" }}
+                            {{ rec.check_out_display if rec.check_out_display is defined else (rec.check_out.strftime("%H:%M") if rec.check_out else "-") }}
                         </td>
                         <td class="px-4 py-3 text-right text-sm text-slate-700 dark:text-slate-300 font-mono">
                             {{ rec.working_hours | format_number(2) if rec.working_hours is not none else "-" }}

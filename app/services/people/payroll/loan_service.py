@@ -323,6 +323,18 @@ class LoanService:
 
         self.db.flush()
 
+        try:
+            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            fire_workflow_event(
+                db=self.db, organization_id=loan.organization_id,
+                entity_type="LOAN", entity_id=loan.loan_id,
+                event="ON_APPROVAL",
+                old_values={"status": "PENDING"},
+                new_values={"status": "APPROVED"}, user_id=user_id,
+            )
+        except Exception:
+            pass
+
         logger.info("Approved loan %s", loan.loan_number)
         return loan
 
@@ -351,6 +363,18 @@ class LoanService:
         loan.rejection_reason = reason
 
         self.db.flush()
+
+        try:
+            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            fire_workflow_event(
+                db=self.db, organization_id=loan.organization_id,
+                entity_type="LOAN", entity_id=loan.loan_id,
+                event="ON_REJECTION",
+                old_values={"status": "PENDING"},
+                new_values={"status": "REJECTED"}, user_id=coerce_uuid(rejected_by_id),
+            )
+        except Exception:
+            pass
 
         logger.info("Rejected loan %s: %s", loan.loan_number, reason)
         return loan

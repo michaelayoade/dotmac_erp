@@ -1,0 +1,223 @@
+"""
+Entity Registry for Workflow Automation.
+
+Maps entity type strings to their SQLAlchemy model classes
+and primary key field names. Used by action handlers that
+need to generically load and manipulate entities.
+"""
+
+import logging
+from typing import Any, Dict, Optional, Tuple, Type
+from uuid import UUID
+
+from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
+
+# Each entry: (import_path, model_class_name, pk_field_name)
+_ENTITY_REGISTRY: Dict[str, Tuple[str, str, str]] = {
+    "INVOICE": (
+        "app.models.finance.ar.invoice",
+        "Invoice",
+        "invoice_id",
+    ),
+    "BILL": (
+        "app.models.finance.ap.supplier_invoice",
+        "SupplierInvoice",
+        "invoice_id",
+    ),
+    "EXPENSE": (
+        "app.models.expense.expense_claim",
+        "ExpenseClaim",
+        "claim_id",
+    ),
+    "JOURNAL": (
+        "app.models.finance.gl.journal_entry",
+        "JournalEntry",
+        "entry_id",
+    ),
+    "PAYMENT": (
+        "app.models.finance.ap.supplier_payment",
+        "SupplierPayment",
+        "payment_id",
+    ),
+    "CUSTOMER": (
+        "app.models.finance.ar.customer",
+        "Customer",
+        "customer_id",
+    ),
+    "SUPPLIER": (
+        "app.models.finance.ap.supplier",
+        "Supplier",
+        "supplier_id",
+    ),
+    "QUOTE": (
+        "app.models.finance.ar.quote",
+        "Quote",
+        "quote_id",
+    ),
+    "SALES_ORDER": (
+        "app.models.finance.ar.sales_order",
+        "SalesOrder",
+        "order_id",
+    ),
+    "PURCHASE_ORDER": (
+        "app.models.finance.ap.purchase_order",
+        "PurchaseOrder",
+        "po_id",
+    ),
+    "BANK_TRANSACTION": (
+        "app.models.finance.banking.bank_statement",
+        "BankStatementLine",
+        "line_id",
+    ),
+    "RECONCILIATION": (
+        "app.models.finance.banking.bank_reconciliation",
+        "BankReconciliation",
+        "reconciliation_id",
+    ),
+    "CREDIT_NOTE": (
+        "app.models.finance.ar.invoice",
+        "Invoice",
+        "invoice_id",
+    ),
+    "CASH_ADVANCE": (
+        "app.models.expense.cash_advance",
+        "CashAdvance",
+        "advance_id",
+    ),
+    "ASSET_DISPOSAL": (
+        "app.models.finance.fa.asset_disposal",
+        "AssetDisposal",
+        "disposal_id",
+    ),
+    # People / HR entity types
+    "EMPLOYEE": (
+        "app.models.people.hr.employee",
+        "Employee",
+        "employee_id",
+    ),
+    "LEAVE_REQUEST": (
+        "app.models.people.leave.leave_application",
+        "LeaveApplication",
+        "application_id",
+    ),
+    "DISCIPLINARY_CASE": (
+        "app.models.people.discipline.disciplinary_case",
+        "DisciplinaryCase",
+        "case_id",
+    ),
+    "PERFORMANCE_APPRAISAL": (
+        "app.models.people.perf.appraisal",
+        "Appraisal",
+        "appraisal_id",
+    ),
+    "LOAN": (
+        "app.models.people.payroll.employee_loan",
+        "EmployeeLoan",
+        "loan_id",
+    ),
+    "RECRUITMENT": (
+        "app.models.people.recruit.job_opening",
+        "JobOpening",
+        "job_opening_id",
+    ),
+    # Fleet
+    "FLEET_VEHICLE": (
+        "app.models.fleet.vehicle",
+        "Vehicle",
+        "vehicle_id",
+    ),
+    "FLEET_RESERVATION": (
+        "app.models.fleet.vehicle_reservation",
+        "VehicleReservation",
+        "reservation_id",
+    ),
+    "FLEET_MAINTENANCE": (
+        "app.models.fleet.maintenance",
+        "MaintenanceRecord",
+        "maintenance_id",
+    ),
+    "FLEET_INCIDENT": (
+        "app.models.fleet.vehicle_incident",
+        "VehicleIncident",
+        "incident_id",
+    ),
+    # Payroll
+    "PAYROLL_RUN": (
+        "app.models.people.payroll.payroll_entry",
+        "PayrollEntry",
+        "entry_id",
+    ),
+    "PAYROLL_ENTRY": (
+        "app.models.people.payroll.payroll_entry",
+        "PayrollEntry",
+        "entry_id",
+    ),
+    "SALARY_SLIP": (
+        "app.models.people.payroll.salary_slip",
+        "SalarySlip",
+        "slip_id",
+    ),
+}
+
+# Cache resolved model classes to avoid repeated imports
+_resolved_models: Dict[str, Optional[Type[Any]]] = {}
+
+
+def _get_model_class(entity_type: str) -> Optional[Type[Any]]:
+    """Resolve entity type to its SQLAlchemy model class (cached)."""
+    if entity_type in _resolved_models:
+        return _resolved_models[entity_type]
+
+    entry = _ENTITY_REGISTRY.get(entity_type)
+    if not entry:
+        _resolved_models[entity_type] = None
+        return None
+
+    module_path, class_name, _ = entry
+    try:
+        import importlib
+
+        module = importlib.import_module(module_path)
+        model_cls = getattr(module, class_name, None)
+        _resolved_models[entity_type] = model_cls
+        return model_cls
+    except (ImportError, AttributeError) as e:
+        logger.warning(
+            "Cannot resolve entity type %s (%s.%s): %s",
+            entity_type,
+            module_path,
+            class_name,
+            e,
+        )
+        _resolved_models[entity_type] = None
+        return None
+
+
+def get_pk_field(entity_type: str) -> Optional[str]:
+    """Return the primary key field name for an entity type."""
+    entry = _ENTITY_REGISTRY.get(entity_type)
+    return entry[2] if entry else None
+
+
+def resolve_entity(
+    db: Session,
+    entity_type: str,
+    entity_id: UUID,
+) -> Optional[Any]:
+    """Load an entity by type and ID.
+
+    Returns:
+        The SQLAlchemy model instance, or None if not found.
+    """
+    model_cls = _get_model_class(entity_type)
+    if model_cls is None:
+        return None
+
+    return db.get(model_cls, entity_id)
+
+
+def get_registered_types() -> list[str]:
+    """Return all registered entity type strings."""
+    return sorted(_ENTITY_REGISTRY.keys())

@@ -28,6 +28,7 @@ router = APIRouter(prefix="/automation", tags=["automation-web"])
 # Automation Dashboard
 # =============================================================================
 
+
 @router.get("", response_class=HTMLResponse)
 def automation_dashboard(
     request: Request,
@@ -51,23 +52,32 @@ def automation_dashboard(
         db, str(auth.organization_id)
     )
 
-    context.update({
-        "recurring_count": recurring_ctx["total"],
-        "active_recurring": len([t for t in recurring_ctx["templates"] if t["is_active"]]),
-        "workflow_count": workflows_ctx["total"],
-        "active_workflows": len([r for r in workflows_ctx["rules"] if r["is_active"]]),
-        "custom_fields_count": fields_ctx["total"],
-        "templates_count": templates_ctx["total"],
-        "recent_recurring": recurring_ctx["templates"][:5],
-        "recent_workflows": workflows_ctx["rules"][:5],
-    })
+    context.update(
+        {
+            "recurring_count": recurring_ctx["total"],
+            "active_recurring": len(
+                [t for t in recurring_ctx["templates"] if t["is_active"]]
+            ),
+            "workflow_count": workflows_ctx["total"],
+            "active_workflows": len(
+                [r for r in workflows_ctx["rules"] if r["is_active"]]
+            ),
+            "custom_fields_count": fields_ctx["total"],
+            "templates_count": templates_ctx["total"],
+            "recent_recurring": recurring_ctx["templates"][:5],
+            "recent_workflows": workflows_ctx["rules"][:5],
+        }
+    )
 
-    return templates.TemplateResponse(request, "finance/automation/dashboard.html", context)
+    return templates.TemplateResponse(
+        request, "finance/automation/dashboard.html", context
+    )
 
 
 # =============================================================================
 # Recurring Transactions
 # =============================================================================
+
 
 @router.get("/recurring", response_class=HTMLResponse)
 def list_recurring(
@@ -89,7 +99,9 @@ def list_recurring(
             page=page,
         )
     )
-    return templates.TemplateResponse(request, "finance/automation/recurring_list.html", context)
+    return templates.TemplateResponse(
+        request, "finance/automation/recurring_list.html", context
+    )
 
 
 @router.get("/recurring/new", response_class=HTMLResponse)
@@ -101,8 +113,12 @@ def new_recurring_form(
     """New recurring template form page."""
     context = base_context(request, auth, "New Recurring Template", "automation")
     context["form_data"] = {}
-    context.update(automation_web_service.recurring_form_context(db, str(auth.organization_id)))
-    return templates.TemplateResponse(request, "finance/automation/recurring_form.html", context)
+    context.update(
+        automation_web_service.recurring_form_context(db, str(auth.organization_id))
+    )
+    return templates.TemplateResponse(
+        request, "finance/automation/recurring_form.html", context
+    )
 
 
 @router.get("/recurring/{template_id}", response_class=HTMLResponse)
@@ -121,7 +137,9 @@ def view_recurring(
             template_id,
         )
     )
-    return templates.TemplateResponse(request, "finance/automation/recurring_detail.html", context)
+    return templates.TemplateResponse(
+        request, "finance/automation/recurring_detail.html", context
+    )
 
 
 @router.get("/recurring/{template_id}/edit", response_class=HTMLResponse)
@@ -138,7 +156,9 @@ def edit_recurring_form(
             db, str(auth.organization_id), template_id
         )
     )
-    return templates.TemplateResponse(request, "finance/automation/recurring_form.html", context)
+    return templates.TemplateResponse(
+        request, "finance/automation/recurring_form.html", context
+    )
 
 
 @router.post("/recurring/new")
@@ -184,10 +204,14 @@ async def create_recurring(
             )
 
         context = base_context(request, auth, "New Recurring Template", "automation")
-        context.update(automation_web_service.recurring_form_context(db, str(auth.organization_id)))
+        context.update(
+            automation_web_service.recurring_form_context(db, str(auth.organization_id))
+        )
         context["error"] = str(e)
         context["form_data"] = data
-        return templates.TemplateResponse(request, "finance/automation/recurring_form.html", context)
+        return templates.TemplateResponse(
+            request, "finance/automation/recurring_form.html", context
+        )
 
 
 @router.post("/recurring/{template_id}/edit")
@@ -244,10 +268,16 @@ async def update_recurring(
             )
 
         context = base_context(request, auth, "Edit Recurring Template", "automation")
-        context.update(automation_web_service.recurring_form_context(db, str(auth.organization_id), template_id))
+        context.update(
+            automation_web_service.recurring_form_context(
+                db, str(auth.organization_id), template_id
+            )
+        )
         context["error"] = str(e)
         context["form_data"] = data
-        return templates.TemplateResponse(request, "finance/automation/recurring_form.html", context)
+        return templates.TemplateResponse(
+            request, "finance/automation/recurring_form.html", context
+        )
 
 
 @router.post("/recurring/{template_id}/pause")
@@ -360,6 +390,7 @@ def generate_now(
 # Workflow Rules
 # =============================================================================
 
+
 @router.get("/workflows", response_class=HTMLResponse)
 def list_workflows(
     request: Request,
@@ -388,7 +419,9 @@ def list_workflows(
             is_active=active_filter,
         )
     )
-    return templates.TemplateResponse(request, "finance/automation/workflow_list.html", context)
+    return templates.TemplateResponse(
+        request, "finance/automation/workflow_list.html", context
+    )
 
 
 @router.get("/workflows/new", response_class=HTMLResponse)
@@ -400,8 +433,30 @@ def new_workflow_form(
     """New workflow rule form page."""
     context = base_context(request, auth, "New Workflow Rule", "automation")
     context["form_data"] = {}
-    context.update(automation_web_service.workflow_form_context(db, str(auth.organization_id)))
-    return templates.TemplateResponse(request, "finance/automation/workflow_form.html", context)
+    context.update(
+        automation_web_service.workflow_form_context(db, str(auth.organization_id))
+    )
+    return templates.TemplateResponse(
+        request, "finance/automation/workflow_form.html", context
+    )
+
+
+@router.get("/workflows/monitoring", response_class=HTMLResponse)
+def workflow_monitoring(
+    request: Request,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Workflow execution monitoring dashboard."""
+    context = base_context(request, auth, "Workflow Monitoring", "automation")
+    context.update(
+        automation_web_service.workflow_monitoring_context(
+            db, str(auth.organization_id)
+        )
+    )
+    return templates.TemplateResponse(
+        request, "finance/automation/workflow_monitoring.html", context
+    )
 
 
 @router.get("/workflows/{rule_id}", response_class=HTMLResponse)
@@ -420,7 +475,9 @@ def view_workflow(
             rule_id,
         )
     )
-    return templates.TemplateResponse(request, "finance/automation/workflow_detail.html", context)
+    return templates.TemplateResponse(
+        request, "finance/automation/workflow_detail.html", context
+    )
 
 
 @router.get("/workflows/{rule_id}/edit", response_class=HTMLResponse)
@@ -437,7 +494,9 @@ def edit_workflow_form(
             db, str(auth.organization_id), rule_id
         )
     )
-    return templates.TemplateResponse(request, "finance/automation/workflow_form.html", context)
+    return templates.TemplateResponse(
+        request, "finance/automation/workflow_form.html", context
+    )
 
 
 @router.post("/workflows/new")
@@ -483,10 +542,14 @@ async def create_workflow(
             )
 
         context = base_context(request, auth, "New Workflow Rule", "automation")
-        context.update(automation_web_service.workflow_form_context(db, str(auth.organization_id)))
+        context.update(
+            automation_web_service.workflow_form_context(db, str(auth.organization_id))
+        )
         context["error"] = str(e)
         context["form_data"] = data
-        return templates.TemplateResponse(request, "finance/automation/workflow_form.html", context)
+        return templates.TemplateResponse(
+            request, "finance/automation/workflow_form.html", context
+        )
 
 
 @router.post("/workflows/{rule_id}/edit")
@@ -506,6 +569,13 @@ async def update_workflow(
         data = dict(form_data)
 
     try:
+        cooldown = None
+        if data.get("cooldown_seconds"):
+            try:
+                cooldown = int(data["cooldown_seconds"])
+            except (ValueError, TypeError):
+                pass
+
         updates = {
             "rule_name": data.get("rule_name"),
             "description": data.get("description"),
@@ -515,6 +585,7 @@ async def update_workflow(
             "stop_on_match": data.get("stop_on_match") == "on",
             "execute_async": data.get("execute_async") != "off",
             "is_active": data.get("is_active") != "off",
+            "cooldown_seconds": cooldown,
         }
         updates = {k: v for k, v in updates.items() if v is not None}
 
@@ -543,10 +614,16 @@ async def update_workflow(
             )
 
         context = base_context(request, auth, "Edit Workflow Rule", "automation")
-        context.update(automation_web_service.workflow_form_context(db, str(auth.organization_id), rule_id))
+        context.update(
+            automation_web_service.workflow_form_context(
+                db, str(auth.organization_id), rule_id
+            )
+        )
         context["error"] = str(e)
         context["form_data"] = data
-        return templates.TemplateResponse(request, "finance/automation/workflow_form.html", context)
+        return templates.TemplateResponse(
+            request, "finance/automation/workflow_form.html", context
+        )
 
 
 @router.post("/workflows/{rule_id}/toggle")
@@ -586,6 +663,51 @@ def toggle_workflow(
         )
 
 
+@router.get("/workflows/{rule_id}/versions", response_class=HTMLResponse)
+def workflow_versions(
+    request: Request,
+    rule_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Workflow rule version history page."""
+    context = base_context(request, auth, "Version History", "automation")
+    context.update(
+        automation_web_service.workflow_versions_context(
+            db, str(auth.organization_id), rule_id
+        )
+    )
+    return templates.TemplateResponse(
+        request, "finance/automation/workflow_versions.html", context
+    )
+
+
+@router.post("/workflows/{rule_id}/test")
+async def test_workflow(
+    request: Request,
+    rule_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Dry-run test a workflow rule against sample data."""
+    content_type = request.headers.get("content-type", "")
+
+    if "application/json" in content_type:
+        data = await request.json()
+    else:
+        form_data = await request.form()
+        data = dict(form_data)
+
+    try:
+        result = workflow_service.dry_run(db, UUID(rule_id), data)
+        return JSONResponse(content=result)
+    except Exception as e:
+        return JSONResponse(
+            status_code=400,
+            content={"detail": str(e)},
+        )
+
+
 @router.post("/workflows/{rule_id}/delete")
 def delete_workflow(
     request: Request,
@@ -613,6 +735,7 @@ def delete_workflow(
 # Custom Fields
 # =============================================================================
 
+
 @router.get("/fields", response_class=HTMLResponse)
 def list_custom_fields(
     request: Request,
@@ -639,7 +762,9 @@ def list_custom_fields(
             is_active=active_filter,
         )
     )
-    return templates.TemplateResponse(request, "finance/automation/fields_list.html", context)
+    return templates.TemplateResponse(
+        request, "finance/automation/fields_list.html", context
+    )
 
 
 @router.get("/fields/new", response_class=HTMLResponse)
@@ -651,8 +776,12 @@ def new_custom_field_form(
     """New custom field form page."""
     context = base_context(request, auth, "New Custom Field", "automation")
     context["form_data"] = {}
-    context.update(automation_web_service.custom_field_form_context(db, str(auth.organization_id)))
-    return templates.TemplateResponse(request, "finance/automation/field_form.html", context)
+    context.update(
+        automation_web_service.custom_field_form_context(db, str(auth.organization_id))
+    )
+    return templates.TemplateResponse(
+        request, "finance/automation/field_form.html", context
+    )
 
 
 @router.get("/fields/{field_id}", response_class=HTMLResponse)
@@ -671,7 +800,9 @@ def view_custom_field(
             field_id,
         )
     )
-    return templates.TemplateResponse(request, "finance/automation/field_detail.html", context)
+    return templates.TemplateResponse(
+        request, "finance/automation/field_detail.html", context
+    )
 
 
 @router.get("/fields/{field_id}/edit", response_class=HTMLResponse)
@@ -688,7 +819,9 @@ def edit_custom_field_form(
             db, str(auth.organization_id), field_id
         )
     )
-    return templates.TemplateResponse(request, "finance/automation/field_form.html", context)
+    return templates.TemplateResponse(
+        request, "finance/automation/field_form.html", context
+    )
 
 
 @router.post("/fields/new")
@@ -734,10 +867,16 @@ async def create_custom_field(
             )
 
         context = base_context(request, auth, "New Custom Field", "automation")
-        context.update(automation_web_service.custom_field_form_context(db, str(auth.organization_id)))
+        context.update(
+            automation_web_service.custom_field_form_context(
+                db, str(auth.organization_id)
+            )
+        )
         context["error"] = str(e)
         context["form_data"] = data
-        return templates.TemplateResponse(request, "finance/automation/field_form.html", context)
+        return templates.TemplateResponse(
+            request, "finance/automation/field_form.html", context
+        )
 
 
 @router.post("/fields/{field_id}/edit")
@@ -764,7 +903,9 @@ async def update_custom_field(
             "default_value": data.get("default_value"),
             "placeholder": data.get("placeholder"),
             "help_text": data.get("help_text"),
-            "display_order": int(data["display_order"]) if data.get("display_order") else None,
+            "display_order": int(data["display_order"])
+            if data.get("display_order")
+            else None,
             "section_name": data.get("section_name"),
             "show_in_list": data.get("show_in_list") == "on",
             "show_in_form": data.get("show_in_form") != "off",
@@ -798,10 +939,16 @@ async def update_custom_field(
             )
 
         context = base_context(request, auth, "Edit Custom Field", "automation")
-        context.update(automation_web_service.custom_field_form_context(db, str(auth.organization_id), field_id))
+        context.update(
+            automation_web_service.custom_field_form_context(
+                db, str(auth.organization_id), field_id
+            )
+        )
         context["error"] = str(e)
         context["form_data"] = data
-        return templates.TemplateResponse(request, "finance/automation/field_form.html", context)
+        return templates.TemplateResponse(
+            request, "finance/automation/field_form.html", context
+        )
 
 
 @router.post("/fields/{field_id}/delete")
@@ -831,6 +978,7 @@ def delete_custom_field(
 # Document Templates
 # =============================================================================
 
+
 @router.get("/templates", response_class=HTMLResponse)
 def list_templates(
     request: Request,
@@ -857,7 +1005,9 @@ def list_templates(
             is_active=active_filter,
         )
     )
-    return templates.TemplateResponse(request, "finance/automation/templates_list.html", context)
+    return templates.TemplateResponse(
+        request, "finance/automation/templates_list.html", context
+    )
 
 
 @router.get("/templates/new", response_class=HTMLResponse)
@@ -869,8 +1019,12 @@ def new_template_form(
     """New document template form page."""
     context = base_context(request, auth, "New Template", "automation")
     context["form_data"] = {}
-    context.update(automation_web_service.template_form_context(db, str(auth.organization_id)))
-    return templates.TemplateResponse(request, "finance/automation/template_form.html", context)
+    context.update(
+        automation_web_service.template_form_context(db, str(auth.organization_id))
+    )
+    return templates.TemplateResponse(
+        request, "finance/automation/template_form.html", context
+    )
 
 
 @router.get("/templates/{template_id}", response_class=HTMLResponse)
@@ -889,7 +1043,9 @@ def view_template(
             template_id,
         )
     )
-    return templates.TemplateResponse(request, "finance/automation/template_detail.html", context)
+    return templates.TemplateResponse(
+        request, "finance/automation/template_detail.html", context
+    )
 
 
 @router.get("/templates/{template_id}/edit", response_class=HTMLResponse)
@@ -906,7 +1062,9 @@ def edit_template_form(
             db, str(auth.organization_id), template_id
         )
     )
-    return templates.TemplateResponse(request, "finance/automation/template_form.html", context)
+    return templates.TemplateResponse(
+        request, "finance/automation/template_form.html", context
+    )
 
 
 @router.post("/templates/new")
@@ -950,10 +1108,14 @@ async def create_template(
             )
 
         context = base_context(request, auth, "New Template", "automation")
-        context.update(automation_web_service.template_form_context(db, str(auth.organization_id)))
+        context.update(
+            automation_web_service.template_form_context(db, str(auth.organization_id))
+        )
         context["error"] = str(e)
         context["form_data"] = data
-        return templates.TemplateResponse(request, "finance/automation/template_form.html", context)
+        return templates.TemplateResponse(
+            request, "finance/automation/template_form.html", context
+        )
 
 
 @router.post("/templates/{template_id}/edit")
@@ -998,10 +1160,16 @@ async def update_template(
             )
 
         context = base_context(request, auth, "Edit Template", "automation")
-        context.update(automation_web_service.template_form_context(db, str(auth.organization_id), template_id))
+        context.update(
+            automation_web_service.template_form_context(
+                db, str(auth.organization_id), template_id
+            )
+        )
         context["error"] = str(e)
         context["form_data"] = data
-        return templates.TemplateResponse(request, "finance/automation/template_form.html", context)
+        return templates.TemplateResponse(
+            request, "finance/automation/template_form.html", context
+        )
 
 
 @router.post("/templates/{template_id}/delete")

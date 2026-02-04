@@ -601,6 +601,22 @@ class ARInvoiceService(ListResponseMixin):
         invoice.submitted_by_user_id = user_id
         invoice.submitted_at = datetime.now(timezone.utc)
 
+        # Fire workflow automation event
+        try:
+            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            fire_workflow_event(
+                db=db,
+                organization_id=org_id,
+                entity_type="INVOICE",
+                entity_id=inv_id,
+                event="ON_STATUS_CHANGE",
+                old_values={"status": "DRAFT"},
+                new_values={"status": "SUBMITTED"},
+                user_id=user_id,
+            )
+        except Exception:
+            pass
+
         db.commit()
         db.refresh(invoice)
 
@@ -638,6 +654,22 @@ class ARInvoiceService(ListResponseMixin):
         invoice.status = InvoiceStatus.APPROVED
         invoice.approved_by_user_id = user_id
         invoice.approved_at = datetime.now(timezone.utc)
+
+        # Fire workflow automation event
+        try:
+            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            fire_workflow_event(
+                db=db,
+                organization_id=org_id,
+                entity_type="INVOICE",
+                entity_id=inv_id,
+                event="ON_APPROVAL",
+                old_values={"status": "SUBMITTED"},
+                new_values={"status": "APPROVED"},
+                user_id=user_id,
+            )
+        except Exception:
+            pass
 
         db.commit()
         db.refresh(invoice)
@@ -688,6 +720,22 @@ class ARInvoiceService(ListResponseMixin):
         invoice.journal_entry_id = result.journal_entry_id
         invoice.posting_batch_id = result.posting_batch_id
         invoice.posting_status = "POSTED"
+
+        # Fire workflow automation event
+        try:
+            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            fire_workflow_event(
+                db=db,
+                organization_id=org_id,
+                entity_type="INVOICE",
+                entity_id=inv_id,
+                event="ON_STATUS_CHANGE",
+                old_values={"status": "APPROVED"},
+                new_values={"status": "POSTED"},
+                user_id=user_id,
+            )
+        except Exception:
+            pass
 
         db.commit()
         db.refresh(invoice)
@@ -773,11 +821,28 @@ class ARInvoiceService(ListResponseMixin):
                 detail=f"Cannot cancel invoice with status '{invoice.status.value}'. Only SUBMITTED or APPROVED invoices can be cancelled.",
             )
 
+        old_status = invoice.status.value
         invoice.status = InvoiceStatus.DRAFT
         invoice.posting_status = "PENDING"
         # Clear approval fields
         invoice.approved_by_user_id = None
         invoice.approved_at = None
+
+        # Fire workflow automation event
+        try:
+            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            fire_workflow_event(
+                db=db,
+                organization_id=org_id,
+                entity_type="INVOICE",
+                entity_id=inv_id,
+                event="ON_STATUS_CHANGE",
+                old_values={"status": old_status},
+                new_values={"status": "DRAFT"},
+                user_id=coerce_uuid(cancelled_by_user_id),
+            )
+        except Exception:
+            pass
 
         db.commit()
         db.refresh(invoice)

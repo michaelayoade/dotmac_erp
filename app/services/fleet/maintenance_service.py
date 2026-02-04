@@ -233,6 +233,17 @@ class MaintenanceService:
         if vehicle and vehicle.status == VehicleStatus.MAINTENANCE:
             vehicle.status = VehicleStatus.ACTIVE
 
+        try:
+            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            fire_workflow_event(
+                db=self.db, organization_id=self.organization_id,
+                entity_type="FLEET_MAINTENANCE", entity_id=record.maintenance_id,
+                event="ON_STATUS_CHANGE",
+                old_values={}, new_values={"status": "COMPLETED"},
+            )
+        except Exception:
+            pass
+
         logger.info("Completed maintenance %s", maintenance_id)
         return record
 
@@ -255,6 +266,17 @@ class MaintenanceService:
         vehicle = self.db.get(Vehicle, record.vehicle_id)
         if vehicle and vehicle.status == VehicleStatus.MAINTENANCE:
             vehicle.status = VehicleStatus.ACTIVE
+
+        try:
+            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            fire_workflow_event(
+                db=self.db, organization_id=self.organization_id,
+                entity_type="FLEET_MAINTENANCE", entity_id=record.maintenance_id,
+                event="ON_STATUS_CHANGE",
+                old_values={}, new_values={"status": "CANCELLED"},
+            )
+        except Exception:
+            pass
 
         logger.info("Cancelled maintenance %s: %s", maintenance_id, reason)
         return record

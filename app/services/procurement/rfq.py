@@ -5,7 +5,7 @@ Business logic for Request for Quotation management.
 """
 
 import logging
-from typing import Any, List, Optional, Tuple
+from typing import List, Optional, Tuple
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from app.models.procurement.enums import RFQStatus
 from app.models.procurement.rfq import RequestForQuotation
 from app.models.procurement.rfq_invitation import RFQInvitation
+from app.schemas.procurement.rfq import RFQCreate, RFQUpdate
 from app.services.common import NotFoundError, ValidationError
 
 logger = logging.getLogger(__name__)
@@ -65,7 +66,7 @@ class RFQService:
     def create(
         self,
         organization_id: UUID,
-        data: Any,
+        data: RFQCreate,
         created_by_user_id: UUID,
     ) -> RequestForQuotation:
         """Create a new RFQ."""
@@ -93,7 +94,7 @@ class RFQService:
         self,
         organization_id: UUID,
         rfq_id: UUID,
-        data: Any,
+        data: RFQUpdate,
     ) -> RequestForQuotation:
         """Update an RFQ."""
         rfq = self.get_by_id(organization_id, rfq_id)

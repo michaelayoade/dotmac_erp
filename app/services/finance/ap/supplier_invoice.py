@@ -601,6 +601,17 @@ class SupplierInvoiceService(ListResponseMixin):
         invoice.submitted_by_user_id = user_id
         invoice.submitted_at = datetime.now(timezone.utc)
 
+        try:
+            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            fire_workflow_event(
+                db=db, organization_id=org_id, entity_type="BILL",
+                entity_id=inv_id, event="ON_STATUS_CHANGE",
+                old_values={"status": "DRAFT"},
+                new_values={"status": "SUBMITTED"}, user_id=user_id,
+            )
+        except Exception:
+            pass
+
         db.commit()
         db.refresh(invoice)
 
@@ -656,6 +667,17 @@ class SupplierInvoiceService(ListResponseMixin):
         invoice.status = SupplierInvoiceStatus.APPROVED
         invoice.approved_by_user_id = user_id
         invoice.approved_at = datetime.now(timezone.utc)
+
+        try:
+            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            fire_workflow_event(
+                db=db, organization_id=org_id, entity_type="BILL",
+                entity_id=inv_id, event="ON_APPROVAL",
+                old_values={"status": "SUBMITTED"},
+                new_values={"status": "APPROVED"}, user_id=user_id,
+            )
+        except Exception:
+            pass
 
         db.commit()
         db.refresh(invoice)
@@ -725,6 +747,17 @@ class SupplierInvoiceService(ListResponseMixin):
 
         # Update item costs from invoice lines
         SupplierInvoiceService._update_item_costs_from_invoice(db, org_id, invoice)
+
+        try:
+            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            fire_workflow_event(
+                db=db, organization_id=org_id, entity_type="BILL",
+                entity_id=inv_id, event="ON_STATUS_CHANGE",
+                old_values={"status": "APPROVED"},
+                new_values={"status": "POSTED"}, user_id=user_id,
+            )
+        except Exception:
+            pass
 
         db.commit()
         db.refresh(invoice)

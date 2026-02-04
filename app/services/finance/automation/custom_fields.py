@@ -3,6 +3,7 @@ Custom Fields Service.
 
 Manages custom field definitions and validates field values.
 """
+
 import logging
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
@@ -24,6 +25,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class CustomFieldInput:
     """Input for creating a custom field definition."""
+
     entity_type: CustomFieldEntityType
     field_code: str
     field_name: str
@@ -304,10 +306,12 @@ class CustomFieldsService:
         result: List[Dict[str, Any]] = []
         for section_name, fields in sections.items():
             field_list: List[Dict[str, Any]] = fields
-            result.append({
-                "section_name": section_name,
-                "fields": sorted(field_list, key=lambda f: f["display_order"]),
-            })
+            result.append(
+                {
+                    "section_name": section_name,
+                    "fields": sorted(field_list, key=lambda f: f["display_order"]),
+                }
+            )
 
         return result
 

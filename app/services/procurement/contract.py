@@ -5,7 +5,7 @@ Business logic for procurement contract management.
 """
 
 import logging
-from typing import Any, List, Optional, Tuple
+from typing import List, Optional, Tuple
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.models.procurement.enums import ContractStatus
 from app.models.procurement.procurement_contract import ProcurementContract
+from app.schemas.procurement.contract import ContractCreate, ContractUpdate
 from app.services.common import NotFoundError, ValidationError
 
 logger = logging.getLogger(__name__)
@@ -66,7 +67,7 @@ class ContractService:
     def create(
         self,
         organization_id: UUID,
-        data: Any,
+        data: ContractCreate,
         created_by_user_id: UUID,
     ) -> ProcurementContract:
         """Create a new contract."""
@@ -100,7 +101,7 @@ class ContractService:
         self,
         organization_id: UUID,
         contract_id: UUID,
-        data: Any,
+        data: ContractUpdate,
     ) -> ProcurementContract:
         """Update a contract."""
         contract = self.get_by_id(organization_id, contract_id)

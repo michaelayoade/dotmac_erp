@@ -133,7 +133,9 @@
                     <a href="/inventory/boms" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Bill of Materials</a>
                     <a href="/inventory/price-lists" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Price Lists</a>
                     <a href="/inventory/lots" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Lots & Serials</a>
+                    {% if auth is defined and (auth.is_admin or auth.has_permission('inv:material_requests:read')) %}
                     <a href="/inventory/material-requests" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Material Requests</a>
+                    {% endif %}
                     <a href="/inventory/reports" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Reports</a>
                 </div>
             </div>
@@ -174,6 +176,7 @@
                 <span x-show="!sidebarCollapsed" class="truncate" x-cloak>Support Tickets</span>
             </a>
 
+            {% if auth is defined and (auth.is_admin or auth.has_permission('fleet:access')) %}
             <!-- Section Divider: Fleet -->
             <div class="pt-4 pb-2" x-show="!sidebarCollapsed" x-cloak>
                 <span class="px-3 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Fleet</span>
@@ -202,6 +205,7 @@
                     <a href="/fleet/documents" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Documents</a>
                 </div>
             </div>
+            {% endif %}
 
 
             <!-- Section Divider: Procurement -->

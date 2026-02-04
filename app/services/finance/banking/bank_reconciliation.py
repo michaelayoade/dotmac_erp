@@ -580,6 +580,20 @@ class BankReconciliationService:
 
         reconciliation.status = ReconciliationStatus.pending_review
         db.flush()
+
+        try:
+            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            fire_workflow_event(
+                db=db, organization_id=reconciliation.organization_id,
+                entity_type="RECONCILIATION",
+                entity_id=reconciliation.reconciliation_id,
+                event="ON_STATUS_CHANGE",
+                old_values={"status": "draft"},
+                new_values={"status": "pending_review"},
+            )
+        except Exception:
+            pass
+
         return reconciliation
 
     def approve(
@@ -620,6 +634,21 @@ class BankReconciliationService:
         bank_account.last_reconciled_balance = reconciliation.statement_closing_balance
 
         db.flush()
+
+        try:
+            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            fire_workflow_event(
+                db=db, organization_id=reconciliation.organization_id,
+                entity_type="RECONCILIATION",
+                entity_id=reconciliation.reconciliation_id,
+                event="ON_APPROVAL",
+                old_values={"status": "pending_review"},
+                new_values={"status": "approved"},
+                user_id=approved_by,
+            )
+        except Exception:
+            pass
+
         return reconciliation
 
     def reject(
@@ -643,6 +672,21 @@ class BankReconciliationService:
         reconciliation.review_notes = notes
 
         db.flush()
+
+        try:
+            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            fire_workflow_event(
+                db=db, organization_id=reconciliation.organization_id,
+                entity_type="RECONCILIATION",
+                entity_id=reconciliation.reconciliation_id,
+                event="ON_REJECTION",
+                old_values={"status": "pending_review"},
+                new_values={"status": "rejected"},
+                user_id=rejected_by,
+            )
+        except Exception:
+            pass
+
         return reconciliation
 
     def get_reconciliation_report(

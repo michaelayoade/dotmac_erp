@@ -23,6 +23,7 @@ from app.services.finance.automation.custom_fields import (
     CustomFieldsService,
     custom_fields_service,
 )
+from app.services.finance.automation.event_dispatcher import fire_workflow_event
 
 __all__ = [
     # Recurring
@@ -40,4 +41,6 @@ __all__ = [
     "CustomFieldsService",
     "CustomFieldInput",
     "custom_fields_service",
+    # Event Dispatcher
+    "fire_workflow_event",
 ]

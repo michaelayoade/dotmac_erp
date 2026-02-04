@@ -79,7 +79,10 @@ def create_fund(
     from app.services.finance.ipsas.fund_service import FundService
 
     svc = FundService(db)
-    user_id = UUID(auth["person_id"]) if auth.get("person_id") else organization_id
+    person_id = auth.get("person_id")
+    if not person_id:
+        raise HTTPException(status_code=400, detail="Missing person_id in auth context")
+    user_id = UUID(person_id)
     fund = svc.create(organization_id, payload, user_id)
     db.commit()
     return fund
@@ -174,7 +177,10 @@ def create_appropriation(
     from app.services.finance.ipsas.appropriation_service import AppropriationService
 
     svc = AppropriationService(db)
-    user_id = UUID(auth["person_id"]) if auth.get("person_id") else organization_id
+    person_id = auth.get("person_id")
+    if not person_id:
+        raise HTTPException(status_code=400, detail="Missing person_id in auth context")
+    user_id = UUID(person_id)
     approp = svc.create(organization_id, payload, user_id)
     db.commit()
     return approp
@@ -335,7 +341,10 @@ def create_commitment_from_po(
     from app.services.finance.ipsas.commitment_service import CommitmentService
 
     svc = CommitmentService(db)
-    user_id = UUID(auth["person_id"]) if auth.get("person_id") else organization_id
+    person_id = auth.get("person_id")
+    if not person_id:
+        raise HTTPException(status_code=400, detail="Missing person_id in auth context")
+    user_id = UUID(person_id)
     commitment = svc.create_commitment_from_po(
         organization_id=organization_id,
         po_id=po_id,
@@ -447,7 +456,10 @@ def create_virement(
     from app.services.finance.ipsas.virement_service import VirementService
 
     svc = VirementService(db)
-    user_id = UUID(auth["person_id"]) if auth.get("person_id") else organization_id
+    person_id = auth.get("person_id")
+    if not person_id:
+        raise HTTPException(status_code=400, detail="Missing person_id in auth context")
+    user_id = UUID(person_id)
     virement = svc.create(organization_id, payload, user_id, virement_number)
     db.commit()
     return virement

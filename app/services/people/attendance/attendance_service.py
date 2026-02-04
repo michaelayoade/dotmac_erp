@@ -211,6 +211,10 @@ class AttendanceService:
         except Exception:
             return timezone.utc
 
+    def get_org_tzinfo(self, org_id: UUID) -> dt_tzinfo:
+        """Public accessor for org timezone info."""
+        return self._org_tzinfo(org_id)
+
     def _now_in_org_tz(self, org_id: UUID) -> datetime:
         return datetime.now(tz=self._org_tzinfo(org_id))
 

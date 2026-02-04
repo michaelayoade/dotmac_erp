@@ -4,7 +4,7 @@ Self-service web view service for employees and managers.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 import shutil
@@ -611,6 +611,14 @@ class SelfServiceWebService:
         svc = AttendanceService(db)
         today = svc.get_org_today(org_id)
         today_record = svc.get_attendance_by_date(org_id, employee_id, today)
+        org_tzinfo = svc.get_org_tzinfo(org_id)
+
+        def _format_time(value: Optional[datetime]) -> str:
+            if not value:
+                return "-"
+            if value.tzinfo is None:
+                value = value.replace(tzinfo=timezone.utc)
+            return value.astimezone(org_tzinfo).strftime("%H:%M")
 
         if month:
             try:
@@ -639,8 +647,23 @@ class SelfServiceWebService:
         context.update(
             {
                 "today_record": today_record,
+                "today_check_in_display": _format_time(
+                    today_record.check_in if today_record else None
+                ),
+                "today_check_out_display": _format_time(
+                    today_record.check_out if today_record else None
+                ),
                 "summary": summary,
-                "recent_records": recent.items,
+                "recent_records": [
+                    {
+                        "attendance_date": rec.attendance_date,
+                        "status": rec.status,
+                        "check_in_display": _format_time(rec.check_in),
+                        "check_out_display": _format_time(rec.check_out),
+                        "working_hours": rec.working_hours,
+                    }
+                    for rec in recent.items
+                ],
                 "month": month,
             }
         )

@@ -34,6 +34,20 @@
             {% endif %}
         </button>
     </form>
+    <a href="/automation/workflows/{{ rule.rule_id }}/versions"
+       class="inline-flex items-center gap-2 rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300">
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        History
+    </a>
+    <button type="button" onclick="testRule()" id="test-rule-btn"
+       class="inline-flex items-center gap-2 rounded-lg bg-indigo-50 px-4 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-900/20 dark:text-indigo-400">
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
+        </svg>
+        Test
+    </button>
     <a href="/automation/workflows/{{ rule.rule_id }}/edit"
        class="inline-flex items-center gap-2 rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300">
         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -180,6 +194,20 @@
                             {% endif %}
                         </dd>
                     </div>
+                    {% if rule.cooldown_seconds %}
+                    <div class="flex items-center justify-between">
+                        <dt class="text-sm text-slate-500 dark:text-slate-400">Cooldown</dt>
+                        <dd class="text-slate-900 dark:text-white">{{ rule.cooldown_seconds }}s</dd>
+                    </div>
+                    {% endif %}
+                    {% if rule.schedule_config %}
+                    <div class="flex items-center justify-between">
+                        <dt class="text-sm text-slate-500 dark:text-slate-400">Schedule</dt>
+                        <dd class="text-slate-900 dark:text-white">
+                            Every {{ rule.schedule_config.get('interval_minutes', '?') }} min
+                        </dd>
+                    </div>
+                    {% endif %}
                 </dl>
             </div>
 
@@ -195,5 +223,60 @@
             </div>
         </div>
     </div>
+
+    <!-- Dry-Run Test Result -->
+    <div id="test-result" class="hidden rounded-xl border border-indigo-200 bg-indigo-50 p-6 dark:border-indigo-800 dark:bg-indigo-900/20">
+        <h3 class="font-semibold text-indigo-700 dark:text-indigo-400 mb-3">Dry-Run Test Result</h3>
+        <div id="test-result-content" class="text-sm text-slate-700 dark:text-slate-300"></div>
+    </div>
 </div>
+
+<script>
+function testRule() {
+    const sampleData = {
+        entity_id: "00000000-0000-0000-0000-000000000000",
+        old_values: {},
+        new_values: {},
+    };
+
+    fetch("/automation/workflows/{{ rule.rule_id }}/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(sampleData),
+    })
+    .then(r => r.json())
+    .then(data => {
+        const el = document.getElementById("test-result");
+        const content = document.getElementById("test-result-content");
+        el.classList.remove("hidden");
+
+        let html = '<dl class="grid gap-2 sm:grid-cols-2">';
+        html += '<div><dt class="text-xs text-slate-500">Conditions Match</dt><dd class="font-medium ' +
+            (data.conditions_match ? 'text-emerald-600">Yes' : 'text-rose-600">No') + '</dd></div>';
+        html += '<div><dt class="text-xs text-slate-500">Would Fire</dt><dd class="font-medium ' +
+            (data.would_fire ? 'text-emerald-600">Yes' : 'text-slate-600">No') + '</dd></div>';
+        html += '<div><dt class="text-xs text-slate-500">Throttled</dt><dd class="font-medium ' +
+            (data.throttled ? 'text-amber-600">Yes' : 'text-slate-600">No') + '</dd></div>';
+        html += '<div><dt class="text-xs text-slate-500">Action Type</dt><dd class="font-medium text-slate-900 dark:text-white">' +
+            (data.action_type || '-') + '</dd></div>';
+        html += '</dl>';
+
+        if (data.matched_conditions && data.matched_conditions.length > 0) {
+            html += '<div class="mt-3 pt-3 border-t border-indigo-200 dark:border-indigo-700">';
+            html += '<dt class="text-xs text-slate-500 mb-1">Matched Conditions</dt>';
+            html += '<ul class="list-disc list-inside text-xs text-slate-600 dark:text-slate-400">';
+            data.matched_conditions.forEach(function(c) { html += '<li>' + c + '</li>'; });
+            html += '</ul></div>';
+        }
+
+        content.innerHTML = html;
+    })
+    .catch(function(err) {
+        const el = document.getElementById("test-result");
+        const content = document.getElementById("test-result-content");
+        el.classList.remove("hidden");
+        content.innerHTML = '<p class="text-rose-600">Test failed: ' + err.message + '</p>';
+    });
+}
+</script>
 {% endblock %}

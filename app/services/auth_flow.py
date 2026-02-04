@@ -416,6 +416,11 @@ def _load_rbac_claims(db: Session, person_id: str):
         "settings:access", "settings:dashboard",
         "expense:access", "expense:dashboard",
         "self:access",
+        "fleet:access",
+        "inv:material_requests:read",
+        "inv:material_requests:create",
+        "inv:material_requests:submit",
+        "inv:material_requests:delete",
     }
     permissions = (
         db.query(Permission)

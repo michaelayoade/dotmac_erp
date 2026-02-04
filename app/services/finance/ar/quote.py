@@ -344,11 +344,25 @@ class QuoteService:
         if quote.status not in [QuoteStatus.SENT, QuoteStatus.VIEWED]:
             raise ValueError(f"Cannot reject quote in {quote.status.value} status")
 
+        old_status = quote.status.value
         quote.status = QuoteStatus.REJECTED
         quote.rejected_at = datetime.utcnow()
         quote.rejection_reason = reason
 
         db.flush()
+
+        try:
+            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            fire_workflow_event(
+                db=db, organization_id=quote.organization_id,
+                entity_type="QUOTE", entity_id=quote.quote_id,
+                event="ON_REJECTION",
+                old_values={"status": old_status},
+                new_values={"status": "REJECTED"},
+            )
+        except Exception:
+            pass
+
         return quote
 
     @staticmethod

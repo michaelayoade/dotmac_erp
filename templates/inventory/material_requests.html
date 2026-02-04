@@ -13,18 +13,22 @@
 {% endblock %}
 
 {% block header_actions %}
+{% if auth is defined and (auth.is_admin or auth.has_permission('inv:material_requests:read')) %}
 <a href="/inventory/material-requests/reports/summary" class="btn btn-secondary">
     <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
     </svg>
     Reports
 </a>
+{% endif %}
+{% if auth is defined and (auth.is_admin or auth.has_permission('inv:material_requests:create')) %}
 <a href="/inventory/material-requests/new" class="btn btn-primary">
     <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
     </svg>
     New Request
 </a>
+{% endif %}
 {% endblock %}
 
 {% block content %}

@@ -39,6 +39,9 @@ from app.models.finance.automation.generated_document import (
     GeneratedDocument,
     OutputFormat,
 )
+from app.models.finance.automation.workflow_rule_version import (
+    WorkflowRuleVersion,
+)
 
 __all__ = [
     # Recurring
@@ -66,4 +69,6 @@ __all__ = [
     "GeneratedDocument",
     "DocumentStatus",
     "OutputFormat",
+    # Rule Versioning
+    "WorkflowRuleVersion",
 ]

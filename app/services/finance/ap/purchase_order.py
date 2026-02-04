@@ -208,6 +208,19 @@ class PurchaseOrderService(ListResponseMixin):
             )
 
         po.status = POStatus.PENDING_APPROVAL
+
+        try:
+            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            fire_workflow_event(
+                db=db, organization_id=org_id, entity_type="PURCHASE_ORDER",
+                entity_id=po_id, event="ON_STATUS_CHANGE",
+                old_values={"status": "DRAFT"},
+                new_values={"status": "PENDING_APPROVAL"},
+                user_id=coerce_uuid(submitted_by_user_id),
+            )
+        except Exception:
+            pass
+
         db.commit()
         db.refresh(po)
 
@@ -263,6 +276,19 @@ class PurchaseOrderService(ListResponseMixin):
         po.status = POStatus.APPROVED
         po.approved_by_user_id = approved_by_user_id
         po.approved_at = datetime.now(timezone.utc)
+
+        try:
+            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            fire_workflow_event(
+                db=db, organization_id=org_id, entity_type="PURCHASE_ORDER",
+                entity_id=po_id, event="ON_APPROVAL",
+                old_values={"status": "PENDING_APPROVAL"},
+                new_values={"status": "APPROVED"},
+                user_id=coerce_uuid(approved_by_user_id),
+            )
+        except Exception:
+            pass
+
         db.commit()
         db.refresh(po)
 
@@ -313,6 +339,17 @@ class PurchaseOrderService(ListResponseMixin):
             )
 
         po.status = POStatus.CANCELLED
+
+        try:
+            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            fire_workflow_event(
+                db=db, organization_id=org_id, entity_type="PURCHASE_ORDER",
+                entity_id=po_id, event="ON_STATUS_CHANGE",
+                old_values={}, new_values={"status": "CANCELLED"},
+            )
+        except Exception:
+            pass
+
         db.commit()
         db.refresh(po)
 

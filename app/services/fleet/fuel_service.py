@@ -189,8 +189,9 @@ class FuelService:
         month: Optional[int] = None,
     ) -> List[dict]:
         """Get monthly fuel consumption summary."""
+        month_expr = func.date_trunc("month", FuelLogEntry.log_date).label("month")
         stmt = select(
-            func.date_trunc("month", FuelLogEntry.log_date).label("month"),
+            month_expr,
             func.sum(FuelLogEntry.quantity_liters).label("total_liters"),
             func.sum(FuelLogEntry.total_cost).label("total_cost"),
             func.count(FuelLogEntry.fuel_log_id).label("fill_count"),
@@ -205,9 +206,7 @@ class FuelService:
         if month:
             stmt = stmt.where(func.extract("month", FuelLogEntry.log_date) == month)
 
-        stmt = stmt.group_by(func.date_trunc("month", FuelLogEntry.log_date)).order_by(
-            func.date_trunc("month", FuelLogEntry.log_date).desc()
-        )
+        stmt = stmt.group_by(month_expr).order_by(month_expr.desc())
 
         results = self.db.execute(stmt).all()
         return [

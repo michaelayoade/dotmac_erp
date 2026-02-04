@@ -273,6 +273,17 @@ class SupplierPaymentService(ListResponseMixin):
         payment.approved_by_user_id = user_id
         payment.approved_at = datetime.now(timezone.utc)
 
+        try:
+            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            fire_workflow_event(
+                db=db, organization_id=org_id, entity_type="PAYMENT",
+                entity_id=payment.payment_id, event="ON_APPROVAL",
+                old_values={"status": "DRAFT"},
+                new_values={"status": "APPROVED"}, user_id=user_id,
+            )
+        except Exception:
+            pass
+
         db.commit()
         db.refresh(payment)
 
@@ -349,6 +360,17 @@ class SupplierPaymentService(ListResponseMixin):
                     invoice.status = SupplierInvoiceStatus.PAID
                 else:
                     invoice.status = SupplierInvoiceStatus.PARTIALLY_PAID
+
+        try:
+            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            fire_workflow_event(
+                db=db, organization_id=org_id, entity_type="PAYMENT",
+                entity_id=payment.payment_id, event="ON_STATUS_CHANGE",
+                old_values={"status": "APPROVED"},
+                new_values={"status": "SENT"}, user_id=user_id,
+            )
+        except Exception:
+            pass
 
         db.commit()
         db.refresh(payment)

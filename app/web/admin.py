@@ -269,12 +269,13 @@ async def admin_roles_update(
     form = getattr(request.state, "csrf_form", None)
     if form is None:
         form = await request.form()
+
+    permissions = form.getlist("permissions") if hasattr(form, "getlist") else []
     form = _normalize_form(form)
 
     name = (form.get("name") or "").strip()
     description = (form.get("description") or "").strip()
     is_active = form.get("is_active") or ""
-    permissions = form.getlist("permissions") if hasattr(form, "getlist") else []
 
     return admin_web_service.roles_update_response(
         request,

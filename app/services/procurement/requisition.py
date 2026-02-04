@@ -7,7 +7,7 @@ Business logic for purchase requisition management.
 import logging
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Any, List, Optional, Tuple
+from typing import List, Optional, Tuple
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from app.models.procurement.enums import RequisitionStatus
 from app.models.procurement.purchase_requisition import PurchaseRequisition
 from app.models.procurement.purchase_requisition_line import PurchaseRequisitionLine
+from app.schemas.procurement.requisition import RequisitionCreate, RequisitionUpdate
 from app.services.common import NotFoundError, ValidationError
 
 logger = logging.getLogger(__name__)
@@ -69,7 +70,7 @@ class RequisitionService:
     def create(
         self,
         organization_id: UUID,
-        data: Any,
+        data: RequisitionCreate,
         created_by_user_id: UUID,
     ) -> PurchaseRequisition:
         """Create a new requisition."""
@@ -117,7 +118,7 @@ class RequisitionService:
         self,
         organization_id: UUID,
         requisition_id: UUID,
-        data: Any,
+        data: RequisitionUpdate,
     ) -> PurchaseRequisition:
         """Update a requisition."""
         req = self.get_by_id(organization_id, requisition_id)

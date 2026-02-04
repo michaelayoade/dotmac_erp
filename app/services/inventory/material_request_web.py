@@ -8,7 +8,7 @@ from decimal import Decimal
 from typing import Any, Optional, TypedDict
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.finance.core_config.numbering_sequence import SequenceType
@@ -742,6 +742,25 @@ class MaterialRequestWebService:
         request.updated_by_id = user_id
 
         return request
+
+    @staticmethod
+    def delete_request(
+        db: Session,
+        organization_id: UUID,
+        request_id: str,
+    ) -> None:
+        """Delete a draft material request."""
+        mr = db.get(MaterialRequest, coerce_uuid(request_id))
+        if not mr or mr.organization_id != organization_id:
+            raise ValueError("Material request not found")
+
+        if mr.status != MaterialRequestStatus.DRAFT:
+            raise ValueError("Only draft requests can be deleted")
+
+        # Delete items first
+        for item in list(mr.items):
+            db.delete(item)
+        db.delete(mr)
 
     @staticmethod
     def dashboard_context(db: Session, organization_id: str) -> dict:

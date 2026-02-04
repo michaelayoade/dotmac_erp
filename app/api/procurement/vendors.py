@@ -112,7 +112,10 @@ def qualify_vendor(
     db: Session = Depends(get_db),
 ):
     """Qualify a vendor."""
-    user_id = UUID(auth["person_id"]) if auth.get("person_id") else organization_id
+    person_id = auth.get("person_id")
+    if not person_id:
+        raise HTTPException(status_code=400, detail="Missing person_id in auth context")
+    user_id = UUID(person_id)
     service = VendorPrequalificationService(db)
     try:
         preq = service.qualify(organization_id, prequalification_id, user_id)
@@ -133,7 +136,10 @@ def disqualify_vendor(
     db: Session = Depends(get_db),
 ):
     """Disqualify a vendor."""
-    user_id = UUID(auth["person_id"]) if auth.get("person_id") else organization_id
+    person_id = auth.get("person_id")
+    if not person_id:
+        raise HTTPException(status_code=400, detail="Missing person_id in auth context")
+    user_id = UUID(person_id)
     service = VendorPrequalificationService(db)
     try:
         preq = service.disqualify(organization_id, prequalification_id, user_id)
