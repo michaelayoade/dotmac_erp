@@ -433,15 +433,16 @@ class TestEdgeCases:
 
         assert len(result) == 3
 
-    def test_various_currency_codes(self, mock_db, org_id):
+    def test_various_currency_codes(self, mock_db):
         """Test various ISO 4217 currency codes."""
         currencies = ["USD", "EUR", "GBP", "JPY", "NGN", "CAD", "AUD"]
 
         for currency in currencies:
+            unique_org_id = uuid4()
             mock_org = MockOrganization(functional_currency_code=currency)
             mock_db.get.return_value = mock_org
 
-            result = OrgContextService.get_functional_currency(mock_db, org_id)
+            result = OrgContextService.get_functional_currency(mock_db, unique_org_id)
 
             assert result == currency
 

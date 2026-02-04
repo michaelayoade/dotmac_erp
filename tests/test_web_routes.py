@@ -92,10 +92,9 @@ def web_client(db_session):
     mock_ar_invoice_service.list.return_value = ([], 0)
 
     try:
-        with patch('app.web.ifrs.dashboard.dashboard_web_service', mock_dashboard_service), \
-             patch('app.web.ifrs.ap.supplier_service', mock_supplier_service), \
-             patch('app.web.ifrs.ar.customer_service', mock_customer_service), \
-             patch('app.web.ifrs.ar.ar_invoice_service', mock_ar_invoice_service):
+        with patch('app.web.finance.dashboard.dashboard_web_service', mock_dashboard_service), \
+             patch('app.web.finance.ap.ap_web_service', mock_supplier_service), \
+             patch('app.web.finance.ar.ar_web_service', mock_customer_service):
 
             with TestClient(app, raise_server_exceptions=False) as client:
                 yield client

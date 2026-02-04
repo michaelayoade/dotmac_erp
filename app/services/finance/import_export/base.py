@@ -360,8 +360,9 @@ class ValidationRule:
             # Clean phone number before validation
             cleaned = re.sub(r"[\s\-\.\(\)]", "", str_value)
             if not (cleaned.isdigit() or (cleaned.startswith("+") and cleaned[1:].isdigit())):
-                if len(cleaned) < 7 or len(cleaned) > 20:
-                    return False, self.message or f"'{self.field_name}' must be a valid phone number"
+                return False, self.message or f"'{self.field_name}' must be a valid phone number"
+            if len(cleaned) < 7 or len(cleaned) > 20:
+                return False, self.message or f"'{self.field_name}' must be a valid phone number"
 
         elif self.rule_type == "currency":
             upper_value = str_value.upper()
@@ -934,10 +935,10 @@ class BaseImporter(ABC, Generic[T]):
         """Parse a date string to a date object."""
         if value is None or value == "":
             return None
-        if isinstance(value, date):
-            return value
         if isinstance(value, datetime):
             return value.date()
+        if isinstance(value, date):
+            return value
 
         # Try multiple formats
         formats = [format, "%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y", "%d-%m-%Y"]

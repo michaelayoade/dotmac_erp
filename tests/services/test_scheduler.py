@@ -154,9 +154,10 @@ class TestScheduledTasksGet:
         assert "Scheduled task not found" in exc_info.value.detail
 
     def test_get_invalid_uuid_raises(self, mock_db):
-        """Invalid UUID format should raise ValueError."""
-        with pytest.raises(ValueError):
+        """Invalid UUID format should raise HTTPException."""
+        with pytest.raises(HTTPException) as exc_info:
             ScheduledTasks.get(mock_db, "not-a-uuid")
+        assert exc_info.value.status_code == 400
 
 
 # ============ TestScheduledTasksList ============
@@ -449,7 +450,7 @@ class TestRefreshSchedule:
 class TestEnqueueTask:
     """Tests for the enqueue_task function."""
 
-    @patch("app.services.scheduler.celery_app")
+    @patch("app.celery_app.celery_app")
     def test_enqueue_task_success(self, mock_celery):
         """Should enqueue task and return task_id."""
         mock_result = MagicMock()
@@ -462,7 +463,7 @@ class TestEnqueueTask:
         assert "task_id" in result
         mock_celery.send_task.assert_called_once()
 
-    @patch("app.services.scheduler.celery_app")
+    @patch("app.celery_app.celery_app")
     def test_enqueue_task_with_args(self, mock_celery):
         """Should pass args to send_task."""
         mock_result = MagicMock()
@@ -475,7 +476,7 @@ class TestEnqueueTask:
             "app.tasks.test", args=["arg1", "arg2"], kwargs={"key": "value"}
         )
 
-    @patch("app.services.scheduler.celery_app")
+    @patch("app.celery_app.celery_app")
     def test_enqueue_task_none_args_defaults(self, mock_celery):
         """None args/kwargs should default to empty list/dict."""
         mock_result = MagicMock()

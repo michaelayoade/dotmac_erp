@@ -32,7 +32,7 @@ class TestFAWebServiceHelpers:
         from app.services.fixed_assets.web import _format_currency
 
         result = _format_currency(Decimal("1234.56"), "USD")
-        assert result == "$1,234.56"
+        assert result == "USD 1,234.56"
 
     def test_format_currency_other(self):
         """Test currency formatting for other currencies."""

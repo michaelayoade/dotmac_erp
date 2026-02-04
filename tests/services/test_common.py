@@ -41,9 +41,9 @@ class TestCoerceUuid:
         assert isinstance(result, uuid.UUID)
 
     def test_coerce_uuid_invalid_raises_valueerror(self):
-        """An invalid UUID string should raise ValueError."""
+        """An invalid UUID string should raise ValueError when raise_http=False."""
         with pytest.raises(ValueError):
-            coerce_uuid("not-a-uuid")
+            coerce_uuid("not-a-uuid", raise_http=False)
 
     def test_coerce_uuid_with_dashes(self):
         """A UUID string with dashes should be converted correctly."""

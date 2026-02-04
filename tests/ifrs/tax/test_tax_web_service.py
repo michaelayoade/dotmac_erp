@@ -72,7 +72,7 @@ class TestTaxWebServiceHelpers:
         from app.services.finance.tax.web import _format_currency
 
         result = _format_currency(Decimal("1234.56"), "USD")
-        assert result == "$1,234.56"
+        assert result == "USD 1,234.56"
 
     def test_format_currency_other(self):
         """Test currency formatting for other currencies."""
@@ -227,5 +227,5 @@ class TestBoxValueView:
 
         assert result["box_number"] == "1"
         assert result["description"] == "Standard Rate Sales"
-        assert result["amount"] == "$5,000.00"
+        assert result["amount"] == "USD 5,000.00"
         assert result["transaction_count"] == 25

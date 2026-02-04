@@ -111,18 +111,21 @@ class TestCanPostToDate:
     """Tests for can_post_to_date method."""
 
     def test_no_period_found_returns_not_allowed(self, mock_db, org_id):
-        """Test when no fiscal period contains the date."""
+        """Test when no fiscal period contains the date and auto-create fails."""
         mock_db.query.return_value.filter.return_value.first.return_value = None
         posting_date = date(2024, 1, 15)
 
         with patch_period_guard():
-            result = PeriodGuardService.can_post_to_date(
-                mock_db, org_id, posting_date
-            )
+            with patch.object(
+                PeriodGuardService, "_ensure_period_exists", return_value=None
+            ):
+                result = PeriodGuardService.can_post_to_date(
+                    mock_db, org_id, posting_date
+                )
 
         assert result.is_allowed is False
         assert result.fiscal_period_id is None
-        assert "No fiscal period found" in result.message
+        assert "Failed to create fiscal period" in result.message
 
     def test_open_period_allows_posting(self, mock_db, org_id):
         """Test that OPEN period allows posting."""
