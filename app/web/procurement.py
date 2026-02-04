@@ -11,25 +11,17 @@ from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
-from app.db import SessionLocal
 from app.services.common import NotFoundError
 from app.services.procurement.web.procurement_web import ProcurementWebService
 from app.web.deps import (
     WebAuthContext,
     base_context,
+    get_db,
     require_procurement_access,
     templates,
 )
 
 router = APIRouter(prefix="/procurement", tags=["procurement-web"])
-
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 
 # =============================================================================

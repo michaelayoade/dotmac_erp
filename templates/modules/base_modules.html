@@ -70,7 +70,7 @@
 
         <!-- Logo/Brand -->
         <div class="flex h-16 items-center justify-between border-b border-slate-200 px-4 dark:border-slate-800">
-            <a href="/inventory/items" class="flex items-center gap-3" x-show="!sidebarCollapsed" x-cloak>
+            <a href="/" class="flex items-center gap-3" x-show="!sidebarCollapsed" x-cloak>
                 <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 text-white shadow-lg shadow-amber-500/25">
                     <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
@@ -78,7 +78,7 @@
                 </div>
                 <span class="font-display font-semibold text-slate-900 dark:text-white">Modules</span>
             </a>
-            <a href="/inventory/items" x-show="sidebarCollapsed" x-cloak class="mx-auto">
+            <a href="/" x-show="sidebarCollapsed" x-cloak class="mx-auto">
                 <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 text-white shadow-lg shadow-amber-500/25">
                     <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
@@ -97,7 +97,7 @@
         <!-- Navigation -->
         <nav class="flex-1 space-y-1 overflow-y-auto p-3">
             <!-- Dashboard -->
-            <a href="/inventory/items"
+            <a href="/"
                :class="activeModule === 'dashboard' ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
                class="flex items-center gap-3 rounded-lg border px-3 py-2.5 font-medium transition-all">
                 <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">

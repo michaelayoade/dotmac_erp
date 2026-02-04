@@ -7,25 +7,16 @@ Server-rendered HTML routes for fleet management.
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Form, Query, Request
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
-from app.db import SessionLocal
-from app.services.common import NotFoundError, ValidationError
+from app.services.common import NotFoundError
 from app.services.fleet.web.fleet_web import FleetWebService
 from app.templates import templates
-from app.web.deps import WebAuthContext, base_context, require_fleet_access
+from app.web.deps import WebAuthContext, base_context, get_db, require_fleet_access
 
 router = APIRouter(prefix="/fleet", tags=["fleet-web"])
-
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 
 # =============================================================================
