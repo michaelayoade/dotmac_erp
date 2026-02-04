@@ -24,7 +24,7 @@ class TestDepreciationCalculations:
 
     def test_calculate_straight_line(self):
         """Test straight-line depreciation calculation."""
-        from app.services.finance.fa.depreciation import DepreciationService
+        from app.services.fixed_assets.depreciation import DepreciationService
 
         result = DepreciationService.calculate_straight_line(
             cost_basis=Decimal("12000"),
@@ -37,7 +37,7 @@ class TestDepreciationCalculations:
 
     def test_calculate_straight_line_with_residual(self):
         """Test straight-line depreciation with residual value."""
-        from app.services.finance.fa.depreciation import DepreciationService
+        from app.services.fixed_assets.depreciation import DepreciationService
 
         result = DepreciationService.calculate_straight_line(
             cost_basis=Decimal("12000"),
@@ -51,7 +51,7 @@ class TestDepreciationCalculations:
 
     def test_calculate_straight_line_zero_life(self):
         """Test straight-line with zero useful life returns zero."""
-        from app.services.finance.fa.depreciation import DepreciationService
+        from app.services.fixed_assets.depreciation import DepreciationService
 
         result = DepreciationService.calculate_straight_line(
             cost_basis=Decimal("12000"),
@@ -63,7 +63,7 @@ class TestDepreciationCalculations:
 
     def test_calculate_declining_balance(self):
         """Test declining balance depreciation calculation."""
-        from app.services.finance.fa.depreciation import DepreciationService
+        from app.services.fixed_assets.depreciation import DepreciationService
 
         result = DepreciationService.calculate_declining_balance(
             net_book_value=Decimal("10000"),
@@ -78,7 +78,7 @@ class TestDepreciationCalculations:
 
     def test_calculate_declining_balance_respects_residual(self):
         """Test declining balance respects residual value."""
-        from app.services.finance.fa.depreciation import DepreciationService
+        from app.services.fixed_assets.depreciation import DepreciationService
 
         result = DepreciationService.calculate_declining_balance(
             net_book_value=Decimal("500"),
@@ -93,7 +93,7 @@ class TestDepreciationCalculations:
 
     def test_calculate_declining_balance_zero_life(self):
         """Test declining balance with zero life returns zero."""
-        from app.services.finance.fa.depreciation import DepreciationService
+        from app.services.fixed_assets.depreciation import DepreciationService
 
         result = DepreciationService.calculate_declining_balance(
             net_book_value=Decimal("10000"),
@@ -107,7 +107,7 @@ class TestDepreciationCalculations:
 
     def test_calculate_sum_of_years(self):
         """Test sum of years digits depreciation."""
-        from app.services.finance.fa.depreciation import DepreciationService
+        from app.services.fixed_assets.depreciation import DepreciationService
 
         result = DepreciationService.calculate_sum_of_years(
             cost_basis=Decimal("10000"),
@@ -124,7 +124,7 @@ class TestDepreciationCalculations:
 
     def test_calculate_sum_of_years_zero_life(self):
         """Test sum of years with zero life returns zero."""
-        from app.services.finance.fa.depreciation import DepreciationService
+        from app.services.fixed_assets.depreciation import DepreciationService
 
         result = DepreciationService.calculate_sum_of_years(
             cost_basis=Decimal("10000"),
@@ -141,7 +141,7 @@ class TestDepreciationRunService:
 
     def test_create_depreciation_run_success(self, mock_db, org_id, user_id):
         """Test successful depreciation run creation."""
-        from app.services.finance.fa.depreciation import DepreciationService
+        from app.services.fixed_assets.depreciation import DepreciationService
 
         fiscal_period_id = uuid.uuid4()
         mock_db.query.return_value.filter.return_value.scalar.return_value = 0
@@ -160,7 +160,7 @@ class TestDepreciationRunService:
 
     def test_get_depreciation_run(self, mock_db, mock_depreciation_run):
         """Test getting a depreciation run."""
-        from app.services.finance.fa.depreciation import DepreciationService
+        from app.services.fixed_assets.depreciation import DepreciationService
 
         mock_db.get.return_value = mock_depreciation_run
 
@@ -171,7 +171,7 @@ class TestDepreciationRunService:
 
     def test_get_depreciation_run_not_found(self, mock_db):
         """Test getting non-existent depreciation run."""
-        from app.services.finance.fa.depreciation import DepreciationService
+        from app.services.fixed_assets.depreciation import DepreciationService
         from fastapi import HTTPException
 
         mock_db.get.return_value = None
@@ -183,7 +183,7 @@ class TestDepreciationRunService:
 
     def test_list_depreciation_runs(self, mock_db, org_id):
         """Test listing depreciation runs."""
-        from app.services.finance.fa.depreciation import DepreciationService
+        from app.services.fixed_assets.depreciation import DepreciationService
 
         mock_runs = [MockDepreciationRun(organization_id=org_id) for _ in range(5)]
         mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = mock_runs
@@ -194,7 +194,7 @@ class TestDepreciationRunService:
 
     def test_list_depreciation_runs_with_filters(self, mock_db, org_id):
         """Test listing depreciation runs with status filter."""
-        from app.services.finance.fa.depreciation import DepreciationService
+        from app.services.fixed_assets.depreciation import DepreciationService
 
         mock_runs = [MockDepreciationRun(organization_id=org_id, status="POSTED")]
         mock_db.query.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = mock_runs
@@ -205,7 +205,7 @@ class TestDepreciationRunService:
 
     def test_get_run_schedules(self, mock_db, org_id, mock_depreciation_run):
         """Test getting schedules for a depreciation run."""
-        from app.services.finance.fa.depreciation import DepreciationService
+        from app.services.fixed_assets.depreciation import DepreciationService
 
         mock_db.get.return_value = mock_depreciation_run
 
@@ -225,7 +225,7 @@ class TestAssetDepreciationCalculation:
 
     def test_calculate_asset_depreciation_straight_line(self, mock_db, mock_asset, mock_category):
         """Test calculating depreciation for a single asset."""
-        from app.services.finance.fa.depreciation import DepreciationService
+        from app.services.fixed_assets.depreciation import DepreciationService
 
         mock_asset.depreciation_method = MockDepreciationMethod.STRAIGHT_LINE
         mock_asset.acquisition_cost = Decimal("12000")
@@ -247,7 +247,7 @@ class TestAssetDepreciationCalculation:
 
     def test_calculate_asset_depreciation_fully_depreciated(self, mock_db, mock_asset, mock_category):
         """Test that fully depreciated assets return zero depreciation."""
-        from app.services.finance.fa.depreciation import DepreciationService
+        from app.services.fixed_assets.depreciation import DepreciationService
 
         mock_asset.depreciation_method = MockDepreciationMethod.STRAIGHT_LINE
         mock_asset.acquisition_cost = Decimal("12000")
@@ -266,7 +266,7 @@ class TestAssetDepreciationCalculation:
 
     def test_calculate_asset_depreciation_with_residual(self, mock_db, mock_asset, mock_category):
         """Test depreciation stops at residual value."""
-        from app.services.finance.fa.depreciation import DepreciationService
+        from app.services.fixed_assets.depreciation import DepreciationService
 
         mock_asset.depreciation_method = MockDepreciationMethod.STRAIGHT_LINE
         mock_asset.acquisition_cost = Decimal("12000")
@@ -286,7 +286,7 @@ class TestAssetDepreciationCalculation:
 
     def test_calculate_asset_depreciation_declining_balance(self, mock_db, mock_asset, mock_category):
         """Test declining balance depreciation calculation for asset."""
-        from app.services.finance.fa.depreciation import DepreciationService
+        from app.services.fixed_assets.depreciation import DepreciationService
 
         mock_asset.depreciation_method = MockDepreciationMethod.DECLINING_BALANCE
         mock_asset.acquisition_cost = Decimal("10000")
@@ -306,7 +306,7 @@ class TestAssetDepreciationCalculation:
 
     def test_calculate_asset_depreciation_sum_of_years(self, mock_db, mock_asset, mock_category):
         """Test sum of years depreciation calculation for asset."""
-        from app.services.finance.fa.depreciation import DepreciationService
+        from app.services.fixed_assets.depreciation import DepreciationService
 
         mock_asset.depreciation_method = MockDepreciationMethod.SUM_OF_YEARS
         mock_asset.acquisition_cost = Decimal("10000")
@@ -325,7 +325,7 @@ class TestAssetDepreciationCalculation:
 
     def test_calculate_asset_depreciation_category_not_found(self, mock_db, mock_asset):
         """Test depreciation calculation fails when category not found."""
-        from app.services.finance.fa.depreciation import DepreciationService
+        from app.services.fixed_assets.depreciation import DepreciationService
 
         mock_asset.depreciation_method = MockDepreciationMethod.STRAIGHT_LINE
         mock_asset.revalued_amount = None

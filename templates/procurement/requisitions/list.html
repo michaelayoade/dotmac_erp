@@ -1,0 +1,93 @@
+{% extends "modules/base_modules.html" %}
+
+{% block page_title %}Purchase Requisitions{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+    <a href="/procurement" class="hover:text-amber-600 transition-colors">Procurement</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+    <span class="font-medium text-slate-900 dark:text-white">Requisitions</span>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<a href="/procurement/requisitions/new" class="btn btn-primary">
+    <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
+    New Requisition
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-4 stagger-in">
+    <!-- Filters -->
+    <div class="card p-4">
+        <form method="get" class="flex flex-wrap gap-3 items-end">
+            <div>
+                <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Status</label>
+                <select name="status" class="input-field text-sm">
+                    <option value="">All</option>
+                    {% for s in req_statuses %}
+                    <option value="{{ s.value }}" {% if filter_status == s.value %}selected{% endif %}>{{ s.value }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Urgency</label>
+                <select name="urgency" class="input-field text-sm">
+                    <option value="">All</option>
+                    {% for u in urgency_levels %}
+                    <option value="{{ u.value }}" {% if filter_urgency == u.value %}selected{% endif %}>{{ u.value }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="btn btn-secondary text-sm">Filter</button>
+        </form>
+    </div>
+
+    <!-- Table -->
+    <div class="card">
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="bg-slate-50 dark:bg-slate-800/50">
+                    <tr>
+                        <th class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Number</th>
+                        <th class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Date</th>
+                        <th class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Urgency</th>
+                        <th class="px-4 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Amount</th>
+                        <th class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Status</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                    {% for req in requisitions %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                        <td class="px-4 py-3">
+                            <a href="/procurement/requisitions/{{ req.requisition_id }}" class="font-medium text-blue-600 hover:underline dark:text-blue-400">{{ req.requisition_number }}</a>
+                        </td>
+                        <td class="px-4 py-3 text-slate-600 dark:text-slate-400">{{ req.requisition_date }}</td>
+                        <td class="px-4 py-3">
+                            <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium {% if req.urgency.value == 'EMERGENCY' %}bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400{% elif req.urgency.value == 'URGENT' %}bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400{% else %}bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400{% endif %}">{{ req.urgency.value }}</span>
+                        </td>
+                        <td class="px-4 py-3 text-right font-medium text-slate-900 dark:text-white">{{ "{:,.2f}".format(req.total_estimated_amount) }}</td>
+                        <td class="px-4 py-3">
+                            {% set label, color = status_labels.get(req.status, ("Unknown", "slate")) %}
+                            <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-{{ color }}-100 text-{{ color }}-700 dark:bg-{{ color }}-900/30 dark:text-{{ color }}-400">{{ label }}</span>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="5" class="px-4 py-8 text-center text-slate-500 dark:text-slate-400">No requisitions found.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if total > limit %}
+        <div class="p-4 border-t border-slate-200 dark:border-slate-700 flex justify-between items-center text-sm text-slate-600 dark:text-slate-400">
+            <span>Showing {{ offset + 1 }}-{{ [offset + limit, total] | min }} of {{ total }}</span>
+            <div class="flex gap-2">
+                {% if offset > 0 %}<a href="?offset={{ offset - limit }}&limit={{ limit }}{% if filter_status %}&status={{ filter_status }}{% endif %}{% if filter_urgency %}&urgency={{ filter_urgency }}{% endif %}" class="btn btn-secondary text-xs">Previous</a>{% endif %}
+                {% if offset + limit < total %}<a href="?offset={{ offset + limit }}&limit={{ limit }}{% if filter_status %}&status={{ filter_status }}{% endif %}{% if filter_urgency %}&urgency={{ filter_urgency }}{% endif %}" class="btn btn-secondary text-xs">Next</a>{% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

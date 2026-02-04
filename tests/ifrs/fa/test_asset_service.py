@@ -22,7 +22,7 @@ class TestAssetCategoryService:
 
     def test_create_category_success(self, mock_db, org_id):
         """Test successful category creation."""
-        from app.services.finance.fa.asset import AssetCategoryService, AssetCategoryInput
+        from app.services.fixed_assets.asset import AssetCategoryService, AssetCategoryInput
 
         input_data = AssetCategoryInput(
             category_code="EQUIPMENT",
@@ -45,7 +45,7 @@ class TestAssetCategoryService:
 
     def test_create_category_duplicate_code(self, mock_db, org_id):
         """Test category creation with duplicate code fails."""
-        from app.services.finance.fa.asset import AssetCategoryService, AssetCategoryInput
+        from app.services.fixed_assets.asset import AssetCategoryService, AssetCategoryInput
         from fastapi import HTTPException
 
         existing_category = MockAssetCategory(organization_id=org_id)
@@ -69,7 +69,7 @@ class TestAssetCategoryService:
 
     def test_get_category_success(self, mock_db, mock_category):
         """Test getting a category by ID."""
-        from app.services.finance.fa.asset import AssetCategoryService
+        from app.services.fixed_assets.asset import AssetCategoryService
 
         mock_db.get.return_value = mock_category
 
@@ -81,7 +81,7 @@ class TestAssetCategoryService:
 
     def test_get_category_not_found(self, mock_db):
         """Test getting non-existent category raises HTTPException."""
-        from app.services.finance.fa.asset import AssetCategoryService
+        from app.services.fixed_assets.asset import AssetCategoryService
         from fastapi import HTTPException
 
         mock_db.get.return_value = None
@@ -93,7 +93,7 @@ class TestAssetCategoryService:
 
     def test_list_categories(self, mock_db, org_id):
         """Test listing categories."""
-        from app.services.finance.fa.asset import AssetCategoryService
+        from app.services.fixed_assets.asset import AssetCategoryService
 
         mock_categories = [MockAssetCategory(organization_id=org_id) for _ in range(5)]
         mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = mock_categories
@@ -104,7 +104,7 @@ class TestAssetCategoryService:
 
     def test_list_categories_with_filters(self, mock_db, org_id):
         """Test listing categories with is_active filter."""
-        from app.services.finance.fa.asset import AssetCategoryService
+        from app.services.fixed_assets.asset import AssetCategoryService
 
         mock_categories = [MockAssetCategory(organization_id=org_id, is_active=True)]
         mock_db.query.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = mock_categories
@@ -119,7 +119,7 @@ class TestAssetService:
 
     def test_create_asset_success(self, mock_db, org_id, mock_category, user_id):
         """Test successful asset creation."""
-        from app.services.finance.fa.asset import AssetService, AssetInput
+        from app.services.fixed_assets.asset import AssetService, AssetInput
 
         # Mock category lookup
         mock_db.get.return_value = mock_category
@@ -132,7 +132,7 @@ class TestAssetService:
             currency_code="USD",
         )
 
-        with patch("app.services.finance.fa.asset.SequenceService.get_next_number") as mock_seq:
+        with patch("app.services.fixed_assets.asset.SequenceService.get_next_number") as mock_seq:
             mock_seq.return_value = "FA-0001"
             result = AssetService.create_asset(mock_db, org_id, input_data, user_id)
 
@@ -142,7 +142,7 @@ class TestAssetService:
 
     def test_create_asset_category_not_found(self, mock_db, org_id, user_id):
         """Test asset creation fails when category not found."""
-        from app.services.finance.fa.asset import AssetService, AssetInput
+        from app.services.fixed_assets.asset import AssetService, AssetInput
         from fastapi import HTTPException
 
         mock_db.get.return_value = None
@@ -162,7 +162,7 @@ class TestAssetService:
 
     def test_create_asset_category_inactive(self, mock_db, org_id, mock_category, user_id):
         """Test asset creation fails when category is inactive."""
-        from app.services.finance.fa.asset import AssetService, AssetInput
+        from app.services.fixed_assets.asset import AssetService, AssetInput
         from fastapi import HTTPException
 
         mock_category.is_active = False
@@ -184,7 +184,7 @@ class TestAssetService:
 
     def test_create_asset_below_threshold(self, mock_db, org_id, mock_category, user_id):
         """Test asset creation fails when cost is below capitalization threshold."""
-        from app.services.finance.fa.asset import AssetService, AssetInput
+        from app.services.fixed_assets.asset import AssetService, AssetInput
         from fastapi import HTTPException
 
         mock_category.capitalization_threshold = Decimal("1000")
@@ -206,7 +206,7 @@ class TestAssetService:
 
     def test_get_asset_success(self, mock_db, mock_asset):
         """Test getting an asset by ID."""
-        from app.services.finance.fa.asset import AssetService
+        from app.services.fixed_assets.asset import AssetService
 
         mock_db.get.return_value = mock_asset
 
@@ -217,7 +217,7 @@ class TestAssetService:
 
     def test_get_asset_not_found(self, mock_db):
         """Test getting non-existent asset raises HTTPException."""
-        from app.services.finance.fa.asset import AssetService
+        from app.services.fixed_assets.asset import AssetService
         from fastapi import HTTPException
 
         mock_db.get.return_value = None
@@ -229,7 +229,7 @@ class TestAssetService:
 
     def test_get_asset_by_number(self, mock_db, org_id, mock_asset):
         """Test getting asset by asset number."""
-        from app.services.finance.fa.asset import AssetService
+        from app.services.fixed_assets.asset import AssetService
 
         mock_db.query.return_value.filter.return_value.first.return_value = mock_asset
 
@@ -240,7 +240,7 @@ class TestAssetService:
 
     def test_list_assets(self, mock_db, org_id):
         """Test listing assets."""
-        from app.services.finance.fa.asset import AssetService
+        from app.services.fixed_assets.asset import AssetService
 
         mock_assets = [MockAsset(organization_id=org_id) for _ in range(5)]
         mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = mock_assets
@@ -251,7 +251,7 @@ class TestAssetService:
 
     def test_list_assets_with_category_filter(self, mock_db, org_id, mock_category):
         """Test listing assets with category filter."""
-        from app.services.finance.fa.asset import AssetService
+        from app.services.fixed_assets.asset import AssetService
 
         mock_assets = [MockAsset(organization_id=org_id, category_id=mock_category.category_id)]
         mock_db.query.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = mock_assets
@@ -262,7 +262,7 @@ class TestAssetService:
 
     def test_get_depreciable_assets(self, mock_db, org_id):
         """Test getting depreciable assets."""
-        from app.services.finance.fa.asset import AssetService
+        from app.services.fixed_assets.asset import AssetService
 
         mock_assets = [
             MockAsset(organization_id=org_id, status=MockAssetStatus.ACTIVE)
@@ -276,7 +276,7 @@ class TestAssetService:
 
     def test_update_asset_success(self, mock_db, org_id, mock_asset):
         """Test successful asset update."""
-        from app.services.finance.fa.asset import AssetService
+        from app.services.fixed_assets.asset import AssetService
 
         mock_asset.status = MockAssetStatus.DRAFT
         mock_db.get.return_value = mock_asset
@@ -292,7 +292,7 @@ class TestAssetService:
 
     def test_update_asset_not_found(self, mock_db, org_id):
         """Test updating non-existent asset fails."""
-        from app.services.finance.fa.asset import AssetService
+        from app.services.fixed_assets.asset import AssetService
         from fastapi import HTTPException
 
         mock_db.get.return_value = None
@@ -309,7 +309,7 @@ class TestAssetService:
 
     def test_update_asset_restricted_after_activation(self, mock_db, org_id, mock_asset):
         """Test that certain fields can't be updated after activation."""
-        from app.services.finance.fa.asset import AssetService
+        from app.services.fixed_assets.asset import AssetService
         from fastapi import HTTPException
 
         mock_asset.status = MockAssetStatus.ACTIVE  # Not DRAFT
@@ -328,7 +328,7 @@ class TestAssetService:
 
     def test_activate_asset_success(self, mock_db, org_id, mock_asset):
         """Test successful asset activation."""
-        from app.services.finance.fa.asset import AssetService
+        from app.services.fixed_assets.asset import AssetService
 
         mock_asset.status = MockAssetStatus.DRAFT
         mock_db.get.return_value = mock_asset
@@ -339,7 +339,7 @@ class TestAssetService:
 
     def test_activate_asset_wrong_status(self, mock_db, org_id, mock_asset):
         """Test activating asset with wrong status fails."""
-        from app.services.finance.fa.asset import AssetService
+        from app.services.fixed_assets.asset import AssetService
         from fastapi import HTTPException
 
         mock_asset.status = MockAssetStatus.ACTIVE  # Already active
@@ -352,7 +352,7 @@ class TestAssetService:
 
     def test_get_asset_summary(self, mock_db, org_id):
         """Test getting asset summary statistics."""
-        from app.services.finance.fa.asset import AssetService
+        from app.services.fixed_assets.asset import AssetService
 
         mock_assets = [
             MockAsset(
@@ -375,7 +375,7 @@ class TestAssetService:
 
     def test_mark_fully_depreciated(self, mock_db, org_id, mock_asset):
         """Test marking an asset as fully depreciated."""
-        from app.services.finance.fa.asset import AssetService
+        from app.services.fixed_assets.asset import AssetService
 
         mock_asset.status = MockAssetStatus.ACTIVE
         mock_db.get.return_value = mock_asset

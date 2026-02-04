@@ -19,9 +19,9 @@ from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.models.finance.inv.item import Item
-from app.models.finance.inv.item_category import ItemCategory
-from app.services.finance.inv.balance import InventoryBalanceService
+from app.models.inventory.item import Item
+from app.models.inventory.item_category import ItemCategory
+from app.services.inventory.balance import InventoryBalanceService
 
 logger = logging.getLogger(__name__)
 

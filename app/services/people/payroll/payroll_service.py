@@ -893,10 +893,13 @@ class PayrollService:
 
         # Dispatch events after commit to ensure persistence
         for slip in paid_slips:
+            employee_id = getattr(slip, "employee_id", None)
+            if employee_id is None:
+                continue
             _dispatch_slip_paid(
                 slip_id=slip.slip_id,
-                slip_number=getattr(slip, 'slip_number', ''),
-                employee_id=getattr(slip, 'employee_id', None),
+                slip_number=getattr(slip, "slip_number", ""),
+                employee_id=employee_id,
             )
 
         return {"updated": updated, "requested": len(slips), "errors": errors}

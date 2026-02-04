@@ -13,7 +13,7 @@ from typing import Any, Optional
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.finance.inv import (
+from app.models.inventory import (
     MaterialRequest,
     MaterialRequestItem,
     MaterialRequestStatus,

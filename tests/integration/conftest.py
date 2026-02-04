@@ -416,7 +416,7 @@ def asset_category(
     fa_gain_loss_account,
 ):
     """Create an asset category for testing."""
-    from app.models.finance.fa.asset_category import AssetCategory, DepreciationMethod
+    from app.models.fixed_assets.asset_category import AssetCategory, DepreciationMethod
 
     category = AssetCategory(
         organization_id=org_id,
@@ -527,7 +527,7 @@ def customer(db: Session, org_id: uuid.UUID, ar_control_account):
 @pytest.fixture
 def warehouse(db: Session, org_id: uuid.UUID):
     """Create a warehouse for testing."""
-    from app.models.finance.inv.warehouse import Warehouse
+    from app.models.inventory.warehouse import Warehouse
 
     warehouse = Warehouse(
         organization_id=org_id,
@@ -562,7 +562,7 @@ def inventory_adjustment_account(db: Session, org_id: uuid.UUID, account_categor
 @pytest.fixture
 def item_category(db: Session, org_id: uuid.UUID, inventory_account, cogs_account, revenue_account, inventory_adjustment_account):
     """Create an item category for testing."""
-    from app.models.finance.inv.item_category import ItemCategory
+    from app.models.inventory.item_category import ItemCategory
 
     category = ItemCategory(
         organization_id=org_id,
@@ -582,7 +582,7 @@ def item_category(db: Session, org_id: uuid.UUID, inventory_account, cogs_accoun
 @pytest.fixture
 def inventory_item(db: Session, org_id: uuid.UUID, item_category, inventory_account, cogs_account, revenue_account):
     """Create an inventory item for testing."""
-    from app.models.finance.inv.item import Item, CostingMethod
+    from app.models.inventory.item import Item, CostingMethod
 
     item = Item(
         organization_id=org_id,
@@ -617,7 +617,7 @@ def initial_inventory_transaction(
     fiscal_period,
 ):
     """Create initial inventory through a receipt transaction."""
-    from app.models.finance.inv.inventory_transaction import InventoryTransaction, TransactionType
+    from app.models.inventory.inventory_transaction import InventoryTransaction, TransactionType
 
     txn = InventoryTransaction(
         organization_id=org_id,
@@ -700,7 +700,7 @@ def ar_invoice(db: Session, org_id: uuid.UUID, customer, user_id: uuid.UUID):
 @pytest.fixture
 def inventory_lot(db: Session, org_id: uuid.UUID, inventory_item, warehouse):
     """Create an inventory lot for testing."""
-    from app.models.finance.inv.inventory_lot import InventoryLot
+    from app.models.inventory.inventory_lot import InventoryLot
 
     lot = InventoryLot(
         organization_id=org_id,

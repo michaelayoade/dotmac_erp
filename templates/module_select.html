@@ -90,8 +90,8 @@
         </a>
         {% endif %}
 
-        {% if "operations" in modules %}
-        <a href="/operations/dashboard" class="group rounded-xl border border-slate-200 bg-white p-5 transition hover:border-amber-300 hover:shadow-md dark:border-slate-700 dark:bg-slate-900/60">
+        {% if "inventory" in modules %}
+        <a href="/inventory/items" class="group rounded-xl border border-slate-200 bg-white p-5 transition hover:border-amber-300 hover:shadow-md dark:border-slate-700 dark:bg-slate-900/60">
           <div class="flex items-center gap-3">
             <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-300">
               <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -99,12 +99,100 @@
               </svg>
             </div>
             <div>
-              <div class="text-base font-semibold text-slate-900 dark:text-white">Operations</div>
-              <div class="text-xs text-slate-500 dark:text-slate-400">Inventory, procurement, workflows</div>
+              <div class="text-base font-semibold text-slate-900 dark:text-white">Inventory</div>
+              <div class="text-xs text-slate-500 dark:text-slate-400">Items, warehouses, and stock movements</div>
             </div>
           </div>
           <div class="mt-4 flex items-center text-sm font-medium text-amber-600 group-hover:text-amber-700 dark:text-amber-300 dark:group-hover:text-amber-200">
-            Open Operations
+            Open Inventory
+            <svg class="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
+            </svg>
+          </div>
+        </a>
+        {% endif %}
+
+        {% if "fleet" in modules %}
+        <a href="/fleet" class="group rounded-xl border border-slate-200 bg-white p-5 transition hover:border-amber-300 hover:shadow-md dark:border-slate-700 dark:bg-slate-900/60">
+          <div class="flex items-center gap-3">
+            <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-orange-100 text-orange-600 dark:bg-orange-900/40 dark:text-orange-300">
+              <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
+              </svg>
+            </div>
+            <div>
+              <div class="text-base font-semibold text-slate-900 dark:text-white">Fleet</div>
+              <div class="text-xs text-slate-500 dark:text-slate-400">Vehicles, maintenance, and fuel logs</div>
+            </div>
+          </div>
+          <div class="mt-4 flex items-center text-sm font-medium text-orange-600 group-hover:text-orange-700 dark:text-orange-300 dark:group-hover:text-orange-200">
+            Open Fleet
+            <svg class="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
+            </svg>
+          </div>
+        </a>
+        {% endif %}
+
+        {% if "support" in modules %}
+        <a href="/support/tickets" class="group rounded-xl border border-slate-200 bg-white p-5 transition hover:border-amber-300 hover:shadow-md dark:border-slate-700 dark:bg-slate-900/60">
+          <div class="flex items-center gap-3">
+            <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-rose-100 text-rose-600 dark:bg-rose-900/40 dark:text-rose-300">
+              <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z"/>
+              </svg>
+            </div>
+            <div>
+              <div class="text-base font-semibold text-slate-900 dark:text-white">Support</div>
+              <div class="text-xs text-slate-500 dark:text-slate-400">Tickets, SLAs, and helpdesk workflows</div>
+            </div>
+          </div>
+          <div class="mt-4 flex items-center text-sm font-medium text-rose-600 group-hover:text-rose-700 dark:text-rose-300 dark:group-hover:text-rose-200">
+            Open Support
+            <svg class="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
+            </svg>
+          </div>
+        </a>
+        {% endif %}
+
+        {% if "procurement" in modules %}
+        <a href="/procurement" class="group rounded-xl border border-slate-200 bg-white p-5 transition hover:border-amber-300 hover:shadow-md dark:border-slate-700 dark:bg-slate-900/60">
+          <div class="flex items-center gap-3">
+            <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-300">
+              <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+              </svg>
+            </div>
+            <div>
+              <div class="text-base font-semibold text-slate-900 dark:text-white">Procurement</div>
+              <div class="text-xs text-slate-500 dark:text-slate-400">Plans, RFQs, evaluations, and contracts</div>
+            </div>
+          </div>
+          <div class="mt-4 flex items-center text-sm font-medium text-emerald-600 group-hover:text-emerald-700 dark:text-emerald-300 dark:group-hover:text-emerald-200">
+            Open Procurement
+            <svg class="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
+            </svg>
+          </div>
+        </a>
+        {% endif %}
+
+        {% if "projects" in modules %}
+        <a href="/projects" class="group rounded-xl border border-slate-200 bg-white p-5 transition hover:border-amber-300 hover:shadow-md dark:border-slate-700 dark:bg-slate-900/60">
+          <div class="flex items-center gap-3">
+            <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+              <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5h6m0 0l3 3m-3-3l-3 3m0 6h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+              </svg>
+            </div>
+            <div>
+              <div class="text-base font-semibold text-slate-900 dark:text-white">Projects</div>
+              <div class="text-xs text-slate-500 dark:text-slate-400">Tasks, time entries, and milestones</div>
+            </div>
+          </div>
+          <div class="mt-4 flex items-center text-sm font-medium text-slate-600 group-hover:text-slate-700 dark:text-slate-300 dark:group-hover:text-slate-200">
+            Open Projects
             <svg class="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
             </svg>

@@ -1,0 +1,282 @@
+{% extends "modules/base_modules.html" %}
+
+{% block page_title %}Material Request Report{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 mt-1">
+    <a href="/inventory/items" class="hover:text-slate-700 dark:hover:text-slate-300">Inventory</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <a href="/inventory/material-requests" class="hover:text-slate-700 dark:hover:text-slate-300">Material Requests</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="text-slate-700 dark:text-slate-300">Summary Report</span>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<a href="/inventory/material-requests" class="btn btn-secondary">
+    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+    </svg>
+    Back to List
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Filters -->
+    <div class="card p-4">
+        <form method="get" class="flex flex-wrap items-end gap-4">
+            <div class="min-w-[150px]">
+                <label class="form-label">Start Date</label>
+                <input type="date" name="start_date" value="{{ filter_start_date or '' }}" class="form-input">
+            </div>
+            <div class="min-w-[150px]">
+                <label class="form-label">End Date</label>
+                <input type="date" name="end_date" value="{{ filter_end_date or '' }}" class="form-input">
+            </div>
+            <div class="min-w-[150px]">
+                <label class="form-label">Group By</label>
+                <select name="group_by" class="form-input form-select">
+                    <option value="status" {% if filter_group_by == 'status' %}selected{% endif %}>Status</option>
+                    <option value="type" {% if filter_group_by == 'type' %}selected{% endif %}>Request Type</option>
+                </select>
+            </div>
+            <button type="submit" class="btn btn-secondary">
+                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+                Generate Report
+            </button>
+        </form>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div class="card p-6">
+            <div class="flex items-center gap-4">
+                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-100 dark:bg-amber-900/30">
+                    <svg class="h-6 w-6 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">Total Requests</p>
+                    <p class="text-2xl font-bold text-slate-900 dark:text-white">{{ summary.total_requests }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="card p-6">
+            <div class="flex items-center gap-4">
+                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-100 dark:bg-amber-900/30">
+                    <svg class="h-6 w-6 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">Pending</p>
+                    <p class="text-2xl font-bold text-amber-600 dark:text-amber-400">{{ summary.pending_requests }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="card p-6">
+            <div class="flex items-center gap-4">
+                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-100 dark:bg-emerald-900/30">
+                    <svg class="h-6 w-6 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">Completed</p>
+                    <p class="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{{ summary.completed_requests }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="card p-6">
+            <div class="flex items-center gap-4">
+                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-100 dark:bg-blue-900/30">
+                    <svg class="h-6 w-6 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">Total Items</p>
+                    <p class="text-2xl font-bold text-blue-600 dark:text-blue-400">{{ summary.total_items }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Grouped Data -->
+    <div class="card overflow-hidden">
+        <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+            <h3 class="font-semibold text-slate-900 dark:text-white">
+                Requests by {{ 'Status' if filter_group_by == 'status' else 'Type' }}
+            </h3>
+        </div>
+        {% if grouped_data %}
+        <div class="table-container">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>{{ 'Status' if filter_group_by == 'status' else 'Request Type' }}</th>
+                        <th class="text-right">Request Count</th>
+                        <th class="text-right">Total Items</th>
+                        <th class="text-right">Requested Qty</th>
+                        <th class="text-right">Ordered Qty</th>
+                        <th class="text-right">Fulfillment %</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in grouped_data %}
+                    <tr>
+                        <td>
+                            {% if filter_group_by == 'status' %}
+                                {% if row.group_key == 'DRAFT' %}
+                                <span class="badge badge-neutral">Draft</span>
+                                {% elif row.group_key == 'SUBMITTED' %}
+                                <span class="badge badge-warning">Submitted</span>
+                                {% elif row.group_key == 'PARTIALLY_ORDERED' %}
+                                <span class="badge badge-info">Partially Ordered</span>
+                                {% elif row.group_key == 'ORDERED' %}
+                                <span class="badge badge-primary">Ordered</span>
+                                {% elif row.group_key == 'ISSUED' %}
+                                <span class="badge badge-success">Issued</span>
+                                {% elif row.group_key == 'TRANSFERRED' %}
+                                <span class="badge badge-teal">Transferred</span>
+                                {% elif row.group_key == 'CANCELLED' %}
+                                <span class="badge badge-neutral">Cancelled</span>
+                                {% else %}
+                                <span class="text-slate-900 dark:text-white">{{ row.group_key | replace('_', ' ') | title }}</span>
+                                {% endif %}
+                            {% else %}
+                                {% if row.group_key == 'PURCHASE' %}
+                                <span class="badge badge-info">Purchase</span>
+                                {% elif row.group_key == 'TRANSFER' %}
+                                <span class="badge badge-warning">Transfer</span>
+                                {% elif row.group_key == 'ISSUE' %}
+                                <span class="badge badge-success">Issue</span>
+                                {% elif row.group_key == 'MANUFACTURE' %}
+                                <span class="badge badge-violet">Manufacture</span>
+                                {% else %}
+                                <span class="text-slate-900 dark:text-white">{{ row.group_key | title }}</span>
+                                {% endif %}
+                            {% endif %}
+                        </td>
+                        <td class="text-right font-mono text-slate-900 dark:text-white">{{ row.request_count }}</td>
+                        <td class="text-right font-mono text-slate-900 dark:text-white">{{ row.item_count }}</td>
+                        <td class="text-right font-mono text-slate-900 dark:text-white">{{ row.requested_qty }}</td>
+                        <td class="text-right font-mono text-emerald-600 dark:text-emerald-400">{{ row.ordered_qty }}</td>
+                        <td class="text-right">
+                            {% set fulfillment = (row.ordered_qty / row.requested_qty * 100) if row.requested_qty > 0 else 0 %}
+                            <div class="flex items-center justify-end gap-2">
+                                <div class="w-16 h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                    <div class="h-full bg-amber-500 rounded-full" style="width: {{ 100 if fulfillment > 100 else fulfillment }}%"></div>
+                                </div>
+                                <span class="font-mono text-sm text-slate-600 dark:text-slate-400">{{ "%.1f" | format(fulfillment) }}%</span>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot class="bg-slate-50 dark:bg-slate-800/50">
+                    <tr>
+                        <td class="font-semibold text-slate-900 dark:text-white">Total</td>
+                        <td class="text-right font-mono font-semibold text-slate-900 dark:text-white">{{ summary.total_requests }}</td>
+                        <td class="text-right font-mono font-semibold text-slate-900 dark:text-white">{{ summary.total_items }}</td>
+                        <td class="text-right font-mono font-semibold text-slate-900 dark:text-white">{{ summary.total_requested_qty }}</td>
+                        <td class="text-right font-mono font-semibold text-emerald-600 dark:text-emerald-400">{{ summary.total_ordered_qty }}</td>
+                        <td class="text-right">
+                            {% set total_fulfillment = (summary.total_ordered_qty / summary.total_requested_qty * 100) if summary.total_requested_qty > 0 else 0 %}
+                            <span class="font-mono font-semibold text-amber-600 dark:text-amber-400">{{ "%.1f" | format(total_fulfillment) }}%</span>
+                        </td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+        {% else %}
+        <div class="p-12 text-center">
+            <div class="empty-state-icon mx-auto mb-4">
+                <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                </svg>
+            </div>
+            <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-2">No Data</h3>
+            <p class="text-slate-500 dark:text-slate-400">No material requests found for the selected period.</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Recent Requests -->
+    {% if recent_requests %}
+    <div class="card overflow-hidden">
+        <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+            <h3 class="font-semibold text-slate-900 dark:text-white">Recent Requests</h3>
+        </div>
+        <div class="table-container">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Request #</th>
+                        <th>Type</th>
+                        <th>Schedule Date</th>
+                        <th>Requested By</th>
+                        <th class="text-center">Items</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for req in recent_requests[:10] %}
+                    <tr>
+                        <td>
+                            <a href="/inventory/material-requests/{{ req.request_id }}" class="font-mono text-amber-600 hover:text-amber-700 dark:text-amber-400">
+                                {{ req.request_number }}
+                            </a>
+                        </td>
+                        <td>
+                            {% if req.request_type == 'PURCHASE' %}
+                            <span class="badge badge-info">Purchase</span>
+                            {% elif req.request_type == 'TRANSFER' %}
+                            <span class="badge badge-warning">Transfer</span>
+                            {% elif req.request_type == 'ISSUE' %}
+                            <span class="badge badge-success">Issue</span>
+                            {% elif req.request_type == 'MANUFACTURE' %}
+                            <span class="badge badge-violet">Manufacture</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-slate-500">{{ req.schedule_date or '-' }}</td>
+                        <td class="text-slate-500">{{ req.requested_by_name or '-' }}</td>
+                        <td class="text-center">
+                            <span class="inline-flex items-center justify-center min-w-[24px] h-6 px-2 rounded-full bg-slate-100 dark:bg-slate-700 text-xs font-medium text-slate-600 dark:text-slate-300">
+                                {{ req.item_count }}
+                            </span>
+                        </td>
+                        <td>
+                            {% if req.status == 'DRAFT' %}
+                            <span class="badge badge-neutral">Draft</span>
+                            {% elif req.status == 'SUBMITTED' %}
+                            <span class="badge badge-warning">Submitted</span>
+                            {% elif req.status == 'PARTIALLY_ORDERED' %}
+                            <span class="badge badge-info">Partially Ordered</span>
+                            {% elif req.status == 'ORDERED' %}
+                            <span class="badge badge-primary">Ordered</span>
+                            {% elif req.status == 'ISSUED' %}
+                            <span class="badge badge-success">Issued</span>
+                            {% elif req.status == 'TRANSFERRED' %}
+                            <span class="badge badge-teal">Transferred</span>
+                            {% elif req.status == 'CANCELLED' %}
+                            <span class="badge badge-neutral">Cancelled</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

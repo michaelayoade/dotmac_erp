@@ -1,0 +1,174 @@
+{% extends "modules/base_modules.html" %}
+{% from "components/macros.html" import pagination, empty_state %}
+
+{% block page_title %}Price Lists{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+    <a href="/inventory/items" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Inventory</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="font-medium text-slate-900 dark:text-white">Price Lists</span>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<a href="/inventory/price-lists/new" class="btn btn-primary">
+    <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+    </svg>
+    New Price List
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6 stagger-in">
+    <!-- Stats Row -->
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div class="card p-4">
+            <div class="flex items-center gap-3">
+                <div class="card-icon bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ total_count | default(0) }}</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Total Price Lists</p>
+                </div>
+            </div>
+        </div>
+        <div class="card p-4">
+            <div class="flex items-center gap-3">
+                <div class="card-icon bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ sales_count | default(0) }}</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Sales Lists</p>
+                </div>
+            </div>
+        </div>
+        <div class="card p-4">
+            <div class="flex items-center gap-3">
+                <div class="card-icon bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ purchase_count | default(0) }}</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Purchase Lists</p>
+                </div>
+            </div>
+        </div>
+        <div class="card p-4">
+            <div class="flex items-center gap-3">
+                <div class="card-icon bg-violet-50 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ active_count | default(0) }}</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Active Lists</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Search & Filters -->
+    <div class="card p-4">
+        <form method="get" action="/inventory/price-lists" class="flex flex-wrap items-center gap-4">
+            <div class="relative flex-1 min-w-[200px]">
+                <svg class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                </svg>
+                <input type="text" name="search" value="{{ search | default('') }}"
+                       placeholder="Search by name or code..."
+                       class="form-input pl-10 w-full">
+            </div>
+            <select name="price_list_type" class="form-select">
+                <option value="">All Types</option>
+                <option value="SALES" {{ 'selected' if price_list_type == 'SALES' else '' }}>Sales</option>
+                <option value="PURCHASE" {{ 'selected' if price_list_type == 'PURCHASE' else '' }}>Purchase</option>
+                <option value="TRANSFER" {{ 'selected' if price_list_type == 'TRANSFER' else '' }}>Transfer</option>
+            </select>
+            <button type="submit" class="btn btn-secondary">Filter</button>
+            <a href="/inventory/price-lists" class="btn btn-ghost">Clear</a>
+        </form>
+    </div>
+
+    <!-- Price Lists Table -->
+    <div class="card overflow-hidden">
+        {% if price_lists | default([]) | length > 0 %}
+        <div class="overflow-x-auto">
+            <table class="table-ledger">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Code</th>
+                        <th>Type</th>
+                        <th>Currency</th>
+                        <th class="text-right">Items</th>
+                        <th>Effective Date</th>
+                        <th>Status</th>
+                        <th class="w-12"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for pl in price_lists %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer"
+                        onclick="window.location='/inventory/price-lists/{{ pl.price_list_id }}'">
+                        <td class="font-medium text-slate-900 dark:text-white">{{ pl.price_list_name }}</td>
+                        <td class="font-mono text-sm">{{ pl.price_list_code or '-' }}</td>
+                        <td>
+                            {% set type_colors = {
+                                'SALES': 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+                                'PURCHASE': 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+                                'TRANSFER': 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400'
+                            } %}
+                            <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium {{ type_colors.get(pl.price_list_type.value if pl.price_list_type else 'SALES', type_colors['SALES']) }}">
+                                {{ pl.price_list_type.value if pl.price_list_type else 'Sales' }}
+                            </span>
+                        </td>
+                        <td class="font-mono">{{ pl.currency_code or '-' }}</td>
+                        <td class="text-right font-mono">{{ pl.items | length if pl.items else 0 }}</td>
+                        <td>{{ pl.effective_from.strftime('%Y-%m-%d') if pl.effective_from else '-' }}</td>
+                        <td>
+                            {% if pl.is_active %}
+                            <span class="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+                                Active
+                            </span>
+                            {% else %}
+                            <span class="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-400">
+                                Inactive
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="/inventory/price-lists/{{ pl.price_list_id }}" class="text-slate-400 hover:text-amber-600 dark:hover:text-amber-400">
+                                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                                </svg>
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        {{ empty_state(
+            title="No price lists yet",
+            description="Create price lists to manage item pricing for sales and purchases.",
+            action_url="/inventory/price-lists/new",
+            action_label="New Price List"
+        ) }}
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

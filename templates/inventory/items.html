@@ -1,0 +1,276 @@
+{% extends "modules/base_modules.html" %}
+{% from "components/macros.html" import status_badge, search_filter_bar, pagination, action_buttons, empty_state, bulk_select_header, bulk_select_cell, bulk_action_bar, bulk_icon_delete, bulk_icon_export, bulk_icon_activate, bulk_icon_deactivate %}
+
+{% block page_title %}Inventory Items{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+    <a href="/dashboard" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Inventory</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="font-medium text-slate-900 dark:text-white">Inventory Items</span>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<a href="/inventory/items/new" class="btn btn-primary">
+    <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+    </svg>
+    New Item
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6 stagger-in">
+    <!-- Stats Row -->
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div class="card p-4">
+            <div class="flex items-center gap-3">
+                <div class="card-icon bg-teal-50 text-teal-600 dark:bg-teal-900/30 dark:text-teal-400">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ total_count }}</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Total Items</p>
+                </div>
+            </div>
+        </div>
+        <div class="card p-4">
+            <div class="flex items-center gap-3">
+                <div class="card-icon bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ items|selectattr('is_active')|list|length }}</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Active Items</p>
+                </div>
+            </div>
+        </div>
+        <div class="card p-4">
+            <div class="flex items-center gap-3">
+                <div class="card-icon bg-violet-50 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ categories|length }}</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Categories</p>
+                </div>
+            </div>
+        </div>
+        <div class="card p-4">
+            <div class="flex items-center gap-3">
+                <div class="card-icon bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ items|selectattr('item_type', 'equalto', 'INVENTORY')|list|length }}</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Stock Items</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Search & Filters -->
+    <div class="card p-4">
+        <form method="get" action="/inventory/items" class="flex flex-wrap items-center gap-4">
+            <div class="relative flex-1 min-w-[200px]">
+                <svg class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                </svg>
+                <input type="text" name="search" value="{{ search }}"
+                       placeholder="Search by code, name, or barcode..."
+                       class="form-input pl-10 w-full">
+            </div>
+            <select name="category" class="form-select">
+                <option value="">All Categories</option>
+                {% for cat in categories %}
+                <option value="{{ cat.category_id }}" {{ 'selected' if category == cat.category_id|string else '' }}>
+                    {{ cat.category_code }} - {{ cat.category_name }}
+                </option>
+                {% endfor %}
+            </select>
+            <select name="status" class="form-select">
+                <option value="">All Status</option>
+                <option value="active" {{ 'selected' if status == 'active' else '' }}>Active</option>
+                <option value="inactive" {{ 'selected' if status == 'inactive' else '' }}>Inactive</option>
+            </select>
+            <button type="submit" class="btn btn-secondary">
+                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
+                </svg>
+                Filter
+            </button>
+            {% if search or category or status %}
+            <a href="/inventory/items" class="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300 transition-colors">
+                Clear filters
+            </a>
+            {% endif %}
+        </form>
+    </div>
+
+    <!-- Items Table with Bulk Selection -->
+    <div x-data="bulkActions({ entityName: 'items' })">
+        <div class="card">
+            <div class="table-container">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            {{ bulk_select_header() }}
+                            <th>Item Code</th>
+                            <th>Item Name</th>
+                            <th>Category</th>
+                            <th>Type</th>
+                            <th class="text-right">List Price</th>
+                            <th class="text-right">On Hand</th>
+                            <th class="text-right">Available</th>
+                            <th>Status</th>
+                            <th class="text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in items %}
+                        <tr class="group hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                            {{ bulk_select_cell(item.item_id) }}
+                            <td>
+                                <a href="/inventory/items/{{ item.item_id }}" class="font-mono text-sm font-semibold text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-amber-300">
+                                    {{ item.item_code }}
+                                </a>
+                            </td>
+                            <td>
+                                <a href="/inventory/items/{{ item.item_id }}" class="font-medium text-slate-900 dark:text-white hover:text-amber-600 dark:hover:text-amber-400 transition-colors">
+                                    {{ item.item_name }}
+                                </a>
+                            </td>
+                            <td>
+                                <span class="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-300">
+                                    {{ item.category_code }}
+                                </span>
+                            </td>
+                            <td class="text-sm text-slate-600 dark:text-slate-400">{{ item.item_type | replace('_', ' ') | title }}</td>
+                            <td class="text-right font-mono font-medium text-slate-900 dark:text-white">{{ item.list_price | default("-") }}</td>
+                            <td class="text-right">
+                                {% if item.track_inventory %}
+                                <span class="font-mono text-sm {% if item.below_reorder %}text-amber-600 dark:text-amber-400 font-semibold{% else %}text-slate-900 dark:text-white{% endif %}">
+                                    {{ "%.2f"|format(item.quantity_on_hand|float) }}
+                                </span>
+                                {% if item.below_reorder %}
+                                <span class="inline-block ml-1 text-amber-500" title="Below reorder point">
+                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                                    </svg>
+                                </span>
+                                {% endif %}
+                                {% else %}
+                                <span class="text-xs text-slate-400">N/A</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-right">
+                                {% if item.track_inventory %}
+                                <span class="font-mono text-sm text-slate-900 dark:text-white">
+                                    {{ "%.2f"|format(item.quantity_available|float) }}
+                                </span>
+                                {% else %}
+                                <span class="text-xs text-slate-400">N/A</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {{ status_badge('active' if item.is_active else 'inactive', 'sm') }}
+                            </td>
+                            <td class="text-right">
+                                {{ action_buttons(
+                                    view_href="/inventory/items/" ~ item.item_id,
+                                    edit_href="/inventory/items/" ~ item.item_id ~ "/edit"
+                                ) }}
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="10" class="py-16">
+                                <div class="text-center">
+                                    <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 mb-4">
+                                        <svg class="h-8 w-8 text-slate-400 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+                                        </svg>
+                                    </div>
+                                    <h3 class="text-lg font-semibold text-slate-700 dark:text-slate-300 mb-1">No items found</h3>
+                                    {% if search or category or status %}
+                                    <p class="text-sm text-slate-500 dark:text-slate-400 max-w-sm mx-auto">Try adjusting your search or filter criteria</p>
+                                    <a href="/inventory/items" class="btn btn-secondary mt-4">Clear all filters</a>
+                                    {% else %}
+                                    <p class="text-sm text-slate-500 dark:text-slate-400 max-w-sm mx-auto">Get started by creating your first inventory item</p>
+                                    <a href="/inventory/items/new" class="btn btn-primary mt-4">
+                                        <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                                        </svg>
+                                        Add Item
+                                    </a>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination -->
+            {{ pagination(
+                page=page,
+                total_pages=total_pages,
+                total_count=total_count,
+                limit=limit,
+                search=search,
+                filters={"category": category, "status": status}
+            ) }}
+        </div>
+
+        {# Bulk Action Bar #}
+        {{ bulk_action_bar(
+            actions=[
+                {
+                    "name": "export",
+                    "label": "Export",
+                    "endpoint": "/inventory/items/bulk-export",
+                    "icon": bulk_icon_export(),
+                    "class": "btn-secondary"
+                },
+                {
+                    "name": "activate",
+                    "label": "Activate",
+                    "endpoint": "/inventory/items/bulk-activate",
+                    "icon": bulk_icon_activate(),
+                    "class": "btn-secondary",
+                    "confirm": "Activate selected items?"
+                },
+                {
+                    "name": "deactivate",
+                    "label": "Deactivate",
+                    "endpoint": "/inventory/items/bulk-deactivate",
+                    "icon": bulk_icon_deactivate(),
+                    "class": "btn-secondary",
+                    "confirm": "Deactivate selected items?"
+                },
+                {
+                    "name": "delete",
+                    "label": "Delete",
+                    "endpoint": "/inventory/items/bulk-delete",
+                    "icon": bulk_icon_delete(),
+                    "class": "btn-bulk-danger",
+                    "confirm": "Delete selected items? This action cannot be undone."
+                }
+            ],
+            entity_name="items"
+        ) }}
+    </div>
+</div>
+{% endblock %}

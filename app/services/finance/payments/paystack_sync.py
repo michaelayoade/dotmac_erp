@@ -7,7 +7,7 @@ import logging
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
-from typing import Optional
+from typing import Any, Optional, cast
 from uuid import UUID, uuid4
 
 from sqlalchemy import select
@@ -711,13 +711,13 @@ class PaystackSyncService:
             logger.warning(f"Failed to fetch Paystack balance: {e}")
             self._update_account_balance(account)
 
-    def get_balance(self) -> dict:
+    def get_balance(self) -> list[dict[str, Any]]:
         """
         Get current Paystack balance.
 
         Returns:
-            Dict with balance info
+            List of balance entries
         """
         config = self._get_paystack_config()
         with PaystackClient(config) as client:
-            return client.get_balance()
+            return cast(list[dict[str, Any]], client.get_balance())

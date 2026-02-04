@@ -24,6 +24,7 @@ from app.services.auth_flow import decode_access_token
 from app.services.auth_dependencies import is_session_inactive
 from app.services.common import coerce_uuid
 from app.services.finance.branding import BrandingService, CSSGenerator
+from app.templates import templates  # noqa: F401 - re-exported for web routes
 
 
 def _get_auth_db_for_sso() -> Session | None:
@@ -209,7 +210,7 @@ def landing_content() -> dict:
             "items": [
                 {
                     "title": "One system, fewer handoffs",
-                    "description": "Finance, HR, and operations stay in sync with shared data and approvals.",
+                    "description": "Finance, HR, and operational modules stay in sync with shared data and approvals.",
                 },
                 {
                     "title": "Audit-ready out of the box",
@@ -227,7 +228,7 @@ def landing_content() -> dict:
         },
         "core_modules": {
             "title": "Core ERP modules",
-            "subtitle": "Start with finance and HR, then expand across operations as you grow.",
+            "subtitle": "Start with finance and HR, then add inventory, fleet, support, procurement, and projects.",
             "cards": [
                 {
                     "key": "finance",
@@ -244,17 +245,17 @@ def landing_content() -> dict:
                     "cta_href": "/people/hr/employees",
                 },
                 {
-                    "key": "operations",
-                    "title": "Operations",
-                    "description": "Inventory, procurement, and workflow automation connected to finance.",
-                    "cta_label": "Explore operations",
-                    "cta_href": "/finance/inv/items",
+                    "key": "inventory",
+                    "title": "Inventory",
+                    "description": "Items, warehouses, stock movements, and valuation.",
+                    "cta_label": "Explore inventory",
+                    "cta_href": "/inventory/items",
                 },
             ],
         },
         "modules": {
             "title": "ERP modules, fully connected",
-            "subtitle": "Finance, people, and operations working from a single system of record.",
+            "subtitle": "Finance, people, and operational modules working from a single system of record.",
             "featured": {
                 "title": "General Ledger",
                 "description": (
@@ -290,7 +291,7 @@ def landing_content() -> dict:
                     "title": "Fixed Assets",
                     "description": "Asset register and depreciation schedules.",
                     "cta_label": "View assets",
-                    "cta_href": "/finance/fa/assets",
+                    "cta_href": "/fixed-assets/assets",
                 },
                 {
                     "key": "banking",
@@ -423,7 +424,7 @@ def landing_content() -> dict:
         },
         "cta": {
             "title": "Ready to run on one ERP?",
-            "subtitle": "Unify finance, HR, and operations with {brand}.",
+            "subtitle": "Unify finance, HR, and operational modules with {brand}.",
             "cta_primary": settings.landing_cta_primary,
             "cta_secondary": settings.landing_cta_secondary,
         },
@@ -641,8 +642,18 @@ class WebAuthContext:
             modules.append("finance")
         if self.is_admin or "hr:access" in scopes_set:
             modules.append("people")
-        if self.is_admin or "operations:access" in scopes_set:
-            modules.append("operations")
+        if self.is_admin or "inventory:access" in scopes_set:
+            modules.append("inventory")
+        if self.is_admin or "fleet:access" in scopes_set:
+            modules.append("fleet")
+        if self.is_admin or "support:access" in scopes_set:
+            modules.append("support")
+        if self.is_admin or "procurement:access" in scopes_set:
+            modules.append("procurement")
+        if self.is_admin or "projects:access" in scopes_set:
+            modules.append("projects")
+        if self.is_admin or "settings:access" in scopes_set:
+            modules.append("settings")
         if self.is_admin or "expense:access" in scopes_set:
             modules.append("expense")
         if "self:access" in scopes_set:
@@ -656,7 +667,12 @@ class WebAuthContext:
             "hr": "people",
             "people": "people",
             "finance": "finance",
-            "operations": "operations",
+            "inventory": "inventory",
+            "fleet": "fleet",
+            "support": "support",
+            "procurement": "procurement",
+            "projects": "projects",
+            "settings": "settings",
             "expense": "expense",
             "expenses": "expense",
             "self": "self_service",
@@ -702,8 +718,18 @@ class WebAuthContext:
                 return "/finance/dashboard"
             if module == "people":
                 return "/people/hr/employees"
-            if module == "operations":
-                return "/operations/dashboard"
+            if module == "inventory":
+                return "/inventory/items"
+            if module == "fleet":
+                return "/fleet"
+            if module == "support":
+                return "/support/dashboard"
+            if module == "procurement":
+                return "/procurement"
+            if module == "projects":
+                return "/projects"
+            if module == "settings":
+                return "/settings"
             if module == "expense":
                 return "/expense"
             if module == "self_service":
@@ -1087,16 +1113,74 @@ def require_hr_access(
     return auth
 
 
-def require_operations_access(
+def require_inventory_access(
     auth: WebAuthContext = Depends(require_web_auth),
 ) -> WebAuthContext:
-    """
-    Require access to the Operations module.
-    """
-    if not auth.has_module_access("operations"):
+    """Require access to the Inventory module."""
+    if not auth.has_module_access("inventory"):
         raise HTTPException(
             status_code=403,
-            detail="Operations module access required",
+            detail="Inventory module access required",
+        )
+    return auth
+
+
+def require_fleet_access(
+    auth: WebAuthContext = Depends(require_web_auth),
+) -> WebAuthContext:
+    """Require access to the Fleet module."""
+    if not auth.has_module_access("fleet"):
+        raise HTTPException(
+            status_code=403,
+            detail="Fleet module access required",
+        )
+    return auth
+
+
+def require_support_access(
+    auth: WebAuthContext = Depends(require_web_auth),
+) -> WebAuthContext:
+    """Require access to the Support module."""
+    if not auth.has_module_access("support"):
+        raise HTTPException(
+            status_code=403,
+            detail="Support module access required",
+        )
+    return auth
+
+
+def require_procurement_access(
+    auth: WebAuthContext = Depends(require_web_auth),
+) -> WebAuthContext:
+    """Require access to the Procurement module."""
+    if not auth.has_module_access("procurement"):
+        raise HTTPException(
+            status_code=403,
+            detail="Procurement module access required",
+        )
+    return auth
+
+
+def require_projects_access(
+    auth: WebAuthContext = Depends(require_web_auth),
+) -> WebAuthContext:
+    """Require access to the Projects module."""
+    if not auth.has_module_access("projects"):
+        raise HTTPException(
+            status_code=403,
+            detail="Projects module access required",
+        )
+    return auth
+
+
+def require_settings_access(
+    auth: WebAuthContext = Depends(require_web_auth),
+) -> WebAuthContext:
+    """Require access to the Settings module."""
+    if not auth.has_module_access("settings"):
+        raise HTTPException(
+            status_code=403,
+            detail="Settings module access required",
         )
     return auth
 

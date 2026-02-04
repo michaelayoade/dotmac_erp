@@ -1,0 +1,238 @@
+{% extends "modules/base_modules.html" %}
+
+{% block page_title %}{{ 'Edit Ticket' if ticket else 'New Ticket' }}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+    <a href="/support/dashboard" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Support</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <a href="/support/tickets" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Support Tickets</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="font-medium text-slate-900 dark:text-white">{{ 'Edit' if ticket else 'New' }}</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto">
+    {% if error %}
+    <div class="mb-6 p-4 rounded-lg bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800">
+        <div class="flex items-center gap-3">
+            <svg class="h-5 w-5 text-rose-600 dark:text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+            </svg>
+            <p class="text-sm text-rose-700 dark:text-rose-300">{{ error }}</p>
+        </div>
+    </div>
+    {% endif %}
+
+    <form method="post" enctype="multipart/form-data" action="{{ '/support/tickets/' + ticket.ticket_number if ticket else '/support/tickets' }}" class="card p-6 space-y-6">
+
+        {# Ticket Number (shown only for edit) #}
+        {% if ticket %}
+        <div class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 pb-4 border-b border-slate-200 dark:border-slate-700">
+            <span class="font-medium text-slate-700 dark:text-slate-300">Editing:</span>
+            <span class="font-mono">{{ ticket.ticket_number }}</span>
+        </div>
+        {% endif %}
+
+        {# Subject #}
+        <div>
+            <label class="form-label required">Subject</label>
+            <input type="text" name="subject" value="{{ ticket.subject if ticket else '' }}" required maxlength="255" class="form-input" placeholder="Brief description of the issue">
+        </div>
+
+        {# Description #}
+        <div>
+            <label class="form-label">Description</label>
+            <textarea name="description" rows="5" class="form-input" placeholder="Detailed description of the issue...">{{ ticket.description if ticket else '' }}</textarea>
+        </div>
+
+        {# Priority and Date #}
+        <div class="grid gap-6 sm:grid-cols-2">
+            <div>
+                <label class="form-label required">Priority</label>
+                <select name="priority" required class="form-input">
+                    {% for p in priorities %}
+                    <option value="{{ p.value }}" {{ 'selected' if (ticket and ticket.priority.value == p.value) or (not ticket and p.value == 'MEDIUM') }}>
+                        {{ p.label }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="form-label">Opening Date</label>
+                <input type="date" name="opening_date" value="{{ ticket.opening_date.isoformat() if ticket and ticket.opening_date else today }}" class="form-input">
+            </div>
+        </div>
+
+        {# Customer & Category #}
+        <div class="grid gap-6 sm:grid-cols-2">
+            <div>
+                <label class="form-label">Customer</label>
+                <select id="customer_id" name="customer_id" class="form-input">
+                    <option value="">No customer linked</option>
+                    {% for cust in customers %}
+                    <option value="{{ cust.customer_id }}"
+                            data-email="{{ cust.customer_email or '' }}"
+                            data-phone="{{ cust.customer_phone or '' }}"
+                            data-billing="{{ cust.billing_address or '' }}"
+                            data-shipping="{{ cust.shipping_address or '' }}"
+                            {{ 'selected' if ticket and ticket.customer_id and ticket.customer_id|string == cust.customer_id }}>
+                        {{ cust.customer_name }} ({{ cust.customer_code }})
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="form-label">Category</label>
+                <select name="category_id" class="form-input">
+                    <option value="">No category</option>
+                    {% for cat in categories %}
+                    <option value="{{ cat.value }}" {{ 'selected' if ticket and ticket.category_id and ticket.category_id|string == cat.value }}>
+                        {{ cat.label }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div class="grid gap-6 sm:grid-cols-2">
+            <div>
+                <label class="form-label">Contact Email</label>
+                <input id="contact_email" name="contact_email" type="email"
+                       value="{{ ticket.contact_email if ticket else '' }}"
+                       class="form-input" placeholder="Auto-filled from customer or enter manually">
+                <p class="text-xs text-slate-400 mt-1">Auto-populated from customer, but can be edited</p>
+            </div>
+            <div>
+                <label class="form-label">Contact Phone</label>
+                <input id="contact_phone" name="contact_phone" type="tel"
+                       value="{{ ticket.contact_phone if ticket else '' }}"
+                       class="form-input" placeholder="Auto-filled from customer or enter manually">
+            </div>
+        </div>
+        <div>
+            <label class="form-label">Address</label>
+            <textarea id="contact_address" name="contact_address" rows="2"
+                      class="form-input" placeholder="Auto-filled from customer or enter manually">{{ ticket.contact_address if ticket else '' }}</textarea>
+        </div>
+
+        {# Raised By #}
+        <div>
+            <label class="form-label">Raised By (Email)</label>
+            <input type="email" name="raised_by_email" value="{{ ticket.raised_by_email if ticket else '' }}" maxlength="255" class="form-input" placeholder="email@example.com">
+            <p class="text-xs text-slate-400 mt-1">The email address of the person who raised this ticket</p>
+        </div>
+
+        {# Team & Assignment #}
+        <div class="grid gap-6 sm:grid-cols-2">
+            <div>
+                <label class="form-label">Team</label>
+                <select name="team_id" class="form-input">
+                    <option value="">No team assigned</option>
+                    {% for tm in teams %}
+                    <option value="{{ tm.value }}" {{ 'selected' if ticket and ticket.team_id and ticket.team_id|string == tm.value }}>
+                        {{ tm.label }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="form-label">Assign To</label>
+                <select name="assigned_to_id" class="form-input">
+                    <option value="">Unassigned</option>
+                    {% for emp in employees %}
+                    <option value="{{ emp.employee_id }}" {{ 'selected' if ticket and ticket.assigned_to_id and ticket.assigned_to_id|string == emp.employee_id }}>
+                        {{ emp.full_name }} ({{ emp.employee_code }})
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        {# Project #}
+        <div>
+            <label class="form-label">Project</label>
+            <select name="project_id" class="form-input">
+                <option value="">No project</option>
+                {% for proj in projects %}
+                <option value="{{ proj.project_id }}" {{ 'selected' if ticket and ticket.project_id and ticket.project_id|string == proj.project_id }}>
+                    {{ proj.project_code }} - {{ proj.project_name }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        {# Attachments #}
+        <div>
+            <label class="form-label">Attachments</label>
+            <input type="file" name="files" multiple
+                   accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.zip"
+                   class="block w-full text-sm text-slate-500 dark:text-slate-400
+                          file:mr-4 file:py-2 file:px-4
+                          file:rounded-lg file:border-0
+                          file:text-sm file:font-medium
+                          file:bg-amber-50 file:text-amber-700
+                          hover:file:bg-amber-100
+                          dark:file:bg-amber-900/20 dark:file:text-amber-400">
+            <p class="mt-1 text-xs text-slate-400">Max 10MB per file. Images, PDFs, Office docs, or ZIP files.</p>
+        </div>
+
+        {# Actions #}
+        <div class="flex items-center justify-between pt-4 border-t border-slate-200 dark:border-slate-700">
+            <a href="{{ '/support/tickets/' + ticket.ticket_number if ticket else '/support/tickets' }}" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">
+                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                </svg>
+                {{ 'Update Ticket' if ticket else 'Create Ticket' }}
+            </button>
+        </div>
+    </form>
+</div>
+
+<script>
+    (function () {
+        const select = document.getElementById("customer_id");
+        const email = document.getElementById("contact_email");
+        const phone = document.getElementById("contact_phone");
+        const address = document.getElementById("contact_address");
+
+        // Only auto-populate if fields are empty (don't overwrite existing data on edit)
+        const updateFromCustomer = () => {
+            const opt = select.options[select.selectedIndex];
+            if (!opt || !opt.value) {
+                return;
+            }
+            // Only fill if currently empty
+            if (!email.value) {
+                email.value = opt.dataset.email || "";
+            }
+            if (!phone.value) {
+                phone.value = opt.dataset.phone || "";
+            }
+            if (!address.value) {
+                // Use billing address as default
+                address.value = opt.dataset.billing || opt.dataset.shipping || "";
+            }
+        };
+
+        // On customer change, always update (user is explicitly selecting a new customer)
+        select.addEventListener("change", () => {
+            const opt = select.options[select.selectedIndex];
+            if (opt && opt.value) {
+                email.value = opt.dataset.email || "";
+                phone.value = opt.dataset.phone || "";
+                address.value = opt.dataset.billing || opt.dataset.shipping || "";
+            }
+        });
+
+        // On initial load, only populate if fields are empty (preserve existing values on edit)
+        updateFromCustomer();
+    })();
+</script>
+{% endblock %}

@@ -8,7 +8,7 @@ from uuid import uuid4
 
 import pytest
 
-from app.services.finance.inv.warehouse import (
+from app.services.inventory.warehouse import (
     WarehouseService,
     WarehouseInput,
     WarehouseLocationInput,
@@ -315,7 +315,7 @@ class TestDeactivateWarehouse:
     def test_deactivate_warehouse_with_inventory_fails(self, service, mock_db, org_id):
         """Test deactivating warehouse with inventory fails."""
         from fastapi import HTTPException
-        from app.services.finance.inv.warehouse import InventoryBalance, WarehouseService
+        from app.services.inventory.warehouse import InventoryBalance, WarehouseService
 
         warehouse = MockWarehouse(organization_id=org_id, is_active=True)
         mock_db.get.return_value = warehouse

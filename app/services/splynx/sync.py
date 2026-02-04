@@ -11,7 +11,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
+from typing import Any, Optional, TypedDict
 from uuid import UUID
 
 from sqlalchemy import select
@@ -36,6 +36,36 @@ from app.services.splynx.client import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+class PaystackReconcileResult(TypedDict):
+    matched_by_reference: int
+    matched_by_date_amount: int
+    matched_by_customer: int
+    ambiguous_matches: int
+    unmatched_payments: int
+    unmatched_statements: int
+    total_matched_amount: Decimal
+    errors: list[str]
+
+
+class BankReconcileResult(TypedDict):
+    bank_name: str
+    matched_by_date_amount: int
+    matched_by_customer: int
+    ambiguous_matches: int
+    unmatched_payments: int
+    unmatched_statements: int
+    total_matched_amount: Decimal
+    errors: list[str]
+
+
+class BulkReconcileResult(TypedDict):
+    bank_name: str
+    bulk_matches: int
+    payments_matched: int
+    total_matched_amount: Decimal
+    errors: list[str]
 
 
 @dataclass
@@ -1065,7 +1095,7 @@ class SplynxSyncService:
     def reconcile_paystack_payments(
         self,
         dry_run: bool = False,
-    ) -> dict:
+    ) -> PaystackReconcileResult:
         """
         Reconcile Splynx Paystack payments with bank statement lines.
 
@@ -1092,7 +1122,7 @@ class SplynxSyncService:
 
         logger.info("Starting Paystack payment reconciliation (dry_run=%s)", dry_run)
 
-        result = {
+        result: PaystackReconcileResult = {
             "matched_by_reference": 0,
             "matched_by_date_amount": 0,
             "matched_by_customer": 0,
@@ -1245,7 +1275,7 @@ class SplynxSyncService:
 
         # Build date+amount index for statement lines
         # Key: (date, amount_cents) -> list of line_ids
-        line_index: dict[tuple, list] = {}
+        line_index: dict[tuple[object, int], list[UUID]] = {}
         for line in unmatched_lines:
             # Round to 2 decimals to handle precision differences
             amount_cents = int(line.amount * 100)
@@ -1302,13 +1332,13 @@ class SplynxSyncService:
 
         # Tier 3: Customer-based matching for ambiguous payments
         # Group ambiguous payments by (customer_id, date, amount_cents)
-        customer_payment_groups: dict[tuple, list] = defaultdict(list)
+        customer_payment_groups: dict[tuple[UUID, object, int], list[Any]] = defaultdict(list)
         for payment in ambiguous_payments:
             if payment.payment_id in matched_payment_ids:
                 continue
             amount_cents = int(payment.amount * 100)
-            key = (payment.customer_id, payment.payment_date, amount_cents)
-            customer_payment_groups[key].append(payment)
+            customer_key = (payment.customer_id, payment.payment_date, amount_cents)
+            customer_payment_groups[customer_key].append(payment)
 
         # For each customer with unique payment on date+amount, try to match
         for (customer_id, pay_date, amount_cents), payments in customer_payment_groups.items():
@@ -1384,7 +1414,7 @@ class SplynxSyncService:
         bank_account_ids: list[UUID],
         bank_name: str = "Bank",
         dry_run: bool = False,
-    ) -> dict:
+    ) -> BankReconcileResult:
         """
         Reconcile Splynx payments with bank statement lines for specific bank accounts.
 
@@ -1406,7 +1436,7 @@ class SplynxSyncService:
 
         logger.info("Starting %s payment reconciliation (dry_run=%s)", bank_name, dry_run)
 
-        result = {
+        result: BankReconcileResult = {
             "bank_name": bank_name,
             "matched_by_date_amount": 0,
             "matched_by_customer": 0,
@@ -1467,7 +1497,7 @@ class SplynxSyncService:
         matched_line_ids: set[UUID] = set()
 
         # Build date+amount index for statement lines
-        line_index: dict[tuple, list] = {}
+        line_index: dict[tuple[object, int], list[UUID]] = {}
         for line in statement_lines:
             amount_cents = int(line.amount * 100)
             key = (line.transaction_date, amount_cents)
@@ -1518,13 +1548,13 @@ class SplynxSyncService:
         )
 
         # Tier 2: Customer-based matching
-        customer_payment_groups: dict[tuple, list] = defaultdict(list)
+        customer_payment_groups: dict[tuple[UUID, object, int], list[Any]] = defaultdict(list)
         for payment in ambiguous_payments:
             if payment.payment_id in matched_payment_ids:
                 continue
             amount_cents = int(payment.amount * 100)
-            key = (payment.customer_id, payment.payment_date, amount_cents)
-            customer_payment_groups[key].append(payment)
+            customer_key = (payment.customer_id, payment.payment_date, amount_cents)
+            customer_payment_groups[customer_key].append(payment)
 
         for (customer_id, pay_date, amount_cents), group_payments in customer_payment_groups.items():
             if len(group_payments) != 1:
@@ -1588,7 +1618,7 @@ class SplynxSyncService:
         bank_account_ids: list[UUID],
         bank_name: str = "Bank",
         dry_run: bool = False,
-    ) -> dict:
+    ) -> BulkReconcileResult:
         """
         Match bulk payments where customer's multiple Splynx payments on same day
         sum to a single bank statement line.
@@ -1609,7 +1639,7 @@ class SplynxSyncService:
 
         logger.info("Starting bulk payment reconciliation for %s (dry_run=%s)", bank_name, dry_run)
 
-        result = {
+        result: BulkReconcileResult = {
             "bank_name": bank_name,
             "bulk_matches": 0,
             "payments_matched": 0,
@@ -1743,25 +1773,27 @@ class SplynxSyncService:
             {"org_id": self.organization_id},
         ).fetchall()
 
-        results = {
+        totals: dict[str, int | Decimal] = {
+            "matched_by_date_amount": 0,
+            "matched_by_customer": 0,
+            "matched_by_reference": 0,
+            "ambiguous_matches": 0,
+            "total_matched_amount": Decimal("0"),
+        }
+        results: dict[str, Any] = {
             "banks": {},
-            "totals": {
-                "matched_by_date_amount": 0,
-                "matched_by_customer": 0,
-                "matched_by_reference": 0,
-                "ambiguous_matches": 0,
-                "total_matched_amount": Decimal("0"),
-            },
+            "totals": totals,
         }
 
         for bank in banks:
             bank_id = bank.bank_account_id
             bank_display = f"{bank.account_name} ({bank.bank_name})"
+            bank_result: BankReconcileResult | PaystackReconcileResult
 
             # Check if this is Paystack (use special method with reference matching)
             if "paystack" in bank.account_name.lower() or "paystack" in bank.bank_name.lower():
                 bank_result = self.reconcile_paystack_payments(dry_run=dry_run)
-                results["totals"]["matched_by_reference"] += bank_result.get("matched_by_reference", 0)
+                totals["matched_by_reference"] += bank_result.get("matched_by_reference", 0)
             else:
                 bank_result = self.reconcile_bank_payments(
                     bank_account_ids=[bank_id],
@@ -1772,10 +1804,10 @@ class SplynxSyncService:
             results["banks"][bank.account_name] = bank_result
 
             # Update totals
-            results["totals"]["matched_by_date_amount"] += bank_result.get("matched_by_date_amount", 0)
-            results["totals"]["matched_by_customer"] += bank_result.get("matched_by_customer", 0)
-            results["totals"]["ambiguous_matches"] += bank_result.get("ambiguous_matches", 0)
-            results["totals"]["total_matched_amount"] += bank_result.get("total_matched_amount", Decimal("0"))
+            totals["matched_by_date_amount"] += bank_result.get("matched_by_date_amount", 0)
+            totals["matched_by_customer"] += bank_result.get("matched_by_customer", 0)
+            totals["ambiguous_matches"] += bank_result.get("ambiguous_matches", 0)
+            totals["total_matched_amount"] += bank_result.get("total_matched_amount", Decimal("0"))
 
         # Phase 2: Bulk payment matching for remaining unmatched
         # (Multiple Splynx payments on same day summing to one bank line)
@@ -1787,8 +1819,8 @@ class SplynxSyncService:
         )
 
         results["bulk_matching"] = bulk_result
-        results["totals"]["bulk_matches"] = bulk_result.get("bulk_matches", 0)
-        results["totals"]["bulk_payments_matched"] = bulk_result.get("payments_matched", 0)
-        results["totals"]["total_matched_amount"] += bulk_result.get("total_matched_amount", Decimal("0"))
+        totals["bulk_matches"] = bulk_result.get("bulk_matches", 0)
+        totals["bulk_payments_matched"] = bulk_result.get("payments_matched", 0)
+        totals["total_matched_amount"] += bulk_result.get("total_matched_amount", Decimal("0"))
 
         return results

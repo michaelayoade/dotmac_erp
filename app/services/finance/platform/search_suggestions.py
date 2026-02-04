@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 from app.models.finance.ar.customer import Customer
 from app.models.finance.ap.supplier import Supplier
 from app.models.finance.gl.account import Account
-from app.models.finance.inv.item import Item
+from app.models.inventory.item import Item
 from app.models.finance.tax.tax_code import TaxCode
 from app.models.finance.banking.bank_account import BankAccount, BankAccountStatus
 

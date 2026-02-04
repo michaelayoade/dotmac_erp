@@ -10,8 +10,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.finance.gl.account import Account
-from app.models.finance.inv.item import Item
-from app.models.finance.inv.item_category import ItemCategory
+from app.models.inventory.item import Item
+from app.models.inventory.item_category import ItemCategory
 from app.services.erpnext.mappings.items import ItemMapping, ItemCategoryMapping
 
 from .base import BaseSyncService

@@ -44,7 +44,7 @@ class CommentWebService:
         ticket = ticket_service.get_ticket(db, org_id, tid)
         if not ticket:
             return RedirectResponse(
-                url="/operations/support/tickets?error=Ticket+not+found",
+                url="/support/tickets?error=Ticket+not+found",
                 status_code=303,
             )
 
@@ -75,7 +75,7 @@ class CommentWebService:
             logger.exception("Failed to add comment")
 
         return RedirectResponse(
-            url=f"/operations/support/tickets/{ticket.ticket_number}#comments",
+            url=f"/support/tickets/{ticket.ticket_number}#comments",
             status_code=303,
         )
 
@@ -99,7 +99,7 @@ class CommentWebService:
             logger.exception("Failed to delete comment")
 
         return RedirectResponse(
-            url=f"/operations/support/tickets/{ticket_id}#comments",
+            url=f"/support/tickets/{ticket_id}#comments",
             status_code=303,
         )
 

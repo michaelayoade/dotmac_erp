@@ -382,7 +382,7 @@ class GoodsReceiptWebService:
                         })
 
         # Get warehouses for selection
-        from app.models.finance.inv.warehouse import Warehouse
+        from app.models.inventory.warehouse import Warehouse
         warehouses = (
             db.query(Warehouse)
             .filter(

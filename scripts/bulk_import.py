@@ -42,8 +42,8 @@ from app.models.finance.ap.supplier import Supplier, SupplierType
 from app.models.finance.ap.supplier_invoice import SupplierInvoice, SupplierInvoiceType, SupplierInvoiceStatus
 from app.models.finance.ap.supplier_invoice_line import SupplierInvoiceLine
 from app.models.finance.ap.supplier_payment import SupplierPayment, APPaymentMethod, APPaymentStatus
-from app.models.finance.inv.item import Item, ItemType, CostingMethod
-from app.models.finance.inv.item_category import ItemCategory
+from app.models.inventory.item import Item, ItemType, CostingMethod
+from app.models.inventory.item_category import ItemCategory
 
 
 # Import paths

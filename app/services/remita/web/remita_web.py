@@ -6,7 +6,7 @@ Provides request/response formatting for Remita web UI routes.
 
 import logging
 from decimal import Decimal
-from typing import Optional
+from typing import Any, Optional
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -368,6 +368,7 @@ class RemitaWebService:
         except ValueError:
             raise ValueError("Invalid date filter")
 
+        stmt: Any
         if source_type == "ap_invoice":
             stmt = (
                 select(SupplierInvoice, Supplier)

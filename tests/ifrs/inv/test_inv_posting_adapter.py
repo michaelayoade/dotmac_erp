@@ -11,11 +11,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.services.finance.inv.inv_posting_adapter import (
+from app.services.inventory.inv_posting_adapter import (
     INVPostingAdapter,
     INVPostingResult,
 )
-from app.models.finance.inv.inventory_transaction import TransactionType
+from app.models.inventory.inventory_transaction import TransactionType
 
 
 class MockItem:
@@ -121,8 +121,8 @@ class MockPostingResult:
 class TestPostReceipt:
     """Tests for post_receipt method."""
 
-    @patch("app.services.finance.inv.posting.receipt.LedgerPostingService")
-    @patch("app.services.finance.inv.posting.receipt.JournalService")
+    @patch("app.services.inventory.posting.receipt.LedgerPostingService")
+    @patch("app.services.inventory.posting.receipt.JournalService")
     def test_post_receipt_success(self, mock_journal_service, mock_ledger_posting):
         """Test successful receipt posting."""
         mock_db = MagicMock()
@@ -176,8 +176,8 @@ class TestPostReceipt:
         assert result.success is True
         assert result.journal_entry_id == mock_journal.journal_entry_id
 
-    @patch("app.services.finance.inv.posting.receipt.LedgerPostingService")
-    @patch("app.services.finance.inv.posting.receipt.JournalService")
+    @patch("app.services.inventory.posting.receipt.LedgerPostingService")
+    @patch("app.services.inventory.posting.receipt.JournalService")
     def test_post_receipt_with_ap_control_account(self, mock_journal_service, mock_ledger_posting):
         """Test receipt posting with AP control account specified."""
         mock_db = MagicMock()
@@ -370,8 +370,8 @@ class TestPostReceipt:
         assert result.success is False
         assert "Item category not found" in result.message
 
-    @patch("app.services.finance.inv.posting.receipt.LedgerPostingService")
-    @patch("app.services.finance.inv.posting.receipt.JournalService")
+    @patch("app.services.inventory.posting.receipt.LedgerPostingService")
+    @patch("app.services.inventory.posting.receipt.JournalService")
     def test_post_receipt_with_cost_variance(self, mock_journal_service, mock_ledger_posting):
         """Test receipt posting with cost variance (standard costing)."""
         mock_db = MagicMock()
@@ -421,8 +421,8 @@ class TestPostReceipt:
 
         assert result.success is True
 
-    @patch("app.services.finance.inv.posting.receipt.LedgerPostingService")
-    @patch("app.services.finance.inv.posting.receipt.JournalService")
+    @patch("app.services.inventory.posting.receipt.LedgerPostingService")
+    @patch("app.services.inventory.posting.receipt.JournalService")
     def test_post_receipt_ledger_posting_fails(self, mock_journal_service, mock_ledger_posting):
         """Test receipt posting when ledger posting fails."""
         mock_db = MagicMock()
@@ -475,8 +475,8 @@ class TestPostReceipt:
 class TestPostIssue:
     """Tests for post_issue method."""
 
-    @patch("app.services.finance.inv.posting.issue.LedgerPostingService")
-    @patch("app.services.finance.inv.posting.issue.JournalService")
+    @patch("app.services.inventory.posting.issue.LedgerPostingService")
+    @patch("app.services.inventory.posting.issue.JournalService")
     def test_post_issue_success(self, mock_journal_service, mock_ledger_posting):
         """Test successful issue posting."""
         mock_db = MagicMock()
@@ -523,8 +523,8 @@ class TestPostIssue:
         assert result.success is True
         assert result.journal_entry_id == mock_journal.journal_entry_id
 
-    @patch("app.services.finance.inv.posting.issue.LedgerPostingService")
-    @patch("app.services.finance.inv.posting.issue.JournalService")
+    @patch("app.services.inventory.posting.issue.LedgerPostingService")
+    @patch("app.services.inventory.posting.issue.JournalService")
     def test_post_issue_with_expense_account(self, mock_journal_service, mock_ledger_posting):
         """Test issue posting with override expense account."""
         mock_db = MagicMock()
@@ -649,8 +649,8 @@ class TestPostIssue:
 class TestPostAdjustment:
     """Tests for post_adjustment method."""
 
-    @patch("app.services.finance.inv.posting.adjustment.LedgerPostingService")
-    @patch("app.services.finance.inv.posting.adjustment.JournalService")
+    @patch("app.services.inventory.posting.adjustment.LedgerPostingService")
+    @patch("app.services.inventory.posting.adjustment.JournalService")
     def test_post_positive_adjustment_success(self, mock_journal_service, mock_ledger_posting):
         """Test successful positive adjustment posting."""
         mock_db = MagicMock()
@@ -697,8 +697,8 @@ class TestPostAdjustment:
 
         assert result.success is True
 
-    @patch("app.services.finance.inv.posting.adjustment.LedgerPostingService")
-    @patch("app.services.finance.inv.posting.adjustment.JournalService")
+    @patch("app.services.inventory.posting.adjustment.LedgerPostingService")
+    @patch("app.services.inventory.posting.adjustment.JournalService")
     def test_post_negative_adjustment_success(self, mock_journal_service, mock_ledger_posting):
         """Test successful negative adjustment posting."""
         mock_db = MagicMock()
@@ -792,8 +792,8 @@ class TestPostAdjustment:
         assert result.success is False
         assert "not an adjustment" in result.message
 
-    @patch("app.services.finance.inv.posting.adjustment.LedgerPostingService")
-    @patch("app.services.finance.inv.posting.adjustment.JournalService")
+    @patch("app.services.inventory.posting.adjustment.LedgerPostingService")
+    @patch("app.services.inventory.posting.adjustment.JournalService")
     def test_post_scrap_adjustment(self, mock_journal_service, mock_ledger_posting):
         """Test posting scrap as adjustment."""
         mock_db = MagicMock()
@@ -844,7 +844,7 @@ class TestPostAdjustment:
 class TestPostTransaction:
     """Tests for post_transaction router method."""
 
-    @patch("app.services.finance.inv.posting.router.post_receipt")
+    @patch("app.services.inventory.posting.router.post_receipt")
     def test_routes_receipt_to_post_receipt(self, mock_post_receipt):
         """Test routing RECEIPT to post_receipt."""
         mock_db = MagicMock()
@@ -870,7 +870,7 @@ class TestPostTransaction:
 
         mock_post_receipt.assert_called_once()
 
-    @patch("app.services.finance.inv.posting.router.post_receipt")
+    @patch("app.services.inventory.posting.router.post_receipt")
     def test_routes_return_to_post_receipt(self, mock_post_receipt):
         """Test routing RETURN to post_receipt."""
         mock_db = MagicMock()
@@ -896,7 +896,7 @@ class TestPostTransaction:
 
         mock_post_receipt.assert_called_once()
 
-    @patch("app.services.finance.inv.posting.router.post_issue")
+    @patch("app.services.inventory.posting.router.post_issue")
     def test_routes_issue_to_post_issue(self, mock_post_issue):
         """Test routing ISSUE to post_issue."""
         mock_db = MagicMock()
@@ -922,7 +922,7 @@ class TestPostTransaction:
 
         mock_post_issue.assert_called_once()
 
-    @patch("app.services.finance.inv.posting.router.post_issue")
+    @patch("app.services.inventory.posting.router.post_issue")
     def test_routes_sale_to_post_issue(self, mock_post_issue):
         """Test routing SALE to post_issue."""
         mock_db = MagicMock()
@@ -948,7 +948,7 @@ class TestPostTransaction:
 
         mock_post_issue.assert_called_once()
 
-    @patch("app.services.finance.inv.posting.router.post_adjustment")
+    @patch("app.services.inventory.posting.router.post_adjustment")
     def test_routes_adjustment_to_post_adjustment(self, mock_post_adjustment):
         """Test routing ADJUSTMENT to post_adjustment."""
         mock_db = MagicMock()
@@ -974,7 +974,7 @@ class TestPostTransaction:
 
         mock_post_adjustment.assert_called_once()
 
-    @patch("app.services.finance.inv.posting.router.post_adjustment")
+    @patch("app.services.inventory.posting.router.post_adjustment")
     def test_routes_scrap_to_post_adjustment(self, mock_post_adjustment):
         """Test routing SCRAP to post_adjustment."""
         mock_db = MagicMock()

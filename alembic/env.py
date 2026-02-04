@@ -14,6 +14,8 @@ from app.models import (  # noqa: F401
     scheduler,
     finance,
 )
+import app.models.procurement  # noqa: F401
+import app.models.finance.ipsas  # noqa: F401
 
 config = context.config
 

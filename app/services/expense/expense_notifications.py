@@ -141,7 +141,7 @@ class ExpenseNotificationService:
 
         # Build claim URL
         app_url = _get_app_url()
-        claim_url = f"{app_url}/operations/expense/claims/{claim.claim_id}"
+        claim_url = f"{app_url}/expense/claims/{claim.claim_id}"
 
         # Subject
         subject = f"Expense Approval Needed: {claim.claim_number}"
@@ -254,7 +254,7 @@ This is an automated notification from the expense management system.
         net_payable = claim.net_payable_amount or amount
 
         app_url = _get_app_url()
-        claim_url = f"{app_url}/operations/expense/claims/{claim.claim_id}"
+        claim_url = f"{app_url}/expense/claims/{claim.claim_id}"
 
         subject = f"Expense Claim Approved: {claim.claim_number}"
 
@@ -363,7 +363,7 @@ View claim at: {claim_url}
         currency = claim.currency_code
 
         app_url = _get_app_url()
-        claim_url = f"{app_url}/operations/expense/claims/{claim.claim_id}"
+        claim_url = f"{app_url}/expense/claims/{claim.claim_id}"
 
         subject = f"Expense Claim Rejected: {claim.claim_number}"
 
@@ -472,7 +472,7 @@ View claim at: {claim_url}
         currency = claim.currency_code
 
         app_url = _get_app_url()
-        claim_url = f"{app_url}/operations/expense/claims/{claim.claim_id}"
+        claim_url = f"{app_url}/expense/claims/{claim.claim_id}"
 
         if is_blocked:
             subject = f"Expense Claim Blocked: Limit Exceeded - {claim.claim_number}"
@@ -584,7 +584,7 @@ View claim at: {claim_url}
         currency = claim.currency_code
 
         app_url = _get_app_url()
-        claim_url = f"{app_url}/operations/expense/claims/{claim.claim_id}"
+        claim_url = f"{app_url}/expense/claims/{claim.claim_id}"
 
         subject = f"Reminder: Expense Claim Awaiting Your Approval - {claim.claim_number}"
 
@@ -686,7 +686,7 @@ Review now at: {claim_url}
         currency = claim.currency_code
 
         app_url = _get_app_url()
-        claim_url = f"{app_url}/operations/expense/claims/{claim.claim_id}"
+        claim_url = f"{app_url}/expense/claims/{claim.claim_id}"
 
         subject = f"Expense Reimbursement Paid: {claim.claim_number}"
 

@@ -154,8 +154,8 @@ def _format_ticket_for_list(ticket: Ticket) -> Dict[str, Any]:
     return {
         "ticket_id": str(ticket.ticket_id),
         "ticket_number": ticket.ticket_number,
-        "ticket_url": f"/operations/support/tickets/{ticket.ticket_number or ticket.ticket_id}",
-        "ticket_edit_url": f"/operations/support/tickets/{ticket.ticket_number or ticket.ticket_id}/edit",
+        "ticket_url": f"/support/tickets/{ticket.ticket_number or ticket.ticket_id}",
+        "ticket_edit_url": f"/support/tickets/{ticket.ticket_number or ticket.ticket_id}/edit",
         "subject": ticket.subject,
         "display_subject": display_subject,
         "description_preview": (ticket.description[:100] + "...") if ticket.description and len(ticket.description) > 100 else ticket.description,
@@ -278,7 +278,7 @@ class SupportWebService:
 
     @staticmethod
     def _ticket_url(ticket: Ticket) -> str:
-        return f"/operations/support/tickets/{ticket.ticket_number or ticket.ticket_id}"
+        return f"/support/tickets/{ticket.ticket_number or ticket.ticket_id}"
 
     def list_tickets_response(
         self,
@@ -391,7 +391,7 @@ class SupportWebService:
         }
 
         return templates.TemplateResponse(
-            request, "operations/support/tickets.html", context
+            request, "support/tickets.html", context
         )
 
     def ticket_detail_response(
@@ -409,7 +409,7 @@ class SupportWebService:
         if not ticket:
             return templates.TemplateResponse(
                 request,
-                "operations/support/ticket_detail.html",
+                "support/ticket_detail.html",
                 {
                     **base_context(request, auth, "Ticket Not Found", "support", db=db),
                     "ticket": None,
@@ -460,7 +460,7 @@ class SupportWebService:
         }
 
         return templates.TemplateResponse(
-            request, "operations/support/ticket_detail.html", context
+            request, "support/ticket_detail.html", context
         )
 
     def ticket_form_response(
@@ -520,7 +520,7 @@ class SupportWebService:
         }
 
         return templates.TemplateResponse(
-            request, "operations/support/ticket_form.html", context
+            request, "support/ticket_form.html", context
         )
 
     def create_ticket_response(
@@ -597,7 +597,7 @@ class SupportWebService:
             logger.exception("Failed to create ticket")
             error = self._format_ticket_error(e)
             return RedirectResponse(
-                url=f"/operations/support/tickets/new?error={quote(error)}",
+                url=f"/support/tickets/new?error={quote(error)}",
                 status_code=303,
             )
 
@@ -645,7 +645,7 @@ class SupportWebService:
         ticket_ref = self._resolve_ticket_ref(db, org_id, ticket_id)
         if not ticket_ref:
             return RedirectResponse(
-                url="/operations/support/tickets",
+                url="/support/tickets",
                 status_code=303,
             )
 
@@ -668,7 +668,7 @@ class SupportWebService:
 
             if not ticket:
                 return RedirectResponse(
-                    url="/operations/support/tickets",
+                    url="/support/tickets",
                     status_code=303,
                 )
 
@@ -712,7 +712,7 @@ class SupportWebService:
         ticket_ref = self._resolve_ticket_ref(db, org_id, ticket_id)
         if not ticket_ref:
             return RedirectResponse(
-                url="/operations/support/tickets",
+                url="/support/tickets",
                 status_code=303,
             )
 
@@ -746,7 +746,7 @@ class SupportWebService:
         ticket_ref = self._resolve_ticket_ref(db, org_id, ticket_id)
         if not ticket_ref:
             return RedirectResponse(
-                url="/operations/support/tickets",
+                url="/support/tickets",
                 status_code=303,
             )
 
@@ -777,7 +777,7 @@ class SupportWebService:
         ticket_ref = self._resolve_ticket_ref(db, org_id, ticket_id)
         if not ticket_ref:
             return RedirectResponse(
-                url="/operations/support/tickets",
+                url="/support/tickets",
                 status_code=303,
             )
 
@@ -806,7 +806,7 @@ class SupportWebService:
         ticket_ref = self._resolve_ticket_ref(db, org_id, ticket_id)
         if not ticket_ref:
             return RedirectResponse(
-                url="/operations/support/tickets",
+                url="/support/tickets",
                 status_code=303,
             )
 
@@ -817,7 +817,7 @@ class SupportWebService:
         if success:
             db.commit()
             return RedirectResponse(
-                url="/operations/support/tickets?archived=success",
+                url="/support/tickets?archived=success",
                 status_code=303,
             )
 
@@ -839,7 +839,7 @@ class SupportWebService:
         ticket_ref = self._resolve_ticket_ref(db, org_id, ticket_id)
         if not ticket_ref:
             return RedirectResponse(
-                url="/operations/support/tickets",
+                url="/support/tickets",
                 status_code=303,
             )
 
@@ -850,7 +850,7 @@ class SupportWebService:
         if success:
             db.commit()
             return RedirectResponse(
-                url="/operations/support/tickets?deleted=success",
+                url="/support/tickets?deleted=success",
                 status_code=303,
             )
 
@@ -872,7 +872,7 @@ class SupportWebService:
         ticket_ref = self._resolve_ticket_ref(db, org_id, ticket_id)
         if not ticket_ref:
             return RedirectResponse(
-                url="/operations/support/tickets/archived?error=restore_failed",
+                url="/support/tickets/archived?error=restore_failed",
                 status_code=303,
             )
 
@@ -886,7 +886,7 @@ class SupportWebService:
             )
 
         return RedirectResponse(
-            url="/operations/support/tickets/archived?error=restore_failed",
+            url="/support/tickets/archived?error=restore_failed",
             status_code=303,
         )
 
@@ -932,7 +932,7 @@ class SupportWebService:
         }
 
         return templates.TemplateResponse(
-            request, "operations/support/archived_tickets.html", context
+            request, "support/archived_tickets.html", context
         )
 
     def dashboard_context(
@@ -1090,7 +1090,7 @@ class SupportWebService:
         }
 
         return templates.TemplateResponse(
-            request, "operations/support/sla_dashboard.html", context
+            request, "support/sla_dashboard.html", context
         )
 
     def breached_tickets_response(
@@ -1154,7 +1154,7 @@ class SupportWebService:
         }
 
         return templates.TemplateResponse(
-            request, "operations/support/breached_tickets.html", context
+            request, "support/breached_tickets.html", context
         )
 
     def aging_report_response(
@@ -1200,7 +1200,7 @@ class SupportWebService:
         }
 
         return templates.TemplateResponse(
-            request, "operations/support/aging_report.html", context
+            request, "support/aging_report.html", context
         )
 
     def _format_sla_status(self, sla_status) -> Optional[Dict[str, Any]]:
@@ -1513,7 +1513,7 @@ class SupportWebService:
         # Validate status is provided
         if not new_status or not new_status.strip():
             return RedirectResponse(
-                url="/operations/support/tickets?error=no_status_selected",
+                url="/support/tickets?error=no_status_selected",
                 status_code=303,
             )
 
@@ -1528,7 +1528,7 @@ class SupportWebService:
 
         if not uuids:
             return RedirectResponse(
-                url="/operations/support/tickets?error=no_tickets_selected",
+                url="/support/tickets?error=no_tickets_selected",
                 status_code=303,
             )
 
@@ -1541,14 +1541,14 @@ class SupportWebService:
             db.commit()
 
             return RedirectResponse(
-                url=f"/operations/support/tickets?bulk_status=success&updated={result['success']}&errors={result['error']}",
+                url=f"/support/tickets?bulk_status=success&updated={result['success']}&errors={result['error']}",
                 status_code=303,
             )
         except Exception as e:
             db.rollback()
             logger.exception("Bulk status update failed")
             return RedirectResponse(
-                url="/operations/support/tickets?error=bulk_failed",
+                url="/support/tickets?error=bulk_failed",
                 status_code=303,
             )
 
@@ -1568,7 +1568,7 @@ class SupportWebService:
         # Validate assignee is provided
         if not assigned_to_id or not assigned_to_id.strip():
             return RedirectResponse(
-                url="/operations/support/tickets?error=no_assignee_selected",
+                url="/support/tickets?error=no_assignee_selected",
                 status_code=303,
             )
 
@@ -1577,7 +1577,7 @@ class SupportWebService:
             assignee_uuid = coerce_uuid(assigned_to_id)
         except (ValueError, HTTPException):
             return RedirectResponse(
-                url="/operations/support/tickets?error=invalid_assignee",
+                url="/support/tickets?error=invalid_assignee",
                 status_code=303,
             )
 
@@ -1592,7 +1592,7 @@ class SupportWebService:
 
         if not uuids:
             return RedirectResponse(
-                url="/operations/support/tickets?error=no_tickets_selected",
+                url="/support/tickets?error=no_tickets_selected",
                 status_code=303,
             )
 
@@ -1604,14 +1604,14 @@ class SupportWebService:
             db.commit()
 
             return RedirectResponse(
-                url=f"/operations/support/tickets?bulk_assign=success&updated={result['success']}&errors={result['error']}",
+                url=f"/support/tickets?bulk_assign=success&updated={result['success']}&errors={result['error']}",
                 status_code=303,
             )
         except Exception as e:
             db.rollback()
             logger.exception("Bulk assign failed")
             return RedirectResponse(
-                url="/operations/support/tickets?error=bulk_failed",
+                url="/support/tickets?error=bulk_failed",
                 status_code=303,
             )
 
@@ -1638,7 +1638,7 @@ class SupportWebService:
 
         if not uuids:
             return RedirectResponse(
-                url="/operations/support/tickets?error=no_tickets_selected",
+                url="/support/tickets?error=no_tickets_selected",
                 status_code=303,
             )
 
@@ -1649,14 +1649,14 @@ class SupportWebService:
             db.commit()
 
             return RedirectResponse(
-                url=f"/operations/support/tickets?bulk_archive=success&archived={result['success']}&errors={result['error']}",
+                url=f"/support/tickets?bulk_archive=success&archived={result['success']}&errors={result['error']}",
                 status_code=303,
             )
         except Exception as e:
             db.rollback()
             logger.exception("Bulk archive failed")
             return RedirectResponse(
-                url=f"/operations/support/tickets?error=bulk_failed",
+                url=f"/support/tickets?error=bulk_failed",
                 status_code=303,
             )
 

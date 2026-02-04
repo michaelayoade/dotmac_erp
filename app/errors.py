@@ -121,14 +121,14 @@ def register_error_handlers(app) -> None:
                             url=f"/people/hr/discipline/{case_id}?error={quote(message)}",
                             status_code=303,
                         )
-                if path == "/operations/support/tickets":
+                if path == "/support/tickets":
                     return RedirectResponse(
-                        url=f"/operations/support/tickets/new?error={quote(message)}",
+                        url=f"/support/tickets/new?error={quote(message)}",
                         status_code=303,
                     )
-                if path in {"/operations/projects", "/operations/projects/new"}:
+                if path in {"/projects", "/projects/new"}:
                     return RedirectResponse(
-                        url=f"/operations/projects/new?error={quote(message)}",
+                        url=f"/projects/new?error={quote(message)}",
                         status_code=303,
                     )
             return templates.TemplateResponse(

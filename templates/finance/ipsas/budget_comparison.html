@@ -1,0 +1,126 @@
+{% extends "finance/base_finance.html" %}
+
+{% block page_title %}Budget vs Actual (IPSAS 24){% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400">
+    <a href="/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/finance" class="hover:text-primary-600 dark:hover:text-primary-400">Finance</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white">Budget Comparison</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Fiscal Year Selector -->
+    <div class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-800/50">
+        <form method="GET" class="flex flex-wrap items-end gap-4">
+            <div>
+                <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Fiscal Year</label>
+                <select name="fiscal_year_id" class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-white">
+                    <option value="">Select fiscal year...</option>
+                    {% for fy in fiscal_years %}
+                    <option value="{{ fy.fiscal_year_id }}" {{ 'selected' if selected_fiscal_year_id == fy.fiscal_year_id|string }}>{{ fy.year_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700">
+                Generate Report
+            </button>
+        </form>
+    </div>
+
+    {% if comparison %}
+    <!-- Summary Cards -->
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <div class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-800/50">
+            <p class="text-xs font-medium text-slate-500 dark:text-slate-400">Total Budget</p>
+            <p class="mt-1 text-lg font-bold text-slate-900 dark:text-white font-mono">{{ "{:,.2f}".format(comparison.total_budget) }}</p>
+        </div>
+        <div class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-800/50">
+            <p class="text-xs font-medium text-slate-500 dark:text-slate-400">Committed</p>
+            <p class="mt-1 text-lg font-bold text-blue-600 dark:text-blue-400 font-mono">{{ "{:,.2f}".format(comparison.total_committed) }}</p>
+        </div>
+        <div class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-800/50">
+            <p class="text-xs font-medium text-slate-500 dark:text-slate-400">Obligated</p>
+            <p class="mt-1 text-lg font-bold text-purple-600 dark:text-purple-400 font-mono">{{ "{:,.2f}".format(comparison.total_obligated) }}</p>
+        </div>
+        <div class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-800/50">
+            <p class="text-xs font-medium text-slate-500 dark:text-slate-400">Expended</p>
+            <p class="mt-1 text-lg font-bold text-green-600 dark:text-green-400 font-mono">{{ "{:,.2f}".format(comparison.total_expended) }}</p>
+        </div>
+        <div class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-800/50">
+            <p class="text-xs font-medium text-slate-500 dark:text-slate-400">Available</p>
+            <p class="mt-1 text-lg font-bold font-mono {{ 'text-green-600 dark:text-green-400' if comparison.total_available > 0 else 'text-red-600 dark:text-red-400' }}">
+                {{ "{:,.2f}".format(comparison.total_available) }}
+            </p>
+        </div>
+    </div>
+
+    <!-- Budget Lines Table -->
+    <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50">
+        <div class="border-b border-slate-200 p-6 dark:border-slate-700">
+            <h3 class="text-sm font-medium text-slate-900 dark:text-white">Budget vs Actual by Appropriation</h3>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="border-b border-slate-200 dark:border-slate-700">
+                        <th class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Code</th>
+                        <th class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Appropriation</th>
+                        <th class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Fund</th>
+                        <th class="px-4 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Original</th>
+                        <th class="px-4 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Revised</th>
+                        <th class="px-4 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Committed</th>
+                        <th class="px-4 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Expended</th>
+                        <th class="px-4 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Available</th>
+                        <th class="px-4 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Util %</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                    {% for line in comparison.lines %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/80">
+                        <td class="px-4 py-4 font-mono text-xs text-primary-600 dark:text-primary-400">{{ line.appropriation_code }}</td>
+                        <td class="px-4 py-4 text-slate-900 dark:text-white">{{ line.appropriation_name }}</td>
+                        <td class="px-4 py-4 text-slate-500 dark:text-slate-400">{{ line.fund_code or '-' }}</td>
+                        <td class="px-4 py-4 text-right font-mono text-slate-500 dark:text-slate-400">{{ "{:,.2f}".format(line.original_budget) }}</td>
+                        <td class="px-4 py-4 text-right font-mono text-slate-900 dark:text-white">{{ "{:,.2f}".format(line.revised_budget) }}</td>
+                        <td class="px-4 py-4 text-right font-mono text-blue-600 dark:text-blue-400">{{ "{:,.2f}".format(line.committed) }}</td>
+                        <td class="px-4 py-4 text-right font-mono text-green-600 dark:text-green-400">{{ "{:,.2f}".format(line.expended) }}</td>
+                        <td class="px-4 py-4 text-right font-mono {{ 'text-green-600 dark:text-green-400' if line.available > 0 else 'text-red-600 dark:text-red-400' }}">
+                            {{ "{:,.2f}".format(line.available) }}
+                        </td>
+                        <td class="px-4 py-4 text-right">
+                            <div class="flex items-center justify-end gap-2">
+                                <div class="h-2 w-16 rounded-full bg-slate-200 dark:bg-slate-700">
+                                    <div class="h-full rounded-full {{ 'bg-green-500' if line.utilization_pct < 80 else 'bg-yellow-500' if line.utilization_pct < 95 else 'bg-red-500' }}"
+                                         style="width: {{ [line.utilization_pct, 100] | min }}%"></div>
+                                </div>
+                                <span class="text-xs font-mono text-slate-600 dark:text-slate-400">{{ line.utilization_pct }}%</span>
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="9" class="px-4 py-12 text-center text-slate-500 dark:text-slate-400">
+                            No appropriations found for this fiscal year.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% elif selected_fiscal_year_id %}
+    <div class="rounded-xl border border-slate-200 bg-white p-12 text-center dark:border-slate-800 dark:bg-slate-800/50">
+        <p class="text-slate-500 dark:text-slate-400">No budget data available for the selected fiscal year.</p>
+    </div>
+    {% else %}
+    <div class="rounded-xl border border-slate-200 bg-white p-12 text-center dark:border-slate-800 dark:bg-slate-800/50">
+        <p class="text-slate-500 dark:text-slate-400">Select a fiscal year above to generate the budget comparison report.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

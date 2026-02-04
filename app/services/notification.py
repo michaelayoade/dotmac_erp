@@ -108,7 +108,7 @@ class NotificationService:
             title=f"Ticket {ticket_number} assigned to you",
             message=f"You have been assigned ticket '{ticket_subject}'",
             channel=NotificationChannel.BOTH,
-            action_url=f"/operations/support/tickets/{ticket_number}",
+            action_url=f"/support/tickets/{ticket_number}",
             actor_id=actor_id,
         )
 
@@ -133,7 +133,7 @@ class NotificationService:
             notification_type=NotificationType.STATUS_CHANGE,
             title=f"Ticket {ticket_number} status changed",
             message=f"Status changed from {old_status} to {new_status}",
-            action_url=f"/operations/support/tickets/{ticket_number}",
+            action_url=f"/support/tickets/{ticket_number}",
             actor_id=actor_id,
         )
 
@@ -159,7 +159,7 @@ class NotificationService:
             title=f"Ticket {ticket_number} resolved",
             message=f"Your ticket '{ticket_subject}' has been resolved by {resolver_name}",
             channel=NotificationChannel.BOTH,
-            action_url=f"/operations/support/tickets/{ticket_number}",
+            action_url=f"/support/tickets/{ticket_number}",
             actor_id=actor_id,
         )
 
@@ -185,7 +185,7 @@ class NotificationService:
             notification_type=NotificationType.COMMENT,
             title=f"New comment on {ticket_number}",
             message=f"{commenter_name} {action} on the ticket",
-            action_url=f"/operations/support/tickets/{ticket_number}#comments",
+            action_url=f"/support/tickets/{ticket_number}#comments",
             actor_id=actor_id,
         )
 

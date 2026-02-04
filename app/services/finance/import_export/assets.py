@@ -12,8 +12,8 @@ from uuid import UUID, uuid4
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.finance.fa.asset import Asset, AssetStatus
-from app.models.finance.fa.asset_category import AssetCategory, DepreciationMethod
+from app.models.fixed_assets.asset import Asset, AssetStatus
+from app.models.fixed_assets.asset_category import AssetCategory, DepreciationMethod
 
 from .base import BaseImporter, FieldMapping, ImportConfig
 

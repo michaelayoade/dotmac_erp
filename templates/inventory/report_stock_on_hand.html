@@ -1,0 +1,160 @@
+{% extends "modules/base_modules.html" %}
+{% from "components/macros.html" import pagination %}
+
+{% block page_title %}Stock on Hand Report{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+    <a href="/inventory/items" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Inventory</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <a href="/inventory/reports" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Reports</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="font-medium text-slate-900 dark:text-white">Stock on Hand</span>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<button onclick="window.print()" class="btn btn-secondary">
+    <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
+    </svg>
+    Print
+</button>
+<a href="/inventory/reports/stock-on-hand?format=csv" class="btn btn-secondary">
+    <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+    </svg>
+    Export CSV
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6 stagger-in">
+    <!-- Summary Cards -->
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div class="card p-4">
+            <p class="text-sm text-slate-500 dark:text-slate-400">Total Items</p>
+            <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ summary.total_items | default(0) }}</p>
+        </div>
+        <div class="card p-4">
+            <p class="text-sm text-slate-500 dark:text-slate-400">Total Quantity</p>
+            <p class="text-2xl font-bold text-slate-900 dark:text-white font-mono">{{ '{:,.0f}'.format(summary.total_quantity or 0) }}</p>
+        </div>
+        <div class="card p-4">
+            <p class="text-sm text-slate-500 dark:text-slate-400">Total Value</p>
+            <p class="text-2xl font-bold text-emerald-600 dark:text-emerald-400 font-mono">{{ '{:,.2f}'.format(summary.total_value or 0) }}</p>
+        </div>
+        <div class="card p-4">
+            <p class="text-sm text-slate-500 dark:text-slate-400">Items Below Reorder</p>
+            <p class="text-2xl font-bold text-amber-600 dark:text-amber-400 font-display">{{ summary.below_reorder | default(0) }}</p>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="card p-4">
+        <form method="get" action="/inventory/reports/stock-on-hand" class="flex flex-wrap items-center gap-4">
+            <select name="warehouse" class="form-select">
+                <option value="">All Warehouses</option>
+                {% for wh in warehouses | default([]) %}
+                <option value="{{ wh.warehouse_id }}" {{ 'selected' if warehouse == wh.warehouse_id|string else '' }}>
+                    {{ wh.warehouse_name }}
+                </option>
+                {% endfor %}
+            </select>
+            <select name="category" class="form-select">
+                <option value="">All Categories</option>
+                {% for cat in categories | default([]) %}
+                <option value="{{ cat.category_id }}" {{ 'selected' if category == cat.category_id|string else '' }}>
+                    {{ cat.category_name }}
+                </option>
+                {% endfor %}
+            </select>
+            <label class="flex items-center gap-2">
+                <input type="checkbox" name="show_zero" value="1" class="form-checkbox"
+                       {{ 'checked' if show_zero else '' }}>
+                <span class="text-sm text-slate-600 dark:text-slate-400">Show zero stock</span>
+            </label>
+            <button type="submit" class="btn btn-secondary">Apply</button>
+        </form>
+    </div>
+
+    <!-- Report Table -->
+    <div class="card overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="table-ledger">
+                <thead>
+                    <tr>
+                        <th>Item Code</th>
+                        <th>Item Name</th>
+                        <th>Category</th>
+                        <th>Warehouse</th>
+                        <th class="text-right">On Hand</th>
+                        <th class="text-right">Reserved</th>
+                        <th class="text-right">Available</th>
+                        <th class="text-right">Unit Cost</th>
+                        <th class="text-right">Total Value</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in stock_data | default([]) %}
+                    <tr class="{{ 'bg-amber-50 dark:bg-amber-900/10' if row.is_low_stock else '' }}">
+                        <td class="font-mono font-medium text-slate-900 dark:text-white">{{ row.item_code }}</td>
+                        <td>{{ row.item_name }}</td>
+                        <td class="text-sm text-slate-500">{{ row.category_name or '-' }}</td>
+                        <td>{{ row.warehouse_name or 'All' }}</td>
+                        <td class="text-right font-mono">{{ '{:,.2f}'.format(row.on_hand or 0) }}</td>
+                        <td class="text-right font-mono text-slate-500">{{ '{:,.2f}'.format(row.reserved or 0) }}</td>
+                        <td class="text-right font-mono {{ 'text-rose-600' if (row.available or 0) < 0 else '' }}">
+                            {{ '{:,.2f}'.format(row.available or 0) }}
+                        </td>
+                        <td class="text-right font-mono">{{ '{:,.2f}'.format(row.unit_cost or 0) }}</td>
+                        <td class="text-right font-mono font-medium">{{ '{:,.2f}'.format(row.total_value or 0) }}</td>
+                        <td>
+                            {% if row.is_low_stock %}
+                            <span class="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+                                Low Stock
+                            </span>
+                            {% elif (row.on_hand or 0) <= 0 %}
+                            <span class="inline-flex items-center rounded-full bg-rose-100 px-2 py-0.5 text-xs font-medium text-rose-700">
+                                Out of Stock
+                            </span>
+                            {% else %}
+                            <span class="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                                In Stock
+                            </span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="10" class="text-center py-8 text-slate-500">No stock data found</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                {% if stock_data | default([]) | length > 0 %}
+                <tfoot>
+                    <tr class="bg-slate-50 dark:bg-slate-800/50 font-semibold">
+                        <td colspan="4">Totals</td>
+                        <td class="text-right font-mono">{{ '{:,.2f}'.format(summary.total_quantity or 0) }}</td>
+                        <td class="text-right font-mono">{{ '{:,.2f}'.format(summary.total_reserved or 0) }}</td>
+                        <td class="text-right font-mono">{{ '{:,.2f}'.format(summary.total_available or 0) }}</td>
+                        <td></td>
+                        <td class="text-right font-mono">{{ '{:,.2f}'.format(summary.total_value or 0) }}</td>
+                        <td></td>
+                    </tr>
+                </tfoot>
+                {% endif %}
+            </table>
+        </div>
+    </div>
+
+    {% if stock_data | default([]) | length > 0 %}
+    {{ pagination(page, total_pages, '/inventory/reports/stock-on-hand') }}
+    {% endif %}
+</div>
+{% endblock %}

@@ -154,8 +154,8 @@ from app.models.finance.ap import (
     APAgingSnapshot,
 )
 
-# FA Schema
-from app.models.finance.fa import (
+# FA Schema (standalone module)
+from app.models.fixed_assets import (
     AssetCategory,
     Asset,
     AssetStatus,
@@ -183,8 +183,8 @@ from app.models.finance.lease import (
     ModificationType,
 )
 
-# Inventory Schema
-from app.models.finance.inv import (
+# Inventory Schema (standalone module)
+from app.models.inventory import (
     ItemCategory,
     Item,
     ItemType,
@@ -309,6 +309,27 @@ from app.models.finance.payments import (
 from app.models.finance.remita import (
     RemitaRRR,
     RRRStatus,
+)
+
+# IPSAS Fund Accounting (public sector)
+from app.models.finance.ipsas import (  # noqa: F401
+    Fund,
+    FundType,
+    FundStatus,
+    Appropriation,
+    AppropriationType,
+    AppropriationStatus,
+    Allotment,
+    AllotmentStatus,
+    Commitment,
+    CommitmentLine,
+    CommitmentType,
+    CommitmentStatus,
+    Virement,
+    VirementStatus,
+    CoASegmentDefinition,
+    CoASegmentValue,
+    CoASegmentType,
 )
 
 __all__ = [

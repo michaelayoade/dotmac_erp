@@ -1,0 +1,97 @@
+{% extends "modules/base_modules.html" %}
+{% import "components/settings_macros.html" as settings_ui %}
+
+{% block page_title %}Projects Settings{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+    <a href="/inventory/items" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Dashboard</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <a href="/settings" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Settings</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="font-medium text-slate-900 dark:text-white">Projects</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-6">
+    {{ settings_ui.settings_header("Projects Settings", "Configure project workflow defaults and task settings.") }}
+    {{ settings_ui.settings_messages(request, error, "Projects settings updated successfully.") }}
+
+    <form method="POST" action="/settings/projects" class="space-y-6">
+        <!-- Project Defaults -->
+        <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-800">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Project Defaults</h2>
+            <div class="grid gap-6 sm:grid-cols-2">
+                <div>
+                    <label for="project_default_status" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                        {{ settings.project_default_status.label }}
+                    </label>
+                    <select id="project_default_status" name="project_default_status"
+                            class="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-900 dark:text-white">
+                        {% for status in project_statuses %}
+                        <option value="{{ status.value }}" {{ 'selected' if settings.project_default_status.value == status.value else '' }}>
+                            {{ status.label }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ settings.project_default_status.description }}</p>
+                </div>
+                <div class="flex items-center">
+                    <label class="flex items-center gap-3 cursor-pointer">
+                        <input type="checkbox" name="project_enable_time_tracking" value="true"
+                               {{ 'checked' if settings.project_enable_time_tracking.value else '' }}
+                               class="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-900">
+                        <div>
+                            <span class="font-medium text-slate-900 dark:text-white">{{ settings.project_enable_time_tracking.label }}</span>
+                            <p class="text-xs text-slate-500 dark:text-slate-400">{{ settings.project_enable_time_tracking.description }}</p>
+                        </div>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <!-- Task Settings -->
+        <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-800">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Task Settings</h2>
+            <div class="grid gap-6 sm:grid-cols-2">
+                <div>
+                    <label for="project_task_prefix" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                        {{ settings.project_task_prefix.label }}
+                    </label>
+                    <input type="text" id="project_task_prefix" name="project_task_prefix"
+                           value="{{ settings.project_task_prefix.value }}"
+                           maxlength="10"
+                           class="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm uppercase focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-900 dark:text-white">
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ settings.project_task_prefix.description }}</p>
+                </div>
+                <div>
+                    <!-- Preview of task numbering -->
+                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                        Preview
+                    </label>
+                    <div class="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
+                        <span class="text-sm font-mono text-slate-600 dark:text-slate-400">
+                            <span id="prefix-preview">{{ settings.project_task_prefix.value or 'TASK' }}</span>-001
+                        </span>
+                    </div>
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Example task number format</p>
+                </div>
+            </div>
+        </div>
+
+        {{ settings_ui.settings_actions() }}
+    </form>
+</div>
+
+<script>
+// Live preview of task prefix
+document.getElementById('project_task_prefix').addEventListener('input', function() {
+    document.getElementById('prefix-preview').textContent = this.value.toUpperCase() || 'TASK';
+});
+</script>
+{% endblock %}

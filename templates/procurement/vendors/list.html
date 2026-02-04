@@ -1,0 +1,99 @@
+{% extends "modules/base_modules.html" %}
+
+{% block page_title %}Vendor Registry{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+    <a href="/procurement" class="hover:text-amber-600 transition-colors">Procurement</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+    <span class="font-medium text-slate-900 dark:text-white">Vendors</span>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<a href="/procurement/vendors/prequalify" class="btn btn-primary">
+    <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+    Prequalify Vendor
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-4 stagger-in">
+    <!-- Filters -->
+    <div class="card p-4">
+        <form method="get" class="flex flex-wrap gap-3 items-end">
+            <div>
+                <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Status</label>
+                <select name="status" class="input-field text-sm">
+                    <option value="">All</option>
+                    {% for s in vendor_statuses %}
+                    <option value="{{ s.value }}" {% if filter_status == s.value %}selected{% endif %}>{{ s.value }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Search</label>
+                <input type="text" name="q" value="{{ filter_q or '' }}" class="input-field text-sm" placeholder="Supplier name...">
+            </div>
+            <button type="submit" class="btn btn-secondary text-sm">Filter</button>
+        </form>
+    </div>
+
+    <!-- Table -->
+    <div class="card">
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="bg-slate-50 dark:bg-slate-800/50">
+                    <tr>
+                        <th class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Supplier</th>
+                        <th class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Status</th>
+                        <th class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Valid From</th>
+                        <th class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Valid To</th>
+                        <th class="px-4 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Score</th>
+                        <th class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                    {% for vendor in vendors %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                        <td class="px-4 py-3">
+                            <div>
+                                <p class="font-medium text-slate-900 dark:text-white">{{ vendor.supplier_name }}</p>
+                                {% if vendor.registration_number %}<p class="text-xs text-slate-500 dark:text-slate-400">{{ vendor.registration_number }}</p>{% endif %}
+                            </div>
+                        </td>
+                        <td class="px-4 py-3">
+                            {% set label, color = status_labels.get(vendor.status, ("Unknown", "slate")) %}
+                            <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-{{ color }}-100 text-{{ color }}-700 dark:bg-{{ color }}-900/30 dark:text-{{ color }}-400">{{ label }}</span>
+                        </td>
+                        <td class="px-4 py-3 text-slate-600 dark:text-slate-400">{{ vendor.valid_from or '-' }}</td>
+                        <td class="px-4 py-3 text-slate-600 dark:text-slate-400">{{ vendor.valid_to or '-' }}</td>
+                        <td class="px-4 py-3 text-right">
+                            {% if vendor.overall_score is not none %}
+                            <span class="font-semibold {% if vendor.overall_score >= 80 %}text-emerald-600 dark:text-emerald-400{% elif vendor.overall_score >= 60 %}text-amber-600 dark:text-amber-400{% else %}text-rose-600 dark:text-rose-400{% endif %}">{{ "{:.0f}".format(vendor.overall_score) }}%</span>
+                            {% else %}
+                            <span class="text-slate-400">-</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3">
+                            <a href="/procurement/vendors/{{ vendor.prequalification_id }}" class="text-blue-600 hover:underline dark:text-blue-400 text-xs">View Details</a>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="6" class="px-4 py-8 text-center text-slate-500 dark:text-slate-400">No vendors found.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if total > limit %}
+        <div class="p-4 border-t border-slate-200 dark:border-slate-700 flex justify-between items-center text-sm text-slate-600 dark:text-slate-400">
+            <span>Showing {{ offset + 1 }}-{{ [offset + limit, total] | min }} of {{ total }}</span>
+            <div class="flex gap-2">
+                {% if offset > 0 %}<a href="?offset={{ offset - limit }}&limit={{ limit }}{% if filter_status %}&status={{ filter_status }}{% endif %}{% if filter_q %}&q={{ filter_q }}{% endif %}" class="btn btn-secondary text-xs">Previous</a>{% endif %}
+                {% if offset + limit < total %}<a href="?offset={{ offset + limit }}&limit={{ limit }}{% if filter_status %}&status={{ filter_status }}{% endif %}{% if filter_q %}&q={{ filter_q }}{% endif %}" class="btn btn-secondary text-xs">Next</a>{% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

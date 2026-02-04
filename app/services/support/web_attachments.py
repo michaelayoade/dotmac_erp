@@ -41,7 +41,7 @@ class AttachmentWebService:
         ticket = ticket_service.get_ticket(db, org_id, tid)
         if not ticket:
             return RedirectResponse(
-                url="/operations/support/tickets?error=Ticket+not+found",
+                url="/support/tickets?error=Ticket+not+found",
                 status_code=303,
             )
 
@@ -57,7 +57,7 @@ class AttachmentWebService:
 
             if error:
                 return RedirectResponse(
-                    url=f"/operations/support/tickets/{ticket_id}?error={error.replace(' ', '+')}",
+                    url=f"/support/tickets/{ticket_id}?error={error.replace(' ', '+')}",
                     status_code=303,
                 )
 
@@ -67,12 +67,12 @@ class AttachmentWebService:
             db.rollback()
             logger.exception("Failed to upload attachment")
             return RedirectResponse(
-                url=f"/operations/support/tickets/{ticket_id}?error=Upload+failed",
+                url=f"/support/tickets/{ticket_id}?error=Upload+failed",
                 status_code=303,
             )
 
         return RedirectResponse(
-            url=f"/operations/support/tickets/{ticket_id}#attachments",
+            url=f"/support/tickets/{ticket_id}#attachments",
             status_code=303,
         )
 
@@ -91,14 +91,14 @@ class AttachmentWebService:
         attachment = attachment_service.get_attachment(db, org_id, aid)
         if not attachment:
             return RedirectResponse(
-                url=f"/operations/support/tickets/{ticket_id}?error=Attachment+not+found",
+                url=f"/support/tickets/{ticket_id}?error=Attachment+not+found",
                 status_code=303,
             )
 
         file_path = attachment_service.get_file_path(db, org_id, aid)
         if not file_path:
             return RedirectResponse(
-                url=f"/operations/support/tickets/{ticket_id}?error=File+not+found",
+                url=f"/support/tickets/{ticket_id}?error=File+not+found",
                 status_code=303,
             )
 
@@ -128,7 +128,7 @@ class AttachmentWebService:
             logger.exception("Failed to delete attachment")
 
         return RedirectResponse(
-            url=f"/operations/support/tickets/{ticket_id}#attachments",
+            url=f"/support/tickets/{ticket_id}#attachments",
             status_code=303,
         )
 

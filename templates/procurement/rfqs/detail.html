@@ -1,0 +1,129 @@
+{% extends "modules/base_modules.html" %}
+
+{% block page_title %}RFQ {{ rfq.rfq_number }}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+    <a href="/procurement" class="hover:text-amber-600 transition-colors">Procurement</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+    <a href="/procurement/rfqs" class="hover:text-amber-600 transition-colors">RFQs</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+    <span class="font-medium text-slate-900 dark:text-white">{{ rfq.rfq_number }}</span>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+{% if rfq.status.value == 'PUBLISHED' %}
+<a href="/procurement/evaluations/{{ rfq.rfq_id }}" class="btn btn-primary">
+    <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+    Evaluate Responses
+</a>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6 stagger-in">
+    <!-- Header Card -->
+    <div class="card p-6">
+        <div class="flex justify-between items-start mb-4">
+            <div>
+                <h2 class="text-xl font-semibold text-slate-900 dark:text-white">{{ rfq.title }}</h2>
+                <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">{{ rfq.rfq_number }}</p>
+            </div>
+            {% set label, color = status_labels.get(rfq.status, ("Unknown", "slate")) %}
+            <span class="inline-flex items-center rounded-full px-3 py-1 text-sm font-medium bg-{{ color }}-100 text-{{ color }}-700 dark:bg-{{ color }}-900/30 dark:text-{{ color }}-400">{{ label }}</span>
+        </div>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+            <div>
+                <span class="text-slate-500 dark:text-slate-400">Method:</span>
+                <p class="font-semibold text-slate-900 dark:text-white">{{ rfq.procurement_method.value }}</p>
+            </div>
+            <div>
+                <span class="text-slate-500 dark:text-slate-400">Published:</span>
+                <p class="font-semibold text-slate-900 dark:text-white">{{ rfq.published_date or 'Not yet' }}</p>
+            </div>
+            <div>
+                <span class="text-slate-500 dark:text-slate-400">Closing Date:</span>
+                <p class="font-semibold text-slate-900 dark:text-white">{{ rfq.closing_date }}</p>
+            </div>
+            <div>
+                <span class="text-slate-500 dark:text-slate-400">Responses:</span>
+                <p class="font-semibold text-slate-900 dark:text-white">{{ responses | length }}</p>
+            </div>
+        </div>
+        {% if rfq.description %}
+        <div class="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+            <span class="text-sm text-slate-500 dark:text-slate-400">Description:</span>
+            <p class="text-sm text-slate-900 dark:text-white mt-1">{{ rfq.description }}</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Invited Vendors -->
+    {% if invitations %}
+    <div class="card">
+        <div class="p-4 border-b border-slate-200 dark:border-slate-700">
+            <h3 class="font-semibold text-slate-900 dark:text-white">Invited Vendors</h3>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="bg-slate-50 dark:bg-slate-800/50">
+                    <tr>
+                        <th class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Vendor</th>
+                        <th class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Invited Date</th>
+                        <th class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Response</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                    {% for inv in invitations %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                        <td class="px-4 py-3 text-slate-900 dark:text-white">{{ inv.vendor_name }}</td>
+                        <td class="px-4 py-3 text-slate-600 dark:text-slate-400">{{ inv.invited_date }}</td>
+                        <td class="px-4 py-3">
+                            <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium {% if inv.responded %}bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400{% else %}bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400{% endif %}">{{ 'Responded' if inv.responded else 'Pending' }}</span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Vendor Responses -->
+    {% if responses %}
+    <div class="card">
+        <div class="p-4 border-b border-slate-200 dark:border-slate-700">
+            <h3 class="font-semibold text-slate-900 dark:text-white">Vendor Responses</h3>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="bg-slate-50 dark:bg-slate-800/50">
+                    <tr>
+                        <th class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Vendor</th>
+                        <th class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Submitted</th>
+                        <th class="px-4 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Quoted Amount</th>
+                        <th class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Validity</th>
+                        <th class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Status</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                    {% for resp in responses %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                        <td class="px-4 py-3 text-slate-900 dark:text-white">{{ resp.vendor_name }}</td>
+                        <td class="px-4 py-3 text-slate-600 dark:text-slate-400">{{ resp.submitted_date }}</td>
+                        <td class="px-4 py-3 text-right font-medium text-slate-900 dark:text-white">{{ "{:,.2f}".format(resp.total_amount) }}</td>
+                        <td class="px-4 py-3 text-slate-600 dark:text-slate-400">{{ resp.validity_period }} days</td>
+                        <td class="px-4 py-3">
+                            {% set rlabel, rcolor = response_status_labels.get(resp.status, ("Unknown", "slate")) %}
+                            <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-{{ rcolor }}-100 text-{{ rcolor }}-700 dark:bg-{{ rcolor }}-900/30 dark:text-{{ rcolor }}-400">{{ rlabel }}</span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

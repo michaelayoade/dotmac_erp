@@ -12,8 +12,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi import HTTPException
 
-from app.models.finance.inv.bom import BOMType
-from app.services.finance.inv.bom import (
+from app.models.inventory.bom import BOMType
+from app.services.inventory.bom import (
     BOMService,
     BOMInput,
     BOMComponentInput,
@@ -473,7 +473,7 @@ class TestProcessAssembly:
             transaction_date=datetime.now(timezone.utc),
         )
 
-        with patch('app.services.finance.inv.balance.InventoryBalanceService.get_available') as mock_get_available:
+        with patch('app.services.inventory.balance.InventoryBalanceService.get_available') as mock_get_available:
             mock_get_available.return_value = Decimal("100")  # Only 100 available
 
             with pytest.raises(HTTPException) as exc:
@@ -507,11 +507,11 @@ class TestProcessAssembly:
             transaction_date=datetime.now(timezone.utc),
         )
 
-        with patch('app.services.finance.inv.balance.InventoryBalanceService.get_available') as mock_get_available:
+        with patch('app.services.inventory.balance.InventoryBalanceService.get_available') as mock_get_available:
             mock_get_available.return_value = Decimal("100")
 
-            with patch('app.services.finance.inv.transaction.InventoryTransactionService.create_issue') as mock_issue:
-                with patch('app.services.finance.inv.transaction.InventoryTransactionService.create_receipt') as mock_receipt:
+            with patch('app.services.inventory.transaction.InventoryTransactionService.create_issue') as mock_issue:
+                with patch('app.services.inventory.transaction.InventoryTransactionService.create_receipt') as mock_receipt:
                     mock_issue_txn = MagicMock()
                     mock_issue_txn.transaction_id = uuid.uuid4()
                     mock_receipt_txn = MagicMock()
@@ -552,11 +552,11 @@ class TestProcessAssembly:
             transaction_date=datetime.now(timezone.utc),
         )
 
-        with patch('app.services.finance.inv.balance.InventoryBalanceService.get_available') as mock_get_available:
+        with patch('app.services.inventory.balance.InventoryBalanceService.get_available') as mock_get_available:
             mock_get_available.return_value = Decimal("100")
 
-            with patch('app.services.finance.inv.transaction.InventoryTransactionService.create_issue') as mock_issue:
-                with patch('app.services.finance.inv.transaction.InventoryTransactionService.create_receipt') as mock_receipt:
+            with patch('app.services.inventory.transaction.InventoryTransactionService.create_issue') as mock_issue:
+                with patch('app.services.inventory.transaction.InventoryTransactionService.create_receipt') as mock_receipt:
                     mock_issue.return_value = MagicMock(transaction_id=uuid.uuid4())
                     mock_receipt.return_value = MagicMock(transaction_id=uuid.uuid4())
 
@@ -592,11 +592,11 @@ class TestProcessAssembly:
             transaction_date=datetime.now(timezone.utc),
         )
 
-        with patch('app.services.finance.inv.balance.InventoryBalanceService.get_available') as mock_get_available:
+        with patch('app.services.inventory.balance.InventoryBalanceService.get_available') as mock_get_available:
             mock_get_available.return_value = Decimal("100")
 
-            with patch('app.services.finance.inv.transaction.InventoryTransactionService.create_issue') as mock_issue:
-                with patch('app.services.finance.inv.transaction.InventoryTransactionService.create_receipt') as mock_receipt:
+            with patch('app.services.inventory.transaction.InventoryTransactionService.create_issue') as mock_issue:
+                with patch('app.services.inventory.transaction.InventoryTransactionService.create_receipt') as mock_receipt:
                     mock_issue.return_value = MagicMock(transaction_id=uuid.uuid4())
                     mock_receipt.return_value = MagicMock(transaction_id=uuid.uuid4())
 
@@ -644,7 +644,7 @@ class TestProcessDisassembly:
             transaction_date=datetime.now(timezone.utc),
         )
 
-        with patch('app.services.finance.inv.balance.InventoryBalanceService.get_available') as mock_get_available:
+        with patch('app.services.inventory.balance.InventoryBalanceService.get_available') as mock_get_available:
             mock_get_available.return_value = Decimal("10")  # Only 10 available
 
             with pytest.raises(HTTPException) as exc:
@@ -679,11 +679,11 @@ class TestProcessDisassembly:
             transaction_date=datetime.now(timezone.utc),
         )
 
-        with patch('app.services.finance.inv.balance.InventoryBalanceService.get_available') as mock_get_available:
+        with patch('app.services.inventory.balance.InventoryBalanceService.get_available') as mock_get_available:
             mock_get_available.return_value = Decimal("100")
 
-            with patch('app.services.finance.inv.transaction.InventoryTransactionService.create_issue') as mock_issue:
-                with patch('app.services.finance.inv.transaction.InventoryTransactionService.create_receipt') as mock_receipt:
+            with patch('app.services.inventory.transaction.InventoryTransactionService.create_issue') as mock_issue:
+                with patch('app.services.inventory.transaction.InventoryTransactionService.create_receipt') as mock_receipt:
                     mock_issue.return_value = MagicMock(transaction_id=uuid.uuid4())
                     mock_receipt.return_value = MagicMock(transaction_id=uuid.uuid4())
 
@@ -819,7 +819,7 @@ class TestModuleInstance:
 
     def test_singleton_instance_exists(self):
         """Should have module-level bom_service instance."""
-        from app.services.finance.inv.bom import bom_service
+        from app.services.inventory.bom import bom_service
 
         assert bom_service is not None
         assert isinstance(bom_service, BOMService)

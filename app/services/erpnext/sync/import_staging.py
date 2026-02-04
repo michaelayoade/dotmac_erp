@@ -180,6 +180,8 @@ class StagingImportService:
         ).all()
 
         for se in sync_entities:
+            if se.target_id is None:
+                continue
             if se.source_doctype == "Department":
                 self._dept_cache[se.source_name] = se.target_id
             elif se.source_doctype == "Designation":

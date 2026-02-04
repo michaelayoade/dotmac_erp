@@ -15,9 +15,9 @@ from app.db import SessionLocal
 from app.services.common import NotFoundError, ValidationError
 from app.services.fleet.web.fleet_web import FleetWebService
 from app.templates import templates
-from app.web.deps import WebAuthContext, base_context, require_operations_access
+from app.web.deps import WebAuthContext, base_context, require_fleet_access
 
-router = APIRouter(tags=["fleet-web"])
+router = APIRouter(prefix="/fleet", tags=["fleet-web"])
 
 
 def get_db():
@@ -36,14 +36,14 @@ def get_db():
 @router.get("", response_class=HTMLResponse)
 def fleet_dashboard(
     request: Request,
-    auth: WebAuthContext = Depends(require_operations_access),
+    auth: WebAuthContext = Depends(require_fleet_access),
     db: Session = Depends(get_db),
 ):
     """Fleet management dashboard."""
     context = base_context(request, auth, "Fleet Dashboard", "fleet", db=db)
     web_service = FleetWebService(db)
     context.update(web_service.dashboard_context(auth.organization_id))
-    return templates.TemplateResponse(request, "operations/fleet/dashboard.html", context)
+    return templates.TemplateResponse(request, "fleet/dashboard.html", context)
 
 
 # =============================================================================
@@ -59,7 +59,7 @@ def vehicle_list(
     department_id: Optional[UUID] = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
-    auth: WebAuthContext = Depends(require_operations_access),
+    auth: WebAuthContext = Depends(require_fleet_access),
     db: Session = Depends(get_db),
 ):
     """List all vehicles."""
@@ -75,27 +75,27 @@ def vehicle_list(
             limit=limit,
         )
     )
-    return templates.TemplateResponse(request, "operations/fleet/vehicles.html", context)
+    return templates.TemplateResponse(request, "fleet/vehicles.html", context)
 
 
 @router.get("/vehicles/new", response_class=HTMLResponse)
 def vehicle_new(
     request: Request,
-    auth: WebAuthContext = Depends(require_operations_access),
+    auth: WebAuthContext = Depends(require_fleet_access),
     db: Session = Depends(get_db),
 ):
     """New vehicle form."""
     context = base_context(request, auth, "Add Vehicle", "fleet", db=db)
     web_service = FleetWebService(db)
     context.update(web_service.vehicle_form_context(auth.organization_id))
-    return templates.TemplateResponse(request, "operations/fleet/vehicle_form.html", context)
+    return templates.TemplateResponse(request, "fleet/vehicle_form.html", context)
 
 
 @router.get("/vehicles/{vehicle_id}", response_class=HTMLResponse)
 def vehicle_detail(
     request: Request,
     vehicle_id: UUID,
-    auth: WebAuthContext = Depends(require_operations_access),
+    auth: WebAuthContext = Depends(require_fleet_access),
     db: Session = Depends(get_db),
 ):
     """Vehicle detail view."""
@@ -103,16 +103,16 @@ def vehicle_detail(
     web_service = FleetWebService(db)
     try:
         context.update(web_service.vehicle_detail_context(auth.organization_id, vehicle_id))
-        return templates.TemplateResponse(request, "operations/fleet/vehicle_detail.html", context)
+        return templates.TemplateResponse(request, "fleet/vehicle_detail.html", context)
     except NotFoundError:
-        return RedirectResponse(url="/operations/fleet/vehicles?error=not_found", status_code=303)
+        return RedirectResponse(url="/fleet/vehicles?error=not_found", status_code=303)
 
 
 @router.get("/vehicles/{vehicle_id}/edit", response_class=HTMLResponse)
 def vehicle_edit(
     request: Request,
     vehicle_id: UUID,
-    auth: WebAuthContext = Depends(require_operations_access),
+    auth: WebAuthContext = Depends(require_fleet_access),
     db: Session = Depends(get_db),
 ):
     """Edit vehicle form."""
@@ -120,9 +120,9 @@ def vehicle_edit(
     web_service = FleetWebService(db)
     try:
         context.update(web_service.vehicle_form_context(auth.organization_id, vehicle_id))
-        return templates.TemplateResponse(request, "operations/fleet/vehicle_form.html", context)
+        return templates.TemplateResponse(request, "fleet/vehicle_form.html", context)
     except NotFoundError:
-        return RedirectResponse(url="/operations/fleet/vehicles?error=not_found", status_code=303)
+        return RedirectResponse(url="/fleet/vehicles?error=not_found", status_code=303)
 
 
 # =============================================================================
@@ -138,7 +138,7 @@ def maintenance_list(
     maintenance_type: Optional[str] = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
-    auth: WebAuthContext = Depends(require_operations_access),
+    auth: WebAuthContext = Depends(require_fleet_access),
     db: Session = Depends(get_db),
 ):
     """List maintenance records."""
@@ -154,28 +154,28 @@ def maintenance_list(
             limit=limit,
         )
     )
-    return templates.TemplateResponse(request, "operations/fleet/maintenance.html", context)
+    return templates.TemplateResponse(request, "fleet/maintenance.html", context)
 
 
 @router.get("/maintenance/new", response_class=HTMLResponse)
 def maintenance_new(
     request: Request,
     vehicle_id: Optional[UUID] = None,
-    auth: WebAuthContext = Depends(require_operations_access),
+    auth: WebAuthContext = Depends(require_fleet_access),
     db: Session = Depends(get_db),
 ):
     """New maintenance record form."""
     context = base_context(request, auth, "Schedule Maintenance", "fleet", db=db)
     web_service = FleetWebService(db)
     context.update(web_service.maintenance_form_context(auth.organization_id, vehicle_id=vehicle_id))
-    return templates.TemplateResponse(request, "operations/fleet/maintenance_form.html", context)
+    return templates.TemplateResponse(request, "fleet/maintenance_form.html", context)
 
 
 @router.get("/maintenance/{record_id}", response_class=HTMLResponse)
 def maintenance_detail(
     request: Request,
     record_id: UUID,
-    auth: WebAuthContext = Depends(require_operations_access),
+    auth: WebAuthContext = Depends(require_fleet_access),
     db: Session = Depends(get_db),
 ):
     """Maintenance record detail view."""
@@ -183,9 +183,9 @@ def maintenance_detail(
     web_service = FleetWebService(db)
     try:
         context.update(web_service.maintenance_detail_context(auth.organization_id, record_id))
-        return templates.TemplateResponse(request, "operations/fleet/maintenance_detail.html", context)
+        return templates.TemplateResponse(request, "fleet/maintenance_detail.html", context)
     except NotFoundError:
-        return RedirectResponse(url="/operations/fleet/maintenance?error=not_found", status_code=303)
+        return RedirectResponse(url="/fleet/maintenance?error=not_found", status_code=303)
 
 
 # =============================================================================
@@ -199,7 +199,7 @@ def fuel_list(
     vehicle_id: Optional[UUID] = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
-    auth: WebAuthContext = Depends(require_operations_access),
+    auth: WebAuthContext = Depends(require_fleet_access),
     db: Session = Depends(get_db),
 ):
     """List fuel log entries."""
@@ -213,21 +213,21 @@ def fuel_list(
             limit=limit,
         )
     )
-    return templates.TemplateResponse(request, "operations/fleet/fuel.html", context)
+    return templates.TemplateResponse(request, "fleet/fuel.html", context)
 
 
 @router.get("/fuel/new", response_class=HTMLResponse)
 def fuel_new(
     request: Request,
     vehicle_id: Optional[UUID] = None,
-    auth: WebAuthContext = Depends(require_operations_access),
+    auth: WebAuthContext = Depends(require_fleet_access),
     db: Session = Depends(get_db),
 ):
     """New fuel log entry form."""
     context = base_context(request, auth, "Record Fuel Purchase", "fleet", db=db)
     web_service = FleetWebService(db)
     context.update(web_service.fuel_form_context(auth.organization_id, vehicle_id=vehicle_id))
-    return templates.TemplateResponse(request, "operations/fleet/fuel_form.html", context)
+    return templates.TemplateResponse(request, "fleet/fuel_form.html", context)
 
 
 # =============================================================================
@@ -243,7 +243,7 @@ def incident_list(
     severity: Optional[str] = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
-    auth: WebAuthContext = Depends(require_operations_access),
+    auth: WebAuthContext = Depends(require_fleet_access),
     db: Session = Depends(get_db),
 ):
     """List incidents."""
@@ -259,28 +259,28 @@ def incident_list(
             limit=limit,
         )
     )
-    return templates.TemplateResponse(request, "operations/fleet/incidents.html", context)
+    return templates.TemplateResponse(request, "fleet/incidents.html", context)
 
 
 @router.get("/incidents/new", response_class=HTMLResponse)
 def incident_new(
     request: Request,
     vehicle_id: Optional[UUID] = None,
-    auth: WebAuthContext = Depends(require_operations_access),
+    auth: WebAuthContext = Depends(require_fleet_access),
     db: Session = Depends(get_db),
 ):
     """New incident report form."""
     context = base_context(request, auth, "Report Incident", "fleet", db=db)
     web_service = FleetWebService(db)
     context.update(web_service.incident_form_context(auth.organization_id, vehicle_id=vehicle_id))
-    return templates.TemplateResponse(request, "operations/fleet/incident_form.html", context)
+    return templates.TemplateResponse(request, "fleet/incident_form.html", context)
 
 
 @router.get("/incidents/{incident_id}", response_class=HTMLResponse)
 def incident_detail(
     request: Request,
     incident_id: UUID,
-    auth: WebAuthContext = Depends(require_operations_access),
+    auth: WebAuthContext = Depends(require_fleet_access),
     db: Session = Depends(get_db),
 ):
     """Incident detail view."""
@@ -288,9 +288,9 @@ def incident_detail(
     web_service = FleetWebService(db)
     try:
         context.update(web_service.incident_detail_context(auth.organization_id, incident_id))
-        return templates.TemplateResponse(request, "operations/fleet/incident_detail.html", context)
+        return templates.TemplateResponse(request, "fleet/incident_detail.html", context)
     except NotFoundError:
-        return RedirectResponse(url="/operations/fleet/incidents?error=not_found", status_code=303)
+        return RedirectResponse(url="/fleet/incidents?error=not_found", status_code=303)
 
 
 # =============================================================================
@@ -305,7 +305,7 @@ def reservation_list(
     status: Optional[str] = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
-    auth: WebAuthContext = Depends(require_operations_access),
+    auth: WebAuthContext = Depends(require_fleet_access),
     db: Session = Depends(get_db),
 ):
     """List reservations."""
@@ -320,27 +320,27 @@ def reservation_list(
             limit=limit,
         )
     )
-    return templates.TemplateResponse(request, "operations/fleet/reservations.html", context)
+    return templates.TemplateResponse(request, "fleet/reservations.html", context)
 
 
 @router.get("/reservations/new", response_class=HTMLResponse)
 def reservation_new(
     request: Request,
-    auth: WebAuthContext = Depends(require_operations_access),
+    auth: WebAuthContext = Depends(require_fleet_access),
     db: Session = Depends(get_db),
 ):
     """New reservation form."""
     context = base_context(request, auth, "New Reservation", "fleet", db=db)
     web_service = FleetWebService(db)
     context.update(web_service.reservation_form_context(auth.organization_id))
-    return templates.TemplateResponse(request, "operations/fleet/reservation_form.html", context)
+    return templates.TemplateResponse(request, "fleet/reservation_form.html", context)
 
 
 @router.get("/reservations/{reservation_id}", response_class=HTMLResponse)
 def reservation_detail(
     request: Request,
     reservation_id: UUID,
-    auth: WebAuthContext = Depends(require_operations_access),
+    auth: WebAuthContext = Depends(require_fleet_access),
     db: Session = Depends(get_db),
 ):
     """Reservation detail view."""
@@ -348,9 +348,9 @@ def reservation_detail(
     web_service = FleetWebService(db)
     try:
         context.update(web_service.reservation_detail_context(auth.organization_id, reservation_id))
-        return templates.TemplateResponse(request, "operations/fleet/reservation_detail.html", context)
+        return templates.TemplateResponse(request, "fleet/reservation_detail.html", context)
     except NotFoundError:
-        return RedirectResponse(url="/operations/fleet/reservations?error=not_found", status_code=303)
+        return RedirectResponse(url="/fleet/reservations?error=not_found", status_code=303)
 
 
 # =============================================================================
@@ -367,7 +367,7 @@ def document_list(
     expiring_soon: bool = False,
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
-    auth: WebAuthContext = Depends(require_operations_access),
+    auth: WebAuthContext = Depends(require_fleet_access),
     db: Session = Depends(get_db),
 ):
     """List documents."""
@@ -384,28 +384,28 @@ def document_list(
             limit=limit,
         )
     )
-    return templates.TemplateResponse(request, "operations/fleet/documents.html", context)
+    return templates.TemplateResponse(request, "fleet/documents.html", context)
 
 
 @router.get("/documents/new", response_class=HTMLResponse)
 def document_new(
     request: Request,
     vehicle_id: Optional[UUID] = None,
-    auth: WebAuthContext = Depends(require_operations_access),
+    auth: WebAuthContext = Depends(require_fleet_access),
     db: Session = Depends(get_db),
 ):
     """New document form."""
     context = base_context(request, auth, "Add Document", "fleet", db=db)
     web_service = FleetWebService(db)
     context.update(web_service.document_form_context(auth.organization_id, vehicle_id=vehicle_id))
-    return templates.TemplateResponse(request, "operations/fleet/document_form.html", context)
+    return templates.TemplateResponse(request, "fleet/document_form.html", context)
 
 
 @router.get("/documents/{document_id}", response_class=HTMLResponse)
 def document_detail(
     request: Request,
     document_id: UUID,
-    auth: WebAuthContext = Depends(require_operations_access),
+    auth: WebAuthContext = Depends(require_fleet_access),
     db: Session = Depends(get_db),
 ):
     """Document detail view."""
@@ -413,6 +413,6 @@ def document_detail(
     web_service = FleetWebService(db)
     try:
         context.update(web_service.document_detail_context(auth.organization_id, document_id))
-        return templates.TemplateResponse(request, "operations/fleet/document_detail.html", context)
+        return templates.TemplateResponse(request, "fleet/document_detail.html", context)
     except NotFoundError:
-        return RedirectResponse(url="/operations/fleet/documents?error=not_found", status_code=303)
+        return RedirectResponse(url="/fleet/documents?error=not_found", status_code=303)

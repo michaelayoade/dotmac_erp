@@ -19,12 +19,12 @@ from sqlalchemy.orm import Session
 from app.models.finance.ar.invoice import Invoice, InvoiceType
 from app.models.finance.ar.invoice_line import InvoiceLine
 from app.models.finance.gl.fiscal_period import FiscalPeriod
-from app.models.finance.inv.item import Item, CostingMethod
-from app.models.finance.inv.item_category import ItemCategory
-from app.models.finance.inv.inventory_transaction import TransactionType
+from app.models.inventory.item import Item, CostingMethod
+from app.models.inventory.item_category import ItemCategory
+from app.models.inventory.inventory_transaction import TransactionType
 from app.services.common import coerce_uuid
 from app.services.finance.gl.journal import JournalLineInput
-from app.services.finance.inv.transaction import (
+from app.services.inventory.transaction import (
     InventoryTransactionService,
     TransactionInput,
 )
@@ -139,7 +139,7 @@ class ARInventoryIntegration:
         Returns:
             CostingResult with unit cost and total cost
         """
-        from app.models.finance.inv.inventory_lot import InventoryLot
+        from app.models.inventory.inventory_lot import InventoryLot
 
         org_id = coerce_uuid(organization_id)
 

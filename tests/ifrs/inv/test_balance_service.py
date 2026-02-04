@@ -11,9 +11,9 @@ from unittest.mock import MagicMock, patch, PropertyMock
 
 import pytest
 
-from app.models.finance.inv.item import CostingMethod, ItemType
-from app.models.finance.inv.inventory_transaction import TransactionType
-from app.services.finance.inv.balance import (
+from app.models.inventory.item import CostingMethod, ItemType
+from app.models.inventory.inventory_transaction import TransactionType
+from app.services.inventory.balance import (
     InventoryBalanceService,
     InventoryBalance,
     ItemStockSummary,
@@ -781,7 +781,7 @@ class TestModuleInstance:
 
     def test_singleton_instance_exists(self):
         """Should have module-level inventory_balance_service instance."""
-        from app.services.finance.inv.balance import inventory_balance_service
+        from app.services.inventory.balance import inventory_balance_service
 
         assert inventory_balance_service is not None
         assert isinstance(inventory_balance_service, InventoryBalanceService)

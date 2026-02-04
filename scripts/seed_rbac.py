@@ -232,49 +232,49 @@ FINANCE_PERMISSIONS = [
     # -------------------------------------------------------------------------
     # Inventory (INV)
     # -------------------------------------------------------------------------
-    ("inv:items:read", "View inventory items"),
-    ("inv:items:create", "Create inventory items"),
-    ("inv:items:update", "Modify inventory items"),
-    ("inv:items:delete", "Deactivate inventory items"),
+    ("inventory:items:read", "View inventory items"),
+    ("inventory:items:create", "Create inventory items"),
+    ("inventory:items:update", "Modify inventory items"),
+    ("inventory:items:delete", "Deactivate inventory items"),
 
-    ("inv:warehouses:read", "View warehouses"),
-    ("inv:warehouses:manage", "Manage warehouses"),
+    ("inventory:warehouses:read", "View warehouses"),
+    ("inventory:warehouses:manage", "Manage warehouses"),
 
-    ("inv:transactions:read", "View inventory transactions"),
-    ("inv:transactions:create", "Create inventory transactions"),
-    ("inv:transactions:post", "Post transactions to GL"),
-    ("inv:transactions:receipt", "Record inventory receipts"),
-    ("inv:transactions:issue", "Record inventory issues"),
-    ("inv:transactions:transfer", "Transfer between warehouses"),
-    ("inv:transactions:adjust", "Adjust inventory quantities"),
+    ("inventory:transactions:read", "View inventory transactions"),
+    ("inventory:transactions:create", "Create inventory transactions"),
+    ("inventory:transactions:post", "Post transactions to GL"),
+    ("inventory:transactions:receipt", "Record inventory receipts"),
+    ("inventory:transactions:issue", "Record inventory issues"),
+    ("inventory:transactions:transfer", "Transfer between warehouses"),
+    ("inventory:transactions:adjust", "Adjust inventory quantities"),
 
-    ("inv:stock:read", "View stock balances"),
-    ("inv:stock:allocate", "Allocate/reserve inventory"),
+    ("inventory:stock:read", "View stock balances"),
+    ("inventory:stock:allocate", "Allocate/reserve inventory"),
 
-    ("inv:counts:read", "View inventory counts"),
-    ("inv:counts:create", "Create inventory counts"),
-    ("inv:counts:post", "Post count adjustments"),
+    ("inventory:counts:read", "View inventory counts"),
+    ("inventory:counts:create", "Create inventory counts"),
+    ("inventory:counts:post", "Post count adjustments"),
 
-    ("inv:valuation:read", "View inventory valuation"),
-    ("inv:valuation:create", "Create FIFO cost layers"),
-    ("inv:valuation:update", "Consume FIFO layers"),
-    ("inv:valuation:calculate", "Calculate NRV write-downs"),
-    ("inv:valuation:revalue", "Revalue inventory"),
+    ("inventory:valuation:read", "View inventory valuation"),
+    ("inventory:valuation:create", "Create FIFO cost layers"),
+    ("inventory:valuation:update", "Consume FIFO layers"),
+    ("inventory:valuation:calculate", "Calculate NRV write-downs"),
+    ("inventory:valuation:revalue", "Revalue inventory"),
 
-    ("inv:lots:read", "View inventory lots"),
-    ("inv:lots:create", "Create inventory lots"),
-    ("inv:lots:allocate", "Allocate/consume from lots"),
-    ("inv:lots:quarantine", "Quarantine/release lots"),
+    ("inventory:lots:read", "View inventory lots"),
+    ("inventory:lots:create", "Create inventory lots"),
+    ("inventory:lots:allocate", "Allocate/consume from lots"),
+    ("inventory:lots:quarantine", "Quarantine/release lots"),
 
-    ("inv:price_lists:read", "View price lists"),
-    ("inv:price_lists:manage", "Manage price lists"),
+    ("inventory:price_lists:read", "View price lists"),
+    ("inventory:price_lists:manage", "Manage price lists"),
 
-    ("inv:categories:read", "View item categories"),
-    ("inv:categories:create", "Create item categories"),
-    ("inv:categories:manage", "Manage item categories"),
+    ("inventory:categories:read", "View item categories"),
+    ("inventory:categories:create", "Create item categories"),
+    ("inventory:categories:manage", "Manage item categories"),
 
-    ("inv:bom:read", "View bills of materials"),
-    ("inv:bom:manage", "Manage bills of materials"),
+    ("inventory:bom:read", "View bills of materials"),
+    ("inventory:bom:manage", "Manage bills of materials"),
 
     # -------------------------------------------------------------------------
     # Tax (IAS 12)
@@ -778,14 +778,24 @@ EXPENSE_PERMISSIONS = [
 ]
 
 # =============================================================================
-# Operations Module Permissions
+# Operational Module Permissions
 # =============================================================================
-OPERATIONS_PERMISSIONS = [
+MODULE_PERMISSIONS = [
     # -------------------------------------------------------------------------
-    # Module Access Gate
+    # Module Access Gates
     # -------------------------------------------------------------------------
-    ("operations:access", "Access operations module"),
-    ("operations:dashboard", "View operations dashboard"),
+    ("inventory:access", "Access inventory module"),
+    ("inventory:dashboard", "View inventory dashboard"),
+    ("fleet:access", "Access fleet module"),
+    ("fleet:dashboard", "View fleet dashboard"),
+    ("support:access", "Access support module"),
+    ("support:dashboard", "View support dashboard"),
+    ("procurement:access", "Access procurement module"),
+    ("procurement:dashboard", "View procurement dashboard"),
+    ("projects:access", "Access projects module"),
+    ("projects:dashboard", "View projects dashboard"),
+    ("settings:access", "Access settings module"),
+    ("settings:dashboard", "View settings dashboard"),
 
     # -------------------------------------------------------------------------
     # Support/Ticketing
@@ -800,6 +810,30 @@ OPERATIONS_PERMISSIONS = [
 
     ("support:categories:read", "View ticket categories"),
     ("support:categories:manage", "Manage ticket categories"),
+
+    # -------------------------------------------------------------------------
+    # IPSAS Fund Accounting
+    # -------------------------------------------------------------------------
+    ("ipsas:funds:read", "View IPSAS funds"),
+    ("ipsas:funds:create", "Create IPSAS funds"),
+    ("ipsas:funds:update", "Update IPSAS funds"),
+
+    ("ipsas:appropriations:read", "View appropriations and allotments"),
+    ("ipsas:appropriations:create", "Create appropriations and allotments"),
+    ("ipsas:appropriations:approve", "Approve appropriations"),
+
+    ("ipsas:commitments:read", "View commitments"),
+    ("ipsas:commitments:create", "Create commitments"),
+    ("ipsas:commitments:update", "Update commitments (obligations, expenditures, cancellations)"),
+
+    ("ipsas:virements:read", "View virements"),
+    ("ipsas:virements:create", "Create virement requests"),
+    ("ipsas:virements:approve", "Approve and apply virements"),
+
+    ("ipsas:reports:read", "View IPSAS financial reports and budget comparisons"),
+
+    ("ipsas:coa:read", "View chart of account segments"),
+    ("ipsas:coa:create", "Create chart of account segment definitions and values"),
 
     # -------------------------------------------------------------------------
     # Task Management
@@ -821,7 +855,7 @@ DEFAULT_PERMISSIONS = (
     + FINANCE_PERMISSIONS
     + HR_PERMISSIONS
     + EXPENSE_PERMISSIONS
-    + OPERATIONS_PERMISSIONS
+    + MODULE_PERMISSIONS
 )
 
 
@@ -901,7 +935,7 @@ ROLE_PERMISSIONS = {
         "ap:suppliers:read", "ap:invoices:read", "ap:payments:read", "ap:aging:read",
         "fa:assets:read", "fa:depreciation:read", "fa:categories:read",
         "banking:accounts:read", "banking:statements:read", "banking:reconciliation:read",
-        "inv:items:read", "inv:warehouses:read", "inv:transactions:read", "inv:valuation:read",
+        "inventory:items:read", "inventory:warehouses:read", "inventory:transactions:read", "inventory:valuation:read",
         # Tax - read access
         "tax:jurisdictions:read", "tax:codes:read", "tax:transactions:read",
         "tax:deferred:read", "tax:reconciliation:read", "tax:periods:read", "tax:returns:read",
@@ -973,19 +1007,19 @@ ROLE_PERMISSIONS = {
         "banking:reconciliation:submit", "banking:reconciliation:approve", "banking:reconciliation:complete",
         "banking:transfers:read", "banking:transfers:create", "banking:transfers:approve",
         "banking:rules:read", "banking:rules:manage",
-        "inv:items:read", "inv:items:create", "inv:items:update", "inv:items:delete",
-        "inv:warehouses:read", "inv:warehouses:manage",
-        "inv:transactions:read", "inv:transactions:create", "inv:transactions:post",
-        "inv:transactions:receipt", "inv:transactions:issue",
-        "inv:transactions:transfer", "inv:transactions:adjust",
-        "inv:stock:read", "inv:stock:allocate",
-        "inv:counts:read", "inv:counts:create", "inv:counts:post",
-        "inv:valuation:read", "inv:valuation:create", "inv:valuation:update",
-        "inv:valuation:calculate", "inv:valuation:revalue",
-        "inv:lots:read", "inv:lots:create", "inv:lots:allocate", "inv:lots:quarantine",
-        "inv:price_lists:read", "inv:price_lists:manage",
-        "inv:categories:read", "inv:categories:create", "inv:categories:manage",
-        "inv:bom:read", "inv:bom:manage",
+        "inventory:items:read", "inventory:items:create", "inventory:items:update", "inventory:items:delete",
+        "inventory:warehouses:read", "inventory:warehouses:manage",
+        "inventory:transactions:read", "inventory:transactions:create", "inventory:transactions:post",
+        "inventory:transactions:receipt", "inventory:transactions:issue",
+        "inventory:transactions:transfer", "inventory:transactions:adjust",
+        "inventory:stock:read", "inventory:stock:allocate",
+        "inventory:counts:read", "inventory:counts:create", "inventory:counts:post",
+        "inventory:valuation:read", "inventory:valuation:create", "inventory:valuation:update",
+        "inventory:valuation:calculate", "inventory:valuation:revalue",
+        "inventory:lots:read", "inventory:lots:create", "inventory:lots:allocate", "inventory:lots:quarantine",
+        "inventory:price_lists:read", "inventory:price_lists:manage",
+        "inventory:categories:read", "inventory:categories:create", "inventory:categories:manage",
+        "inventory:bom:read", "inventory:bom:manage",
         "tax:codes:read", "tax:codes:manage",
         "tax:jurisdictions:read", "tax:jurisdictions:manage",
         "tax:transactions:read",
@@ -1026,6 +1060,13 @@ ROLE_PERMISSIONS = {
         "automation:recurring:read", "automation:recurring:manage",
         "automation:workflows:read", "automation:workflows:manage",
         "automation:templates:read", "automation:templates:manage",
+        # IPSAS Fund Accounting - full control
+        "ipsas:funds:read", "ipsas:funds:create", "ipsas:funds:update",
+        "ipsas:appropriations:read", "ipsas:appropriations:create", "ipsas:appropriations:approve",
+        "ipsas:commitments:read", "ipsas:commitments:create", "ipsas:commitments:update",
+        "ipsas:virements:read", "ipsas:virements:create", "ipsas:virements:approve",
+        "ipsas:reports:read",
+        "ipsas:coa:read", "ipsas:coa:create",
         "org:business_units:read", "org:business_units:manage",
         "org:cost_centers:read", "org:cost_centers:manage",
         "org:projects:read", "org:projects:manage",
@@ -1073,17 +1114,17 @@ ROLE_PERMISSIONS = {
         "banking:transfers:read", "banking:transfers:create", "banking:transfers:approve",
         "banking:rules:read", "banking:rules:manage",
         # Inventory
-        "inv:items:read", "inv:items:create", "inv:items:update",
-        "inv:warehouses:read", "inv:warehouses:manage",
-        "inv:transactions:read", "inv:transactions:create", "inv:transactions:post",
-        "inv:transactions:receipt", "inv:transactions:issue",
-        "inv:transactions:transfer", "inv:transactions:adjust",
-        "inv:stock:read", "inv:stock:allocate",
-        "inv:counts:read", "inv:counts:create", "inv:counts:post",
-        "inv:valuation:read", "inv:valuation:create", "inv:valuation:update", "inv:valuation:calculate",
-        "inv:lots:read", "inv:lots:create", "inv:lots:allocate", "inv:lots:quarantine",
-        "inv:price_lists:read", "inv:price_lists:manage",
-        "inv:categories:read", "inv:categories:create", "inv:categories:manage",
+        "inventory:items:read", "inventory:items:create", "inventory:items:update",
+        "inventory:warehouses:read", "inventory:warehouses:manage",
+        "inventory:transactions:read", "inventory:transactions:create", "inventory:transactions:post",
+        "inventory:transactions:receipt", "inventory:transactions:issue",
+        "inventory:transactions:transfer", "inventory:transactions:adjust",
+        "inventory:stock:read", "inventory:stock:allocate",
+        "inventory:counts:read", "inventory:counts:create", "inventory:counts:post",
+        "inventory:valuation:read", "inventory:valuation:create", "inventory:valuation:update", "inventory:valuation:calculate",
+        "inventory:lots:read", "inventory:lots:create", "inventory:lots:allocate", "inventory:lots:quarantine",
+        "inventory:price_lists:read", "inventory:price_lists:manage",
+        "inventory:categories:read", "inventory:categories:create", "inventory:categories:manage",
         # Tax (IAS 12)
         "tax:jurisdictions:read", "tax:jurisdictions:create",
         "tax:codes:read", "tax:codes:create", "tax:codes:calculate", "tax:codes:manage",
@@ -1121,6 +1162,13 @@ ROLE_PERMISSIONS = {
         "rpt:instances:read", "rpt:instances:create", "rpt:instances:generate", "rpt:instances:data",
         "rpt:disclosures:read", "rpt:disclosures:create", "rpt:disclosures:complete",
         "rpt:schedules:read", "rpt:schedules:create", "rpt:schedules:run",
+        # IPSAS Fund Accounting
+        "ipsas:funds:read", "ipsas:funds:create", "ipsas:funds:update",
+        "ipsas:appropriations:read", "ipsas:appropriations:create", "ipsas:appropriations:approve",
+        "ipsas:commitments:read", "ipsas:commitments:create", "ipsas:commitments:update",
+        "ipsas:virements:read", "ipsas:virements:create", "ipsas:virements:approve",
+        "ipsas:reports:read",
+        "ipsas:coa:read", "ipsas:coa:create",
         # Org
         "org:business_units:read", "org:cost_centers:read", "org:projects:read",
         "org:locations:read", "org:segments:read",
@@ -1146,10 +1194,17 @@ ROLE_PERMISSIONS = {
         "banking:statements:read", "banking:statements:import",
         "banking:reconciliation:read", "banking:reconciliation:create", "banking:reconciliation:update",
         "banking:reconciliation:submit", "banking:reconciliation:complete",
-        "inv:items:read", "inv:transactions:read", "inv:stock:read",
+        "inventory:items:read", "inventory:transactions:read", "inventory:stock:read",
         "tax:codes:read", "tax:transactions:read", "tax:returns:read",
         "reports:instances:read", "reports:instances:generate",
         "reports:trial_balance:read", "reports:financial_statements:read", "reports:gl_detail:read",
+        # IPSAS Fund Accounting
+        "ipsas:funds:read", "ipsas:funds:create",
+        "ipsas:appropriations:read", "ipsas:appropriations:create",
+        "ipsas:commitments:read", "ipsas:commitments:create", "ipsas:commitments:update",
+        "ipsas:virements:read", "ipsas:virements:create",
+        "ipsas:reports:read",
+        "ipsas:coa:read",
     ],
 
     "accountant": [
@@ -1165,9 +1220,16 @@ ROLE_PERMISSIONS = {
         "ap:aging:read",
         "banking:accounts:read", "banking:statements:read",
         "banking:reconciliation:read", "banking:reconciliation:create", "banking:reconciliation:update",
-        "inv:items:read", "inv:transactions:read", "inv:stock:read",
+        "inventory:items:read", "inventory:transactions:read", "inventory:stock:read",
         "tax:codes:read", "tax:transactions:read",
         "reports:instances:read", "reports:trial_balance:read",
+        # IPSAS Fund Accounting
+        "ipsas:funds:read",
+        "ipsas:appropriations:read",
+        "ipsas:commitments:read", "ipsas:commitments:create",
+        "ipsas:virements:read",
+        "ipsas:reports:read",
+        "ipsas:coa:read",
     ],
 
     "junior_accountant": [
@@ -1177,7 +1239,7 @@ ROLE_PERMISSIONS = {
         "ap:suppliers:read", "ap:invoices:read", "ap:invoices:create",
         "ap:goods_receipts:read",
         "banking:accounts:read", "banking:statements:read",
-        "inv:items:read",
+        "inventory:items:read",
         "reports:instances:read",
     ],
 
@@ -1188,8 +1250,8 @@ ROLE_PERMISSIONS = {
         "ap:suppliers:read", "ap:invoices:read", "ap:payments:read", "ap:aging:read",
         "fa:assets:read", "fa:depreciation:read", "fa:categories:read",
         "banking:accounts:read", "banking:statements:read", "banking:reconciliation:read",
-        "inv:items:read", "inv:warehouses:read", "inv:transactions:read", "inv:valuation:read",
-        "inv:stock:read", "inv:lots:read", "inv:categories:read",
+        "inventory:items:read", "inventory:warehouses:read", "inventory:transactions:read", "inventory:valuation:read",
+        "inventory:stock:read", "inventory:lots:read", "inventory:categories:read",
         # Tax - read access
         "tax:jurisdictions:read", "tax:codes:read", "tax:transactions:read",
         "tax:deferred:read", "tax:reconciliation:read", "tax:periods:read", "tax:returns:read",
@@ -1207,6 +1269,13 @@ ROLE_PERMISSIONS = {
         "rpt:definitions:read", "rpt:lines:read",
         "rpt:instances:read", "rpt:instances:data",
         "rpt:disclosures:read", "rpt:schedules:read",
+        # IPSAS Fund Accounting - read access
+        "ipsas:funds:read",
+        "ipsas:appropriations:read",
+        "ipsas:commitments:read",
+        "ipsas:virements:read",
+        "ipsas:reports:read",
+        "ipsas:coa:read",
     ],
 
     "ap_clerk": [
@@ -1236,19 +1305,20 @@ ROLE_PERMISSIONS = {
 
     "inventory_manager": [
         "finance:access", "finance:dashboard",
-        "inv:items:read", "inv:items:create", "inv:items:update", "inv:items:delete",
-        "inv:warehouses:read", "inv:warehouses:manage",
-        "inv:transactions:read", "inv:transactions:create", "inv:transactions:post",
-        "inv:transactions:receipt", "inv:transactions:issue",
-        "inv:transactions:transfer", "inv:transactions:adjust",
-        "inv:stock:read", "inv:stock:allocate",
-        "inv:counts:read", "inv:counts:create", "inv:counts:post",
-        "inv:valuation:read", "inv:valuation:create", "inv:valuation:update",
-        "inv:valuation:calculate", "inv:valuation:revalue",
-        "inv:lots:read", "inv:lots:create", "inv:lots:allocate", "inv:lots:quarantine",
-        "inv:price_lists:read", "inv:price_lists:manage",
-        "inv:categories:read", "inv:categories:create", "inv:categories:manage",
-        "inv:bom:read", "inv:bom:manage",
+        "inventory:access", "inventory:dashboard",
+        "inventory:items:read", "inventory:items:create", "inventory:items:update", "inventory:items:delete",
+        "inventory:warehouses:read", "inventory:warehouses:manage",
+        "inventory:transactions:read", "inventory:transactions:create", "inventory:transactions:post",
+        "inventory:transactions:receipt", "inventory:transactions:issue",
+        "inventory:transactions:transfer", "inventory:transactions:adjust",
+        "inventory:stock:read", "inventory:stock:allocate",
+        "inventory:counts:read", "inventory:counts:create", "inventory:counts:post",
+        "inventory:valuation:read", "inventory:valuation:create", "inventory:valuation:update",
+        "inventory:valuation:calculate", "inventory:valuation:revalue",
+        "inventory:lots:read", "inventory:lots:create", "inventory:lots:allocate", "inventory:lots:quarantine",
+        "inventory:price_lists:read", "inventory:price_lists:manage",
+        "inventory:categories:read", "inventory:categories:create", "inventory:categories:manage",
+        "inventory:bom:read", "inventory:bom:manage",
         "gl:accounts:read",
     ],
 
@@ -1512,7 +1582,12 @@ ROLE_PERMISSIONS = {
     # Operations Roles
     # -------------------------------------------------------------------------
     "operations_manager": [
-        "operations:access", "operations:dashboard",
+        "inventory:access", "inventory:dashboard",
+        "fleet:access", "fleet:dashboard",
+        "support:access", "support:dashboard",
+        "procurement:access", "procurement:dashboard",
+        "projects:access", "projects:dashboard",
+        "settings:access", "settings:dashboard",
         "support:tickets:read", "support:tickets:create", "support:tickets:update",
         "support:tickets:assign", "support:tickets:resolve", "support:tickets:close",
         "support:categories:read", "support:categories:manage",
@@ -1520,7 +1595,8 @@ ROLE_PERMISSIONS = {
     ],
 
     "support_agent": [
-        "operations:access", "operations:dashboard",
+        "support:access", "support:dashboard",
+        "projects:access",
         "support:tickets:read", "support:tickets:create", "support:tickets:update",
         "support:tickets:resolve",
         "support:categories:read",
@@ -1538,6 +1614,7 @@ ROLE_PERMISSIONS = {
         "perf:appraisals:read_team", "perf:appraisals:review",
         "perf:goals:read", "perf:goals:create", "perf:goals:update",
         "expense:claims:read_team", "expense:claims:approve:tier1",
+        "projects:access",
         "tasks:read", "tasks:create", "tasks:assign",
     ],
 
@@ -1557,7 +1634,9 @@ ROLE_PERMISSIONS = {
         "payroll:slips:read_own",
         "training:events:read", "training:enrollments:self_enroll",
         "training:feedback:submit",
+        "support:access",
         "support:tickets:read_own", "support:tickets:create",
+        "projects:access",
         "tasks:read_own", "tasks:update", "tasks:complete",
     ],
 }
@@ -1636,7 +1715,7 @@ def main():
         print(f"  Finance: {len(FINANCE_PERMISSIONS)}")
         print(f"  HR/People: {len(HR_PERMISSIONS)}")
         print(f"  Expense: {len(EXPENSE_PERMISSIONS)}")
-        print(f"  Operations: {len(OPERATIONS_PERMISSIONS)}")
+        print(f"  Modules: {len(MODULE_PERMISSIONS)}")
         print("\nRole -> Permission counts:")
         for role_name, perms in ROLE_PERMISSIONS.items():
             print(f"  {role_name}: {len(perms)} permissions")

@@ -16,8 +16,8 @@ import pytest
 
 # ============ Mock Enums ============
 
-from app.models.finance.inv.item import CostingMethod, ItemType
-from app.models.finance.inv.inventory_transaction import TransactionType
+from app.models.inventory.item import CostingMethod, ItemType
+from app.models.inventory.inventory_transaction import TransactionType
 
 MockItemType = ItemType
 MockCostingMethod = CostingMethod

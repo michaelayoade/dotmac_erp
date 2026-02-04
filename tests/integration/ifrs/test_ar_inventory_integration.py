@@ -12,7 +12,7 @@ import pytest
 from sqlalchemy.orm import Session
 
 from app.models.finance.ar.invoice_line import InvoiceLine
-from app.models.finance.inv.item import CostingMethod
+from app.models.inventory.item import CostingMethod
 from app.services.finance.ar.ar_inventory_integration import (
     ARInventoryIntegration,
     CostingResult,
@@ -279,7 +279,7 @@ class TestGetItemCost:
         warehouse,
     ):
         """Should consume from multiple lots in FIFO order."""
-        from app.models.finance.inv.inventory_lot import InventoryLot
+        from app.models.inventory.inventory_lot import InventoryLot
 
         inventory_item.costing_method = CostingMethod.FIFO
         db.flush()

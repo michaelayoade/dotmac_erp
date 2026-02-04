@@ -1,0 +1,114 @@
+{% extends "modules/base_modules.html" %}
+
+{% block page_title %}New Reservation{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+    <a href="/fleet" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Fleet</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <a href="/fleet" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Fleet</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <a href="/fleet/reservations" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Reservations</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="font-medium text-slate-900 dark:text-white">New</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <form method="POST" action="/api/v1/fleet/reservations" class="space-y-6">
+        <!-- Vehicle & Time -->
+        <div class="card">
+            <div class="px-4 py-3 border-b border-slate-100 dark:border-slate-800">
+                <h3 class="font-semibold text-slate-900 dark:text-white">Reservation Details</h3>
+            </div>
+            <div class="p-4 space-y-4">
+                <div>
+                    <label for="vehicle_id" class="form-label">Pool Vehicle <span class="text-rose-500">*</span></label>
+                    <select id="vehicle_id" name="vehicle_id" required class="form-select">
+                        <option value="">Select vehicle...</option>
+                        {% for v in pool_vehicles %}
+                        <option value="{{ v.vehicle_id }}">
+                            {{ v.registration_number }} - {{ v.make }} {{ v.model }} ({{ v.vehicle_type | replace('_', ' ') | title }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                    {% if not pool_vehicles %}
+                    <p class="mt-1 text-xs text-amber-600 dark:text-amber-400">No pool vehicles are currently available.</p>
+                    {% endif %}
+                </div>
+
+                <div class="grid gap-4 sm:grid-cols-2">
+                    <div>
+                        <label for="start_datetime" class="form-label">Start Date & Time <span class="text-rose-500">*</span></label>
+                        <input type="datetime-local" id="start_datetime" name="start_datetime" required class="form-input">
+                    </div>
+                    <div>
+                        <label for="end_datetime" class="form-label">End Date & Time <span class="text-rose-500">*</span></label>
+                        <input type="datetime-local" id="end_datetime" name="end_datetime" required class="form-input">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Trip Details -->
+        <div class="card">
+            <div class="px-4 py-3 border-b border-slate-100 dark:border-slate-800">
+                <h3 class="font-semibold text-slate-900 dark:text-white">Trip Information</h3>
+            </div>
+            <div class="p-4 space-y-4">
+                <div>
+                    <label for="purpose" class="form-label">Purpose <span class="text-rose-500">*</span></label>
+                    <textarea id="purpose" name="purpose" required rows="3"
+                              placeholder="Describe the purpose of this trip..."
+                              class="form-textarea"></textarea>
+                </div>
+
+                <div class="grid gap-4 sm:grid-cols-2">
+                    <div>
+                        <label for="destination" class="form-label">Destination</label>
+                        <input type="text" id="destination" name="destination"
+                               placeholder="Where are you going?"
+                               class="form-input">
+                    </div>
+                    <div>
+                        <label for="estimated_distance_km" class="form-label">Estimated Distance (km)</label>
+                        <input type="number" id="estimated_distance_km" name="estimated_distance_km"
+                               min="0" step="1" placeholder="0"
+                               class="form-input">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Notes -->
+        <div class="card">
+            <div class="px-4 py-3 border-b border-slate-100 dark:border-slate-800">
+                <h3 class="font-semibold text-slate-900 dark:text-white">Notes</h3>
+            </div>
+            <div class="p-4">
+                <textarea id="notes" name="notes" rows="3"
+                          placeholder="Additional notes..."
+                          class="form-textarea"></textarea>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex items-center justify-end gap-3">
+            <a href="/fleet/reservations" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">
+                <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                </svg>
+                Submit Reservation
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

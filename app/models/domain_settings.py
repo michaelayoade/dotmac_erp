@@ -37,6 +37,12 @@ class SettingDomain(enum.Enum):
     reporting = "reporting"
     payments = "payments"
     operations = "operations"
+    support = "support"
+    inventory = "inventory"
+    projects = "projects"
+    fleet = "fleet"
+    procurement = "procurement"
+    settings = "settings"
     payroll = "payroll"
 
 

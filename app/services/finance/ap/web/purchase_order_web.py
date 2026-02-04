@@ -351,7 +351,7 @@ class PurchaseOrderWebService:
         expense_accounts = get_accounts(db, org_id, IFRSCategory.EXPENSES)
 
         # Get inventory items for selection
-        from app.models.finance.inv.item import Item
+        from app.models.inventory.item import Item
         items = (
             db.query(Item)
             .filter(

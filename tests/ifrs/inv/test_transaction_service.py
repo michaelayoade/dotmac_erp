@@ -9,12 +9,12 @@ from uuid import uuid4
 
 import pytest
 
-from app.services.finance.inv.transaction import (
+from app.services.inventory.transaction import (
     InventoryTransactionService,
     TransactionInput,
 )
-from app.models.finance.inv.item import CostingMethod
-from app.models.finance.inv.inventory_transaction import TransactionType
+from app.models.inventory.item import CostingMethod
+from app.models.inventory.inventory_transaction import TransactionType
 from tests.ifrs.inv.conftest import (
     MockItem,
     MockWarehouse,
@@ -88,7 +88,7 @@ class TestCreateReceipt:
         self, service, mock_db, org_id, user_id, sample_receipt_input
     ):
         """Test successful receipt creation."""
-        from app.services.finance.inv.transaction import InventoryTransactionService
+        from app.services.inventory.transaction import InventoryTransactionService
 
         item = MockItem(
             item_id=sample_receipt_input.item_id,
@@ -180,7 +180,7 @@ class TestCreateIssue:
         self, service, mock_db, org_id, user_id, sample_issue_input
     ):
         """Test successful issue creation."""
-        from app.services.finance.inv.transaction import InventoryTransactionService
+        from app.services.inventory.transaction import InventoryTransactionService
 
         item = MockItem(
             item_id=sample_issue_input.item_id,
@@ -208,7 +208,7 @@ class TestCreateIssue:
     ):
         """Test issue creation with insufficient inventory."""
         from fastapi import HTTPException
-        from app.services.finance.inv.transaction import InventoryTransactionService
+        from app.services.inventory.transaction import InventoryTransactionService
 
         item = MockItem(
             item_id=sample_issue_input.item_id,
@@ -247,7 +247,7 @@ class TestCreateAdjustment:
 
     def test_create_positive_adjustment(self, service, mock_db, org_id, user_id):
         """Test successful positive adjustment."""
-        from app.services.finance.inv.transaction import InventoryTransactionService
+        from app.services.inventory.transaction import InventoryTransactionService
 
         input_data = TransactionInput(
             transaction_type=TransactionType.ADJUSTMENT,
@@ -282,7 +282,7 @@ class TestCreateAdjustment:
 
     def test_create_negative_adjustment(self, service, mock_db, org_id, user_id):
         """Test successful negative adjustment."""
-        from app.services.finance.inv.transaction import InventoryTransactionService
+        from app.services.inventory.transaction import InventoryTransactionService
 
         input_data = TransactionInput(
             transaction_type=TransactionType.ADJUSTMENT,
@@ -318,7 +318,7 @@ class TestCreateAdjustment:
     ):
         """Test that adjustment resulting in negative inventory fails."""
         from fastapi import HTTPException
-        from app.services.finance.inv.transaction import InventoryTransactionService
+        from app.services.inventory.transaction import InventoryTransactionService
 
         input_data = TransactionInput(
             transaction_type=TransactionType.ADJUSTMENT,
@@ -356,7 +356,7 @@ class TestCreateTransfer:
 
     def test_create_transfer_success(self, service, mock_db, org_id, user_id):
         """Test successful transfer between warehouses."""
-        from app.services.finance.inv.transaction import InventoryTransactionService
+        from app.services.inventory.transaction import InventoryTransactionService
 
         input_data = TransactionInput(
             transaction_type=TransactionType.TRANSFER,
@@ -427,7 +427,7 @@ class TestCreateTransfer:
     ):
         """Test transfer with insufficient inventory fails."""
         from fastapi import HTTPException
-        from app.services.finance.inv.transaction import InventoryTransactionService
+        from app.services.inventory.transaction import InventoryTransactionService
 
         input_data = TransactionInput(
             transaction_type=TransactionType.TRANSFER,
