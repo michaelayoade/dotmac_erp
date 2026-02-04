@@ -1,0 +1,114 @@
+{% extends "finance/base_finance.html" %}
+
+{% block page_title %}{{ fund.fund_name }}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400">
+    <a href="/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/finance/ipsas/funds" class="hover:text-primary-600 dark:hover:text-primary-400">Funds</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white">{{ fund.fund_code }}</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Fund Header -->
+    <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800/50">
+        <div class="flex items-start justify-between">
+            <div>
+                <div class="flex items-center gap-3">
+                    <h2 class="text-xl font-semibold text-slate-900 dark:text-white font-display">{{ fund.fund_name }}</h2>
+                    {% if fund.status.value == 'ACTIVE' %}
+                    <span class="inline-flex rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">Active</span>
+                    {% elif fund.status.value == 'FROZEN' %}
+                    <span class="inline-flex rounded-full bg-yellow-100 px-3 py-1 text-xs font-medium text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">Frozen</span>
+                    {% else %}
+                    <span class="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-400">Closed</span>
+                    {% endif %}
+                </div>
+                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ fund.fund_code }} &middot; {{ fund.fund_type.value }}</p>
+                {% if fund.description %}
+                <p class="mt-2 text-sm text-slate-600 dark:text-slate-300">{{ fund.description }}</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Fund Details Grid -->
+    <div class="grid gap-6 lg:grid-cols-2">
+        <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800/50">
+            <h3 class="text-sm font-medium text-slate-900 dark:text-white mb-4">Fund Details</h3>
+            <dl class="space-y-3">
+                <div class="flex justify-between">
+                    <dt class="text-sm text-slate-500 dark:text-slate-400">Type</dt>
+                    <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ fund.fund_type.value }}</dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-sm text-slate-500 dark:text-slate-400">Restricted</dt>
+                    <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ 'Yes' if fund.is_restricted else 'No' }}</dd>
+                </div>
+                {% if fund.restriction_description %}
+                <div class="flex justify-between">
+                    <dt class="text-sm text-slate-500 dark:text-slate-400">Restriction</dt>
+                    <dd class="text-sm text-slate-900 dark:text-white">{{ fund.restriction_description }}</dd>
+                </div>
+                {% endif %}
+                <div class="flex justify-between">
+                    <dt class="text-sm text-slate-500 dark:text-slate-400">Effective From</dt>
+                    <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ fund.effective_from }}</dd>
+                </div>
+                {% if fund.effective_to %}
+                <div class="flex justify-between">
+                    <dt class="text-sm text-slate-500 dark:text-slate-400">Effective To</dt>
+                    <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ fund.effective_to }}</dd>
+                </div>
+                {% endif %}
+                {% if fund.donor_name %}
+                <div class="flex justify-between">
+                    <dt class="text-sm text-slate-500 dark:text-slate-400">Donor</dt>
+                    <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ fund.donor_name }}</dd>
+                </div>
+                {% endif %}
+                {% if fund.donor_reference %}
+                <div class="flex justify-between">
+                    <dt class="text-sm text-slate-500 dark:text-slate-400">Donor Reference</dt>
+                    <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ fund.donor_reference }}</dd>
+                </div>
+                {% endif %}
+            </dl>
+        </div>
+
+        {% if balance %}
+        <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800/50">
+            <h3 class="text-sm font-medium text-slate-900 dark:text-white mb-4">Fund Balance</h3>
+            <dl class="space-y-3">
+                <div class="flex justify-between">
+                    <dt class="text-sm text-slate-500 dark:text-slate-400">Appropriated</dt>
+                    <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ "{:,.2f}".format(balance.total_appropriated) }} {{ balance.currency_code }}</dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-sm text-slate-500 dark:text-slate-400">Committed</dt>
+                    <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ "{:,.2f}".format(balance.total_committed) }}</dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-sm text-slate-500 dark:text-slate-400">Obligated</dt>
+                    <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ "{:,.2f}".format(balance.total_obligated) }}</dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-sm text-slate-500 dark:text-slate-400">Expended</dt>
+                    <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ "{:,.2f}".format(balance.total_expended) }}</dd>
+                </div>
+                <div class="flex justify-between border-t border-slate-200 pt-3 dark:border-slate-700">
+                    <dt class="text-sm font-medium text-slate-900 dark:text-white">Available</dt>
+                    <dd class="text-sm font-bold {{ 'text-green-600 dark:text-green-400' if balance.available_balance > 0 else 'text-red-600 dark:text-red-400' }}">
+                        {{ "{:,.2f}".format(balance.available_balance) }} {{ balance.currency_code }}
+                    </dd>
+                </div>
+            </dl>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

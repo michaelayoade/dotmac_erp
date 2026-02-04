@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Optional, cast
 from uuid import UUID
 
 from sqlalchemy import select
@@ -392,9 +392,9 @@ class InfoChangeService:
                     try:
                         person.gender = PersonGender(value)
                     except Exception:
-                        person.gender = None
+                        person.gender = cast(Any, None)
                 else:
-                    person.gender = None
+                    person.gender = cast(Any, None)
         employee_fields = [
             "personal_email",
             "personal_phone",

@@ -61,7 +61,7 @@ class CategoryWebService:
         }
 
         return templates.TemplateResponse(
-            request, "operations/support/categories.html", context
+            request, "support/categories.html", context
         )
 
     def category_form_response(
@@ -128,7 +128,7 @@ class CategoryWebService:
         }
 
         return templates.TemplateResponse(
-            request, "operations/support/category_form.html", context
+            request, "support/category_form.html", context
         )
 
     def create_category_response(
@@ -175,7 +175,7 @@ class CategoryWebService:
                 )
 
             return RedirectResponse(
-                url="/operations/support/categories",
+                url="/support/categories",
                 status_code=303,
             )
 
@@ -222,7 +222,7 @@ class CategoryWebService:
             db.commit()
 
             return RedirectResponse(
-                url="/operations/support/categories",
+                url="/support/categories",
                 status_code=303,
             )
 

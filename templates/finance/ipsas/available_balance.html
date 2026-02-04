@@ -1,0 +1,94 @@
+{% extends "finance/base_finance.html" %}
+
+{% block page_title %}Available Balance{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400">
+    <a href="/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/finance" class="hover:text-primary-600 dark:hover:text-primary-400">Finance</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white">Available Balance</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Overall Balance -->
+    {% if overall_balance %}
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div class="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-800/50">
+            <p class="text-xs font-medium text-slate-500 dark:text-slate-400">Total Appropriated</p>
+            <p class="mt-2 text-2xl font-bold text-slate-900 dark:text-white font-mono">{{ "{:,.2f}".format(overall_balance.total_appropriated) }}</p>
+            <p class="mt-1 text-xs text-slate-400">{{ overall_balance.currency_code }}</p>
+        </div>
+        <div class="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-800/50">
+            <p class="text-xs font-medium text-slate-500 dark:text-slate-400">Total Committed</p>
+            <p class="mt-2 text-2xl font-bold text-blue-600 dark:text-blue-400 font-mono">{{ "{:,.2f}".format(overall_balance.total_committed) }}</p>
+        </div>
+        <div class="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-800/50">
+            <p class="text-xs font-medium text-slate-500 dark:text-slate-400">Total Expended</p>
+            <p class="mt-2 text-2xl font-bold text-green-600 dark:text-green-400 font-mono">{{ "{:,.2f}".format(overall_balance.total_expended) }}</p>
+        </div>
+        <div class="rounded-xl border border-slate-200 bg-gradient-to-br from-primary-50 to-primary-100 p-5 dark:border-primary-800 dark:from-primary-900/30 dark:to-primary-800/20">
+            <p class="text-xs font-medium text-primary-600 dark:text-primary-400">Available Balance</p>
+            <p class="mt-2 text-2xl font-bold font-mono {{ 'text-green-700 dark:text-green-400' if overall_balance.available_balance > 0 else 'text-red-700 dark:text-red-400' }}">
+                {{ "{:,.2f}".format(overall_balance.available_balance) }}
+            </p>
+            <p class="mt-1 text-xs text-primary-500 dark:text-primary-400">{{ overall_balance.currency_code }}</p>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Per-Fund Breakdown -->
+    <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50">
+        <div class="border-b border-slate-200 p-6 dark:border-slate-700">
+            <h3 class="text-sm font-medium text-slate-900 dark:text-white">Balance by Fund</h3>
+        </div>
+
+        {% if fund_balances %}
+        <div class="divide-y divide-slate-200 dark:divide-slate-700">
+            {% for fb in fund_balances %}
+            <div class="p-6">
+                <div class="flex items-center justify-between mb-3">
+                    <div>
+                        <a href="/finance/ipsas/funds/{{ fb.fund.fund_id }}" class="text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">
+                            {{ fb.fund.fund_code }} - {{ fb.fund.fund_name }}
+                        </a>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">{{ fb.fund.fund_type.value }}{% if fb.fund.is_restricted %} &middot; Restricted{% endif %}</p>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-lg font-bold font-mono {{ 'text-green-600 dark:text-green-400' if fb.balance.available_balance > 0 else 'text-red-600 dark:text-red-400' }}">
+                            {{ "{:,.2f}".format(fb.balance.available_balance) }}
+                        </p>
+                        <p class="text-xs text-slate-400">available</p>
+                    </div>
+                </div>
+
+                <!-- Mini progress bar -->
+                {% if fb.balance.total_appropriated > 0 %}
+                {% set util_pct = ((fb.balance.total_committed / fb.balance.total_appropriated) * 100) | round(1) %}
+                <div class="flex items-center gap-3">
+                    <div class="h-2 flex-1 rounded-full bg-slate-200 dark:bg-slate-700">
+                        <div class="h-full rounded-full {{ 'bg-green-500' if util_pct < 80 else 'bg-yellow-500' if util_pct < 95 else 'bg-red-500' }}"
+                             style="width: {{ [util_pct, 100] | min }}%"></div>
+                    </div>
+                    <span class="text-xs text-slate-500 dark:text-slate-400 font-mono w-12 text-right">{{ util_pct }}%</span>
+                </div>
+                <div class="mt-2 flex gap-6 text-xs text-slate-500 dark:text-slate-400">
+                    <span>Appropriated: {{ "{:,.2f}".format(fb.balance.total_appropriated) }}</span>
+                    <span>Committed: {{ "{:,.2f}".format(fb.balance.total_committed) }}</span>
+                    <span>Expended: {{ "{:,.2f}".format(fb.balance.total_expended) }}</span>
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="p-12 text-center text-slate-500 dark:text-slate-400">
+            No active funds. <a href="/finance/ipsas/funds/new" class="text-primary-600 hover:text-primary-700 dark:text-primary-400">Create a fund</a> to get started.
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

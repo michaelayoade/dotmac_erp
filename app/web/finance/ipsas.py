@@ -65,7 +65,7 @@ def view_fund(
     """Fund detail page."""
     context = base_context(request, auth, "Fund Detail", "ipsas", db=db)
     web_svc = IPSASWebService(db)
-    context.update(web_svc.fund_detail_context(UUID(fund_id)))
+    context.update(web_svc.fund_detail_context(auth.organization_id, UUID(fund_id)))
     return templates.TemplateResponse(
         request, "finance/ipsas/fund_detail.html", context
     )
@@ -182,7 +182,7 @@ def view_appropriation(
     """Appropriation detail page."""
     context = base_context(request, auth, "Appropriation Detail", "ipsas", db=db)
     web_svc = IPSASWebService(db)
-    context.update(web_svc.appropriation_detail_context(UUID(appropriation_id)))
+    context.update(web_svc.appropriation_detail_context(auth.organization_id, UUID(appropriation_id)))
     return templates.TemplateResponse(
         request, "finance/ipsas/appropriation_detail.html", context
     )
@@ -228,7 +228,7 @@ def view_commitment(
     """Commitment detail page."""
     context = base_context(request, auth, "Commitment Detail", "ipsas", db=db)
     web_svc = IPSASWebService(db)
-    context.update(web_svc.commitment_detail_context(UUID(commitment_id)))
+    context.update(web_svc.commitment_detail_context(auth.organization_id, UUID(commitment_id)))
     return templates.TemplateResponse(
         request, "finance/ipsas/commitment_detail.html", context
     )

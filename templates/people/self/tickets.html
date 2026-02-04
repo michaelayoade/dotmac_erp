@@ -47,8 +47,8 @@
                         <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">{{ priority_value }}</td>
                         <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">{{ ticket.opening_date }}</td>
                         <td class="px-4 py-3 text-right text-sm space-x-3">
-                            {% if "operations" in accessible_modules %}
-                            <a href="/operations/support/tickets/{{ ticket.ticket_number }}"
+                            {% if "support" in accessible_modules %}
+                            <a href="/support/tickets/{{ ticket.ticket_number }}"
                                class="text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300 font-medium">
                                 View
                             </a>

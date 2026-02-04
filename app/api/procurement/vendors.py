@@ -8,7 +8,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_organization_id
+from app.api.deps import require_organization_id, require_tenant_auth
 from app.db import SessionLocal
 from app.schemas.procurement.vendor import (
     PrequalificationCreate,
@@ -108,12 +108,14 @@ def update_prequalification(
 def qualify_vendor(
     prequalification_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
+    auth: dict = Depends(require_tenant_auth),
     db: Session = Depends(get_db),
 ):
     """Qualify a vendor."""
+    user_id = UUID(auth["person_id"]) if auth.get("person_id") else organization_id
     service = VendorPrequalificationService(db)
     try:
-        preq = service.qualify(organization_id, prequalification_id, organization_id)
+        preq = service.qualify(organization_id, prequalification_id, user_id)
         db.commit()
         return PrequalificationResponse.model_validate(preq)
     except NotFoundError as e:
@@ -127,12 +129,14 @@ def qualify_vendor(
 def disqualify_vendor(
     prequalification_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
+    auth: dict = Depends(require_tenant_auth),
     db: Session = Depends(get_db),
 ):
     """Disqualify a vendor."""
+    user_id = UUID(auth["person_id"]) if auth.get("person_id") else organization_id
     service = VendorPrequalificationService(db)
     try:
-        preq = service.disqualify(organization_id, prequalification_id, organization_id)
+        preq = service.disqualify(organization_id, prequalification_id, user_id)
         db.commit()
         return PrequalificationResponse.model_validate(preq)
     except NotFoundError as e:

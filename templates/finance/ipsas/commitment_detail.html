@@ -1,0 +1,127 @@
+{% extends "finance/base_finance.html" %}
+
+{% block page_title %}Commitment {{ commitment.commitment_number }}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400">
+    <a href="/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/finance/ipsas/commitments" class="hover:text-primary-600 dark:hover:text-primary-400">Commitments</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white">{{ commitment.commitment_number }}</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800/50">
+        <div class="flex items-start justify-between">
+            <div>
+                <div class="flex items-center gap-3">
+                    <h2 class="text-xl font-semibold text-slate-900 dark:text-white font-display">{{ commitment.commitment_number }}</h2>
+                    {% if commitment.status.value == 'COMMITTED' %}
+                    <span class="inline-flex rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">Committed</span>
+                    {% elif commitment.status.value == 'OBLIGATED' %}
+                    <span class="inline-flex rounded-full bg-purple-100 px-3 py-1 text-xs font-medium text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">Obligated</span>
+                    {% elif commitment.status.value == 'EXPENDED' %}
+                    <span class="inline-flex rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">Expended</span>
+                    {% elif commitment.status.value == 'PARTIALLY_PAID' %}
+                    <span class="inline-flex rounded-full bg-yellow-100 px-3 py-1 text-xs font-medium text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">Partially Paid</span>
+                    {% elif commitment.status.value == 'CANCELLED' %}
+                    <span class="inline-flex rounded-full bg-red-100 px-3 py-1 text-xs font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400">Cancelled</span>
+                    {% else %}
+                    <span class="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-500 dark:bg-slate-700 dark:text-slate-400">{{ commitment.status.value }}</span>
+                    {% endif %}
+                </div>
+                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                    {{ commitment.commitment_type.value }} &middot; Source: {{ commitment.source_type }} &middot; {{ commitment.currency_code }}
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Lifecycle Progress -->
+    <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800/50">
+        <h3 class="text-sm font-medium text-slate-900 dark:text-white mb-4">Commitment Lifecycle</h3>
+        <div class="grid gap-4 sm:grid-cols-4">
+            <div class="text-center">
+                <p class="text-xs text-slate-500 dark:text-slate-400 mb-1">Committed</p>
+                <p class="text-lg font-bold font-mono text-slate-900 dark:text-white">{{ "{:,.2f}".format(commitment.committed_amount) }}</p>
+                <p class="text-xs text-slate-400">{{ commitment.commitment_date }}</p>
+            </div>
+            <div class="text-center">
+                <p class="text-xs text-slate-500 dark:text-slate-400 mb-1">Obligated</p>
+                <p class="text-lg font-bold font-mono text-slate-900 dark:text-white">{{ "{:,.2f}".format(commitment.obligated_amount) }}</p>
+                {% if commitment.obligation_date %}
+                <p class="text-xs text-slate-400">{{ commitment.obligation_date }}</p>
+                {% endif %}
+            </div>
+            <div class="text-center">
+                <p class="text-xs text-slate-500 dark:text-slate-400 mb-1">Expended</p>
+                <p class="text-lg font-bold font-mono text-slate-900 dark:text-white">{{ "{:,.2f}".format(commitment.expended_amount) }}</p>
+                {% if commitment.expenditure_date %}
+                <p class="text-xs text-slate-400">{{ commitment.expenditure_date }}</p>
+                {% endif %}
+            </div>
+            <div class="text-center">
+                <p class="text-xs text-slate-500 dark:text-slate-400 mb-1">Cancelled</p>
+                <p class="text-lg font-bold font-mono text-slate-900 dark:text-white">{{ "{:,.2f}".format(commitment.cancelled_amount) }}</p>
+            </div>
+        </div>
+
+        <!-- Progress bar -->
+        {% set total = commitment.committed_amount %}
+        {% if total > 0 %}
+        <div class="mt-4">
+            <div class="h-3 w-full rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden flex">
+                {% set exp_pct = (commitment.expended_amount / total * 100) | round(1) %}
+                {% set obl_pct = (commitment.obligated_amount / total * 100) | round(1) %}
+                {% set can_pct = (commitment.cancelled_amount / total * 100) | round(1) %}
+                <div class="h-full bg-green-500" style="width: {{ exp_pct }}%"></div>
+                <div class="h-full bg-purple-500" style="width: {{ obl_pct }}%"></div>
+                <div class="h-full bg-red-300" style="width: {{ can_pct }}%"></div>
+            </div>
+            <div class="mt-2 flex gap-4 text-xs text-slate-500 dark:text-slate-400">
+                <span class="flex items-center gap-1"><span class="inline-block h-2 w-2 rounded-full bg-green-500"></span>Expended {{ exp_pct }}%</span>
+                <span class="flex items-center gap-1"><span class="inline-block h-2 w-2 rounded-full bg-purple-500"></span>Obligated {{ obl_pct }}%</span>
+                <span class="flex items-center gap-1"><span class="inline-block h-2 w-2 rounded-full bg-red-300"></span>Cancelled {{ can_pct }}%</span>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Commitment Lines -->
+    {% if commitment.lines %}
+    <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50">
+        <div class="border-b border-slate-200 p-6 dark:border-slate-700">
+            <h3 class="text-sm font-medium text-slate-900 dark:text-white">Line Items</h3>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="border-b border-slate-200 dark:border-slate-700">
+                        <th class="px-6 py-3 text-left font-medium text-slate-600 dark:text-slate-400">#</th>
+                        <th class="px-6 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Description</th>
+                        <th class="px-6 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Committed</th>
+                        <th class="px-6 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Obligated</th>
+                        <th class="px-6 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Expended</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                    {% for line in commitment.lines %}
+                    <tr>
+                        <td class="px-6 py-4 text-slate-500 dark:text-slate-400">{{ line.line_number }}</td>
+                        <td class="px-6 py-4 text-slate-900 dark:text-white">{{ line.description or '-' }}</td>
+                        <td class="px-6 py-4 text-right font-mono text-slate-900 dark:text-white">{{ "{:,.2f}".format(line.committed_amount) }}</td>
+                        <td class="px-6 py-4 text-right font-mono text-slate-500 dark:text-slate-400">{{ "{:,.2f}".format(line.obligated_amount) }}</td>
+                        <td class="px-6 py-4 text-right font-mono text-slate-500 dark:text-slate-400">{{ "{:,.2f}".format(line.expended_amount) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

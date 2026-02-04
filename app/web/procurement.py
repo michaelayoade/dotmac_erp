@@ -17,7 +17,7 @@ from app.services.procurement.web.procurement_web import ProcurementWebService
 from app.web.deps import (
     WebAuthContext,
     base_context,
-    require_operations_access,
+    require_procurement_access,
     templates,
 )
 
@@ -40,7 +40,7 @@ def get_db():
 @router.get("", response_class=HTMLResponse)
 def procurement_dashboard(
     request: Request,
-    auth: WebAuthContext = Depends(require_operations_access),
+    auth: WebAuthContext = Depends(require_procurement_access),
     db: Session = Depends(get_db),
 ):
     """Procurement management dashboard."""
@@ -62,7 +62,7 @@ def plan_list(
     fiscal_year: Optional[str] = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
-    auth: WebAuthContext = Depends(require_operations_access),
+    auth: WebAuthContext = Depends(require_procurement_access),
     db: Session = Depends(get_db),
 ):
     """List procurement plans."""
@@ -83,7 +83,7 @@ def plan_list(
 @router.get("/plans/new", response_class=HTMLResponse)
 def plan_new(
     request: Request,
-    auth: WebAuthContext = Depends(require_operations_access),
+    auth: WebAuthContext = Depends(require_procurement_access),
     db: Session = Depends(get_db),
 ):
     """New procurement plan form."""
@@ -97,7 +97,7 @@ def plan_new(
 def plan_detail(
     request: Request,
     plan_id: UUID,
-    auth: WebAuthContext = Depends(require_operations_access),
+    auth: WebAuthContext = Depends(require_procurement_access),
     db: Session = Depends(get_db),
 ):
     """Plan detail view."""
@@ -125,7 +125,7 @@ def requisition_list(
     status: Optional[str] = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
-    auth: WebAuthContext = Depends(require_operations_access),
+    auth: WebAuthContext = Depends(require_procurement_access),
     db: Session = Depends(get_db),
 ):
     """List purchase requisitions."""
@@ -147,7 +147,7 @@ def requisition_list(
 @router.get("/requisitions/new", response_class=HTMLResponse)
 def requisition_new(
     request: Request,
-    auth: WebAuthContext = Depends(require_operations_access),
+    auth: WebAuthContext = Depends(require_procurement_access),
     db: Session = Depends(get_db),
 ):
     """New requisition form."""
@@ -163,7 +163,7 @@ def requisition_new(
 def requisition_detail(
     request: Request,
     requisition_id: UUID,
-    auth: WebAuthContext = Depends(require_operations_access),
+    auth: WebAuthContext = Depends(require_procurement_access),
     db: Session = Depends(get_db),
 ):
     """Requisition detail view."""
@@ -196,7 +196,7 @@ def rfq_list(
     status: Optional[str] = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
-    auth: WebAuthContext = Depends(require_operations_access),
+    auth: WebAuthContext = Depends(require_procurement_access),
     db: Session = Depends(get_db),
 ):
     """List RFQs."""
@@ -216,7 +216,7 @@ def rfq_list(
 @router.get("/rfqs/new", response_class=HTMLResponse)
 def rfq_new(
     request: Request,
-    auth: WebAuthContext = Depends(require_operations_access),
+    auth: WebAuthContext = Depends(require_procurement_access),
     db: Session = Depends(get_db),
 ):
     """New RFQ form."""
@@ -230,7 +230,7 @@ def rfq_new(
 def rfq_detail(
     request: Request,
     rfq_id: UUID,
-    auth: WebAuthContext = Depends(require_operations_access),
+    auth: WebAuthContext = Depends(require_procurement_access),
     db: Session = Depends(get_db),
 ):
     """RFQ detail view."""
@@ -251,7 +251,7 @@ def rfq_detail(
 def evaluation_matrix(
     request: Request,
     rfq_id: UUID,
-    auth: WebAuthContext = Depends(require_operations_access),
+    auth: WebAuthContext = Depends(require_procurement_access),
     db: Session = Depends(get_db),
 ):
     """Evaluation matrix view."""
@@ -283,7 +283,7 @@ def contract_list(
     status: Optional[str] = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
-    auth: WebAuthContext = Depends(require_operations_access),
+    auth: WebAuthContext = Depends(require_procurement_access),
     db: Session = Depends(get_db),
 ):
     """List contracts."""
@@ -306,7 +306,7 @@ def contract_list(
 def contract_detail(
     request: Request,
     contract_id: UUID,
-    auth: WebAuthContext = Depends(require_operations_access),
+    auth: WebAuthContext = Depends(require_procurement_access),
     db: Session = Depends(get_db),
 ):
     """Contract detail view."""
@@ -339,7 +339,7 @@ def vendor_list(
     status: Optional[str] = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
-    auth: WebAuthContext = Depends(require_operations_access),
+    auth: WebAuthContext = Depends(require_procurement_access),
     db: Session = Depends(get_db),
 ):
     """Vendor registry."""
@@ -362,7 +362,7 @@ def vendor_list(
 def prequalification_detail(
     request: Request,
     prequalification_id: UUID,
-    auth: WebAuthContext = Depends(require_operations_access),
+    auth: WebAuthContext = Depends(require_procurement_access),
     db: Session = Depends(get_db),
 ):
     """Prequalification detail view."""

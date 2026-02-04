@@ -75,7 +75,7 @@ class TeamWebService:
         }
 
         return templates.TemplateResponse(
-            request, "operations/support/teams.html", context
+            request, "support/teams.html", context
         )
 
     def team_form_response(
@@ -111,7 +111,7 @@ class TeamWebService:
         }
 
         return templates.TemplateResponse(
-            request, "operations/support/team_form.html", context
+            request, "support/team_form.html", context
         )
 
     def create_team_response(
@@ -152,7 +152,7 @@ class TeamWebService:
                 )
 
             return RedirectResponse(
-                url=f"/operations/support/teams/{team.team_id}",
+                url=f"/support/teams/{team.team_id}",
                 status_code=303,
             )
 
@@ -191,14 +191,14 @@ class TeamWebService:
 
             if not team:
                 return RedirectResponse(
-                    url="/operations/support/teams",
+                    url="/support/teams",
                     status_code=303,
                 )
 
             db.commit()
 
             return RedirectResponse(
-                url=f"/operations/support/teams/{team_id}",
+                url=f"/support/teams/{team_id}",
                 status_code=303,
             )
 
@@ -226,7 +226,7 @@ class TeamWebService:
         if not team:
             return templates.TemplateResponse(
                 request,
-                "operations/support/team_detail.html",
+                "support/team_detail.html",
                 {
                     **base_context(request, auth, "Team Not Found", "support", db=db),
                     "team": None,
@@ -303,7 +303,7 @@ class TeamWebService:
         }
 
         return templates.TemplateResponse(
-            request, "operations/support/team_detail.html", context
+            request, "support/team_detail.html", context
         )
 
     def add_team_member_response(
@@ -334,7 +334,7 @@ class TeamWebService:
             logger.exception("Failed to add team member")
 
         return RedirectResponse(
-            url=f"/operations/support/teams/{team_id}",
+            url=f"/support/teams/{team_id}",
             status_code=303,
         )
 
@@ -363,7 +363,7 @@ class TeamWebService:
                 logger.exception("Failed to remove team member")
 
         return RedirectResponse(
-            url=f"/operations/support/teams/{team_id}",
+            url=f"/support/teams/{team_id}",
             status_code=303,
         )
 
@@ -393,7 +393,7 @@ class TeamWebService:
                 logger.exception("Failed to toggle member availability")
 
         return RedirectResponse(
-            url=f"/operations/support/teams/{team_id}",
+            url=f"/support/teams/{team_id}",
             status_code=303,
         )
 
@@ -426,7 +426,7 @@ class TeamWebService:
                 logger.exception("Failed to update member weight")
 
         return RedirectResponse(
-            url=f"/operations/support/teams/{team_id}",
+            url=f"/support/teams/{team_id}",
             status_code=303,
         )
 

@@ -11,7 +11,9 @@ REST API endpoints for:
 - Vendor prequalification
 """
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+
+from app.api.deps import require_tenant_permission
 
 from app.api.procurement.contracts import router as contracts_router
 from app.api.procurement.evaluations import router as evaluations_router
@@ -21,7 +23,11 @@ from app.api.procurement.requisitions import router as requisitions_router
 from app.api.procurement.rfqs import router as rfqs_router
 from app.api.procurement.vendors import router as vendors_router
 
-router = APIRouter(prefix="/procurement", tags=["procurement"])
+router = APIRouter(
+    prefix="/procurement",
+    tags=["procurement"],
+    dependencies=[Depends(require_tenant_permission("procurement:access"))],
+)
 
 router.include_router(plans_router)
 router.include_router(requisitions_router)

@@ -584,6 +584,12 @@ email_settings = DomainSettings(SettingDomain.email)
 features_settings = DomainSettings(SettingDomain.features)
 reporting_settings = DomainSettings(SettingDomain.reporting)
 payments_settings = DomainSettings(SettingDomain.payments)
+support_settings = DomainSettings(SettingDomain.support)
+inventory_settings = DomainSettings(SettingDomain.inventory)
+projects_settings = DomainSettings(SettingDomain.projects)
+fleet_settings = DomainSettings(SettingDomain.fleet)
+procurement_settings = DomainSettings(SettingDomain.procurement)
+settings_settings = DomainSettings(SettingDomain.settings)
 payroll_settings = DomainSettings(SettingDomain.payroll)
 
 

@@ -7,7 +7,7 @@ import hashlib
 import hmac
 import logging
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional, cast
 
 import httpx
 
@@ -763,7 +763,7 @@ class PaystackClient:
             )
         return records
 
-    def get_balance(self) -> dict:
+    def get_balance(self) -> list[dict[str, Any]]:
         """
         Get Paystack account balance.
 
@@ -788,7 +788,7 @@ class PaystackClient:
         if not data.get("status"):
             raise PaystackError(data.get("message", "Get balance failed"))
 
-        return data.get("data", [])
+        return cast(list[dict[str, Any]], data.get("data", []))
 
     def list_settlements(
         self,

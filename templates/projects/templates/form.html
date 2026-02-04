@@ -1,0 +1,159 @@
+{% extends "modules/base_modules.html" %}
+
+{% block title %}{% if template %}Edit{% else %}New{% endif %} Project Template{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-6" x-data="templateForm({{ tasks_payload_json | safe if tasks_payload_json is defined else '[]' }})">
+    <div class="flex items-center gap-2">
+        <a href="/projects/templates" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+            </svg>
+        </a>
+        <h1 class="text-2xl font-display font-semibold text-slate-900 dark:text-white">{% if template %}Edit{% else %}New{% endif %} Project Template</h1>
+    </div>
+
+    <form method="post" action="{% if template %}/projects/templates/{{ template.template_id }}{% else %}/projects/templates{% endif %}"
+          class="rounded-lg border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-800 space-y-6"
+          @submit="prepareSubmit">
+        {% if error %}
+        <div class="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-800 dark:bg-rose-900/30 dark:text-rose-200">
+            {{ error }}
+        </div>
+        {% endif %}
+        <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
+            <div>
+                <label for="template_name" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Template Name</label>
+                <input type="text" name="template_name" id="template_name" required
+                       value="{{ submitted_name if submitted_name else (template.name if template else '') }}"
+                       class="mt-1 block w-full rounded-lg border-slate-300 focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
+            </div>
+            <div>
+                <label for="project_type" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Project Type</label>
+                <select name="project_type" id="project_type"
+                        class="mt-1 block w-full rounded-lg border-slate-300 focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
+                    {% for t in project_types %}
+                    <option value="{{ t }}" {{ 'selected' if template and template.project_type.value == t else '' }}>{{ t|replace('_', ' ')|title }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div class="border-t border-slate-200 dark:border-slate-700 pt-6">
+            <div class="flex items-center justify-between">
+                <h3 class="text-sm font-medium text-slate-700 dark:text-slate-300">Template Tasks</h3>
+                <button type="button" @click="addTask()"
+                        class="inline-flex items-center gap-2 rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600">
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                    </svg>
+                    Add Task
+                </button>
+            </div>
+
+            <input type="hidden" name="tasks_json" x-ref="tasksJson">
+
+            <div class="mt-4 space-y-4">
+                <template x-for="(task, index) in tasks" :key="task.client_id">
+                    <div class="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900/40">
+                        <div class="flex items-start justify-between gap-3">
+                            <div class="flex-1 space-y-3">
+                                <div>
+                                    <label class="block text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Task Name</label>
+                                    <input type="text" x-model="task.task_name" required
+                                           class="mt-1 block w-full rounded-lg border-slate-300 focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Description</label>
+                                    <textarea rows="2" x-model="task.description"
+                                              class="mt-1 block w-full rounded-lg border-slate-300 focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white"></textarea>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Depends On</label>
+                                    <select multiple x-model="task.depends_on"
+                                            class="mt-1 block w-full rounded-lg border-slate-300 focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
+                                        <template x-for="prev in tasks.slice(0, index)" :key="prev.client_id">
+                                            <option :value="prev.client_id" x-text="prev.task_name || 'Task ' + (tasks.indexOf(prev) + 1)"></option>
+                                        </template>
+                                    </select>
+                                    <p class="mt-1 text-xs text-slate-400">Choose tasks that must be completed before this one.</p>
+                                </div>
+                            </div>
+                            <div class="flex flex-col gap-2">
+                                <button type="button" @click="moveUp(index)" :disabled="index === 0"
+                                        class="rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:bg-white disabled:opacity-40 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800">
+                                    Up
+                                </button>
+                                <button type="button" @click="moveDown(index)" :disabled="index === tasks.length - 1"
+                                        class="rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:bg-white disabled:opacity-40 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800">
+                                    Down
+                                </button>
+                                <button type="button" @click="removeTask(index)"
+                                        class="rounded-md border border-rose-300 px-2 py-1 text-xs text-rose-600 hover:bg-rose-50 dark:border-rose-700 dark:text-rose-300 dark:hover:bg-rose-900/20">
+                                    Remove
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+
+                <div x-show="tasks.length === 0" class="rounded-lg border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                    Add tasks to define the template sequence.
+                </div>
+            </div>
+        </div>
+
+        <div class="flex justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
+            <a href="/projects/templates"
+               class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 transition-colors">
+                Cancel
+            </a>
+            <button type="submit"
+                    class="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 transition-colors">
+                {% if template %}Update{% else %}Create{% endif %} Template
+            </button>
+        </div>
+    </form>
+</div>
+
+<script>
+    function templateForm(initialTasks) {
+        return {
+            tasks: Array.isArray(initialTasks) ? initialTasks.map((task) => ({
+                client_id: task.client_id || `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+                task_name: task.task_name || '',
+                description: task.description || '',
+                depends_on: task.depends_on || [],
+            })) : [],
+            addTask() {
+                this.tasks.push({
+                    client_id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+                    task_name: '',
+                    description: '',
+                    depends_on: [],
+                });
+            },
+            removeTask(index) {
+                const removed = this.tasks.splice(index, 1)[0];
+                if (!removed) return;
+                this.tasks.forEach(task => {
+                    task.depends_on = (task.depends_on || []).filter(id => id !== removed.client_id);
+                });
+            },
+            moveUp(index) {
+                if (index <= 0) return;
+                const item = this.tasks.splice(index, 1)[0];
+                this.tasks.splice(index - 1, 0, item);
+            },
+            moveDown(index) {
+                if (index >= this.tasks.length - 1) return;
+                const item = this.tasks.splice(index, 1)[0];
+                this.tasks.splice(index + 1, 0, item);
+            },
+            prepareSubmit() {
+                this.$refs.tasksJson.value = JSON.stringify(this.tasks);
+            }
+        };
+    }
+</script>
+{% endblock %}

@@ -6,7 +6,7 @@ Provides UI for managing CRM sync integration.
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy.orm import Session
 
 from app.services.admin.crm_sync_web import crm_sync_web_service
@@ -82,7 +82,7 @@ def crm_sync_generate_key(
     request: Request,
     db: Session = Depends(get_db),
     auth: WebAuthContext = Depends(optional_web_auth),
-) -> RedirectResponse:
+) -> Response:
     """Generate a new API key for CRM integration."""
     return crm_sync_web_service.generate_api_key_response(request, db, auth)
 
@@ -92,7 +92,7 @@ def crm_sync_revoke_key(
     request: Request,
     db: Session = Depends(get_db),
     auth: WebAuthContext = Depends(optional_web_auth),
-) -> RedirectResponse:
+) -> Response:
     """Revoke the CRM service API key."""
     return crm_sync_web_service.revoke_api_key_response(request, db, auth)
 

@@ -408,7 +408,12 @@ def _load_rbac_claims(db: Session, person_id: str):
     module_access_scopes = {
         "finance:access", "finance:dashboard",
         "hr:access", "hr:dashboard",
-        "operations:access", "operations:dashboard",
+        "inventory:access", "inventory:dashboard",
+        "fleet:access", "fleet:dashboard",
+        "support:access", "support:dashboard",
+        "procurement:access", "procurement:dashboard",
+        "projects:access", "projects:dashboard",
+        "settings:access", "settings:dashboard",
         "expense:access", "expense:dashboard",
         "self:access",
     }

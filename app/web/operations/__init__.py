@@ -1,36 +1,10 @@
 """
-Operations Web Routes.
+Operations web module placeholder.
 
-HTML template routes for the Operations modules.
-
-Route structure:
-- /operations             - Dashboard
-- /operations/projects/*  - Project management pages
-- /operations/support/*   - Support/Helpdesk pages
-- /operations/settings/*  - Operations settings pages
-
-Note: Inventory, Fixed Assets, Fleet, and Procurement are now standalone
-top-level modules at /inventory/*, /fixed-assets/*, /fleet/*, /procurement/*.
+Operations routes were split into standalone modules. This router is intentionally
+empty to avoid importing deprecated paths.
 """
 
 from fastapi import APIRouter
 
-from app.web.operations.dashboard import router as dashboard_router
-from app.web.operations.projects import router as projects_router
-from app.web.operations.settings import router as settings_router
-from app.web.operations.support import router as support_router
-
-# Create main operations web router
 router = APIRouter(prefix="/operations", tags=["operations-web"])
-
-# Dashboard (must be first to catch /operations and /operations/dashboard)
-router.include_router(dashboard_router)
-
-# Project Management routes
-router.include_router(projects_router)
-
-# Support/Helpdesk routes
-router.include_router(support_router)
-
-# Settings routes
-router.include_router(settings_router)

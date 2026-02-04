@@ -8,7 +8,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_organization_id
+from app.api.deps import require_organization_id, require_tenant_auth
 from app.db import SessionLocal
 from app.schemas.procurement.rfq import (
     RFQCreate,
@@ -68,12 +68,17 @@ def get_rfq(
 def create_rfq(
     data: RFQCreate,
     organization_id: UUID = Depends(require_organization_id),
+    auth: dict = Depends(require_tenant_auth),
     db: Session = Depends(get_db),
 ):
     """Create a new RFQ."""
     service = RFQService(db)
+    person_id = auth.get("person_id")
+    if not person_id:
+        raise HTTPException(status_code=400, detail="Missing person_id")
+    user_id = UUID(person_id)
     try:
-        rfq = service.create(organization_id, data, organization_id)
+        rfq = service.create(organization_id, data, user_id)
         db.commit()
         return RFQResponse.model_validate(rfq)
     except ValidationError as e:

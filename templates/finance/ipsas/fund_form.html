@@ -1,0 +1,93 @@
+{% extends "finance/base_finance.html" %}
+
+{% block page_title %}New Fund{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400">
+    <a href="/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/finance/ipsas/funds" class="hover:text-primary-600 dark:hover:text-primary-400">Funds</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white">New Fund</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-2xl">
+    <form method="POST" action="/finance/ipsas/funds/new" class="space-y-6">
+        <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800/50">
+            <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-6 font-display">Fund Details</h3>
+
+            <div class="grid gap-4 sm:grid-cols-2">
+                <div>
+                    <label for="fund_code" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Fund Code</label>
+                    <input type="text" id="fund_code" name="fund_code" required maxlength="20"
+                           class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-white"
+                           placeholder="e.g. GF-001">
+                </div>
+                <div>
+                    <label for="fund_type" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Fund Type</label>
+                    <select id="fund_type" name="fund_type" required
+                            class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-white">
+                        {% for ft in fund_types %}
+                        <option value="{{ ft }}">{{ ft }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="mt-4">
+                <label for="fund_name" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Fund Name</label>
+                <input type="text" id="fund_name" name="fund_name" required maxlength="200"
+                       class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-white"
+                       placeholder="General Revenue Fund">
+            </div>
+
+            <div class="mt-4">
+                <label for="description" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Description</label>
+                <textarea id="description" name="description" rows="3"
+                          class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-white"
+                          placeholder="Optional description"></textarea>
+            </div>
+
+            <div class="mt-4">
+                <label for="effective_from" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Effective From</label>
+                <input type="date" id="effective_from" name="effective_from" required
+                       class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-white">
+            </div>
+
+            <div class="mt-4 flex items-center gap-2">
+                <input type="checkbox" id="is_restricted" name="is_restricted" value="1"
+                       class="rounded border-slate-300 text-primary-600 dark:border-slate-600">
+                <label for="is_restricted" class="text-sm text-slate-700 dark:text-slate-300">Restricted fund (donor/earmarked)</label>
+            </div>
+
+            <div class="mt-4 grid gap-4 sm:grid-cols-2">
+                <div>
+                    <label for="donor_name" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Donor Name</label>
+                    <input type="text" id="donor_name" name="donor_name" maxlength="200"
+                           class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-white"
+                           placeholder="Optional">
+                </div>
+                <div>
+                    <label for="donor_reference" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Donor Reference</label>
+                    <input type="text" id="donor_reference" name="donor_reference" maxlength="100"
+                           class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-white"
+                           placeholder="Optional">
+                </div>
+            </div>
+        </div>
+
+        <div class="flex justify-end gap-3">
+            <a href="/finance/ipsas/funds"
+               class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700">
+                Cancel
+            </a>
+            <button type="submit"
+                    class="rounded-lg bg-gradient-to-r from-primary-600 to-primary-500 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-primary-500/25 btn-hover">
+                Create Fund
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

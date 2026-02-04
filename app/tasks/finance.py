@@ -561,8 +561,8 @@ def sync_paystack_transactions(days_back: int = 1) -> dict[str, Any]:
             select(Organization).where(Organization.is_active.is_(True))
         ).all()
 
-        total_credits = 0
-        total_debits = 0
+        total_credits = 0.0
+        total_debits = 0.0
 
         for org in organizations:
             try:

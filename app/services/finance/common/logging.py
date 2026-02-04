@@ -159,13 +159,14 @@ def log_slow_operation(
                 if elapsed_ms > threshold_ms:
                     log = logger or logging.getLogger(func.__module__)
                     context = get_log_context()
+                    org_id = context.get("org_id")
                     log.warning(
                         "Slow operation: %s.%s took %.1fms (threshold: %dms) org=%s",
                         func.__module__,
                         func.__name__,
                         elapsed_ms,
                         threshold_ms,
-                        context.get("org_id", "?")[:8] if context.get("org_id") else "?"
+                        org_id[:8] if isinstance(org_id, str) else "?"
                     )
 
         return wrapper  # type: ignore
@@ -195,7 +196,8 @@ def log_service_call(
         def wrapper(*args, **kwargs):
             log = logger or logging.getLogger(func.__module__)
             context = get_log_context()
-            org_prefix = f"org={context.get('org_id', '?')[:8]}" if context.get("org_id") else ""
+            org_id = context.get("org_id")
+            org_prefix = f"org={org_id[:8]}" if isinstance(org_id, str) and org_id else ""
 
             # Log entry
             if log_args:

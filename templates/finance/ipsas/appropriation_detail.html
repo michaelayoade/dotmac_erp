@@ -1,0 +1,135 @@
+{% extends "finance/base_finance.html" %}
+
+{% block page_title %}{{ appropriation.appropriation_name }}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400">
+    <a href="/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/finance/ipsas/appropriations" class="hover:text-primary-600 dark:hover:text-primary-400">Appropriations</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white">{{ appropriation.appropriation_code }}</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800/50">
+        <div class="flex items-start justify-between">
+            <div>
+                <div class="flex items-center gap-3">
+                    <h2 class="text-xl font-semibold text-slate-900 dark:text-white font-display">{{ appropriation.appropriation_name }}</h2>
+                    {% if appropriation.status.value == 'ACTIVE' or appropriation.status.value == 'APPROVED' %}
+                    <span class="inline-flex rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">{{ appropriation.status.value }}</span>
+                    {% elif appropriation.status.value == 'DRAFT' %}
+                    <span class="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-400">Draft</span>
+                    {% elif appropriation.status.value == 'SUBMITTED' %}
+                    <span class="inline-flex rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">Submitted</span>
+                    {% else %}
+                    <span class="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-500 dark:bg-slate-700 dark:text-slate-400">{{ appropriation.status.value }}</span>
+                    {% endif %}
+                </div>
+                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                    {{ appropriation.appropriation_code }} &middot; {{ appropriation.appropriation_type.value }} &middot; {{ appropriation.currency_code }}
+                </p>
+            </div>
+            {% if appropriation.status.value == 'DRAFT' %}
+            <button class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                    hx-post="/api/ipsas/appropriations/{{ appropriation.appropriation_id }}/submit"
+                    hx-confirm="Submit this appropriation for approval?">
+                Submit for Approval
+            </button>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-800/50">
+            <p class="text-xs font-medium text-slate-500 dark:text-slate-400">Approved Amount</p>
+            <p class="mt-1 text-lg font-bold text-slate-900 dark:text-white font-mono">{{ "{:,.2f}".format(appropriation.approved_amount) }}</p>
+        </div>
+        <div class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-800/50">
+            <p class="text-xs font-medium text-slate-500 dark:text-slate-400">Revised Amount</p>
+            <p class="mt-1 text-lg font-bold text-slate-900 dark:text-white font-mono">{{ "{:,.2f}".format(appropriation.revised_amount) }}</p>
+        </div>
+        {% if available_balance %}
+        <div class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-800/50">
+            <p class="text-xs font-medium text-slate-500 dark:text-slate-400">Committed</p>
+            <p class="mt-1 text-lg font-bold text-slate-900 dark:text-white font-mono">{{ "{:,.2f}".format(available_balance.total_committed) }}</p>
+        </div>
+        <div class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-800/50">
+            <p class="text-xs font-medium text-slate-500 dark:text-slate-400">Available</p>
+            <p class="mt-1 text-lg font-bold font-mono {{ 'text-green-600 dark:text-green-400' if available_balance.available_balance > 0 else 'text-red-600 dark:text-red-400' }}">
+                {{ "{:,.2f}".format(available_balance.available_balance) }}
+            </p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Details -->
+    <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800/50">
+        <h3 class="text-sm font-medium text-slate-900 dark:text-white mb-4">Details</h3>
+        <dl class="grid gap-3 sm:grid-cols-2">
+            <div>
+                <dt class="text-xs text-slate-500 dark:text-slate-400">Effective Period</dt>
+                <dd class="text-sm text-slate-900 dark:text-white">{{ appropriation.effective_from }}{% if appropriation.effective_to %} to {{ appropriation.effective_to }}{% endif %}</dd>
+            </div>
+            {% if appropriation.appropriation_act_reference %}
+            <div>
+                <dt class="text-xs text-slate-500 dark:text-slate-400">Act Reference</dt>
+                <dd class="text-sm text-slate-900 dark:text-white">{{ appropriation.appropriation_act_reference }}</dd>
+            </div>
+            {% endif %}
+            {% if appropriation.approved_by_user_id %}
+            <div>
+                <dt class="text-xs text-slate-500 dark:text-slate-400">Approved At</dt>
+                <dd class="text-sm text-slate-900 dark:text-white">{{ appropriation.approved_at }}</dd>
+            </div>
+            {% endif %}
+        </dl>
+    </div>
+
+    <!-- Allotments -->
+    <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50">
+        <div class="border-b border-slate-200 p-6 dark:border-slate-700">
+            <h3 class="text-sm font-medium text-slate-900 dark:text-white">Allotments</h3>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="border-b border-slate-200 dark:border-slate-700">
+                        <th class="px-6 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Code</th>
+                        <th class="px-6 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Name</th>
+                        <th class="px-6 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Period</th>
+                        <th class="px-6 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Status</th>
+                        <th class="px-6 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Amount</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                    {% for allot in allotments %}
+                    <tr>
+                        <td class="px-6 py-4 font-mono text-sm text-primary-600 dark:text-primary-400">{{ allot.allotment_code }}</td>
+                        <td class="px-6 py-4 text-slate-900 dark:text-white">{{ allot.allotment_name }}</td>
+                        <td class="px-6 py-4 text-slate-500 dark:text-slate-400">{{ allot.period_from }} - {{ allot.period_to }}</td>
+                        <td class="px-6 py-4">
+                            {% if allot.status.value == 'ACTIVE' %}
+                            <span class="inline-flex rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">Active</span>
+                            {% else %}
+                            <span class="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500 dark:bg-slate-700 dark:text-slate-400">{{ allot.status.value }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 text-right font-mono text-slate-900 dark:text-white">{{ "{:,.2f}".format(allot.allotted_amount) }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5" class="px-6 py-8 text-center text-slate-500 dark:text-slate-400">No allotments yet.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

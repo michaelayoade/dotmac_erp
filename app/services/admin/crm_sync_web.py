@@ -11,7 +11,7 @@ from typing import Optional
 from urllib.parse import quote_plus
 
 from fastapi import Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy import func, select, desc
 from sqlalchemy.orm import Session
 
@@ -220,7 +220,7 @@ class CRMSyncWebService:
         sync_projects: bool,
         sync_tickets: bool,
         sync_work_orders: bool,
-    ) -> RedirectResponse:
+    ) -> Response:
         """Save CRM config."""
         error_response = self._require_admin(request, auth)
         if error_response:
@@ -271,7 +271,7 @@ class CRMSyncWebService:
         request: Request,
         db: Session,
         auth: Optional[WebAuthContext],
-    ) -> RedirectResponse:
+    ) -> Response:
         """Generate a new API key for CRM sync."""
         error_response = self._require_admin(request, auth)
         if error_response:
@@ -330,7 +330,7 @@ class CRMSyncWebService:
         request: Request,
         db: Session,
         auth: Optional[WebAuthContext],
-    ) -> RedirectResponse:
+    ) -> Response:
         """Revoke the CRM service API key."""
         error_response = self._require_admin(request, auth)
         if error_response:

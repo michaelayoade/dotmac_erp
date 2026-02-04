@@ -8,7 +8,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_organization_id
+from app.api.deps import require_organization_id, require_tenant_auth
 from app.db import SessionLocal
 from app.schemas.procurement.evaluation import (
     EvaluationCreate,
@@ -71,9 +71,14 @@ def create_evaluation(
 ):
     """Create a new bid evaluation."""
     service = BidEvaluationService(db)
-    evaluation = service.create(organization_id, data)
-    db.commit()
-    return EvaluationResponse.model_validate(evaluation)
+    try:
+        evaluation = service.create(organization_id, data)
+        db.commit()
+        return EvaluationResponse.model_validate(evaluation)
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.post("/{evaluation_id}/score", response_model=EvaluationScoreResponse)
@@ -97,12 +102,17 @@ def add_score(
 def approve_evaluation(
     evaluation_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
+    auth: dict = Depends(require_tenant_auth),
     db: Session = Depends(get_db),
 ):
     """Approve a bid evaluation."""
     service = BidEvaluationService(db)
+    person_id = auth.get("person_id")
+    if not person_id:
+        raise HTTPException(status_code=400, detail="Missing person_id")
+    user_id = UUID(person_id)
     try:
-        evaluation = service.approve(organization_id, evaluation_id, organization_id)
+        evaluation = service.approve(organization_id, evaluation_id, user_id)
         db.commit()
         return EvaluationResponse.model_validate(evaluation)
     except NotFoundError as e:

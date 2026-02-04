@@ -197,19 +197,71 @@
                 </div>
             </div>
 
-            <!-- Section Divider: Operations -->
+            <!-- Section Divider: Operations Modules -->
             <div class="pt-4 pb-2" x-show="!sidebarCollapsed" x-cloak>
-                <span class="px-3 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Operations</span>
+                <span class="px-3 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Operations Modules</span>
             </div>
 
             <!-- Inventory (links to Operations module) -->
-            {% if "operations" in accessible_modules %}
-            <a href="/operations/dashboard"
+            {% if "inventory" in accessible_modules %}
+            <a href="/inventory/items"
                class="flex items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 font-medium text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800/50 transition-all">
                 <svg class="h-5 w-5 flex-shrink-0 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
                 </svg>
                 <span x-show="!sidebarCollapsed" class="flex-1 truncate text-left" x-cloak>Inventory</span>
+                <svg x-show="!sidebarCollapsed" class="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" x-cloak>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+                </svg>
+            </a>
+            {% endif %}
+
+            {% if "fleet" in accessible_modules %}
+            <a href="/fleet"
+               class="flex items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 font-medium text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800/50 transition-all">
+                <svg class="h-5 w-5 flex-shrink-0 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
+                </svg>
+                <span x-show="!sidebarCollapsed" class="flex-1 truncate text-left" x-cloak>Fleet</span>
+                <svg x-show="!sidebarCollapsed" class="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" x-cloak>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+                </svg>
+            </a>
+            {% endif %}
+
+            {% if "support" in accessible_modules %}
+            <a href="/support/tickets"
+               class="flex items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 font-medium text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800/50 transition-all">
+                <svg class="h-5 w-5 flex-shrink-0 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z"/>
+                </svg>
+                <span x-show="!sidebarCollapsed" class="flex-1 truncate text-left" x-cloak>Support</span>
+                <svg x-show="!sidebarCollapsed" class="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" x-cloak>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+                </svg>
+            </a>
+            {% endif %}
+
+            {% if "procurement" in accessible_modules %}
+            <a href="/procurement"
+               class="flex items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 font-medium text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800/50 transition-all">
+                <svg class="h-5 w-5 flex-shrink-0 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                </svg>
+                <span x-show="!sidebarCollapsed" class="flex-1 truncate text-left" x-cloak>Procurement</span>
+                <svg x-show="!sidebarCollapsed" class="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" x-cloak>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+                </svg>
+            </a>
+            {% endif %}
+
+            {% if "projects" in accessible_modules %}
+            <a href="/projects"
+               class="flex items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 font-medium text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800/50 transition-all">
+                <svg class="h-5 w-5 flex-shrink-0 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5h6m0 0l3 3m-3-3l-3 3m0 6h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                </svg>
+                <span x-show="!sidebarCollapsed" class="flex-1 truncate text-left" x-cloak>Projects</span>
                 <svg x-show="!sidebarCollapsed" class="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" x-cloak>
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
                 </svg>
@@ -297,7 +349,7 @@
             </div>
 
             <!-- IPSAS / Fund Accounting (conditionally shown) -->
-            {% if organization and organization.fund_accounting_enabled %}
+            {% if organization and organization.fund_accounting_enabled | default(false) %}
             <div class="pt-4 pb-2" x-show="!sidebarCollapsed" x-cloak>
                 <span class="px-3 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">IPSAS</span>
             </div>
@@ -402,13 +454,49 @@
                 <span class="truncate">People</span>
             </a>
             {% endif %}
-            {% if "operations" in accessible_modules %}
-            <a href="/operations/dashboard" x-show="!sidebarCollapsed" x-cloak
+            {% if "inventory" in accessible_modules %}
+            <a href="/inventory/items" x-show="!sidebarCollapsed" x-cloak
                class="flex items-center gap-3 rounded-lg px-3 py-2 text-slate-500 hover:bg-slate-50 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-300 transition-colors">
                 <svg class="h-5 w-5 flex-shrink-0 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
                 </svg>
-                <span class="truncate">Operations</span>
+                <span class="truncate">Inventory</span>
+            </a>
+            {% endif %}
+            {% if "fleet" in accessible_modules %}
+            <a href="/fleet" x-show="!sidebarCollapsed" x-cloak
+               class="flex items-center gap-3 rounded-lg px-3 py-2 text-slate-500 hover:bg-slate-50 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-300 transition-colors">
+                <svg class="h-5 w-5 flex-shrink-0 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
+                </svg>
+                <span class="truncate">Fleet</span>
+            </a>
+            {% endif %}
+            {% if "support" in accessible_modules %}
+            <a href="/support/tickets" x-show="!sidebarCollapsed" x-cloak
+               class="flex items-center gap-3 rounded-lg px-3 py-2 text-slate-500 hover:bg-slate-50 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-300 transition-colors">
+                <svg class="h-5 w-5 flex-shrink-0 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z"/>
+                </svg>
+                <span class="truncate">Support</span>
+            </a>
+            {% endif %}
+            {% if "procurement" in accessible_modules %}
+            <a href="/procurement" x-show="!sidebarCollapsed" x-cloak
+               class="flex items-center gap-3 rounded-lg px-3 py-2 text-slate-500 hover:bg-slate-50 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-300 transition-colors">
+                <svg class="h-5 w-5 flex-shrink-0 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                </svg>
+                <span class="truncate">Procurement</span>
+            </a>
+            {% endif %}
+            {% if "projects" in accessible_modules %}
+            <a href="/projects" x-show="!sidebarCollapsed" x-cloak
+               class="flex items-center gap-3 rounded-lg px-3 py-2 text-slate-500 hover:bg-slate-50 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-300 transition-colors">
+                <svg class="h-5 w-5 flex-shrink-0 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5h6m0 0l3 3m-3-3l-3 3m0 6h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                </svg>
+                <span class="truncate">Projects</span>
             </a>
             {% endif %}
             {% if "expense" in accessible_modules %}

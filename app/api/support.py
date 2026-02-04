@@ -33,7 +33,10 @@ from app.services.common import coerce_uuid
 router = APIRouter(
     prefix="/support",
     tags=["support"],
-    dependencies=[Depends(require_tenant_auth)],
+    dependencies=[
+        Depends(require_tenant_auth),
+        Depends(require_tenant_permission("support:access")),
+    ],
 )
 
 
@@ -160,7 +163,7 @@ def get_ticket(
 @router.post("/tickets", response_model=TicketRead, status_code=status.HTTP_201_CREATED)
 def create_ticket(
     data: TicketCreate,
-    auth: dict = Depends(require_tenant_permission("support:write")),
+    auth: dict = Depends(require_tenant_permission("support:tickets:create")),
     db: Session = Depends(get_db),
 ):
     """Create a new support ticket."""
@@ -189,7 +192,7 @@ def create_ticket(
 def update_ticket(
     ticket_id: str,
     data: TicketUpdate,
-    auth: dict = Depends(require_tenant_permission("support:write")),
+    auth: dict = Depends(require_tenant_permission("support:tickets:update")),
     db: Session = Depends(get_db),
 ):
     """Update a ticket."""
@@ -229,7 +232,7 @@ def update_ticket(
 def update_ticket_status(
     ticket_id: str,
     data: TicketStatusUpdate,
-    auth: dict = Depends(require_tenant_permission("support:write")),
+    auth: dict = Depends(require_tenant_permission("support:tickets:update")),
     db: Session = Depends(get_db),
 ):
     """Update ticket status."""
@@ -259,7 +262,7 @@ def update_ticket_status(
 def assign_ticket(
     ticket_id: str,
     data: TicketAssign,
-    auth: dict = Depends(require_tenant_permission("support:write")),
+    auth: dict = Depends(require_tenant_permission("support:tickets:assign")),
     db: Session = Depends(get_db),
 ):
     """Assign a ticket to an employee."""
@@ -288,7 +291,7 @@ def assign_ticket(
 def resolve_ticket(
     ticket_id: str,
     data: TicketResolve,
-    auth: dict = Depends(require_tenant_permission("support:write")),
+    auth: dict = Depends(require_tenant_permission("support:tickets:resolve")),
     db: Session = Depends(get_db),
 ):
     """Mark a ticket as resolved."""

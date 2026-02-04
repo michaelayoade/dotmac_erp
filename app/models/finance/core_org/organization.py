@@ -25,6 +25,20 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db import Base
 
 
+class SectorType(str, enum.Enum):
+    """Organization sector classification."""
+    PRIVATE = "PRIVATE"
+    PUBLIC = "PUBLIC"
+    NGO = "NGO"
+
+
+class AccountingFramework(str, enum.Enum):
+    """Accounting standard the organization follows."""
+    IFRS = "IFRS"
+    IPSAS = "IPSAS"
+    BOTH = "BOTH"
+
+
 class ConsolidationMethod(str, enum.Enum):
     FULL = "FULL"
     PROPORTIONAL = "PROPORTIONAL"
@@ -98,6 +112,36 @@ class Organization(Base):
 
     # Status
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+    # Sector & accounting framework
+    sector_type: Mapped[SectorType] = mapped_column(
+        Enum(SectorType, name="sector_type", schema="core_org"),
+        nullable=False,
+        default=SectorType.PRIVATE,
+        server_default="PRIVATE",
+        comment="Organization sector: PRIVATE, PUBLIC, NGO",
+    )
+    accounting_framework: Mapped[AccountingFramework] = mapped_column(
+        Enum(AccountingFramework, name="accounting_framework", schema="core_org"),
+        nullable=False,
+        default=AccountingFramework.IFRS,
+        server_default="IFRS",
+        comment="Accounting standard: IFRS, IPSAS, or BOTH",
+    )
+    fund_accounting_enabled: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=text("false"),
+        comment="Enable IPSAS fund accounting (public sector)",
+    )
+    commitment_control_enabled: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=text("false"),
+        comment="Enable budget commitment/encumbrance control",
+    )
 
     # Regional settings
     timezone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)

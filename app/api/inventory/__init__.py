@@ -36,7 +36,11 @@ from app.services.inventory import (
 router = APIRouter(
     prefix="/inventory",
     tags=["inventory"],
-    dependencies=[Depends(require_tenant_auth), Depends(require_feature(FEATURE_INVENTORY))],
+    dependencies=[
+        Depends(require_tenant_auth),
+        Depends(require_tenant_permission("inventory:access")),
+        Depends(require_feature(FEATURE_INVENTORY)),
+    ],
 )
 
 
@@ -218,7 +222,7 @@ class ItemCategoryRead(BaseModel):
 def create_item_category(
     payload: ItemCategoryCreate,
     organization_id: UUID = Depends(require_organization_id),
-    auth: dict = Depends(require_tenant_permission("inv:categories:create")),
+    auth: dict = Depends(require_tenant_permission("inventory:categories:create")),
     db: Session = Depends(get_db),
 ):
     """Create a new item category."""
@@ -239,7 +243,7 @@ def create_item_category(
 @router.get("/categories/{category_id}", response_model=ItemCategoryRead)
 def get_item_category(
     category_id: UUID,
-    auth: dict = Depends(require_tenant_permission("inv:categories:read")),
+    auth: dict = Depends(require_tenant_permission("inventory:categories:read")),
     db: Session = Depends(get_db),
 ):
     """Get an item category by ID."""
@@ -253,7 +257,7 @@ def list_item_categories(
     search: Optional[str] = Query(default=None, description="Search by code or name"),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
-    auth: dict = Depends(require_tenant_permission("inv:categories:read")),
+    auth: dict = Depends(require_tenant_permission("inventory:categories:read")),
     db: Session = Depends(get_db),
 ):
     """List item categories with filters."""
@@ -283,7 +287,7 @@ def create_inventory_item(
     organization_id: UUID = Depends(require_organization_id),
     category_id: UUID = Query(..., description="Item category ID"),
     currency_code: str = Query(default=settings.default_functional_currency_code),
-    auth: dict = Depends(require_tenant_permission("inv:items:create")),
+    auth: dict = Depends(require_tenant_permission("inventory:items:create")),
     db: Session = Depends(get_db),
 ):
     """Create a new inventory item."""
@@ -312,7 +316,7 @@ def create_inventory_item(
 @router.get("/items/{item_id}", response_model=InventoryItemRead)
 def get_inventory_item(
     item_id: UUID,
-    auth: dict = Depends(require_tenant_permission("inv:items:read")),
+    auth: dict = Depends(require_tenant_permission("inventory:items:read")),
     db: Session = Depends(get_db),
 ):
     """Get an inventory item by ID."""
@@ -329,7 +333,7 @@ def list_inventory_items(
     search: Optional[str] = Query(default=None, description="Search by code, name, or barcode"),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
-    auth: dict = Depends(require_tenant_permission("inv:items:read")),
+    auth: dict = Depends(require_tenant_permission("inventory:items:read")),
     db: Session = Depends(get_db),
 ):
     """List inventory items with filters."""
@@ -364,7 +368,7 @@ def create_inventory_transaction(
     fiscal_period_id: UUID = Query(..., description="Fiscal period ID"),
     uom: str = Query(default="EACH", description="Unit of measure"),
     currency_code: str = Query(default=settings.default_functional_currency_code),
-    auth: dict = Depends(require_tenant_permission("inv:transactions:create")),
+    auth: dict = Depends(require_tenant_permission("inventory:transactions:create")),
     db: Session = Depends(get_db),
 ):
     """Create an inventory transaction."""
@@ -407,7 +411,7 @@ def create_inventory_transaction(
 @router.get("/transactions/{transaction_id}", response_model=TransactionRead)
 def get_inventory_transaction(
     transaction_id: UUID,
-    auth: dict = Depends(require_tenant_permission("inv:transactions:read")),
+    auth: dict = Depends(require_tenant_permission("inventory:transactions:read")),
     db: Session = Depends(get_db),
 ):
     """Get an inventory transaction by ID."""
@@ -424,7 +428,7 @@ def list_inventory_transactions(
     end_date: Optional[date] = None,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
-    auth: dict = Depends(require_tenant_permission("inv:transactions:read")),
+    auth: dict = Depends(require_tenant_permission("inventory:transactions:read")),
     db: Session = Depends(get_db),
 ):
     """List inventory transactions with filters."""
@@ -453,7 +457,7 @@ def post_inventory_transaction(
     posting_date: date = Query(...),
     organization_id: UUID = Depends(require_organization_id),
     posted_by_user_id: UUID = Query(...),
-    auth: dict = Depends(require_tenant_permission("inv:transactions:post")),
+    auth: dict = Depends(require_tenant_permission("inventory:transactions:post")),
     db: Session = Depends(get_db),
 ):
     """Post inventory transaction to GL."""
@@ -509,7 +513,7 @@ def get_item_stock_balance(
     item_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     warehouse_id: Optional[UUID] = None,
-    auth: dict = Depends(require_tenant_permission("inv:stock:read")),
+    auth: dict = Depends(require_tenant_permission("inventory:stock:read")),
     db: Session = Depends(get_db),
 ):
     """Get stock balance for an item, optionally filtered by warehouse."""
@@ -540,7 +544,7 @@ def get_item_stock_balance(
 def get_warehouse_inventory(
     warehouse_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    auth: dict = Depends(require_tenant_permission("inv:stock:read")),
+    auth: dict = Depends(require_tenant_permission("inventory:stock:read")),
     db: Session = Depends(get_db),
 ):
     """Get all inventory balances for a warehouse."""
@@ -571,7 +575,7 @@ def get_warehouse_inventory(
 def get_low_stock_items(
     organization_id: UUID = Depends(require_organization_id),
     include_below_minimum: bool = Query(default=True),
-    auth: dict = Depends(require_tenant_permission("inv:stock:read")),
+    auth: dict = Depends(require_tenant_permission("inventory:stock:read")),
     db: Session = Depends(get_db),
 ):
     """Get items at or below reorder point."""
@@ -607,7 +611,7 @@ def allocate_stock(
     organization_id: UUID = Depends(require_organization_id),
     warehouse_id: Optional[UUID] = None,
     lot_id: Optional[UUID] = None,
-    auth: dict = Depends(require_tenant_permission("inv:stock:allocate")),
+    auth: dict = Depends(require_tenant_permission("inventory:stock:allocate")),
     db: Session = Depends(get_db),
 ):
     """Allocate (reserve) inventory for a sales order or other document."""
@@ -631,7 +635,7 @@ def deallocate_stock(
     organization_id: UUID = Depends(require_organization_id),
     warehouse_id: Optional[UUID] = None,
     lot_id: Optional[UUID] = None,
-    auth: dict = Depends(require_tenant_permission("inv:stock:allocate")),
+    auth: dict = Depends(require_tenant_permission("inventory:stock:allocate")),
     db: Session = Depends(get_db),
 ):
     """Release an inventory allocation."""
@@ -707,7 +711,7 @@ class AddLayerCreate(BaseModel):
 def add_fifo_layer(
     payload: AddLayerCreate,
     organization_id: UUID = Depends(require_organization_id),
-    auth: dict = Depends(require_tenant_permission("inv:valuation:create")),
+    auth: dict = Depends(require_tenant_permission("inventory:valuation:create")),
     db: Session = Depends(get_db),
 ):
     """Add a new FIFO cost layer."""
@@ -729,7 +733,7 @@ def consume_fifo(
     item_id: UUID = Query(...),
     quantity: Decimal = Query(...),
     organization_id: UUID = Depends(require_organization_id),
-    auth: dict = Depends(require_tenant_permission("inv:valuation:update")),
+    auth: dict = Depends(require_tenant_permission("inventory:valuation:update")),
     db: Session = Depends(get_db),
 ):
     """Consume inventory using FIFO method."""
@@ -746,7 +750,7 @@ def calculate_nrv_write_down(
     costs_to_complete: Decimal = Query(default=Decimal("0")),
     selling_costs: Decimal = Query(default=Decimal("0")),
     organization_id: UUID = Depends(require_organization_id),
-    auth: dict = Depends(require_tenant_permission("inv:valuation:calculate")),
+    auth: dict = Depends(require_tenant_permission("inventory:valuation:calculate")),
     db: Session = Depends(get_db),
 ):
     """Calculate NRV write-down for an item per IAS 2."""
@@ -768,7 +772,7 @@ def calculate_nrv_write_down(
 def get_fifo_valuation_summary(
     organization_id: UUID = Depends(require_organization_id),
     fiscal_period_id: UUID = Query(...),
-    auth: dict = Depends(require_tenant_permission("inv:valuation:read")),
+    auth: dict = Depends(require_tenant_permission("inventory:valuation:read")),
     db: Session = Depends(get_db),
 ):
     """Get valuation summary for a period."""
@@ -779,7 +783,7 @@ def get_fifo_valuation_summary(
 def get_fifo_inventory(
     item_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    auth: dict = Depends(require_tenant_permission("inv:valuation:read")),
+    auth: dict = Depends(require_tenant_permission("inventory:valuation:read")),
     db: Session = Depends(get_db),
 ):
     """Get current FIFO inventory state for an item."""
@@ -842,7 +846,7 @@ class LotTraceabilityRead(BaseModel):
 def create_lot(
     payload: LotCreate,
     organization_id: UUID = Depends(require_organization_id),
-    auth: dict = Depends(require_tenant_permission("inv:lots:create")),
+    auth: dict = Depends(require_tenant_permission("inventory:lots:create")),
     db: Session = Depends(get_db),
 ):
     """Create a new inventory lot."""
@@ -867,7 +871,7 @@ def create_lot(
 def get_expiring_lots(
     organization_id: UUID = Depends(require_organization_id),
     days_ahead: int = Query(default=30),
-    auth: dict = Depends(require_tenant_permission("inv:lots:read")),
+    auth: dict = Depends(require_tenant_permission("inventory:lots:read")),
     db: Session = Depends(get_db),
 ):
     """Get lots expiring within specified days."""
@@ -878,7 +882,7 @@ def get_expiring_lots(
 @router.get("/lots/expired", response_model=ListResponse[LotRead])
 def get_expired_lots(
     organization_id: UUID = Depends(require_organization_id),
-    auth: dict = Depends(require_tenant_permission("inv:lots:read")),
+    auth: dict = Depends(require_tenant_permission("inventory:lots:read")),
     db: Session = Depends(get_db),
 ):
     """Get already expired lots."""
@@ -889,7 +893,7 @@ def get_expired_lots(
 @router.get("/lots/{lot_id}", response_model=LotRead)
 def get_lot(
     lot_id: UUID,
-    auth: dict = Depends(require_tenant_permission("inv:lots:read")),
+    auth: dict = Depends(require_tenant_permission("inventory:lots:read")),
     db: Session = Depends(get_db),
 ):
     """Get a lot by ID."""
@@ -905,7 +909,7 @@ def list_lots(
     include_zero_quantity: bool = Query(default=False),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
-    auth: dict = Depends(require_tenant_permission("inv:lots:read")),
+    auth: dict = Depends(require_tenant_permission("inventory:lots:read")),
     db: Session = Depends(get_db),
 ):
     """List lots with filters."""
@@ -927,7 +931,7 @@ def allocate_from_lot(
     lot_id: UUID,
     quantity: Decimal = Query(...),
     reference: Optional[str] = None,
-    auth: dict = Depends(require_tenant_permission("inv:lots:allocate")),
+    auth: dict = Depends(require_tenant_permission("inventory:lots:allocate")),
     db: Session = Depends(get_db),
 ):
     """Allocate quantity from a lot."""
@@ -938,7 +942,7 @@ def allocate_from_lot(
 def deallocate_from_lot(
     lot_id: UUID,
     quantity: Decimal = Query(...),
-    auth: dict = Depends(require_tenant_permission("inv:lots:allocate")),
+    auth: dict = Depends(require_tenant_permission("inventory:lots:allocate")),
     db: Session = Depends(get_db),
 ):
     """Release allocation from a lot."""
@@ -949,7 +953,7 @@ def deallocate_from_lot(
 def consume_from_lot(
     lot_id: UUID,
     quantity: Decimal = Query(...),
-    auth: dict = Depends(require_tenant_permission("inv:lots:allocate")),
+    auth: dict = Depends(require_tenant_permission("inventory:lots:allocate")),
     db: Session = Depends(get_db),
 ):
     """Consume quantity from a lot."""
@@ -960,7 +964,7 @@ def consume_from_lot(
 def quarantine_lot(
     lot_id: UUID,
     reason: str = Query(...),
-    auth: dict = Depends(require_tenant_permission("inv:lots:quarantine")),
+    auth: dict = Depends(require_tenant_permission("inventory:lots:quarantine")),
     db: Session = Depends(get_db),
 ):
     """Place a lot in quarantine."""
@@ -971,7 +975,7 @@ def quarantine_lot(
 def release_quarantine(
     lot_id: UUID,
     qc_status: str = Query(default="PASSED"),
-    auth: dict = Depends(require_tenant_permission("inv:lots:quarantine")),
+    auth: dict = Depends(require_tenant_permission("inventory:lots:quarantine")),
     db: Session = Depends(get_db),
 ):
     """Release a lot from quarantine."""
@@ -981,7 +985,7 @@ def release_quarantine(
 @router.get("/lots/{lot_id}/traceability", response_model=LotTraceabilityRead)
 def get_lot_traceability(
     lot_id: UUID,
-    auth: dict = Depends(require_tenant_permission("inv:lots:read")),
+    auth: dict = Depends(require_tenant_permission("inventory:lots:read")),
     db: Session = Depends(get_db),
 ):
     """Get traceability information for a lot."""

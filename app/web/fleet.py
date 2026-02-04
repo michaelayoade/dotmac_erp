@@ -15,9 +15,9 @@ from app.db import SessionLocal
 from app.services.common import NotFoundError, ValidationError
 from app.services.fleet.web.fleet_web import FleetWebService
 from app.templates import templates
-from app.web.deps import WebAuthContext, base_context, require_operations_access
+from app.web.deps import WebAuthContext, base_context, require_fleet_access
 
-router = APIRouter(tags=["fleet-web"])
+router = APIRouter(prefix="/fleet", tags=["fleet-web"])
 
 
 def get_db():
@@ -36,7 +36,7 @@ def get_db():
 @router.get("", response_class=HTMLResponse)
 def fleet_dashboard(
     request: Request,
-    auth: WebAuthContext = Depends(require_operations_access),
+    auth: WebAuthContext = Depends(require_fleet_access),
     db: Session = Depends(get_db),
 ):
     """Fleet management dashboard."""
@@ -59,7 +59,7 @@ def vehicle_list(
     department_id: Optional[UUID] = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
-    auth: WebAuthContext = Depends(require_operations_access),
+    auth: WebAuthContext = Depends(require_fleet_access),
     db: Session = Depends(get_db),
 ):
     """List all vehicles."""
@@ -81,7 +81,7 @@ def vehicle_list(
 @router.get("/vehicles/new", response_class=HTMLResponse)
 def vehicle_new(
     request: Request,
-    auth: WebAuthContext = Depends(require_operations_access),
+    auth: WebAuthContext = Depends(require_fleet_access),
     db: Session = Depends(get_db),
 ):
     """New vehicle form."""
@@ -95,7 +95,7 @@ def vehicle_new(
 def vehicle_detail(
     request: Request,
     vehicle_id: UUID,
-    auth: WebAuthContext = Depends(require_operations_access),
+    auth: WebAuthContext = Depends(require_fleet_access),
     db: Session = Depends(get_db),
 ):
     """Vehicle detail view."""
@@ -112,7 +112,7 @@ def vehicle_detail(
 def vehicle_edit(
     request: Request,
     vehicle_id: UUID,
-    auth: WebAuthContext = Depends(require_operations_access),
+    auth: WebAuthContext = Depends(require_fleet_access),
     db: Session = Depends(get_db),
 ):
     """Edit vehicle form."""
@@ -138,7 +138,7 @@ def maintenance_list(
     maintenance_type: Optional[str] = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
-    auth: WebAuthContext = Depends(require_operations_access),
+    auth: WebAuthContext = Depends(require_fleet_access),
     db: Session = Depends(get_db),
 ):
     """List maintenance records."""
@@ -161,7 +161,7 @@ def maintenance_list(
 def maintenance_new(
     request: Request,
     vehicle_id: Optional[UUID] = None,
-    auth: WebAuthContext = Depends(require_operations_access),
+    auth: WebAuthContext = Depends(require_fleet_access),
     db: Session = Depends(get_db),
 ):
     """New maintenance record form."""
@@ -175,7 +175,7 @@ def maintenance_new(
 def maintenance_detail(
     request: Request,
     record_id: UUID,
-    auth: WebAuthContext = Depends(require_operations_access),
+    auth: WebAuthContext = Depends(require_fleet_access),
     db: Session = Depends(get_db),
 ):
     """Maintenance record detail view."""
@@ -199,7 +199,7 @@ def fuel_list(
     vehicle_id: Optional[UUID] = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
-    auth: WebAuthContext = Depends(require_operations_access),
+    auth: WebAuthContext = Depends(require_fleet_access),
     db: Session = Depends(get_db),
 ):
     """List fuel log entries."""
@@ -220,7 +220,7 @@ def fuel_list(
 def fuel_new(
     request: Request,
     vehicle_id: Optional[UUID] = None,
-    auth: WebAuthContext = Depends(require_operations_access),
+    auth: WebAuthContext = Depends(require_fleet_access),
     db: Session = Depends(get_db),
 ):
     """New fuel log entry form."""
@@ -243,7 +243,7 @@ def incident_list(
     severity: Optional[str] = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
-    auth: WebAuthContext = Depends(require_operations_access),
+    auth: WebAuthContext = Depends(require_fleet_access),
     db: Session = Depends(get_db),
 ):
     """List incidents."""
@@ -266,7 +266,7 @@ def incident_list(
 def incident_new(
     request: Request,
     vehicle_id: Optional[UUID] = None,
-    auth: WebAuthContext = Depends(require_operations_access),
+    auth: WebAuthContext = Depends(require_fleet_access),
     db: Session = Depends(get_db),
 ):
     """New incident report form."""
@@ -280,7 +280,7 @@ def incident_new(
 def incident_detail(
     request: Request,
     incident_id: UUID,
-    auth: WebAuthContext = Depends(require_operations_access),
+    auth: WebAuthContext = Depends(require_fleet_access),
     db: Session = Depends(get_db),
 ):
     """Incident detail view."""
@@ -305,7 +305,7 @@ def reservation_list(
     status: Optional[str] = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
-    auth: WebAuthContext = Depends(require_operations_access),
+    auth: WebAuthContext = Depends(require_fleet_access),
     db: Session = Depends(get_db),
 ):
     """List reservations."""
@@ -326,7 +326,7 @@ def reservation_list(
 @router.get("/reservations/new", response_class=HTMLResponse)
 def reservation_new(
     request: Request,
-    auth: WebAuthContext = Depends(require_operations_access),
+    auth: WebAuthContext = Depends(require_fleet_access),
     db: Session = Depends(get_db),
 ):
     """New reservation form."""
@@ -340,7 +340,7 @@ def reservation_new(
 def reservation_detail(
     request: Request,
     reservation_id: UUID,
-    auth: WebAuthContext = Depends(require_operations_access),
+    auth: WebAuthContext = Depends(require_fleet_access),
     db: Session = Depends(get_db),
 ):
     """Reservation detail view."""
@@ -367,7 +367,7 @@ def document_list(
     expiring_soon: bool = False,
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
-    auth: WebAuthContext = Depends(require_operations_access),
+    auth: WebAuthContext = Depends(require_fleet_access),
     db: Session = Depends(get_db),
 ):
     """List documents."""
@@ -391,7 +391,7 @@ def document_list(
 def document_new(
     request: Request,
     vehicle_id: Optional[UUID] = None,
-    auth: WebAuthContext = Depends(require_operations_access),
+    auth: WebAuthContext = Depends(require_fleet_access),
     db: Session = Depends(get_db),
 ):
     """New document form."""
@@ -405,7 +405,7 @@ def document_new(
 def document_detail(
     request: Request,
     document_id: UUID,
-    auth: WebAuthContext = Depends(require_operations_access),
+    auth: WebAuthContext = Depends(require_fleet_access),
     db: Session = Depends(get_db),
 ):
     """Document detail view."""

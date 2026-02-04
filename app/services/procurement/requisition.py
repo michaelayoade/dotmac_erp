@@ -5,7 +5,7 @@ Business logic for purchase requisition management.
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, List, Optional, Tuple
 from uuid import UUID
@@ -165,7 +165,7 @@ class RequisitionService:
         req.status = RequisitionStatus.BUDGET_VERIFIED
         req.budget_verified = True
         req.budget_verified_by_id = verified_by_user_id
-        req.budget_verified_at = datetime.utcnow()
+        req.budget_verified_at = datetime.now(timezone.utc)
         self.db.flush()
         logger.info("Budget verified requisition %s", req.requisition_number)
         return req
@@ -188,7 +188,7 @@ class RequisitionService:
 
         req.status = RequisitionStatus.APPROVED
         req.approved_by_user_id = approved_by_user_id
-        req.approved_at = datetime.utcnow()
+        req.approved_at = datetime.now(timezone.utc)
         self.db.flush()
         logger.info("Approved requisition %s", req.requisition_number)
         return req

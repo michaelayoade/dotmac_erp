@@ -1,0 +1,117 @@
+{% extends "finance/base_finance.html" %}
+
+{% block page_title %}Commitment Register{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400">
+    <a href="/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/finance" class="hover:text-primary-600 dark:hover:text-primary-400">Finance</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white">Commitments</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Filters -->
+    <div class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-800/50">
+        <form method="GET" class="flex flex-wrap items-end gap-4">
+            <div>
+                <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Status</label>
+                <select name="status" class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-white">
+                    <option value="">All</option>
+                    <option value="PENDING" {{ 'selected' if status_filter == 'PENDING' }}>Pending</option>
+                    <option value="COMMITTED" {{ 'selected' if status_filter == 'COMMITTED' }}>Committed</option>
+                    <option value="OBLIGATED" {{ 'selected' if status_filter == 'OBLIGATED' }}>Obligated</option>
+                    <option value="PARTIALLY_PAID" {{ 'selected' if status_filter == 'PARTIALLY_PAID' }}>Partially Paid</option>
+                    <option value="EXPENDED" {{ 'selected' if status_filter == 'EXPENDED' }}>Expended</option>
+                    <option value="CANCELLED" {{ 'selected' if status_filter == 'CANCELLED' }}>Cancelled</option>
+                </select>
+            </div>
+            <button type="submit" class="rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600">
+                Filter
+            </button>
+        </form>
+    </div>
+
+    <!-- Commitments Table -->
+    <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50">
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="border-b border-slate-200 dark:border-slate-700">
+                        <th class="px-6 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Number</th>
+                        <th class="px-6 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Type</th>
+                        <th class="px-6 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Source</th>
+                        <th class="px-6 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Status</th>
+                        <th class="px-6 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Committed</th>
+                        <th class="px-6 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Obligated</th>
+                        <th class="px-6 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Expended</th>
+                        <th class="px-6 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Date</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                    {% for c in commitments %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/80 cursor-pointer"
+                        onclick="window.location='/finance/ipsas/commitments/{{ c.commitment_id }}'">
+                        <td class="px-6 py-4 font-mono text-sm font-medium text-primary-600 dark:text-primary-400">{{ c.commitment_number }}</td>
+                        <td class="px-6 py-4">
+                            <span class="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-300">
+                                {{ c.commitment_type.value }}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 text-slate-600 dark:text-slate-300">{{ c.source_type }}</td>
+                        <td class="px-6 py-4">
+                            {% if c.status.value == 'COMMITTED' %}
+                            <span class="inline-flex rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">Committed</span>
+                            {% elif c.status.value == 'OBLIGATED' %}
+                            <span class="inline-flex rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">Obligated</span>
+                            {% elif c.status.value == 'EXPENDED' %}
+                            <span class="inline-flex rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">Expended</span>
+                            {% elif c.status.value == 'PARTIALLY_PAID' %}
+                            <span class="inline-flex rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">Partial</span>
+                            {% elif c.status.value == 'CANCELLED' %}
+                            <span class="inline-flex rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400">Cancelled</span>
+                            {% elif c.status.value == 'PENDING' %}
+                            <span class="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-400">Pending</span>
+                            {% else %}
+                            <span class="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500 dark:bg-slate-700 dark:text-slate-400">{{ c.status.value }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 text-right font-mono text-slate-900 dark:text-white">{{ "{:,.2f}".format(c.committed_amount) }}</td>
+                        <td class="px-6 py-4 text-right font-mono text-slate-500 dark:text-slate-400">{{ "{:,.2f}".format(c.obligated_amount) }}</td>
+                        <td class="px-6 py-4 text-right font-mono text-slate-500 dark:text-slate-400">{{ "{:,.2f}".format(c.expended_amount) }}</td>
+                        <td class="px-6 py-4 text-slate-500 dark:text-slate-400">{{ c.commitment_date }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="8" class="px-6 py-12 text-center text-slate-500 dark:text-slate-400">
+                            No commitments found. Commitments are created from purchase orders and contracts.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {% if total_pages > 1 %}
+        <div class="flex items-center justify-between border-t border-slate-200 px-6 py-3 dark:border-slate-700">
+            <p class="text-sm text-slate-500 dark:text-slate-400">
+                Showing {{ ((page - 1) * page_size) + 1 }}-{{ [page * page_size, total] | min }} of {{ total }}
+            </p>
+            <div class="flex gap-2">
+                {% if page > 1 %}
+                <a href="?page={{ page - 1 }}{% if status_filter %}&status={{ status_filter }}{% endif %}"
+                   class="rounded-lg border border-slate-300 px-3 py-1 text-sm hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-700">Prev</a>
+                {% endif %}
+                {% if page < total_pages %}
+                <a href="?page={{ page + 1 }}{% if status_filter %}&status={{ status_filter }}{% endif %}"
+                   class="rounded-lg border border-slate-300 px-3 py-1 text-sm hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-700">Next</a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,169 @@
+{% extends "modules/base_modules.html" %}
+
+{% block title %}My Timesheet{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="flex items-start justify-between">
+        <div>
+            <h1 class="text-2xl font-display font-semibold text-slate-900 dark:text-white">My Timesheet</h1>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                Week of {{ week_start.strftime('%d %b %Y') }} - {{ (week_start + timedelta(days=6)).strftime('%d %b %Y') }}
+            </p>
+        </div>
+        <div class="flex items-center gap-2">
+            <a href="?week_start={{ (week_start - timedelta(days=7)).strftime('%Y-%m-%d') }}"
+               class="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 transition-colors">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                </svg>
+                Previous
+            </a>
+            <a href="?week_start={{ today.strftime('%Y-%m-%d') }}"
+               class="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 transition-colors">
+                Today
+            </a>
+            <a href="?week_start={{ (week_start + timedelta(days=7)).strftime('%Y-%m-%d') }}"
+               class="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 transition-colors">
+                Next
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                </svg>
+            </a>
+        </div>
+    </div>
+
+    <!-- Week Summary -->
+    <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
+            <div class="text-2xl font-bold text-slate-900 dark:text-white">{{ week_total }}</div>
+            <div class="text-sm text-slate-500 dark:text-slate-400">Total Hours</div>
+        </div>
+        <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
+            <div class="text-2xl font-bold text-green-600 dark:text-green-400">{{ billable_total }}</div>
+            <div class="text-sm text-slate-500 dark:text-slate-400">Billable Hours</div>
+        </div>
+        <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
+            <div class="text-2xl font-bold text-slate-600 dark:text-slate-400">{{ entries|length }}</div>
+            <div class="text-sm text-slate-500 dark:text-slate-400">Entries</div>
+        </div>
+    </div>
+
+    <!-- Timesheet Grid -->
+    <div class="rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800 overflow-x-auto">
+        <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+            <thead class="bg-slate-50 dark:bg-slate-800/50">
+                <tr>
+                    <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Project / Task</th>
+                    {% for i in range(7) %}
+                    {% set day = week_start + timedelta(days=i) %}
+                    <th scope="col" class="px-2 py-3 text-center text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 {{ 'bg-amber-50 dark:bg-amber-900/20' if day == today else '' }}">
+                        <div>{{ day.strftime('%a') }}</div>
+                        <div class="text-slate-400">{{ day.strftime('%d') }}</div>
+                    </th>
+                    {% endfor %}
+                    <th scope="col" class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Total</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                {% for project_id, project_data in entries_by_project.items() %}
+                <tr class="bg-slate-50/50 dark:bg-slate-800/30">
+                    <td colspan="9" class="px-4 py-2">
+                        <span class="text-sm font-medium text-slate-900 dark:text-white">{{ project_data.project_name }}</span>
+                    </td>
+                </tr>
+                {% for task_id, task_data in project_data.tasks.items() %}
+                <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                    <td class="px-4 py-3 pl-8">
+                        <span class="text-sm text-slate-600 dark:text-slate-400">{{ task_data.task_name or 'General' }}</span>
+                    </td>
+                    {% for i in range(7) %}
+                    {% set day = week_start + timedelta(days=i) %}
+                    {% set day_key = day.strftime('%Y-%m-%d') %}
+                    <td class="px-2 py-3 text-center {{ 'bg-amber-50/50 dark:bg-amber-900/10' if day == today else '' }}">
+                        {% if task_data.hours_by_day.get(day_key) %}
+                        <span class="text-sm font-medium text-slate-900 dark:text-white">{{ task_data.hours_by_day[day_key] }}</span>
+                        {% else %}
+                        <span class="text-sm text-slate-300 dark:text-slate-600">-</span>
+                        {% endif %}
+                    </td>
+                    {% endfor %}
+                    <td class="px-4 py-3 text-right">
+                        <span class="text-sm font-medium text-slate-900 dark:text-white">{{ task_data.total }}</span>
+                    </td>
+                </tr>
+                {% endfor %}
+                {% else %}
+                <tr>
+                    <td colspan="9" class="px-4 py-12 text-center">
+                        <p class="text-sm text-slate-500 dark:text-slate-400">No time entries for this week</p>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot class="bg-slate-50 dark:bg-slate-800/50">
+                <tr>
+                    <td class="px-4 py-3 text-sm font-medium text-slate-900 dark:text-white">Daily Total</td>
+                    {% for i in range(7) %}
+                    {% set day = week_start + timedelta(days=i) %}
+                    {% set day_key = day.strftime('%Y-%m-%d') %}
+                    <td class="px-2 py-3 text-center {{ 'bg-amber-50 dark:bg-amber-900/20' if day == today else '' }}">
+                        <span class="text-sm font-medium text-slate-900 dark:text-white">{{ daily_totals.get(day_key, 0) }}</span>
+                    </td>
+                    {% endfor %}
+                    <td class="px-4 py-3 text-right">
+                        <span class="text-sm font-bold text-slate-900 dark:text-white">{{ week_total }}</span>
+                    </td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+
+    <!-- Quick Add Entry -->
+    <div class="rounded-lg border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-800">
+        <h3 class="text-lg font-medium text-slate-900 dark:text-white mb-4">Log Time</h3>
+        <form method="post" action="/projects/timesheet/log" class="grid grid-cols-1 gap-4 sm:grid-cols-6">
+            <div>
+                <label for="entry_date" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Date</label>
+                <input type="date" name="entry_date" id="entry_date" required
+                       value="{{ today.strftime('%Y-%m-%d') }}"
+                       class="mt-1 block w-full rounded-lg border-slate-300 focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
+            </div>
+            <div>
+                <label for="project_id" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Project</label>
+                <select name="project_id" id="project_id" required
+                        class="mt-1 block w-full rounded-lg border-slate-300 focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
+                    <option value="">Select Project</option>
+                    {% for p in user_projects %}
+                    <option value="{{ p.project_id }}">{{ p.project_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label for="task_id" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Task</label>
+                <select name="task_id" id="task_id"
+                        class="mt-1 block w-full rounded-lg border-slate-300 focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
+                    <option value="">No Task</option>
+                </select>
+            </div>
+            <div>
+                <label for="hours" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Hours</label>
+                <input type="number" name="hours" id="hours" required step="0.25" min="0.25" max="24"
+                       class="mt-1 block w-full rounded-lg border-slate-300 focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
+            </div>
+            <div>
+                <label for="description" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Description</label>
+                <input type="text" name="description" id="description"
+                       class="mt-1 block w-full rounded-lg border-slate-300 focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
+            </div>
+            <div class="flex items-end">
+                <button type="submit"
+                        class="w-full rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 transition-colors">
+                    Log Time
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

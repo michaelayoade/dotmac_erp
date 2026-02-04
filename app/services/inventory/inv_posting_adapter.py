@@ -3,9 +3,9 @@ INVPostingAdapter - Converts inventory transactions to GL entries.
 
 This module is a facade that delegates to the modular posting subpackage.
 For implementation details, see:
-- app/services/finance/inv/posting/receipt.py
-- app/services/finance/inv/posting/issue.py
-- app/services/finance/inv/posting/adjustment.py
+- app/services/inventory/posting/receipt.py
+- app/services/inventory/posting/issue.py
+- app/services/inventory/posting/adjustment.py
 
 Posts inventory movements (receipts, issues, adjustments) to the general ledger.
 """

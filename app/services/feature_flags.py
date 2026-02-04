@@ -25,6 +25,8 @@ FEATURE_INVENTORY = "enable_inventory"
 FEATURE_FIXED_ASSETS = "enable_fixed_assets"
 FEATURE_LEASES = "enable_leases"
 FEATURE_PROCUREMENT = "enable_procurement"
+FEATURE_IPSAS = "enable_ipsas"
+FEATURE_FUND_ACCOUNTING = "enable_fund_accounting"
 
 # Human-readable feature names for error messages
 FEATURE_LABELS = {
@@ -37,6 +39,8 @@ FEATURE_LABELS = {
     FEATURE_FIXED_ASSETS: "Fixed Assets",
     FEATURE_LEASES: "Leases",
     FEATURE_PROCUREMENT: "Procurement Management",
+    FEATURE_IPSAS: "IPSAS Accounting",
+    FEATURE_FUND_ACCOUNTING: "Fund Accounting",
 }
 
 # Cache for defaults derived from settings specs (lazy initialization)
@@ -75,6 +79,8 @@ def _get_feature_defaults() -> Dict[str, bool]:
             FEATURE_FIXED_ASSETS: True,
             FEATURE_LEASES: False,
             FEATURE_PROCUREMENT: True,
+            FEATURE_IPSAS: False,
+            FEATURE_FUND_ACCOUNTING: False,
         }
         return _feature_defaults_cache
 

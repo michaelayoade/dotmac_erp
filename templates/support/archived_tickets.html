@@ -1,0 +1,184 @@
+{% extends "modules/base_modules.html" %}
+
+{% block page_title %}Archived Tickets{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+    <a href="/support/dashboard" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Support</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <a href="/support/tickets" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Support Tickets</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="font-medium text-slate-900 dark:text-white">Archived</span>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<a href="/support/tickets" class="btn btn-secondary">
+    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+    </svg>
+    Back to Active Tickets
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    {# Info Banner #}
+    <div class="card p-4 bg-slate-50 dark:bg-slate-800/50 border-l-4 border-slate-400">
+        <div class="flex items-start gap-3">
+            <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-400">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/>
+                </svg>
+            </div>
+            <div>
+                <h3 class="font-medium text-slate-900 dark:text-white">Archived Tickets</h3>
+                <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+                    These tickets have been archived. You can restore them to make them active again.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    {# Search #}
+    <div class="card p-4">
+        <form method="get" class="flex gap-4 items-end">
+            <div class="flex-1">
+                <label for="search" class="form-label">Search</label>
+                <div class="relative">
+                    <svg class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                    </svg>
+                    <input type="text" name="search" id="search" value="{{ search }}"
+                        placeholder="Search archived tickets..."
+                        class="form-input w-full pl-10">
+                </div>
+            </div>
+            <button type="submit" class="btn btn-secondary h-10">Search</button>
+            {% if search %}
+            <a href="/support/tickets/archived" class="btn btn-secondary h-10">Clear</a>
+            {% endif %}
+        </form>
+    </div>
+
+    {# Tickets Table #}
+    <div class="card overflow-hidden">
+        {% if tickets %}
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead>
+                    <tr class="border-b border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50">
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Ticket</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Subject</th>
+                        <th class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Priority</th>
+                        <th class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Last Status</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Opened</th>
+                        <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                    {% for ticket in tickets %}
+                    <tr class="group hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                        <td class="px-4 py-4">
+                            <span class="font-mono text-sm text-slate-500 dark:text-slate-400">{{ ticket.ticket_number }}</span>
+                        </td>
+                        <td class="px-4 py-4">
+                            <div class="min-w-0">
+                                <p class="font-medium text-slate-900 dark:text-white truncate max-w-xs" title="{{ ticket.subject }}">
+                                    {{ ticket.display_subject or ticket.subject }}
+                                </p>
+                                {% if ticket.raised_by_name %}
+                                <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                    From: {{ ticket.raised_by_name }}
+                                </p>
+                                {% endif %}
+                            </div>
+                        </td>
+                        <td class="px-4 py-4 text-center">
+                            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ring-1 ring-inset {{ ticket.priority_badge }}">
+                                {{ ticket.priority_label }}
+                            </span>
+                        </td>
+                        <td class="px-4 py-4 text-center">
+                            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ring-1 ring-inset {{ ticket.status_badge }}">
+                                {{ ticket.status_label }}
+                            </span>
+                        </td>
+                        <td class="px-4 py-4">
+                            <span class="text-sm text-slate-600 dark:text-slate-400">{{ ticket.opening_date_formatted }}</span>
+                        </td>
+                        <td class="px-4 py-4 text-right">
+                            <form method="post" action="/support/tickets/{{ ticket.ticket_number }}/restore" class="inline">
+                                <button type="submit" class="btn btn-sm btn-success">
+                                    <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                                    </svg>
+                                    Restore
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {# Pagination #}
+        {% if total_pages > 1 %}
+        <div class="px-4 py-3 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between bg-slate-50/30 dark:bg-slate-800/30">
+            <div class="text-sm text-slate-500 dark:text-slate-400">
+                Showing page <span class="font-medium text-slate-700 dark:text-slate-300">{{ page }}</span> of <span class="font-medium text-slate-700 dark:text-slate-300">{{ total_pages }}</span>
+                <span class="hidden sm:inline">({{ total }} archived tickets)</span>
+            </div>
+            <div class="flex gap-2">
+                {% if has_prev %}
+                <a href="?page={{ page - 1 }}&search={{ search }}" class="btn btn-secondary btn-sm">
+                    <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                    </svg>
+                    Previous
+                </a>
+                {% endif %}
+                {% if has_next %}
+                <a href="?page={{ page + 1 }}&search={{ search }}" class="btn btn-secondary btn-sm">
+                    Next
+                    <svg class="h-4 w-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                    </svg>
+                </a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        {% else %}
+        {# Empty State #}
+        <div class="px-6 py-16 text-center">
+            <div class="mx-auto w-24 h-24 rounded-full bg-gradient-to-br from-slate-100 to-slate-50 dark:from-slate-800 dark:to-slate-900 flex items-center justify-center mb-6">
+                <svg class="h-12 w-12 text-slate-400 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/>
+                </svg>
+            </div>
+            <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-2">No archived tickets</h3>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mb-6 max-w-sm mx-auto">
+                {% if search %}
+                No archived tickets match your search criteria.
+                {% else %}
+                There are no archived tickets. Tickets you archive will appear here.
+                {% endif %}
+            </p>
+            <a href="/support/tickets" class="btn btn-primary">
+                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                </svg>
+                Back to Active Tickets
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

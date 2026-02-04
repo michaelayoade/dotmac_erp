@@ -559,8 +559,97 @@ def upgrade() -> None:
             ON proc.vendor_prequalification(organization_id, valid_from, valid_to)
     """)
 
+    # ─────────────────────────────────────────────────────────────
+    # Row Level Security policies for tenant isolation
+    # ─────────────────────────────────────────────────────────────
+    rls_tables = [
+        "procurement_plan",
+        "procurement_plan_item",
+        "purchase_requisition",
+        "purchase_requisition_line",
+        "request_for_quotation",
+        "quotation_response",
+        "bid_evaluation",
+        "procurement_contract",
+        "vendor_prequalification",
+    ]
+    for table in rls_tables:
+        op.execute(f"ALTER TABLE proc.{table} ENABLE ROW LEVEL SECURITY")
+        op.execute(
+            f"""
+            CREATE POLICY {table}_tenant_isolation ON proc.{table}
+            USING (organization_id::text = current_setting('app.current_organization_id', true))
+            """
+        )
+
+    # quotation_response_line, rfq_invitation, and bid_evaluation_score have
+    # no organization_id; enforce tenant isolation via parent table join
+    op.execute("ALTER TABLE proc.quotation_response_line ENABLE ROW LEVEL SECURITY")
+    op.execute(
+        """
+        CREATE POLICY quotation_response_line_tenant_isolation ON proc.quotation_response_line
+        USING (
+            EXISTS (
+                SELECT 1
+                FROM proc.quotation_response qr
+                WHERE qr.response_id = quotation_response_line.response_id
+                AND qr.organization_id::text = current_setting('app.current_organization_id', true)
+            )
+        )
+        """
+    )
+
+    op.execute("ALTER TABLE proc.rfq_invitation ENABLE ROW LEVEL SECURITY")
+    op.execute(
+        """
+        CREATE POLICY rfq_invitation_tenant_isolation ON proc.rfq_invitation
+        USING (
+            EXISTS (
+                SELECT 1
+                FROM proc.request_for_quotation r
+                WHERE r.rfq_id = rfq_invitation.rfq_id
+                AND r.organization_id::text = current_setting('app.current_organization_id', true)
+            )
+        )
+        """
+    )
+
+    op.execute("ALTER TABLE proc.bid_evaluation_score ENABLE ROW LEVEL SECURITY")
+    op.execute(
+        """
+        CREATE POLICY bid_evaluation_score_tenant_isolation ON proc.bid_evaluation_score
+        USING (
+            EXISTS (
+                SELECT 1
+                FROM proc.bid_evaluation e
+                WHERE e.evaluation_id = bid_evaluation_score.evaluation_id
+                AND e.organization_id::text = current_setting('app.current_organization_id', true)
+            )
+        )
+        """
+    )
+
 
 def downgrade() -> None:
+    # Drop RLS policies
+    rls_tables = [
+        "vendor_prequalification",
+        "procurement_contract",
+        "bid_evaluation_score",
+        "bid_evaluation",
+        "quotation_response_line",
+        "quotation_response",
+        "rfq_invitation",
+        "request_for_quotation",
+        "purchase_requisition_line",
+        "purchase_requisition",
+        "procurement_plan_item",
+        "procurement_plan",
+    ]
+    for table in rls_tables:
+        op.execute(f"DROP POLICY IF EXISTS {table}_tenant_isolation ON proc.{table}")
+        op.execute(f"ALTER TABLE proc.{table} DISABLE ROW LEVEL SECURITY")
+
     # Drop tables in reverse order (respect foreign key dependencies)
     op.execute("DROP TABLE IF EXISTS proc.vendor_prequalification CASCADE")
     op.execute("DROP TABLE IF EXISTS proc.procurement_contract CASCADE")

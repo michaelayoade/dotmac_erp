@@ -1,0 +1,100 @@
+{% extends "finance/base_finance.html" %}
+
+{% block page_title %}New Virement{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex text-sm text-slate-500 dark:text-slate-400">
+    <a href="/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a>
+    <span class="mx-2">/</span>
+    <a href="/finance/ipsas/virements" class="hover:text-primary-600 dark:hover:text-primary-400">Virements</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-900 dark:text-white">New Virement</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-2xl">
+    <form method="POST" action="/finance/ipsas/virements/new" class="space-y-6">
+        <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800/50">
+            <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-6 font-display">Budget Transfer (Virement)</h3>
+
+            <div class="space-y-4">
+                <div>
+                    <label for="description" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Description</label>
+                    <input type="text" id="description" name="description" required maxlength="500"
+                           class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-white"
+                           placeholder="Transfer from Personnel to Capital Expenditure">
+                </div>
+
+                <!-- From -->
+                <div class="rounded-lg border border-slate-200 p-4 dark:border-slate-700">
+                    <p class="text-xs font-medium text-red-600 dark:text-red-400 mb-3">FROM (Source Appropriation)</p>
+                    <div>
+                        <label for="from_appropriation_id" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Source Appropriation</label>
+                        <select id="from_appropriation_id" name="from_appropriation_id" required
+                                class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-white">
+                            <option value="">Select...</option>
+                            {% for a in appropriations %}
+                            <option value="{{ a.appropriation_id }}">{{ a.appropriation_code }} - {{ a.appropriation_name }} ({{ "{:,.2f}".format(a.revised_amount) }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <!-- To -->
+                <div class="rounded-lg border border-slate-200 p-4 dark:border-slate-700">
+                    <p class="text-xs font-medium text-green-600 dark:text-green-400 mb-3">TO (Destination Appropriation)</p>
+                    <div>
+                        <label for="to_appropriation_id" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Destination Appropriation</label>
+                        <select id="to_appropriation_id" name="to_appropriation_id" required
+                                class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-white">
+                            <option value="">Select...</option>
+                            {% for a in appropriations %}
+                            <option value="{{ a.appropriation_id }}">{{ a.appropriation_code }} - {{ a.appropriation_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid gap-4 sm:grid-cols-2">
+                    <div>
+                        <label for="amount" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Amount</label>
+                        <input type="number" id="amount" name="amount" required step="0.01" min="0.01"
+                               class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-white">
+                    </div>
+                    <div>
+                        <label for="currency_code" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Currency</label>
+                        <input type="text" id="currency_code" name="currency_code" required maxlength="3" value="NGN"
+                               class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-white">
+                    </div>
+                </div>
+
+                <div>
+                    <label for="justification" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Justification</label>
+                    <textarea id="justification" name="justification" required rows="4"
+                              class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-white"
+                              placeholder="Provide justification for this budget transfer..."></textarea>
+                </div>
+
+                <div>
+                    <label for="approval_authority" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Approval Authority</label>
+                    <input type="text" id="approval_authority" name="approval_authority" maxlength="100"
+                           class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-white"
+                           placeholder="e.g. Permanent Secretary, Director of Finance">
+                </div>
+            </div>
+        </div>
+
+        <div class="flex justify-end gap-3">
+            <a href="/finance/ipsas/virements"
+               class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700">
+                Cancel
+            </a>
+            <button type="submit"
+                    class="rounded-lg bg-gradient-to-r from-primary-600 to-primary-500 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-primary-500/25 btn-hover">
+                Create Virement
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

@@ -9,7 +9,7 @@ from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.schemas.finance.ipsas import (
@@ -30,8 +30,8 @@ from app.schemas.finance.ipsas import (
     VirementCreate,
     VirementResponse,
 )
-from app.web.deps import (
-    get_db,
+from app.api.deps import (
+    _get_db as get_db,
     require_organization_id,
     require_tenant_auth,
     require_tenant_permission,
@@ -88,19 +88,21 @@ def create_fund(
 @router.get("/funds/{fund_id}", response_model=FundResponse)
 def get_fund(
     fund_id: UUID,
+    organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ipsas:funds:read")),
     db: Session = Depends(get_db),
 ):
     """Get a fund by ID."""
     from app.services.finance.ipsas.fund_service import FundService
 
-    return FundService(db).get_or_404(fund_id)
+    return FundService(db).get_or_404(fund_id, organization_id)
 
 
 @router.put("/funds/{fund_id}", response_model=FundResponse)
 def update_fund(
     fund_id: UUID,
     payload: FundUpdate,
+    organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ipsas:funds:update")),
     db: Session = Depends(get_db),
 ):
@@ -108,6 +110,7 @@ def update_fund(
     from app.services.finance.ipsas.fund_service import FundService
 
     svc = FundService(db)
+    svc.get_or_404(fund_id, organization_id)  # verify tenant ownership
     fund = svc.update(fund_id, payload)
     db.commit()
     return fund
@@ -117,13 +120,16 @@ def update_fund(
 def get_fund_balance(
     fund_id: UUID,
     fiscal_period_id: Optional[UUID] = None,
+    organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ipsas:funds:read")),
     db: Session = Depends(get_db),
 ):
     """Get aggregated balance for a fund."""
     from app.services.finance.ipsas.fund_service import FundService
 
-    balance = FundService(db).get_fund_balance(fund_id, fiscal_period_id)
+    svc = FundService(db)
+    svc.get_or_404(fund_id, organization_id)  # verify tenant ownership
+    balance = svc.get_fund_balance(fund_id, fiscal_period_id)
     return {"fund_id": str(fund_id), "balance": str(balance)}
 
 
@@ -177,13 +183,14 @@ def create_appropriation(
 @router.get("/appropriations/{appropriation_id}", response_model=AppropriationResponse)
 def get_appropriation(
     appropriation_id: UUID,
+    organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ipsas:appropriations:read")),
     db: Session = Depends(get_db),
 ):
     """Get an appropriation by ID."""
     from app.services.finance.ipsas.appropriation_service import AppropriationService
 
-    return AppropriationService(db).get_or_404(appropriation_id)
+    return AppropriationService(db).get_or_404(appropriation_id, organization_id)
 
 
 @router.post(
@@ -191,6 +198,7 @@ def get_appropriation(
 )
 def approve_appropriation(
     appropriation_id: UUID,
+    organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ipsas:appropriations:approve")),
     db: Session = Depends(get_db),
 ):
@@ -198,7 +206,11 @@ def approve_appropriation(
     from app.services.finance.ipsas.appropriation_service import AppropriationService
 
     svc = AppropriationService(db)
-    user_id = UUID(auth["person_id"]) if auth.get("person_id") else appropriation_id
+    svc.get_or_404(appropriation_id, organization_id)  # verify tenant ownership
+    person_id = auth.get("person_id")
+    if not person_id:
+        raise HTTPException(status_code=400, detail="Missing person_id")
+    user_id = UUID(person_id)
     approp = svc.approve(appropriation_id, user_id)
     db.commit()
     return approp
@@ -210,21 +222,20 @@ def approve_appropriation(
 )
 def get_appropriation_available_balance(
     appropriation_id: UUID,
+    organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ipsas:appropriations:read")),
     db: Session = Depends(get_db),
 ):
     """Get available balance for an appropriation."""
+    from app.services.finance.ipsas.appropriation_service import AppropriationService
     from app.services.finance.ipsas.available_balance_service import (
         AvailableBalanceService,
     )
 
-    svc = AvailableBalanceService(db)
-    approp_svc_mod = __import__(
-        "app.services.finance.ipsas.appropriation_service",
-        fromlist=["AppropriationService"],
+    AppropriationService(db).get_or_404(appropriation_id, organization_id)
+    return AvailableBalanceService(db).calculate(
+        organization_id, appropriation_id=appropriation_id
     )
-    approp = approp_svc_mod.AppropriationService(db).get_or_404(appropriation_id)
-    return svc.calculate(approp.organization_id, appropriation_id=appropriation_id)
 
 
 # =============================================================================
@@ -293,13 +304,14 @@ def list_commitments(
 @router.get("/commitments/{commitment_id}", response_model=CommitmentResponse)
 def get_commitment(
     commitment_id: UUID,
+    organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ipsas:commitments:read")),
     db: Session = Depends(get_db),
 ):
     """Get a commitment by ID."""
     from app.services.finance.ipsas.commitment_service import CommitmentService
 
-    return CommitmentService(db).get_or_404(commitment_id)
+    return CommitmentService(db).get_or_404(commitment_id, organization_id)
 
 
 @router.post(
@@ -345,13 +357,16 @@ def create_commitment_from_po(
 def obligate_commitment(
     commitment_id: UUID,
     amount: Decimal = Query(...),
+    organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ipsas:commitments:update")),
     db: Session = Depends(get_db),
 ):
     """Record obligation against a commitment."""
     from app.services.finance.ipsas.commitment_service import CommitmentService
 
-    commitment = CommitmentService(db).record_obligation(commitment_id, amount)
+    svc = CommitmentService(db)
+    svc.get_or_404(commitment_id, organization_id)  # verify tenant ownership
+    commitment = svc.record_obligation(commitment_id, amount)
     db.commit()
     return commitment
 
@@ -360,13 +375,16 @@ def obligate_commitment(
 def expend_commitment(
     commitment_id: UUID,
     amount: Decimal = Query(...),
+    organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ipsas:commitments:update")),
     db: Session = Depends(get_db),
 ):
     """Record expenditure against a commitment."""
     from app.services.finance.ipsas.commitment_service import CommitmentService
 
-    commitment = CommitmentService(db).record_expenditure(commitment_id, amount)
+    svc = CommitmentService(db)
+    svc.get_or_404(commitment_id, organization_id)  # verify tenant ownership
+    commitment = svc.record_expenditure(commitment_id, amount)
     db.commit()
     return commitment
 
@@ -375,13 +393,16 @@ def expend_commitment(
 def cancel_commitment(
     commitment_id: UUID,
     amount: Optional[Decimal] = None,
+    organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ipsas:commitments:update")),
     db: Session = Depends(get_db),
 ):
     """Cancel a commitment (full or partial)."""
     from app.services.finance.ipsas.commitment_service import CommitmentService
 
-    commitment = CommitmentService(db).cancel_commitment(commitment_id, amount)
+    svc = CommitmentService(db)
+    svc.get_or_404(commitment_id, organization_id)  # verify tenant ownership
+    commitment = svc.cancel_commitment(commitment_id, amount)
     db.commit()
     return commitment
 
@@ -435,6 +456,7 @@ def create_virement(
 @router.post("/virements/{virement_id}/approve", response_model=VirementResponse)
 def approve_virement(
     virement_id: UUID,
+    organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ipsas:virements:approve")),
     db: Session = Depends(get_db),
 ):
@@ -442,7 +464,11 @@ def approve_virement(
     from app.services.finance.ipsas.virement_service import VirementService
 
     svc = VirementService(db)
-    user_id = UUID(auth["person_id"]) if auth.get("person_id") else virement_id
+    svc.get_or_404(virement_id, organization_id)  # verify tenant ownership
+    person_id = auth.get("person_id")
+    if not person_id:
+        raise HTTPException(status_code=400, detail="Missing person_id")
+    user_id = UUID(person_id)
     virement = svc.approve(virement_id, user_id)
     db.commit()
     return virement
@@ -451,13 +477,16 @@ def approve_virement(
 @router.post("/virements/{virement_id}/apply", response_model=VirementResponse)
 def apply_virement(
     virement_id: UUID,
+    organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ipsas:virements:approve")),
     db: Session = Depends(get_db),
 ):
     """Apply an approved virement."""
     from app.services.finance.ipsas.virement_service import VirementService
 
-    virement = VirementService(db).apply(virement_id)
+    svc = VirementService(db)
+    svc.get_or_404(virement_id, organization_id)  # verify tenant ownership
+    virement = svc.apply(virement_id)
     db.commit()
     return virement
 
@@ -496,6 +525,12 @@ def get_financial_position(
     """Generate IPSAS 1 Statement of Financial Position."""
     from app.services.finance.ipsas.ipsas_statement_service import IPSASStatementService
 
+    if fund_id is not None:
+        raise HTTPException(
+            status_code=400,
+            detail="Fund-level IPSAS statements are not supported yet.",
+        )
+
     return IPSASStatementService(db).generate_financial_position(
         organization_id, fiscal_period_id, fund_id=fund_id
     )
@@ -511,6 +546,12 @@ def get_financial_performance(
 ):
     """Generate IPSAS 1 Statement of Financial Performance."""
     from app.services.finance.ipsas.ipsas_statement_service import IPSASStatementService
+
+    if fund_id is not None:
+        raise HTTPException(
+            status_code=400,
+            detail="Fund-level IPSAS statements are not supported yet.",
+        )
 
     return IPSASStatementService(db).generate_financial_performance(
         organization_id, fiscal_period_id, fund_id=fund_id
@@ -542,6 +583,12 @@ def get_cash_flow(
 ):
     """Generate IPSAS 2 Cash Flow Statement."""
     from app.services.finance.ipsas.ipsas_statement_service import IPSASStatementService
+
+    if fund_id is not None:
+        raise HTTPException(
+            status_code=400,
+            detail="Fund-level IPSAS statements are not supported yet.",
+        )
 
     return IPSASStatementService(db).generate_cash_flow(
         organization_id, fiscal_period_id, fund_id=fund_id

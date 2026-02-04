@@ -8,7 +8,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_organization_id
+from app.api.deps import require_organization_id, require_tenant_auth
 from app.db import SessionLocal
 from app.schemas.procurement.procurement_plan import (
     ProcurementPlanCreate,
@@ -70,12 +70,17 @@ def get_plan(
 def create_plan(
     data: ProcurementPlanCreate,
     organization_id: UUID = Depends(require_organization_id),
+    auth: dict = Depends(require_tenant_auth),
     db: Session = Depends(get_db),
 ):
     """Create a new procurement plan."""
     service = ProcurementPlanService(db)
+    person_id = auth.get("person_id")
+    if not person_id:
+        raise HTTPException(status_code=400, detail="Missing person_id")
+    user_id = UUID(person_id)
     try:
-        plan = service.create(organization_id, data, organization_id)
+        plan = service.create(organization_id, data, user_id)
         db.commit()
         return ProcurementPlanResponse.model_validate(plan)
     except ValidationError as e:
@@ -123,12 +128,17 @@ def submit_plan(
 def approve_plan(
     plan_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
+    auth: dict = Depends(require_tenant_auth),
     db: Session = Depends(get_db),
 ):
     """Approve a procurement plan."""
     service = ProcurementPlanService(db)
+    person_id = auth.get("person_id")
+    if not person_id:
+        raise HTTPException(status_code=400, detail="Missing person_id")
+    user_id = UUID(person_id)
     try:
-        plan = service.approve(organization_id, plan_id, organization_id)
+        plan = service.approve(organization_id, plan_id, user_id)
         db.commit()
         return ProcurementPlanResponse.model_validate(plan)
     except NotFoundError as e:

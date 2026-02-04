@@ -17,6 +17,9 @@ def list_response(items: list, limit: int, offset: int, total: int | None = None
     return {"items": items, "total": actual_total, "limit": limit, "offset": offset}
 
 
+from typing import Callable, ClassVar, Any
+
+
 class ListResponseMixin:
     """Mixin providing standardized list response methods.
 
@@ -24,6 +27,9 @@ class ListResponseMixin:
     - list(db, ..., limit, offset) -> list: Returns paginated items
     - count(db, ...) -> int: Returns total count (optional but recommended)
     """
+
+    list: ClassVar[Callable[..., list[Any]]]
+    count: ClassVar[Callable[..., int]]
 
     @classmethod
     def list_response(cls, db, *args, **kwargs):

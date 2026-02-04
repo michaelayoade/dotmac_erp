@@ -8,7 +8,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_organization_id
+from app.api.deps import require_organization_id, require_tenant_auth
 from app.db import SessionLocal
 from app.schemas.procurement.contract import (
     ContractCreate,
@@ -66,12 +66,17 @@ def get_contract(
 def create_contract(
     data: ContractCreate,
     organization_id: UUID = Depends(require_organization_id),
+    auth: dict = Depends(require_tenant_auth),
     db: Session = Depends(get_db),
 ):
     """Create a new procurement contract."""
     service = ContractService(db)
+    person_id = auth.get("person_id")
+    if not person_id:
+        raise HTTPException(status_code=400, detail="Missing person_id")
+    user_id = UUID(person_id)
     try:
-        contract = service.create(organization_id, data, organization_id)
+        contract = service.create(organization_id, data, user_id)
         db.commit()
         return ContractResponse.model_validate(contract)
     except ValidationError as e:

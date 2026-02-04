@@ -8,7 +8,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_organization_id
+from app.api.deps import require_organization_id, require_tenant_auth
 from app.db import SessionLocal
 from app.schemas.procurement.requisition import (
     RequisitionCreate,
@@ -68,12 +68,17 @@ def get_requisition(
 def create_requisition(
     data: RequisitionCreate,
     organization_id: UUID = Depends(require_organization_id),
+    auth: dict = Depends(require_tenant_auth),
     db: Session = Depends(get_db),
 ):
     """Create a new requisition."""
     service = RequisitionService(db)
+    person_id = auth.get("person_id")
+    if not person_id:
+        raise HTTPException(status_code=400, detail="Missing person_id")
+    user_id = UUID(person_id)
     try:
-        req = service.create(organization_id, data, organization_id)
+        req = service.create(organization_id, data, user_id)
         db.commit()
         return RequisitionResponse.model_validate(req)
     except ValidationError as e:
@@ -121,12 +126,17 @@ def submit_requisition(
 def verify_budget(
     requisition_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
+    auth: dict = Depends(require_tenant_auth),
     db: Session = Depends(get_db),
 ):
     """Verify budget for a requisition."""
     service = RequisitionService(db)
+    person_id = auth.get("person_id")
+    if not person_id:
+        raise HTTPException(status_code=400, detail="Missing person_id")
+    user_id = UUID(person_id)
     try:
-        req = service.verify_budget(organization_id, requisition_id, organization_id)
+        req = service.verify_budget(organization_id, requisition_id, user_id)
         db.commit()
         return RequisitionResponse.model_validate(req)
     except NotFoundError as e:
@@ -139,12 +149,17 @@ def verify_budget(
 def approve_requisition(
     requisition_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
+    auth: dict = Depends(require_tenant_auth),
     db: Session = Depends(get_db),
 ):
     """Approve a requisition."""
     service = RequisitionService(db)
+    person_id = auth.get("person_id")
+    if not person_id:
+        raise HTTPException(status_code=400, detail="Missing person_id")
+    user_id = UUID(person_id)
     try:
-        req = service.approve(organization_id, requisition_id, organization_id)
+        req = service.approve(organization_id, requisition_id, user_id)
         db.commit()
         return RequisitionResponse.model_validate(req)
     except NotFoundError as e:
