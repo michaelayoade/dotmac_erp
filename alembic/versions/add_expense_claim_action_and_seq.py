@@ -50,9 +50,9 @@ def upgrade() -> None:
     op.execute(
         "SELECT setval("
         "'expense.expense_claim_number_seq', "
-        "COALESCE((SELECT MAX(CAST(split_part(claim_number, '-', 3) AS INTEGER)) "
+        "GREATEST(1, COALESCE((SELECT MAX(CAST(split_part(claim_number, '-', 3) AS INTEGER)) "
         "FROM expense.expense_claim "
-        "WHERE claim_number ~ '^EXP-[0-9]{4}-[0-9]+$'), 0)"
+        "WHERE claim_number ~ '^EXP-[0-9]{4}-[0-9]+$'), 1))"
         ")"
     )
 
