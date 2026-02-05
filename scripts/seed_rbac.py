@@ -170,8 +170,6 @@ FINANCE_PERMISSIONS = [
     ("ap:payment_batches:approve", "Approve payment batches"),
     ("ap:payment_batches:process", "Process approved batches"),
     ("ap:payment_batches:export", "Generate bank files"),
-    ("ap:payment_batches:create", "Create payment batches"),
-    ("ap:payment_batches:approve", "Approve payment batches"),
 
     ("ap:aging:read", "View AP aging reports"),
 
