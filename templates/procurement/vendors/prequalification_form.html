@@ -1,0 +1,87 @@
+{% extends "procurement/base_procurement.html" %}
+
+{% block page_title %}Prequalify Vendor{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+    <a href="/procurement" class="hover:text-amber-600 transition-colors">Procurement</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+    <a href="/procurement/vendors/prequalification" class="hover:text-amber-600 transition-colors">Prequalification</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+    <span class="font-medium text-slate-900 dark:text-white">New</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    {% if error %}
+    <div class="card border border-rose-200 bg-rose-50 text-rose-900 dark:border-rose-900/40 dark:bg-rose-900/20 dark:text-rose-100 p-4 text-sm">
+        {{ error }}
+    </div>
+    {% endif %}
+    <div class="card p-6">
+        <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Prequalify Vendor</h2>
+        <form method="post" action="/procurement/vendors/prequalification" class="space-y-5">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Supplier</label>
+                    <select name="supplier_id" class="form-select" required>
+                        <option value="">Select supplier</option>
+                        {% for supplier in suppliers %}
+                        <option value="{{ supplier.supplier_id }}">
+                            {{ supplier.trading_name or supplier.legal_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Application Date</label>
+                    <input type="date" name="application_date" class="input-field" required>
+                </div>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Categories</label>
+                <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {% for category in prequalification_categories %}
+                    <label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                        <input type="checkbox" name="categories" value="{{ category }}" class="form-checkbox">
+                        {{ category }}
+                    </label>
+                    {% endfor %}
+                </div>
+                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Optional. Select all categories that apply.</p>
+            </div>
+            <div>
+                <h3 class="text-sm font-semibold text-slate-900 dark:text-white mb-2">Compliance Checklist</h3>
+                <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                    <input type="checkbox" name="documents_verified" class="form-checkbox">
+                    Documents verified
+                </label>
+                <label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                    <input type="checkbox" name="tax_clearance_valid" class="form-checkbox">
+                    Tax clearance valid
+                </label>
+                <label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                    <input type="checkbox" name="pension_compliance" class="form-checkbox">
+                    Pension compliance
+                </label>
+                <label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                    <input type="checkbox" name="itf_compliance" class="form-checkbox">
+                    ITF compliance
+                </label>
+                <label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                    <input type="checkbox" name="nsitf_compliance" class="form-checkbox">
+                    NSITF compliance
+                </label>
+                </div>
+            </div>
+            <div class="flex items-center gap-3">
+                <a href="/procurement/vendors/prequalification" class="btn btn-secondary">Cancel</a>
+                <button type="submit" class="btn btn-primary">Create Prequalification</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

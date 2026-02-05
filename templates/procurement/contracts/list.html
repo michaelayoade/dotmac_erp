@@ -11,6 +11,18 @@
 {% endblock %}
 
 {% block header_actions %}
+<button type="button" class="btn btn-secondary" onclick="document.getElementById('proc-contract-import-modal').classList.remove('hidden')">
+    <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1M12 12l4-4m-4 4l-4-4m4 4V4"/>
+    </svg>
+    Import
+</button>
+<button type="button" class="btn btn-secondary" onclick="document.getElementById('proc-contract-export-modal').classList.remove('hidden')">
+    <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1M12 12l4 4m-4-4l-4 4m4-4V4"/>
+    </svg>
+    Export
+</button>
 <a href="/procurement/contracts/new" class="btn btn-primary">
     <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
     New Contract
@@ -19,6 +31,17 @@
 
 {% block content %}
 <div class="space-y-4 stagger-in">
+    {% if success %}
+    <div class="card border border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900/40 dark:bg-emerald-900/20 dark:text-emerald-100 p-4 text-sm">
+        {{ success }}
+    </div>
+    {% endif %}
+    {% if error %}
+    <div class="card border border-rose-200 bg-rose-50 text-rose-900 dark:border-rose-900/40 dark:bg-rose-900/20 dark:text-rose-100 p-4 text-sm">
+        {{ error }}
+    </div>
+    {% endif %}
+
     <!-- Filters -->
     <div class="card p-4">
         <form method="get" class="flex flex-wrap gap-3 items-end">
@@ -93,6 +116,95 @@
             </div>
         </div>
         {% endif %}
+    </div>
+</div>
+
+<!-- Import Modal -->
+<div id="proc-contract-import-modal" class="hidden fixed inset-0 z-50 overflow-y-auto" aria-modal="true" role="dialog">
+    <div class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm" onclick="document.getElementById('proc-contract-import-modal').classList.add('hidden')"></div>
+    <div class="relative mx-auto my-10 w-full max-w-2xl bg-white dark:bg-slate-800 rounded-xl shadow-2xl p-6">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Import Contracts</h3>
+            <button type="button" class="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300" onclick="document.getElementById('proc-contract-import-modal').classList.add('hidden')">
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+        </div>
+        <p class="text-sm text-slate-600 dark:text-slate-400 mb-6">
+            Upload a CSV or XLSX file. Required columns: contract_number, title, supplier_id, contract_date, start_date, end_date, contract_value.
+        </p>
+        <form method="post" action="/procurement/contracts/import" enctype="multipart/form-data" class="space-y-4">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                    <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Format</label>
+                    <select name="format" id="proc-contract-import-format" class="form-select text-sm" onchange="document.getElementById('proc-contract-template-link').href = '/procurement/contracts/template?format=' + this.value;">
+                        <option value="csv">CSV</option>
+                        {% if xlsx_available %}
+                        <option value="xlsx">XLSX</option>
+                        {% endif %}
+                    </select>
+                </div>
+                <div class="flex items-end">
+                    <a id="proc-contract-template-link" href="/procurement/contracts/template?format=csv" class="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300">
+                        Download template
+                    </a>
+                </div>
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">File</label>
+                <input type="file" name="file" accept=".csv{% if xlsx_available %},.xlsx{% endif %}" class="form-input text-sm" required>
+            </div>
+            <div class="flex items-center justify-end gap-2">
+                <button type="button" class="btn btn-secondary" onclick="document.getElementById('proc-contract-import-modal').classList.add('hidden')">Cancel</button>
+                <button type="submit" class="btn btn-primary">Import Contracts</button>
+            </div>
+        </form>
+        <div class="mt-4 text-xs text-slate-500 dark:text-slate-400">
+            Optional columns: rfq_id, evaluation_id, currency_code, bpp_clearance_number, bpp_clearance_date, payment_terms, terms_and_conditions, performance_bond_required, performance_bond_amount, retention_percentage.
+        </div>
+    </div>
+</div>
+
+<!-- Export Modal -->
+<div id="proc-contract-export-modal" class="hidden fixed inset-0 z-50 overflow-y-auto" aria-modal="true" role="dialog">
+    <div class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm" onclick="document.getElementById('proc-contract-export-modal').classList.add('hidden')"></div>
+    <div class="relative mx-auto my-10 w-full max-w-xl bg-white dark:bg-slate-800 rounded-xl shadow-2xl p-6">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Export Contracts</h3>
+            <button type="button" class="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300" onclick="document.getElementById('proc-contract-export-modal').classList.add('hidden')">
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+        </div>
+        <p class="text-sm text-slate-600 dark:text-slate-400 mb-6">
+            Export the current list (including filters) as CSV or XLSX.
+        </p>
+        <form method="get" action="/procurement/contracts/export" class="space-y-4">
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                    <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Format</label>
+                    <select name="format" class="form-select text-sm">
+                        <option value="csv">CSV</option>
+                        {% if xlsx_available %}
+                        <option value="xlsx">XLSX</option>
+                        {% endif %}
+                    </select>
+                </div>
+                <div class="flex items-end text-xs text-slate-500 dark:text-slate-400">
+                    Includes contract metadata only.
+                </div>
+            </div>
+            {% if filter_status %}
+            <input type="hidden" name="status" value="{{ filter_status }}">
+            {% endif %}
+            <div class="flex items-center justify-end gap-2">
+                <button type="button" class="btn btn-secondary" onclick="document.getElementById('proc-contract-export-modal').classList.add('hidden')">Cancel</button>
+                <button type="submit" class="btn btn-primary">Export</button>
+            </div>
+        </form>
     </div>
 </div>
 {% endblock %}

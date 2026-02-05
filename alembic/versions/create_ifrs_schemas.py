@@ -57,6 +57,28 @@ SCHEMAS = [
 
 def upgrade() -> None:
     bind = op.get_bind()
+
+    # Ensure schemas exist before creating schema-qualified enums.
+    for stmt in [
+        "CREATE SCHEMA IF NOT EXISTS ap;",
+        "CREATE SCHEMA IF NOT EXISTS ar;",
+        "CREATE SCHEMA IF NOT EXISTS audit;",
+        "CREATE SCHEMA IF NOT EXISTS banking;",
+        "CREATE SCHEMA IF NOT EXISTS cons;",
+        "CREATE SCHEMA IF NOT EXISTS core_config;",
+        "CREATE SCHEMA IF NOT EXISTS core_fx;",
+        "CREATE SCHEMA IF NOT EXISTS core_org;",
+        "CREATE SCHEMA IF NOT EXISTS fa;",
+        "CREATE SCHEMA IF NOT EXISTS fin_inst;",
+        "CREATE SCHEMA IF NOT EXISTS gl;",
+        "CREATE SCHEMA IF NOT EXISTS inv;",
+        "CREATE SCHEMA IF NOT EXISTS lease;",
+        "CREATE SCHEMA IF NOT EXISTS platform;",
+        "CREATE SCHEMA IF NOT EXISTS rpt;",
+        "CREATE SCHEMA IF NOT EXISTS tax;",
+    ]:
+        op.execute(stmt)
+
     enum_definitions = [
         ("account_type", ("CONTROL", "POSTING", "STATISTICAL"), None),
         ("ap_batch_status", ("DRAFT", "APPROVED", "PROCESSING", "COMPLETED", "FAILED"), None),

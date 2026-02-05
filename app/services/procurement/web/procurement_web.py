@@ -293,6 +293,7 @@ class ProcurementWebService:
         self,
         organization_id: UUID,
         status: Optional[str] = None,
+        procurement_method: Optional[str] = None,
         offset: int = 0,
         limit: int = 25,
     ) -> Dict[str, Any]:
@@ -301,6 +302,7 @@ class ProcurementWebService:
         rfqs, total = service.list_rfqs(
             organization_id,
             status=status,
+            procurement_method=procurement_method,
             offset=offset,
             limit=limit,
         )
@@ -310,8 +312,10 @@ class ProcurementWebService:
             "offset": offset,
             "limit": limit,
             "filter_status": status,
+            "filter_method": procurement_method,
             "status_labels": RFQ_STATUS_LABELS,
             "rfq_statuses": list(RFQStatus),
+            "procurement_methods": list(ProcurementMethod),
         }
 
     def rfq_detail_context(
@@ -623,4 +627,26 @@ class ProcurementWebService:
             "qualification_scores": qualification_scores,
             "past_contracts": [],
             "status_labels": PREQUALIFICATION_STATUS_LABELS,
+        }
+
+    def prequalification_form_context(self, organization_id: UUID) -> Dict[str, Any]:
+        """Build context for prequalification create form."""
+        from app.models.finance.ap.supplier import Supplier
+
+        suppliers = self.db.scalars(
+            select(Supplier).order_by(Supplier.legal_name.asc()).limit(200)
+        ).all()
+        return {
+            "suppliers": suppliers,
+            "prequalification_categories": [
+                "Goods",
+                "Works",
+                "Services",
+                "Consulting",
+                "ICT",
+                "Construction",
+                "Logistics",
+                "Facilities",
+                "Professional Services",
+            ],
         }

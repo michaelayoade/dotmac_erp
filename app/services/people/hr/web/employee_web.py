@@ -6,7 +6,7 @@ Provides view-focused data and operations for HR web routes.
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation
 from typing import Any, Optional
 from uuid import UUID
@@ -16,7 +16,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
-from app.models.auth import UserCredential
+from app.models.auth import Session as AuthSession, SessionStatus, UserCredential
 from app.models.finance.core_org.cost_center import CostCenter
 from app.models.finance.core_org.location import Location
 from app.models.people.hr import (
@@ -719,6 +719,77 @@ class HRWebService:
             "error": "Please provide a valid termination date.",
         })
         return templates.TemplateResponse(request, "people/hr/employee_detail.html", context)
+
+    async def toggle_user_credential_response(
+        self,
+        request: Request,
+        employee_id: UUID,
+        credential_id: UUID,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> RedirectResponse | HTMLResponse:
+        """Enable/disable a user credential linked to an employee."""
+        form = getattr(request.state, "csrf_form", None)
+        if form is None:
+            form = await request.form()
+
+        org_id = coerce_uuid(auth.organization_id)
+        svc = EmployeeService(db, org_id)
+        employee = svc.get_employee(employee_id)
+
+        if not employee.person_id:
+            context = self._employee_detail_context(request, auth, db, employee)
+            context.update({
+                "employee": employee,
+                "error": "This employee is not linked to a user account.",
+            })
+            return templates.TemplateResponse(request, "people/hr/employee_detail.html", context)
+
+        credential = (
+            db.query(UserCredential)
+            .filter(UserCredential.id == credential_id)
+            .filter(UserCredential.person_id == employee.person_id)
+            .first()
+        )
+        if not credential:
+            context = self._employee_detail_context(request, auth, db, employee)
+            context.update({
+                "employee": employee,
+                "error": "User credential not found for this employee.",
+            })
+            return templates.TemplateResponse(request, "people/hr/employee_detail.html", context)
+
+        credential.is_active = not bool(credential.is_active)
+
+        # If disabling, revoke active sessions for immediate lockout.
+        if not credential.is_active:
+            now = datetime.now(timezone.utc)
+            active_sessions = (
+                db.query(AuthSession)
+                .filter(AuthSession.person_id == employee.person_id)
+                .filter(AuthSession.status == SessionStatus.active)
+                .filter(AuthSession.revoked_at.is_(None))
+                .filter(AuthSession.expires_at > now)
+                .all()
+            )
+            session_ids = [s.id for s in active_sessions]
+            for session in active_sessions:
+                session.status = SessionStatus.revoked
+                session.revoked_at = now
+
+            db.commit()
+
+            if session_ids:
+                from app.services.auth_dependencies import invalidate_session_cache
+                for session_id in session_ids:
+                    invalidate_session_cache(session_id)
+        else:
+            db.commit()
+
+        return RedirectResponse(
+            url=f"/people/hr/employees/{employee_id}?saved=1",
+            status_code=303,
+        )
 
     def _employee_detail_context(
         self,

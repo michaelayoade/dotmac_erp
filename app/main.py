@@ -389,7 +389,8 @@ _include_api_router(crm_webhook_router)
 _include_api_router(crm_sync_router)
 
 # Public Careers Portal (no authentication required)
-_include_api_router(careers_api_router)  # API endpoints
+# Serve API under /api/v1 to avoid clashing with web UI routes.
+app.include_router(careers_api_router, prefix="/api/v1")  # API endpoints
 app.include_router(careers_web_router)  # Web UI routes
 
 # Public Onboarding Self-Service Portal (token-based auth, no login required)

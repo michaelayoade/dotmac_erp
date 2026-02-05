@@ -55,22 +55,12 @@ def upgrade() -> None:
         ),
         sa.Column(
             "change_type",
-            sa.Enum(
-                "BANK_DETAILS", "TAX_INFO", "PENSION_INFO", "NHF_INFO", "COMBINED",
-                name="info_change_type",
-                schema="hr",
-                create_type=False,
-            ),
+            info_change_type,
             nullable=False,
         ),
         sa.Column(
             "status",
-            sa.Enum(
-                "PENDING", "APPROVED", "REJECTED", "CANCELLED", "EXPIRED",
-                name="info_change_status",
-                schema="hr",
-                create_type=False,
-            ),
+            info_change_status,
             nullable=False,
             server_default="PENDING",
         ),

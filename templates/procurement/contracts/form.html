@@ -1,0 +1,101 @@
+{% extends "procurement/base_procurement.html" %}
+
+{% block page_title %}New Contract{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+    <a href="/procurement" class="hover:text-amber-600 transition-colors">Procurement</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+    <a href="/procurement/contracts" class="hover:text-amber-600 transition-colors">Contracts</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+    <span class="font-medium text-slate-900 dark:text-white">New</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl stagger-in">
+    <div class="card p-6">
+        <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Create Procurement Contract</h2>
+        <form method="post" class="space-y-4">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Contract Number</label>
+                    <input type="text" name="contract_number" required class="input-field" placeholder="CTR-2026-001">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Supplier ID</label>
+                    <input type="text" name="supplier_id" required class="input-field" placeholder="Supplier UUID">
+                </div>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Title</label>
+                <input type="text" name="title" required class="input-field" placeholder="Supply of Office Equipment">
+            </div>
+            <div class="grid grid-cols-3 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Contract Date</label>
+                    <input type="date" name="contract_date" required class="input-field">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Start Date</label>
+                    <input type="date" name="start_date" required class="input-field">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">End Date</label>
+                    <input type="date" name="end_date" required class="input-field">
+                </div>
+            </div>
+            <div class="grid grid-cols-3 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Contract Value</label>
+                    <input type="number" step="0.01" name="contract_value" required class="input-field" placeholder="0.00">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Currency</label>
+                    <input type="text" name="currency_code" class="input-field" placeholder="{{ default_currency_code }}">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Retention %</label>
+                    <input type="number" step="0.01" name="retention_percentage" class="input-field" placeholder="0.00">
+                </div>
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">BPP Clearance Number</label>
+                    <input type="text" name="bpp_clearance_number" class="input-field" placeholder="BPP-0001">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">BPP Clearance Date</label>
+                    <input type="date" name="bpp_clearance_date" class="input-field">
+                </div>
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Performance Bond</label>
+                    <div class="flex items-center gap-2">
+                        <input type="checkbox" name="performance_bond_required" class="h-4 w-4 text-amber-600">
+                        <span class="text-sm text-slate-600 dark:text-slate-400">Required</span>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Bond Amount</label>
+                    <input type="number" step="0.01" name="performance_bond_amount" class="input-field" placeholder="0.00">
+                </div>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Payment Terms</label>
+                <textarea name="payment_terms" rows="3" class="input-field" placeholder="Specify payment schedule or terms..."></textarea>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Terms and Conditions</label>
+                <textarea name="terms_and_conditions" rows="4" class="input-field" placeholder="Add contract terms and conditions..."></textarea>
+            </div>
+            <div class="flex justify-end gap-3 pt-4">
+                <a href="/procurement/contracts" class="btn btn-secondary">Cancel</a>
+                <button type="submit" class="btn btn-primary">Create Contract</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

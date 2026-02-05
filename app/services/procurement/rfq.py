@@ -11,7 +11,7 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models.procurement.enums import RFQStatus
+from app.models.procurement.enums import ProcurementMethod, RFQStatus
 from app.models.procurement.rfq import RequestForQuotation
 from app.models.procurement.rfq_invitation import RFQInvitation
 from app.schemas.procurement.rfq import RFQCreate, RFQUpdate
@@ -43,6 +43,7 @@ class RFQService:
         organization_id: UUID,
         *,
         status: Optional[str] = None,
+        procurement_method: Optional[str] = None,
         offset: int = 0,
         limit: int = 25,
     ) -> Tuple[List[RequestForQuotation], int]:
@@ -51,7 +52,21 @@ class RFQService:
             RequestForQuotation.organization_id == organization_id,
         )
         if status:
-            base = base.where(RequestForQuotation.status == RFQStatus(status))
+            try:
+                status_enum = RFQStatus(status)
+            except ValueError:
+                status_enum = None
+            if status_enum:
+                base = base.where(RequestForQuotation.status == status_enum)
+        if procurement_method:
+            try:
+                method_enum = ProcurementMethod(procurement_method)
+            except ValueError:
+                method_enum = None
+            if method_enum:
+                base = base.where(
+                    RequestForQuotation.procurement_method == method_enum,
+                )
 
         total = self.db.scalar(select(func.count()).select_from(base.subquery()))
         items = list(

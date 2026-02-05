@@ -17,26 +17,33 @@ depends_on = None
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    columns = {col["name"] for col in inspector.get_columns("organization", schema="core_org")}
+    indexes = {idx["name"] for idx in inspector.get_indexes("organization", schema="core_org")}
+
     # Add slug column to organization table
-    op.add_column(
-        "organization",
-        sa.Column(
-            "slug",
-            sa.String(50),
-            nullable=True,
-            comment="URL-safe identifier for public pages like careers portal",
-        ),
-        schema="core_org",
-    )
+    if "slug" not in columns:
+        op.add_column(
+            "organization",
+            sa.Column(
+                "slug",
+                sa.String(50),
+                nullable=True,
+                comment="URL-safe identifier for public pages like careers portal",
+            ),
+            schema="core_org",
+        )
     # Create unique index on slug
-    op.create_index(
-        "ix_core_org_organization_slug",
-        "organization",
-        ["slug"],
-        unique=True,
-        schema="core_org",
-        postgresql_where=sa.text("slug IS NOT NULL"),
-    )
+    if "ix_core_org_organization_slug" not in indexes:
+        op.create_index(
+            "ix_core_org_organization_slug",
+            "organization",
+            ["slug"],
+            unique=True,
+            schema="core_org",
+            postgresql_where=sa.text("slug IS NOT NULL"),
+        )
 
 
 def downgrade() -> None:

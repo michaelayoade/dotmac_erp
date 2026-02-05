@@ -81,6 +81,20 @@ class CareersService:
             Organization.slug == slug,
             Organization.is_active == True,
         )
+        org = self.db.scalar(stmt)
+        if org:
+            return org
+
+        # Allow UUIDs in the public URL to resolve by organization_id.
+        try:
+            org_id = uuid.UUID(str(slug))
+        except (ValueError, TypeError):
+            return None
+
+        stmt = select(Organization).where(
+            Organization.organization_id == org_id,
+            Organization.is_active == True,
+        )
         return self.db.scalar(stmt)
 
     def list_open_jobs(
@@ -435,7 +449,9 @@ class CareersService:
         self.db.flush()
 
         # Build verification URL
-        verification_url = f"{settings.app_url}/careers/{org.slug}/status/{token}"
+        verification_url = (
+            f"{settings.app_url}/careers/{self._public_org_identifier(org)}/status/{token}"
+        )
 
         # Send verification email
         self.notification_service.send_status_verification_email(
@@ -517,6 +533,10 @@ class CareersService:
         }
         return status_labels.get(status, status.value.replace("_", " ").title())
 
+    def _public_org_identifier(self, org: Organization) -> str:
+        """Return slug if present, else fallback to organization_id for public URLs."""
+        return org.slug or str(org.organization_id)
+
     def send_application_confirmation(
         self, applicant: JobApplicant, org: Organization
     ) -> bool:
@@ -537,5 +557,5 @@ class CareersService:
             job_title=applicant.job_opening.job_title if applicant.job_opening else "Position",
             application_number=applicant.application_number,
             org_name=org.legal_name or org.trading_name or "Our Company",
-            org_slug=org.slug or "",
+            org_slug=self._public_org_identifier(org),
         )

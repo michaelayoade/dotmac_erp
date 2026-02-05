@@ -11,7 +11,7 @@
 {% endblock %}
 
 {% block header_actions %}
-<a href="/procurement/vendors/prequalify" class="btn btn-primary">
+<a href="/procurement/vendors/prequalification/new" class="btn btn-primary">
     <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
     Prequalify Vendor
 </a>
@@ -19,6 +19,17 @@
 
 {% block content %}
 <div class="space-y-4 stagger-in">
+    {% if success %}
+    <div class="card border border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900/40 dark:bg-emerald-900/20 dark:text-emerald-100 p-4 text-sm">
+        {{ success }}
+    </div>
+    {% endif %}
+    {% if error %}
+    <div class="card border border-rose-200 bg-rose-50 text-rose-900 dark:border-rose-900/40 dark:bg-rose-900/20 dark:text-rose-100 p-4 text-sm">
+        {{ error }}
+    </div>
+    {% endif %}
+
     <!-- Filters -->
     <div class="card p-4">
         <form method="get" class="flex flex-wrap gap-3 items-end">
@@ -97,7 +108,7 @@
                                     {% endif %}
                                 </p>
                                 {% if not (filter_status or filter_q) %}
-                                <a href="/procurement/vendors/prequalify" class="mt-4 inline-flex items-center btn btn-primary text-sm">
+                                <a href="/procurement/vendors/prequalification/new" class="mt-4 inline-flex items-center btn btn-primary text-sm">
                                     <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
                                     </svg>

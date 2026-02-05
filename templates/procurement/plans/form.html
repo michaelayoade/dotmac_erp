@@ -13,29 +13,66 @@
 {% endblock %}
 
 {% block content %}
-<div class="max-w-2xl stagger-in">
-    <div class="card p-6">
-        <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Create Procurement Plan</h2>
-        <form method="post" class="space-y-4">
-            <div class="grid grid-cols-2 gap-4">
-                <div>
-                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Plan Number</label>
-                    <input type="text" name="plan_number" required class="input-field" placeholder="PP-2025-001">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Fiscal Year</label>
-                    <input type="text" name="fiscal_year" required class="input-field" placeholder="2025/2026">
-                </div>
-            </div>
-            <div>
-                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Title</label>
-                <input type="text" name="title" required class="input-field" placeholder="Annual Procurement Plan">
-            </div>
-            <div class="flex justify-end gap-3 pt-4">
-                <a href="/procurement/plans" class="btn btn-secondary">Cancel</a>
-                <button type="submit" class="btn btn-primary">Create Plan</button>
-            </div>
-        </form>
+<div class="max-w-3xl mx-auto pb-12">
+    <div class="mb-10 stagger-in" style="animation-delay: 0ms;">
+        <h1 class="text-3xl font-bold text-slate-900 dark:text-white font-display tracking-tight">
+            New Procurement Plan
+        </h1>
+        <p class="mt-2 text-lg text-slate-600 dark:text-slate-400">
+            Define the plan header, attach supporting documentation, and move to line items.
+        </p>
     </div>
+
+    <form method="post" enctype="multipart/form-data" class="space-y-8">
+        <div class="card stagger-in" style="animation-delay: 50ms;">
+            <div class="card-header border-b border-slate-100 dark:border-slate-700">
+                <div class="flex items-center gap-4">
+                    <div class="card-icon bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display">Plan Details</h2>
+                        <p class="text-sm text-slate-500 dark:text-slate-400">Core plan information</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-6 grid gap-6 sm:grid-cols-2">
+                <div>
+                    <label class="form-label">
+                        Plan Number <span class="text-rose-500">*</span>
+                    </label>
+                    <input type="text" name="plan_number" required class="form-input" placeholder="PP-2025-001">
+                </div>
+                <div>
+                    <label class="form-label">
+                        Fiscal Year <span class="text-rose-500">*</span>
+                    </label>
+                    <input type="text" name="fiscal_year" required class="form-input" placeholder="2025/2026">
+                </div>
+                <div class="sm:col-span-2">
+                    <label class="form-label">
+                        Title <span class="text-rose-500">*</span>
+                    </label>
+                    <input type="text" name="title" required class="form-input" placeholder="Annual Procurement Plan">
+                </div>
+                <div class="sm:col-span-2">
+                    <label class="form-label">Description</label>
+                    <textarea name="description" rows="3" class="form-input" placeholder="Optional summary of the procurement plan..."></textarea>
+                </div>
+                <div class="sm:col-span-2">
+                    <label class="form-label">Attachment (optional)</label>
+                    <input type="file" name="attachment" class="form-input text-sm">
+                </div>
+            </div>
+        </div>
+
+        <div class="flex items-center justify-end gap-3">
+            <a href="/procurement/plans" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">Create Plan</button>
+        </div>
+    </form>
 </div>
 {% endblock %}

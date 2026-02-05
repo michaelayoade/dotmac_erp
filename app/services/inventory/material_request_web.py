@@ -251,7 +251,7 @@ class MaterialRequestWebService:
             "projects": project_options,
             "request_types": [t.value for t in MaterialRequestType],
             "today": _format_date(date.today()),
-            "material_request": None,
+            "material_request": {},
             "items_json": "[]",
             "requested_by_name": "",
             "tickets": [],

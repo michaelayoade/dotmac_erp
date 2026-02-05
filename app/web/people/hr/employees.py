@@ -208,3 +208,21 @@ async def terminate_employee(
         auth=auth,
         db=db,
     )
+
+
+@router.post("/employees/{employee_id}/credentials/{credential_id}/toggle")
+async def toggle_employee_credential(
+    request: Request,
+    employee_id: UUID,
+    credential_id: UUID,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Enable/disable a user's login credential from the employee record."""
+    return await hr_web_service.toggle_user_credential_response(
+        request=request,
+        employee_id=employee_id,
+        credential_id=credential_id,
+        auth=auth,
+        db=db,
+    )

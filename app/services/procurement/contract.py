@@ -50,9 +50,14 @@ class ContractService:
             ProcurementContract.organization_id == organization_id,
         )
         if status:
-            base = base.where(
-                ProcurementContract.status == ContractStatus(status),
-            )
+            try:
+                status_enum = ContractStatus(status)
+            except ValueError:
+                status_enum = None
+            if status_enum:
+                base = base.where(
+                    ProcurementContract.status == status_enum,
+                )
 
         total = self.db.scalar(select(func.count()).select_from(base.subquery()))
         items = list(

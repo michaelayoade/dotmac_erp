@@ -5,6 +5,7 @@ These routes serve HTML pages for the public careers portal.
 No authentication required.
 """
 
+import secrets
 import uuid
 from typing import Optional
 
@@ -17,6 +18,7 @@ from app.middleware.rate_limit import check_rate_limit
 from app.services.careers.captcha import get_captcha_site_key, is_captcha_enabled
 from app.services.careers.web import CareersWebService
 from app.templates import templates
+from app.web.csrf import CSRF_COOKIE_NAME, _is_secure_request
 
 router = APIRouter(prefix="/careers", tags=["careers-web"])
 
@@ -31,6 +33,38 @@ def get_db():
 
 def _get_service(db: Session) -> CareersWebService:
     return CareersWebService(db)
+
+
+def _ensure_csrf_token(request: Request) -> tuple[str, bool]:
+    token = getattr(request.state, "csrf_token", "") or request.cookies.get(
+        CSRF_COOKIE_NAME, ""
+    )
+    if token:
+        return token, False
+    return secrets.token_urlsafe(32), True
+
+
+def _render_with_csrf(
+    request: Request, template_name: str, context: dict
+) -> HTMLResponse:
+    token, set_cookie = _ensure_csrf_token(request)
+    response = templates.TemplateResponse(
+        template_name,
+        {
+            **context,
+            "csrf_token": token,
+        },
+    )
+    if set_cookie:
+        response.set_cookie(
+            CSRF_COOKIE_NAME,
+            token,
+            httponly=True,
+            secure=_is_secure_request(request),
+            samesite="Lax",
+            path="/",
+        )
+    return response
 
 
 def _require_org_ctx(slug: str, db: Session) -> tuple:
@@ -145,7 +179,8 @@ def apply_form_page(
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    return templates.TemplateResponse(
+    return _render_with_csrf(
+        request,
         "careers/apply.html",
         {
             "request": request,
@@ -229,7 +264,8 @@ async def submit_application(
         error = result.error
 
     # Re-render form with error
-    return templates.TemplateResponse(
+    return _render_with_csrf(
+        request,
         "careers/apply.html",
         {
             "request": request,
@@ -296,7 +332,8 @@ def status_form_page(
 ):
     ctx, _ = _require_org_ctx(org_slug, db)
 
-    return templates.TemplateResponse(
+    return _render_with_csrf(
+        request,
         "careers/status_form.html",
         {
             "request": request,
@@ -324,7 +361,8 @@ async def request_status_check(
 
     service.request_status_check(ctx.org_id, email, application_number or None)
 
-    return templates.TemplateResponse(
+    return _render_with_csrf(
+        request,
         "careers/status_form.html",
         {
             "request": request,

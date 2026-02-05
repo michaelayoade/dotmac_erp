@@ -189,15 +189,20 @@
             </div>
             {% endif %}
 
+            {% set any_active_cred = credentials and (credentials | selectattr('is_active') | list | length) > 0 %}
             <div class="flex flex-wrap items-center justify-between gap-3">
                 <div>
                     <p class="text-sm text-slate-500 dark:text-slate-400">Linked Person ID</p>
                     <p class="text-sm font-mono text-slate-900 dark:text-white">{{ person.id }}</p>
                 </div>
                 <div class="flex items-center gap-2">
-                    {% if credentials %}
+                    {% if any_active_cred %}
                     <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300">
-                        Credentials Active
+                        Login Active
+                    </span>
+                    {% elif credentials %}
+                    <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-rose-100 text-rose-700 dark:bg-rose-900 dark:text-rose-300">
+                        Login Disabled
                     </span>
                     {% else %}
                     <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300">
@@ -208,12 +213,30 @@
             </div>
 
             {% if credentials %}
-            <div class="text-sm text-slate-600 dark:text-slate-400">
+            <div class="space-y-3 text-sm text-slate-600 dark:text-slate-400">
                 {% for cred in credentials %}
-                <div class="flex flex-wrap items-center gap-2">
-                    <span class="font-medium text-slate-900 dark:text-white">{{ cred.provider.value }}</span>
-                    <span class="text-slate-500 dark:text-slate-400">{{ cred.username or '-' }}</span>
-                    <span class="text-xs text-slate-400 dark:text-slate-500">{{ 'active' if cred.is_active else 'inactive' }}</span>
+                <div class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 dark:border-slate-800 px-3 py-2">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <span class="font-medium text-slate-900 dark:text-white">{{ cred.provider.value }}</span>
+                        <span class="text-slate-500 dark:text-slate-400">{{ cred.username or '-' }}</span>
+                        {% if cred.is_active %}
+                        <span class="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300">active</span>
+                        {% else %}
+                        <span class="text-xs px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 dark:bg-rose-900 dark:text-rose-300">inactive</span>
+                        {% endif %}
+                    </div>
+                    <form method="post" action="/people/hr/employees/{{ employee.employee_id }}/credentials/{{ cred.id }}/toggle">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                        {% if cred.is_active %}
+                        <button type="submit" class="btn btn-secondary" onclick="return confirm('Disable this user\\'s login? This will sign them out.');">
+                            Disable Login
+                        </button>
+                        {% else %}
+                        <button type="submit" class="btn btn-primary">
+                            Enable Login
+                        </button>
+                        {% endif %}
+                    </form>
                 </div>
                 {% endfor %}
             </div>

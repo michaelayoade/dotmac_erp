@@ -35,6 +35,7 @@ def get_db():
 def list_rfqs(
     organization_id: UUID = Depends(require_organization_id),
     status_filter: Optional[str] = Query(None, alias="status"),
+    method_filter: Optional[str] = Query(None, alias="method"),
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -44,6 +45,7 @@ def list_rfqs(
     rfqs, _ = service.list_rfqs(
         organization_id,
         status=status_filter,
+        procurement_method=method_filter,
         offset=offset,
         limit=limit,
     )
