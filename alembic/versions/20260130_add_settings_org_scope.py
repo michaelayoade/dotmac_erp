@@ -25,6 +25,7 @@ def upgrade() -> None:
     setting_scope_enum = postgresql.ENUM(
         "GLOBAL", "ORG_SPECIFIC",
         name="setting_scope",
+        create_type=False,
     )
     setting_scope_enum.create(op.get_bind(), checkfirst=True)
 
