@@ -28,7 +28,16 @@
   'REVERSED': 'badge-rejected',
   'VOIDED': 'badge-draft',
   'INACTIVE': 'badge-draft',
-  'CLOSED': 'badge-draft'
+  'CLOSED': 'badge-draft',
+  'QUARANTINED': 'badge-overdue',
+  'EXPIRED': 'badge-rejected',
+  'DEPLETED': 'badge-draft',
+  'AVAILABLE': 'badge-approved',
+  'IN_PROGRESS': 'badge-pending',
+  'OPEN': 'badge-approved',
+  'SUBMITTED': 'badge-pending',
+  'PROCESSING': 'badge-pending',
+  'RECEIVED': 'badge-paid'
 } %}
 {% set badge_class = badge_classes.get(status_upper, 'badge-draft') %}
 <span class="{{ badge_class }}">{{ status|title }}</span>
@@ -404,7 +413,7 @@
 if (typeof window.searchAutosuggest === 'undefined') {
   window.searchAutosuggest = function(entityType, debounceMs = 300) {
     return {
-      query: '{{ search }}',
+      query: '{{ search if search else '' }}',
       entityType: entityType,
       suggestions: [],
       selectedIndex: -1,
@@ -498,7 +507,7 @@ if (typeof window.searchAutosuggest === 'undefined') {
       <svg class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
       </svg>
-      <input type="text" name="search" value="{{ search }}"
+      <input type="text" name="search" value="{{ search if search else '' }}"
              placeholder="{{ placeholder }}"
              class="form-input pl-10 w-full">
     </div>

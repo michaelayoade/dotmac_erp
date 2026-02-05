@@ -1306,8 +1306,11 @@ class ARWebService:
         as_of_date: Optional[str],
         customer_id: Optional[str],
     ) -> dict:
+        import logging as _log
+        _logger = _log.getLogger("ar.aging_context")
         org_id = coerce_uuid(organization_id)
         ref_date = _parse_date(as_of_date)
+        _logger.warning("aging_context called: org=%s ref_date=%s cust=%s", org_id, ref_date, customer_id)
 
         if customer_id:
             summary = ar_aging_service.calculate_customer_aging(
@@ -1318,6 +1321,9 @@ class ARWebService:
             aging_data = ar_aging_service.get_aging_by_customer(
                 db, org_id, ref_date
             )
+        _logger.warning("aging_data returned %d rows", len(aging_data))
+        if aging_data:
+            _logger.warning("first row: current=%s, over_90=%s, total=%s", aging_data[0].current, aging_data[0].over_90, aging_data[0].total_outstanding)
 
         customers_list = [
             _customer_option_view(customer)
@@ -1329,11 +1335,86 @@ class ARWebService:
             )
         ]
 
+        # Build template-ready context from raw aging data
+        currency = aging_data[0].currency_code if aging_data else "NGN"
+        fmt = lambda v: _format_currency(v, currency)
+
+        # Aggregate totals across all customers
+        total_current = sum(r.current for r in aging_data)
+        total_30 = sum(r.days_31_60 for r in aging_data)
+        total_60 = sum(r.days_61_90 for r in aging_data)
+        total_90 = sum(r.over_90 for r in aging_data)
+        grand_total = total_current + total_30 + total_60 + total_90
+        total_invoices = sum(r.invoice_count for r in aging_data)
+
+        def _pct(part: Decimal, whole: Decimal) -> float:
+            return round(float(part / whole * 100), 1) if whole else 0.0
+
+        # DSO approximation using bucket midpoints
+        if grand_total:
+            dso = int(
+                (total_current * 15 + total_30 * 45 + total_60 * 75 + total_90 * 120)
+                / grand_total
+            )
+        else:
+            dso = 0
+
+        aging_summary = {
+            "total": fmt(grand_total),
+            "invoice_count": total_invoices,
+            "current": fmt(total_current),
+            "current_pct": _pct(total_current, grand_total),
+            "days_30": fmt(total_30),
+            "days_30_pct": _pct(total_30, grand_total),
+            "days_60": fmt(total_60),
+            "days_60_pct": _pct(total_60, grand_total),
+            "days_90": fmt(total_90),
+            "days_90_pct": _pct(total_90, grand_total),
+            "days_90_raw": float(total_90),
+            "dso": dso,
+        } if aging_data else None
+
+        # Per-customer rows for the table
+        customer_aging = []
+        for r in aging_data:
+            row_total = r.current + r.days_31_60 + r.days_61_90 + r.over_90
+            customer_aging.append({
+                "customer_id": r.customer_id,
+                "customer_name": r.customer_name,
+                "customer_code": r.customer_code,
+                "current": fmt(r.current),
+                "current_raw": float(r.current),
+                "days_30": fmt(r.days_31_60),
+                "days_30_raw": float(r.days_31_60),
+                "days_60": fmt(r.days_61_90),
+                "days_60_raw": float(r.days_61_90),
+                "days_90": fmt(r.over_90),
+                "days_90_raw": float(r.over_90),
+                "total": fmt(row_total),
+                "current_pct": _pct(r.current, row_total),
+                "days_30_pct": _pct(r.days_31_60, row_total),
+                "days_60_pct": _pct(r.days_61_90, row_total),
+                "days_90_pct": _pct(r.over_90, row_total),
+            })
+
+        # Chart data JSON for the <script> tag
+        aging_chart_data = json.dumps({
+            "buckets": {
+                "current": float(total_current),
+                "days_30": float(total_30),
+                "days_60": float(total_60),
+                "days_90": float(total_90),
+            },
+            "currency": currency,
+        }) if aging_data else "{}"
+
         return {
-            "aging_data": aging_data,
-            "customers_list": customers_list,
-            "as_of_date": as_of_date,
-            "customer_id": customer_id,
+            "aging_summary": aging_summary,
+            "customer_aging": customer_aging,
+            "customers": customers_list,
+            "selected_customer_id": customer_id,
+            "as_of_date": as_of_date or _format_date(ref_date or date.today()),
+            "aging_chart_data": aging_chart_data,
         }
 
 

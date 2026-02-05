@@ -21,7 +21,15 @@
             <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">Edit Expense Claim</h1>
             <p class="text-sm text-slate-500 dark:text-slate-400">Update items for draft claims only.</p>
         </div>
-        <a href="/people/self/expenses" class="btn btn-secondary">Back to My Expenses</a>
+        <div class="flex flex-wrap items-center gap-2">
+            {% if can_submit %}
+            <form method="post" action="/people/self/expenses/claims/{{ claim.claim_id }}/submit">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <button type="submit" class="btn btn-primary">Submit for Approval</button>
+            </form>
+            {% endif %}
+            <a href="/people/self/expenses" class="btn btn-secondary">Back to My Expenses</a>
+        </div>
     </div>
 
     <div class="card p-6">

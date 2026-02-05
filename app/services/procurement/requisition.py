@@ -94,6 +94,7 @@ class RequisitionService:
         for line_data in data.lines:
             line = PurchaseRequisitionLine(
                 requisition_id=req.requisition_id,
+                organization_id=organization_id,
                 line_number=line_data.line_number,
                 item_id=line_data.item_id,
                 description=line_data.description,

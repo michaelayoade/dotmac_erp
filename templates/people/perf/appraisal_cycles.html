@@ -42,7 +42,7 @@
             <div class="flex flex-wrap gap-4 items-end">
                 <div class="flex-1 min-w-[200px]">
                     <label for="search" class="form-label">Search</label>
-                    <input type="text" name="search" id="search" value="{{ search | default('') }}"
+                    <input type="text" name="search" id="search" value="{{ search | default('', true) }}"
                            class="form-input w-full" placeholder="Code or name...">
                 </div>
                 <div class="w-48">
@@ -56,7 +56,7 @@
                 </div>
                 <div class="w-32">
                     <label for="year" class="form-label">Year</label>
-                    <input type="number" name="year" id="year" value="{{ year | default('') }}"
+                    <input type="number" name="year" id="year" value="{{ year | default('', true) }}"
                            class="form-input w-full" placeholder="2024" min="2000" max="2100">
                 </div>
                 <button type="submit" class="btn btn-secondary h-10">Filter</button>
@@ -145,10 +145,10 @@
         </p>
         <div class="flex gap-2">
             {% if has_prev %}
-            <a href="?page={{ page - 1 }}&status={{ status | default('') }}&year={{ year | default('') }}&search={{ search | default('') }}" class="btn btn-secondary btn-sm">Previous</a>
+            <a href="?page={{ page - 1 }}&status={{ status | default('', true) }}&year={{ year | default('', true) }}&search={{ search | default('', true) }}" class="btn btn-secondary btn-sm">Previous</a>
             {% endif %}
             {% if has_next %}
-            <a href="?page={{ page + 1 }}&status={{ status | default('') }}&year={{ year | default('') }}&search={{ search | default('') }}" class="btn btn-secondary btn-sm">Next</a>
+            <a href="?page={{ page + 1 }}&status={{ status | default('', true) }}&year={{ year | default('', true) }}&search={{ search | default('', true) }}" class="btn btn-secondary btn-sm">Next</a>
             {% endif %}
         </div>
     </div>

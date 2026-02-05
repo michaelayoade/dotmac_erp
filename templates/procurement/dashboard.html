@@ -1,4 +1,4 @@
-{% extends "modules/base_modules.html" %}
+{% extends "procurement/base_procurement.html" %}
 
 {% block page_title %}Procurement Dashboard{% endblock %}
 
@@ -79,99 +79,217 @@
         </div>
     </div>
 
-    <!-- Quick Links -->
-    <div class="grid gap-4 sm:grid-cols-3 lg:grid-cols-6">
-        <a href="/procurement/plans" class="card p-3 text-center hover:shadow-md transition-shadow">
-            <p class="text-sm font-medium text-slate-700 dark:text-slate-300">Plans</p>
-        </a>
-        <a href="/procurement/requisitions" class="card p-3 text-center hover:shadow-md transition-shadow">
-            <p class="text-sm font-medium text-slate-700 dark:text-slate-300">Requisitions</p>
-        </a>
-        <a href="/procurement/rfqs" class="card p-3 text-center hover:shadow-md transition-shadow">
-            <p class="text-sm font-medium text-slate-700 dark:text-slate-300">RFQs</p>
-        </a>
-        <a href="/procurement/contracts" class="card p-3 text-center hover:shadow-md transition-shadow">
-            <p class="text-sm font-medium text-slate-700 dark:text-slate-300">Contracts</p>
-        </a>
-        <a href="/procurement/vendors" class="card p-3 text-center hover:shadow-md transition-shadow">
-            <p class="text-sm font-medium text-slate-700 dark:text-slate-300">Vendors</p>
-        </a>
-        <a href="/procurement/plans/new" class="card p-3 text-center hover:shadow-md transition-shadow bg-emerald-50 dark:bg-emerald-900/20">
-            <p class="text-sm font-medium text-emerald-700 dark:text-emerald-300">+ New Plan</p>
-        </a>
+    <!-- Pending Requisitions & Active Contracts side-by-side -->
+    <div class="grid gap-6 lg:grid-cols-2">
+        <!-- Pending Requisitions -->
+        <div class="card">
+            <div class="flex items-center justify-between p-4 border-b border-slate-100 dark:border-slate-800">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Pending Requisitions</h2>
+                <a href="/procurement/requisitions?status=SUBMITTED" class="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300">View All</a>
+            </div>
+            <div class="divide-y divide-slate-100 dark:divide-slate-800">
+                {% for req in pending_requisitions %}
+                <a href="/procurement/requisitions/{{ req.requisition_id }}" class="flex items-center gap-4 p-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                    <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+                        <svg class="h-5 w-5 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm font-medium text-slate-900 dark:text-white truncate">{{ req.requisition_number }}</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">
+                            <span class="inline-flex items-center rounded-full px-1.5 py-0.5 text-xs font-medium {% if req.urgency.value == 'EMERGENCY' %}bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400{% elif req.urgency.value == 'URGENT' %}bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400{% else %}bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400{% endif %}">{{ req.urgency.value }}</span>
+                        </p>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-sm font-medium text-slate-900 dark:text-white">{{ "{:,.2f}".format(req.total_estimated_amount) }}</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">{{ req.requisition_date }}</p>
+                    </div>
+                </a>
+                {% else %}
+                <div class="p-8 text-center">
+                    <svg class="mx-auto h-12 w-12 text-slate-300 dark:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">No pending requisitions</p>
+                    <a href="/procurement/requisitions/new" class="mt-3 inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300">
+                        Create Requisition
+                        <svg class="ml-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                    </a>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Active Contracts -->
+        <div class="card">
+            <div class="flex items-center justify-between p-4 border-b border-slate-100 dark:border-slate-800">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Active Contracts</h2>
+                <a href="/procurement/contracts" class="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300">View All</a>
+            </div>
+            <div class="divide-y divide-slate-100 dark:divide-slate-800">
+                {% for contract in active_contracts %}
+                <a href="/procurement/contracts/{{ contract.contract_id }}" class="flex items-center gap-4 p-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                    <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
+                        <svg class="h-5 w-5 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                        </svg>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm font-medium text-slate-900 dark:text-white truncate">{{ contract.contract_number }}</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">{{ contract.title }}</p>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-sm font-medium text-slate-900 dark:text-white">{{ "{:,.2f}".format(contract.contract_value) }}</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Ends {{ contract.end_date }}</p>
+                    </div>
+                </a>
+                {% else %}
+                <div class="p-8 text-center">
+                    <svg class="mx-auto h-12 w-12 text-slate-300 dark:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">No active contracts</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
     </div>
 
-    <!-- Pending Requisitions -->
-    {% if pending_requisitions %}
-    <div class="card">
-        <div class="p-4 border-b border-slate-200 dark:border-slate-700">
-            <h3 class="font-semibold text-slate-900 dark:text-white">Pending Requisitions</h3>
+    <!-- Open RFQs & Recent Plans side-by-side -->
+    <div class="grid gap-6 lg:grid-cols-2">
+        <!-- Open RFQs -->
+        <div class="card">
+            <div class="flex items-center justify-between p-4 border-b border-slate-100 dark:border-slate-800">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Open RFQs</h2>
+                <a href="/procurement/rfqs" class="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300">View All</a>
+            </div>
+            <div class="divide-y divide-slate-100 dark:divide-slate-800">
+                {% for rfq in open_rfqs | default([]) %}
+                <a href="/procurement/rfqs/{{ rfq.rfq_id }}" class="flex items-center gap-4 p-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                    <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
+                        <svg class="h-5 w-5 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
+                        </svg>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm font-medium text-slate-900 dark:text-white truncate">{{ rfq.rfq_number }}</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">{{ rfq.title | default('', true) | truncate(40) }}</p>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-sm font-medium text-slate-900 dark:text-white">{{ rfq.submission_deadline | default('', true) }}</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Deadline</p>
+                    </div>
+                </a>
+                {% else %}
+                <div class="p-8 text-center">
+                    <svg class="mx-auto h-12 w-12 text-slate-300 dark:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">No open RFQs</p>
+                </div>
+                {% endfor %}
+            </div>
         </div>
-        <div class="overflow-x-auto">
-            <table class="w-full text-sm">
-                <thead class="bg-slate-50 dark:bg-slate-800/50">
-                    <tr>
-                        <th class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Number</th>
-                        <th class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Date</th>
-                        <th class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Urgency</th>
-                        <th class="px-4 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Amount</th>
-                        <th class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Status</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
-                    {% for req in pending_requisitions %}
-                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                        <td class="px-4 py-3">
-                            <a href="/procurement/requisitions/{{ req.requisition_id }}" class="font-medium text-blue-600 hover:underline dark:text-blue-400">{{ req.requisition_number }}</a>
-                        </td>
-                        <td class="px-4 py-3 text-slate-600 dark:text-slate-400">{{ req.requisition_date }}</td>
-                        <td class="px-4 py-3">
-                            <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium {% if req.urgency.value == 'EMERGENCY' %}bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400{% elif req.urgency.value == 'URGENT' %}bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400{% else %}bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400{% endif %}">{{ req.urgency.value }}</span>
-                        </td>
-                        <td class="px-4 py-3 text-right font-medium text-slate-900 dark:text-white">{{ "{:,.2f}".format(req.total_estimated_amount) }}</td>
-                        <td class="px-4 py-3">
-                            {% set label, color = req_status_labels.get(req.status, ("Unknown", "slate")) %}
-                            <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-{{ color }}-100 text-{{ color }}-700 dark:bg-{{ color }}-900/30 dark:text-{{ color }}-400">{{ label }}</span>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
-    {% endif %}
 
-    <!-- Active Contracts -->
-    {% if active_contracts %}
-    <div class="card">
-        <div class="p-4 border-b border-slate-200 dark:border-slate-700">
-            <h3 class="font-semibold text-slate-900 dark:text-white">Active Contracts</h3>
-        </div>
-        <div class="overflow-x-auto">
-            <table class="w-full text-sm">
-                <thead class="bg-slate-50 dark:bg-slate-800/50">
-                    <tr>
-                        <th class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Number</th>
-                        <th class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Title</th>
-                        <th class="px-4 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Value</th>
-                        <th class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">End Date</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
-                    {% for contract in active_contracts %}
-                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                        <td class="px-4 py-3">
-                            <a href="/procurement/contracts/{{ contract.contract_id }}" class="font-medium text-blue-600 hover:underline dark:text-blue-400">{{ contract.contract_number }}</a>
-                        </td>
-                        <td class="px-4 py-3 text-slate-600 dark:text-slate-400">{{ contract.title }}</td>
-                        <td class="px-4 py-3 text-right font-medium text-slate-900 dark:text-white">{{ "{:,.2f}".format(contract.contract_value) }}</td>
-                        <td class="px-4 py-3 text-slate-600 dark:text-slate-400">{{ contract.end_date }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+        <!-- Vendor Summary -->
+        <div class="card">
+            <div class="flex items-center justify-between p-4 border-b border-slate-100 dark:border-slate-800">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Vendor Summary</h2>
+                <a href="/procurement/vendors" class="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300">View All</a>
+            </div>
+            <div class="p-4 space-y-4">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                            <svg class="h-4 w-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+                            </svg>
+                        </div>
+                        <span class="text-sm text-slate-600 dark:text-slate-400">Registered Vendors</span>
+                    </div>
+                    <span class="text-lg font-bold text-slate-900 dark:text-white">{{ vendor_count | default(0) }}</span>
+                </div>
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
+                            <svg class="h-4 w-4 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                        </div>
+                        <span class="text-sm text-slate-600 dark:text-slate-400">Prequalified</span>
+                    </div>
+                    <span class="text-lg font-bold text-slate-900 dark:text-white">{{ prequalified_count | default(0) }}</span>
+                </div>
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+                            <svg class="h-4 w-4 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                        </div>
+                        <span class="text-sm text-slate-600 dark:text-slate-400">Pending Evaluation</span>
+                    </div>
+                    <span class="text-lg font-bold text-slate-900 dark:text-white">{{ pending_evaluation_count | default(0) }}</span>
+                </div>
+            </div>
         </div>
     </div>
-    {% endif %}
+
+    <!-- Quick Actions -->
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <a href="/procurement/plans/new" class="card p-4 hover:border-blue-300 dark:hover:border-blue-700 transition-colors group">
+            <div class="flex items-center gap-3">
+                <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 group-hover:scale-110 transition-transform">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="font-medium text-slate-900 dark:text-white">New Plan</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Create procurement plan</p>
+                </div>
+            </div>
+        </a>
+        <a href="/procurement/requisitions/new" class="card p-4 hover:border-blue-300 dark:hover:border-blue-700 transition-colors group">
+            <div class="flex items-center gap-3">
+                <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400 group-hover:scale-110 transition-transform">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="font-medium text-slate-900 dark:text-white">New Requisition</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Submit purchase request</p>
+                </div>
+            </div>
+        </a>
+        <a href="/procurement/rfqs/new" class="card p-4 hover:border-blue-300 dark:hover:border-blue-700 transition-colors group">
+            <div class="flex items-center gap-3">
+                <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400 group-hover:scale-110 transition-transform">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="font-medium text-slate-900 dark:text-white">New RFQ</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Request for quotation</p>
+                </div>
+            </div>
+        </a>
+        <a href="/procurement/vendors" class="card p-4 hover:border-blue-300 dark:hover:border-blue-700 transition-colors group">
+            <div class="flex items-center gap-3">
+                <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400 group-hover:scale-110 transition-transform">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="font-medium text-slate-900 dark:text-white">Manage Vendors</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">View vendor registry</p>
+                </div>
+            </div>
+        </a>
+    </div>
 </div>
 {% endblock %}

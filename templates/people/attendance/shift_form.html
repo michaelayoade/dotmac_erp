@@ -34,13 +34,13 @@
             <div>
                 <label class="form-label">Shift Code</label>
                 <input type="text" name="shift_code" required maxlength="30"
-                       value="{{ form_data.shift_code | default('') }}"
+                       value="{{ form_data.shift_code | default('', true) }}"
                        class="form-input" placeholder="DAY-01">
             </div>
             <div>
                 <label class="form-label">Shift Name</label>
                 <input type="text" name="shift_name" required maxlength="100"
-                       value="{{ form_data.shift_name | default('') }}"
+                       value="{{ form_data.shift_name | default('', true) }}"
                        class="form-input" placeholder="Day Shift">
             </div>
             <div>
@@ -58,7 +58,7 @@
             <div>
                 <label class="form-label">Working Hours (optional)</label>
                 <input type="number" step="0.01" min="0" name="working_hours"
-                       value="{{ form_data.working_hours | default('') }}"
+                       value="{{ form_data.working_hours | default('', true) }}"
                        class="form-input" placeholder="8.00">
             </div>
             <div>
@@ -82,20 +82,20 @@
             <div>
                 <label class="form-label">Half-day Threshold (hours)</label>
                 <input type="number" step="0.01" min="0" name="half_day_threshold_hours"
-                       value="{{ form_data.half_day_threshold_hours | default('') }}"
+                       value="{{ form_data.half_day_threshold_hours | default('', true) }}"
                        class="form-input" placeholder="4.00">
             </div>
             <div>
                 <label class="form-label">Overtime Threshold (hours)</label>
                 <input type="number" step="0.01" min="0" name="overtime_threshold_hours"
-                       value="{{ form_data.overtime_threshold_hours | default('') }}"
+                       value="{{ form_data.overtime_threshold_hours | default('', true) }}"
                        class="form-input" placeholder="9.00">
             </div>
         </div>
 
         <div>
             <label class="form-label">Description</label>
-            <textarea name="description" rows="3" class="form-input" placeholder="Optional notes">{{ form_data.description | default('') }}</textarea>
+            <textarea name="description" rows="3" class="form-input" placeholder="Optional notes">{{ form_data.description | default('', true) }}</textarea>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">

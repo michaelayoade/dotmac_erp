@@ -75,19 +75,20 @@ class TestCreateInvoice:
             lines=lines,
         )
 
-        with patch("app.services.finance.ar.invoice.Customer"):
-            with patch("app.services.finance.ar.invoice.Invoice") as MockInv:
-                mock_invoice = MockInvoice(
-                    organization_id=org_id,
-                    customer_id=customer.customer_id,
-                )
-                MockInv.return_value = mock_invoice
+        with patch("app.services.finance.ar.invoice._batch_validate_org_refs"):
+            with patch("app.services.finance.ar.invoice.Customer"):
+                with patch("app.services.finance.ar.invoice.Invoice") as MockInv:
+                    mock_invoice = MockInvoice(
+                        organization_id=org_id,
+                        customer_id=customer.customer_id,
+                    )
+                    MockInv.return_value = mock_invoice
 
-                with patch("app.services.finance.ar.invoice.InvoiceLine"):
-                    with patch("app.services.finance.ar.invoice.SequenceService.get_next_number", return_value="INV-0001"):
-                        result = ARInvoiceService.create_invoice(
-                            mock_db, org_id, invoice_input, user_id
-                        )
+                    with patch("app.services.finance.ar.invoice.InvoiceLine"):
+                        with patch("app.services.finance.ar.invoice.SequenceService.get_next_number", return_value="INV-0001"):
+                            result = ARInvoiceService.create_invoice(
+                                mock_db, org_id, invoice_input, user_id
+                            )
 
         mock_db.add.assert_called()
         mock_db.commit.assert_called()
@@ -334,6 +335,7 @@ class TestListInvoices:
 
         invoices = [MockInvoice(organization_id=org_id)]
         mock_query = MagicMock()
+        mock_query.options.return_value = mock_query
         mock_query.filter.return_value = mock_query
         mock_query.order_by.return_value = mock_query
         mock_query.limit.return_value = mock_query
@@ -741,19 +743,20 @@ class TestCreditNoteHandling:
             lines=lines,
         )
 
-        with patch("app.services.finance.ar.invoice.Customer"):
-            with patch("app.services.finance.ar.invoice.Invoice") as MockInv:
-                mock_invoice = MockInvoice(
-                    organization_id=org_id,
-                    customer_id=customer.customer_id,
-                )
-                MockInv.return_value = mock_invoice
+        with patch("app.services.finance.ar.invoice._batch_validate_org_refs"):
+            with patch("app.services.finance.ar.invoice.Customer"):
+                with patch("app.services.finance.ar.invoice.Invoice") as MockInv:
+                    mock_invoice = MockInvoice(
+                        organization_id=org_id,
+                        customer_id=customer.customer_id,
+                    )
+                    MockInv.return_value = mock_invoice
 
-                with patch("app.services.finance.ar.invoice.InvoiceLine"):
-                    with patch("app.services.finance.ar.invoice.SequenceService.get_next_number", return_value="INV-0002"):
-                        result = ARInvoiceService.create_invoice(
-                            mock_db, org_id, invoice_input, user_id
-                        )
+                    with patch("app.services.finance.ar.invoice.InvoiceLine"):
+                        with patch("app.services.finance.ar.invoice.SequenceService.get_next_number", return_value="INV-0002"):
+                            result = ARInvoiceService.create_invoice(
+                                mock_db, org_id, invoice_input, user_id
+                            )
 
         # Verify the invoice was created with negative amounts
         call_kwargs = MockInv.call_args[1]
@@ -874,6 +877,7 @@ class TestListInvoicesEdgeCases:
 
         invoices = [MockInvoice(organization_id=org_id)]
         mock_query = MagicMock()
+        mock_query.options.return_value = mock_query
         mock_query.filter.return_value = mock_query
         mock_query.order_by.return_value = mock_query
         mock_query.limit.return_value = mock_query
@@ -904,6 +908,7 @@ class TestListInvoicesEdgeCases:
         customer_id = uuid4()
         invoices = [MockInvoice(organization_id=org_id, customer_id=customer_id)]
         mock_query = MagicMock()
+        mock_query.options.return_value = mock_query
         mock_query.filter.return_value = mock_query
         mock_query.order_by.return_value = mock_query
         mock_query.limit.return_value = mock_query
@@ -926,6 +931,7 @@ class TestListInvoicesEdgeCases:
 
         invoices = [MockInvoice(organization_id=org_id)]
         mock_query = MagicMock()
+        mock_query.options.return_value = mock_query
         mock_query.filter.return_value = mock_query
         mock_query.order_by.return_value = mock_query
         mock_query.limit.return_value = mock_query

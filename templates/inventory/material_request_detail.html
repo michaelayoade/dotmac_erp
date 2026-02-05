@@ -1,9 +1,9 @@
-{% extends "modules/base_modules.html" %}
+{% extends "inventory/base_inventory.html" %}
 
 {% block page_title %}Material Request {{ material_request.request_number }}{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 mt-1">
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 mt-1">
     <a href="/inventory/items" class="hover:text-slate-700 dark:hover:text-slate-300">Inventory</a>
     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
@@ -106,6 +106,26 @@
                     <dt class="text-sm text-slate-500 dark:text-slate-400">Default Warehouse</dt>
                     <dd class="text-sm text-slate-900 dark:text-white">{{ material_request.warehouse_name or '-' }}</dd>
                 </div>
+                <div class="flex justify-between py-2 border-b border-slate-100 dark:border-slate-800">
+                    <dt class="text-sm text-slate-500 dark:text-slate-400">Project</dt>
+                    <dd class="text-sm text-slate-900 dark:text-white">
+                        {% if material_request.project_code %}
+                        {{ material_request.project_code }}{% if material_request.project_name %} - {{ material_request.project_name }}{% endif %}
+                        {% else %}
+                        -
+                        {% endif %}
+                    </dd>
+                </div>
+                <div class="flex justify-between py-2 border-b border-slate-100 dark:border-slate-800">
+                    <dt class="text-sm text-slate-500 dark:text-slate-400">Ticket</dt>
+                    <dd class="text-sm text-slate-900 dark:text-white">
+                        {% if material_request.ticket_number %}
+                        {{ material_request.ticket_number }}{% if material_request.ticket_subject %} - {{ material_request.ticket_subject }}{% endif %}
+                        {% else %}
+                        -
+                        {% endif %}
+                    </dd>
+                </div>
                 <div class="flex justify-between py-2">
                     <dt class="text-sm text-slate-500 dark:text-slate-400">Requested By</dt>
                     <dd class="text-sm text-slate-900 dark:text-white">{{ material_request.requested_by_name or '-' }}</dd>
@@ -183,7 +203,6 @@
                         <th class="text-right">Ordered Qty</th>
                         <th>UOM</th>
                         <th>Schedule Date</th>
-                        <th>Project</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -205,13 +224,6 @@
                         </td>
                         <td class="text-slate-500">{{ item.uom or '-' }}</td>
                         <td class="text-slate-500">{{ item.schedule_date or '-' }}</td>
-                        <td>
-                            {% if item.project_code %}
-                            <span class="font-mono text-xs text-amber-600 dark:text-amber-400">{{ item.project_code }}</span>
-                            {% else %}
-                            <span class="text-slate-400">-</span>
-                            {% endif %}
-                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -220,7 +232,7 @@
                         <td colspan="3" class="font-semibold text-slate-900 dark:text-white">Total</td>
                         <td class="text-right font-mono font-semibold text-slate-900 dark:text-white">{{ material_request.total_requested_qty }}</td>
                         <td class="text-right font-mono font-semibold text-emerald-600 dark:text-emerald-400">{{ material_request.total_ordered_qty }}</td>
-                        <td colspan="3"></td>
+                        <td colspan="2"></td>
                     </tr>
                 </tfoot>
             </table>
@@ -243,6 +255,18 @@
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
                     </svg>
                     Submit Request
+                </button>
+            </form>
+            {% endif %}
+
+{% if material_request.can_approve and auth is defined and auth.is_admin %}
+            <form method="post" action="/inventory/material-requests/{{ material_request.request_id }}/approve" class="inline"
+                  onsubmit="return confirm('Approve this request? {% if material_request.request_type in ['ISSUE', 'TRANSFER', 'MANUFACTURE'] %}Stock will be deducted from the warehouse immediately.{% else %}This will mark the request as ordered.{% endif %}')">
+                <button type="submit" class="btn btn-success">
+                    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                    </svg>
+                    Approve{% if material_request.request_type in ['ISSUE', 'TRANSFER', 'MANUFACTURE'] %} &amp; Issue Stock{% endif %}
                 </button>
             </form>
             {% endif %}

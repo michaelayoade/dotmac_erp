@@ -37,9 +37,7 @@ class VirementService:
         offset: int = 0,
     ) -> list[Virement]:
         """List virements with optional filters."""
-        stmt = select(Virement).where(
-            Virement.organization_id == organization_id
-        )
+        stmt = select(Virement).where(Virement.organization_id == organization_id)
 
         if fiscal_year_id:
             stmt = stmt.where(Virement.fiscal_year_id == fiscal_year_id)
@@ -111,9 +109,7 @@ class VirementService:
             )
 
         if virement.created_by_user_id == approver_id:
-            raise ValidationError(
-                "Segregation of duties: creator cannot approve"
-            )
+            raise ValidationError("Segregation of duties: creator cannot approve")
 
         virement.status = VirementStatus.APPROVED
         virement.approved_by_user_id = approver_id
@@ -139,17 +135,13 @@ class VirementService:
         to_approp = self.db.get(Appropriation, virement.to_appropriation_id)
 
         if not from_approp or not to_approp:
-            raise ValidationError(
-                "Source or destination appropriation not found"
-            )
+            raise ValidationError("Source or destination appropriation not found")
 
         if (
             from_approp.organization_id != virement.organization_id
             or to_approp.organization_id != virement.organization_id
         ):
-            raise ValidationError(
-                "Appropriations must belong to the same organization"
-            )
+            raise ValidationError("Appropriations must belong to the same organization")
 
         if (
             from_approp.fiscal_year_id != virement.fiscal_year_id
@@ -163,9 +155,7 @@ class VirementService:
             from_approp.currency_code != virement.currency_code
             or to_approp.currency_code != virement.currency_code
         ):
-            raise ValidationError(
-                "Appropriation currency must match virement currency"
-            )
+            raise ValidationError("Appropriation currency must match virement currency")
 
         # Check source has sufficient balance
         if from_approp.revised_amount < virement.amount:

@@ -735,7 +735,7 @@ class TestCalculateMatchScore:
             credit_amount=None,
             description="REF123 Payment",
         )
-        gl_line.entry = MockJournalEntry(entry_date=date.today())
+        gl_line.journal_entry = MockJournalEntry(entry_date=date.today())
 
         score = service._calculate_match_score(stmt_line, gl_line)
 
@@ -756,7 +756,7 @@ class TestCalculateMatchScore:
             debit_amount=Decimal("100.00"),
             credit_amount=None,
         )
-        gl_line.entry = MockJournalEntry(entry_date=date.today() - timedelta(days=5))
+        gl_line.journal_entry = MockJournalEntry(entry_date=date.today() - timedelta(days=5))
 
         score = service._calculate_match_score(stmt_line, gl_line)
 
@@ -775,7 +775,7 @@ class TestCalculateMatchScore:
             debit_amount=Decimal("200.00"),
             credit_amount=None,
         )
-        gl_line.entry = MockJournalEntry(entry_date=date.today())
+        gl_line.journal_entry = MockJournalEntry(entry_date=date.today())
 
         score = service._calculate_match_score(stmt_line, gl_line)
 
@@ -806,7 +806,7 @@ class TestAutoMatchWithItems:
             debit_amount=Decimal("100.00"),
             credit_amount=None,
         )
-        gl_line.entry = MockJournalEntry(entry_date=date.today())
+        gl_line.journal_entry = MockJournalEntry(entry_date=date.today())
 
         # Mock the database queries for statement and GL lines
         mock_stmt_result = MagicMock()

@@ -47,11 +47,13 @@ class BudgetComparisonService:
         approp_stmt = select(Appropriation).where(
             Appropriation.organization_id == organization_id,
             Appropriation.fiscal_year_id == fiscal_year_id,
-            Appropriation.status.in_([
-                AppropriationStatus.APPROVED,
-                AppropriationStatus.ACTIVE,
-                AppropriationStatus.CLOSED,
-            ]),
+            Appropriation.status.in_(
+                [
+                    AppropriationStatus.APPROVED,
+                    AppropriationStatus.ACTIVE,
+                    AppropriationStatus.CLOSED,
+                ]
+            ),
         )
         if fund_id:
             approp_stmt = approp_stmt.where(Appropriation.fund_id == fund_id)
@@ -75,10 +77,12 @@ class BudgetComparisonService:
                 func.coalesce(func.sum(Commitment.cancelled_amount), 0),
             ).where(
                 Commitment.appropriation_id == approp.appropriation_id,
-                Commitment.status.notin_([
-                    CommitmentStatus.CANCELLED,
-                    CommitmentStatus.LAPSED,
-                ]),
+                Commitment.status.notin_(
+                    [
+                        CommitmentStatus.CANCELLED,
+                        CommitmentStatus.LAPSED,
+                    ]
+                ),
             )
             result = self.db.execute(commit_stmt).one()
 

@@ -1,4 +1,4 @@
-{% extends "modules/base_modules.html" %}
+{% extends "procurement/base_procurement.html" %}
 
 {% block page_title %}RFQ {{ rfq.rfq_number }}{% endblock %}
 
@@ -30,8 +30,8 @@
                 <h2 class="text-xl font-semibold text-slate-900 dark:text-white">{{ rfq.title }}</h2>
                 <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">{{ rfq.rfq_number }}</p>
             </div>
-            {% set label, color = status_labels.get(rfq.status, ("Unknown", "slate")) %}
-            <span class="inline-flex items-center rounded-full px-3 py-1 text-sm font-medium bg-{{ color }}-100 text-{{ color }}-700 dark:bg-{{ color }}-900/30 dark:text-{{ color }}-400">{{ label }}</span>
+            {% set label, classes = status_labels.get(rfq.status, ("Unknown", "bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-400")) %}
+            <span class="inline-flex items-center rounded-full px-3 py-1 text-sm font-medium {{ classes }}">{{ label }}</span>
         </div>
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
             <div>
@@ -115,8 +115,8 @@
                         <td class="px-4 py-3 text-right font-medium text-slate-900 dark:text-white">{{ "{:,.2f}".format(resp.total_amount) }}</td>
                         <td class="px-4 py-3 text-slate-600 dark:text-slate-400">{{ resp.validity_period }} days</td>
                         <td class="px-4 py-3">
-                            {% set rlabel, rcolor = response_status_labels.get(resp.status, ("Unknown", "slate")) %}
-                            <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-{{ rcolor }}-100 text-{{ rcolor }}-700 dark:bg-{{ rcolor }}-900/30 dark:text-{{ rcolor }}-400">{{ rlabel }}</span>
+                            {% set rlabel, rclasses = response_status_labels.get(resp.status, ("Unknown", "bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-400")) %}
+                            <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium {{ rclasses }}">{{ rlabel }}</span>
                         </td>
                     </tr>
                     {% endfor %}

@@ -524,6 +524,25 @@ async def update_expense_claim(
     )
 
 
+@router.post("/expenses/claims/{claim_id}/submit")
+async def submit_expense_claim(
+    claim_id: UUID,
+    request: Request,
+    auth: WebAuthContext = Depends(require_self_service_access),
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    """Submit a draft expense claim for approval."""
+    form = getattr(request.state, "csrf_form", None)
+    if form is None:
+        form = await request.form()
+
+    return self_service_web_service.expense_claim_submit_response(
+        auth,
+        db,
+        claim_id=claim_id,
+    )
+
+
 @router.get("/team/leave", response_class=HTMLResponse)
 def team_leave_requests(
     request: Request,

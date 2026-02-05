@@ -53,7 +53,7 @@
             </select>
 
             {# Period Filter #}
-            <input type="month" name="period" value="{{ period | default('') }}"
+            <input type="month" name="period" value="{{ period | default('', true) }}"
                    class="form-input" placeholder="Tax Period">
 
             {# Actions #}
@@ -139,7 +139,7 @@
                                 'Get started by creating your first tax return' if not (return_type or status or period) else 'Try adjusting your filter criteria',
                                 'document',
                                 'New Return' if not (return_type or status or period) else none,
-                                '/tax/returns/new' if not (return_type or status or period) else none
+                                '/finance/tax/returns/new' if not (return_type or status or period) else none
                             ) }}
                         </td>
                     </tr>

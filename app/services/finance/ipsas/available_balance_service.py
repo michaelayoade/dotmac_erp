@@ -46,10 +46,12 @@ class AvailableBalanceService:
             func.coalesce(func.sum(Appropriation.revised_amount), 0)
         ).where(
             Appropriation.organization_id == organization_id,
-            Appropriation.status.in_([
-                AppropriationStatus.APPROVED,
-                AppropriationStatus.ACTIVE,
-            ]),
+            Appropriation.status.in_(
+                [
+                    AppropriationStatus.APPROVED,
+                    AppropriationStatus.ACTIVE,
+                ]
+            ),
         )
         if appropriation_id:
             approp_stmt = approp_stmt.where(
@@ -80,10 +82,12 @@ class AvailableBalanceService:
             func.coalesce(func.sum(Commitment.cancelled_amount), 0),
         ).where(
             Commitment.organization_id == organization_id,
-            Commitment.status.notin_([
-                CommitmentStatus.CANCELLED,
-                CommitmentStatus.LAPSED,
-            ]),
+            Commitment.status.notin_(
+                [
+                    CommitmentStatus.CANCELLED,
+                    CommitmentStatus.LAPSED,
+                ]
+            ),
         )
         if fund_id:
             commit_stmt = commit_stmt.where(Commitment.fund_id == fund_id)
@@ -115,7 +119,7 @@ class AvailableBalanceService:
             currency_stmt = currency_stmt.where(Appropriation.fund_id == fund_id)
         if account_id:
             currency_stmt = currency_stmt.where(Appropriation.account_id == account_id)
-        currency_code = (self.db.scalar(currency_stmt.limit(1)) or "NGN")
+        currency_code = self.db.scalar(currency_stmt.limit(1)) or "NGN"
 
         return AvailableBalanceResponse(
             organization_id=organization_id,

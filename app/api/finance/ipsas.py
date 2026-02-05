@@ -537,12 +537,6 @@ def get_financial_position(
     """Generate IPSAS 1 Statement of Financial Position."""
     from app.services.finance.ipsas.ipsas_statement_service import IPSASStatementService
 
-    if fund_id is not None:
-        raise HTTPException(
-            status_code=400,
-            detail="Fund-level IPSAS statements are not supported yet.",
-        )
-
     return IPSASStatementService(db).generate_financial_position(
         organization_id, fiscal_period_id, fund_id=fund_id
     )
@@ -559,12 +553,6 @@ def get_financial_performance(
     """Generate IPSAS 1 Statement of Financial Performance."""
     from app.services.finance.ipsas.ipsas_statement_service import IPSASStatementService
 
-    if fund_id is not None:
-        raise HTTPException(
-            status_code=400,
-            detail="Fund-level IPSAS statements are not supported yet.",
-        )
-
     return IPSASStatementService(db).generate_financial_performance(
         organization_id, fiscal_period_id, fund_id=fund_id
     )
@@ -573,6 +561,7 @@ def get_financial_performance(
 @router.get("/reports/changes-net-assets")
 def get_changes_net_assets(
     fiscal_period_id: UUID = Query(...),
+    fund_id: Optional[UUID] = None,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ipsas:reports:read")),
     db: Session = Depends(get_db),
@@ -581,7 +570,7 @@ def get_changes_net_assets(
     from app.services.finance.ipsas.ipsas_statement_service import IPSASStatementService
 
     return IPSASStatementService(db).generate_changes_in_net_assets(
-        organization_id, fiscal_period_id
+        organization_id, fiscal_period_id, fund_id=fund_id
     )
 
 
@@ -595,12 +584,6 @@ def get_cash_flow(
 ):
     """Generate IPSAS 2 Cash Flow Statement."""
     from app.services.finance.ipsas.ipsas_statement_service import IPSASStatementService
-
-    if fund_id is not None:
-        raise HTTPException(
-            status_code=400,
-            detail="Fund-level IPSAS statements are not supported yet.",
-        )
 
     return IPSASStatementService(db).generate_cash_flow(
         organization_id, fiscal_period_id, fund_id=fund_id

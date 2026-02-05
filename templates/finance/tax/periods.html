@@ -33,7 +33,7 @@
                         <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{{ period.start_date }}</td>
                         <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{{ period.end_date }}</td>
                         <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{{ period.due_date }}</td>
-                        <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{{ period.status }}</td>
+                        <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{{ period.status | replace('_', ' ') | title }}</td>
                     </tr>
                     {% else %}
                     <tr>

@@ -38,7 +38,7 @@
             <div class="flex flex-wrap items-end gap-4">
                 <div class="w-32">
                     <label for="year" class="form-label">Year</label>
-                    <input type="number" name="year" id="year" value="{{ year | default('') }}" class="form-input w-full" placeholder="2024">
+                    <input type="number" name="year" id="year" value="{{ year | default('', true) }}" class="form-input w-full" placeholder="2024">
                 </div>
                 <div class="w-44">
                     <label for="is_active" class="form-label">Status</label>

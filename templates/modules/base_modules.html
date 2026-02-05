@@ -11,7 +11,7 @@
         sidebarOpen: false,
         sidebarCollapsed: false,
         sidebarCollapsedStored: localStorage.getItem('appSidebarCollapsed') === 'true',
-        activeModule: '{{ active_module | default('inventory') }}',
+        activeModule: '{{ active_module | default('fleet') }}',
         isDesktop: false,
         viewportWidth: 0,
         init() {
@@ -21,6 +21,18 @@
                 if (!this.isDesktop) {
                     document.body.style.overflow = open ? 'hidden' : '';
                 }
+            });
+            this.$nextTick(() => {
+                const path = window.location.pathname;
+                this.$el.querySelectorAll('.ml-8 a[href]').forEach(link => {
+                    const href = (link.getAttribute('href') || '').split('?')[0];
+                    if (!href) return;
+                    const segments = href.split('/').filter(Boolean);
+                    if (path === href || (segments.length >= 2 && path.startsWith(href + '/'))) {
+                        link.classList.remove('text-slate-600', 'dark:text-slate-400');
+                        link.classList.add('text-amber-800', 'bg-amber-50/50', 'font-medium', 'dark:text-amber-200', 'dark:bg-amber-900/20');
+                    }
+                });
             });
         },
         updateViewport() {
@@ -70,15 +82,15 @@
 
         <!-- Logo/Brand -->
         <div class="flex h-16 items-center justify-between border-b border-slate-200 px-4 dark:border-slate-800">
-            <a href="/" class="flex items-center gap-3" x-show="!sidebarCollapsed" x-cloak>
+            <a href="/fleet" class="flex items-center gap-3" x-show="!sidebarCollapsed" x-cloak>
                 <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 text-white shadow-lg shadow-amber-500/25">
                     <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
                     </svg>
                 </div>
-                <span class="font-display font-semibold text-slate-900 dark:text-white">Modules</span>
+                <span class="font-display font-semibold text-slate-900 dark:text-white">Operations</span>
             </a>
-            <a href="/" x-show="sidebarCollapsed" x-cloak class="mx-auto">
+            <a href="/fleet" x-show="sidebarCollapsed" x-cloak class="mx-auto">
                 <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 text-white shadow-lg shadow-amber-500/25">
                     <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
@@ -105,61 +117,6 @@
                 </svg>
                 <span x-show="!sidebarCollapsed" class="truncate" x-cloak>Dashboard</span>
             </a>
-
-            <!-- Section Divider: Inventory -->
-            <div class="pt-4 pb-2" x-show="!sidebarCollapsed" x-cloak>
-                <span class="px-3 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Inventory</span>
-            </div>
-
-            <!-- Inventory Module -->
-            <div x-data="{ open: ['items','categories','warehouses','transactions','material_requests','counts','boms','price_lists','lots','inv_reports'].includes(activeModule) }">
-                <button @click="open = !open"
-                        :class="['items','categories','warehouses','transactions','material_requests','counts','boms','price_lists','lots','inv_reports'].includes(activeModule) ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
-                        class="flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 font-medium transition-all">
-                    <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
-                    </svg>
-                    <span x-show="!sidebarCollapsed" class="flex-1 truncate text-left" x-cloak>Inventory</span>
-                    <svg x-show="!sidebarCollapsed" class="h-4 w-4 transition-transform duration-200" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24" x-cloak>
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-                    </svg>
-                </button>
-                <div x-show="open && !sidebarCollapsed" x-collapse x-cloak class="ml-8 mt-1 space-y-0.5">
-                    <a href="/inventory/items" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Items</a>
-                    <a href="/inventory/categories" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Categories</a>
-                    <a href="/inventory/warehouses" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Warehouses</a>
-                    <a href="/inventory/transactions" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Transactions</a>
-                    <a href="/inventory/counts" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Stock Counts</a>
-                    <a href="/inventory/boms" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Bill of Materials</a>
-                    <a href="/inventory/price-lists" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Price Lists</a>
-                    <a href="/inventory/lots" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Lots & Serials</a>
-                    {% if auth is defined and (auth.is_admin or auth.has_permission('inv:material_requests:read')) %}
-                    <a href="/inventory/material-requests" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Material Requests</a>
-                    {% endif %}
-                    <a href="/inventory/reports" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Reports</a>
-                </div>
-            </div>
-
-            <!-- Transaction Shortcuts -->
-            <div x-data="{ open: activeModule === 'inv-transactions' }">
-                <button @click="open = !open"
-                        :class="activeModule === 'inv-transactions' ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
-                        class="flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 font-medium transition-all">
-                    <svg class="h-5 w-5 flex-shrink-0 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
-                    </svg>
-                    <span x-show="!sidebarCollapsed" class="flex-1 truncate text-left" x-cloak>Quick Entry</span>
-                    <svg x-show="!sidebarCollapsed" class="h-4 w-4 transition-transform duration-200" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24" x-cloak>
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-                    </svg>
-                </button>
-                <div x-show="open && !sidebarCollapsed" x-collapse x-cloak class="ml-8 mt-1 space-y-0.5">
-                    <a href="/inventory/transactions/receipt/new" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Receipt</a>
-                    <a href="/inventory/transactions/issue/new" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Issue</a>
-                    <a href="/inventory/transactions/transfer/new" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Transfer</a>
-                    <a href="/inventory/transactions/adjustment/new" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Adjustment</a>
-                </div>
-            </div>
 
             <!-- Section Divider: Support -->
             <div class="pt-4 pb-2" x-show="!sidebarCollapsed" x-cloak>
@@ -208,33 +165,6 @@
             {% endif %}
 
 
-            <!-- Section Divider: Procurement -->
-            <div class="pt-4 pb-2" x-show="!sidebarCollapsed" x-cloak>
-                <span class="px-3 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Procurement</span>
-            </div>
-
-            <!-- Procurement Management Module -->
-            <div x-data="{ open: ['procurement','proc_plans','proc_requisitions','proc_rfqs','proc_contracts','proc_vendors'].includes(activeModule) }">
-                <button @click="open = !open"
-                        :class="['procurement','proc_plans','proc_requisitions','proc_rfqs','proc_contracts','proc_vendors'].includes(activeModule) ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
-                        class="flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 font-medium transition-all">
-                    <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                    </svg>
-                    <span x-show="!sidebarCollapsed" class="flex-1 truncate text-left" x-cloak>Procurement</span>
-                    <svg x-show="!sidebarCollapsed" class="h-4 w-4 transition-transform duration-200" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24" x-cloak>
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-                    </svg>
-                </button>
-                <div x-show="open && !sidebarCollapsed" x-collapse x-cloak class="ml-8 mt-1 space-y-0.5">
-                    <a href="/procurement" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Dashboard</a>
-                    <a href="/procurement/plans" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Plans</a>
-                    <a href="/procurement/requisitions" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Requisitions</a>
-                    <a href="/procurement/rfqs" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">RFQs</a>
-                    <a href="/procurement/contracts" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Contracts</a>
-                    <a href="/procurement/vendors" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Vendors</a>
-                </div>
-            </div>
             <!-- Section Divider: Projects -->
             <div class="pt-4 pb-2" x-show="!sidebarCollapsed" x-cloak>
                 <span class="px-3 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Projects</span>
@@ -294,12 +224,32 @@
             </a>
             {% endif %}
 
+            <!-- Inventory -->
+            <a href="/inventory/items"
+               class="flex items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 font-medium text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800/50 transition-all">
+                <svg class="h-5 w-5 flex-shrink-0 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+                </svg>
+                <span x-show="!sidebarCollapsed" class="truncate" x-cloak>Inventory</span>
+            </a>
+
+            <!-- Procurement -->
+            {% if "procurement" in accessible_modules %}
+            <a href="/procurement"
+               class="flex items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 font-medium text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800/50 transition-all">
+                <svg class="h-5 w-5 flex-shrink-0 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                </svg>
+                <span x-show="!sidebarCollapsed" class="truncate" x-cloak>Procurement</span>
+            </a>
+            {% endif %}
+
             <!-- Expense -->
             {% if "expense" in accessible_modules %}
             <a href="/expense"
                class="flex items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 font-medium text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800/50 transition-all">
-                <svg class="h-5 w-5 flex-shrink-0 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/>
+                <svg class="h-5 w-5 flex-shrink-0 text-pink-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
                 </svg>
                 <span x-show="!sidebarCollapsed" class="truncate" x-cloak>Expenses</span>
             </a>
@@ -320,7 +270,7 @@
         <!-- Footer -->
         <div class="border-t border-slate-200 p-3 dark:border-slate-800 space-y-1">
             <!-- Settings -->
-            <a href="/settings"
+            <a href="{{ settings_url | default('/settings') }}"
                :class="activeModule === 'settings' ? 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-300'"
                class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors">
                 <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -425,7 +375,7 @@
                     </button>
 
                     <!-- Notifications -->
-                    <div x-data="{ open: false, notifications: {{ notifications | default([]) | tojson }} }" class="relative">
+                    <div x-data='{ open: false, notifications: {{ notifications | default([]) | tojson }} }' class="relative">
                         <button @click="open = !open"
                                 class="relative rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-300 transition-colors"
                                 aria-label="Notifications">

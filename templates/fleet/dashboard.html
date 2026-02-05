@@ -47,7 +47,7 @@
                     </svg>
                 </div>
                 <div>
-                    <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ summary.available_vehicles }}</p>
+                    <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ summary.available_vehicles | default(0) }}</p>
                     <p class="text-xs text-slate-500 dark:text-slate-400">Available</p>
                 </div>
             </div>
@@ -61,7 +61,7 @@
                     </svg>
                 </div>
                 <div>
-                    <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ summary.in_maintenance }}</p>
+                    <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ summary.in_maintenance | default(0) }}</p>
                     <p class="text-xs text-slate-500 dark:text-slate-400">In Maintenance</p>
                 </div>
             </div>
@@ -74,7 +74,7 @@
                     </svg>
                 </div>
                 <div>
-                    <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ summary.assigned_vehicles }}</p>
+                    <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ summary.assigned_vehicles | default(0) }}</p>
                     <p class="text-xs text-slate-500 dark:text-slate-400">Assigned</p>
                 </div>
             </div>
@@ -87,7 +87,7 @@
                     </svg>
                 </div>
                 <div>
-                    <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ summary.out_of_service }}</p>
+                    <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ summary.out_of_service | default(0) }}</p>
                     <p class="text-xs text-slate-500 dark:text-slate-400">Out of Service</p>
                 </div>
             </div>

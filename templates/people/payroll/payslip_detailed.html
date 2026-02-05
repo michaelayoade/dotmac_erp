@@ -462,7 +462,7 @@
         {% if slip.is_prorated is defined and slip.is_prorated %}
         <div class="proration-notice">
             <strong>Pro-rated Salary:</strong>
-            {% set reason = slip.proration_reason | default('') %}
+            {% set reason = slip.proration_reason | default('', true) %}
             {% if reason == 'JOINED_MID_PERIOD' %}
             Employee joined on {{ slip.employee_start_in_period.strftime('%B %d, %Y') if slip.employee_start_in_period else 'mid-period' }}.
             {% elif reason == 'LEFT_MID_PERIOD' %}

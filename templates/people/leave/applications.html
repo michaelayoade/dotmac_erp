@@ -69,19 +69,19 @@
                 </div>
                 <div class="w-52">
                     <label for="employee_id" class="form-label">Employee ID</label>
-                    <input type="text" name="employee_id" id="employee_id" value="{{ employee_id | default('') }}" class="form-input w-full" placeholder="UUID">
+                    <input type="text" name="employee_id" id="employee_id" value="{{ employee_id | default('', true) }}" class="form-input w-full" placeholder="UUID">
                 </div>
                 <div class="w-52">
                     <label for="leave_type_id" class="form-label">Leave Type ID</label>
-                    <input type="text" name="leave_type_id" id="leave_type_id" value="{{ leave_type_id | default('') }}" class="form-input w-full" placeholder="UUID">
+                    <input type="text" name="leave_type_id" id="leave_type_id" value="{{ leave_type_id | default('', true) }}" class="form-input w-full" placeholder="UUID">
                 </div>
                 <div class="w-44">
                     <label for="start_date" class="form-label">From</label>
-                    <input type="date" name="start_date" id="start_date" value="{{ start_date | default('') }}" class="form-input w-full">
+                    <input type="date" name="start_date" id="start_date" value="{{ start_date | default('', true) }}" class="form-input w-full">
                 </div>
                 <div class="w-44">
                     <label for="end_date" class="form-label">To</label>
-                    <input type="date" name="end_date" id="end_date" value="{{ end_date | default('') }}" class="form-input w-full">
+                    <input type="date" name="end_date" id="end_date" value="{{ end_date | default('', true) }}" class="form-input w-full">
                 </div>
                 <button type="submit" class="btn btn-secondary h-10">Filter</button>
             </div>

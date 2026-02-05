@@ -91,6 +91,7 @@
                 </div>
 
                 <div class="flex items-center">
+                    <input type="hidden" name="is_active" value="false">
                     <input type="checkbox" name="is_active" id="is_active" value="true"
                         {{ 'checked' if not department or department.is_active }}
                         class="rounded border-slate-300 text-teal-600 focus:ring-teal-500">

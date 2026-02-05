@@ -10,25 +10,37 @@ from unittest.mock import MagicMock, patch, AsyncMock
 
 import pytest
 from fastapi import HTTPException
+from sqlalchemy import String
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import Mapped, mapped_column
 
+from app.db import Base
 from app.services.bulk_actions import BulkActionService
 from app.schemas.bulk_actions import BulkActionResult
 
 
 # ============ Concrete Test Implementation ============
 
-class MockModel:
-    """Mock SQLAlchemy model for testing."""
+class TestModel(Base):
+    """Real SQLAlchemy model so that and_() receives proper column objects."""
 
-    id = MagicMock()
-    organization_id = MagicMock()
-    is_active = MagicMock()
+    __tablename__ = "test_bulk_model"
+    __table_args__ = {"extend_existing": True}
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False
+    )
+    is_active: Mapped[bool] = mapped_column(default=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=True)
 
 
-class ConcreteBulkService(BulkActionService[MockModel]):
+class ConcreteBulkService(BulkActionService[TestModel]):
     """Concrete implementation of BulkActionService for testing."""
 
-    model = MockModel
+    model = TestModel
     export_fields = [
         ("id", "ID"),
         ("name", "Name"),
@@ -382,9 +394,9 @@ class TestBulkExport:
 
         response = await service.bulk_export([uuid.uuid4()])
 
-        # Get the CSV content
+        # Get the CSV content from the async body_iterator
         content = ""
-        for chunk in response.body_iterator:
+        async for chunk in response.body_iterator:
             content = chunk if isinstance(chunk, str) else chunk.decode()
 
         lines = content.strip().split("\n")
@@ -410,7 +422,7 @@ class TestBulkExport:
         response = await service.bulk_export([uuid.uuid4()])
 
         content = ""
-        for chunk in response.body_iterator:
+        async for chunk in response.body_iterator:
             content = chunk if isinstance(chunk, str) else chunk.decode()
 
         assert "Test Entity" in content

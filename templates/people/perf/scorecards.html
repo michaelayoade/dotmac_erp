@@ -196,10 +196,10 @@
         </p>
         <div class="flex gap-2">
             {% if has_prev %}
-            <a href="?page={{ page - 1 }}&employee_id={{ employee_id | default('') }}&department_id={{ department_id | default('') }}&is_finalized={{ is_finalized | default('') }}" class="btn btn-secondary btn-sm">Previous</a>
+            <a href="?page={{ page - 1 }}&employee_id={{ employee_id | default('', true) }}&department_id={{ department_id | default('', true) }}&is_finalized={{ is_finalized | default('', true) }}" class="btn btn-secondary btn-sm">Previous</a>
             {% endif %}
             {% if has_next %}
-            <a href="?page={{ page + 1 }}&employee_id={{ employee_id | default('') }}&department_id={{ department_id | default('') }}&is_finalized={{ is_finalized | default('') }}" class="btn btn-secondary btn-sm">Next</a>
+            <a href="?page={{ page + 1 }}&employee_id={{ employee_id | default('', true) }}&department_id={{ department_id | default('', true) }}&is_finalized={{ is_finalized | default('', true) }}" class="btn btn-secondary btn-sm">Next</a>
             {% endif %}
         </div>
     </div>

@@ -26,13 +26,13 @@
                 <div>
                     <label for="template_name" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Template Name *</label>
                     <input type="text" id="template_name" name="template_name" required
-                           value="{{ template.template_name if template else form_data.template_name | default('') }}"
+                           value="{{ template.template_name if template else form_data.template_name | default('', true) }}"
                            class="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                 </div>
                 <div>
                     <label for="description" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Description</label>
                     <textarea id="description" name="description" rows="3"
-                              class="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">{{ template.description if template else form_data.description | default('') }}</textarea>
+                              class="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">{{ template.description if template else form_data.description | default('', true) }}</textarea>
                 </div>
                 {% if not is_edit %}
                 <div>
@@ -68,13 +68,13 @@
                     <div>
                         <label for="start_date" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Start Date *</label>
                         <input type="date" id="start_date" name="start_date" required
-                               value="{{ template.start_date if template else form_data.start_date | default('') }}"
+                               value="{{ template.start_date if template else form_data.start_date | default('', true) }}"
                                class="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                     </div>
                     <div>
                         <label for="end_date" class="block text-sm font-medium text-slate-700 dark:text-slate-300">End Date</label>
                         <input type="date" id="end_date" name="end_date"
-                               value="{{ template.end_date if template else form_data.end_date | default('') }}"
+                               value="{{ template.end_date if template else form_data.end_date | default('', true) }}"
                                class="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                     </div>
                 </div>
@@ -82,7 +82,7 @@
                     <div>
                         <label for="occurrences_limit" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Max Occurrences</label>
                         <input type="number" id="occurrences_limit" name="occurrences_limit" min="1"
-                               value="{{ template.occurrences_limit if template else form_data.occurrences_limit | default('') }}"
+                               value="{{ template.occurrences_limit if template else form_data.occurrences_limit | default('', true) }}"
                                placeholder="Unlimited"
                                class="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                     </div>
@@ -120,7 +120,7 @@
                 <div>
                     <label for="notify_email" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Notification Email</label>
                     <input type="email" id="notify_email" name="notify_email"
-                           value="{{ template.notify_email if template else form_data.notify_email | default('') }}"
+                           value="{{ template.notify_email if template else form_data.notify_email | default('', true) }}"
                            placeholder="Leave blank to use account email"
                            class="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                 </div>

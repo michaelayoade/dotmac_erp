@@ -49,12 +49,30 @@ def _form_str(form: Any, key: str) -> str:
 def list_departments(
     request: Request,
     search: Optional[str] = None,
+    is_active: Optional[str] = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
     """Department list page."""
-    return hr_web_service.list_departments_response(request, auth, db, search, page)
+    filter_is_active: Optional[bool] = None
+    if is_active is None:
+        filter_is_active = True
+    else:
+        text = str(is_active).strip().lower()
+        if text in {"true", "1", "yes", "active"}:
+            filter_is_active = True
+        elif text in {"false", "0", "no", "inactive"}:
+            filter_is_active = False
+
+    return hr_web_service.list_departments_response(
+        request,
+        auth,
+        db,
+        search,
+        page,
+        filter_is_active,
+    )
 
 
 @router.get("/departments/new", response_class=HTMLResponse)

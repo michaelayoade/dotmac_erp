@@ -96,6 +96,8 @@ class IPSASWebService:
             AppropriationService,
         )
 
+        from app.services.finance.ipsas.fund_service import FundService
+
         svc = AppropriationService(self.db)
         offset = (page - 1) * PAGE_SIZE
         appropriations = svc.list_for_org(
@@ -108,8 +110,14 @@ class IPSASWebService:
         )
         total = svc.count_for_org(organization_id, fiscal_year_id=fiscal_year_id)
 
+        # Build fund lookup for display
+        fund_svc = FundService(self.db)
+        funds = fund_svc.list_for_org(organization_id)
+        fund_map = {f.fund_id: f for f in funds}
+
         return {
             "appropriations": appropriations,
+            "fund_map": fund_map,
             "total": total,
             "page": page,
             "page_size": PAGE_SIZE,
@@ -131,7 +139,9 @@ class IPSASWebService:
         )
 
         approp_svc = AppropriationService(self.db)
-        approp = approp_svc.get_or_404(appropriation_id, organization_id=organization_id)
+        approp = approp_svc.get_or_404(
+            appropriation_id, organization_id=organization_id
+        )
         allotments = approp_svc.list_allotments(
             approp.organization_id, appropriation_id=appropriation_id
         )
@@ -226,6 +236,32 @@ class IPSASWebService:
             "total_pages": (total + PAGE_SIZE - 1) // PAGE_SIZE,
             "fiscal_year_id_filter": fiscal_year_id,
             "status_filter": status,
+        }
+
+    def virement_detail_context(
+        self, organization_id: UUID, virement_id: UUID
+    ) -> dict:
+        """Build context for virement detail page."""
+        from app.services.finance.ipsas.appropriation_service import (
+            AppropriationService,
+        )
+        from app.services.finance.ipsas.virement_service import VirementService
+
+        svc = VirementService(self.db)
+        virement = svc.get_or_404(virement_id, organization_id=organization_id)
+
+        approp_svc = AppropriationService(self.db)
+        from_approp = approp_svc.get_or_404(
+            virement.from_appropriation_id, organization_id=organization_id
+        )
+        to_approp = approp_svc.get_or_404(
+            virement.to_appropriation_id, organization_id=organization_id
+        )
+
+        return {
+            "virement": virement,
+            "from_appropriation": from_approp,
+            "to_appropriation": to_approp,
         }
 
     # ─── Reports ──────────────────────────────────────────────────────

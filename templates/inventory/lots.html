@@ -1,5 +1,5 @@
-{% extends "modules/base_modules.html" %}
-{% from "components/macros.html" import pagination, empty_state %}
+{% extends "inventory/base_inventory.html" %}
+{% from "components/macros.html" import pagination, empty_state, status_badge %}
 
 {% block page_title %}Lots & Serial Numbers{% endblock %}
 
@@ -93,7 +93,7 @@
                 <svg class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
                 </svg>
-                <input type="text" name="search" value="{{ search | default('') }}"
+                <input type="text" name="search" value="{{ search | default('', true) }}"
                        placeholder="Search by lot number or item..."
                        class="form-input pl-10 w-full">
             </div>
@@ -155,21 +155,13 @@
                         </td>
                         <td>
                             {% if lot.is_quarantined %}
-                            <span class="inline-flex items-center rounded-full bg-rose-100 px-2.5 py-0.5 text-xs font-medium text-rose-700 dark:bg-rose-900/30 dark:text-rose-400">
-                                Quarantined
-                            </span>
+                            {{ status_badge("QUARANTINED") }}
                             {% elif lot.expiry_date and lot.expiry_date < now %}
-                            <span class="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-400">
-                                Expired
-                            </span>
+                            {{ status_badge("EXPIRED") }}
                             {% elif (lot.remaining_quantity or 0) <= 0 %}
-                            <span class="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-400">
-                                Depleted
-                            </span>
+                            {{ status_badge("DEPLETED") }}
                             {% else %}
-                            <span class="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
-                                Available
-                            </span>
+                            {{ status_badge("AVAILABLE") }}
                             {% endif %}
                         </td>
                         <td>

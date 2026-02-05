@@ -1,4 +1,4 @@
-{% extends "modules/base_modules.html" %}
+{% extends "procurement/base_procurement.html" %}
 
 {% block page_title %}Procurement Contracts{% endblock %}
 
@@ -24,10 +24,10 @@
         <form method="get" class="flex flex-wrap gap-3 items-end">
             <div>
                 <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Status</label>
-                <select name="status" class="input-field text-sm">
+                <select name="status" class="form-select text-sm">
                     <option value="">All</option>
                     {% for s in contract_statuses %}
-                    <option value="{{ s.value }}" {% if filter_status == s.value %}selected{% endif %}>{{ s.value }}</option>
+                    <option value="{{ s.value }}" {% if filter_status == s.value %}selected{% endif %}>{{ s.value | replace('_', ' ') | title }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -58,12 +58,28 @@
                         <td class="px-4 py-3 text-slate-600 dark:text-slate-400">{{ contract.supplier_name }}</td>
                         <td class="px-4 py-3 text-right font-medium text-slate-900 dark:text-white">{{ "{:,.2f}".format(contract.contract_value) }}</td>
                         <td class="px-4 py-3">
-                            {% set label, color = status_labels.get(contract.status, ("Unknown", "slate")) %}
-                            <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-{{ color }}-100 text-{{ color }}-700 dark:bg-{{ color }}-900/30 dark:text-{{ color }}-400">{{ label }}</span>
+                            {% set label, classes = status_labels.get(contract.status, ("Unknown", "bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-400")) %}
+                            <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium {{ classes }}">{{ label }}</span>
                         </td>
                     </tr>
                     {% else %}
-                    <tr><td colspan="5" class="px-4 py-8 text-center text-slate-500 dark:text-slate-400">No contracts found.</td></tr>
+                    <tr>
+                        <td colspan="5" class="py-12">
+                            <div class="text-center">
+                                <svg class="mx-auto h-12 w-12 text-slate-300 dark:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                                </svg>
+                                <p class="mt-2 text-sm font-medium text-slate-900 dark:text-white">No contracts found</p>
+                                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                                    {% if filter_status %}
+                                    Try adjusting your filter criteria
+                                    {% else %}
+                                    Contracts will appear here once RFQs are awarded
+                                    {% endif %}
+                                </p>
+                            </div>
+                        </td>
+                    </tr>
                     {% endfor %}
                 </tbody>
             </table>

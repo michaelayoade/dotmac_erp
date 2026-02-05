@@ -55,11 +55,13 @@
                         <th class="px-6 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Status</th>
                         <th class="px-6 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Amount</th>
                         <th class="px-6 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Created</th>
+                        <th class="px-6 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Actions</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
                     {% for v in virements %}
-                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/80">
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/80 cursor-pointer"
+                        onclick="window.location='/finance/ipsas/virements/{{ v.virement_id }}'">
                         <td class="px-6 py-4 font-mono text-sm font-medium text-primary-600 dark:text-primary-400">{{ v.virement_number }}</td>
                         <td class="px-6 py-4 text-slate-900 dark:text-white max-w-xs truncate">{{ v.description }}</td>
                         <td class="px-6 py-4">
@@ -77,10 +79,33 @@
                         </td>
                         <td class="px-6 py-4 text-right font-mono text-slate-900 dark:text-white">{{ "{:,.2f}".format(v.amount) }} {{ v.currency_code }}</td>
                         <td class="px-6 py-4 text-slate-500 dark:text-slate-400">{{ v.created_at.strftime('%Y-%m-%d') if v.created_at else '' }}</td>
+                        <td class="px-6 py-4 text-right">
+                            <div class="flex items-center justify-end gap-2">
+                                {% if v.status.value == 'SUBMITTED' %}
+                                <form method="POST" action="/finance/ipsas/virements/{{ v.virement_id }}/approve" class="inline"
+                                      onsubmit="return confirm('Approve this virement? Budget amounts will be adjusted upon application.')">
+                                    <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+                                    <button type="submit"
+                                            class="rounded-lg bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 dark:hover:bg-blue-900/50">
+                                        Approve
+                                    </button>
+                                </form>
+                                {% elif v.status.value == 'APPROVED' %}
+                                <form method="POST" action="/finance/ipsas/virements/{{ v.virement_id }}/apply" class="inline"
+                                      onsubmit="return confirm('Apply this virement? This will transfer budget from the source to destination appropriation and cannot be undone.')">
+                                    <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+                                    <button type="submit"
+                                            class="rounded-lg bg-green-50 px-3 py-1 text-xs font-medium text-green-700 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-400 dark:hover:bg-green-900/50">
+                                        Apply
+                                    </button>
+                                </form>
+                                {% endif %}
+                            </div>
+                        </td>
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="5" class="px-6 py-12 text-center text-slate-500 dark:text-slate-400">
+                        <td colspan="6" class="px-6 py-12 text-center text-slate-500 dark:text-slate-400">
                             No virements found. <a href="/finance/ipsas/virements/new" class="text-primary-600 hover:text-primary-700 dark:text-primary-400">Create one</a>.
                         </td>
                     </tr>

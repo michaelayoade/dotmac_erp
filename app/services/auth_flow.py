@@ -421,6 +421,12 @@ def _load_rbac_claims(db: Session, person_id: str):
         "inv:material_requests:create",
         "inv:material_requests:submit",
         "inv:material_requests:delete",
+        "leave:applications:approve:tier1",
+        "leave:applications:approve:tier2",
+        "leave:applications:approve:tier3",
+        "expense:claims:approve:tier1",
+        "expense:claims:approve:tier2",
+        "expense:claims:approve:tier3",
     }
     permissions = (
         db.query(Permission)

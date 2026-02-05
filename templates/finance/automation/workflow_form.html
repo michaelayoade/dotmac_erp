@@ -16,7 +16,18 @@
 
 {% block content %}
 <div class="mx-auto max-w-3xl">
-    <form method="post" action="/automation/workflows/{% if is_edit %}{{ rule.rule_id }}/edit{% else %}new{% endif %}" class="space-y-6">
+    <form method="post"
+          action="/automation/workflows/{% if is_edit %}{{ rule.rule_id }}/edit{% else %}new{% endif %}"
+          class="space-y-6"
+          x-data="workflowForm({
+            triggerEvent: '{{ rule.trigger_event_raw if rule else form_data.trigger_event | default('', true) }}',
+            actionType: '{{ rule.action_type_raw if rule else form_data.action_type | default('', true) }}',
+            triggerConditions: {{ (rule.trigger_conditions if rule else form_data.trigger_conditions | default({}, true)) | tojson }},
+            actionConfig: {{ (rule.action_config if rule else form_data.action_config | default({}, true)) | tojson }},
+            scheduleConfig: {{ (rule.schedule_config if rule else form_data.schedule_config | default(None, true)) | tojson }},
+            cooldownSeconds: '{{ rule.cooldown_seconds if rule else form_data.cooldown_seconds | default('', true) }}'
+          })"
+          x-effect="syncAll()">
         <!-- Basic Info -->
         <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50">
             <div class="border-b border-slate-200 px-6 py-4 dark:border-slate-700">
@@ -26,13 +37,13 @@
                 <div>
                     <label for="rule_name" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Rule Name *</label>
                     <input type="text" id="rule_name" name="rule_name" required
-                           value="{{ rule.rule_name if rule else form_data.rule_name | default('') }}"
+                           value="{{ rule.rule_name if rule else form_data.rule_name | default('', true) }}"
                            class="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                 </div>
                 <div>
                     <label for="description" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Description</label>
                     <textarea id="description" name="description" rows="2"
-                              class="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">{{ rule.description if rule else form_data.description | default('') }}</textarea>
+                              class="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">{{ rule.description if rule else form_data.description | default('', true) }}</textarea>
                 </div>
             </div>
         </div>
@@ -57,7 +68,7 @@
                     </div>
                     <div>
                         <label for="trigger_event" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Trigger Event *</label>
-                        <select id="trigger_event" name="trigger_event" required {% if is_edit %}disabled{% endif %}
+                        <select id="trigger_event" name="trigger_event" x-model="triggerEvent" required {% if is_edit %}disabled{% endif %}
                                 class="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                             <option value="">Select trigger...</option>
                             {% for te in trigger_events %}
@@ -65,6 +76,181 @@
                             {% endfor %}
                         </select>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Trigger Conditions -->
+        <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50">
+            <div class="border-b border-slate-200 px-6 py-4 dark:border-slate-700">
+                <h3 class="font-semibold text-slate-900 dark:text-white">Trigger Conditions</h3>
+                <p class="text-sm text-slate-500 dark:text-slate-400">Define when this rule should match.</p>
+            </div>
+            <div class="p-6 space-y-5">
+                <div class="flex items-center gap-3">
+                    <input type="checkbox" id="use_field_conditions" x-model="useFieldConditions"
+                           class="h-4 w-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500">
+                    <label for="use_field_conditions" class="text-sm font-medium text-slate-700 dark:text-slate-300">Match field values</label>
+                </div>
+                <div x-show="useFieldConditions" x-cloak class="space-y-3">
+                    <template x-for="(cond, index) in fieldConditions" :key="index">
+                        <div class="grid gap-3 sm:grid-cols-12">
+                            <div class="sm:col-span-4">
+                                <input type="text" placeholder="Field name" x-model="cond.field"
+                                       class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                            </div>
+                            <div class="sm:col-span-4">
+                                <select x-model="cond.operator"
+                                        class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                                    <option value="equals">Equals</option>
+                                    <option value="not_equals">Not equals</option>
+                                    <option value="greater_than">Greater than</option>
+                                    <option value="greater_than_or_equal">Greater than or equal</option>
+                                    <option value="less_than">Less than</option>
+                                    <option value="less_than_or_equal">Less than or equal</option>
+                                    <option value="contains">Contains</option>
+                                    <option value="starts_with">Starts with</option>
+                                    <option value="ends_with">Ends with</option>
+                                    <option value="matches">Matches (regex)</option>
+                                    <option value="in">In (comma list)</option>
+                                    <option value="not_in">Not in (comma list)</option>
+                                    <option value="is_null">Is empty</option>
+                                    <option value="is_not_null">Is not empty</option>
+                                </select>
+                            </div>
+                            <div class="sm:col-span-3">
+                                <input type="text" placeholder="Value" x-model="cond.value"
+                                       class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                            </div>
+                            <div class="sm:col-span-1 flex items-center justify-end">
+                                <button type="button" class="text-sm text-rose-600 hover:text-rose-700"
+                                        @click="removeFieldCondition(index)">Remove</button>
+                            </div>
+                        </div>
+                    </template>
+                    <button type="button" class="text-sm font-medium text-violet-600 hover:text-violet-700" @click="addFieldCondition()">
+                        Add field condition
+                    </button>
+                </div>
+
+                <div class="flex items-center gap-3">
+                    <input type="checkbox" id="use_status_change" x-model="useStatusChange"
+                           class="h-4 w-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500">
+                    <label for="use_status_change" class="text-sm font-medium text-slate-700 dark:text-slate-300">Match status change</label>
+                </div>
+                <div x-show="useStatusChange" x-cloak class="grid gap-3 sm:grid-cols-2">
+                    <div>
+                        <label class="block text-sm text-slate-600 dark:text-slate-400">From status</label>
+                        <input type="text" placeholder="e.g., PENDING" x-model="statusFrom"
+                               class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                    </div>
+                    <div>
+                        <label class="block text-sm text-slate-600 dark:text-slate-400">To status</label>
+                        <input type="text" placeholder="e.g., APPROVED" x-model="statusTo"
+                               class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-3">
+                    <input type="checkbox" id="use_changed_fields" x-model="useChangedFields"
+                           class="h-4 w-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500">
+                    <label for="use_changed_fields" class="text-sm font-medium text-slate-700 dark:text-slate-300">Match changed fields</label>
+                </div>
+                <div x-show="useChangedFields" x-cloak>
+                    <input type="text" placeholder="status, total_amount, due_date" x-model="changedFieldsInput"
+                           class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Comma-separated list of fields to watch.</p>
+                </div>
+
+                <div class="flex items-center gap-3">
+                    <input type="checkbox" id="use_amount_threshold" x-model="useAmountThreshold"
+                           class="h-4 w-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500">
+                    <label for="use_amount_threshold" class="text-sm font-medium text-slate-700 dark:text-slate-300">Match amount threshold</label>
+                </div>
+                <div x-show="useAmountThreshold" x-cloak class="grid gap-3 sm:grid-cols-3">
+                    <div>
+                        <label class="block text-sm text-slate-600 dark:text-slate-400">Amount field</label>
+                        <input type="text" placeholder="total_amount" x-model="amountField"
+                               class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                    </div>
+                    <div>
+                        <label class="block text-sm text-slate-600 dark:text-slate-400">Operator</label>
+                        <select x-model="amountOperator"
+                                class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                            <option value="greater_than">Greater than</option>
+                            <option value="greater_than_or_equal">Greater than or equal</option>
+                            <option value="less_than">Less than</option>
+                            <option value="less_than_or_equal">Less than or equal</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm text-slate-600 dark:text-slate-400">Value</label>
+                        <input type="number" step="0.01" placeholder="0.00" x-model="amountValue"
+                               class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                    </div>
+                </div>
+
+                <div x-show="advancedConditionsEnabled" x-cloak class="rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-700 dark:bg-amber-900/20">
+                    <p class="text-sm text-amber-700 dark:text-amber-300">This rule uses advanced condition groups. Edit the JSON below to avoid losing logic.</p>
+                    <textarea rows="5" x-model="advancedConditionsJson"
+                              class="mt-3 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm font-mono focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400 dark:border-amber-700 dark:bg-slate-900 dark:text-white"></textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- Schedule -->
+        <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50"
+             x-show="triggerEvent === 'ON_SCHEDULE'" x-cloak>
+            <div class="border-b border-slate-200 px-6 py-4 dark:border-slate-700">
+                <h3 class="font-semibold text-slate-900 dark:text-white">Schedule</h3>
+                <p class="text-sm text-slate-500 dark:text-slate-400">Configure how often scheduled workflows run.</p>
+            </div>
+            <div class="p-6 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Interval (minutes) *</label>
+                    <input type="number" min="1" x-model.number="scheduleInterval" :required="triggerEvent === 'ON_SCHEDULE'"
+                           class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Entity status filter</label>
+                    <input type="text" placeholder="e.g., OVERDUE" x-model="scheduleStatus"
+                           class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                </div>
+                <div class="space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Additional filters</span>
+                        <button type="button" class="text-sm font-medium text-violet-600 hover:text-violet-700" @click="addScheduleFilter()">
+                            Add filter
+                        </button>
+                    </div>
+                    <template x-for="(filter, index) in scheduleFilters" :key="index">
+                        <div class="grid gap-3 sm:grid-cols-12">
+                            <div class="sm:col-span-4">
+                                <input type="text" placeholder="Field name" x-model="filter.field"
+                                       class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                            </div>
+                            <div class="sm:col-span-4">
+                                <select x-model="filter.operator"
+                                        class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                                    <option value="equals">Equals</option>
+                                    <option value="not_equals">Not equals</option>
+                                    <option value="greater_than">Greater than</option>
+                                    <option value="less_than">Less than</option>
+                                    <option value="is_null">Is empty</option>
+                                    <option value="is_not_null">Is not empty</option>
+                                </select>
+                            </div>
+                            <div class="sm:col-span-3">
+                                <input type="text" placeholder="Value" x-model="filter.value"
+                                       class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                            </div>
+                            <div class="sm:col-span-1 flex items-center justify-end">
+                                <button type="button" class="text-sm text-rose-600 hover:text-rose-700"
+                                        @click="removeScheduleFilter(index)">Remove</button>
+                            </div>
+                        </div>
+                    </template>
+                    <p x-show="scheduleFilters.length === 0" x-cloak class="text-xs text-slate-500 dark:text-slate-400">No extra filters applied.</p>
                 </div>
             </div>
         </div>
@@ -78,7 +264,7 @@
             <div class="p-6 space-y-4">
                 <div>
                     <label for="action_type" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Action Type *</label>
-                    <select id="action_type" name="action_type" required {% if is_edit %}disabled{% endif %}
+                    <select id="action_type" name="action_type" x-model="actionType" required {% if is_edit %}disabled{% endif %}
                             class="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                         <option value="">Select action...</option>
                         {% for at in action_types %}
@@ -96,12 +282,259 @@
             </div>
         </div>
 
+        <!-- Action Configuration -->
+        <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50">
+            <div class="border-b border-slate-200 px-6 py-4 dark:border-slate-700">
+                <h3 class="font-semibold text-slate-900 dark:text-white">Action Configuration</h3>
+                <p class="text-sm text-slate-500 dark:text-slate-400">Provide the details needed to execute the action.</p>
+            </div>
+            <div class="p-6 space-y-5">
+                <p x-show="!actionType" x-cloak class="text-sm text-slate-500 dark:text-slate-400">Select an action type to configure details.</p>
+
+                <div x-show="actionType === 'SEND_EMAIL'" x-cloak class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Recipients *</label>
+                        <input type="text" placeholder="email1@company.com, email2@company.com" x-model="emailRecipients"
+                               :required="actionType === 'SEND_EMAIL'"
+                               class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Subject *</label>
+                        <input type="text" placeholder="Workflow Notification" x-model="emailSubject"
+                               :required="actionType === 'SEND_EMAIL'"
+                               class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">HTML Body *</label>
+                        <textarea rows="4" x-model="emailBodyHtml" :required="actionType === 'SEND_EMAIL'"
+                                  class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white"></textarea>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Text Body (optional)</label>
+                        <textarea rows="3" x-model="emailBodyText"
+                                  class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white"></textarea>
+                    </div>
+                </div>
+
+                <div x-show="actionType === 'SEND_NOTIFICATION'" x-cloak class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Recipient IDs *</label>
+                        <input type="text" placeholder="UUIDs separated by commas" x-model="notificationRecipients"
+                               :required="actionType === 'SEND_NOTIFICATION'"
+                               class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                    </div>
+                    <div class="grid gap-3 sm:grid-cols-2">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Title *</label>
+                            <input type="text" placeholder="Workflow Notification" x-model="notificationTitle"
+                                   :required="actionType === 'SEND_NOTIFICATION'"
+                                   class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Channel</label>
+                            <select x-model="notificationChannel"
+                                    class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                                <option value="IN_APP">In-app</option>
+                                <option value="EMAIL">Email</option>
+                                <option value="BOTH">Both</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Message *</label>
+                        <textarea rows="3" x-model="notificationMessage" :required="actionType === 'SEND_NOTIFICATION'"
+                                  class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white"></textarea>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Action URL (optional)</label>
+                        <input type="text" placeholder="/finance/invoices/123" x-model="notificationActionUrl"
+                               class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                    </div>
+                </div>
+
+                <div x-show="actionType === 'VALIDATE'" x-cloak class="space-y-4">
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Validation rules</span>
+                        <button type="button" class="text-sm font-medium text-violet-600 hover:text-violet-700" @click="addValidationRule()">
+                            Add validation rule
+                        </button>
+                    </div>
+                    <template x-for="(rule, index) in validationRules" :key="index">
+                        <div class="grid gap-3 sm:grid-cols-12">
+                            <div class="sm:col-span-3">
+                                <input type="text" placeholder="Field name" x-model="rule.field"
+                                       class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                            </div>
+                            <div class="sm:col-span-3">
+                                <select x-model="rule.operator"
+                                        class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                                    <option value="equals">Equals</option>
+                                    <option value="not_equals">Not equals</option>
+                                    <option value="greater_than">Greater than</option>
+                                    <option value="greater_than_or_equal">Greater than or equal</option>
+                                    <option value="less_than">Less than</option>
+                                    <option value="less_than_or_equal">Less than or equal</option>
+                                    <option value="contains">Contains</option>
+                                    <option value="starts_with">Starts with</option>
+                                    <option value="ends_with">Ends with</option>
+                                    <option value="matches">Matches (regex)</option>
+                                    <option value="in">In (comma list)</option>
+                                    <option value="not_in">Not in (comma list)</option>
+                                    <option value="is_null">Is empty</option>
+                                    <option value="is_not_null">Is not empty</option>
+                                </select>
+                            </div>
+                            <div class="sm:col-span-3">
+                                <input type="text" placeholder="Expected value" x-model="rule.value"
+                                       class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                            </div>
+                            <div class="sm:col-span-2">
+                                <input type="text" placeholder="Error message" x-model="rule.message"
+                                       class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                            </div>
+                            <div class="sm:col-span-1 flex items-center justify-end">
+                                <button type="button" class="text-sm text-rose-600 hover:text-rose-700"
+                                        @click="removeValidationRule(index)">Remove</button>
+                            </div>
+                        </div>
+                    </template>
+                    <p x-show="validationRules.length === 0" x-cloak class="text-xs text-slate-500 dark:text-slate-400">No validation rules configured.</p>
+                </div>
+
+                <div x-show="actionType === 'UPDATE_FIELD'" x-cloak class="grid gap-3 sm:grid-cols-2">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Field *</label>
+                        <input type="text" placeholder="status" x-model="updateFieldName"
+                               :required="actionType === 'UPDATE_FIELD'"
+                               class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Value *</label>
+                        <input type="text" placeholder="APPROVED" x-model="updateFieldValue"
+                               :required="actionType === 'UPDATE_FIELD'"
+                               class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                    </div>
+                </div>
+
+                <div x-show="actionType === 'CREATE_TASK'" x-cloak class="space-y-4">
+                    <div class="grid gap-3 sm:grid-cols-2">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Project ID *</label>
+                            <input type="text" placeholder="Project UUID" x-model="taskProjectId"
+                                   :required="actionType === 'CREATE_TASK'"
+                                   class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Assignee ID (optional)</label>
+                            <input type="text" placeholder="User UUID" x-model="taskAssigneeId"
+                                   class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                        </div>
+                    </div>
+                    <div class="grid gap-3 sm:grid-cols-2">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Priority</label>
+                            <select x-model="taskPriority"
+                                    class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                                <option value="LOW">Low</option>
+                                <option value="MEDIUM">Medium</option>
+                                <option value="HIGH">High</option>
+                                <option value="URGENT">Urgent</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Title *</label>
+                            <input type="text" placeholder="Workflow Task" x-model="taskTitle"
+                                   :required="actionType === 'CREATE_TASK'"
+                                   class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Description</label>
+                        <textarea rows="3" x-model="taskDescription"
+                                  class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white"></textarea>
+                    </div>
+                </div>
+
+                <div x-show="actionType === 'WEBHOOK'" x-cloak class="space-y-4">
+                    <div class="grid gap-3 sm:grid-cols-2">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Webhook URL *</label>
+                            <input type="text" placeholder="https://example.com/webhook" x-model="webhookUrl"
+                                   :required="actionType === 'WEBHOOK'"
+                                   class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Method</label>
+                            <select x-model="webhookMethod"
+                                    class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                                <option value="POST">POST</option>
+                                <option value="GET">GET</option>
+                                <option value="PUT">PUT</option>
+                                <option value="PATCH">PATCH</option>
+                                <option value="DELETE">DELETE</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="space-y-3">
+                        <div class="flex items-center justify-between">
+                            <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Headers</span>
+                            <button type="button" class="text-sm font-medium text-violet-600 hover:text-violet-700" @click="addWebhookHeader()">
+                                Add header
+                            </button>
+                        </div>
+                        <template x-for="(header, index) in webhookHeaders" :key="index">
+                            <div class="grid gap-3 sm:grid-cols-12">
+                                <div class="sm:col-span-5">
+                                    <input type="text" placeholder="Header name" x-model="header.key"
+                                           class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                                </div>
+                                <div class="sm:col-span-6">
+                                    <input type="text" placeholder="Header value" x-model="header.value"
+                                           class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                                </div>
+                                <div class="sm:col-span-1 flex items-center justify-end">
+                                    <button type="button" class="text-sm text-rose-600 hover:text-rose-700"
+                                            @click="removeWebhookHeader(index)">Remove</button>
+                                </div>
+                            </div>
+                        </template>
+                        <p x-show="webhookHeaders.length === 0" x-cloak class="text-xs text-slate-500 dark:text-slate-400">No headers added.</p>
+                    </div>
+                </div>
+
+                <div x-show="actionType === 'BLOCK'" x-cloak>
+                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Block message *</label>
+                    <input type="text" placeholder="Operation blocked by workflow rule" x-model="blockMessage"
+                           :required="actionType === 'BLOCK'"
+                           class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                </div>
+
+                <div x-show="actionType === 'TRIGGER_RULE'" x-cloak>
+                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Target Rule ID *</label>
+                    <input type="text" placeholder="Rule UUID" x-model="triggerRuleId"
+                           :required="actionType === 'TRIGGER_RULE'"
+                           class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                </div>
+            </div>
+        </div>
+
+        <input type="hidden" name="trigger_conditions" x-bind:value="triggerConditionsJson">
+        <input type="hidden" name="action_config" x-bind:value="actionConfigJson">
+        <input type="hidden" name="schedule_config" x-bind:value="scheduleConfigJson">
+
         <!-- Options -->
         <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50">
             <div class="border-b border-slate-200 px-6 py-4 dark:border-slate-700">
                 <h3 class="font-semibold text-slate-900 dark:text-white">Options</h3>
             </div>
             <div class="p-6 space-y-4">
+                <div>
+                    <label for="cooldown_seconds" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Cooldown (seconds)</label>
+                    <input type="number" id="cooldown_seconds" name="cooldown_seconds" min="0" x-model="cooldownSeconds"
+                           value="{{ rule.cooldown_seconds if rule else form_data.cooldown_seconds | default('', true) }}"
+                           class="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Minimum time between executions for the same entity.</p>
+                </div>
                 <label class="flex items-center gap-3">
                     <input type="checkbox" name="stop_on_match" {{ 'checked' if (rule.stop_on_match if rule else form_data.stop_on_match) else '' }}
                            class="h-4 w-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500">
@@ -140,4 +573,310 @@
         </div>
     </form>
 </div>
+
+<script>
+function workflowForm(initial) {
+    const parseJson = (value, fallback) => {
+        if (value === null || value === undefined || value === "") {
+            return fallback;
+        }
+        if (typeof value === "object") {
+            return value;
+        }
+        if (typeof value === "string") {
+            try {
+                return JSON.parse(value);
+            } catch (e) {
+                return fallback;
+            }
+        }
+        return fallback;
+    };
+
+    const triggerConditions = parseJson(initial.triggerConditions, {});
+    const actionConfig = parseJson(initial.actionConfig, {});
+    const scheduleConfig = parseJson(initial.scheduleConfig, null);
+
+    const advancedConditionsEnabled = Boolean(
+        triggerConditions && triggerConditions.operator && triggerConditions.groups
+    );
+
+    const fieldsObj = (triggerConditions && triggerConditions.fields) || {};
+    const fieldConditions = Object.entries(fieldsObj).map(([field, condition]) => {
+        if (condition && typeof condition === "object" && "operator" in condition) {
+            return {
+                field,
+                operator: condition.operator || "equals",
+                value: condition.value === undefined || condition.value === null ? "" : String(condition.value),
+            };
+        }
+        return { field, operator: "equals", value: condition === undefined || condition === null ? "" : String(condition) };
+    });
+
+    const amountThreshold = triggerConditions && triggerConditions.amount_threshold ? triggerConditions.amount_threshold : {};
+
+    const validationRules = Array.isArray(actionConfig.rules)
+        ? actionConfig.rules.map((rule) => ({
+            field: rule.field || "",
+            operator: (rule.condition && rule.condition.operator) || "equals",
+            value: (rule.condition && rule.condition.value) !== undefined ? String(rule.condition.value) : "",
+            message: rule.message || "",
+        }))
+        : [];
+
+    const webhookHeaders = actionConfig.headers && typeof actionConfig.headers === "object"
+        ? Object.entries(actionConfig.headers).map(([key, value]) => ({ key, value: String(value) }))
+        : [];
+
+    const scheduleFilters = scheduleConfig && scheduleConfig.entity_query && Array.isArray(scheduleConfig.entity_query.filters)
+        ? scheduleConfig.entity_query.filters.map((filter) => ({
+            field: filter.field || "",
+            operator: filter.operator || "equals",
+            value: filter.value === undefined || filter.value === null ? "" : String(filter.value),
+        }))
+        : [];
+
+    return {
+        triggerEvent: initial.triggerEvent || "",
+        actionType: initial.actionType || "",
+        cooldownSeconds: initial.cooldownSeconds || "",
+        useFieldConditions: fieldConditions.length > 0 && !advancedConditionsEnabled,
+        fieldConditions: fieldConditions.length > 0 ? fieldConditions : [{ field: "", operator: "equals", value: "" }],
+        useStatusChange: Boolean(triggerConditions.status_from || triggerConditions.status_to) && !advancedConditionsEnabled,
+        statusFrom: triggerConditions.status_from || "",
+        statusTo: triggerConditions.status_to || "",
+        useChangedFields: Array.isArray(triggerConditions.changed_fields) && triggerConditions.changed_fields.length > 0 && !advancedConditionsEnabled,
+        changedFieldsInput: Array.isArray(triggerConditions.changed_fields) ? triggerConditions.changed_fields.join(", ") : "",
+        useAmountThreshold: Boolean(amountThreshold && amountThreshold.value) && !advancedConditionsEnabled,
+        amountField: amountThreshold.field || "total_amount",
+        amountOperator: amountThreshold.operator || "greater_than",
+        amountValue: amountThreshold.value === undefined || amountThreshold.value === null ? "" : String(amountThreshold.value),
+        advancedConditionsEnabled: advancedConditionsEnabled,
+        advancedConditionsJson: advancedConditionsEnabled ? JSON.stringify(triggerConditions, null, 2) : "",
+        emailRecipients: Array.isArray(actionConfig.recipients) ? actionConfig.recipients.join(", ") : "",
+        emailSubject: actionConfig.subject || "Workflow Notification",
+        emailBodyHtml: actionConfig.body_html || "",
+        emailBodyText: actionConfig.body_text || "",
+        notificationRecipients: Array.isArray(actionConfig.recipient_ids) ? actionConfig.recipient_ids.join(", ") : "",
+        notificationTitle: actionConfig.title || "Workflow Notification",
+        notificationMessage: actionConfig.message || "",
+        notificationActionUrl: actionConfig.action_url || "",
+        notificationChannel: actionConfig.channel || "IN_APP",
+        validationRules: validationRules,
+        updateFieldName: actionConfig.field || "",
+        updateFieldValue: actionConfig.value === undefined || actionConfig.value === null ? "" : String(actionConfig.value),
+        taskProjectId: actionConfig.project_id || "",
+        taskAssigneeId: actionConfig.assignee_id || "",
+        taskPriority: actionConfig.priority || "MEDIUM",
+        taskTitle: actionConfig.title || "Workflow Task",
+        taskDescription: actionConfig.description || "",
+        webhookUrl: actionConfig.url || "",
+        webhookMethod: actionConfig.method || "POST",
+        webhookHeaders: webhookHeaders,
+        blockMessage: actionConfig.message || "Operation blocked by workflow rule",
+        triggerRuleId: actionConfig.rule_id || "",
+        scheduleInterval: scheduleConfig && scheduleConfig.interval_minutes ? scheduleConfig.interval_minutes : 60,
+        scheduleStatus: scheduleConfig && scheduleConfig.entity_query ? (scheduleConfig.entity_query.status || "") : "",
+        scheduleFilters: scheduleFilters,
+        triggerConditionsJson: "",
+        actionConfigJson: "",
+        scheduleConfigJson: "",
+        addFieldCondition() {
+            this.fieldConditions.push({ field: "", operator: "equals", value: "" });
+        },
+        removeFieldCondition(index) {
+            this.fieldConditions.splice(index, 1);
+        },
+        addValidationRule() {
+            this.validationRules.push({ field: "", operator: "equals", value: "", message: "" });
+        },
+        removeValidationRule(index) {
+            this.validationRules.splice(index, 1);
+        },
+        addWebhookHeader() {
+            this.webhookHeaders.push({ key: "", value: "" });
+        },
+        removeWebhookHeader(index) {
+            this.webhookHeaders.splice(index, 1);
+        },
+        addScheduleFilter() {
+            this.scheduleFilters.push({ field: "", operator: "equals", value: "" });
+        },
+        removeScheduleFilter(index) {
+            this.scheduleFilters.splice(index, 1);
+        },
+        buildTriggerConditions() {
+            if (this.advancedConditionsEnabled) {
+                const parsed = parseJson(this.advancedConditionsJson, {});
+                return parsed || {};
+            }
+            const conditions = {};
+            if (this.useFieldConditions) {
+                const fields = {};
+                this.fieldConditions.forEach((cond) => {
+                    const field = (cond.field || "").trim();
+                    if (!field) {
+                        return;
+                    }
+                    const operator = cond.operator || "equals";
+                    if (operator === "is_null" || operator === "is_not_null") {
+                        fields[field] = { operator: operator, value: null };
+                        return;
+                    }
+                    let value = cond.value;
+                    if (operator === "in" || operator === "not_in") {
+                        value = String(cond.value || "")
+                            .split(",")
+                            .map((item) => item.trim())
+                            .filter((item) => item);
+                    }
+                    fields[field] = { operator: operator, value: value };
+                });
+                if (Object.keys(fields).length > 0) {
+                    conditions.fields = fields;
+                }
+            }
+
+            if (this.useStatusChange) {
+                if (this.statusFrom) {
+                    conditions.status_from = this.statusFrom.trim();
+                }
+                if (this.statusTo) {
+                    conditions.status_to = this.statusTo.trim();
+                }
+            }
+
+            if (this.useChangedFields) {
+                const items = String(this.changedFieldsInput || "")
+                    .split(",")
+                    .map((item) => item.trim())
+                    .filter((item) => item);
+                if (items.length > 0) {
+                    conditions.changed_fields = items;
+                }
+            }
+
+            if (this.useAmountThreshold && this.amountValue !== "") {
+                conditions.amount_threshold = {
+                    field: this.amountField || "total_amount",
+                    operator: this.amountOperator || "greater_than",
+                    value: this.amountValue,
+                };
+            }
+
+            return conditions;
+        },
+        buildActionConfig() {
+            const config = {};
+            if (this.actionType === "SEND_EMAIL") {
+                const recipients = String(this.emailRecipients || "")
+                    .split(",")
+                    .map((item) => item.trim())
+                    .filter((item) => item);
+                config.recipients = recipients;
+                config.subject = this.emailSubject || "Workflow Notification";
+                config.body_html = this.emailBodyHtml || "";
+                if (this.emailBodyText) {
+                    config.body_text = this.emailBodyText;
+                }
+            } else if (this.actionType === "SEND_NOTIFICATION") {
+                const recipients = String(this.notificationRecipients || "")
+                    .split(",")
+                    .map((item) => item.trim())
+                    .filter((item) => item);
+                config.recipient_ids = recipients;
+                config.title = this.notificationTitle || "Workflow Notification";
+                config.message = this.notificationMessage || "";
+                if (this.notificationActionUrl) {
+                    config.action_url = this.notificationActionUrl;
+                }
+                config.channel = this.notificationChannel || "IN_APP";
+            } else if (this.actionType === "VALIDATE") {
+                const rules = this.validationRules
+                    .filter((rule) => rule.field)
+                    .map((rule) => {
+                        let value = rule.value;
+                        if (rule.operator === "in" || rule.operator === "not_in") {
+                            value = String(rule.value || "")
+                                .split(",")
+                                .map((item) => item.trim())
+                                .filter((item) => item);
+                        }
+                        return {
+                            field: rule.field,
+                            condition: {
+                                operator: rule.operator || "equals",
+                                value: value,
+                            },
+                            message: rule.message || `Validation failed for ${rule.field}`,
+                        };
+                    });
+                config.rules = rules;
+            } else if (this.actionType === "UPDATE_FIELD") {
+                config.field = this.updateFieldName || "";
+                config.value = this.updateFieldValue || "";
+            } else if (this.actionType === "CREATE_TASK") {
+                config.project_id = this.taskProjectId || "";
+                if (this.taskAssigneeId) {
+                    config.assignee_id = this.taskAssigneeId;
+                }
+                config.priority = this.taskPriority || "MEDIUM";
+                config.title = this.taskTitle || "Workflow Task";
+                config.description = this.taskDescription || "";
+            } else if (this.actionType === "WEBHOOK") {
+                config.url = this.webhookUrl || "";
+                config.method = this.webhookMethod || "POST";
+                const headers = {};
+                this.webhookHeaders.forEach((header) => {
+                    const key = (header.key || "").trim();
+                    if (!key) {
+                        return;
+                    }
+                    headers[key] = header.value || "";
+                });
+                config.headers = headers;
+            } else if (this.actionType === "BLOCK") {
+                config.message = this.blockMessage || "Operation blocked by workflow rule";
+            } else if (this.actionType === "TRIGGER_RULE") {
+                config.rule_id = this.triggerRuleId || "";
+            }
+            return config;
+        },
+        buildScheduleConfig() {
+            if (this.triggerEvent !== "ON_SCHEDULE") {
+                return null;
+            }
+            const config = {
+                interval_minutes: this.scheduleInterval || 60,
+            };
+            const entityQuery = {};
+            if (this.scheduleStatus) {
+                entityQuery.status = this.scheduleStatus;
+            }
+            const filters = this.scheduleFilters
+                .filter((filter) => filter.field)
+                .map((filter) => ({
+                    field: filter.field,
+                    operator: filter.operator || "equals",
+                    value: filter.value,
+                }));
+            if (filters.length > 0) {
+                entityQuery.filters = filters;
+            }
+            if (Object.keys(entityQuery).length > 0) {
+                config.entity_query = entityQuery;
+            }
+            return config;
+        },
+        syncAll() {
+            const triggerConditions = this.buildTriggerConditions() || {};
+            const actionConfig = this.buildActionConfig() || {};
+            const scheduleConfig = this.buildScheduleConfig();
+            this.triggerConditionsJson = JSON.stringify(triggerConditions);
+            this.actionConfigJson = JSON.stringify(actionConfig);
+            this.scheduleConfigJson = scheduleConfig ? JSON.stringify(scheduleConfig) : "";
+        },
+    };
+}
+</script>
 {% endblock %}

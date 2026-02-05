@@ -107,6 +107,9 @@ class MockJournalEntry:
     ):
         self.entry_id = entry_id or uuid.uuid4()
         self.entry_number = entry_number
+        # Aliases matching the actual JournalEntry model field names
+        self.journal_entry_id = self.entry_id
+        self.journal_number = self.entry_number
 
 
 # ============ Fixtures ============

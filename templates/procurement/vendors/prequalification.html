@@ -1,4 +1,4 @@
-{% extends "modules/base_modules.html" %}
+{% extends "procurement/base_procurement.html" %}
 
 {% block page_title %}Vendor Prequalification - {{ vendor.supplier_name }}{% endblock %}
 
@@ -40,8 +40,8 @@
                 <h2 class="text-xl font-semibold text-slate-900 dark:text-white">{{ vendor.supplier_name }}</h2>
                 {% if vendor.registration_number %}<p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Reg: {{ vendor.registration_number }}</p>{% endif %}
             </div>
-            {% set label, color = status_labels.get(vendor.status, ("Unknown", "slate")) %}
-            <span class="inline-flex items-center rounded-full px-3 py-1 text-sm font-medium bg-{{ color }}-100 text-{{ color }}-700 dark:bg-{{ color }}-900/30 dark:text-{{ color }}-400">{{ label }}</span>
+            {% set label, classes = status_labels.get(vendor.status, ("Unknown", "bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-400")) %}
+            <span class="inline-flex items-center rounded-full px-3 py-1 text-sm font-medium {{ classes }}">{{ label }}</span>
         </div>
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
             <div>

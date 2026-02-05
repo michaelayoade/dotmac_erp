@@ -811,6 +811,24 @@ class AutomationWebService:
 
     def build_workflow_input(self, form_data: dict) -> WorkflowRuleInput:
         """Build WorkflowRuleInput from form data."""
+        def _parse_json_field(value: Any, default: Optional[dict]) -> Optional[dict]:
+            if value in (None, "", {}):
+                return default
+            if isinstance(value, dict):
+                return value
+            if isinstance(value, str):
+                import json
+
+                try:
+                    parsed = json.loads(value)
+                except json.JSONDecodeError:
+                    return default
+                if parsed in (None, "", {}):
+                    return default
+                if isinstance(parsed, dict):
+                    return parsed
+            return default
+
         cooldown = None
         if form_data.get("cooldown_seconds"):
             try:
@@ -818,24 +836,21 @@ class AutomationWebService:
             except (ValueError, TypeError):
                 pass
 
-        schedule_config = None
-        if form_data.get("schedule_config"):
-            schedule_config = form_data["schedule_config"]
-            if isinstance(schedule_config, str):
-                import json
-
-                try:
-                    schedule_config = json.loads(schedule_config)
-                except json.JSONDecodeError:
-                    schedule_config = None
+        schedule_config = _parse_json_field(
+            form_data.get("schedule_config"), default=None
+        )
+        trigger_conditions = _parse_json_field(
+            form_data.get("trigger_conditions"), default={}
+        )
+        action_config = _parse_json_field(form_data.get("action_config"), default={})
 
         return WorkflowRuleInput(
             rule_name=form_data["rule_name"],
             entity_type=WorkflowEntityType(form_data["entity_type"]),
             trigger_event=TriggerEvent(form_data["trigger_event"]),
             action_type=ActionType(form_data["action_type"]),
-            trigger_conditions=form_data.get("trigger_conditions", {}),
-            action_config=form_data.get("action_config", {}),
+            trigger_conditions=trigger_conditions or {},
+            action_config=action_config or {},
             description=form_data.get("description"),
             priority=int(form_data.get("priority", 100)),
             stop_on_match=form_data.get("stop_on_match") == "on",

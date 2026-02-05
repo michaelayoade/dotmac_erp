@@ -44,13 +44,13 @@
             <div>
                 <label class="form-label">From date</label>
                 <input type="date" name="from_date" required
-                       value="{{ form_data.from_date | default('') }}"
+                       value="{{ form_data.from_date | default('', true) }}"
                        class="form-input">
             </div>
             <div>
                 <label class="form-label">To date</label>
                 <input type="date" name="to_date" required
-                       value="{{ form_data.to_date | default('') }}"
+                       value="{{ form_data.to_date | default('', true) }}"
                        class="form-input">
             </div>
             <div class="flex items-center gap-2">
@@ -62,7 +62,7 @@
             <div>
                 <label class="form-label">Half-day date</label>
                 <input type="date" name="half_day_date"
-                       value="{{ form_data.half_day_date | default('') }}"
+                       value="{{ form_data.half_day_date | default('', true) }}"
                        class="form-input">
                 <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Required when half-day is selected.</p>
             </div>
@@ -72,14 +72,14 @@
             <div>
                 <label class="form-label">Reason</label>
                 <input type="text" name="reason"
-                       value="{{ form_data.reason | default('') }}"
+                       value="{{ form_data.reason | default('', true) }}"
                        class="form-input"
                        placeholder="e.g., System outage, late approval">
             </div>
             <div>
                 <label class="form-label">Explanation</label>
                 <textarea name="explanation" rows="4" class="form-input"
-                          placeholder="Add details for the request">{{ form_data.explanation | default('') }}</textarea>
+                          placeholder="Add details for the request">{{ form_data.explanation | default('', true) }}</textarea>
             </div>
         </div>
 

@@ -5,7 +5,7 @@ HTML template routes for Recurring Transactions, Workflow Rules,
 Custom Fields, and Document Templates.
 """
 
-from typing import Optional
+from typing import Any, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -560,6 +560,24 @@ async def update_workflow(
     db: Session = Depends(get_db),
 ):
     """Handle workflow rule update form submission."""
+    def _parse_json_field(value: Any, default: Optional[dict]) -> Optional[dict]:
+        if value in (None, "", {}):
+            return default
+        if isinstance(value, dict):
+            return value
+        if isinstance(value, str):
+            import json
+
+            try:
+                parsed = json.loads(value)
+            except json.JSONDecodeError:
+                return default
+            if parsed in (None, "", {}):
+                return default
+            if isinstance(parsed, dict):
+                return parsed
+        return default
+
     content_type = request.headers.get("content-type", "")
 
     if "application/json" in content_type:
@@ -576,16 +594,23 @@ async def update_workflow(
             except (ValueError, TypeError):
                 pass
 
+        trigger_conditions = _parse_json_field(
+            data.get("trigger_conditions"), default=None
+        )
+        action_config = _parse_json_field(data.get("action_config"), default=None)
+        schedule_config = _parse_json_field(data.get("schedule_config"), default=None)
+
         updates = {
             "rule_name": data.get("rule_name"),
             "description": data.get("description"),
-            "trigger_conditions": data.get("trigger_conditions"),
-            "action_config": data.get("action_config"),
+            "trigger_conditions": trigger_conditions,
+            "action_config": action_config,
             "priority": int(data["priority"]) if data.get("priority") else None,
             "stop_on_match": data.get("stop_on_match") == "on",
             "execute_async": data.get("execute_async") != "off",
             "is_active": data.get("is_active") != "off",
             "cooldown_seconds": cooldown,
+            "schedule_config": schedule_config,
         }
         updates = {k: v for k, v in updates.items() if v is not None}
 

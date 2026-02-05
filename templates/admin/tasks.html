@@ -17,7 +17,7 @@
                 <input
                     type="text"
                     name="search"
-                    value="{{ search | default('') }}"
+                    value="{{ search | default('', true) }}"
                     placeholder="Search tasks..."
                     class="w-56 pl-10 pr-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all"
                     hx-get="/admin/tasks"

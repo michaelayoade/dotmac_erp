@@ -437,6 +437,18 @@ def list_projects(
     total = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
     projects = list(db.scalars(stmt.offset(offset).limit(per_page)).all())
 
+    # Stats counts (unfiltered, for the org)
+    base_stmt = select(Project.status, func.count()).where(
+        Project.organization_id == org_id
+    ).group_by(Project.status)
+    rows = db.execute(base_stmt).all()
+    # Normalize keys: status may come back as enum or string
+    status_counts: dict[str, int] = {}
+    for row in rows:
+        key = row[0].value if hasattr(row[0], "value") else str(row[0])
+        status_counts[key] = row[1]
+    total_all = sum(status_counts.values())
+
     context = {
         "request": request,
         **base_context(request, auth, "Projects", "projects", db=db),
@@ -448,6 +460,11 @@ def list_projects(
         "search": search,
         "status_filter": status,
         "statuses": [s.value for s in ProjectStatus],
+        "total_all": total_all,
+        "active_count": status_counts.get("ACTIVE", 0),
+        "completed_count": status_counts.get("COMPLETED", 0),
+        "on_hold_count": status_counts.get("ON_HOLD", 0),
+        "planning_count": status_counts.get("PLANNING", 0),
     }
 
     return templates.TemplateResponse("projects/list.html", context)

@@ -26,13 +26,13 @@
     <div class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-800/50">
         <form method="get" class="flex flex-wrap items-center gap-4">
             <div class="flex-1 min-w-[200px]">
-                <input type="text" name="search" value="{{ search | default('') }}"
+                <input type="text" name="search" value="{{ search | default('', true) }}"
                        placeholder="Search entries..."
                        class="w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
             </div>
-            <input type="date" name="start_date" value="{{ start_date | default('') }}"
+            <input type="date" name="start_date" value="{{ start_date if start_date else '' }}"
                    class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
-            <input type="date" name="end_date" value="{{ end_date | default('') }}"
+            <input type="date" name="end_date" value="{{ end_date if end_date else '' }}"
                    class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
             <select name="status"
                     class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
@@ -77,8 +77,8 @@
                             <p class="text-sm text-slate-900 dark:text-white">{{ entry.description | truncate(50) }}</p>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-400">{{ entry.source_module | default("MANUAL") }}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium font-mono text-slate-900 dark:text-white table-cell-debit">{{ entry.total_debit | default("$0.00") }}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium font-mono text-slate-900 dark:text-white table-cell-credit">{{ entry.total_credit | default("$0.00") }}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium font-mono text-slate-900 dark:text-white table-cell-debit">{{ entry.total_debit | default("0.00") }}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium font-mono text-slate-900 dark:text-white table-cell-credit">{{ entry.total_credit | default("0.00") }}</td>
                         <td class="px-6 py-4 whitespace-nowrap">
                             {% if entry.status == 'POSTED' %}
                             <span class="badge-posted">Posted</span>
@@ -87,7 +87,7 @@
                             {% elif entry.status == 'REVERSED' %}
                             <span class="badge-rejected">Reversed</span>
                             {% else %}
-                            <span class="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-400">{{ entry.status }}</span>
+                            <span class="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-400">{{ entry.status | replace('''_''', ''' ''') | title }}</span>
                             {% endif %}
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-right">

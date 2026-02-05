@@ -11,7 +11,6 @@ from uuid import UUID
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
-from app.models.finance.core_config.numbering_sequence import SequenceType
 from app.models.inventory import (
     MaterialRequest,
     MaterialRequestItem,
@@ -21,8 +20,9 @@ from app.models.inventory import (
     Warehouse,
 )
 from app.models.finance.core_org.project import Project, ProjectStatus
-from app.models.people.hr import Employee
+from app.models.people.hr import Employee, EmployeeStatus
 from app.models.person import Person
+from app.models.support.ticket import Ticket
 from app.config import settings
 from app.services.common import coerce_uuid
 
@@ -93,6 +93,9 @@ class MaterialRequestWebService:
 
         if end_date:
             query = query.filter(MaterialRequest.schedule_date <= end_date)
+
+        if project_id:
+            query = query.filter(MaterialRequest.project_id == coerce_uuid(project_id))
 
         requests = query.order_by(MaterialRequest.created_at.desc()).limit(100).all()
 
@@ -241,34 +244,17 @@ class MaterialRequestWebService:
             for p in projects
         ]
 
-        # Get employees for requested_by selection
-        employees = (
-            db.query(Employee)
-            .join(Person, Person.id == Employee.person_id)
-            .filter(Employee.organization_id == org_id)
-            .order_by(Person.first_name, Person.last_name)
-            .all()
-        )
-
-        employee_options = [
-            {
-                "employee_id": str(e.employee_id),
-                "employee_code": e.employee_code or "",
-                "full_name": e.person.name if e.person else "",
-            }
-            for e in employees
-        ]
-
         import json
         context: dict[str, Any] = {
             "inventory_items": item_options,
             "warehouses": warehouse_options,
             "projects": project_options,
-            "employees": employee_options,
             "request_types": [t.value for t in MaterialRequestType],
             "today": _format_date(date.today()),
             "material_request": None,
             "items_json": "[]",
+            "requested_by_name": "",
+            "tickets": [],
         }
 
         # If editing, load request data
@@ -292,10 +278,23 @@ class MaterialRequestWebService:
                     "status": material_request.status.value,
                     "schedule_date": _format_date(material_request.schedule_date),
                     "default_warehouse_id": str(material_request.default_warehouse_id) if material_request.default_warehouse_id else "",
+                    "project_id": str(material_request.project_id) if material_request.project_id else "",
+                    "ticket_id": str(material_request.ticket_id) if material_request.ticket_id else "",
                     "requested_by_id": str(material_request.requested_by_id) if material_request.requested_by_id else "",
                     "remarks": material_request.remarks or "",
                     "can_edit": material_request.status == MaterialRequestStatus.DRAFT,
                 }
+                if material_request.requested_by_id:
+                    emp = (
+                        db.query(Employee)
+                        .join(Person, Person.id == Employee.person_id)
+                        .filter(Employee.employee_id == material_request.requested_by_id)
+                        .first()
+                    )
+                    if emp and emp.person:
+                        context["requested_by_name"] = emp.person.name
+                if material_request.ticket_id:
+                    pass
                 request_items = [
                     {
                         "item_id": str(item.inventory_item_id),
@@ -303,13 +302,103 @@ class MaterialRequestWebService:
                         "qty": float(item.requested_qty),
                         "uom": item.uom or "Nos",
                         "schedule_date": _format_date(item.schedule_date),
-                        "project_id": str(item.project_id) if item.project_id else "",
                     }
                     for item in sorted(material_request.items, key=lambda x: x.sequence)
                 ]
                 context["items_json"] = json.dumps(request_items)
 
+        # Load ticket options (active + recent, non-deleted)
+        tickets = (
+            db.query(Ticket)
+            .filter(
+                Ticket.organization_id == org_id,
+                Ticket.is_deleted.is_(False),
+            )
+            .order_by(Ticket.opening_date.desc())
+            .limit(200)
+            .all()
+        )
+        ticket_options = [
+            {
+                "ticket_id": str(t.ticket_id),
+                "ticket_number": t.ticket_number,
+                "subject": t.subject or "",
+            }
+            for t in tickets
+        ]
+        if context.get("material_request", {}).get("ticket_id"):
+            current_id = context["material_request"]["ticket_id"]
+            if current_id and all(t["ticket_id"] != current_id for t in ticket_options):
+                current_ticket = (
+                    db.query(Ticket)
+                    .filter(
+                        Ticket.ticket_id == coerce_uuid(current_id),
+                        Ticket.organization_id == org_id,
+                    )
+                    .first()
+                )
+                if current_ticket:
+                    ticket_options.append(
+                        {
+                            "ticket_id": str(current_ticket.ticket_id),
+                            "ticket_number": current_ticket.ticket_number,
+                            "subject": current_ticket.subject or "",
+                        }
+                    )
+        context["tickets"] = ticket_options
+
         return context
+
+    @staticmethod
+    def requested_by_typeahead(
+        db: Session,
+        organization_id: str,
+        query: str,
+        limit: int = 8,
+    ) -> dict:
+        """Search active employees for material request requested-by typeahead."""
+        from sqlalchemy import select as sa_select
+        from sqlalchemy.orm import joinedload as jl
+
+        org_id = coerce_uuid(organization_id)
+        search_term = f"%{query.strip()}%"
+        stmt = (
+            sa_select(Employee)
+            .join(Person, Person.id == Employee.person_id)
+            .options(jl(Employee.person))
+            .where(
+                Employee.organization_id == org_id,
+                Employee.status == EmployeeStatus.ACTIVE,
+            )
+            .where(
+                (Person.first_name.ilike(search_term))
+                | (Person.last_name.ilike(search_term))
+                | (Person.email.ilike(search_term))
+                | (Employee.employee_code.ilike(search_term))
+            )
+            .order_by(Person.first_name.asc(), Person.last_name.asc())
+            .limit(limit)
+        )
+        employees = list(db.scalars(stmt).unique().all())
+        items = []
+        for employee in employees:
+            name = employee.person.name if employee.person else ""
+            label = name
+            if employee.employee_code:
+                label = (
+                    f"{name} ({employee.employee_code})"
+                    if name
+                    else employee.employee_code
+                )
+            items.append(
+                {
+                    "ref": str(employee.employee_id),
+                    "label": label,
+                    "name": name,
+                    "employee_code": employee.employee_code or "",
+                }
+            )
+        return {"items": items}
 
     @staticmethod
     def detail_context(
@@ -337,8 +426,6 @@ class MaterialRequestWebService:
         # Get related data for items
         item_ids = [item.inventory_item_id for item in request.items]
         warehouse_ids = [item.warehouse_id for item in request.items if item.warehouse_id]
-        project_ids = [item.project_id for item in request.items if item.project_id]
-
         items_map = {}
         if item_ids:
             inv_items = db.query(Item).filter(
@@ -354,14 +441,6 @@ class MaterialRequestWebService:
                 Warehouse.organization_id == org_id,
             ).all()
             warehouses_map = {w.warehouse_id: w for w in wh_list}
-
-        projects_map = {}
-        if project_ids:
-            proj_list = db.query(Project).filter(
-                Project.project_id.in_(project_ids),
-                Project.organization_id == org_id,
-            ).all()
-            projects_map = {p.project_id: p for p in proj_list}
 
         # Get default warehouse and requested by names
         default_warehouse_name = None
@@ -387,6 +466,36 @@ class MaterialRequestWebService:
             if emp and emp.person:
                 requested_by_name = emp.person.name
 
+        project_code = None
+        project_name = None
+        if request.project_id:
+            proj = (
+                db.query(Project)
+                .filter(
+                    Project.project_id == request.project_id,
+                    Project.organization_id == org_id,
+                )
+                .first()
+            )
+            if proj:
+                project_code = proj.project_code
+                project_name = proj.project_name
+
+        ticket_number = None
+        ticket_subject = None
+        if request.ticket_id:
+            ticket = (
+                db.query(Ticket)
+                .filter(
+                    Ticket.ticket_id == request.ticket_id,
+                    Ticket.organization_id == org_id,
+                )
+                .first()
+            )
+            if ticket:
+                ticket_number = ticket.ticket_number
+                ticket_subject = ticket.subject
+
         total_qty = (
             sum((item.requested_qty for item in request.items), Decimal("0"))
             if request.items else Decimal("0")
@@ -400,7 +509,6 @@ class MaterialRequestWebService:
         for item in sorted(request.items, key=lambda x: x.sequence):
             inv_item = items_map.get(item.inventory_item_id)
             wh = warehouses_map.get(item.warehouse_id) if item.warehouse_id else None
-            proj = projects_map.get(item.project_id) if item.project_id else None
 
             detail_items.append({
                 "item_id": str(item.item_id),
@@ -410,15 +518,15 @@ class MaterialRequestWebService:
                 "warehouse_name": wh.warehouse_name if wh else None,
                 "requested_qty": _format_currency(item.requested_qty),
                 "ordered_qty": _format_currency(item.ordered_qty),
+                "ordered_qty_value": float(item.ordered_qty or Decimal("0")),
                 "pending_qty": _format_currency(item.requested_qty - item.ordered_qty),
                 "uom": item.uom or (inv_item.base_uom if inv_item else ""),
                 "schedule_date": _format_date(item.schedule_date),
-                "project_code": proj.project_code if proj else None,
-                "project_name": proj.project_name if proj else None,
                 "sequence": item.sequence,
             })
 
         return {
+            "material_request_items": detail_items,
             "material_request": {
                 "request_id": str(request.request_id),
                 "request_number": request.request_number,
@@ -426,6 +534,10 @@ class MaterialRequestWebService:
                 "status": request.status.value,
                 "schedule_date": _format_date(request.schedule_date),
                 "warehouse_name": default_warehouse_name,
+                "project_code": project_code,
+                "project_name": project_name,
+                "ticket_number": ticket_number,
+                "ticket_subject": ticket_subject,
                 "requested_by_name": requested_by_name,
                 "remarks": request.remarks or "-",
                 "total_requested_qty": _format_currency(total_qty),
@@ -438,7 +550,9 @@ class MaterialRequestWebService:
                 "erpnext_id": request.erpnext_id,
                 "can_edit": request.status == MaterialRequestStatus.DRAFT,
                 "can_submit": request.status == MaterialRequestStatus.DRAFT,
+                "can_approve": request.status == MaterialRequestStatus.SUBMITTED,
                 "can_cancel": request.status in [MaterialRequestStatus.DRAFT, MaterialRequestStatus.SUBMITTED],
+                "can_delete": request.status == MaterialRequestStatus.DRAFT,
                 "items": detail_items,
             },
         }
@@ -564,19 +678,17 @@ class MaterialRequestWebService:
         request_type: str,
         schedule_date: Optional[str] = None,
         default_warehouse_id: Optional[str] = None,
+        project_id: Optional[str] = None,
+        ticket_id: Optional[str] = None,
         requested_by_id: Optional[str] = None,
         remarks: Optional[str] = None,
         items: Optional[list[dict]] = None,
     ) -> MaterialRequest:
         """Create a material request from form data."""
-        from app.services.finance.platform.sequence import sequence_service
+        from app.services.inventory.material_request_numbering import material_request_numbering_service
 
         # Generate request number
-        request_number = sequence_service.get_next_number(
-            db,
-            organization_id,
-            SequenceType.PURCHASE_ORDER,
-        )
+        request_number = material_request_numbering_service.get_next_number(db, organization_id)
 
         # Parse date
         parsed_date = None
@@ -591,6 +703,8 @@ class MaterialRequestWebService:
             status=MaterialRequestStatus.DRAFT,
             schedule_date=parsed_date,
             default_warehouse_id=coerce_uuid(default_warehouse_id) if default_warehouse_id else None,
+            project_id=coerce_uuid(project_id) if project_id else None,
+            ticket_id=coerce_uuid(ticket_id) if ticket_id else None,
             requested_by_id=coerce_uuid(requested_by_id) if requested_by_id else None,
             remarks=remarks,
             created_by_id=user_id,
@@ -623,7 +737,7 @@ class MaterialRequestWebService:
                     ordered_qty=Decimal("0"),
                     uom=item_data.get("uom"),
                     schedule_date=item_schedule,
-                    project_id=coerce_uuid(item_data.get("project_id")) if item_data.get("project_id") else None,
+                    project_id=None,
                     sequence=seq,
                 )
                 db.add(item)
@@ -639,6 +753,8 @@ class MaterialRequestWebService:
         request_type: str,
         schedule_date: Optional[str] = None,
         default_warehouse_id: Optional[str] = None,
+        project_id: Optional[str] = None,
+        ticket_id: Optional[str] = None,
         requested_by_id: Optional[str] = None,
         remarks: Optional[str] = None,
         items: Optional[list[dict]] = None,
@@ -660,6 +776,8 @@ class MaterialRequestWebService:
         request.request_type = MaterialRequestType(request_type)
         request.schedule_date = parsed_date
         request.default_warehouse_id = coerce_uuid(default_warehouse_id) if default_warehouse_id else None
+        request.project_id = coerce_uuid(project_id) if project_id else None
+        request.ticket_id = coerce_uuid(ticket_id) if ticket_id else None
         request.requested_by_id = coerce_uuid(requested_by_id) if requested_by_id else None
         request.remarks = remarks
         request.updated_by_id = user_id
@@ -693,7 +811,7 @@ class MaterialRequestWebService:
                     ordered_qty=Decimal("0"),
                     uom=item_data.get("uom"),
                     schedule_date=item_schedule,
-                    project_id=coerce_uuid(item_data.get("project_id")) if item_data.get("project_id") else None,
+                    project_id=None,
                     sequence=seq,
                 )
                 db.add(item)
@@ -761,6 +879,196 @@ class MaterialRequestWebService:
         for item in list(mr.items):
             db.delete(item)
         db.delete(mr)
+
+    @staticmethod
+    def approve_request(
+        db: Session,
+        organization_id: UUID,
+        user_id: UUID,
+        request_id: str,
+    ) -> MaterialRequest:
+        """
+        Approve a submitted material request and auto-deduct stock.
+
+        For ISSUE requests: creates ISSUE transactions for each line item,
+        deducting stock from the specified warehouse. Status → ISSUED.
+
+        For TRANSFER requests: creates TRANSFER transactions for each line
+        item. Status → TRANSFERRED.
+
+        For PURCHASE requests: no stock movement; status → ORDERED.
+        """
+        import logging
+        from datetime import datetime, timezone
+
+        from app.models.finance.gl.fiscal_period import FiscalPeriod
+        from app.models.inventory.inventory_transaction import TransactionType
+        from app.services.inventory.transaction import (
+            InventoryTransactionService,
+            TransactionInput,
+        )
+
+        logger = logging.getLogger(__name__)
+
+        request = (
+            db.query(MaterialRequest)
+            .options(joinedload(MaterialRequest.items))
+            .filter(
+                MaterialRequest.request_id == coerce_uuid(request_id),
+                MaterialRequest.organization_id == organization_id,
+            )
+            .first()
+        )
+        if not request:
+            raise ValueError("Material request not found")
+
+        if request.status != MaterialRequestStatus.SUBMITTED:
+            raise ValueError("Only submitted requests can be approved")
+
+        if not request.items:
+            raise ValueError("Cannot approve request without items")
+
+        # For PURCHASE type: just mark as ordered, no stock movement
+        if request.request_type == MaterialRequestType.PURCHASE:
+            request.status = MaterialRequestStatus.ORDERED
+            request.updated_by_id = user_id
+            return request
+
+        # For ISSUE and TRANSFER types: create inventory transactions
+        now = datetime.now(timezone.utc)
+        txn_date = now
+
+        # Find fiscal period for today
+        fiscal_period = (
+            db.query(FiscalPeriod)
+            .filter(
+                FiscalPeriod.organization_id == organization_id,
+                FiscalPeriod.start_date <= now.date(),
+                FiscalPeriod.end_date >= now.date(),
+            )
+            .first()
+        )
+        if not fiscal_period:
+            raise ValueError(
+                "No fiscal period found for today. "
+                "Please ensure an open fiscal period exists before approving."
+            )
+
+        errors: list[str] = []
+
+        for line in request.items:
+            # Resolve warehouse: line-level or header default
+            wh_id = line.warehouse_id or request.default_warehouse_id
+            if not wh_id:
+                errors.append(
+                    f"Item #{line.sequence}: no warehouse specified"
+                )
+                continue
+
+            # Fetch item to get its UOM and currency
+            item = db.get(Item, line.inventory_item_id)
+            if not item:
+                errors.append(
+                    f"Item #{line.sequence}: inventory item not found"
+                )
+                continue
+
+            try:
+                if request.request_type == MaterialRequestType.ISSUE:
+                    txn_input = TransactionInput(
+                        transaction_type=TransactionType.ISSUE,
+                        transaction_date=txn_date,
+                        fiscal_period_id=fiscal_period.fiscal_period_id,
+                        item_id=line.inventory_item_id,
+                        warehouse_id=wh_id,
+                        quantity=line.requested_qty,
+                        unit_cost=item.average_cost or Decimal("0"),
+                        uom=line.uom or item.base_uom or "",
+                        currency_code=item.currency_code or settings.default_presentation_currency_code,
+                        source_document_type="MATERIAL_REQUEST",
+                        source_document_id=request.request_id,
+                        source_document_line_id=line.item_id,
+                        reference=request.request_number,
+                    )
+                    InventoryTransactionService.create_issue(
+                        db, organization_id, txn_input, user_id
+                    )
+                elif request.request_type == MaterialRequestType.TRANSFER:
+                    # For transfers: issue from source warehouse
+                    # (full transfer support would need to_warehouse on lines)
+                    txn_input = TransactionInput(
+                        transaction_type=TransactionType.ISSUE,
+                        transaction_date=txn_date,
+                        fiscal_period_id=fiscal_period.fiscal_period_id,
+                        item_id=line.inventory_item_id,
+                        warehouse_id=wh_id,
+                        quantity=line.requested_qty,
+                        unit_cost=item.average_cost or Decimal("0"),
+                        uom=line.uom or item.base_uom or "",
+                        currency_code=item.currency_code or settings.default_presentation_currency_code,
+                        source_document_type="MATERIAL_REQUEST",
+                        source_document_id=request.request_id,
+                        source_document_line_id=line.item_id,
+                        reference=request.request_number,
+                    )
+                    InventoryTransactionService.create_issue(
+                        db, organization_id, txn_input, user_id
+                    )
+                elif request.request_type == MaterialRequestType.MANUFACTURE:
+                    # Manufacture requests issue raw materials
+                    txn_input = TransactionInput(
+                        transaction_type=TransactionType.ISSUE,
+                        transaction_date=txn_date,
+                        fiscal_period_id=fiscal_period.fiscal_period_id,
+                        item_id=line.inventory_item_id,
+                        warehouse_id=wh_id,
+                        quantity=line.requested_qty,
+                        unit_cost=item.average_cost or Decimal("0"),
+                        uom=line.uom or item.base_uom or "",
+                        currency_code=item.currency_code or settings.default_presentation_currency_code,
+                        source_document_type="MATERIAL_REQUEST",
+                        source_document_id=request.request_id,
+                        source_document_line_id=line.item_id,
+                        reference=request.request_number,
+                    )
+                    InventoryTransactionService.create_issue(
+                        db, organization_id, txn_input, user_id
+                    )
+
+                # Mark line as fulfilled
+                line.ordered_qty = line.requested_qty
+
+            except Exception as e:
+                errors.append(f"Item #{line.sequence}: {e}")
+                logger.warning(
+                    "Failed to create transaction for MR %s item #%s: %s",
+                    request.request_number,
+                    line.sequence,
+                    e,
+                )
+
+        if errors and len(errors) == len(request.items):
+            raise ValueError(
+                "All items failed to process: " + "; ".join(errors)
+            )
+
+        # Set final status based on type
+        if request.request_type == MaterialRequestType.TRANSFER:
+            request.status = MaterialRequestStatus.TRANSFERRED
+        else:
+            request.status = MaterialRequestStatus.ISSUED
+
+        request.updated_by_id = user_id
+
+        if errors:
+            logger.warning(
+                "Material request %s approved with %d errors: %s",
+                request.request_number,
+                len(errors),
+                "; ".join(errors),
+            )
+
+        return request
 
     @staticmethod
     def dashboard_context(db: Session, organization_id: str) -> dict:

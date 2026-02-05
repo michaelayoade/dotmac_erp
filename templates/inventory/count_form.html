@@ -1,4 +1,4 @@
-{% extends "modules/base_modules.html" %}
+{% extends "inventory/base_inventory.html" %}
 
 {% block page_title %}{{ 'Edit Count' if count else 'New Stock Count' }}{% endblock %}
 
@@ -37,7 +37,7 @@
                 <div>
                     <label for="count_number" class="form-label">Count Number <span class="text-rose-500">*</span></label>
                     <input type="text" id="count_number" name="count_number"
-                           value="{{ count.count_number if count else next_count_number | default('') }}"
+                           value="{{ count.count_number if count else next_count_number | default('', true) }}"
                            class="form-input" required>
                 </div>
                 <div>

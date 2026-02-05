@@ -13,6 +13,8 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import require_organization_id, require_tenant_auth
 from app.services.auth_dependencies import require_tenant_permission
+from app.services.common import coerce_uuid
+from app.services.finance.platform.authorization import AuthorizationService
 from app.db import SessionLocal
 from app.models.domain_settings import SettingDomain
 from app.models.finance.payments.payment_intent import PaymentIntentStatus
@@ -40,6 +42,49 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+def require_expense_reimburse_access(
+    auth=Depends(require_tenant_auth),
+    db: Session = Depends(get_db),
+):
+    """
+    Allow finance users and expense approvers to reimburse via Paystack.
+
+    This covers the reimburse UI flow (list banks, resolve account, initialize
+    transfer, initiate transfer).
+    """
+    roles = set(auth.get("roles") or [])
+    if "admin" in roles:
+        return auth
+
+    scopes = set(auth.get("scopes") or [])
+    if "finance:access" in scopes:
+        return auth
+
+    allowed_permissions = [
+        "payments:read",
+        "payments:expense:initialize",
+        "payments:transfer:initiate",
+        "expense:claims:approve:tier1",
+        "expense:claims:approve:tier2",
+        "expense:claims:approve:tier3",
+    ]
+    if scopes.intersection(allowed_permissions):
+        return auth
+
+    person_id = auth.get("person_id")
+    organization_id = auth.get("organization_id")
+    if person_id and organization_id:
+        if AuthorizationService.check_any_permission(
+            db,
+            coerce_uuid(person_id),
+            allowed_permissions,
+            coerce_uuid(organization_id),
+        ):
+            return auth
+
+    raise HTTPException(status_code=403, detail="Forbidden")
 
 
 # =============================================================================
@@ -354,7 +399,7 @@ def verify_payment(
 def list_banks(
     organization_id: UUID = Depends(require_organization_id),
     db: Session = Depends(get_db),
-    auth: dict = Depends(require_tenant_permission("payments:read")),
+    auth: dict = Depends(require_expense_reimburse_access),
 ):
     """
     List supported banks for transfers.
@@ -381,7 +426,7 @@ def resolve_bank_account(
     request_data: ResolveAccountRequest,
     organization_id: UUID = Depends(require_organization_id),
     db: Session = Depends(get_db),
-    auth: dict = Depends(require_tenant_permission("payments:expense:initialize")),
+    auth: dict = Depends(require_expense_reimburse_access),
 ):
     """
     Resolve a bank account to verify it exists and get the account name.
@@ -420,7 +465,7 @@ def initialize_expense_payment(
     request_data: InitializeExpensePaymentRequest,
     organization_id: UUID = Depends(require_organization_id),
     db: Session = Depends(get_db),
-    auth: dict = Depends(require_tenant_permission("payments:expense:initialize")),
+    auth: dict = Depends(require_expense_reimburse_access),
 ):
     """
     Initialize an expense reimbursement payment (transfer).
@@ -515,7 +560,7 @@ def initiate_transfer(
     intent_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     db: Session = Depends(get_db),
-    auth: dict = Depends(require_tenant_permission("payments:transfer:initiate")),
+    auth: dict = Depends(require_expense_reimburse_access),
 ):
     """
     Initiate a Paystack transfer for an expense reimbursement.

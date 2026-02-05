@@ -230,6 +230,10 @@ class MockSettings:
     captcha_secret_key = None
     # App URL
     app_url = "http://localhost:8000"
+    # SSO settings
+    sso_enabled = False
+    sso_jwt_secret = None
+    sso_cookie_domain = None
 
 
 mock_config_module.settings = MockSettings()

@@ -5,6 +5,7 @@ HTML template routes for IPSAS Fund Accounting, Appropriations,
 Commitments, Virements, and Budget Comparison.
 """
 
+from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 
@@ -172,6 +173,54 @@ def new_appropriation_form(
     )
 
 
+@router.post("/appropriations/new")
+def create_appropriation(
+    request: Request,
+    fiscal_year_id: str = Form(...),
+    fund_id: str = Form(...),
+    appropriation_code: str = Form(...),
+    appropriation_name: str = Form(...),
+    appropriation_type: str = Form(...),
+    approved_amount: str = Form(...),
+    currency_code: str = Form("NGN"),
+    effective_from: str = Form(...),
+    budget_id: Optional[str] = Form(None),
+    account_id: Optional[str] = Form(None),
+    cost_center_id: Optional[str] = Form(None),
+    business_unit_id: Optional[str] = Form(None),
+    appropriation_act_reference: Optional[str] = Form(None),
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Create an appropriation (form submission)."""
+    from datetime import date as date_type
+
+    from app.schemas.finance.ipsas import AppropriationCreate
+    from app.services.finance.ipsas.appropriation_service import AppropriationService
+
+    data = AppropriationCreate(
+        fiscal_year_id=UUID(fiscal_year_id),
+        fund_id=UUID(fund_id),
+        appropriation_code=appropriation_code,
+        appropriation_name=appropriation_name,
+        appropriation_type=appropriation_type,
+        approved_amount=Decimal(approved_amount),
+        currency_code=currency_code,
+        effective_from=date_type.fromisoformat(effective_from),
+        budget_id=UUID(budget_id) if budget_id else None,
+        account_id=UUID(account_id) if account_id else None,
+        cost_center_id=UUID(cost_center_id) if cost_center_id else None,
+        business_unit_id=UUID(business_unit_id) if business_unit_id else None,
+        appropriation_act_reference=appropriation_act_reference or None,
+    )
+    svc = AppropriationService(db)
+    approp = svc.create(auth.organization_id, data, auth.user_id)
+    db.commit()
+    return RedirectResponse(
+        f"/finance/ipsas/appropriations/{approp.appropriation_id}", status_code=303
+    )
+
+
 @router.get("/appropriations/{appropriation_id}", response_class=HTMLResponse)
 def view_appropriation(
     request: Request,
@@ -182,9 +231,32 @@ def view_appropriation(
     """Appropriation detail page."""
     context = base_context(request, auth, "Appropriation Detail", "ipsas", db=db)
     web_svc = IPSASWebService(db)
-    context.update(web_svc.appropriation_detail_context(auth.organization_id, UUID(appropriation_id)))
+    context.update(
+        web_svc.appropriation_detail_context(
+            auth.organization_id, UUID(appropriation_id)
+        )
+    )
     return templates.TemplateResponse(
         request, "finance/ipsas/appropriation_detail.html", context
+    )
+
+
+@router.post("/appropriations/{appropriation_id}/approve")
+def approve_appropriation(
+    request: Request,
+    appropriation_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Approve an appropriation (web form submission)."""
+    from app.services.finance.ipsas.appropriation_service import AppropriationService
+
+    svc = AppropriationService(db)
+    svc.get_or_404(UUID(appropriation_id), auth.organization_id)
+    svc.approve(UUID(appropriation_id), auth.user_id)
+    db.commit()
+    return RedirectResponse(
+        f"/finance/ipsas/appropriations/{appropriation_id}", status_code=303
     )
 
 
@@ -218,6 +290,106 @@ def list_commitments(
     )
 
 
+@router.get("/commitments/new", response_class=HTMLResponse)
+def new_commitment_form(
+    request: Request,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Create commitment form page."""
+    from app.models.finance.gl.account import Account
+    from app.models.finance.gl.fiscal_year import FiscalYear
+    from app.models.finance.gl.fiscal_period import FiscalPeriod
+    from app.models.finance.ipsas.appropriation import Appropriation
+    from app.models.finance.ipsas.fund import Fund
+    from sqlalchemy import select
+
+    context = base_context(request, auth, "New Commitment", "ipsas", db=db)
+    org_id = auth.organization_id
+
+    context["funds"] = list(
+        db.scalars(
+            select(Fund).where(Fund.organization_id == org_id).order_by(Fund.fund_code)
+        ).all()
+    )
+    context["appropriations"] = list(
+        db.scalars(
+            select(Appropriation)
+            .where(Appropriation.organization_id == org_id)
+            .order_by(Appropriation.appropriation_code)
+        ).all()
+    )
+    context["accounts"] = list(
+        db.scalars(
+            select(Account)
+            .where(Account.organization_id == org_id, Account.is_active.is_(True))
+            .order_by(Account.account_code)
+        ).all()
+    )
+    context["fiscal_years"] = list(
+        db.scalars(
+            select(FiscalYear)
+            .where(FiscalYear.organization_id == org_id)
+            .order_by(FiscalYear.start_date.desc())
+        ).all()
+    )
+    context["fiscal_periods"] = list(
+        db.scalars(
+            select(FiscalPeriod)
+            .where(FiscalPeriod.organization_id == org_id)
+            .order_by(FiscalPeriod.start_date.desc())
+        ).all()
+    )
+    context["commitment_types"] = [
+        {"value": "PURCHASE_ORDER", "label": "Purchase Order"},
+        {"value": "CONTRACT", "label": "Contract"},
+        {"value": "PAYROLL", "label": "Payroll"},
+        {"value": "OTHER", "label": "Other"},
+    ]
+
+    return templates.TemplateResponse(
+        request, "finance/ipsas/commitment_form.html", context
+    )
+
+
+@router.post("/commitments/new")
+def create_commitment(
+    request: Request,
+    commitment_number: str = Form(...),
+    commitment_type: str = Form(...),
+    fund_id: str = Form(...),
+    account_id: str = Form(...),
+    fiscal_year_id: str = Form(...),
+    fiscal_period_id: str = Form(...),
+    committed_amount: str = Form(...),
+    currency_code: str = Form("NGN"),
+    appropriation_id: Optional[str] = Form(None),
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Create a commitment (form submission)."""
+    from app.services.finance.ipsas.commitment_service import CommitmentService
+
+    svc = CommitmentService(db)
+    commitment = svc.create(
+        organization_id=auth.organization_id,
+        commitment_number=commitment_number,
+        commitment_type=commitment_type,
+        fund_id=UUID(fund_id),
+        account_id=UUID(account_id),
+        fiscal_year_id=UUID(fiscal_year_id),
+        fiscal_period_id=UUID(fiscal_period_id),
+        committed_amount=Decimal(committed_amount),
+        currency_code=currency_code,
+        created_by_user_id=auth.user_id,
+        appropriation_id=UUID(appropriation_id) if appropriation_id else None,
+    )
+    db.commit()
+    return RedirectResponse(
+        f"/finance/ipsas/commitments/{commitment.commitment_id}", status_code=303
+    )
+
+
 @router.get("/commitments/{commitment_id}", response_class=HTMLResponse)
 def view_commitment(
     request: Request,
@@ -228,7 +400,9 @@ def view_commitment(
     """Commitment detail page."""
     context = base_context(request, auth, "Commitment Detail", "ipsas", db=db)
     web_svc = IPSASWebService(db)
-    context.update(web_svc.commitment_detail_context(auth.organization_id, UUID(commitment_id)))
+    context.update(
+        web_svc.commitment_detail_context(auth.organization_id, UUID(commitment_id))
+    )
     return templates.TemplateResponse(
         request, "finance/ipsas/commitment_detail.html", context
     )
@@ -288,6 +462,111 @@ def new_virement_form(
     )
 
 
+@router.post("/virements/new")
+def create_virement(
+    request: Request,
+    description: str = Form(...),
+    from_appropriation_id: str = Form(...),
+    to_appropriation_id: str = Form(...),
+    amount: str = Form(...),
+    currency_code: str = Form("NGN"),
+    justification: str = Form(...),
+    approval_authority: Optional[str] = Form(None),
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Create a virement (form submission)."""
+    from app.schemas.finance.ipsas import VirementCreate
+    from app.services.finance.ipsas.virement_service import VirementService
+
+    # Resolve fiscal_year_id from the source appropriation
+    from app.models.finance.ipsas.appropriation import Appropriation
+
+    from_approp = db.get(Appropriation, UUID(from_appropriation_id))
+    fiscal_year_id = from_approp.fiscal_year_id if from_approp else None
+    if not fiscal_year_id:
+        return RedirectResponse(
+            "/finance/ipsas/virements?error=invalid_appropriation", status_code=303
+        )
+
+    data = VirementCreate(
+        fiscal_year_id=fiscal_year_id,
+        description=description,
+        from_appropriation_id=UUID(from_appropriation_id),
+        to_appropriation_id=UUID(to_appropriation_id),
+        amount=Decimal(amount),
+        currency_code=currency_code,
+        justification=justification,
+        approval_authority=approval_authority or None,
+    )
+
+    svc = VirementService(db)
+    org_id = auth.organization_id
+    assert org_id is not None
+    virement_number = (
+        f"VIR-{org_id.hex[:6].upper()}-{svc.count_for_org(org_id) + 1:04d}"
+    )
+    svc.create(auth.organization_id, data, auth.user_id, virement_number)
+    db.commit()
+    return RedirectResponse("/finance/ipsas/virements", status_code=303)
+
+
+@router.get("/virements/{virement_id}", response_class=HTMLResponse)
+def view_virement(
+    request: Request,
+    virement_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Virement detail page."""
+    context = base_context(request, auth, "Virement Detail", "ipsas", db=db)
+    web_svc = IPSASWebService(db)
+    context.update(
+        web_svc.virement_detail_context(auth.organization_id, UUID(virement_id))
+    )
+    return templates.TemplateResponse(
+        request, "finance/ipsas/virement_detail.html", context
+    )
+
+
+@router.post("/virements/{virement_id}/approve")
+def approve_virement(
+    request: Request,
+    virement_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Approve a virement (form submission)."""
+    from app.services.finance.ipsas.virement_service import VirementService
+
+    svc = VirementService(db)
+    svc.get_or_404(UUID(virement_id), organization_id=auth.organization_id)
+    svc.approve(UUID(virement_id), auth.user_id)
+    db.commit()
+    return RedirectResponse(
+        f"/finance/ipsas/virements/{virement_id}", status_code=303
+    )
+
+
+@router.post("/virements/{virement_id}/apply")
+def apply_virement(
+    request: Request,
+    virement_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Apply an approved virement (form submission)."""
+    from app.services.finance.ipsas.virement_service import VirementService
+
+    svc = VirementService(db)
+    svc.get_or_404(UUID(virement_id), organization_id=auth.organization_id)
+    svc.apply(UUID(virement_id))
+    db.commit()
+    return RedirectResponse(
+        f"/finance/ipsas/virements/{virement_id}", status_code=303
+    )
+
+
 # =============================================================================
 # Reports
 # =============================================================================
@@ -326,6 +605,19 @@ def budget_comparison(
     )
     context["fiscal_years"] = fiscal_years
     context["selected_fiscal_year_id"] = fiscal_year_id
+    context["selected_fund_id"] = fund_id
+
+    # Load funds for filter
+    from app.models.finance.ipsas.fund import Fund
+
+    funds = list(
+        db.scalars(
+            select(Fund)
+            .where(Fund.organization_id == auth.organization_id)
+            .order_by(Fund.fund_code)
+        ).all()
+    )
+    context["funds"] = funds
 
     return templates.TemplateResponse(
         request, "finance/ipsas/budget_comparison.html", context

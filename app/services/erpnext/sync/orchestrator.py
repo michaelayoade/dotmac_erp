@@ -49,6 +49,7 @@ from .support import TicketSyncService
 from .tasks import TaskSyncService
 from .timesheets import TimesheetSyncService
 from .material_request import MaterialRequestSyncService
+from .stock_ledger import StockLedgerSyncService
 
 logger = logging.getLogger(__name__)
 
@@ -127,6 +128,10 @@ SYNC_PHASES = [
         "name": "Phase 7: Expenses",
         "entities": ["expense_categories", "expense_claims"],
     },
+    {
+        "name": "Phase 8: Inventory Transactions",
+        "entities": ["stock_ledger_entries"],
+    },
 ]
 
 # All supported entity types
@@ -163,6 +168,8 @@ SUPPORTED_ENTITIES = {
     # Expenses
     "expense_categories": "Expense Categories",
     "expense_claims": "Expense Claims",
+    # Inventory Transactions
+    "stock_ledger_entries": "Stock Ledger Entries",
 }
 
 
@@ -240,6 +247,8 @@ class ERPNextSyncOrchestrator:
             # Expenses
             "expense_categories": ExpenseCategorySyncService,
             "expense_claims": ExpenseClaimSyncService,
+            # Inventory Transactions
+            "stock_ledger_entries": StockLedgerSyncService,
         }
 
         service_class = services.get(entity_type)
@@ -366,6 +375,8 @@ class ERPNextSyncOrchestrator:
             # Expenses
             "expense_categories": "Expense Claim Type",
             "expense_claims": "Expense Claim",
+            # Inventory Transactions
+            "stock_ledger_entries": "Stock Ledger Entry",
         }
 
         doctype = doctype_map.get(entity_type)
@@ -377,7 +388,7 @@ class ERPNextSyncOrchestrator:
         if self.config.erpnext_company and entity_type in [
             "accounts", "assets", "warehouses", "departments",
             "employees", "projects", "expense_claims", "timesheets",
-            "material_requests",
+            "material_requests", "stock_ledger_entries",
         ]:
             filters["company"] = self.config.erpnext_company
 

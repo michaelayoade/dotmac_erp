@@ -30,7 +30,7 @@
                             <div>
                                 <label for="template_name" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Template Name *</label>
                                 <input type="text" id="template_name" name="template_name" required
-                                       value="{{ template.template_name if template else form_data.template_name | default('') }}"
+                                       value="{{ template.template_name if template else form_data.template_name | default('', true) }}"
                                        class="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2 focus:border-rose-500 focus:outline-none focus:ring-1 focus:ring-rose-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                             </div>
                             <div>
@@ -47,7 +47,7 @@
                         <div>
                             <label for="description" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Description</label>
                             <textarea id="description" name="description" rows="2"
-                                      class="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2 focus:border-rose-500 focus:outline-none focus:ring-1 focus:ring-rose-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">{{ template.description if template else form_data.description | default('') }}</textarea>
+                                      class="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2 focus:border-rose-500 focus:outline-none focus:ring-1 focus:ring-rose-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">{{ template.description if template else form_data.description | default('', true) }}</textarea>
                         </div>
                     </div>
                 </div>
@@ -177,7 +177,7 @@
                     <div class="p-6">
                         <textarea id="css_styles" name="css_styles" rows="8"
                                   placeholder="/* Add custom CSS styles here */"
-                                  class="w-full rounded-lg border border-slate-300 px-4 py-3 font-mono text-sm focus:border-rose-500 focus:outline-none focus:ring-1 focus:ring-rose-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-300">{{ template.css_styles if template else form_data.css_styles | default('') }}</textarea>
+                                  class="w-full rounded-lg border border-slate-300 px-4 py-3 font-mono text-sm focus:border-rose-500 focus:outline-none focus:ring-1 focus:ring-rose-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-300">{{ template.css_styles if template else form_data.css_styles | default('', true) }}</textarea>
                     </div>
                 </div>
             </div>

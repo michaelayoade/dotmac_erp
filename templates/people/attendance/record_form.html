@@ -46,7 +46,7 @@
             <div>
                 <label class="form-label">Attendance Date</label>
                 <input type="date" name="attendance_date" required
-                       value="{{ form_data.attendance_date | default('') }}"
+                       value="{{ form_data.attendance_date | default('', true) }}"
                        class="form-input">
             </div>
             <div>
@@ -75,20 +75,20 @@
             <div>
                 <label class="form-label">Check In (optional)</label>
                 <input type="datetime-local" name="check_in"
-                       value="{{ form_data.check_in | default('') }}"
+                       value="{{ form_data.check_in | default('', true) }}"
                        class="form-input">
             </div>
             <div>
                 <label class="form-label">Check Out (optional)</label>
                 <input type="datetime-local" name="check_out"
-                       value="{{ form_data.check_out | default('') }}"
+                       value="{{ form_data.check_out | default('', true) }}"
                        class="form-input">
             </div>
         </div>
 
         <div>
             <label class="form-label">Remarks</label>
-            <textarea name="remarks" rows="3" class="form-input" placeholder="Optional notes">{{ form_data.remarks | default('') }}</textarea>
+            <textarea name="remarks" rows="3" class="form-input" placeholder="Optional notes">{{ form_data.remarks | default('', true) }}</textarea>
         </div>
 
         <div class="flex items-center gap-3">

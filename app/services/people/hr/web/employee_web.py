@@ -1126,12 +1126,13 @@ class HRWebService:
         db: Session,
         search: Optional[str] = None,
         page: int = 1,
+        is_active: Optional[bool] = None,
     ) -> HTMLResponse:
         """Render department list page."""
         org_id = coerce_uuid(auth.organization_id)
         svc = OrganizationService(db, org_id)
 
-        filters = DepartmentFilters(search=search)
+        filters = DepartmentFilters(search=search, is_active=is_active)
         pagination = PaginationParams.from_page(page, DEFAULT_PAGE_SIZE)
         result = svc.list_departments(filters, pagination)
 
@@ -1145,6 +1146,7 @@ class HRWebService:
             "departments": result.items,
             "employee_counts": dept_employee_counts,
             "search": search or "",
+            "is_active": "true" if is_active is True else "false" if is_active is False else "",
             "page": page,
             "total_pages": result.total_pages,
             "total": result.total,

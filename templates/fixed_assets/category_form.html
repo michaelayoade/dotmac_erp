@@ -1,4 +1,4 @@
-{% extends "finance/base_finance.html" %}
+{% extends "inventory/base_inventory.html" %}
 
 {% block page_title %}{{ "Edit Asset Category" if category else "New Asset Category" }}{% endblock %}
 
@@ -28,7 +28,7 @@
     </div>
 
     <form method="post"
-          action="{{ '/fa/categories/' ~ category.category_id ~ '/edit' if category else '/fa/categories/new' }}"
+          action="{{ '/fixed-assets/categories/' ~ category.category_id ~ '/edit' if category else '/fixed-assets/categories/new' }}"
           class="space-y-8">
 
         {% if error %}

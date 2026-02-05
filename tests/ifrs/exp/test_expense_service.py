@@ -419,9 +419,10 @@ class TestPostExpense:
         mock_db.query.return_value.filter.return_value.order_by.return_value.first.return_value = None
 
         # Mock fiscal period and tax code lookups via db.get()
+        tax_code = MockTaxCode(tax_code_id=tax_code_id)
         mock_fiscal_period = MagicMock()
         mock_fiscal_period.organization_id = expense.organization_id
-        tax_code = MockTaxCode(tax_code_id=tax_code_id)
+        fiscal_period_id = uuid4()
 
         def mock_get(model, id):
             from app.models.finance.tax.tax_code import TaxCode
@@ -434,8 +435,6 @@ class TestPostExpense:
 
         # Mock savepoint
         mock_db.begin_nested.return_value = MagicMock()
-
-        fiscal_period_id = uuid4()
 
         result = ExpenseService.post(
             mock_db,

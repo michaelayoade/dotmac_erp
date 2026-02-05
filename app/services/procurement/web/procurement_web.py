@@ -8,18 +8,22 @@ import logging
 from typing import Any, Dict, Optional
 from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.procurement.enums import (
     ContractStatus,
+    EvaluationStatus,
     PlanItemStatus,
     PrequalificationStatus,
     ProcurementMethod,
     ProcurementPlanStatus,
+    QuotationResponseStatus,
     RequisitionStatus,
     RFQStatus,
     UrgencyLevel,
 )
+from app.models.procurement.rfq import RequestForQuotation
 from app.services.common import coerce_uuid
 from app.services.procurement.contract import ContractService
 from app.services.procurement.evaluation import BidEvaluationService
@@ -31,49 +35,77 @@ from app.services.procurement.vendor import VendorPrequalificationService
 
 logger = logging.getLogger(__name__)
 
-# Status display labels
+# Badge CSS classes for each color used in status labels.
+# Full class strings are required so Tailwind JIT can find them at build time.
+_BADGE = {
+    "slate": "bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-400",
+    "blue": "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+    "emerald": "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
+    "teal": "bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400",
+    "gray": "bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400",
+    "indigo": "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400",
+    "rose": "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400",
+    "amber": "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+    "red": "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+}
+
+# Status display labels: (display_text, badge_css_classes)
 PLAN_STATUS_LABELS = {
-    ProcurementPlanStatus.DRAFT: ("Draft", "slate"),
-    ProcurementPlanStatus.SUBMITTED: ("Submitted", "blue"),
-    ProcurementPlanStatus.APPROVED: ("Approved", "emerald"),
-    ProcurementPlanStatus.ACTIVE: ("Active", "teal"),
-    ProcurementPlanStatus.CLOSED: ("Closed", "gray"),
+    ProcurementPlanStatus.DRAFT: ("Draft", _BADGE["slate"]),
+    ProcurementPlanStatus.SUBMITTED: ("Submitted", _BADGE["blue"]),
+    ProcurementPlanStatus.APPROVED: ("Approved", _BADGE["emerald"]),
+    ProcurementPlanStatus.ACTIVE: ("Active", _BADGE["teal"]),
+    ProcurementPlanStatus.CLOSED: ("Closed", _BADGE["gray"]),
 }
 
 REQUISITION_STATUS_LABELS = {
-    RequisitionStatus.DRAFT: ("Draft", "slate"),
-    RequisitionStatus.SUBMITTED: ("Submitted", "blue"),
-    RequisitionStatus.BUDGET_VERIFIED: ("Budget Verified", "indigo"),
-    RequisitionStatus.APPROVED: ("Approved", "emerald"),
-    RequisitionStatus.CONVERTED: ("Converted", "teal"),
-    RequisitionStatus.REJECTED: ("Rejected", "rose"),
-    RequisitionStatus.CANCELLED: ("Cancelled", "gray"),
+    RequisitionStatus.DRAFT: ("Draft", _BADGE["slate"]),
+    RequisitionStatus.SUBMITTED: ("Submitted", _BADGE["blue"]),
+    RequisitionStatus.BUDGET_VERIFIED: ("Budget Verified", _BADGE["indigo"]),
+    RequisitionStatus.APPROVED: ("Approved", _BADGE["emerald"]),
+    RequisitionStatus.CONVERTED: ("Converted", _BADGE["teal"]),
+    RequisitionStatus.REJECTED: ("Rejected", _BADGE["rose"]),
+    RequisitionStatus.CANCELLED: ("Cancelled", _BADGE["gray"]),
 }
 
 RFQ_STATUS_LABELS = {
-    RFQStatus.DRAFT: ("Draft", "slate"),
-    RFQStatus.PUBLISHED: ("Published", "blue"),
-    RFQStatus.CLOSED: ("Closed", "amber"),
-    RFQStatus.EVALUATED: ("Evaluated", "indigo"),
-    RFQStatus.AWARDED: ("Awarded", "emerald"),
-    RFQStatus.CANCELLED: ("Cancelled", "gray"),
+    RFQStatus.DRAFT: ("Draft", _BADGE["slate"]),
+    RFQStatus.PUBLISHED: ("Published", _BADGE["blue"]),
+    RFQStatus.CLOSED: ("Closed", _BADGE["amber"]),
+    RFQStatus.EVALUATED: ("Evaluated", _BADGE["indigo"]),
+    RFQStatus.AWARDED: ("Awarded", _BADGE["emerald"]),
+    RFQStatus.CANCELLED: ("Cancelled", _BADGE["gray"]),
 }
 
 CONTRACT_STATUS_LABELS = {
-    ContractStatus.DRAFT: ("Draft", "slate"),
-    ContractStatus.ACTIVE: ("Active", "emerald"),
-    ContractStatus.COMPLETED: ("Completed", "teal"),
-    ContractStatus.TERMINATED: ("Terminated", "rose"),
-    ContractStatus.EXPIRED: ("Expired", "gray"),
+    ContractStatus.DRAFT: ("Draft", _BADGE["slate"]),
+    ContractStatus.ACTIVE: ("Active", _BADGE["emerald"]),
+    ContractStatus.COMPLETED: ("Completed", _BADGE["teal"]),
+    ContractStatus.TERMINATED: ("Terminated", _BADGE["rose"]),
+    ContractStatus.EXPIRED: ("Expired", _BADGE["gray"]),
 }
 
 PREQUALIFICATION_STATUS_LABELS = {
-    PrequalificationStatus.PENDING: ("Pending", "amber"),
-    PrequalificationStatus.UNDER_REVIEW: ("Under Review", "blue"),
-    PrequalificationStatus.QUALIFIED: ("Qualified", "emerald"),
-    PrequalificationStatus.DISQUALIFIED: ("Disqualified", "rose"),
-    PrequalificationStatus.EXPIRED: ("Expired", "gray"),
-    PrequalificationStatus.BLACKLISTED: ("Blacklisted", "red"),
+    PrequalificationStatus.PENDING: ("Pending", _BADGE["amber"]),
+    PrequalificationStatus.UNDER_REVIEW: ("Under Review", _BADGE["blue"]),
+    PrequalificationStatus.QUALIFIED: ("Qualified", _BADGE["emerald"]),
+    PrequalificationStatus.DISQUALIFIED: ("Disqualified", _BADGE["rose"]),
+    PrequalificationStatus.EXPIRED: ("Expired", _BADGE["gray"]),
+    PrequalificationStatus.BLACKLISTED: ("Blacklisted", _BADGE["red"]),
+}
+
+RESPONSE_STATUS_LABELS = {
+    QuotationResponseStatus.RECEIVED: ("Received", _BADGE["blue"]),
+    QuotationResponseStatus.UNDER_EVALUATION: ("Under Evaluation", _BADGE["amber"]),
+    QuotationResponseStatus.ACCEPTED: ("Accepted", _BADGE["emerald"]),
+    QuotationResponseStatus.REJECTED: ("Rejected", _BADGE["rose"]),
+}
+
+EVALUATION_STATUS_LABELS = {
+    EvaluationStatus.DRAFT: ("Draft", _BADGE["slate"]),
+    EvaluationStatus.IN_PROGRESS: ("In Progress", _BADGE["amber"]),
+    EvaluationStatus.COMPLETED: ("Completed", _BADGE["teal"]),
+    EvaluationStatus.APPROVED: ("Approved", _BADGE["emerald"]),
 }
 
 
@@ -300,6 +332,7 @@ class ProcurementWebService:
             "invitations": rfq.invitations,
             "responses": responses,
             "status_labels": RFQ_STATUS_LABELS,
+            "response_status_labels": RESPONSE_STATUS_LABELS,
             "procurement_methods": list(ProcurementMethod),
         }
 
@@ -315,6 +348,44 @@ class ProcurementWebService:
     # ─────────────────────────────────────────────────────────────
     # Evaluations
     # ─────────────────────────────────────────────────────────────
+
+    def evaluation_list_context(
+        self,
+        organization_id: UUID,
+        status: Optional[str] = None,
+        offset: int = 0,
+        limit: int = 25,
+    ) -> Dict[str, Any]:
+        """Build context for evaluation list page."""
+        eval_service = BidEvaluationService(self.db)
+        evaluations, total = eval_service.list_evaluations(
+            organization_id,
+            status=status,
+            offset=offset,
+            limit=limit,
+        )
+
+        rfq_map: Dict[UUID, RequestForQuotation] = {}
+        rfq_ids = {evaluation.rfq_id for evaluation in evaluations}
+        if rfq_ids:
+            rfqs = self.db.scalars(
+                select(RequestForQuotation).where(
+                    RequestForQuotation.organization_id == organization_id,
+                    RequestForQuotation.rfq_id.in_(rfq_ids),
+                )
+            ).all()
+            rfq_map = {rfq.rfq_id: rfq for rfq in rfqs}
+
+        return {
+            "evaluations": evaluations,
+            "total": total,
+            "offset": offset,
+            "limit": limit,
+            "filter_status": status,
+            "status_labels": EVALUATION_STATUS_LABELS,
+            "evaluation_statuses": list(EvaluationStatus),
+            "rfq_map": rfq_map,
+        }
 
     def evaluation_matrix_context(
         self,
@@ -338,11 +409,38 @@ class ProcurementWebService:
             rfq_id=rfq_id,
         )
 
+        # Build total_scores and ranks from evaluation scores
+        total_scores: Dict[Any, float] = {}
+        scores: Dict[tuple, float] = {}
+        for evaluation in evaluations:
+            if hasattr(evaluation, "scores"):
+                for s in evaluation.scores:
+                    resp_id = s.response_id
+                    total_scores[resp_id] = total_scores.get(resp_id, 0) + float(
+                        s.weighted_score
+                    )
+                    scores[(resp_id, s.criterion_name)] = float(s.score)
+
+        # Compute ranks by sorting total_scores descending
+        sorted_responses = sorted(
+            total_scores.items(), key=lambda x: x[1], reverse=True
+        )
+        ranks: Dict[Any, int] = {
+            resp_id: rank + 1 for rank, (resp_id, _) in enumerate(sorted_responses)
+        }
+
+        # Build criteria list from evaluation_criteria JSON
+        criteria = rfq.evaluation_criteria or []
+
         return {
             "rfq": rfq,
             "responses": responses,
             "evaluations": evaluations,
-            "evaluation_criteria": rfq.evaluation_criteria or [],
+            "evaluation_criteria": criteria,
+            "criteria": criteria,
+            "total_scores": total_scores,
+            "ranks": ranks,
+            "scores": scores,
             "status_labels": RFQ_STATUS_LABELS,
         }
 
@@ -397,6 +495,7 @@ class ProcurementWebService:
 
         return {
             "contract": contract,
+            "total_paid": contract.amount_paid,
             "remaining_amount": remaining,
             "payment_progress_pct": round(progress_pct, 1),
             "status_labels": CONTRACT_STATUS_LABELS,
@@ -417,10 +516,13 @@ class ProcurementWebService:
         self,
         organization_id: UUID,
         status: Optional[str] = None,
+        q: Optional[str] = None,
         offset: int = 0,
         limit: int = 25,
     ) -> Dict[str, Any]:
         """Build context for vendor registry page."""
+        from app.models.finance.ap.supplier import Supplier
+
         service = VendorPrequalificationService(self.db)
         prequalifications, total = service.list_prequalifications(
             organization_id,
@@ -428,14 +530,37 @@ class ProcurementWebService:
             offset=offset,
             limit=limit,
         )
+
+        # Fetch supplier data for display
+        supplier_ids = [p.supplier_id for p in prequalifications]
+        supplier_map: Dict[UUID, Any] = {}
+        if supplier_ids:
+            suppliers = self.db.scalars(
+                select(Supplier).where(Supplier.supplier_id.in_(supplier_ids))
+            ).all()
+            supplier_map = {s.supplier_id: s for s in suppliers}
+
+        # Enrich prequalification rows with supplier name/registration
+        for preq in prequalifications:
+            supplier = supplier_map.get(preq.supplier_id)
+            preq.supplier_name = (  # type: ignore[attr-defined]
+                (supplier.trading_name or supplier.legal_name)
+                if supplier
+                else "Unknown"
+            )
+            preq.registration_number = (  # type: ignore[attr-defined]
+                supplier.registration_number if supplier else None
+            )
+
         return {
-            "prequalifications": prequalifications,
+            "vendors": prequalifications,
             "total": total,
             "offset": offset,
             "limit": limit,
             "filter_status": status,
+            "filter_q": q,
             "status_labels": PREQUALIFICATION_STATUS_LABELS,
-            "preq_statuses": list(PrequalificationStatus),
+            "vendor_statuses": list(PrequalificationStatus),
         }
 
     def prequalification_detail_context(
@@ -444,6 +569,8 @@ class ProcurementWebService:
         prequalification_id: UUID,
     ) -> Dict[str, Any]:
         """Build context for prequalification detail page."""
+        from app.models.finance.ap.supplier import Supplier
+
         service = VendorPrequalificationService(self.db)
         preq = service.get_by_id(organization_id, prequalification_id)
         if not preq:
@@ -451,7 +578,45 @@ class ProcurementWebService:
 
             raise NotFoundError("Prequalification not found")
 
+        # Enrich with supplier data
+        supplier = self.db.get(Supplier, preq.supplier_id)
+        preq.supplier_name = (  # type: ignore[attr-defined]
+            (supplier.trading_name or supplier.legal_name)
+            if supplier
+            else "Unknown"
+        )
+        preq.registration_number = (  # type: ignore[attr-defined]
+            supplier.registration_number if supplier else None
+        )
+
+        # Build compliance checklist from model fields
+        checklist = [
+            {"requirement": "Documents Verified", "compliant": preq.documents_verified, "notes": None},
+            {"requirement": "Tax Clearance Valid", "compliant": preq.tax_clearance_valid, "notes": None},
+            {"requirement": "Pension Compliance", "compliant": preq.pension_compliance, "notes": None},
+            {"requirement": "ITF Compliance", "compliant": preq.itf_compliance, "notes": "Industrial Training Fund"},
+            {"requirement": "NSITF Compliance", "compliant": preq.nsitf_compliance, "notes": "Nigeria Social Insurance Trust Fund"},
+        ]
+
+        # Build qualification scores from capability scores
+        qualification_scores = []
+        if preq.financial_capability_score is not None:
+            qualification_scores.append({
+                "category": "Financial Capability",
+                "weight": 40,
+                "score": float(preq.financial_capability_score),
+            })
+        if preq.technical_capability_score is not None:
+            qualification_scores.append({
+                "category": "Technical Capability",
+                "weight": 60,
+                "score": float(preq.technical_capability_score),
+            })
+
         return {
-            "prequalification": preq,
+            "vendor": preq,
+            "checklist": checklist,
+            "qualification_scores": qualification_scores,
+            "past_contracts": [],
             "status_labels": PREQUALIFICATION_STATUS_LABELS,
         }

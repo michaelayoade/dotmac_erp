@@ -29,6 +29,7 @@ from app.services.finance.banking.bank_directory import BankDirectoryService
 from app.services.people.hr.info_change_service import InfoChangeService
 from app.services.common import PaginationParams, coerce_uuid
 from app.services.people.attendance import AttendanceService
+from app.services.people.attendance.attendance_service import AttendanceServiceError
 from app.services.people.expense import ExpenseService
 from app.services.people.hr import EmployeeService
 from app.services.people.hr.employee_types import EmployeeFilters
@@ -702,6 +703,11 @@ class SelfServiceWebService:
                 url=f"/people/self/attendance?{urlencode({'error': exc.message})}",
                 status_code=303,
             )
+        except AttendanceServiceError as exc:
+            return RedirectResponse(
+                url=f"/people/self/attendance?{urlencode({'error': str(exc)})}",
+                status_code=303,
+            )
         db.commit()
         return RedirectResponse(url="/people/self/attendance", status_code=302)
 
@@ -729,6 +735,11 @@ class SelfServiceWebService:
         except ValidationError as exc:
             return RedirectResponse(
                 url=f"/people/self/attendance?{urlencode({'error': exc.message})}",
+                status_code=303,
+            )
+        except AttendanceServiceError as exc:
+            return RedirectResponse(
+                url=f"/people/self/attendance?{urlencode({'error': str(exc)})}",
                 status_code=303,
             )
         db.commit()
@@ -1019,6 +1030,7 @@ class SelfServiceWebService:
         if claim.employee_id != employee_id:
             raise HTTPException(status_code=403, detail="Forbidden")
         can_edit = claim.status == ExpenseClaimStatus.DRAFT
+        can_submit = claim.status == ExpenseClaimStatus.DRAFT
         categories = svc.list_categories(org_id, is_active=True, pagination=None).items
 
         # Get projects, tickets, tasks for dropdowns (same as create form)
@@ -1036,6 +1048,7 @@ class SelfServiceWebService:
                 "claim": claim,
                 "categories": categories,
                 "can_edit": can_edit,
+                "can_submit": can_submit,
                 "projects": projects,
                 "tickets": tickets,
                 "tasks": tasks,
@@ -1049,6 +1062,30 @@ class SelfServiceWebService:
         return templates.TemplateResponse(
             request, "people/self/expense_claim_edit.html", context
         )
+
+    def expense_claim_submit_response(
+        self,
+        auth: WebAuthContext,
+        db: Session,
+        *,
+        claim_id: UUID,
+    ) -> RedirectResponse:
+        org_id = coerce_uuid(auth.organization_id)
+        person_id = coerce_uuid(auth.person_id)
+        employee_id = self._get_employee_id(db, org_id, person_id)
+
+        svc = ExpenseService(db, auth)
+        claim = svc.get_claim(org_id, claim_id)
+        if claim.employee_id != employee_id:
+            raise HTTPException(status_code=403, detail="Forbidden")
+        if claim.status != ExpenseClaimStatus.DRAFT:
+            raise HTTPException(
+                status_code=400, detail="Only draft claims can be submitted"
+            )
+
+        svc.submit_claim(org_id, claim_id)
+        db.commit()
+        return RedirectResponse(url="/people/self/expenses", status_code=302)
 
     def expense_claim_update_response(
         self,

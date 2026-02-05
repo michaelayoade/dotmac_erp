@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Optional
 from sqlalchemy import (
     Boolean,
     Date,
+    Enum,
     ForeignKey,
     Integer,
     Numeric,
@@ -91,6 +92,12 @@ class Competency(Base, AuditMixin, SoftDeleteMixin):
 
     # Classification
     category: Mapped[CompetencyCategory] = mapped_column(
+        Enum(
+            CompetencyCategory,
+            name="competency_category",
+            schema="hr",
+            values_callable=lambda enum_cls: [e.value for e in enum_cls],
+        ),
         nullable=False,
         default=CompetencyCategory.FUNCTIONAL,
     )
@@ -217,6 +224,12 @@ class JobDescription(Base, AuditMixin, SoftDeleteMixin, ERPNextSyncMixin):
 
     # Status
     status: Mapped[JobDescriptionStatus] = mapped_column(
+        Enum(
+            JobDescriptionStatus,
+            name="job_description_status",
+            schema="hr",
+            values_callable=lambda enum_cls: [e.value for e in enum_cls],
+        ),
         nullable=False,
         default=JobDescriptionStatus.DRAFT,
     )

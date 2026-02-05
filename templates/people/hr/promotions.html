@@ -115,10 +115,10 @@
         </p>
         <div class="flex gap-2">
             {% if has_prev %}
-            <a href="?page={{ page - 1 }}&employee_id={{ employee_id | default('') }}" class="btn btn-secondary btn-sm">Previous</a>
+            <a href="?page={{ page - 1 }}&employee_id={{ employee_id | default('', true) }}" class="btn btn-secondary btn-sm">Previous</a>
             {% endif %}
             {% if has_next %}
-            <a href="?page={{ page + 1 }}&employee_id={{ employee_id | default('') }}" class="btn btn-secondary btn-sm">Next</a>
+            <a href="?page={{ page + 1 }}&employee_id={{ employee_id | default('', true) }}" class="btn btn-secondary btn-sm">Next</a>
             {% endif %}
         </div>
     </div>

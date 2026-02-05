@@ -12,6 +12,16 @@
 </nav>
 {% endblock %}
 
+{% block header_actions %}
+<a href="/finance/ipsas/commitments/new"
+   class="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-primary-600 to-primary-500 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-primary-500/25 btn-hover">
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+    </svg>
+    New Commitment
+</a>
+{% endblock %}
+
 {% block content %}
 <div class="space-y-6">
     <!-- Filters -->
@@ -58,10 +68,10 @@
                         <td class="px-6 py-4 font-mono text-sm font-medium text-primary-600 dark:text-primary-400">{{ c.commitment_number }}</td>
                         <td class="px-6 py-4">
                             <span class="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-300">
-                                {{ c.commitment_type.value }}
+                                {{ c.commitment_type.value | replace('_', ' ') | title }}
                             </span>
                         </td>
-                        <td class="px-6 py-4 text-slate-600 dark:text-slate-300">{{ c.source_type }}</td>
+                        <td class="px-6 py-4 text-slate-600 dark:text-slate-300">{{ (c.source_type or '') | replace('_', ' ') | title }}</td>
                         <td class="px-6 py-4">
                             {% if c.status.value == 'COMMITTED' %}
                             <span class="inline-flex rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">Committed</span>
@@ -76,13 +86,13 @@
                             {% elif c.status.value == 'PENDING' %}
                             <span class="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-400">Pending</span>
                             {% else %}
-                            <span class="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500 dark:bg-slate-700 dark:text-slate-400">{{ c.status.value }}</span>
+                            <span class="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500 dark:bg-slate-700 dark:text-slate-400">{{ c.status.value | replace('_', ' ') | title }}</span>
                             {% endif %}
                         </td>
                         <td class="px-6 py-4 text-right font-mono text-slate-900 dark:text-white">{{ "{:,.2f}".format(c.committed_amount) }}</td>
                         <td class="px-6 py-4 text-right font-mono text-slate-500 dark:text-slate-400">{{ "{:,.2f}".format(c.obligated_amount) }}</td>
                         <td class="px-6 py-4 text-right font-mono text-slate-500 dark:text-slate-400">{{ "{:,.2f}".format(c.expended_amount) }}</td>
-                        <td class="px-6 py-4 text-slate-500 dark:text-slate-400">{{ c.commitment_date }}</td>
+                        <td class="px-6 py-4 text-slate-500 dark:text-slate-400">{{ c.commitment_date.strftime('%Y-%m-%d') if c.commitment_date else '-' }}</td>
                     </tr>
                     {% else %}
                     <tr>
@@ -102,11 +112,11 @@
             </p>
             <div class="flex gap-2">
                 {% if page > 1 %}
-                <a href="?page={{ page - 1 }}{% if status_filter %}&status={{ status_filter }}{% endif %}"
+                <a href="?page={{ page - 1 }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if fund_id_filter %}&fund_id={{ fund_id_filter }}{% endif %}"
                    class="rounded-lg border border-slate-300 px-3 py-1 text-sm hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-700">Prev</a>
                 {% endif %}
                 {% if page < total_pages %}
-                <a href="?page={{ page + 1 }}{% if status_filter %}&status={{ status_filter }}{% endif %}"
+                <a href="?page={{ page + 1 }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if fund_id_filter %}&fund_id={{ fund_id_filter }}{% endif %}"
                    class="rounded-lg border border-slate-300 px-3 py-1 text-sm hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-700">Next</a>
                 {% endif %}
             </div>

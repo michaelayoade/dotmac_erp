@@ -7,9 +7,10 @@ HTML template routes for Items and Inventory Transactions.
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Form, Query, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy.orm import Session
 
+from app.services.inventory.material_request_web import MaterialRequestWebService
 from app.services.inventory.web import inv_web_service
 from app.services.operations.inv_web import operations_inv_web_service
 from app.web.deps import (
@@ -735,6 +736,26 @@ def new_material_request_form(
     )
 
 
+@router.get("/material-requests/requested-by/search")
+def material_request_requested_by_search(
+    q: str = Query(..., min_length=1),
+    limit: int = Query(default=8, ge=1, le=20),
+    _perm: WebAuthContext = Depends(
+        require_web_permission("inv:material_requests:create")
+    ),
+    auth: WebAuthContext = Depends(require_inventory_access),
+    db: Session = Depends(get_db),
+):
+    """Search active employees for material request requested-by typeahead."""
+    payload = MaterialRequestWebService.requested_by_typeahead(
+        db=db,
+        organization_id=str(auth.organization_id),
+        query=q,
+        limit=limit,
+    )
+    return JSONResponse(payload)
+
+
 @router.post("/material-requests/new", response_class=HTMLResponse)
 async def create_material_request(
     request: Request,
@@ -852,6 +873,24 @@ def submit_material_request(
 ):
     """Submit material request."""
     return operations_inv_web_service.submit_material_request_response(
+        request_id=request_id,
+        auth=auth,
+        db=db,
+    )
+
+
+@router.post("/material-requests/{request_id}/approve", response_class=HTMLResponse)
+def approve_material_request(
+    request: Request,
+    request_id: str,
+    _perm: WebAuthContext = Depends(
+        require_web_permission("inv:material_requests:submit")
+    ),
+    auth: WebAuthContext = Depends(require_inventory_access),
+    db: Session = Depends(get_db),
+):
+    """Approve material request and auto-deduct stock."""
+    return operations_inv_web_service.approve_material_request_response(
         request_id=request_id,
         auth=auth,
         db=db,
@@ -1039,6 +1078,24 @@ def post_count(
     """Post inventory count adjustments."""
     return operations_inv_web_service.post_count_response(
         count_id=count_id,
+        auth=auth,
+        db=db,
+    )
+
+
+@router.post("/counts/{count_id}/lines/{line_id}/record", response_class=HTMLResponse)
+async def record_count_line(
+    request: Request,
+    count_id: str,
+    line_id: str,
+    auth: WebAuthContext = Depends(require_inventory_access),
+    db: Session = Depends(get_db),
+):
+    """Record counted quantity for a count line."""
+    return await operations_inv_web_service.record_count_line_response(
+        request=request,
+        count_id=count_id,
+        line_id=line_id,
         auth=auth,
         db=db,
     )

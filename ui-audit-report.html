@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DotMac ERP — Full UI Audit Report</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  :root {
+    --ink: #0f172a;
+    --ink-light: #334155;
+    --ink-muted: #64748b;
+    --parchment: #faf9f7;
+    --teal: #0d9488;
+    --teal-light: #ccfbf1;
+    --rose: #e11d48;
+    --rose-light: #ffe4e6;
+    --amber: #d97706;
+    --amber-light: #fef3c7;
+    --blue: #2563eb;
+    --blue-light: #dbeafe;
+    --emerald: #059669;
+    --emerald-light: #d1fae5;
+    --slate-100: #f1f5f9;
+    --slate-200: #e2e8f0;
+    --slate-300: #cbd5e1;
+    --radius: 12px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'DM Sans', system-ui, sans-serif;
+    background: var(--parchment);
+    color: var(--ink);
+    line-height: 1.6;
+    padding: 2rem;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  h1 { font-size: 2rem; font-weight: 700; margin-bottom: 0.25rem; }
+  h2 {
+    font-size: 1.35rem; font-weight: 700;
+    margin-top: 2.5rem; margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid var(--slate-200);
+  }
+  h3 { font-size: 1.05rem; font-weight: 600; margin-top: 1.5rem; margin-bottom: 0.5rem; color: var(--ink-light); }
+  p, li { color: var(--ink-light); }
+  .subtitle { font-size: 1.05rem; color: var(--ink-muted); margin-bottom: 0.5rem; }
+  .date { font-size: 0.85rem; color: var(--ink-muted); margin-bottom: 2rem; }
+
+  code {
+    font-family: 'JetBrains Mono', monospace;
+    background: var(--slate-100); padding: 0.15em 0.4em;
+    border-radius: 4px; font-size: 0.85em; color: var(--teal);
+  }
+
+  .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin: 1.5rem 0; }
+  .summary-card { background: white; border: 1px solid var(--slate-200); border-radius: var(--radius); padding: 1.25rem; text-align: center; }
+  .summary-card .number { font-size: 2rem; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+  .summary-card .label { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-muted); margin-top: 0.25rem; }
+  .p0 .number { color: var(--rose); }
+  .p1 .number { color: var(--amber); }
+  .p2 .number { color: var(--blue); }
+  .p3 .number { color: var(--ink-muted); }
+  .pass .number { color: var(--emerald); }
+
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.9rem; background: white; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--slate-200); }
+  th { text-align: left; padding: 0.75rem 1rem; background: var(--slate-100); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--ink-muted); border-bottom: 1px solid var(--slate-200); }
+  td { padding: 0.65rem 1rem; border-bottom: 1px solid var(--slate-100); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+
+  .severity { display: inline-block; padding: 0.15em 0.6em; border-radius: 6px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; }
+  .sev-p0 { background: var(--rose-light); color: var(--rose); }
+  .sev-p1 { background: var(--amber-light); color: var(--amber); }
+  .sev-p2 { background: var(--blue-light); color: var(--blue); }
+  .sev-p3 { background: var(--slate-100); color: var(--ink-muted); }
+
+  .module-tag { display: inline-block; padding: 0.1em 0.5em; border-radius: 4px; font-size: 0.75rem; font-weight: 500; background: var(--teal-light); color: var(--teal); }
+
+  .section-positive { background: var(--emerald-light); border: 1px solid #a7f3d0; border-radius: var(--radius); padding: 1.25rem; margin: 1rem 0; }
+  .section-positive h3 { color: var(--emerald); margin-top: 0; }
+
+  ul { padding-left: 1.25rem; margin: 0.5rem 0; }
+  li { margin: 0.25rem 0; }
+  .file-ref { font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; color: var(--ink-muted); }
+
+  @media print { body { padding: 1rem; } .summary-grid { grid-template-columns: repeat(5, 1fr); } }
+</style>
+</head>
+<body>
+
+<h1>DotMac ERP &mdash; Full UI Audit Report</h1>
+<p class="subtitle">Comprehensive E2E design review across all modules, ~130 templates, CSS architecture, and 95 browser screenshots</p>
+<p class="date">2026-02-04 &middot; Reviewed by Claude (6 parallel code review agents + Playwright browser testing)</p>
+
+<h2>Executive Summary</h2>
+<div class="summary-grid">
+  <div class="summary-card p0"><div class="number">7</div><div class="label">P0 Critical</div></div>
+  <div class="summary-card p1"><div class="number">12</div><div class="label">P1 High</div></div>
+  <div class="summary-card p2"><div class="number">18</div><div class="label">P2 Medium</div></div>
+  <div class="summary-card p3"><div class="number">15</div><div class="label">P3 Low</div></div>
+  <div class="summary-card pass"><div class="number">A-</div><div class="label">Overall Grade</div></div>
+</div>
+
+<p>The DotMac ERP UI is <strong>production-grade</strong> with a well-designed CSS architecture (268 KB compiled Tailwind bundle with comprehensive design tokens), three self-hosted fonts (DM Sans, Fraunces, JetBrains Mono), full dark mode support, and a clean component macro system. The issues found are primarily <strong>consistency gaps</strong> across the 130+ template files, not fundamental design flaws.</p>
+
+<h2>CSS Architecture Assessment</h2>
+
+<div class="section-positive">
+  <h3>Strengths (What's Working Well)</h3>
+  <ul>
+    <li><strong>Design token system</strong> &mdash; 50+ CSS variables for colors, spacing, radii, shadows in <code>_tokens.css</code></li>
+    <li><strong>Modular CSS</strong> &mdash; 13 source modules compiled via PostCSS: base, components, layout, utilities</li>
+    <li><strong>Dark mode</strong> &mdash; Alpine.js toggle with localStorage persistence + system preference detection</li>
+    <li><strong>Self-hosted variable fonts</strong> &mdash; DM Sans (body), Fraunces (display headings), JetBrains Mono (financial/code) with <code>font-display: swap</code></li>
+    <li><strong>Component macro library</strong> &mdash; <code>status_badge()</code>, <code>stats_card()</code>, <code>empty_state()</code>, <code>pagination()</code>, <code>aging_bar()</code>, <code>progress_bar()</code></li>
+    <li><strong>Advanced CSS</strong> &mdash; Ledger-line backgrounds, mesh gradients, grain overlay, View Transitions API, CSS Layers</li>
+    <li><strong>Responsive design</strong> &mdash; Mobile-first with sidebar slide-in, touch device optimizations</li>
+    <li><strong>Accessibility foundation</strong> &mdash; <code>:focus-visible</code> rings, ARIA roles on toasts, keyboard nav on command palette</li>
+  </ul>
+</div>
+
+<h2>P0 &mdash; Critical (Breaks Functionality or Accessibility)</h2>
+<table>
+  <thead><tr><th>ID</th><th>Issue</th><th>Module</th><th>Files</th><th>Impact</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>P0-1</td>
+      <td><strong>Dynamic Tailwind classes stripped by purge</strong><br>Using <code>bg-{{ module_color }}-50/50</code> in Alpine.js <code>:class</code> bindings generates class names at runtime that Tailwind's tree-shaking cannot detect.</td>
+      <td><span class="module-tag">Topbar</span></td>
+      <td><span class="file-ref">app_topbar.html:145, 187</span></td>
+      <td>Notification highlights silently broken in production build</td>
+    </tr>
+    <tr>
+      <td>P0-2</td>
+      <td><strong>Broken empty state link &mdash; 404</strong><br>Empty state CTA links to <code>/tax/returns/new</code> instead of <code>/finance/tax/returns/new</code>.</td>
+      <td><span class="module-tag">Finance</span></td>
+      <td><span class="file-ref">finance/tax/returns.html:142</span></td>
+      <td>User gets 404 on first-use flow</td>
+    </tr>
+    <tr>
+      <td>P0-3</td>
+      <td><strong>Missing <code>btn</code> base class on Cancel buttons</strong><br>Four inventory forms use <code>class="btn-secondary"</code> without <code>btn</code> base class, rendering Cancel as unstyled text.</td>
+      <td><span class="module-tag">Inventory</span></td>
+      <td><span class="file-ref">receipt_form.html:105<br>issue_form.html:106<br>adjustment_form.html:135<br>transfer_form.html:110</span></td>
+      <td>Cancel buttons appear as plain text</td>
+    </tr>
+    <tr>
+      <td>P0-4</td>
+      <td><strong>Server errors on 3 People routes</strong><br><code>/people/hr/promotions</code>, <code>/people/hr/transfers</code>, and <code>/people/hr/discipline/cases</code> return 500 errors.</td>
+      <td><span class="module-tag">People</span></td>
+      <td><span class="file-ref">Browser console errors</span></td>
+      <td>Three HR pages completely broken</td>
+    </tr>
+    <tr>
+      <td>P0-5</td>
+      <td><strong>Server errors on form pages</strong><br><code>/inventory/counts/new</code> and <code>/inventory/boms/new</code> return 500 Server Error.</td>
+      <td><span class="module-tag">Inventory</span></td>
+      <td><span class="file-ref">Browser 500 responses</span></td>
+      <td>Cannot create stock counts or BOMs</td>
+    </tr>
+    <tr>
+      <td>P0-6</td>
+      <td><strong>404 on Fixed Assets list and IPSAS</strong><br><code>/fixed-assets</code>, <code>/fixed-assets/new</code>, <code>/finance/ipsas</code>, and <code>/finance/lease/contracts</code> return 404.</td>
+      <td><span class="module-tag">Finance</span></td>
+      <td><span class="file-ref">Browser 404 responses</span></td>
+      <td>Fixed Assets and IPSAS modules unreachable</td>
+    </tr>
+    <tr>
+      <td>P0-7</td>
+      <td><strong>Duplicate breadcrumb on Fleet Vehicles</strong><br>"Fleet" appears twice: <code>Fleet &rarr; Fleet &rarr; Vehicles</code>.</td>
+      <td><span class="module-tag">Fleet</span></td>
+      <td><span class="file-ref">fleet/vehicles.html:8-12</span></td>
+      <td>Confusing navigation, looks like a bug</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>P1 &mdash; High Priority (Poor UX or Accessibility)</h2>
+<table>
+  <thead><tr><th>ID</th><th>Issue</th><th>Module</th><th>Files Affected</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>P1-1</td>
+      <td><strong>Raw enum values displayed to users</strong><br>Multiple templates show UPPER_CASE without <code>| replace('_', ' ') | title</code> filter.</td>
+      <td><span class="module-tag">Procurement</span> <span class="module-tag">Inventory</span></td>
+      <td><span class="file-ref">procurement/requisitions/list.html:30,39 &middot; rfqs/list.html:30,39 &middot; contracts/list.html:30 &middot; evaluations/matrix.html:35 &middot; inventory/material_requests.html:44,53 &middot; boms.html:145 &middot; admin/sync/history_detail.html:52</span></td>
+    </tr>
+    <tr>
+      <td>P1-2</td>
+      <td><strong>Dark mode: table headers invisible</strong><br>Several <code>&lt;th&gt;</code> elements missing <code>dark:text-slate-400</code>.</td>
+      <td><span class="module-tag">Finance</span></td>
+      <td><span class="file-ref">tax/overdue_periods.html:34 &middot; lease/overdue.html:34-37 &middot; lease/contracts.html:61-66</span></td>
+    </tr>
+    <tr>
+      <td>P1-3</td>
+      <td><strong>Inconsistent status badge usage</strong><br>Mix of <code>status_badge()</code> macro and manual inline HTML with different color mappings.</td>
+      <td><span class="module-tag">All</span></td>
+      <td><span class="file-ref">lease/contracts.html:78 &middot; tax/returns.html:103 &middot; lease/overdue.html:46 &middot; lots.html:157 &middot; tickets.html:413</span></td>
+    </tr>
+    <tr>
+      <td>P1-4</td>
+      <td><strong>Inconsistent stats cards</strong><br>Manual stat cards with hardcoded colors instead of <code>stats_card()</code> macro.</td>
+      <td><span class="module-tag">Finance</span></td>
+      <td><span class="file-ref">ap/goods_receipts.html:26-39 &middot; banking/payees.html:28-44</span></td>
+    </tr>
+    <tr>
+      <td>P1-5</td>
+      <td><strong>Nonexistent <code>bg-primary-600</code> class</strong><br>Uses a Tailwind class that's not in the config. Should use <code>btn btn-primary</code>.</td>
+      <td><span class="module-tag">Fixed Assets</span></td>
+      <td><span class="file-ref">fixed_assets/depreciation.html:12</span></td>
+    </tr>
+    <tr>
+      <td>P1-6</td>
+      <td><strong>Finance sidebar missing active link detection</strong><br>No path-aware highlighting like Inventory/Procurement have.</td>
+      <td><span class="module-tag">Finance</span></td>
+      <td><span class="file-ref">finance/base_finance.html</span></td>
+    </tr>
+    <tr>
+      <td>P1-7</td>
+      <td><strong>Sidebar logo links inconsistent</strong><br>Finance links to dashboard, others link to module selector.</td>
+      <td><span class="module-tag">All</span></td>
+      <td><span class="file-ref">base_finance.html:84 &middot; base_inventory.html:85 &middot; base_procurement.html:85 &middot; base_modules.html:85</span></td>
+    </tr>
+    <tr>
+      <td>P1-8</td>
+      <td><strong>Missing dark mode on breadcrumbs</strong><br>Material request pages invisible in dark mode.</td>
+      <td><span class="module-tag">Inventory</span></td>
+      <td><span class="file-ref">material_requests.html:6 &middot; material_request_detail.html:6 &middot; material_request_form.html:6</span></td>
+    </tr>
+    <tr>
+      <td>P1-9</td>
+      <td><strong>Keyboard accessibility missing on notifications</strong><br>No arrow key nav, roving tabindex, or ESC binding.</td>
+      <td><span class="module-tag">Topbar</span></td>
+      <td><span class="file-ref">app_topbar.html:98-200</span></td>
+    </tr>
+    <tr>
+      <td>P1-10</td>
+      <td><strong>Missing pagination on 2 list pages</strong></td>
+      <td><span class="module-tag">Inventory</span></td>
+      <td><span class="file-ref">material_requests.html &middot; price_lists.html</span></td>
+    </tr>
+    <tr>
+      <td>P1-11</td>
+      <td><strong>Expense amount column not right-aligned</strong></td>
+      <td><span class="module-tag">Expense</span></td>
+      <td><span class="file-ref">expense/claims_list.html:61</span></td>
+    </tr>
+    <tr>
+      <td>P1-12</td>
+      <td><strong>Procurement evaluations page returns 404</strong></td>
+      <td><span class="module-tag">Procurement</span></td>
+      <td><span class="file-ref">Browser 404</span></td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>P2 &mdash; Medium Priority (Code Quality &amp; Consistency)</h2>
+<table>
+  <thead><tr><th>ID</th><th>Issue</th><th>Files</th></tr></thead>
+  <tbody>
+    <tr><td>P2-1</td><td><strong>500+ lines of duplicated sidebar code</strong> across 6 base templates</td><td><span class="file-ref">All base_*.html</span></td></tr>
+    <tr><td>P2-2</td><td><strong>Inconsistent pagination implementations</strong> &mdash; some use macro, others manual query strings</td><td><span class="file-ref">goods_receipts.html:156 &middot; payees.html:170</span></td></tr>
+    <tr><td>P2-3</td><td><strong>Mixed empty state implementations</strong> &mdash; some use macro, others inline HTML</td><td><span class="file-ref">items.html:197 &middot; goods_receipts.html:136 &middot; payees.html:150</span></td></tr>
+    <tr><td>P2-4</td><td><strong>Date display without consistent formatting</strong></td><td><span class="file-ref">reconciliations.html:105 &middot; statements.html:103 &middot; lease/contracts.html:79</span></td></tr>
+    <tr><td>P2-5</td><td><strong>Bulk action toolbar color inconsistency</strong></td><td><span class="file-ref">employees.html:207 &middot; applications.html:104</span></td></tr>
+    <tr><td>P2-6</td><td><strong>Filter/search UI layout inconsistency</strong></td><td><span class="file-ref">goods_receipts.html:41 &middot; lease/contracts.html:26 &middot; tickets.html:157</span></td></tr>
+    <tr><td>P2-7</td><td><strong>Dark mode borders too subtle</strong> (<code>dark:border-slate-800</code> on <code>dark:bg-slate-900</code>)</td><td><span class="file-ref">All sidebar templates</span></td></tr>
+    <tr><td>P2-8</td><td><strong>Alert-only preview button</strong> on template form</td><td><span class="file-ref">automation/template_form.html:65</span></td></tr>
+    <tr><td>P2-9</td><td><strong>Unread notification background too subtle in dark mode</strong> (10% opacity)</td><td><span class="file-ref">app_topbar.html:145</span></td></tr>
+    <tr><td>P2-10</td><td><strong>Table class inconsistency</strong> &mdash; bare <code>w-full</code> instead of <code>table-ledger</code></td><td><span class="file-ref">transactions.html:17</span></td></tr>
+    <tr><td>P2-11</td><td><strong>Missing per-field validation errors</strong> on attendance forms</td><td><span class="file-ref">record_form.html:25</span></td></tr>
+    <tr><td>P2-12</td><td><strong>Evaluation matrix not responsive</strong> &mdash; overflows on mobile</td><td><span class="file-ref">evaluations/matrix.html:62</span></td></tr>
+    <tr><td>P2-13</td><td><strong>Admin audit log search width hardcoded</strong> (<code>w-64</code>)</td><td><span class="file-ref">audit_logs.html:23</span></td></tr>
+    <tr><td>P2-14</td><td><strong>Inline <code>!important</code></strong> in base_expense.html</td><td><span class="file-ref">base_expense.html</span></td></tr>
+    <tr><td>P2-15</td><td><strong>CSS bundle render-blocking</strong> (268 KB synchronous load)</td><td><span class="file-ref">base.html:20</span></td></tr>
+    <tr><td>P2-16</td><td><strong>Expense rejection input too narrow</strong> (<code>w-48</code>)</td><td><span class="file-ref">claim_detail.html:69</span></td></tr>
+    <tr><td>P2-17</td><td><strong>Inconsistent action button styling</strong> across list views</td><td><span class="file-ref">vendors/list.html:79 &middot; vehicles.html:178</span></td></tr>
+    <tr><td>P2-18</td><td><strong>Missing form placeholders</strong> on reference fields</td><td><span class="file-ref">receipt_form.html:88 &middot; issue_form.html:89 &middot; adjustment_form.html:112</span></td></tr>
+  </tbody>
+</table>
+
+<h2>P3 &mdash; Low Priority (Polish &amp; Technical Debt)</h2>
+<table>
+  <thead><tr><th>ID</th><th>Issue</th></tr></thead>
+  <tbody>
+    <tr><td>P3-1</td><td>Hardcoded module colors in module selector not using CSS variables</td></tr>
+    <tr><td>P3-2</td><td>Inconsistent font display on collapsed sidebar</td></tr>
+    <tr><td>P3-3</td><td>User name in topbar menu lacks truncation</td></tr>
+    <tr><td>P3-4</td><td>Attendance record search uses "UUID" as placeholder</td></tr>
+    <tr><td>P3-5</td><td>Missing <code>aria-label</code> on icon-only buttons</td></tr>
+    <tr><td>P3-6</td><td>Missing <code>role="dialog"</code> on modal dialogs</td></tr>
+    <tr><td>P3-7</td><td>Inconsistent <code>data-testid</code> usage</td></tr>
+    <tr><td>P3-8</td><td>Notification icon colors hardcoded per type instead of using module color</td></tr>
+    <tr><td>P3-9</td><td>Dark mode toggle not visually obvious to new users</td></tr>
+    <tr><td>P3-10</td><td>Missing font preload hints for LCP optimization</td></tr>
+    <tr><td>P3-11</td><td>Card header border inconsistency in material_request_detail.html</td></tr>
+    <tr><td>P3-12</td><td>Table <code>&lt;th&gt;</code> missing <code>scope="col"</code> for screen readers</td></tr>
+    <tr><td>P3-13</td><td><code>window.location</code> vs <code>window.location.href</code> inconsistency</td></tr>
+    <tr><td>P3-14</td><td>Inventory form <code>required</code> CSS class not in standard utilities</td></tr>
+    <tr><td>P3-15</td><td>Help text positioning inconsistent between forms</td></tr>
+  </tbody>
+</table>
+
+<h2>Module Scorecards</h2>
+<table>
+  <thead><tr><th>Module</th><th>Pages</th><th>P0</th><th>P1</th><th>P2</th><th>P3</th><th>Grade</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Module Selector</strong></td><td>1</td><td>0</td><td>0</td><td>0</td><td>1</td><td style="color: #059669; font-weight: 700;">A</td></tr>
+    <tr><td><strong>Finance (GL/AR/AP/Tax/Banking)</strong></td><td>22</td><td>2</td><td>4</td><td>5</td><td>1</td><td style="color: #d97706; font-weight: 700;">B+</td></tr>
+    <tr><td><strong>People (HR/Leave/Payroll/Perf)</strong></td><td>43</td><td>1</td><td>0</td><td>2</td><td>3</td><td style="color: #059669; font-weight: 700;">A-</td></tr>
+    <tr><td><strong>Inventory &amp; Fixed Assets</strong></td><td>35</td><td>2</td><td>4</td><td>3</td><td>3</td><td style="color: #d97706; font-weight: 700;">B</td></tr>
+    <tr><td><strong>Procurement</strong></td><td>15</td><td>0</td><td>2</td><td>2</td><td>1</td><td style="color: #d97706; font-weight: 700;">B+</td></tr>
+    <tr><td><strong>Fleet</strong></td><td>2</td><td>1</td><td>0</td><td>0</td><td>0</td><td style="color: #d97706; font-weight: 700;">B+</td></tr>
+    <tr><td><strong>Expense</strong></td><td>4</td><td>0</td><td>1</td><td>2</td><td>0</td><td style="color: #d97706; font-weight: 700;">B+</td></tr>
+    <tr><td><strong>Support</strong></td><td>1</td><td>0</td><td>0</td><td>1</td><td>0</td><td style="color: #059669; font-weight: 700;">A-</td></tr>
+    <tr><td><strong>Admin &amp; Settings</strong></td><td>6</td><td>0</td><td>0</td><td>1</td><td>2</td><td style="color: #059669; font-weight: 700;">A-</td></tr>
+    <tr><td><strong>CSS / Design System</strong></td><td>&mdash;</td><td>1</td><td>0</td><td>2</td><td>3</td><td style="color: #059669; font-weight: 700;">A</td></tr>
+  </tbody>
+</table>
+
+<h2>Recommended Fix Order</h2>
+
+<h3>Phase 1 &mdash; Ship Blockers (P0)</h3>
+<ol>
+  <li>Fix 500 errors on promotions, transfers, discipline, counts/new, boms/new (backend service issues)</li>
+  <li>Fix 404s on fixed-assets, IPSAS, lease, evaluations (missing routes or templates)</li>
+  <li>Fix tax returns empty state URL: <code>/tax/returns/new</code> &rarr; <code>/finance/tax/returns/new</code></li>
+  <li>Add <code>btn</code> class to 4 inventory Cancel buttons</li>
+  <li>Fix fleet vehicles duplicate breadcrumb (delete lines 8-11)</li>
+  <li>Fix dynamic Tailwind class generation in topbar (add to safelist or use inline styles)</li>
+</ol>
+
+<h3>Phase 2 &mdash; UX Polish (P1)</h3>
+<ol>
+  <li>Add <code>| replace('_', ' ') | title</code> to ~11 raw enum display locations</li>
+  <li>Add <code>dark:text-slate-400</code> to all <code>&lt;th&gt;</code> elements missing dark mode</li>
+  <li>Standardize on <code>status_badge()</code> macro for all status displays</li>
+  <li>Add pagination to material requests and price lists pages</li>
+  <li>Right-align expense amount column</li>
+  <li>Add path-aware active link detection to Finance sidebar</li>
+</ol>
+
+<h3>Phase 3 &mdash; Consistency (P2)</h3>
+<ol>
+  <li>Extract shared sidebar code into a Jinja2 partial to eliminate 500+ lines of duplication</li>
+  <li>Standardize pagination, empty state, and stats card implementations on macros</li>
+  <li>Fix dark mode border visibility and notification backgrounds</li>
+  <li>Add responsive horizontal scroll to evaluation matrix</li>
+</ol>
+
+</body>
+</html>

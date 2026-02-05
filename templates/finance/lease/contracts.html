@@ -1,4 +1,5 @@
 {% extends "finance/base_finance.html" %}
+{% from "components/macros.html" import status_badge %}
 
 {% block page_title %}Lease Contracts{% endblock %}
 
@@ -25,7 +26,7 @@
     <div class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-800/50">
         <form method="get" class="flex flex-wrap items-center gap-4">
             <div class="flex-1 min-w-[200px]">
-                <input type="text" name="search" value="{{ search | default('') }}"
+                <input type="text" name="search" value="{{ search | default('', true) }}"
                        placeholder="Search contracts..."
                        class="w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
             </div>
@@ -58,12 +59,12 @@
             <table class="w-full">
                 <thead>
                     <tr class="border-b border-slate-200 dark:border-slate-700">
-                        <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Lease</th>
-                        <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Lessor</th>
-                        <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Type</th>
-                        <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Term</th>
-                        <th class="px-6 py-4 text-right text-xs font-medium uppercase tracking-wider text-slate-500">Base Payment</th>
-                        <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Status</th>
+                        <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Lease</th>
+                        <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Lessor</th>
+                        <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Type</th>
+                        <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Term</th>
+                        <th class="px-6 py-4 text-right text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Base Payment</th>
+                        <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Status</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
@@ -78,7 +79,7 @@
                         <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{{ contract.classification }}</td>
                         <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{{ contract.commencement_date }} - {{ contract.end_date }}</td>
                         <td class="px-6 py-4 text-right text-sm font-medium text-slate-900 dark:text-white">{{ contract.base_payment_amount }}</td>
-                        <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{{ contract.status }}</td>
+                        <td class="px-6 py-4">{{ status_badge(contract.status) }}</td>
                     </tr>
                     {% else %}
                     <tr>

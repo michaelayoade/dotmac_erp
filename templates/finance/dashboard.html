@@ -731,7 +731,7 @@ document.addEventListener('DOMContentLoaded', function() {
             data: {
                 labels: ['Current', '1-30 Days', '31-60 Days', '60+ Days'],
                 datasets: [{
-                    data: [stats.aging_current || 25, stats.aging_30 || 25, stats.aging_60 || 25, stats.aging_90 || 25],
+                    data: [stats.aging_current || 0, stats.aging_30 || 0, stats.aging_60 || 0, stats.aging_90 || 0],
                     backgroundColor: [colors.emerald.solid, colors.amber.solid, colors.orange.solid, colors.rose.solid],
                     borderWidth: 0,
                 }]

@@ -8,7 +8,7 @@ from typing import Optional
 
 from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Integer, String, Text, UniqueConstraint, func, text
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
 
@@ -115,4 +115,9 @@ class InventoryCount(Base):
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),
+    )
+
+    # Relationships
+    warehouse: Mapped[Optional["Warehouse"]] = relationship(
+        "Warehouse", foreign_keys=[warehouse_id], lazy="noload",
     )

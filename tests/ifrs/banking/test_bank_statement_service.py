@@ -183,20 +183,20 @@ class TestImportStatement:
 class TestGetStatement:
     """Tests for get method."""
 
-    def test_get_existing_statement(self, service, mock_db):
+    def test_get_existing_statement(self, service, mock_db, org_id):
         """Test getting existing statement."""
-        statement = MockBankStatement()
+        statement = MockBankStatement(organization_id=org_id)
         mock_db.get.return_value = statement
 
-        result = service.get(mock_db, statement.statement_id)
+        result = service.get(mock_db, org_id, statement.statement_id)
 
         assert result == statement
 
-    def test_get_nonexistent_statement(self, service, mock_db):
+    def test_get_nonexistent_statement(self, service, mock_db, org_id):
         """Test getting non-existent statement returns None."""
         mock_db.get.return_value = None
 
-        result = service.get(mock_db, uuid4())
+        result = service.get(mock_db, org_id, uuid4())
 
         assert result is None
 
@@ -204,13 +204,13 @@ class TestGetStatement:
 class TestGetWithLines:
     """Tests for get_with_lines method."""
 
-    def test_get_with_lines(self, service, mock_db):
+    def test_get_with_lines(self, service, mock_db, org_id):
         """Test getting statement with lines."""
-        statement = MockBankStatement()
+        statement = MockBankStatement(organization_id=org_id)
         statement.lines = [MockBankStatementLine() for _ in range(3)]
         mock_db.get.return_value = statement
 
-        result = service.get_with_lines(mock_db, statement.statement_id)
+        result = service.get_with_lines(mock_db, org_id, statement.statement_id)
 
         assert result == statement
         assert len(result.lines) == 3

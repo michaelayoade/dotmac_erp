@@ -161,14 +161,14 @@
                         <svg class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
                         </svg>
-                        <input type="text" name="search" id="search" value="{{ search | default('') }}"
+                        <input type="text" name="search" id="search" value="{{ search | default('', true) }}"
                             placeholder="Search by ticket number, subject, or email..."
                             class="form-input w-full pl-10">
                     </div>
                 </div>
                 <div class="w-32">
                     <label for="status" class="form-label">Status</label>
-                    <select name="status" id="status" class="form-input w-full">
+                    <select name="status" id="status" class="form-select w-full">
                         <option value="">All</option>
                         {% for s in statuses %}
                         <option value="{{ s.value }}" {{ 'selected' if selected_status == s.value }}>{{ s.label }}</option>
@@ -177,7 +177,7 @@
                 </div>
                 <div class="w-32">
                     <label for="priority" class="form-label">Priority</label>
-                    <select name="priority" id="priority" class="form-input w-full">
+                    <select name="priority" id="priority" class="form-select w-full">
                         <option value="">All</option>
                         {% for p in priorities %}
                         <option value="{{ p.value }}" {{ 'selected' if selected_priority == p.value }}>{{ p.label }}</option>
@@ -186,7 +186,7 @@
                 </div>
                 <div class="w-44">
                     <label for="assigned_to" class="form-label">Assigned To</label>
-                    <select name="assigned_to" id="assigned_to" class="form-input w-full">
+                    <select name="assigned_to" id="assigned_to" class="form-select w-full">
                         <option value="">All Assignees</option>
                         {% for emp in employees %}
                         <option value="{{ emp.employee_id }}" {{ 'selected' if selected_assigned_to == emp.employee_id }}>
@@ -201,7 +201,7 @@
             <div class="flex flex-wrap gap-4 items-end">
                 <div class="w-40">
                     <label for="category" class="form-label">Category</label>
-                    <select name="category" id="category" class="form-input w-full">
+                    <select name="category" id="category" class="form-select w-full">
                         <option value="">All Categories</option>
                         {% for c in categories %}
                         <option value="{{ c.value }}" {{ 'selected' if selected_category == c.value }}>{{ c.label }}</option>
@@ -210,7 +210,7 @@
                 </div>
                 <div class="w-40">
                     <label for="team" class="form-label">Team</label>
-                    <select name="team" id="team" class="form-input w-full">
+                    <select name="team" id="team" class="form-select w-full">
                         <option value="">All Teams</option>
                         {% for t in teams %}
                         <option value="{{ t.value }}" {{ 'selected' if selected_team == t.value }}>{{ t.label }}</option>
@@ -219,11 +219,11 @@
                 </div>
                 <div class="w-36">
                     <label for="date_from" class="form-label">From Date</label>
-                    <input type="date" name="date_from" id="date_from" value="{{ selected_date_from | default('') }}" class="form-input w-full">
+                    <input type="date" name="date_from" id="date_from" value="{{ selected_date_from | default('', true) }}" class="form-input w-full">
                 </div>
                 <div class="w-36">
                     <label for="date_to" class="form-label">To Date</label>
-                    <input type="date" name="date_to" id="date_to" value="{{ selected_date_to | default('') }}" class="form-input w-full">
+                    <input type="date" name="date_to" id="date_to" value="{{ selected_date_to | default('', true) }}" class="form-input w-full">
                 </div>
                 <div class="flex gap-2">
                     <button type="submit" class="btn btn-primary h-10">
@@ -298,7 +298,7 @@
                             <template x-for="id in selectedTickets" :key="id">
                                 <input type="hidden" name="ticket_ids" :value="id">
                             </template>
-                            <select name="assigned_to_id" required class="form-input w-full text-sm">
+                            <select name="assigned_to_id" required class="form-select w-full text-sm">
                                 <option value="">Select employee...</option>
                                 {% for emp in employees %}
                                 <option value="{{ emp.employee_id }}">{{ emp.full_name }}</option>
@@ -462,7 +462,7 @@
                 <span class="hidden sm:inline">({{ total }} total tickets)</span>
             </div>
             <div class="flex gap-2">
-                {% set filter_params = "search=" ~ (search | default('')) ~ "&status=" ~ (selected_status | default('')) ~ "&priority=" ~ (selected_priority | default('')) ~ "&assigned_to=" ~ (selected_assigned_to | default('')) ~ "&category=" ~ (selected_category | default('')) ~ "&team=" ~ (selected_team | default('')) ~ "&date_from=" ~ (selected_date_from | default('')) ~ "&date_to=" ~ (selected_date_to | default('')) %}
+                {% set filter_params = "search=" ~ (search | default('', true)) ~ "&status=" ~ (selected_status | default('', true)) ~ "&priority=" ~ (selected_priority | default('', true)) ~ "&assigned_to=" ~ (selected_assigned_to | default('', true)) ~ "&category=" ~ (selected_category | default('', true)) ~ "&team=" ~ (selected_team | default('', true)) ~ "&date_from=" ~ (selected_date_from | default('', true)) ~ "&date_to=" ~ (selected_date_to | default('', true)) %}
                 {% if has_prev %}
                 <a href="?page={{ page - 1 }}&{{ filter_params }}"
                    class="btn btn-secondary btn-sm">

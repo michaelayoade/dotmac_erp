@@ -81,8 +81,8 @@
             If you need help beyond these guides, contact your system administrator or support team.
         </p>
         <div class="mt-4 flex flex-wrap gap-3 text-sm text-slate-600 dark:text-slate-400">
-            <span class="rounded-full bg-slate-100 px-3 py-1 dark:bg-slate-800">Org: {{ organization_id | default('') }}</span>
-            <span class="rounded-full bg-slate-100 px-3 py-1 dark:bg-slate-800">User: {{ user.name | default('') }}</span>
+            <span class="rounded-full bg-slate-100 px-3 py-1 dark:bg-slate-800">Org: {{ organization_id | default('', true) }}</span>
+            <span class="rounded-full bg-slate-100 px-3 py-1 dark:bg-slate-800">User: {{ user.name | default('', true) }}</span>
         </div>
     </div>
 </div>

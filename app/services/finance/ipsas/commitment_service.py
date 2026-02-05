@@ -37,16 +37,16 @@ class CommitmentService:
         offset: int = 0,
     ) -> list[Commitment]:
         """List commitments with optional filters."""
-        stmt = select(Commitment).where(
-            Commitment.organization_id == organization_id
-        )
+        stmt = select(Commitment).where(Commitment.organization_id == organization_id)
 
         if fund_id:
             stmt = stmt.where(Commitment.fund_id == fund_id)
         if status:
             stmt = stmt.where(Commitment.status == CommitmentStatus(status))
 
-        stmt = stmt.order_by(Commitment.commitment_date.desc()).offset(offset).limit(limit)
+        stmt = (
+            stmt.order_by(Commitment.commitment_date.desc()).offset(offset).limit(limit)
+        )
         return list(self.db.scalars(stmt).all())
 
     def get_or_404(
@@ -61,6 +61,50 @@ class CommitmentService:
             raise NotFoundError(f"Commitment {commitment_id} not found")
         if organization_id and commitment.organization_id != organization_id:
             raise NotFoundError(f"Commitment {commitment_id} not found")
+        return commitment
+
+    def create(
+        self,
+        *,
+        organization_id: UUID,
+        commitment_number: str,
+        commitment_type: str,
+        fund_id: UUID,
+        account_id: UUID,
+        fiscal_year_id: UUID,
+        fiscal_period_id: UUID,
+        committed_amount: Decimal,
+        currency_code: str,
+        created_by_user_id: UUID,
+        appropriation_id: Optional[UUID] = None,
+    ) -> Commitment:
+        """Create a generic commitment (not tied to a specific source document)."""
+        commitment = Commitment(
+            organization_id=organization_id,
+            commitment_number=commitment_number,
+            commitment_type=CommitmentType(commitment_type),
+            status=CommitmentStatus.COMMITTED,
+            fund_id=fund_id,
+            appropriation_id=appropriation_id,
+            source_type="manual",
+            source_id=organization_id,  # Use org_id as placeholder source
+            account_id=account_id,
+            fiscal_year_id=fiscal_year_id,
+            fiscal_period_id=fiscal_period_id,
+            currency_code=currency_code,
+            committed_amount=committed_amount,
+            commitment_date=date.today(),
+            created_by_user_id=created_by_user_id,
+        )
+        self.db.add(commitment)
+        self.db.flush()
+
+        logger.info(
+            "Created commitment %s: %s %s",
+            commitment_number,
+            currency_code,
+            committed_amount,
+        )
         return commitment
 
     def create_commitment_from_po(
@@ -103,6 +147,51 @@ class CommitmentService:
             "Created commitment %s from PO %s: %s %s",
             commitment_number,
             po_id,
+            currency_code,
+            amount,
+        )
+        return commitment
+
+    def create_commitment_from_contract(
+        self,
+        *,
+        organization_id: UUID,
+        contract_id: UUID,
+        fund_id: UUID,
+        account_id: UUID,
+        fiscal_year_id: UUID,
+        fiscal_period_id: UUID,
+        amount: Decimal,
+        currency_code: str,
+        created_by_user_id: UUID,
+        commitment_number: str,
+        appropriation_id: Optional[UUID] = None,
+    ) -> Commitment:
+        """Create a commitment from a procurement contract."""
+        commitment = Commitment(
+            organization_id=organization_id,
+            commitment_number=commitment_number,
+            commitment_type=CommitmentType.CONTRACT,
+            status=CommitmentStatus.COMMITTED,
+            fund_id=fund_id,
+            appropriation_id=appropriation_id,
+            source_type="contract",
+            source_id=contract_id,
+            account_id=account_id,
+            fiscal_year_id=fiscal_year_id,
+            fiscal_period_id=fiscal_period_id,
+            currency_code=currency_code,
+            committed_amount=amount,
+            commitment_date=date.today(),
+            created_by_user_id=created_by_user_id,
+        )
+        self.db.add(commitment)
+        self.db.flush()
+
+        logger.info(
+            "Created commitment %s from contract %s: %s %s",
+            commitment_number,
+            contract_id,
             currency_code,
             amount,
         )

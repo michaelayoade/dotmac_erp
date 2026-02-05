@@ -154,7 +154,7 @@ class TestScheduledTasksGet:
         assert "Scheduled task not found" in exc_info.value.detail
 
     def test_get_invalid_uuid_raises(self, mock_db):
-        """Invalid UUID format should raise HTTPException."""
+        """Invalid UUID format should raise HTTPException(400)."""
         with pytest.raises(HTTPException) as exc_info:
             ScheduledTasks.get(mock_db, "not-a-uuid")
         assert exc_info.value.status_code == 400

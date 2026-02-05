@@ -103,6 +103,9 @@ MODULE_SETTINGS_CONFIGS = [
         setting_keys=[
             "procurement_default_payment_terms_days",
             "procurement_require_rfq_for_po",
+            "procurement_threshold_direct_max",
+            "procurement_threshold_selective_max",
+            "procurement_threshold_ministerial_max",
         ],
     ),
 ]

@@ -1,4 +1,4 @@
-{% extends "modules/base_modules.html" %}
+{% extends "inventory/base_inventory.html" %}
 {% from "components/macros.html" import status_badge, search_filter_bar, pagination, action_buttons, empty_state, bulk_select_header, bulk_select_cell, bulk_action_bar, bulk_icon_delete, bulk_icon_export, bulk_icon_activate, bulk_icon_deactivate %}
 
 {% block page_title %}Inventory Items{% endblock %}
@@ -47,7 +47,7 @@
                     </svg>
                 </div>
                 <div>
-                    <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ items|selectattr('is_active')|list|length }}</p>
+                    <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ active_count }}</p>
                     <p class="text-xs text-slate-500 dark:text-slate-400">Active Items</p>
                 </div>
             </div>
@@ -73,7 +73,7 @@
                     </svg>
                 </div>
                 <div>
-                    <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ items|selectattr('item_type', 'equalto', 'INVENTORY')|list|length }}</p>
+                    <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ stock_count }}</p>
                     <p class="text-xs text-slate-500 dark:text-slate-400">Stock Items</p>
                 </div>
             </div>

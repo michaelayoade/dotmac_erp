@@ -120,8 +120,19 @@ class ContractService:
         self,
         organization_id: UUID,
         contract_id: UUID,
+        *,
+        user_id: Optional[UUID] = None,
+        fund_id: Optional[UUID] = None,
+        account_id: Optional[UUID] = None,
+        fiscal_year_id: Optional[UUID] = None,
+        fiscal_period_id: Optional[UUID] = None,
+        appropriation_id: Optional[UUID] = None,
     ) -> ProcurementContract:
-        """Activate a contract."""
+        """Activate a contract.
+
+        When IPSAS params (fund_id, account_id, etc.) are provided and
+        the org has commitment_control_enabled, a commitment is auto-created.
+        """
         contract = self.get_by_id(organization_id, contract_id)
         if not contract:
             raise NotFoundError("Contract not found")
@@ -131,7 +142,66 @@ class ContractService:
         contract.status = ContractStatus.ACTIVE
         self.db.flush()
         logger.info("Activated contract %s", contract.contract_number)
+
+        # Side effect: create IPSAS commitment if enabled
+        if fund_id and account_id and fiscal_year_id and fiscal_period_id and user_id:
+            try:
+                self._create_commitment_if_enabled(
+                    organization_id=organization_id,
+                    contract=contract,
+                    user_id=user_id,
+                    fund_id=fund_id,
+                    account_id=account_id,
+                    fiscal_year_id=fiscal_year_id,
+                    fiscal_period_id=fiscal_period_id,
+                    appropriation_id=appropriation_id,
+                )
+            except Exception as e:
+                logger.exception(
+                    "Failed to create commitment for contract %s: %s",
+                    contract.contract_number,
+                    e,
+                )
+
         return contract
+
+    def _create_commitment_if_enabled(
+        self,
+        *,
+        organization_id: UUID,
+        contract: ProcurementContract,
+        user_id: UUID,
+        fund_id: UUID,
+        account_id: UUID,
+        fiscal_year_id: UUID,
+        fiscal_period_id: UUID,
+        appropriation_id: Optional[UUID] = None,
+    ) -> None:
+        """Create an IPSAS commitment if the org has commitment control enabled."""
+        from app.models.finance.core_org.organization import Organization
+
+        org = self.db.get(Organization, organization_id)
+        if not org or not org.commitment_control_enabled:
+            return
+
+        # Import inside function to avoid circular imports
+        from app.services.finance.ipsas.commitment_service import CommitmentService
+
+        commitment_number = f"CMT-{contract.contract_number}"
+        svc = CommitmentService(self.db)
+        svc.create_commitment_from_contract(
+            organization_id=organization_id,
+            contract_id=contract.contract_id,
+            fund_id=fund_id,
+            account_id=account_id,
+            fiscal_year_id=fiscal_year_id,
+            fiscal_period_id=fiscal_period_id,
+            amount=contract.contract_value,
+            currency_code=contract.currency_code,
+            created_by_user_id=user_id,
+            commitment_number=commitment_number,
+            appropriation_id=appropriation_id,
+        )
 
     def complete(
         self,

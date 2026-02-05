@@ -1,4 +1,4 @@
-{% extends "modules/base_modules.html" %}
+{% extends "procurement/base_procurement.html" %}
 
 {% block page_title %}Bid Evaluation - {{ rfq.rfq_number }}{% endblock %}
 
@@ -32,10 +32,10 @@
         <div class="flex justify-between items-start mb-4">
             <div>
                 <h2 class="text-xl font-semibold text-slate-900 dark:text-white">{{ rfq.title }}</h2>
-                <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">{{ rfq.rfq_number }} | Method: {{ rfq.procurement_method.value }}</p>
+                <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">{{ rfq.rfq_number }} | Method: {{ rfq.procurement_method.value | replace('_', ' ') | title }}</p>
             </div>
-            {% set label, color = status_labels.get(rfq.status, ("Unknown", "slate")) %}
-            <span class="inline-flex items-center rounded-full px-3 py-1 text-sm font-medium bg-{{ color }}-100 text-{{ color }}-700 dark:bg-{{ color }}-900/30 dark:text-{{ color }}-400">{{ label }}</span>
+            {% set label, classes = status_labels.get(rfq.status, ("Unknown", "bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-400")) %}
+            <span class="inline-flex items-center rounded-full px-3 py-1 text-sm font-medium {{ classes }}">{{ label }}</span>
         </div>
         <div class="grid grid-cols-3 gap-4 text-sm">
             <div>

@@ -26,6 +26,7 @@ from app.services.expense.expense_service import (
     ExpenseServiceError,
     ExpenseClaimStatusError,
 )
+from app.services.finance.platform.authorization import AuthorizationService
 from app.services.settings_spec import resolve_value
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
@@ -121,15 +122,23 @@ class ExpenseClaimsWebService:
         if not claim:
             return RedirectResponse("/expense/claims/list", status_code=302)
 
-        can_approve = auth.has_any_permission(
-            [
-                "expense:claims:approve:tier1",
-                "expense:claims:approve:tier2",
-                "expense:claims:approve:tier3",
-            ]
-        )
+        approve_perms = [
+            "expense:claims:approve:tier1",
+            "expense:claims:approve:tier2",
+            "expense:claims:approve:tier3",
+        ]
+        can_approve = auth.is_admin
+        if not can_approve and auth.person_id:
+            can_approve = AuthorizationService.check_any_permission(
+                db, auth.person_id, approve_perms, org_id
+            )
         can_submit = (auth.is_admin or can_approve) and claim.status == ExpenseClaimStatus.DRAFT
-        can_act = can_approve and claim.status in {
+        can_reject = auth.is_admin
+        if not can_reject and auth.person_id:
+            can_reject = AuthorizationService.check_permission(
+                db, auth.person_id, "expense:claims:reject", org_id
+            )
+        can_act = (can_approve or can_reject) and claim.status in {
             ExpenseClaimStatus.SUBMITTED,
             ExpenseClaimStatus.PENDING_APPROVAL,
         }
@@ -157,7 +166,7 @@ class ExpenseClaimsWebService:
             )
 
         can_paystack = (
-            (auth.is_admin or auth.has_module_access("finance"))
+            (auth.is_admin or can_approve)
             and bool(paystack_enabled)
             and bool(transfers_enabled)
             and claim.status == ExpenseClaimStatus.APPROVED
@@ -170,6 +179,8 @@ class ExpenseClaimsWebService:
                 "claim": claim,
                 "can_submit": can_submit,
                 "can_act": can_act,
+                "can_approve": can_approve,
+                "can_reject": can_reject,
                 "can_paystack": can_paystack,
                 "has_active_payment": has_active_payment,
                 "action": request.query_params.get("action"),

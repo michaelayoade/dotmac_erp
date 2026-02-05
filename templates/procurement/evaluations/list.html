@@ -1,0 +1,104 @@
+{% extends "procurement/base_procurement.html" %}
+
+{% block page_title %}Bid Evaluations{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+    <a href="/procurement" class="hover:text-amber-600 transition-colors">Procurement</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+    <span class="font-medium text-slate-900 dark:text-white">Evaluations</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-4 stagger-in">
+    <div class="card p-4">
+        <form method="get" class="flex flex-wrap gap-3 items-end">
+            <div>
+                <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Status</label>
+                <select name="status" class="form-select text-sm">
+                    <option value="">All</option>
+                    {% for s in evaluation_statuses %}
+                    <option value="{{ s.value }}" {% if filter_status == s.value %}selected{% endif %}>{{ s.value | replace('_', ' ') | title }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="btn btn-secondary text-sm">Filter</button>
+        </form>
+    </div>
+
+    <div class="card">
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="bg-slate-50 dark:bg-slate-800/50">
+                    <tr>
+                        <th class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Evaluation Date</th>
+                        <th class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">RFQ</th>
+                        <th class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Status</th>
+                        <th class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                    {% for evaluation in evaluations %}
+                    {% set rfq = rfq_map.get(evaluation.rfq_id) %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                        <td class="px-4 py-3 text-slate-600 dark:text-slate-400">{{ evaluation.evaluation_date }}</td>
+                        <td class="px-4 py-3">
+                            {% if rfq %}
+                            <a href="/procurement/rfqs/{{ rfq.rfq_id }}" class="font-medium text-blue-600 hover:underline dark:text-blue-400">{{ rfq.rfq_number }}</a>
+                            <div class="text-xs text-slate-500 dark:text-slate-400">{{ rfq.title }}</div>
+                            {% else %}
+                            <span class="text-slate-500 dark:text-slate-400">RFQ unavailable</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3">
+                            {% set label, classes = status_labels.get(evaluation.status, ("Unknown", "bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-400")) %}
+                            <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium {{ classes }}">{{ label }}</span>
+                        </td>
+                        <td class="px-4 py-3">
+                            <div class="flex flex-wrap gap-2">
+                                <a href="/procurement/rfqs/{{ evaluation.rfq_id }}/evaluate" class="btn btn-secondary text-xs">Open Matrix</a>
+                                {% if rfq %}
+                                <a href="/procurement/rfqs/{{ rfq.rfq_id }}" class="btn btn-secondary text-xs">View RFQ</a>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="4" class="py-12">
+                            <div class="text-center">
+                                <svg class="mx-auto h-12 w-12 text-slate-300 dark:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z"/>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z"/>
+                                </svg>
+                                <p class="mt-2 text-sm font-medium text-slate-900 dark:text-white">No evaluations found</p>
+                                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                                    {% if filter_status %}
+                                    Try adjusting your filter criteria
+                                    {% else %}
+                                    Evaluations appear after RFQs are scored
+                                    {% endif %}
+                                </p>
+                                {% if not filter_status %}
+                                <a href="/procurement/rfqs" class="mt-4 inline-flex items-center btn btn-primary text-sm">Browse RFQs</a>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if total > limit %}
+        <div class="p-4 border-t border-slate-200 dark:border-slate-700 flex justify-between items-center text-sm text-slate-600 dark:text-slate-400">
+            <span>Showing {{ offset + 1 }}-{{ [offset + limit, total] | min }} of {{ total }}</span>
+            <div class="flex gap-2">
+                {% if offset > 0 %}<a href="?offset={{ offset - limit }}&limit={{ limit }}{% if filter_status %}&status={{ filter_status }}{% endif %}" class="btn btn-secondary text-xs">Previous</a>{% endif %}
+                {% if offset + limit < total %}<a href="?offset={{ offset + limit }}&limit={{ limit }}{% if filter_status %}&status={{ filter_status }}{% endif %}" class="btn btn-secondary text-xs">Next</a>{% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -40,6 +40,14 @@ module.exports = {
     "sm:inline",
     "sm:inline-flex",
     "md:inline-flex",
+    // Module color variants (used in topbar via Jinja2 dict lookups)
+    "bg-teal-50/50", "dark:bg-teal-900/10", "bg-teal-500",
+    "bg-violet-50/50", "dark:bg-violet-900/10", "bg-violet-500",
+    "bg-amber-50/50", "dark:bg-amber-900/10", "bg-amber-500",
+    // Sidebar active link colors
+    "bg-teal-50", "dark:bg-teal-900/20", "text-teal-800", "dark:text-teal-200",
+    "bg-amber-50", "dark:bg-amber-900/20", "text-amber-800", "dark:text-amber-200",
+    "bg-violet-50", "dark:bg-violet-900/20", "text-violet-800", "dark:text-violet-200",
     // Width patterns for tables
     "sm:w-auto",
     "md:w-auto",

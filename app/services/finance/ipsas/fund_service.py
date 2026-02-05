@@ -116,12 +116,16 @@ class FundService:
         self.get_or_404(fund_id)  # verify exists
 
         # Sum revised appropriation amounts
-        approp_stmt = select(func.coalesce(func.sum(Appropriation.revised_amount), 0)).where(
+        approp_stmt = select(
+            func.coalesce(func.sum(Appropriation.revised_amount), 0)
+        ).where(
             Appropriation.fund_id == fund_id,
-            Appropriation.status.in_([
-                AppropriationStatus.APPROVED,
-                AppropriationStatus.ACTIVE,
-            ]),
+            Appropriation.status.in_(
+                [
+                    AppropriationStatus.APPROVED,
+                    AppropriationStatus.ACTIVE,
+                ]
+            ),
         )
         total_appropriated = self.db.scalar(approp_stmt) or Decimal(0)
 
@@ -131,10 +135,12 @@ class FundService:
             func.coalesce(func.sum(Commitment.cancelled_amount), 0),
         ).where(
             Commitment.fund_id == fund_id,
-            Commitment.status.notin_([
-                CommitmentStatus.CANCELLED,
-                CommitmentStatus.LAPSED,
-            ]),
+            Commitment.status.notin_(
+                [
+                    CommitmentStatus.CANCELLED,
+                    CommitmentStatus.LAPSED,
+                ]
+            ),
         )
 
         if fiscal_period_id:

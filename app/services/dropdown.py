@@ -10,7 +10,7 @@ from typing import Any, Dict, List
 from uuid import UUID
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, load_only
 
 from app.services.common import coerce_uuid
 
@@ -46,6 +46,10 @@ class DropdownService:
         query = (
             select(Employee, Person)
             .join(Person, Person.id == Employee.person_id)
+            .options(
+                load_only(Employee.employee_id, Employee.employee_code, Employee.status),
+                load_only(Person.first_name, Person.last_name),
+            )
             .where(Employee.organization_id == org_id)
             .order_by(Person.first_name, Person.last_name)
         )
@@ -89,6 +93,10 @@ class DropdownService:
         try:
             query = (
                 select(Project)
+                .options(load_only(
+                    Project.project_id, Project.project_code,
+                    Project.project_name, Project.status,
+                ))
                 .where(Project.organization_id == org_id)
                 .order_by(Project.project_code)
             )
@@ -135,6 +143,12 @@ class DropdownService:
         try:
             query = (
                 select(Customer)
+                .options(load_only(
+                    Customer.customer_id, Customer.customer_code,
+                    Customer.legal_name, Customer.trading_name,
+                    Customer.is_active, Customer.primary_contact,
+                    Customer.billing_address,
+                ))
                 .where(Customer.organization_id == org_id)
                 .order_by(Customer.legal_name)
             )
@@ -184,6 +198,11 @@ class DropdownService:
         try:
             query = (
                 select(Supplier)
+                .options(load_only(
+                    Supplier.supplier_id, Supplier.supplier_code,
+                    Supplier.legal_name, Supplier.trading_name,
+                    Supplier.is_active,
+                ))
                 .where(Supplier.organization_id == org_id)
                 .order_by(Supplier.legal_name)
             )
@@ -230,6 +249,10 @@ class DropdownService:
         try:
             query = (
                 select(Warehouse)
+                .options(load_only(
+                    Warehouse.warehouse_id, Warehouse.warehouse_code,
+                    Warehouse.warehouse_name, Warehouse.is_active,
+                ))
                 .where(Warehouse.organization_id == org_id)
                 .order_by(Warehouse.warehouse_code)
             )
@@ -278,6 +301,11 @@ class DropdownService:
         try:
             query = (
                 select(Account)
+                .options(load_only(
+                    Account.account_id, Account.account_code,
+                    Account.account_name, Account.account_type,
+                    Account.is_active,
+                ))
                 .where(Account.organization_id == org_id)
                 .order_by(Account.account_code)
             )

@@ -28,7 +28,7 @@
                     <span class="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-400">Closed</span>
                     {% endif %}
                 </div>
-                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ fund.fund_code }} &middot; {{ fund.fund_type.value }}</p>
+                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ fund.fund_code }} &middot; {{ fund.fund_type.value | replace('_', ' ') | title }}</p>
                 {% if fund.description %}
                 <p class="mt-2 text-sm text-slate-600 dark:text-slate-300">{{ fund.description }}</p>
                 {% endif %}
@@ -43,7 +43,7 @@
             <dl class="space-y-3">
                 <div class="flex justify-between">
                     <dt class="text-sm text-slate-500 dark:text-slate-400">Type</dt>
-                    <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ fund.fund_type.value }}</dd>
+                    <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ fund.fund_type.value | replace('_', ' ') | title }}</dd>
                 </div>
                 <div class="flex justify-between">
                     <dt class="text-sm text-slate-500 dark:text-slate-400">Restricted</dt>
@@ -57,12 +57,12 @@
                 {% endif %}
                 <div class="flex justify-between">
                     <dt class="text-sm text-slate-500 dark:text-slate-400">Effective From</dt>
-                    <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ fund.effective_from }}</dd>
+                    <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ fund.effective_from.strftime('%Y-%m-%d') if fund.effective_from else '-' }}</dd>
                 </div>
                 {% if fund.effective_to %}
                 <div class="flex justify-between">
                     <dt class="text-sm text-slate-500 dark:text-slate-400">Effective To</dt>
-                    <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ fund.effective_to }}</dd>
+                    <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ fund.effective_to.strftime('%Y-%m-%d') if fund.effective_to else '-' }}</dd>
                 </div>
                 {% endif %}
                 {% if fund.donor_name %}

@@ -40,6 +40,12 @@ class TestCoerceUuid:
         assert result is original
         assert isinstance(result, uuid.UUID)
 
+    def test_coerce_uuid_invalid_raises_http_exception(self):
+        """An invalid UUID string should raise HTTPException(400) by default."""
+        with pytest.raises(HTTPException) as exc_info:
+            coerce_uuid("not-a-uuid")
+        assert exc_info.value.status_code == 400
+
     def test_coerce_uuid_invalid_raises_valueerror(self):
         """An invalid UUID string should raise ValueError when raise_http=False."""
         with pytest.raises(ValueError):

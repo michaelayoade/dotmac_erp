@@ -5,6 +5,7 @@ Revises: 20260203_create_ipsas_schema
 Create Date: 2026-02-03
 """
 from alembic import op
+import sqlalchemy as sa
 
 revision = "20260203_split_operations_modules"
 down_revision = "20260203_create_ipsas_schema"
@@ -43,6 +44,7 @@ def _grant_permission_from_role_source(source_key: str, target_key: str) -> None
               WHERE rp2.role_id = rp.role_id
                 AND rp2.permission_id = p_target.id
           )
+        ON CONFLICT DO NOTHING
         """.format(source_key=source_key, target_key=target_key)
     )
 
@@ -55,13 +57,14 @@ def _grant_permission_from_prefix(prefix: str, target_key: str) -> None:
         FROM role_permissions rp
         JOIN permissions p_source ON p_source.id = rp.permission_id
         JOIN permissions p_target ON p_target.key = '{target_key}'
-        WHERE p_source.key LIKE '{prefix}%'
+        WHERE p_source.key LIKE '{prefix}%%'
           AND NOT EXISTS (
               SELECT 1
               FROM role_permissions rp2
               WHERE rp2.role_id = rp.role_id
                 AND rp2.permission_id = p_target.id
           )
+        ON CONFLICT DO NOTHING
         """.format(prefix=prefix, target_key=target_key)
     )
 
@@ -72,27 +75,36 @@ def upgrade() -> None:
         _add_settingdomain_value(value)
 
     # Migrate legacy operations settings to module domains
-    op.execute(
-        """
-        UPDATE domain_settings
-        SET domain = 'support'
-        WHERE domain = 'operations' AND key LIKE 'support_%'
-        """
-    )
-    op.execute(
-        """
-        UPDATE domain_settings
-        SET domain = 'inventory'
-        WHERE domain = 'operations' AND key LIKE 'inventory_%'
-        """
-    )
-    op.execute(
-        """
-        UPDATE domain_settings
-        SET domain = 'projects'
-        WHERE domain = 'operations' AND key LIKE 'project_%'
-        """
-    )
+    # Only run if 'operations' exists as a settingdomain value
+    bind = op.get_bind()
+    has_operations = bind.execute(
+        sa.text(
+            "SELECT EXISTS(SELECT 1 FROM pg_enum WHERE enumlabel = 'operations' "
+            "AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'settingdomain'))"
+        )
+    ).scalar()
+    if has_operations:
+        op.execute(
+            """
+            UPDATE domain_settings
+            SET domain = 'support'
+            WHERE domain = 'operations' AND key LIKE 'support_%%'
+            """
+        )
+        op.execute(
+            """
+            UPDATE domain_settings
+            SET domain = 'inventory'
+            WHERE domain = 'operations' AND key LIKE 'inventory_%%'
+            """
+        )
+        op.execute(
+            """
+            UPDATE domain_settings
+            SET domain = 'projects'
+            WHERE domain = 'operations' AND key LIKE 'project_%%'
+            """
+        )
 
     # Rename inventory permissions from inv:* to inventory:*
     op.execute(

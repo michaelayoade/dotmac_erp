@@ -133,10 +133,10 @@
         </p>
         <div class="flex gap-2">
             {% if has_prev %}
-            <a href="?page={{ page - 1 }}&status={{ status | default('') }}&job_opening_id={{ job_opening_id | default('') }}&applicant_id={{ applicant_id | default('') }}" class="btn btn-secondary btn-sm">Previous</a>
+            <a href="?page={{ page - 1 }}&status={{ status | default('', true) }}&job_opening_id={{ job_opening_id | default('', true) }}&applicant_id={{ applicant_id | default('', true) }}" class="btn btn-secondary btn-sm">Previous</a>
             {% endif %}
             {% if has_next %}
-            <a href="?page={{ page + 1 }}&status={{ status | default('') }}&job_opening_id={{ job_opening_id | default('') }}&applicant_id={{ applicant_id | default('') }}" class="btn btn-secondary btn-sm">Next</a>
+            <a href="?page={{ page + 1 }}&status={{ status | default('', true) }}&job_opening_id={{ job_opening_id | default('', true) }}&applicant_id={{ applicant_id | default('', true) }}" class="btn btn-secondary btn-sm">Next</a>
             {% endif %}
         </div>
     </div>

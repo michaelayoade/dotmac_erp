@@ -446,6 +446,21 @@ class InventoryWebService:
             .all()
         )
 
+        # Pre-computed stat-card counts (across ALL items, not just the page)
+        active_count = (
+            db.query(func.count(Item.item_id))
+            .filter(Item.organization_id == org_id, Item.is_active.is_(True))
+            .scalar()
+        ) or 0
+        stock_count = (
+            db.query(func.count(Item.item_id))
+            .filter(
+                Item.organization_id == org_id,
+                Item.item_type == ItemType.INVENTORY,
+            )
+            .scalar()
+        ) or 0
+
         return {
             "items": items_view,
             "categories": categories,
@@ -457,6 +472,8 @@ class InventoryWebService:
             "offset": offset,
             "total_count": total_count,
             "total_pages": total_pages,
+            "active_count": active_count,
+            "stock_count": stock_count,
         }
 
     @staticmethod
@@ -679,7 +696,7 @@ class InventoryWebService:
         limit: int,
         db: Session,
     ) -> HTMLResponse:
-        context = base_context(request, auth, "Inventory Items", "inv")
+        context = base_context(request, auth, "Inventory Items", "items")
         context.update(
             self.list_items_context(
                 db,
@@ -699,7 +716,7 @@ class InventoryWebService:
         auth: WebAuthContext,
         db: Session,
     ) -> HTMLResponse:
-        context = base_context(request, auth, "New Item", "inv")
+        context = base_context(request, auth, "New Item", "items")
         context.update(self.item_form_context(db, str(auth.organization_id)))
         return templates.TemplateResponse(request, "inventory/item_form.html", context)
 
@@ -768,7 +785,7 @@ class InventoryWebService:
             return RedirectResponse(url="/inventory/items", status_code=303)
 
         except Exception as e:
-            context = base_context(request, auth, "New Item", "inv")
+            context = base_context(request, auth, "New Item", "items")
             context.update(self.item_form_context(db, str(auth.organization_id)))
             context["error"] = str(e)
             return templates.TemplateResponse(request, "inventory/item_form.html", context)
@@ -780,7 +797,7 @@ class InventoryWebService:
         db: Session,
         item_id: str,
     ) -> HTMLResponse:
-        context = base_context(request, auth, "Item Details", "inv")
+        context = base_context(request, auth, "Item Details", "items")
         context.update(self.item_detail_context(db, str(auth.organization_id), item_id))
         return templates.TemplateResponse(request, "inventory/item_detail.html", context)
 
@@ -791,7 +808,7 @@ class InventoryWebService:
         db: Session,
         item_id: str,
     ) -> HTMLResponse | RedirectResponse:
-        context = base_context(request, auth, "Edit Item", "inv")
+        context = base_context(request, auth, "Edit Item", "items")
         context.update(self.item_form_context(db, str(auth.organization_id), item_id))
         if not context.get("item"):
             return RedirectResponse(url="/inventory/items", status_code=303)
@@ -864,7 +881,7 @@ class InventoryWebService:
             return RedirectResponse(url=f"/inventory/items/{item_id}", status_code=303)
 
         except Exception as e:
-            context = base_context(request, auth, "Edit Item", "inv")
+            context = base_context(request, auth, "Edit Item", "items")
             context.update(self.item_form_context(db, str(auth.organization_id), item_id))
             context["error"] = str(e)
             return templates.TemplateResponse(request, "inventory/item_form.html", context)
@@ -878,7 +895,7 @@ class InventoryWebService:
         page: int,
         db: Session,
     ) -> HTMLResponse:
-        context = base_context(request, auth, "Inventory Transactions", "inv")
+        context = base_context(request, auth, "Inventory Transactions", "transactions")
         context.update(
             self.list_transactions_context(
                 db,
@@ -1011,7 +1028,7 @@ class InventoryWebService:
         limit: int,
         db: Session,
     ) -> HTMLResponse:
-        context = base_context(request, auth, "Item Categories", "inv")
+        context = base_context(request, auth, "Item Categories", "categories")
         context.update(
             self.list_categories_context(
                 db,
@@ -1030,7 +1047,7 @@ class InventoryWebService:
         auth: WebAuthContext,
         db: Session,
     ) -> HTMLResponse:
-        context = base_context(request, auth, "New Category", "inv")
+        context = base_context(request, auth, "New Category", "categories")
         context.update(self.category_form_context(db, str(auth.organization_id)))
         return templates.TemplateResponse(request, "inventory/category_form.html", context)
 
@@ -1041,7 +1058,7 @@ class InventoryWebService:
         db: Session,
         category_id: str,
     ) -> HTMLResponse | RedirectResponse:
-        context = base_context(request, auth, "Edit Category", "inv")
+        context = base_context(request, auth, "Edit Category", "categories")
         context.update(self.category_form_context(db, str(auth.organization_id), category_id))
         if not context.get("category"):
             return RedirectResponse(url="/inventory/categories", status_code=303)
@@ -1081,7 +1098,7 @@ class InventoryWebService:
             return RedirectResponse(url="/inventory/categories", status_code=303)
 
         except Exception as e:
-            context = base_context(request, auth, "New Category", "inv")
+            context = base_context(request, auth, "New Category", "categories")
             context.update(self.category_form_context(db, str(auth.organization_id)))
             context["error"] = str(e)
             return templates.TemplateResponse(request, "inventory/category_form.html", context)
@@ -1120,7 +1137,7 @@ class InventoryWebService:
             return RedirectResponse(url="/inventory/categories", status_code=303)
 
         except Exception as e:
-            context = base_context(request, auth, "Edit Category", "inv")
+            context = base_context(request, auth, "Edit Category", "categories")
             context.update(self.category_form_context(db, str(auth.organization_id), category_id))
             context["error"] = str(e)
             return templates.TemplateResponse(request, "inventory/category_form.html", context)
@@ -1264,7 +1281,7 @@ class InventoryWebService:
         limit: int,
         db: Session,
     ) -> HTMLResponse:
-        context = base_context(request, auth, "Warehouses", "inv")
+        context = base_context(request, auth, "Warehouses", "warehouses")
         context.update(
             self.list_warehouses_context(
                 db,
@@ -1283,7 +1300,7 @@ class InventoryWebService:
         auth: WebAuthContext,
         db: Session,
     ) -> HTMLResponse:
-        context = base_context(request, auth, "New Warehouse", "inv")
+        context = base_context(request, auth, "New Warehouse", "warehouses")
         context.update(self.warehouse_form_context(db, str(auth.organization_id)))
         return templates.TemplateResponse(request, "inventory/warehouse_form.html", context)
 
@@ -1294,7 +1311,7 @@ class InventoryWebService:
         db: Session,
         warehouse_id: str,
     ) -> HTMLResponse | RedirectResponse:
-        context = base_context(request, auth, "Edit Warehouse", "inv")
+        context = base_context(request, auth, "Edit Warehouse", "warehouses")
         context.update(self.warehouse_form_context(db, str(auth.organization_id), warehouse_id))
         if not context.get("warehouse"):
             return RedirectResponse(url="/inventory/warehouses", status_code=303)
@@ -1307,7 +1324,7 @@ class InventoryWebService:
         db: Session,
         warehouse_id: str,
     ) -> HTMLResponse | RedirectResponse:
-        context = base_context(request, auth, "Warehouse Details", "inv")
+        context = base_context(request, auth, "Warehouse Details", "warehouses")
         context.update(self.warehouse_detail_context(db, str(auth.organization_id), warehouse_id))
         if not context.get("warehouse"):
             return RedirectResponse(url="/inventory/warehouses", status_code=303)
@@ -1368,7 +1385,7 @@ class InventoryWebService:
             return RedirectResponse(url="/inventory/warehouses", status_code=303)
 
         except Exception as e:
-            context = base_context(request, auth, "New Warehouse", "inv")
+            context = base_context(request, auth, "New Warehouse", "warehouses")
             context.update(self.warehouse_form_context(db, str(auth.organization_id)))
             context["error"] = str(e)
             return templates.TemplateResponse(request, "inventory/warehouse_form.html", context)
@@ -1428,7 +1445,7 @@ class InventoryWebService:
             return RedirectResponse(url="/inventory/warehouses", status_code=303)
 
         except Exception as e:
-            context = base_context(request, auth, "Edit Warehouse", "inv")
+            context = base_context(request, auth, "Edit Warehouse", "warehouses")
             context.update(self.warehouse_form_context(db, str(auth.organization_id), warehouse_id))
             context["error"] = str(e)
             return templates.TemplateResponse(request, "inventory/warehouse_form.html", context)
@@ -1644,7 +1661,7 @@ class InventoryTransactionWebService:
             "ADJUSTMENT": "Inventory Adjustment",
         }
         page_title = title_map.get(transaction_type, "Inventory Transaction")
-        context = base_context(request, auth, page_title, "inv", db=db)
+        context = base_context(request, auth, page_title, "transactions", db=db)
         context.update(
             InventoryTransactionWebService.transaction_form_context(
                 db, str(auth.organization_id), transaction_type

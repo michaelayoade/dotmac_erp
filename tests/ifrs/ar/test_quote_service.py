@@ -141,9 +141,10 @@ class TestGenerateQuoteNumber:
 class TestCreate:
     """Tests for create method."""
 
+    @patch("app.services.finance.ar.quote.get_org_scoped_entity")
     @patch("app.services.finance.ar.quote.QuoteService.generate_quote_number")
     @patch("app.services.finance.ar.quote.Quote")
-    def test_create_basic_quote(self, mock_quote_class, mock_generate):
+    def test_create_basic_quote(self, mock_quote_class, mock_generate, mock_get_entity):
         """Test creating a basic quote."""
         mock_db = MagicMock()
         org_id = str(uuid.uuid4())
@@ -151,6 +152,7 @@ class TestCreate:
         user_id = str(uuid.uuid4())
 
         mock_generate.return_value = "QT-001"
+        mock_get_entity.return_value = MagicMock()  # Customer validation
         mock_quote = MockQuote()
         mock_quote.lines = []
         mock_quote_class.return_value = mock_quote
@@ -167,11 +169,12 @@ class TestCreate:
         mock_db.add.assert_called_once()
         mock_db.flush.assert_called()
 
+    @patch("app.services.finance.ar.quote.get_org_scoped_entity")
     @patch("app.services.finance.ar.quote.QuoteService.generate_quote_number")
     @patch("app.services.finance.ar.quote.QuoteService._add_lines")
     @patch("app.services.finance.ar.quote.QuoteService._recalculate_totals")
     @patch("app.services.finance.ar.quote.Quote")
-    def test_create_quote_with_lines(self, mock_quote_class, mock_recalc, mock_add_lines, mock_generate):
+    def test_create_quote_with_lines(self, mock_quote_class, mock_recalc, mock_add_lines, mock_generate, mock_get_entity):
         """Test creating a quote with lines."""
         mock_db = MagicMock()
         org_id = str(uuid.uuid4())
@@ -179,6 +182,7 @@ class TestCreate:
         user_id = str(uuid.uuid4())
 
         mock_generate.return_value = "QT-001"
+        mock_get_entity.return_value = MagicMock()  # Customer validation
         mock_quote = MockQuote()
         mock_quote.lines = []
         mock_quote_class.return_value = mock_quote
@@ -208,17 +212,20 @@ class TestCreate:
 class TestUpdate:
     """Tests for update method."""
 
-    def test_update_draft_quote(self):
+    @patch("app.services.finance.ar.quote.QuoteService._get_quote")
+    def test_update_draft_quote(self, mock_get_quote):
         """Test updating a draft quote."""
         mock_db = MagicMock()
         quote_id = uuid.uuid4()
         user_id = uuid.uuid4()
+        org_id = uuid.uuid4()
 
-        mock_quote = MockQuote(quote_id=quote_id, status=QuoteStatus.DRAFT)
-        mock_db.get.return_value = mock_quote
+        mock_quote = MockQuote(quote_id=quote_id, organization_id=org_id, status=QuoteStatus.DRAFT)
+        mock_get_quote.return_value = mock_quote
 
         result = QuoteService.update(
             db=mock_db,
+            organization_id=str(org_id),
             quote_id=str(quote_id),
             updated_by=str(user_id),
             reference="Updated Reference",
@@ -227,31 +234,37 @@ class TestUpdate:
         assert result.reference == "Updated Reference"
         mock_db.flush.assert_called_once()
 
-    def test_update_not_found(self):
+    @patch("app.services.finance.ar.quote.QuoteService._get_quote")
+    def test_update_not_found(self, mock_get_quote):
         """Test updating non-existent quote."""
         mock_db = MagicMock()
-        mock_db.get.return_value = None
+        from fastapi import HTTPException
+        mock_get_quote.side_effect = HTTPException(status_code=404, detail="Quote not found")
 
-        with pytest.raises(ValueError) as exc_info:
+        with pytest.raises(HTTPException) as exc_info:
             QuoteService.update(
                 db=mock_db,
+                organization_id=str(uuid.uuid4()),
                 quote_id=str(uuid.uuid4()),
                 updated_by=str(uuid.uuid4()),
             )
 
-        assert "not found" in str(exc_info.value)
+        assert "not found" in str(exc_info.value.detail)
 
-    def test_update_non_draft_quote(self):
+    @patch("app.services.finance.ar.quote.QuoteService._get_quote")
+    def test_update_non_draft_quote(self, mock_get_quote):
         """Test updating non-draft quote fails."""
         mock_db = MagicMock()
         quote_id = uuid.uuid4()
+        org_id = uuid.uuid4()
 
-        mock_quote = MockQuote(quote_id=quote_id, status=QuoteStatus.SENT)
-        mock_db.get.return_value = mock_quote
+        mock_quote = MockQuote(quote_id=quote_id, organization_id=org_id, status=QuoteStatus.SENT)
+        mock_get_quote.return_value = mock_quote
 
         with pytest.raises(ValueError) as exc_info:
             QuoteService.update(
                 db=mock_db,
+                organization_id=str(org_id),
                 quote_id=str(quote_id),
                 updated_by=str(uuid.uuid4()),
             )
@@ -262,17 +275,20 @@ class TestUpdate:
 class TestSend:
     """Tests for send method."""
 
-    def test_send_draft_quote(self):
+    @patch("app.services.finance.ar.quote.QuoteService._get_quote")
+    def test_send_draft_quote(self, mock_get_quote):
         """Test sending a draft quote."""
         mock_db = MagicMock()
         quote_id = uuid.uuid4()
         user_id = uuid.uuid4()
+        org_id = uuid.uuid4()
 
-        mock_quote = MockQuote(quote_id=quote_id, status=QuoteStatus.DRAFT)
-        mock_db.get.return_value = mock_quote
+        mock_quote = MockQuote(quote_id=quote_id, organization_id=org_id, status=QuoteStatus.DRAFT)
+        mock_get_quote.return_value = mock_quote
 
         result = QuoteService.send(
             db=mock_db,
+            organization_id=str(org_id),
             quote_id=str(quote_id),
             sent_by=str(user_id),
         )
@@ -281,31 +297,37 @@ class TestSend:
         assert result.sent_by is not None
         mock_db.flush.assert_called_once()
 
-    def test_send_not_found(self):
+    @patch("app.services.finance.ar.quote.QuoteService._get_quote")
+    def test_send_not_found(self, mock_get_quote):
         """Test sending non-existent quote."""
         mock_db = MagicMock()
-        mock_db.get.return_value = None
+        from fastapi import HTTPException
+        mock_get_quote.side_effect = HTTPException(status_code=404, detail="Quote not found")
 
-        with pytest.raises(ValueError) as exc_info:
+        with pytest.raises(HTTPException) as exc_info:
             QuoteService.send(
                 db=mock_db,
+                organization_id=str(uuid.uuid4()),
                 quote_id=str(uuid.uuid4()),
                 sent_by=str(uuid.uuid4()),
             )
 
-        assert "not found" in str(exc_info.value)
+        assert "not found" in str(exc_info.value.detail)
 
-    def test_send_wrong_status(self):
+    @patch("app.services.finance.ar.quote.QuoteService._get_quote")
+    def test_send_wrong_status(self, mock_get_quote):
         """Test sending quote in wrong status fails."""
         mock_db = MagicMock()
         quote_id = uuid.uuid4()
+        org_id = uuid.uuid4()
 
-        mock_quote = MockQuote(quote_id=quote_id, status=QuoteStatus.ACCEPTED)
-        mock_db.get.return_value = mock_quote
+        mock_quote = MockQuote(quote_id=quote_id, organization_id=org_id, status=QuoteStatus.ACCEPTED)
+        mock_get_quote.return_value = mock_quote
 
         with pytest.raises(ValueError) as exc_info:
             QuoteService.send(
                 db=mock_db,
+                organization_id=str(org_id),
                 quote_id=str(quote_id),
                 sent_by=str(uuid.uuid4()),
             )
@@ -316,45 +338,54 @@ class TestSend:
 class TestMarkViewed:
     """Tests for mark_viewed method."""
 
-    def test_mark_viewed_sent_quote(self):
+    @patch("app.services.finance.ar.quote.QuoteService._get_quote")
+    def test_mark_viewed_sent_quote(self, mock_get_quote):
         """Test marking sent quote as viewed."""
         mock_db = MagicMock()
         quote_id = uuid.uuid4()
+        org_id = uuid.uuid4()
 
-        mock_quote = MockQuote(quote_id=quote_id, status=QuoteStatus.SENT)
-        mock_db.get.return_value = mock_quote
+        mock_quote = MockQuote(quote_id=quote_id, organization_id=org_id, status=QuoteStatus.SENT)
+        mock_get_quote.return_value = mock_quote
 
         result = QuoteService.mark_viewed(
             db=mock_db,
+            organization_id=str(org_id),
             quote_id=str(quote_id),
         )
 
         assert result.status == QuoteStatus.VIEWED
         mock_db.flush.assert_called_once()
 
-    def test_mark_viewed_not_found(self):
+    @patch("app.services.finance.ar.quote.QuoteService._get_quote")
+    def test_mark_viewed_not_found(self, mock_get_quote):
         """Test marking non-existent quote as viewed."""
         mock_db = MagicMock()
-        mock_db.get.return_value = None
+        from fastapi import HTTPException
+        mock_get_quote.side_effect = HTTPException(status_code=404, detail="Quote not found")
 
-        with pytest.raises(ValueError) as exc_info:
+        with pytest.raises(HTTPException) as exc_info:
             QuoteService.mark_viewed(
                 db=mock_db,
+                organization_id=str(uuid.uuid4()),
                 quote_id=str(uuid.uuid4()),
             )
 
-        assert "not found" in str(exc_info.value)
+        assert "not found" in str(exc_info.value.detail)
 
-    def test_mark_viewed_non_sent_quote(self):
+    @patch("app.services.finance.ar.quote.QuoteService._get_quote")
+    def test_mark_viewed_non_sent_quote(self, mock_get_quote):
         """Test marking non-sent quote as viewed does nothing."""
         mock_db = MagicMock()
         quote_id = uuid.uuid4()
+        org_id = uuid.uuid4()
 
-        mock_quote = MockQuote(quote_id=quote_id, status=QuoteStatus.DRAFT)
-        mock_db.get.return_value = mock_quote
+        mock_quote = MockQuote(quote_id=quote_id, organization_id=org_id, status=QuoteStatus.DRAFT)
+        mock_get_quote.return_value = mock_quote
 
         result = QuoteService.mark_viewed(
             db=mock_db,
+            organization_id=str(org_id),
             quote_id=str(quote_id),
         )
 
@@ -364,89 +395,107 @@ class TestMarkViewed:
 class TestAccept:
     """Tests for accept method."""
 
-    def test_accept_sent_quote(self):
+    @patch("app.services.finance.ar.quote.QuoteService._get_quote")
+    def test_accept_sent_quote(self, mock_get_quote):
         """Test accepting a sent quote."""
         mock_db = MagicMock()
         quote_id = uuid.uuid4()
+        org_id = uuid.uuid4()
 
         mock_quote = MockQuote(
             quote_id=quote_id,
+            organization_id=org_id,
             status=QuoteStatus.SENT,
             valid_until=date.today() + timedelta(days=10),  # Not expired
         )
-        mock_db.get.return_value = mock_quote
+        mock_get_quote.return_value = mock_quote
 
         result = QuoteService.accept(
             db=mock_db,
+            organization_id=str(org_id),
             quote_id=str(quote_id),
         )
 
         assert result.status == QuoteStatus.ACCEPTED
         mock_db.flush.assert_called_once()
 
-    def test_accept_viewed_quote(self):
+    @patch("app.services.finance.ar.quote.QuoteService._get_quote")
+    def test_accept_viewed_quote(self, mock_get_quote):
         """Test accepting a viewed quote."""
         mock_db = MagicMock()
         quote_id = uuid.uuid4()
+        org_id = uuid.uuid4()
 
         mock_quote = MockQuote(
             quote_id=quote_id,
+            organization_id=org_id,
             status=QuoteStatus.VIEWED,
             valid_until=date.today() + timedelta(days=10),
         )
-        mock_db.get.return_value = mock_quote
+        mock_get_quote.return_value = mock_quote
 
         result = QuoteService.accept(
             db=mock_db,
+            organization_id=str(org_id),
             quote_id=str(quote_id),
         )
 
         assert result.status == QuoteStatus.ACCEPTED
 
-    def test_accept_not_found(self):
+    @patch("app.services.finance.ar.quote.QuoteService._get_quote")
+    def test_accept_not_found(self, mock_get_quote):
         """Test accepting non-existent quote."""
         mock_db = MagicMock()
-        mock_db.get.return_value = None
+        from fastapi import HTTPException
+        mock_get_quote.side_effect = HTTPException(status_code=404, detail="Quote not found")
 
-        with pytest.raises(ValueError) as exc_info:
+        with pytest.raises(HTTPException) as exc_info:
             QuoteService.accept(
                 db=mock_db,
+                organization_id=str(uuid.uuid4()),
                 quote_id=str(uuid.uuid4()),
             )
 
-        assert "not found" in str(exc_info.value)
+        assert "not found" in str(exc_info.value.detail)
 
-    def test_accept_wrong_status(self):
+    @patch("app.services.finance.ar.quote.QuoteService._get_quote")
+    def test_accept_wrong_status(self, mock_get_quote):
         """Test accepting quote in wrong status fails."""
         mock_db = MagicMock()
         quote_id = uuid.uuid4()
+        org_id = uuid.uuid4()
 
-        mock_quote = MockQuote(quote_id=quote_id, status=QuoteStatus.DRAFT)
-        mock_db.get.return_value = mock_quote
+        mock_quote = MockQuote(quote_id=quote_id, organization_id=org_id, status=QuoteStatus.DRAFT)
+        mock_get_quote.return_value = mock_quote
 
         with pytest.raises(ValueError) as exc_info:
             QuoteService.accept(
                 db=mock_db,
+                organization_id=str(org_id),
                 quote_id=str(quote_id),
             )
 
         assert "Cannot accept" in str(exc_info.value)
 
-    def test_accept_expired_quote(self):
+    @patch("app.services.finance.ar.quote.QuoteService._get_quote")
+    def test_accept_expired_quote(self, mock_get_quote):
         """Test accepting expired quote fails."""
         mock_db = MagicMock()
         quote_id = uuid.uuid4()
+        org_id = uuid.uuid4()
 
         mock_quote = MockQuote(
             quote_id=quote_id,
+            organization_id=org_id,
             status=QuoteStatus.SENT,
             valid_until=date.today() - timedelta(days=1),  # Expired
         )
-        mock_db.get.return_value = mock_quote
+        mock_get_quote.return_value = mock_quote
 
         with pytest.raises(ValueError) as exc_info:
             QuoteService.accept(
                 db=mock_db,
+                organization_id=str(org_id),
                 quote_id=str(quote_id),
             )
 
@@ -456,16 +505,19 @@ class TestAccept:
 class TestReject:
     """Tests for reject method."""
 
-    def test_reject_sent_quote(self):
+    @patch("app.services.finance.ar.quote.QuoteService._get_quote")
+    def test_reject_sent_quote(self, mock_get_quote):
         """Test rejecting a sent quote."""
         mock_db = MagicMock()
         quote_id = uuid.uuid4()
+        org_id = uuid.uuid4()
 
-        mock_quote = MockQuote(quote_id=quote_id, status=QuoteStatus.SENT)
-        mock_db.get.return_value = mock_quote
+        mock_quote = MockQuote(quote_id=quote_id, organization_id=org_id, status=QuoteStatus.SENT)
+        mock_get_quote.return_value = mock_quote
 
         result = QuoteService.reject(
             db=mock_db,
+            organization_id=str(org_id),
             quote_id=str(quote_id),
             reason="Too expensive",
         )
@@ -474,30 +526,36 @@ class TestReject:
         assert result.rejection_reason == "Too expensive"
         mock_db.flush.assert_called_once()
 
-    def test_reject_not_found(self):
+    @patch("app.services.finance.ar.quote.QuoteService._get_quote")
+    def test_reject_not_found(self, mock_get_quote):
         """Test rejecting non-existent quote."""
         mock_db = MagicMock()
-        mock_db.get.return_value = None
+        from fastapi import HTTPException
+        mock_get_quote.side_effect = HTTPException(status_code=404, detail="Quote not found")
 
-        with pytest.raises(ValueError) as exc_info:
+        with pytest.raises(HTTPException) as exc_info:
             QuoteService.reject(
                 db=mock_db,
+                organization_id=str(uuid.uuid4()),
                 quote_id=str(uuid.uuid4()),
             )
 
-        assert "not found" in str(exc_info.value)
+        assert "not found" in str(exc_info.value.detail)
 
-    def test_reject_wrong_status(self):
+    @patch("app.services.finance.ar.quote.QuoteService._get_quote")
+    def test_reject_wrong_status(self, mock_get_quote):
         """Test rejecting quote in wrong status fails."""
         mock_db = MagicMock()
         quote_id = uuid.uuid4()
+        org_id = uuid.uuid4()
 
-        mock_quote = MockQuote(quote_id=quote_id, status=QuoteStatus.DRAFT)
-        mock_db.get.return_value = mock_quote
+        mock_quote = MockQuote(quote_id=quote_id, organization_id=org_id, status=QuoteStatus.DRAFT)
+        mock_get_quote.return_value = mock_quote
 
         with pytest.raises(ValueError) as exc_info:
             QuoteService.reject(
                 db=mock_db,
+                organization_id=str(org_id),
                 quote_id=str(quote_id),
             )
 
@@ -507,21 +565,25 @@ class TestReject:
 class TestConvertToInvoice:
     """Tests for convert_to_invoice method."""
 
+    @patch("app.services.finance.ar.quote.QuoteService._get_quote")
     @patch("app.services.finance.ar.quote.InvoiceLine")
     @patch("app.services.finance.ar.quote.Invoice")
     @patch("app.services.finance.ar.quote.SyncNumberingService")
-    def test_convert_to_invoice_success(self, mock_numbering_class, mock_invoice_class, mock_inv_line_class):
+    def test_convert_to_invoice_success(self, mock_numbering_class, mock_invoice_class, mock_inv_line_class, mock_get_quote):
         """Test converting accepted quote to invoice."""
         mock_db = MagicMock()
         quote_id = uuid.uuid4()
         user_id = uuid.uuid4()
+        org_id = uuid.uuid4()
 
         mock_quote_line = MockQuoteLine(quote_id=quote_id)
         mock_quote = MockQuote(
             quote_id=quote_id,
+            organization_id=org_id,
             status=QuoteStatus.ACCEPTED,
             lines=[mock_quote_line],
         )
+        mock_get_quote.return_value = mock_quote
 
         mock_invoice = MagicMock()
         mock_invoice.invoice_id = uuid.uuid4()
@@ -531,10 +593,9 @@ class TestConvertToInvoice:
         mock_numbering.generate_next_number.return_value = "INV-001"
         mock_numbering_class.return_value = mock_numbering
 
-        mock_db.get.return_value = mock_quote
-
         result = QuoteService.convert_to_invoice(
             db=mock_db,
+            organization_id=str(org_id),
             quote_id=str(quote_id),
             created_by=str(user_id),
         )
@@ -543,31 +604,37 @@ class TestConvertToInvoice:
         assert mock_quote.status == QuoteStatus.CONVERTED
         mock_db.flush.assert_called()
 
-    def test_convert_to_invoice_not_found(self):
+    @patch("app.services.finance.ar.quote.QuoteService._get_quote")
+    def test_convert_to_invoice_not_found(self, mock_get_quote):
         """Test converting non-existent quote to invoice."""
         mock_db = MagicMock()
-        mock_db.get.return_value = None
+        from fastapi import HTTPException
+        mock_get_quote.side_effect = HTTPException(status_code=404, detail="Quote not found")
 
-        with pytest.raises(ValueError) as exc_info:
+        with pytest.raises(HTTPException) as exc_info:
             QuoteService.convert_to_invoice(
                 db=mock_db,
+                organization_id=str(uuid.uuid4()),
                 quote_id=str(uuid.uuid4()),
                 created_by=str(uuid.uuid4()),
             )
 
-        assert "not found" in str(exc_info.value)
+        assert "not found" in str(exc_info.value.detail)
 
-    def test_convert_to_invoice_wrong_status(self):
+    @patch("app.services.finance.ar.quote.QuoteService._get_quote")
+    def test_convert_to_invoice_wrong_status(self, mock_get_quote):
         """Test converting non-accepted quote to invoice fails."""
         mock_db = MagicMock()
         quote_id = uuid.uuid4()
+        org_id = uuid.uuid4()
 
-        mock_quote = MockQuote(quote_id=quote_id, status=QuoteStatus.DRAFT)
-        mock_db.get.return_value = mock_quote
+        mock_quote = MockQuote(quote_id=quote_id, organization_id=org_id, status=QuoteStatus.DRAFT)
+        mock_get_quote.return_value = mock_quote
 
         with pytest.raises(ValueError) as exc_info:
             QuoteService.convert_to_invoice(
                 db=mock_db,
+                organization_id=str(org_id),
                 quote_id=str(quote_id),
                 created_by=str(uuid.uuid4()),
             )
@@ -578,21 +645,25 @@ class TestConvertToInvoice:
 class TestConvertToSalesOrder:
     """Tests for convert_to_sales_order method."""
 
+    @patch("app.services.finance.ar.quote.QuoteService._get_quote")
     @patch("app.services.finance.ar.quote.SalesOrderLine")
     @patch("app.services.finance.ar.quote.SalesOrder")
     @patch("app.services.finance.ar.quote.SyncNumberingService")
-    def test_convert_to_sales_order_success(self, mock_numbering_class, mock_so_class, mock_so_line_class):
+    def test_convert_to_sales_order_success(self, mock_numbering_class, mock_so_class, mock_so_line_class, mock_get_quote):
         """Test converting accepted quote to sales order."""
         mock_db = MagicMock()
         quote_id = uuid.uuid4()
         user_id = uuid.uuid4()
+        org_id = uuid.uuid4()
 
         mock_quote_line = MockQuoteLine(quote_id=quote_id)
         mock_quote = MockQuote(
             quote_id=quote_id,
+            organization_id=org_id,
             status=QuoteStatus.ACCEPTED,
             lines=[mock_quote_line],
         )
+        mock_get_quote.return_value = mock_quote
 
         mock_so = MagicMock()
         mock_so.so_id = uuid.uuid4()
@@ -602,10 +673,9 @@ class TestConvertToSalesOrder:
         mock_numbering.generate_next_number.return_value = "SO-001"
         mock_numbering_class.return_value = mock_numbering
 
-        mock_db.get.return_value = mock_quote
-
         result = QuoteService.convert_to_sales_order(
             db=mock_db,
+            organization_id=str(org_id),
             quote_id=str(quote_id),
             created_by=str(user_id),
             customer_po_number="PO-12345",
@@ -615,31 +685,37 @@ class TestConvertToSalesOrder:
         assert mock_quote.status == QuoteStatus.CONVERTED
         mock_db.flush.assert_called()
 
-    def test_convert_to_sales_order_not_found(self):
+    @patch("app.services.finance.ar.quote.QuoteService._get_quote")
+    def test_convert_to_sales_order_not_found(self, mock_get_quote):
         """Test converting non-existent quote to sales order."""
         mock_db = MagicMock()
-        mock_db.get.return_value = None
+        from fastapi import HTTPException
+        mock_get_quote.side_effect = HTTPException(status_code=404, detail="Quote not found")
 
-        with pytest.raises(ValueError) as exc_info:
+        with pytest.raises(HTTPException) as exc_info:
             QuoteService.convert_to_sales_order(
                 db=mock_db,
+                organization_id=str(uuid.uuid4()),
                 quote_id=str(uuid.uuid4()),
                 created_by=str(uuid.uuid4()),
             )
 
-        assert "not found" in str(exc_info.value)
+        assert "not found" in str(exc_info.value.detail)
 
-    def test_convert_to_sales_order_wrong_status(self):
+    @patch("app.services.finance.ar.quote.QuoteService._get_quote")
+    def test_convert_to_sales_order_wrong_status(self, mock_get_quote):
         """Test converting non-accepted quote to sales order fails."""
         mock_db = MagicMock()
         quote_id = uuid.uuid4()
+        org_id = uuid.uuid4()
 
-        mock_quote = MockQuote(quote_id=quote_id, status=QuoteStatus.SENT)
-        mock_db.get.return_value = mock_quote
+        mock_quote = MockQuote(quote_id=quote_id, organization_id=org_id, status=QuoteStatus.SENT)
+        mock_get_quote.return_value = mock_quote
 
         with pytest.raises(ValueError) as exc_info:
             QuoteService.convert_to_sales_order(
                 db=mock_db,
+                organization_id=str(org_id),
                 quote_id=str(quote_id),
                 created_by=str(uuid.uuid4()),
             )
@@ -650,17 +726,20 @@ class TestConvertToSalesOrder:
 class TestVoid:
     """Tests for void method."""
 
-    def test_void_draft_quote(self):
+    @patch("app.services.finance.ar.quote.QuoteService._get_quote")
+    def test_void_draft_quote(self, mock_get_quote):
         """Test voiding a draft quote."""
         mock_db = MagicMock()
         quote_id = uuid.uuid4()
         user_id = uuid.uuid4()
+        org_id = uuid.uuid4()
 
-        mock_quote = MockQuote(quote_id=quote_id, status=QuoteStatus.DRAFT)
-        mock_db.get.return_value = mock_quote
+        mock_quote = MockQuote(quote_id=quote_id, organization_id=org_id, status=QuoteStatus.DRAFT)
+        mock_get_quote.return_value = mock_quote
 
         result = QuoteService.void(
             db=mock_db,
+            organization_id=str(org_id),
             quote_id=str(quote_id),
             voided_by=str(user_id),
         )
@@ -668,31 +747,37 @@ class TestVoid:
         assert result.status == QuoteStatus.VOID
         mock_db.flush.assert_called_once()
 
-    def test_void_not_found(self):
+    @patch("app.services.finance.ar.quote.QuoteService._get_quote")
+    def test_void_not_found(self, mock_get_quote):
         """Test voiding non-existent quote."""
         mock_db = MagicMock()
-        mock_db.get.return_value = None
+        from fastapi import HTTPException
+        mock_get_quote.side_effect = HTTPException(status_code=404, detail="Quote not found")
 
-        with pytest.raises(ValueError) as exc_info:
+        with pytest.raises(HTTPException) as exc_info:
             QuoteService.void(
                 db=mock_db,
+                organization_id=str(uuid.uuid4()),
                 quote_id=str(uuid.uuid4()),
                 voided_by=str(uuid.uuid4()),
             )
 
-        assert "not found" in str(exc_info.value)
+        assert "not found" in str(exc_info.value.detail)
 
-    def test_void_converted_quote_fails(self):
+    @patch("app.services.finance.ar.quote.QuoteService._get_quote")
+    def test_void_converted_quote_fails(self, mock_get_quote):
         """Test voiding converted quote fails."""
         mock_db = MagicMock()
         quote_id = uuid.uuid4()
+        org_id = uuid.uuid4()
 
-        mock_quote = MockQuote(quote_id=quote_id, status=QuoteStatus.CONVERTED)
-        mock_db.get.return_value = mock_quote
+        mock_quote = MockQuote(quote_id=quote_id, organization_id=org_id, status=QuoteStatus.CONVERTED)
+        mock_get_quote.return_value = mock_quote
 
         with pytest.raises(ValueError) as exc_info:
             QuoteService.void(
                 db=mock_db,
+                organization_id=str(org_id),
                 quote_id=str(quote_id),
                 voided_by=str(uuid.uuid4()),
             )

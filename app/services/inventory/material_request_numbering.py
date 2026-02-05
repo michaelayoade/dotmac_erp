@@ -12,7 +12,7 @@ from sqlalchemy import Integer, cast, func, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.core_config.numbering_sequence import NumberingSequence, ResetFrequency, SequenceType
-from app.models.finance.inv.material_request import MaterialRequest
+from app.models.inventory.material_request import MaterialRequest
 
 
 class MaterialRequestNumberingService:
@@ -79,12 +79,11 @@ class MaterialRequestNumberingService:
         year = date.today().year
         sequence = cls._get_or_create_sequence(db, organization_id)
 
-        max_existing = None
         if sequence.current_year != year:
             max_existing = cls._max_existing_for_year(db, organization_id, year)
             sequence.current_year = year
             sequence.current_number = max_existing
-        elif sequence.current_number == 0:
+        else:
             max_existing = cls._max_existing_for_year(db, organization_id, year)
             if max_existing > sequence.current_number:
                 sequence.current_number = max_existing

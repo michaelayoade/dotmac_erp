@@ -1,4 +1,4 @@
-{% extends "modules/base_modules.html" %}
+{% extends "procurement/base_procurement.html" %}
 
 {% block page_title %}Requisition {{ requisition.requisition_number }}{% endblock %}
 
@@ -32,8 +32,8 @@
                 <h2 class="text-xl font-semibold text-slate-900 dark:text-white">{{ requisition.requisition_number }}</h2>
                 <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">{{ requisition.requisition_date }}</p>
             </div>
-            {% set label, color = status_labels.get(requisition.status, ("Unknown", "slate")) %}
-            <span class="inline-flex items-center rounded-full px-3 py-1 text-sm font-medium bg-{{ color }}-100 text-{{ color }}-700 dark:bg-{{ color }}-900/30 dark:text-{{ color }}-400">{{ label }}</span>
+            {% set label, classes = status_labels.get(requisition.status, ("Unknown", "bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-400")) %}
+            <span class="inline-flex items-center rounded-full px-3 py-1 text-sm font-medium {{ classes }}">{{ label }}</span>
         </div>
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
             <div>
@@ -86,9 +86,9 @@
                         <td class="px-4 py-3 text-slate-600 dark:text-slate-400">{{ line.line_number }}</td>
                         <td class="px-4 py-3 text-slate-900 dark:text-white">{{ line.description }}</td>
                         <td class="px-4 py-3 text-right text-slate-600 dark:text-slate-400">{{ line.quantity }}</td>
-                        <td class="px-4 py-3 text-slate-600 dark:text-slate-400">{{ line.unit_of_measure }}</td>
+                        <td class="px-4 py-3 text-slate-600 dark:text-slate-400">{{ line.uom or '-' }}</td>
                         <td class="px-4 py-3 text-right text-slate-600 dark:text-slate-400">{{ "{:,.2f}".format(line.estimated_unit_price) }}</td>
-                        <td class="px-4 py-3 text-right font-medium text-slate-900 dark:text-white">{{ "{:,.2f}".format(line.estimated_total_price) }}</td>
+                        <td class="px-4 py-3 text-right font-medium text-slate-900 dark:text-white">{{ "{:,.2f}".format(line.estimated_amount) }}</td>
                     </tr>
                     {% else %}
                     <tr><td colspan="6" class="px-4 py-8 text-center text-slate-500 dark:text-slate-400">No lines.</td></tr>

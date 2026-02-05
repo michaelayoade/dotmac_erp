@@ -36,6 +36,18 @@
     'amber': 'text-amber-600 dark:text-amber-400',
     'orange': 'text-amber-600 dark:text-amber-400'
 }.get(module_color, 'text-teal-600 dark:text-teal-400') %}
+{% set unread_bg = {
+    'teal': 'bg-teal-50/50 dark:bg-teal-900/10',
+    'violet': 'bg-violet-50/50 dark:bg-violet-900/10',
+    'amber': 'bg-amber-50/50 dark:bg-amber-900/10',
+    'orange': 'bg-amber-50/50 dark:bg-amber-900/10'
+}.get(module_color, 'bg-teal-50/50 dark:bg-teal-900/10') %}
+{% set unread_dot = {
+    'teal': 'bg-teal-500',
+    'violet': 'bg-violet-500',
+    'amber': 'bg-amber-500',
+    'orange': 'bg-amber-500'
+}.get(module_color, 'bg-teal-500') %}
 
 <!-- Top Bar -->
 <header class="sticky top-0 z-20 border-b border-slate-200 bg-white/80 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/80">
@@ -95,7 +107,7 @@
             </button>
 
             <!-- Notifications -->
-            <div x-data="{ open: false, notifications: {{ notifications | default([]) | tojson }} }" class="relative">
+            <div x-data='{ open: false, selectedIdx: -1, notifications: {{ notifications | default([]) | tojson }} }' @keydown.escape.window="open = false; selectedIdx = -1" class="relative">
                 <button @click="open = !open"
                         class="relative rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-300 transition-colors"
                         aria-label="Notifications">
@@ -107,7 +119,10 @@
 
                 <!-- Notifications Dropdown -->
                 <div x-show="open"
-                     @click.away="open = false"
+                     @click.away="open = false; selectedIdx = -1"
+                     @keydown.arrow-down.prevent="selectedIdx = Math.min(selectedIdx + 1, notifications.length - 1)"
+                     @keydown.arrow-up.prevent="selectedIdx = Math.max(selectedIdx - 1, 0)"
+                     @keydown.enter.prevent="if (selectedIdx >= 0 && notifications[selectedIdx]) window.location.href = notifications[selectedIdx].url || '#'"
                      x-transition:enter="transition ease-out duration-200"
                      x-transition:enter-start="opacity-0 translate-y-1"
                      x-transition:enter-end="opacity-100 translate-y-0"
@@ -142,7 +157,7 @@
                         <template x-for="(notification, index) in notifications" :key="index">
                             <a :href="notification.url || '#'"
                                class="flex items-start gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors border-b border-slate-100 dark:border-slate-700 last:border-0"
-                               :class="{ 'bg-{{ module_color }}-50/50 dark:bg-{{ module_color }}-900/10': !notification.read }">
+                               :class="{ '{{ unread_bg }}': !notification.read, 'ring-2 ring-inset ring-primary-400': selectedIdx === index }">
                                 <!-- Icon -->
                                 <div class="flex-shrink-0 mt-0.5">
                                     <template x-if="notification.type === 'mention'">
@@ -184,7 +199,7 @@
 
                                 <!-- Unread indicator -->
                                 <template x-if="!notification.read">
-                                    <span class="flex-shrink-0 h-2 w-2 rounded-full bg-{{ module_color }}-500 mt-2"></span>
+                                    <span class="flex-shrink-0 h-2 w-2 rounded-full {{ unread_dot }} mt-2"></span>
                                 </template>
                             </a>
                         </template>

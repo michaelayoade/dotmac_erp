@@ -38,7 +38,7 @@
             <div class="flex flex-wrap items-end gap-4">
                 <div class="w-64">
                     <label for="search" class="form-label">Search</label>
-                    <input type="text" name="search" id="search" value="{{ search | default('') }}" class="form-input w-full" placeholder="Code or name">
+                    <input type="text" name="search" id="search" value="{{ search | default('', true) }}" class="form-input w-full" placeholder="Code or name">
                 </div>
                 <div class="w-44">
                     <label for="is_active" class="form-label">Status</label>

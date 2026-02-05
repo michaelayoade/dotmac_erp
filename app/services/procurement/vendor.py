@@ -15,7 +15,10 @@ from sqlalchemy.orm import Session
 
 from app.models.procurement.enums import PrequalificationStatus
 from app.models.procurement.vendor_prequalification import VendorPrequalification
-from app.schemas.procurement.vendor import PrequalificationCreate, PrequalificationUpdate
+from app.schemas.procurement.vendor import (
+    PrequalificationCreate,
+    PrequalificationUpdate,
+)
 from app.services.common import NotFoundError
 
 logger = logging.getLogger(__name__)

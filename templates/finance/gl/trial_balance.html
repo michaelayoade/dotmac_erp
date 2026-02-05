@@ -17,7 +17,7 @@
         <form method="get" class="flex flex-wrap items-center gap-4">
             <div class="flex items-center gap-3">
                 <label for="as_of_date" class="text-sm font-medium text-slate-600 dark:text-slate-300">As of</label>
-                <input id="as_of_date" type="date" name="as_of_date" value="{{ as_of_date | default('') }}"
+                <input id="as_of_date" type="date" name="as_of_date" value="{{ as_of_date | default('', true) }}"
                        class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
             </div>
             <button type="submit"

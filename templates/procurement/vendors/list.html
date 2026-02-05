@@ -1,4 +1,4 @@
-{% extends "modules/base_modules.html" %}
+{% extends "procurement/base_procurement.html" %}
 
 {% block page_title %}Vendor Registry{% endblock %}
 
@@ -24,7 +24,7 @@
         <form method="get" class="flex flex-wrap gap-3 items-end">
             <div>
                 <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Status</label>
-                <select name="status" class="input-field text-sm">
+                <select name="status" class="form-select text-sm">
                     <option value="">All</option>
                     {% for s in vendor_statuses %}
                     <option value="{{ s.value }}" {% if filter_status == s.value %}selected{% endif %}>{{ s.value }}</option>
@@ -33,7 +33,7 @@
             </div>
             <div>
                 <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Search</label>
-                <input type="text" name="q" value="{{ filter_q or '' }}" class="input-field text-sm" placeholder="Supplier name...">
+                <input type="text" name="q" value="{{ filter_q or '' }}" class="form-input text-sm" placeholder="Supplier name...">
             </div>
             <button type="submit" class="btn btn-secondary text-sm">Filter</button>
         </form>
@@ -63,8 +63,8 @@
                             </div>
                         </td>
                         <td class="px-4 py-3">
-                            {% set label, color = status_labels.get(vendor.status, ("Unknown", "slate")) %}
-                            <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-{{ color }}-100 text-{{ color }}-700 dark:bg-{{ color }}-900/30 dark:text-{{ color }}-400">{{ label }}</span>
+                            {% set label, classes = status_labels.get(vendor.status, ("Unknown", "bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-400")) %}
+                            <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium {{ classes }}">{{ label }}</span>
                         </td>
                         <td class="px-4 py-3 text-slate-600 dark:text-slate-400">{{ vendor.valid_from or '-' }}</td>
                         <td class="px-4 py-3 text-slate-600 dark:text-slate-400">{{ vendor.valid_to or '-' }}</td>
@@ -76,11 +76,35 @@
                             {% endif %}
                         </td>
                         <td class="px-4 py-3">
-                            <a href="/procurement/vendors/{{ vendor.prequalification_id }}" class="text-blue-600 hover:underline dark:text-blue-400 text-xs">View Details</a>
+                            <a href="/procurement/vendors/{{ vendor.prequalification_id }}/prequalification" class="text-blue-600 hover:underline dark:text-blue-400 text-xs">View Details</a>
                         </td>
                     </tr>
                     {% else %}
-                    <tr><td colspan="6" class="px-4 py-8 text-center text-slate-500 dark:text-slate-400">No vendors found.</td></tr>
+                    <tr>
+                        <td colspan="6" class="py-12">
+                            <div class="text-center">
+                                <svg class="mx-auto h-12 w-12 text-slate-300 dark:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                </svg>
+                                <p class="mt-2 text-sm font-medium text-slate-900 dark:text-white">No vendors found</p>
+                                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                                    {% if filter_status or filter_q %}
+                                    Try adjusting your search or filter criteria
+                                    {% else %}
+                                    Get started by prequalifying your first vendor
+                                    {% endif %}
+                                </p>
+                                {% if not (filter_status or filter_q) %}
+                                <a href="/procurement/vendors/prequalify" class="mt-4 inline-flex items-center btn btn-primary text-sm">
+                                    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                    </svg>
+                                    Prequalify Vendor
+                                </a>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
                     {% endfor %}
                 </tbody>
             </table>

@@ -1,4 +1,4 @@
-{% extends "modules/base_modules.html" %}
+{% extends "inventory/base_inventory.html" %}
 {% from "components/macros.html" import pagination, empty_state %}
 
 {% block page_title %}Bill of Materials{% endblock %}
@@ -87,7 +87,7 @@
                 <svg class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
                 </svg>
-                <input type="text" name="search" value="{{ search | default('') }}"
+                <input type="text" name="search" value="{{ search | default('', true) }}"
                        placeholder="Search by BOM name or item..."
                        class="form-input pl-10 w-full">
             </div>
@@ -142,7 +142,7 @@
                                 'KIT': 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400'
                             } %}
                             <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium {{ type_colors.get(bom.bom_type.value if bom.bom_type else 'ASSEMBLY', type_colors['ASSEMBLY']) }}">
-                                {{ bom.bom_type.value if bom.bom_type else 'Assembly' }}
+                                {{ (bom.bom_type.value | replace('_', ' ') | title) if bom.bom_type else 'Assembly' }}
                             </span>
                         </td>
                         <td class="text-right font-mono">{{ '{:,.2f}'.format(bom.quantity or 1) }}</td>

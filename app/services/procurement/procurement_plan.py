@@ -17,7 +17,10 @@ from sqlalchemy.orm import Session
 from app.models.procurement.enums import ProcurementPlanStatus
 from app.models.procurement.procurement_plan import ProcurementPlan
 from app.models.procurement.procurement_plan_item import ProcurementPlanItem
-from app.schemas.procurement.procurement_plan import ProcurementPlanCreate, ProcurementPlanUpdate
+from app.schemas.procurement.procurement_plan import (
+    ProcurementPlanCreate,
+    ProcurementPlanUpdate,
+)
 from app.services.common import NotFoundError, ValidationError
 from app.services.procurement.thresholds import determine_procurement_method
 
@@ -109,7 +112,9 @@ class ProcurementPlanService:
 
         total = Decimal("0")
         for item_data in data.items:
-            method, authority = determine_procurement_method(item_data.estimated_value)
+            method, authority = determine_procurement_method(
+                item_data.estimated_value, self.db, organization_id
+            )
             item = ProcurementPlanItem(
                 plan_id=plan.plan_id,
                 organization_id=organization_id,

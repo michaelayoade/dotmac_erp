@@ -48,9 +48,7 @@ class CoASegmentService:
             )
         )
         if existing:
-            raise ConflictError(
-                f"Segment type {data.segment_type} already defined"
-            )
+            raise ConflictError(f"Segment type {data.segment_type} already defined")
 
         segment_def = CoASegmentDefinition(
             organization_id=organization_id,
@@ -91,9 +89,7 @@ class CoASegmentService:
         # Verify segment definition exists
         seg_def = self.db.get(CoASegmentDefinition, segment_def_id)
         if not seg_def:
-            raise NotFoundError(
-                f"Segment definition {segment_def_id} not found"
-            )
+            raise NotFoundError(f"Segment definition {segment_def_id} not found")
         if seg_def.organization_id != organization_id:
             raise ForbiddenError(
                 "Segment definition does not belong to this organization"

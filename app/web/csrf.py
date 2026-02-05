@@ -105,13 +105,22 @@ def _should_enforce_csrf(request: Request) -> bool:
     if request.method in _SAFE_METHODS:
         return False
 
+    # JSON-only auth endpoints are inherently CSRF-safe:
+    # - CORS preflight blocks cross-origin JSON POSTs
+    # - Refresh tokens are rotated on each use (replay protection)
+    # - The CSRF cookie is httponly, so JS can't read it for the
+    #   double-submit pattern on fetch() calls
+    csrf_exempt_paths = ["/auth/refresh", "/api/v1/auth/refresh"]
+    path = request.url.path
+    if path in csrf_exempt_paths:
+        return False
+
     # Public portals that use URL-based token authentication need CSRF protection
     # even without auth cookies, because the token in the URL acts as auth
     portal_paths = [
         "/onboarding/",
         "/careers/",
     ]
-    path = request.url.path
     is_portal_request = any(path.startswith(p) for p in portal_paths)
     if is_portal_request:
         return True
@@ -144,6 +153,12 @@ async def _extract_csrf_token(request: Request) -> str | None:
     if content_type.startswith("application/x-www-form-urlencoded") or content_type.startswith(
         "multipart/form-data"
     ):
+        # Read and cache the raw body so downstream form parsing still works.
+        try:
+            if getattr(request, "_body", None) is None:
+                await request.body()
+        except Exception:
+            pass
         form = getattr(request.state, "csrf_form", None)
         if form is None:
             form = await request.form()

@@ -28,7 +28,7 @@
             <div class="flex flex-wrap gap-4 items-end">
                 <div class="flex-1 min-w-[200px] max-w-md">
                     <label for="search" class="form-label">Search</label>
-                    <input type="text" name="search" id="search" value="{{ search | default('') }}"
+                    <input type="text" name="search" id="search" value="{{ search | default('', true) }}"
                         placeholder="Search events"
                         class="form-input w-full">
                 </div>
@@ -54,11 +54,11 @@
                 </div>
                 <div class="w-40">
                     <label for="start_date" class="form-label">From</label>
-                    <input type="date" name="start_date" id="start_date" value="{{ start_date | default('') }}" class="form-input w-full">
+                    <input type="date" name="start_date" id="start_date" value="{{ start_date | default('', true) }}" class="form-input w-full">
                 </div>
                 <div class="w-40">
                     <label for="end_date" class="form-label">To</label>
-                    <input type="date" name="end_date" id="end_date" value="{{ end_date | default('') }}" class="form-input w-full">
+                    <input type="date" name="end_date" id="end_date" value="{{ end_date | default('', true) }}" class="form-input w-full">
                 </div>
                 <button type="submit" class="btn btn-secondary h-10">Filter</button>
             </div>
@@ -131,10 +131,10 @@
         </p>
         <div class="flex gap-2">
             {% if has_prev %}
-            <a href="?page={{ page - 1 }}&search={{ search | default('') }}&status={{ status | default('') }}&program_id={{ program_id | default('') }}&start_date={{ start_date | default('') }}&end_date={{ end_date | default('') }}" class="btn btn-secondary btn-sm">Previous</a>
+            <a href="?page={{ page - 1 }}&search={{ search | default('', true) }}&status={{ status | default('', true) }}&program_id={{ program_id | default('', true) }}&start_date={{ start_date | default('', true) }}&end_date={{ end_date | default('', true) }}" class="btn btn-secondary btn-sm">Previous</a>
             {% endif %}
             {% if has_next %}
-            <a href="?page={{ page + 1 }}&search={{ search | default('') }}&status={{ status | default('') }}&program_id={{ program_id | default('') }}&start_date={{ start_date | default('') }}&end_date={{ end_date | default('') }}" class="btn btn-secondary btn-sm">Next</a>
+            <a href="?page={{ page + 1 }}&search={{ search | default('', true) }}&status={{ status | default('', true) }}&program_id={{ program_id | default('', true) }}&start_date={{ start_date | default('', true) }}&end_date={{ end_date | default('', true) }}" class="btn btn-secondary btn-sm">Next</a>
             {% endif %}
         </div>
     </div>

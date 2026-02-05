@@ -328,7 +328,7 @@ class AssetService(ListResponseMixin):
             category_id=cat_id,
             location_id=input.location_id,
             cost_center_id=input.cost_center_id,
-            custodian_user_id=input.custodian_user_id,
+            custodian_employee_id=input.custodian_user_id,
             acquisition_date=input.acquisition_date,
             in_service_date=input.in_service_date,
             acquisition_cost=input.acquisition_cost,

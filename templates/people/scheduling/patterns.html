@@ -33,7 +33,7 @@
             <div class="flex flex-wrap gap-4 items-end">
                 <div class="flex-1 min-w-[200px] max-w-md">
                     <label for="search" class="form-label">Search</label>
-                    <input type="text" name="search" id="search" value="{{ search | default('') }}"
+                    <input type="text" name="search" id="search" value="{{ search | default('', true) }}"
                         placeholder="Search by code or name"
                         class="form-input w-full">
                 </div>
@@ -114,10 +114,10 @@
         </p>
         <div class="flex gap-2">
             {% if has_prev %}
-            <a href="?page={{ page - 1 }}&search={{ search | default('') }}&is_active={{ is_active | default('') }}" class="btn btn-secondary btn-sm">Previous</a>
+            <a href="?page={{ page - 1 }}&search={{ search | default('', true) }}&is_active={{ is_active | default('', true) }}" class="btn btn-secondary btn-sm">Previous</a>
             {% endif %}
             {% if has_next %}
-            <a href="?page={{ page + 1 }}&search={{ search | default('') }}&is_active={{ is_active | default('') }}" class="btn btn-secondary btn-sm">Next</a>
+            <a href="?page={{ page + 1 }}&search={{ search | default('', true) }}&is_active={{ is_active | default('', true) }}" class="btn btn-secondary btn-sm">Next</a>
             {% endif %}
         </div>
     </div>

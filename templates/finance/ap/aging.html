@@ -385,7 +385,10 @@ function apAgingReport() {
                         legend: { display: false },
                         tooltip: {
                             callbacks: {
-                                label: (ctx) => ctx.dataset.label + ': $' + ctx.raw.toLocaleString()
+                                label: (ctx) => {
+                                    const cur = this.chartData.currency || '';
+                                    return ctx.dataset.label + ': ' + cur + ' ' + ctx.raw.toLocaleString();
+                                }
                             }
                         }
                     },
@@ -394,7 +397,10 @@ function apAgingReport() {
                             stacked: true,
                             grid: { color: colors.grid },
                             ticks: {
-                                callback: (v) => '$' + (v / 1000).toFixed(0) + 'k'
+                                callback: (v) => {
+                                    const cur = this.chartData.currency || '';
+                                    return cur + ' ' + (v / 1000).toFixed(0) + 'k';
+                                }
                             }
                         },
                         y: {
@@ -445,7 +451,8 @@ function apAgingReport() {
                                 label: (ctx) => {
                                     const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
                                     const pct = ((ctx.raw / total) * 100).toFixed(1);
-                                    return ctx.label + ': $' + ctx.raw.toLocaleString() + ' (' + pct + '%)';
+                                    const cur = this.chartData.currency || '';
+                                    return ctx.label + ': ' + cur + ' ' + ctx.raw.toLocaleString() + ' (' + pct + '%)';
                                 }
                             }
                         }

@@ -74,6 +74,8 @@ class MaterialRequest(Base):
         Index("idx_material_request_type", "request_type"),
         Index("idx_material_request_schedule_date", "schedule_date"),
         Index("idx_material_request_requested_by", "requested_by_id"),
+        Index("idx_material_request_project", "project_id"),
+        Index("idx_material_request_ticket", "ticket_id"),
         Index("idx_material_request_erpnext", "erpnext_id"),
         {"schema": "inv"},
     )
@@ -115,6 +117,18 @@ class MaterialRequest(Base):
     default_warehouse_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("inv.warehouse.warehouse_id"),
+        nullable=True,
+    )
+
+    project_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("core_org.project.project_id"),
+        nullable=True,
+    )
+
+    ticket_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("support.ticket.ticket_id"),
         nullable=True,
     )
 

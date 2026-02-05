@@ -1,9 +1,9 @@
-{% extends "modules/base_modules.html" %}
+{% extends "inventory/base_inventory.html" %}
 
 {% block page_title %}{{ 'Edit Material Request' if material_request else 'New Material Request' }}{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 mt-1">
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 mt-1">
     <a href="/inventory/items" class="hover:text-slate-700 dark:hover:text-slate-300">Inventory</a>
     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
@@ -48,7 +48,7 @@
                     <p class="text-xs text-slate-400 mt-1">Date when items are required</p>
                 </div>
             </div>
-            <div class="grid gap-6 sm:grid-cols-2 mt-6">
+            <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-4 mt-6">
                 <div>
                     <label class="form-label">Default Warehouse</label>
                     <select name="default_warehouse_id" class="form-input form-select">
@@ -61,15 +61,47 @@
                     </select>
                 </div>
                 <div>
-                    <label class="form-label">Requested By</label>
-                    <select name="requested_by_id" class="form-input form-select">
-                        <option value="">Select employee...</option>
-                        {% for emp in employees %}
-                        <option value="{{ emp.employee_id }}" {% if material_request and material_request.requested_by_id == emp.employee_id %}selected{% endif %}>
-                            {{ emp.full_name }}
+                    <label class="form-label">Project</label>
+                    <select name="project_id" class="form-input form-select">
+                        <option value="">Select project...</option>
+                        {% for proj in projects %}
+                        <option value="{{ proj.project_id }}" {% if material_request and material_request.project_id == proj.project_id %}selected{% endif %}>
+                            {{ proj.project_code }} - {{ proj.project_name }}
                         </option>
                         {% endfor %}
                     </select>
+                </div>
+                <div>
+                    <label class="form-label">Ticket</label>
+                    <select name="ticket_id" class="form-input form-select">
+                        <option value="">Select ticket...</option>
+                        {% for t in tickets %}
+                        <option value="{{ t.ticket_id }}" {% if material_request and material_request.ticket_id == t.ticket_id %}selected{% endif %}>
+                            {{ t.ticket_number }}{% if t.subject %} - {{ t.subject }}{% endif %}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label">Requested By</label>
+                    <div class="relative" data-typeahead-url="/inventory/material-requests/requested-by/search" data-typeahead-min="2" data-typeahead-limit="8">
+                        <input
+                            type="text"
+                            name="requested_by_name"
+                            class="form-input w-full"
+                            placeholder="Search employee..."
+                            autocomplete="off"
+                            value="{{ requested_by_name or '' }}"
+                            data-typeahead-input
+                        >
+                        <input
+                            type="hidden"
+                            name="requested_by_id"
+                            value="{{ material_request.requested_by_id if material_request else '' }}"
+                            data-typeahead-hidden
+                        >
+                        <div data-typeahead-results></div>
+                    </div>
                 </div>
             </div>
             <div class="mt-6">
@@ -100,7 +132,6 @@
                             <th class="text-right py-2 px-2 font-medium text-slate-500">Qty</th>
                             <th class="text-left py-2 px-2 font-medium text-slate-500">UOM</th>
                             <th class="text-left py-2 px-2 font-medium text-slate-500">Date</th>
-                            <th class="text-left py-2 px-2 font-medium text-slate-500">Project</th>
                             <th class="w-10"></th>
                         </tr>
                     </thead>
@@ -131,14 +162,6 @@
                                 </td>
                                 <td class="py-2 px-2">
                                     <input type="date" x-model="item.schedule_date" class="form-input text-sm py-1.5">
-                                </td>
-                                <td class="py-2 px-2">
-                                    <select x-model="item.project_id" class="form-input form-select text-sm py-1.5">
-                                        <option value="">None</option>
-                                        {% for proj in projects %}
-                                        <option value="{{ proj.project_id }}">{{ proj.project_code }}</option>
-                                        {% endfor %}
-                                    </select>
                                 </td>
                                 <td class="py-2 px-2">
                                     <button type="button" @click="removeItem(index)" class="p-1 text-slate-400 hover:text-rose-500 transition-colors" title="Remove">
@@ -187,8 +210,7 @@ function materialRequestForm() {
                 warehouse_id: '',
                 qty: 1,
                 uom: 'Nos',
-                schedule_date: '',
-                project_id: ''
+                schedule_date: ''
             });
         },
 

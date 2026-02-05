@@ -49,7 +49,7 @@
                     <div>
                         <label for="field_code" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Field Code *</label>
                         <input type="text" id="field_code" name="field_code" required {% if is_edit %}readonly{% endif %}
-                               value="{{ field.field_code if field else form_data.field_code | default('') }}"
+                               value="{{ field.field_code if field else form_data.field_code | default('', true) }}"
                                pattern="[a-zA-Z_][a-zA-Z0-9_]*"
                                placeholder="e.g., custom_reference"
                                class="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2 font-mono focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white {% if is_edit %}bg-slate-50 dark:bg-slate-900{% endif %}">
@@ -58,7 +58,7 @@
                     <div>
                         <label for="field_name" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Display Name *</label>
                         <input type="text" id="field_name" name="field_name" required
-                               value="{{ field.field_name if field else form_data.field_name | default('') }}"
+                               value="{{ field.field_name if field else form_data.field_name | default('', true) }}"
                                placeholder="e.g., Custom Reference"
                                class="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                     </div>
@@ -66,7 +66,7 @@
                 <div>
                     <label for="description" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Description</label>
                     <textarea id="description" name="description" rows="2"
-                              class="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">{{ field.description if field else form_data.description | default('') }}</textarea>
+                              class="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">{{ field.description if field else form_data.description | default('', true) }}</textarea>
                 </div>
             </div>
         </div>
@@ -85,20 +85,20 @@
                 <div>
                     <label for="default_value" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Default Value</label>
                     <input type="text" id="default_value" name="default_value"
-                           value="{{ field.default_value if field else form_data.default_value | default('') }}"
+                           value="{{ field.default_value if field else form_data.default_value | default('', true) }}"
                            class="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                 </div>
                 <div class="grid gap-4 sm:grid-cols-2">
                     <div>
                         <label for="max_length" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Max Length</label>
                         <input type="number" id="max_length" name="max_length" min="1"
-                               value="{{ field.max_length if field else form_data.max_length | default('') }}"
+                               value="{{ field.max_length if field else form_data.max_length | default('', true) }}"
                                class="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                     </div>
                     <div>
                         <label for="section_name" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Section Name</label>
                         <input type="text" id="section_name" name="section_name"
-                               value="{{ field.section_name if field else form_data.section_name | default('') }}"
+                               value="{{ field.section_name if field else form_data.section_name | default('', true) }}"
                                placeholder="e.g., Additional Information"
                                class="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                     </div>
@@ -116,7 +116,7 @@
                     <div>
                         <label for="placeholder" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Placeholder</label>
                         <input type="text" id="placeholder" name="placeholder"
-                               value="{{ field.placeholder if field else form_data.placeholder | default('') }}"
+                               value="{{ field.placeholder if field else form_data.placeholder | default('', true) }}"
                                class="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                     </div>
                     <div>
@@ -129,7 +129,7 @@
                 <div>
                     <label for="help_text" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Help Text</label>
                     <input type="text" id="help_text" name="help_text"
-                           value="{{ field.help_text if field else form_data.help_text | default('') }}"
+                           value="{{ field.help_text if field else form_data.help_text | default('', true) }}"
                            class="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                 </div>
                 <div class="space-y-3">

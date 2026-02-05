@@ -1,4 +1,4 @@
-{% extends "modules/base_modules.html" %}
+{% extends "inventory/base_inventory.html" %}
 
 {% block page_title %}New Inventory Adjustment{% endblock %}
 
@@ -132,7 +132,7 @@
 
         <!-- Actions -->
         <div class="flex justify-end gap-4 stagger-in" style="animation-delay: 100ms;">
-            <a href="/inventory/transactions" class="btn-secondary">Cancel</a>
+            <a href="/inventory/transactions" class="btn btn-secondary">Cancel</a>
             <button type="submit" class="btn-primary">
                 <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>

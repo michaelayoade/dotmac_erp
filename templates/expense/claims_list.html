@@ -22,7 +22,7 @@
                 <select name="status" class="form-input form-select">
                     <option value="">All Statuses</option>
                     {% for s in statuses %}
-                    <option value="{{ s }}" {% if filter_status == s %}selected{% endif %}>{{ s }}</option>
+                    <option value="{{ s }}" {% if filter_status == s %}selected{% endif %}>{{ s | replace('_', ' ') | title }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -42,7 +42,7 @@
     <div class="grid gap-4 sm:grid-cols-3 lg:grid-cols-6">
         {% for s in statuses %}
         <div class="card p-4">
-            <p class="text-sm text-slate-500 dark:text-slate-400">{{ s }}</p>
+            <p class="text-sm text-slate-500 dark:text-slate-400">{{ s | replace('_', ' ') | title }}</p>
             <p class="text-2xl font-bold text-slate-900 dark:text-white">{{ status_counts.get(s, 0) }}</p>
         </div>
         {% endfor %}
@@ -78,7 +78,7 @@
                         <td class="text-slate-500">{{ claim.claim_date }}</td>
                         <td class="text-right font-mono text-slate-900 dark:text-white">{{ claim.total_claimed_amount }}</td>
                         <td>
-                            <span class="badge badge-neutral">{{ claim.status.value if claim.status else 'DRAFT' }}</span>
+                            <span class="badge badge-neutral">{{ claim.status.value | replace('_', ' ') | title if claim.status else 'Draft' }}</span>
                         </td>
                         <td class="text-right">
                             <a href="/expense/claims/{{ claim.claim_id }}" class="table-action-btn" title="View">

@@ -54,7 +54,9 @@ class AppropriationService:
         if status:
             stmt = stmt.where(Appropriation.status == AppropriationStatus(status))
 
-        stmt = stmt.order_by(Appropriation.appropriation_code).offset(offset).limit(limit)
+        stmt = (
+            stmt.order_by(Appropriation.appropriation_code).offset(offset).limit(limit)
+        )
         return list(self.db.scalars(stmt).all())
 
     def get_or_404(
@@ -119,9 +121,7 @@ class AppropriationService:
             )
 
         if approp.created_by_user_id == approver_id:
-            raise ValidationError(
-                "Segregation of duties: creator cannot approve"
-            )
+            raise ValidationError("Segregation of duties: creator cannot approve")
 
         approp.status = AppropriationStatus.APPROVED
         approp.approved_by_user_id = approver_id
@@ -156,9 +156,7 @@ class AppropriationService:
         offset: int = 0,
     ) -> list[Allotment]:
         """List allotments with optional filters."""
-        stmt = select(Allotment).where(
-            Allotment.organization_id == organization_id
-        )
+        stmt = select(Allotment).where(Allotment.organization_id == organization_id)
 
         if appropriation_id:
             stmt = stmt.where(Allotment.appropriation_id == appropriation_id)
@@ -175,9 +173,7 @@ class AppropriationService:
         # Verify appropriation exists and belongs to org
         approp = self.get_or_404(data.appropriation_id)
         if approp.organization_id != organization_id:
-            raise ForbiddenError(
-                "Appropriation does not belong to this organization"
-            )
+            raise ForbiddenError("Appropriation does not belong to this organization")
 
         allotment = Allotment(
             appropriation_id=data.appropriation_id,

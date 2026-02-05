@@ -54,10 +54,10 @@
             </select>
 
             {# Date Range #}
-            <input type="date" name="start_date" value="{{ start_date | default('') }}"
+            <input type="date" name="start_date" value="{{ start_date | default('', true) }}"
                    data-testid="bank-reconciliations-start-date"
                    class="form-input" placeholder="Start Date">
-            <input type="date" name="end_date" value="{{ end_date | default('') }}"
+            <input type="date" name="end_date" value="{{ end_date | default('', true) }}"
                    data-testid="bank-reconciliations-end-date"
                    class="form-input" placeholder="End Date">
 

@@ -1,9 +1,10 @@
-{% extends "modules/base_modules.html" %}
+{% extends "inventory/base_inventory.html" %}
+{% from "components/macros.html" import pagination %}
 
 {% block page_title %}Material Requests{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 mt-1">
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 mt-1">
     <a href="/inventory/items" class="hover:text-slate-700 dark:hover:text-slate-300">Inventory</a>
     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
@@ -208,6 +209,13 @@
             </a>
         </div>
         {% endif %}
+
+        {{ pagination(
+            page=page | default(1),
+            total_pages=total_pages | default(1),
+            total_count=total_count | default(requests | length if requests else 0),
+            limit=limit | default(50)
+        ) }}
     </div>
 </div>
 {% endblock %}

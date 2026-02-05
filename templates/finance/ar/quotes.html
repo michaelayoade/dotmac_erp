@@ -56,9 +56,9 @@
             </select>
 
             {# Date Range #}
-            <input type="date" name="start_date" value="{{ filter_start_date | default('') }}"
+            <input type="date" name="start_date" value="{{ filter_start_date | default('', true) }}"
                    class="form-input" placeholder="Start Date">
-            <input type="date" name="end_date" value="{{ filter_end_date | default('') }}"
+            <input type="date" name="end_date" value="{{ filter_end_date | default('', true) }}"
                    class="form-input" placeholder="End Date">
 
             {# Actions #}

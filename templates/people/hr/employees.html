@@ -125,7 +125,7 @@
                         <svg class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
                         </svg>
-                        <input type="text" name="search" id="search" value="{{ search | default('') }}"
+                        <input type="text" name="search" id="search" value="{{ search | default('', true) }}"
                             placeholder="Search by name, email, or employee code..."
                             class="form-input w-full pl-10">
                     </div>
@@ -167,17 +167,17 @@
                 <div class="min-w-[260px]">
                     <label for="date_of_joining_from" class="form-label">Joining Date</label>
                     <div class="flex items-center gap-2">
-                        <input type="date" name="date_of_joining_from" id="date_of_joining_from" value="{{ date_of_joining_from | default('') }}" class="form-input w-full">
+                        <input type="date" name="date_of_joining_from" id="date_of_joining_from" value="{{ date_of_joining_from | default('', true) }}" class="form-input w-full">
                         <span class="text-xs text-slate-400 whitespace-nowrap">to</span>
-                        <input type="date" name="date_of_joining_to" id="date_of_joining_to" value="{{ date_of_joining_to | default('') }}" class="form-input w-full">
+                        <input type="date" name="date_of_joining_to" id="date_of_joining_to" value="{{ date_of_joining_to | default('', true) }}" class="form-input w-full">
                     </div>
                 </div>
                 <div class="min-w-[260px]">
                     <label for="date_of_leaving_from" class="form-label">Exit Date</label>
                     <div class="flex items-center gap-2">
-                        <input type="date" name="date_of_leaving_from" id="date_of_leaving_from" value="{{ date_of_leaving_from | default('') }}" class="form-input w-full">
+                        <input type="date" name="date_of_leaving_from" id="date_of_leaving_from" value="{{ date_of_leaving_from | default('', true) }}" class="form-input w-full">
                         <span class="text-xs text-slate-400 whitespace-nowrap">to</span>
-                        <input type="date" name="date_of_leaving_to" id="date_of_leaving_to" value="{{ date_of_leaving_to | default('') }}" class="form-input w-full">
+                        <input type="date" name="date_of_leaving_to" id="date_of_leaving_to" value="{{ date_of_leaving_to | default('', true) }}" class="form-input w-full">
                     </div>
                 </div>
                 <button type="submit" class="btn btn-secondary h-10">
@@ -398,7 +398,7 @@
             </div>
             <div class="flex gap-2">
                 {% if has_prev %}
-                <a href="?page={{ page - 1 }}&search={{ search | default('') }}&status={{ status | default('') }}&department_id={{ department_id | default('') }}&designation_id={{ designation_id | default('') }}&date_of_joining_from={{ date_of_joining_from | default('') }}&date_of_joining_to={{ date_of_joining_to | default('') }}&date_of_leaving_from={{ date_of_leaving_from | default('') }}&date_of_leaving_to={{ date_of_leaving_to | default('') }}"
+                <a href="?page={{ page - 1 }}&search={{ search | default('', true) }}&status={{ status | default('', true) }}&department_id={{ department_id | default('', true) }}&designation_id={{ designation_id | default('', true) }}&date_of_joining_from={{ date_of_joining_from | default('', true) }}&date_of_joining_to={{ date_of_joining_to | default('', true) }}&date_of_leaving_from={{ date_of_leaving_from | default('', true) }}&date_of_leaving_to={{ date_of_leaving_to | default('', true) }}"
                    class="btn btn-secondary btn-sm">
                     <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
@@ -407,7 +407,7 @@
                 </a>
                 {% endif %}
                 {% if has_next %}
-                <a href="?page={{ page + 1 }}&search={{ search | default('') }}&status={{ status | default('') }}&department_id={{ department_id | default('') }}&designation_id={{ designation_id | default('') }}&date_of_joining_from={{ date_of_joining_from | default('') }}&date_of_joining_to={{ date_of_joining_to | default('') }}&date_of_leaving_from={{ date_of_leaving_from | default('') }}&date_of_leaving_to={{ date_of_leaving_to | default('') }}"
+                <a href="?page={{ page + 1 }}&search={{ search | default('', true) }}&status={{ status | default('', true) }}&department_id={{ department_id | default('', true) }}&designation_id={{ designation_id | default('', true) }}&date_of_joining_from={{ date_of_joining_from | default('', true) }}&date_of_joining_to={{ date_of_joining_to | default('', true) }}&date_of_leaving_from={{ date_of_leaving_from | default('', true) }}&date_of_leaving_to={{ date_of_leaving_to | default('', true) }}"
                    class="btn btn-secondary btn-sm">
                     Next
                     <svg class="h-4 w-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">

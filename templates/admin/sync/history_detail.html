@@ -42,14 +42,14 @@
                 {% elif history.status == 'FAILED' %}bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400
                 {% else %}bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400{% endif %}">
                 {% if history.status == 'IN_PROGRESS' %}<span class="h-2 w-2 rounded-full bg-current animate-pulse"></span>{% endif %}
-                {{ history.status }}
+                {{ history.status | replace('_', ' ') | title }}
             </span>
         </div>
 
         <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
             <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50">
                 <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Sync Type</p>
-                <p class="mt-1 text-lg font-semibold text-slate-900 dark:text-white">{{ history.sync_type.value if history.sync_type else 'Unknown' }}</p>
+                <p class="mt-1 text-lg font-semibold text-slate-900 dark:text-white">{{ (history.sync_type.value | replace('_', ' ') | title) if history.sync_type else 'Unknown' }}</p>
             </div>
             <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50">
                 <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Started At</p>
@@ -172,11 +172,11 @@
                                 {% elif entity.sync_status.value == 'FAILED' %}bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400
                                 {% elif entity.sync_status.value == 'SKIPPED' %}bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400
                                 {% else %}bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400{% endif %}">
-                                {{ entity.sync_status.value if entity.sync_status else 'Unknown' }}
+                                {{ (entity.sync_status.value | replace('_', ' ') | title) if entity.sync_status else 'Unknown' }}
                             </span>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-300">{{ entity.synced_at.strftime('%H:%M:%S') if entity.synced_at else '-' }}</td>
-                        <td class="px-6 py-4 text-sm text-red-600 dark:text-red-400 max-w-xs truncate" title="{{ entity.error_message | default('') }}">
+                        <td class="px-6 py-4 text-sm text-red-600 dark:text-red-400 max-w-xs truncate" title="{{ entity.error_message | default('', true) }}">
                             {{ entity.error_message | default('-') | truncate(50) }}
                         </td>
                     </tr>

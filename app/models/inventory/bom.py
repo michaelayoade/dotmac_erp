@@ -90,6 +90,9 @@ class BillOfMaterials(Base):
     )
 
     # Relationships
+    item: Mapped["Item"] = relationship(
+        "Item", foreign_keys=[item_id], lazy="noload",
+    )
     components: Mapped[list["BOMComponent"]] = relationship(
         "BOMComponent",
         back_populates="bom",

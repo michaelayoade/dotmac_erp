@@ -88,6 +88,21 @@ def register_error_handlers(app) -> None:
 
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(request: Request, exc: RequestValidationError):
+        try:
+            raw_body = await request.body()
+            body_len = len(raw_body or b"")
+        except Exception:
+            body_len = -1
+        logger.warning(
+            "Request validation error: path=%s method=%s content_type=%s content_length=%s body_len=%s has_csrf_form=%s errors=%s",
+            request.url.path,
+            request.method,
+            request.headers.get("content-type"),
+            request.headers.get("content-length"),
+            body_len,
+            bool(getattr(request.state, "csrf_form", None)),
+            exc.errors(),
+        )
         if _is_html_request(request):
             errors = exc.errors()
             message = "Please check the form and try again."

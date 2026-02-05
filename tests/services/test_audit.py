@@ -56,11 +56,11 @@ class TestParseActorType:
         assert "user" in exc_info.value.detail  # Should list allowed values
 
     def test_parse_actor_type_already_enum(self):
-        """AuditActorType enum should raise ValueError (expects string)."""
-        # The function expects a string, not enum. Passing enum directly
-        # will raise ValueError because AuditActorType(AuditActorType.user) fails
-        with pytest.raises((ValueError, HTTPException)):
-            AuditEvents.parse_actor_type(AuditActorType.user)
+        """AuditActorType enum value should be resolved correctly."""
+        # AuditActorType(AuditActorType.user) succeeds in Python enums,
+        # returning the same member, so the function handles it gracefully.
+        result = AuditEvents.parse_actor_type(AuditActorType.user)
+        assert result == AuditActorType.user
 
 
 # ============ TestAuditEventsCreate ============
@@ -184,9 +184,10 @@ class TestAuditEventsGet:
         assert "Audit event not found" in exc_info.value.detail
 
     def test_get_invalid_uuid(self, mock_db):
-        """Invalid UUID format should raise ValueError."""
-        with pytest.raises(ValueError):
+        """Invalid UUID format should raise HTTPException(400)."""
+        with pytest.raises(HTTPException) as exc_info:
             AuditEvents.get(mock_db, "not-a-uuid")
+        assert exc_info.value.status_code == 400
 
 
 # ============ TestAuditEventsList ============

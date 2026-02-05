@@ -44,7 +44,7 @@
                 </div>
                 <div class="w-64">
                     <label for="employee_id" class="form-label">Employee ID</label>
-                    <input type="text" name="employee_id" id="employee_id" value="{{ employee_id | default('') }}" class="form-input w-full" placeholder="UUID">
+                    <input type="text" name="employee_id" id="employee_id" value="{{ employee_id | default('', true) }}" class="form-input w-full" placeholder="UUID">
                 </div>
                 <div class="w-28">
                     <label for="limit" class="form-label">Limit</label>

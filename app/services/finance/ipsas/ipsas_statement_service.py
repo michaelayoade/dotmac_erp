@@ -25,6 +25,44 @@ class IPSASStatementService:
     def __init__(self, db: Session):
         self.db = db
 
+    def _fund_account_ids(self, organization_id: UUID, fund_id: UUID) -> list[UUID]:
+        """
+        Get account IDs linked to a fund via commitments or appropriations.
+
+        Used to filter GL data by fund when generating fund-level statements.
+        """
+        from app.models.finance.ipsas.commitment import Commitment
+        from app.models.finance.ipsas.appropriation import Appropriation
+
+        # Accounts referenced by commitments in this fund
+        commitment_accounts = set(
+            self.db.scalars(
+                select(Commitment.account_id)
+                .where(
+                    Commitment.organization_id == organization_id,
+                    Commitment.fund_id == fund_id,
+                )
+                .distinct()
+            ).all()
+        )
+
+        # Accounts referenced by appropriations in this fund
+        approp_accounts = {
+            aid
+            for aid in self.db.scalars(
+                select(Appropriation.account_id)
+                .where(
+                    Appropriation.organization_id == organization_id,
+                    Appropriation.fund_id == fund_id,
+                    Appropriation.account_id.isnot(None),
+                )
+                .distinct()
+            ).all()
+            if aid is not None
+        }
+
+        return list(commitment_accounts | approp_accounts)
+
     def generate_financial_position(
         self,
         organization_id: UUID,
@@ -69,6 +107,24 @@ class IPSASStatementService:
             .order_by(AccountCategory.ifrs_category, Account.account_name)
         )
 
+        if fund_id is not None:
+            account_ids = self._fund_account_ids(organization_id, fund_id)
+            if account_ids:
+                stmt = stmt.where(Account.account_id.in_(account_ids))
+            else:
+                # No accounts linked to this fund — return empty result
+                return {
+                    "organization_id": str(organization_id),
+                    "fiscal_period_id": str(fiscal_period_id),
+                    "fund_id": str(fund_id),
+                    "assets": [],
+                    "liabilities": [],
+                    "net_assets": [],
+                    "total_assets": "0",
+                    "total_liabilities": "0",
+                    "total_net_assets": "0",
+                }
+
         rows = self.db.execute(stmt).all()
 
         assets = []
@@ -89,7 +145,7 @@ class IPSASStatementService:
                 net_assets.append(entry)
 
         total_assets = sum(Decimal(a["balance"]) for a in assets)
-        total_liabilities = sum(Decimal(l["balance"]) for l in liabilities)
+        total_liabilities = sum(Decimal(li["balance"]) for li in liabilities)
 
         return {
             "organization_id": str(organization_id),
@@ -141,14 +197,32 @@ class IPSASStatementService:
             .where(
                 JournalEntry.organization_id == organization_id,
                 JournalEntry.fiscal_period_id == fiscal_period_id,
-                AccountCategory.ifrs_category.in_([
-                    IFRSCategory.REVENUE,
-                    IFRSCategory.EXPENSES,
-                ]),
+                AccountCategory.ifrs_category.in_(
+                    [
+                        IFRSCategory.REVENUE,
+                        IFRSCategory.EXPENSES,
+                    ]
+                ),
             )
             .group_by(AccountCategory.ifrs_category, Account.account_name)
             .order_by(AccountCategory.ifrs_category, Account.account_name)
         )
+
+        if fund_id is not None:
+            account_ids = self._fund_account_ids(organization_id, fund_id)
+            if account_ids:
+                stmt = stmt.where(Account.account_id.in_(account_ids))
+            else:
+                return {
+                    "organization_id": str(organization_id),
+                    "fiscal_period_id": str(fiscal_period_id),
+                    "fund_id": str(fund_id),
+                    "revenue": [],
+                    "expenses": [],
+                    "total_revenue": "0",
+                    "total_expenses": "0",
+                    "surplus_deficit": "0",
+                }
 
         rows = self.db.execute(stmt).all()
 
@@ -183,6 +257,8 @@ class IPSASStatementService:
         self,
         organization_id: UUID,
         fiscal_period_id: UUID,
+        *,
+        fund_id: Optional[UUID] = None,
     ) -> dict:
         """
         Generate IPSAS 1 Statement of Changes in Net Assets.
@@ -197,6 +273,10 @@ class IPSASStatementService:
             Fund.organization_id == organization_id,
             Fund.status == FundStatus.ACTIVE,
         )
+
+        if fund_id is not None:
+            fund_stmt = fund_stmt.where(Fund.fund_id == fund_id)
+
         funds = list(self.db.scalars(fund_stmt).all())
 
         restricted_funds = [f for f in funds if f.is_restricted]
@@ -205,6 +285,7 @@ class IPSASStatementService:
         return {
             "organization_id": str(organization_id),
             "fiscal_period_id": str(fiscal_period_id),
+            "fund_id": str(fund_id) if fund_id else None,
             "restricted_funds": [
                 {"fund_code": f.fund_code, "fund_name": f.fund_name}
                 for f in restricted_funds

@@ -574,7 +574,18 @@ class ExpenseService:
 
         action_started = self._begin_action(org_id, claim_id, ExpenseClaimActionType.SUBMIT)
         if not action_started:
-            return claim
+            if claim.status != ExpenseClaimStatus.DRAFT:
+                return claim
+            existing = self.db.scalar(
+                select(ExpenseClaimAction).where(
+                    ExpenseClaimAction.organization_id == org_id,
+                    ExpenseClaimAction.claim_id == claim_id,
+                    ExpenseClaimAction.action_type == ExpenseClaimActionType.SUBMIT,
+                )
+            )
+            if existing:
+                existing.status = ExpenseClaimActionStatus.STARTED
+                self.db.flush()
 
         try:
             claim.status = ExpenseClaimStatus.SUBMITTED

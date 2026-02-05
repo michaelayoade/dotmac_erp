@@ -94,7 +94,7 @@
                                     {% elif ex.status_color == 'blue' %}bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400
                                     {% elif ex.status_color == 'amber' %}bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400
                                     {% else %}bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-400{% endif %}">
-                                    {{ ex.status }}
+                                    {{ ex.status | replace('_', ' ') | title }}
                                 </span>
                             </td>
                             <td class="px-6 py-3 text-sm text-slate-600 dark:text-slate-400">

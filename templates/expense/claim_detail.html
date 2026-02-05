@@ -39,7 +39,7 @@
                 <p class="text-sm text-slate-500 dark:text-slate-400">{{ claim.purpose }}</p>
             </div>
             <div class="flex items-center gap-3">
-                <span class="badge badge-neutral">{{ claim.status.value if claim.status else 'DRAFT' }}</span>
+                <span class="badge badge-neutral">{{ claim.status.value | replace('_', ' ') | title if claim.status else 'Draft' }}</span>
                 {% if has_active_payment %}
                 <span class="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm text-blue-700 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
                     <svg class="h-4 w-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -59,11 +59,13 @@
                     <button type="submit" class="btn btn-primary">Submit for Approval</button>
                 </form>
                 {% endif %}
-                {% if can_act %}
+                {% if can_approve and can_act %}
                 <form method="post" action="/expense/claims/{{ claim.claim_id }}/approve">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                     <button type="submit" class="btn btn-primary">Approve</button>
                 </form>
+                {% endif %}
+                {% if can_reject and can_act %}
                 <form method="post" action="/expense/claims/{{ claim.claim_id }}/reject" class="flex items-center gap-2">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                     <input type="text" name="reason" class="form-input w-48" placeholder="Rejection reason" required>

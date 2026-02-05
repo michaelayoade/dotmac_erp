@@ -6,6 +6,7 @@ proper tenant context handling.
 """
 
 import json
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID
@@ -469,6 +470,12 @@ def base_context(
     Returns:
         Dict with common template context values, including request for TemplateResponse.
     """
+    # Load organization object for template conditionals (e.g. IPSAS sidebar toggle)
+    organization = None
+    if db and auth.organization_id:
+        from app.models.finance.core_org.organization import Organization
+        organization = db.get(Organization, auth.organization_id)
+
     # Get org-specific branding if db session available
     org_branding = None
     if db and auth.organization_id:
@@ -566,25 +573,11 @@ def base_context(
         ]
     )
 
-    # Load organization for template conditionals (e.g. IPSAS sidebar)
-    organization = None
-    if auth.organization_id:
-        from app.models.finance.core_org.organization import Organization
-
-        if db:
-            organization = db.get(Organization, auth.organization_id)
-        else:
-            _tmp_db = SessionLocal()
-            try:
-                organization = _tmp_db.get(Organization, auth.organization_id)
-                # Eagerly access attributes before closing session
-                if organization:
-                    _ = organization.fund_accounting_enabled
-                    _ = organization.commitment_control_enabled
-                    _ = organization.accounting_framework
-                    _ = organization.sector_type
-            finally:
-                _tmp_db.close()
+    settings_url = "/settings"
+    if request.url.path.startswith("/people"):
+        settings_url = "/people/settings"
+    elif active_module in {"support", "inventory", "projects", "fleet", "procurement"}:
+        settings_url = f"/settings/{active_module}"
 
     context = {
         "request": request,
@@ -593,6 +586,7 @@ def base_context(
         "brand": org_branding or brand_context(),
         "org_branding": org_branding,
         "active_module": active_module,
+        "settings_url": settings_url,
         "auth": auth,
         "user": auth.user,
         "organization": organization,
@@ -608,6 +602,19 @@ def base_context(
         except Exception:
             pass
     return context
+
+
+@dataclass(frozen=True)
+class WebPrincipal:
+    """Lightweight principal for web routes."""
+
+    id: Optional[UUID]
+    user_id: Optional[UUID]
+    person_id: Optional[UUID]
+    organization_id: Optional[UUID]
+    employee_id: Optional[UUID]
+    roles: list[str]
+    scopes: list[str]
 
 
 class WebAuthContext:
@@ -647,6 +654,19 @@ class WebAuthContext:
     def user_id(self) -> Optional[UUID]:
         """Alias for person_id for backward compatibility."""
         return self.person_id
+
+    @property
+    def principal(self) -> WebPrincipal:
+        """Provide a Principal-like object for services that require it."""
+        return WebPrincipal(
+            id=self.person_id,
+            user_id=self.person_id,
+            person_id=self.person_id,
+            organization_id=self.organization_id,
+            employee_id=self.employee_id,
+            roles=list(self.roles),
+            scopes=list(self.scopes),
+        )
 
     @property
     def is_admin(self) -> bool:

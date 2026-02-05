@@ -33,14 +33,14 @@
             <div>
                 <label for="pattern_code" class="form-label">Pattern Code <span class="text-red-500">*</span></label>
                 <input type="text" name="pattern_code" id="pattern_code" required maxlength="30"
-                    value="{{ pattern.pattern_code | default('') }}"
+                    value="{{ pattern.pattern_code | default('', true) }}"
                     placeholder="e.g., DAY-STD, ROT-2WK"
                     class="form-input w-full">
             </div>
             <div>
                 <label for="pattern_name" class="form-label">Pattern Name <span class="text-red-500">*</span></label>
                 <input type="text" name="pattern_name" id="pattern_name" required maxlength="100"
-                    value="{{ pattern.pattern_name | default('') }}"
+                    value="{{ pattern.pattern_name | default('', true) }}"
                     placeholder="e.g., Standard Day Shift"
                     class="form-input w-full">
             </div>
@@ -50,7 +50,7 @@
             <label for="description" class="form-label">Description</label>
             <textarea name="description" id="description" rows="2"
                 placeholder="Optional description"
-                class="form-input w-full">{{ pattern.description | default('') }}</textarea>
+                class="form-input w-full">{{ pattern.description | default('', true) }}</textarea>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">

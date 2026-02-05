@@ -46,6 +46,7 @@ class BidEvaluationService:
         organization_id: UUID,
         *,
         rfq_id: Optional[UUID] = None,
+        status: Optional[str] = None,
         offset: int = 0,
         limit: int = 25,
     ) -> Tuple[List[BidEvaluation], int]:
@@ -55,6 +56,8 @@ class BidEvaluationService:
         )
         if rfq_id:
             base = base.where(BidEvaluation.rfq_id == rfq_id)
+        if status:
+            base = base.where(BidEvaluation.status == EvaluationStatus(status))
 
         total = self.db.scalar(select(func.count()).select_from(base.subquery()))
         items = list(

@@ -57,7 +57,7 @@
                         <td class="px-4 py-3 text-right text-sm text-slate-600 dark:text-slate-400">{{ payment.principal_portion }}</td>
                         <td class="px-4 py-3 text-right text-sm text-slate-600 dark:text-slate-400">{{ payment.interest_portion }}</td>
                         <td class="px-4 py-3 text-right text-sm text-slate-600 dark:text-slate-400">{{ payment.closing_balance }}</td>
-                        <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">{{ payment.status }}</td>
+                        <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">{{ payment.status | replace('_', ' ') | title }}</td>
                     </tr>
                     {% else %}
                     <tr>

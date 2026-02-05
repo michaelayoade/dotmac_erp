@@ -105,13 +105,36 @@ def update_contract(
 @router.post("/{contract_id}/activate", response_model=ContractResponse)
 def activate_contract(
     contract_id: UUID,
+    fund_id: Optional[UUID] = Query(None, description="IPSAS fund for commitment"),
+    account_id: Optional[UUID] = Query(None, description="GL account for commitment"),
+    fiscal_year_id: Optional[UUID] = Query(
+        None, description="Fiscal year for commitment"
+    ),
+    fiscal_period_id: Optional[UUID] = Query(
+        None, description="Fiscal period for commitment"
+    ),
+    appropriation_id: Optional[UUID] = Query(
+        None, description="Appropriation for commitment"
+    ),
     organization_id: UUID = Depends(require_organization_id),
+    auth: dict = Depends(require_tenant_auth),
     db: Session = Depends(get_db),
 ):
-    """Activate a contract."""
+    """Activate a contract. Optionally creates an IPSAS commitment."""
     service = ContractService(db)
+    person_id = auth.get("person_id")
+    user_id = UUID(person_id) if person_id else None
     try:
-        contract = service.activate(organization_id, contract_id)
+        contract = service.activate(
+            organization_id,
+            contract_id,
+            user_id=user_id,
+            fund_id=fund_id,
+            account_id=account_id,
+            fiscal_year_id=fiscal_year_id,
+            fiscal_period_id=fiscal_period_id,
+            appropriation_id=appropriation_id,
+        )
         db.commit()
         return ContractResponse.model_validate(contract)
     except NotFoundError as e:
@@ -132,6 +155,46 @@ def complete_contract(
         contract = service.complete(organization_id, contract_id)
         db.commit()
         return ContractResponse.model_validate(contract)
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/{contract_id}/generate-invoice")
+def generate_invoice_from_contract(
+    contract_id: UUID,
+    ap_control_account_id: UUID = Query(..., description="AP control GL account"),
+    expense_account_id: UUID = Query(..., description="Expense GL account"),
+    payment_terms_days: int = Query(30, ge=1, le=365),
+    organization_id: UUID = Depends(require_organization_id),
+    auth: dict = Depends(require_tenant_auth),
+    db: Session = Depends(get_db),
+):
+    """Generate an AP supplier invoice from a procurement contract."""
+    from app.services.procurement.ap_integration import (
+        ProcurementAPIntegrationService,
+    )
+
+    person_id = auth.get("person_id")
+    if not person_id:
+        raise HTTPException(status_code=400, detail="Missing person_id")
+    user_id = UUID(person_id)
+    try:
+        svc = ProcurementAPIntegrationService(db)
+        invoice = svc.generate_invoice_from_contract(
+            organization_id,
+            contract_id,
+            created_by_user_id=user_id,
+            ap_control_account_id=ap_control_account_id,
+            expense_account_id=expense_account_id,
+            payment_terms_days=payment_terms_days,
+        )
+        db.commit()
+        return {
+            "invoice_id": str(invoice.invoice_id),
+            "invoice_number": invoice.invoice_number,
+        }
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except ValidationError as e:

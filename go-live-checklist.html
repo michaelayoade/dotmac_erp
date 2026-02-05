@@ -1,0 +1,1194 @@
+<!DOCTYPE html>
+<html lang="en" x-data="checklist()" :class="{ 'dark': darkMode }">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DotMac ERP — Go-Live Readiness</title>
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,400&family=Source+Serif+4:ital,opsz,wght@0,8..60,300;0,8..60,400;0,8..60,600;0,8..60,700;1,8..60,400&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #f8f6f1;
+  --bg-card: #ffffff;
+  --bg-section: #faf9f6;
+  --bg-hover: #f3f1ec;
+  --bg-checked: #f0fdf4;
+  --border: #e5e1d8;
+  --border-light: #ece9e1;
+  --text: #1a1814;
+  --text-secondary: #6b6560;
+  --text-muted: #9c9690;
+  --accent: #b45309;
+  --accent-light: #fef3c7;
+  --green: #16a34a;
+  --green-bg: #dcfce7;
+  --yellow: #ca8a04;
+  --yellow-bg: #fef9c3;
+  --red: #dc2626;
+  --red-bg: #fee2e2;
+  --teal: #0d9488;
+  --violet: #7c3aed;
+  --header-from: #1c1917;
+  --header-to: #292524;
+  --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-lg: 0 4px 12px rgba(0,0,0,0.08);
+  --radius: 10px;
+  --mono: 'DM Mono', 'Courier New', monospace;
+  --serif: 'Source Serif 4', Georgia, serif;
+  --sans: 'Inter', -apple-system, sans-serif;
+}
+
+.dark {
+  --bg: #0c0a09;
+  --bg-card: #1c1917;
+  --bg-section: #171412;
+  --bg-hover: #292524;
+  --bg-checked: #052e16;
+  --border: #292524;
+  --border-light: #1c1917;
+  --text: #fafaf9;
+  --text-secondary: #a8a29e;
+  --text-muted: #78716c;
+  --accent: #f59e0b;
+  --accent-light: #451a03;
+  --green-bg: #052e16;
+  --yellow-bg: #422006;
+  --red-bg: #450a0a;
+  --header-from: #000000;
+  --header-to: #0c0a09;
+  --shadow: 0 1px 3px rgba(0,0,0,0.3);
+  --shadow-lg: 0 4px 12px rgba(0,0,0,0.4);
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: var(--sans);
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+}
+
+/* ─── HEADER ─── */
+.site-header {
+  background: linear-gradient(135deg, var(--header-from), var(--header-to));
+  color: #fafaf9;
+  padding: 2.5rem 2rem 2rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.site-header::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background:
+    radial-gradient(ellipse at 20% 50%, rgba(180,83,9,0.15) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 20%, rgba(13,148,136,0.1) 0%, transparent 50%);
+  pointer-events: none;
+}
+
+.site-header::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(245,158,11,0.4), transparent);
+}
+
+.header-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  position: relative;
+  z-index: 1;
+}
+
+.header-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.brand-icon {
+  width: 44px; height: 44px;
+  background: linear-gradient(135deg, #b45309, #d97706);
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 1.1rem;
+  color: white;
+  box-shadow: 0 2px 8px rgba(180,83,9,0.3);
+}
+
+.brand h1 {
+  font-family: var(--serif);
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.brand p {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: #a8a29e;
+  margin-top: 2px;
+}
+
+.header-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.header-btn {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.06);
+  color: #d6d3d1;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  display: flex; align-items: center; gap: 0.4rem;
+}
+
+.header-btn:hover { background: rgba(255,255,255,0.12); color: #fff; }
+.header-btn.danger:hover { background: rgba(220,38,38,0.2); border-color: rgba(220,38,38,0.3); color: #fca5a5; }
+
+/* ─── STATS BAR ─── */
+.stats-bar {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 1rem 1.25rem;
+  background: rgba(255,255,255,0.04);
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.06);
+}
+
+.stat-group {
+  display: flex;
+  gap: 2rem;
+}
+
+.stat-group.end { justify-content: flex-end; }
+
+.stat { text-align: center; }
+.stat-value {
+  font-family: var(--mono);
+  font-size: 1.6rem;
+  font-weight: 500;
+  line-height: 1;
+}
+.stat-label {
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: #78716c;
+  margin-top: 4px;
+}
+
+.overall-ring {
+  width: 80px; height: 80px;
+  position: relative;
+}
+
+.overall-ring svg { transform: rotate(-90deg); }
+.overall-ring .ring-bg { stroke: rgba(255,255,255,0.08); }
+.overall-ring .ring-fill { transition: stroke-dashoffset 0.8s cubic-bezier(0.4,0,0.2,1); }
+.overall-pct {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: 1.1rem;
+  font-weight: 500;
+}
+.overall-pct small {
+  font-size: 0.55rem;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: #78716c;
+}
+
+/* ─── MAIN CONTENT ─── */
+.main-content {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 1.5rem 2rem 4rem;
+}
+
+/* ─── SECTION NAV ─── */
+.section-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 1.5rem;
+  padding: 0.75rem;
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+}
+
+.section-nav a {
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 0.35rem 0.6rem;
+  border-radius: 5px;
+  text-decoration: none;
+  color: var(--text-muted);
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.section-nav a:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+/* ─── CHECKLIST SECTION ─── */
+.cl-section {
+  margin-bottom: 1rem;
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  transition: box-shadow 0.2s;
+}
+
+.cl-section:hover { box-shadow: var(--shadow-lg); }
+
+.cl-section-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s;
+  border-bottom: 1px solid transparent;
+}
+
+.cl-section-header:hover { background: var(--bg-hover); }
+.cl-section.open .cl-section-header { border-bottom-color: var(--border-light); }
+
+.cl-section-icon {
+  width: 32px; height: 32px;
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.95rem;
+  flex-shrink: 0;
+}
+
+.cl-section-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.cl-section-title h2 {
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  line-height: 1.3;
+}
+
+.cl-section-title .sub {
+  font-family: var(--sans);
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-top: 1px;
+}
+
+.cl-section-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-shrink: 0;
+}
+
+.cl-count {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.cl-progress-mini {
+  width: 80px; height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.cl-progress-mini-bar {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.4s cubic-bezier(0.4,0,0.2,1), background 0.3s;
+}
+
+.cl-chevron {
+  width: 18px; height: 18px;
+  color: var(--text-muted);
+  transition: transform 0.25s cubic-bezier(0.4,0,0.2,1);
+  flex-shrink: 0;
+}
+
+.cl-section.open .cl-chevron { transform: rotate(180deg); }
+
+/* ─── CHECKLIST BODY ─── */
+.cl-body {
+  display: none;
+  padding: 0;
+}
+
+.cl-section.open .cl-body { display: block; }
+
+/* Subsection */
+.cl-subsection {
+  padding: 0.5rem 0;
+}
+
+.cl-subsection:not(:last-child) {
+  border-bottom: 1px solid var(--border-light);
+}
+
+.cl-subsection-title {
+  font-family: var(--serif);
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  padding: 0.3rem 1rem 0.25rem 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.cl-subsection-title::before {
+  content: '';
+  width: 3px; height: 14px;
+  background: var(--accent);
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+/* Item */
+.cl-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.4rem 1rem 0.4rem 1.5rem;
+  transition: background 0.1s;
+  cursor: pointer;
+}
+
+.cl-item:hover { background: var(--bg-hover); }
+.cl-item.checked { background: var(--bg-checked); }
+
+.cl-item input[type="checkbox"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px; height: 16px;
+  border: 1.5px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  flex-shrink: 0;
+  margin-top: 2px;
+  position: relative;
+  transition: all 0.15s;
+  background: var(--bg-card);
+}
+
+.cl-item input[type="checkbox"]:checked {
+  background: var(--green);
+  border-color: var(--green);
+}
+
+.cl-item input[type="checkbox"]:checked::after {
+  content: '';
+  position: absolute;
+  top: 2px; left: 4.5px;
+  width: 4px; height: 7px;
+  border: solid white;
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg);
+}
+
+.cl-item label {
+  font-family: var(--sans);
+  font-size: 0.78rem;
+  color: var(--text);
+  line-height: 1.5;
+  cursor: pointer;
+  flex: 1;
+  transition: color 0.15s;
+}
+
+.cl-item.checked label {
+  color: var(--text-muted);
+  text-decoration: line-through;
+  text-decoration-color: var(--border);
+}
+
+.cl-item code {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  background: var(--bg-section);
+  padding: 0.1rem 0.35rem;
+  border-radius: 3px;
+  border: 1px solid var(--border-light);
+  color: var(--accent);
+}
+
+/* ─── COVERAGE TABLE ─── */
+.coverage-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+}
+
+.coverage-table th {
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  text-align: left;
+  padding: 0.5rem 1rem;
+  border-bottom: 2px solid var(--border);
+  font-weight: 500;
+}
+
+.coverage-table td {
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.coverage-table tr:hover td { background: var(--bg-hover); }
+
+.badge {
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.badge.good { background: var(--green-bg); color: var(--green); }
+.badge.gap { background: var(--red-bg); color: var(--red); }
+
+/* ─── UTILITIES ─── */
+.progress-green { background: var(--green); }
+.progress-yellow { background: var(--yellow); }
+.progress-red { background: var(--red); }
+
+.text-green { color: var(--green); }
+.text-yellow { color: var(--yellow); }
+.text-red { color: var(--red); }
+
+/* ─── PRINT ─── */
+@media print {
+  .site-header { padding: 1rem; break-after: avoid; }
+  .header-actions, .section-nav, .cl-chevron, .header-btn { display: none !important; }
+  .main-content { padding: 0.5rem; }
+  .cl-section { break-inside: avoid; box-shadow: none; border: 1px solid #ccc; margin-bottom: 0.5rem; }
+  .cl-body { display: block !important; }
+  .cl-section-header { cursor: default; }
+  .stats-bar { background: none; border: 1px solid #ccc; }
+  .cl-item input[type="checkbox"] { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  body { font-size: 10pt; }
+}
+
+/* ─── RESPONSIVE ─── */
+@media (max-width: 768px) {
+  .site-header { padding: 1.5rem 1rem 1rem; }
+  .main-content { padding: 1rem; }
+  .stats-bar { grid-template-columns: 1fr; gap: 1rem; text-align: center; }
+  .stat-group { justify-content: center; }
+  .stat-group.end { justify-content: center; }
+  .header-top { flex-direction: column; }
+  .header-actions { justify-content: flex-start; }
+  .cl-progress-mini { width: 50px; }
+  .section-nav { gap: 0.25rem; }
+}
+
+/* ─── TOAST ─── */
+.toast {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  padding: 0.6rem 1rem;
+  border-radius: 8px;
+  background: var(--header-from);
+  color: #fafaf9;
+  box-shadow: var(--shadow-lg);
+  z-index: 100;
+  animation: toastIn 0.3s ease-out;
+}
+
+@keyframes toastIn {
+  from { transform: translateY(10px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* ─── FADE IN ─── */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.fade-up { animation: fadeUp 0.35s ease-out both; }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="site-header">
+  <div class="header-inner">
+    <div class="header-top">
+      <div class="brand">
+        <div class="brand-icon">◆</div>
+        <div>
+          <h1>DotMac ERP</h1>
+          <p>Go-Live Readiness Checklist</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button class="header-btn" @click="expandAll()">↕ Expand All</button>
+        <button class="header-btn" @click="collapseAll()">⊟ Collapse</button>
+        <button class="header-btn" @click="window.print()">⎙ Print</button>
+        <button class="header-btn" @click="darkMode = !darkMode; localStorage.setItem('cl-dark', darkMode)">
+          <span x-text="darkMode ? '☀' : '☾'"></span> Theme
+        </button>
+        <button class="header-btn danger" @click="if(confirm('Reset all checkboxes? This cannot be undone.')) resetAll()">⟲ Reset</button>
+      </div>
+    </div>
+
+    <div class="stats-bar">
+      <div class="stat-group">
+        <div class="stat">
+          <div class="stat-value" x-text="totalChecked" :class="totalChecked > 0 ? 'text-green' : ''"></div>
+          <div class="stat-label">Completed</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value" x-text="totalItems - totalChecked" :class="totalItems - totalChecked > 0 ? 'text-yellow' : ''"></div>
+          <div class="stat-label">Remaining</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value" x-text="totalItems"></div>
+          <div class="stat-label">Total Items</div>
+        </div>
+      </div>
+
+      <div class="overall-ring">
+        <svg viewBox="0 0 36 36" width="80" height="80">
+          <circle class="ring-bg" cx="18" cy="18" r="15.5" fill="none" stroke-width="3"/>
+          <circle class="ring-fill" cx="18" cy="18" r="15.5" fill="none" stroke-width="3"
+            :stroke="overallPct >= 66 ? 'var(--green)' : overallPct >= 33 ? 'var(--yellow)' : 'var(--red)'"
+            stroke-linecap="round"
+            :stroke-dasharray="97.39"
+            :stroke-dashoffset="97.39 - (97.39 * overallPct / 100)"/>
+        </svg>
+        <div class="overall-pct">
+          <span x-text="overallPct + '%'"></span>
+          <small>Done</small>
+        </div>
+      </div>
+
+      <div class="stat-group end">
+        <div class="stat">
+          <div class="stat-value">12</div>
+          <div class="stat-label">Sections</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value">9</div>
+          <div class="stat-label">Modules</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- MAIN -->
+<main class="main-content">
+
+  <!-- Section Navigation -->
+  <nav class="section-nav fade-up" style="animation-delay:0.1s">
+    <template x-for="(section, i) in sections" :key="i">
+      <a :href="'#section-' + i" x-text="section.short || section.title" @click.prevent="openSections[i] = true; $nextTick(() => document.getElementById('section-' + i)?.scrollIntoView({behavior:'smooth', block:'start'}))"></a>
+    </template>
+  </nav>
+
+  <!-- Sections -->
+  <template x-for="(section, si) in sections" :key="si">
+    <div class="cl-section fade-up" :class="{ open: openSections[si] }" :id="'section-' + si" :style="'animation-delay:' + (0.05 * si + 0.15) + 's'">
+      <div class="cl-section-header" @click="openSections[si] = !openSections[si]">
+        <div class="cl-section-icon" :style="'background:' + section.iconBg + '; color:' + section.iconColor" x-text="section.icon"></div>
+        <div class="cl-section-title">
+          <h2 x-text="(si + 1) + '. ' + section.title"></h2>
+          <div class="sub" x-text="section.desc"></div>
+        </div>
+        <div class="cl-section-meta">
+          <span class="cl-count" x-text="sectionChecked(si) + '/' + sectionTotal(si)"></span>
+          <div class="cl-progress-mini">
+            <div class="cl-progress-mini-bar" :style="'width:' + sectionPct(si) + '%'" :class="sectionPct(si) >= 66 ? 'progress-green' : sectionPct(si) >= 33 ? 'progress-yellow' : 'progress-red'"></div>
+          </div>
+          <svg class="cl-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"/></svg>
+        </div>
+      </div>
+      <div class="cl-body">
+        <template x-for="(sub, subi) in section.subs" :key="subi">
+          <div class="cl-subsection">
+            <div class="cl-subsection-title" x-show="sub.label" x-text="sub.label"></div>
+            <template x-for="(item, ii) in sub.items" :key="ii">
+              <div class="cl-item" :class="{ checked: isChecked(si, subi, ii) }" @click="toggle(si, subi, ii)">
+                <input type="checkbox" :checked="isChecked(si, subi, ii)" @click.stop="toggle(si, subi, ii)">
+                <label x-html="item" @click.stop="toggle(si, subi, ii)"></label>
+              </div>
+            </template>
+          </div>
+        </template>
+
+        <!-- Coverage table for section 12 -->
+        <template x-if="section.coverage">
+          <div style="padding: 0.5rem 1rem 1rem">
+            <table class="coverage-table">
+              <thead><tr><th>Module</th><th>Tests</th><th>Status</th></tr></thead>
+              <tbody>
+                <template x-for="row in section.coverage" :key="row.name">
+                  <tr>
+                    <td x-text="row.name" style="font-weight:500"></td>
+                    <td style="font-family:var(--mono)" x-text="row.tests"></td>
+                    <td><span class="badge" :class="row.good ? 'good' : 'gap'" x-text="row.good ? '✓ Good' : '✗ Gap'"></span></td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </template>
+      </div>
+    </div>
+  </template>
+</main>
+
+<!-- Toast -->
+<div class="toast" x-show="toast" x-text="toast" x-transition x-cloak
+     @click="toast = ''"
+     x-init="$watch('toast', v => { if(v) setTimeout(() => toast = '', 2500) })"></div>
+
+<script>
+function checklist() {
+  const STORAGE_KEY = 'dotmac-golive-v1';
+
+  const sections = [
+    {
+      title: 'Module Navigation & Landing',
+      short: 'Navigation',
+      desc: 'Module selector page and entry points',
+      icon: '◫', iconBg: '#fef3c7', iconColor: '#b45309',
+      subs: [{ label: '', items: [
+        'Module selector page (<code>/</code>) shows all 9 module cards: Finance, People, Self Service, Inventory, Fleet, Support, Procurement, Projects, Expenses',
+        'Each module card respects <code>accessible_modules</code> permission gating',
+        'Finance card links to <code>/finance/dashboard</code>',
+        'People card links to <code>/people/hr/employees</code>',
+        'Self Service card links to <code>/people/self/attendance</code>',
+        'Inventory card links to <code>/inventory/items</code>',
+        'Fleet card links to <code>/fleet</code>',
+        'Support card links to <code>/support/tickets</code>',
+        'Procurement card links to <code>/procurement</code>',
+        'Projects card links to <code>/projects</code>',
+        'Expenses card links to <code>/expense</code>',
+      ]}]
+    },
+    {
+      title: 'Sidebar Navigation',
+      short: 'Sidebars',
+      desc: '4 base templates — finance, people, operations, expense',
+      icon: '☰', iconBg: '#e0e7ff', iconColor: '#4338ca',
+      subs: [
+        { label: 'Finance Sidebar (base_finance.html)', items: [
+          'Logo links to <code>/finance/dashboard</code> (expanded and collapsed)',
+          'Sidebar collapse/expand works and persists via localStorage (<code>appSidebarCollapsed</code>)',
+          'Dashboard link with active state highlighting',
+          'GL section: Accounts, Journals, Ledger, Periods, Trial Balance',
+          'AP section: Suppliers, POs, Goods Receipts, Invoices, Payments, Batches, Aging',
+          'AR section: Customers, Quotes, Sales Orders, Invoices, Credit Notes, Receipts, Aging',
+          'Fixed Assets section: Assets, Depreciation',
+          'Tax section: Jurisdictions, Codes, Periods, Returns, Deferred Tax',
+          'Banking section: Accounts, Statements, Reconciliations',
+          'IPSAS section (conditional): Funds, Appropriations, Commitments, Virements, Budget Comparison',
+          'Reports section: All 12 report links functional',
+          'Automation section: Overview, Recurring, Workflow Rules, Custom Fields, Templates',
+          'Switch Module footer: People, Inventory, Fleet, Support, Procurement, Projects, Expenses, Admin',
+          'Settings link → <code>/settings</code>',
+          'Help link → <code>/support/dashboard</code>',
+        ]},
+        { label: 'People Sidebar (base_people.html)', items: [
+          'Logo links to <code>/people</code> (expanded and collapsed states)',
+          'HR mode shows full HR navigation (departments, employees, lifecycle, etc.)',
+          'Self-Service mode shows personal links (attendance, leave, payslips, expenses, info, discipline)',
+          'Self-Service Approvals section shows conditionally (<code>has_team_approvals</code>)',
+          'Team Leave link shows conditionally (<code>can_team_leave</code>)',
+          'Team Expenses link shows conditionally (<code>can_team_expenses</code>)',
+          'Switch Module in HR mode: Finance, Inventory, Fleet, Support, Procurement, Projects, Expenses, Admin',
+          'Switch Module in Self-Service mode: same links',
+          'Settings link → <code>/people/settings</code> (HR mode only)',
+          'Help link → <code>/support/dashboard</code>',
+        ]},
+        { label: 'Operations Sidebar (base_modules.html)', items: [
+          'Logo links to <code>/</code> (expanded and collapsed states)',
+          'Dashboard link to <code>/</code>',
+          'Inventory section with 10 sub-links (Items through Reports)',
+          'Quick Entry section: Receipt, Issue, Transfer, Adjustment',
+          'Fixed Assets section (conditional on finance access): Assets, Categories, Depreciation',
+          'Support Tickets link',
+          'Fleet section (conditional): Dashboard, Vehicles, Maintenance, Fuel, Incidents, Reservations, Documents',
+          'Procurement section: Dashboard, Plans, Requisitions, RFQs, Contracts, Vendors',
+          'Projects section: All Projects, Active Projects, New Project',
+          'Expenses section (conditional): Overview, Claims, Advances, Categories, Reports',
+          'Sub-link active state highlighting works (URL-based detection via <code>init()</code>)',
+          'Switch Module: Finance, People, Expenses, Admin',
+          'Settings link → <code>/settings</code>',
+          'Help link → <code>/support/dashboard</code>',
+        ]},
+        { label: 'Expense Sidebar (base_expense.html)', items: [
+          'Logo shows in both expanded and collapsed states',
+          'Overview link with active state',
+          'Expense Management: Claims, Advances, Corporate Cards',
+          'Configuration: Categories, Limits/Rules',
+          'Switch Module links present',
+          'Help link → <code>/support/dashboard</code>',
+        ]}
+      ]
+    },
+    {
+      title: 'Finance Module',
+      short: 'Finance',
+      desc: 'GL, AR, AP, Banking, Tax, FA, IPSAS, Reports',
+      icon: '₦', iconBg: '#ccfbf1', iconColor: '#0d9488',
+      subs: [
+        { label: 'General Ledger', items: [
+          'Chart of Accounts: Create, edit, deactivate account',
+          'Journal Entries: Create, submit, approve, post, void',
+          'Fiscal Years: Create year with periods',
+          'Fiscal Periods: Open, soft-close, hard-close, reopen',
+          'Trial Balance report renders correctly',
+          'Ledger report with date filters',
+          'Period guard prevents posting to closed periods',
+        ]},
+        { label: 'Accounts Receivable', items: [
+          'Customer: Create, edit, deactivate, credit limit',
+          'AR Invoice: Create, submit, approve, post, void',
+          'Customer Payment: Create, post, void, bounced',
+          'Quotes: Create, send, accept, reject',
+          'Sales Orders: Create, submit, approve, confirm, deliver',
+          'AR Aging report runs correctly',
+          'Payment allocation works',
+        ]},
+        { label: 'Accounts Payable', items: [
+          'Supplier: Create, edit, deactivate',
+          'Supplier Invoice: Create, submit, approve, post, void, hold/release',
+          'Supplier Payment: Create, approve, post, void, cleared',
+          'Purchase Orders: Create, submit, approve, cancel, close',
+          'Goods Receipts: Create, inspect, accept',
+          'AP Aging report runs correctly',
+          'Payment Batches: Create, add/remove payments, approve, process',
+        ]},
+        { label: 'Banking', items: [
+          'Bank Accounts: Create, list, status update',
+          'Bank Statements: Import (CSV/OFX), view lines',
+          'Bank Reconciliation: Create, match lines, add adjustments, complete',
+          'Transaction categorization and payee rules',
+        ]},
+        { label: 'Tax', items: [
+          'Tax Jurisdictions: Create, update rates',
+          'Tax Codes: Create, calculate',
+          'Tax Periods: Generate, file, pay, close',
+          'Tax Returns: Prepare, review, file, amend',
+          'Deferred Tax calculations',
+          'WHT (Withholding Tax) reports',
+        ]},
+        { label: 'Fixed Assets', items: [
+          'Asset: Create, activate, fully depreciate',
+          'Asset Categories: Create, edit',
+          'Depreciation: Calculate (straight-line, declining balance, SYD), create run, post run',
+          'Asset Disposal: Create, approve, post, gain/loss calculation',
+          'Asset Revaluation: Create, approve, post',
+        ]},
+        { label: 'IPSAS (if enabled)', items: [
+          'Funds: Create, activate, deactivate',
+          'Appropriations: Create, allot',
+          'Commitments: Create, record variation',
+          'Virements: Create, approve, record',
+          'Available Balance check',
+          'Budget vs Actual comparison',
+        ]},
+        { label: 'Financial Reports', items: [
+          'Income Statement',
+          'Balance Sheet',
+          'Cash Flow Statement',
+          'Changes in Equity',
+          'Budget vs Actual',
+          'AP/AR Aging Summary',
+          'Tax Summary',
+        ]}
+      ]
+    },
+    {
+      title: 'People Module',
+      short: 'People',
+      desc: 'HR, Payroll, Leave, Recruitment, Discipline',
+      icon: '⟡', iconBg: '#ede9fe', iconColor: '#7c3aed',
+      subs: [
+        { label: 'HR Core', items: [
+          'Employee: Create, update, directory view',
+          'Departments: Create, list, hierarchy',
+          'Designations: Create, list',
+          'Employee Grades and Types',
+          'Info Change Requests: Submit, approve, reject',
+          'Employee Documents: Upload, manage',
+          'HR Handbook: Create, publish, acknowledge',
+          'Onboarding: Create from template, complete activities',
+          'Separation: Create, complete workflow',
+          'Probation: Track, confirm, extend',
+        ]},
+        { label: 'Payroll', items: [
+          'Salary Structures: Create, manage components',
+          'Salary Assignments: Create, link employee to structure',
+          'Salary Slips: Generate, submit, approve, post',
+          'PAYE Tax Calculation',
+          'Loan Management: Create, approve, disburse, repay',
+          'Payroll Entry/Run processing',
+          'Payslip PDF generation',
+        ]},
+        { label: 'Leave Management', items: [
+          'Leave Types: Create, manage',
+          'Holiday Lists: Create, manage',
+          'Leave Allocations: Create, approve',
+          'Leave Applications: Create, approve, reject, cancel',
+          'Leave Balance checking',
+        ]},
+        { label: 'Recruitment', items: [
+          'Job Openings: Create, publish, close',
+          'Job Applications: Create, shortlist, reject',
+          'Interviews: Schedule, record outcome',
+          'Job Offers: Create, approve, send, accept/reject',
+          'Convert offer to employee',
+        ]},
+        { label: 'Discipline', items: [
+          'Case: Create, issue query, record response',
+          'Hearings: Schedule, record outcome',
+          'Actions: Record warning, suspension, termination',
+          'Appeals: File, decide',
+          'Document/evidence upload',
+          'Letter generation (query, warning, decision, termination)',
+        ]},
+        { label: 'Other People Modules', items: [
+          'Performance: Appraisal cycles, reviews',
+          'Training: Programs, events, completion tracking',
+          'Attendance: Clock in/out, records',
+          'Scheduling: Shift creation and assignment',
+        ]}
+      ]
+    },
+    {
+      title: 'Operations Modules',
+      short: 'Operations',
+      desc: 'Inventory, Procurement, Fleet, Projects, Support',
+      icon: '⬡', iconBg: '#fef3c7', iconColor: '#92400e',
+      subs: [
+        { label: 'Inventory', items: [
+          'Items: Create, edit, deactivate, cost update',
+          'Categories: Create, manage',
+          'Warehouses & Locations: Create, manage',
+          'Receipt Transaction: Create, post',
+          'Issue Transaction: Create, post',
+          'Transfer Transaction: Create, post',
+          'Adjustment Transaction: Create, post',
+          'Stock Counts: Start, record, complete, approve, post',
+          'Bill of Materials: Create, assembly, disassembly',
+          'Price Lists: Create, add items, resolve price',
+          'Lots & Serials: Create, allocate, quarantine',
+          'Material Requests: Create, approve',
+          'Inventory Reports and low stock alerts',
+        ]},
+        { label: 'Procurement', items: [
+          'Procurement Plans: Create, submit, publish, execute, close',
+          'Requisitions: Create, submit, budget verify, approve',
+          'RFQs: Create, publish, invite vendors, close',
+          'Quotation Responses: Create, evaluate',
+          'Bid Evaluations: Score, recommend, approve',
+          'Contracts: Create, activate, complete',
+          'Vendor Prequalification: Create, qualify, disqualify',
+        ]},
+        { label: 'Fleet Management', items: [
+          'Vehicles: Create, activate, deactivate',
+          'Assignments: Create, end, transfer',
+          'Maintenance: Create, schedule, complete',
+          'Fuel Logs: Create, consumption reports',
+          'Incidents: Create, investigate, close',
+          'Documents: Create, renew, expiry tracking',
+          'Reservations: Create, approve, reject, cancel',
+        ]},
+        { label: 'Project Management', items: [
+          'Projects: Create, list, active filter',
+          'Tasks: Create, assign, change status, dependencies, subtasks',
+          'Milestones: Create, complete, overdue tracking',
+          'Time Entries: Log, approve, export timesheet',
+          'Resource Allocation: Create, release, utilization report',
+          'Gantt Chart view',
+          'Project Dashboard metrics',
+        ]},
+        { label: 'Support / Helpdesk', items: [
+          'Tickets: Create, assign, escalate, close, reopen',
+          'Categories: Create, manage, defaults',
+          'Teams: Create, add/remove members',
+          'Comments & Activity Log',
+          'Attachments: Upload, download',
+          'SLA tracking and breach alerts',
+        ]}
+      ]
+    },
+    {
+      title: 'Expense Module',
+      short: 'Expenses',
+      desc: 'Claims, advances, limits, reporting',
+      icon: '◎', iconBg: '#fff7ed', iconColor: '#c2410c',
+      subs: [{ label: '', items: [
+        'Expense Categories: Create, edit, delete',
+        'Expense Claims: Create, submit, withdraw, approve, reject, pay, void',
+        'Cash Advances: Create, request payment, record payment',
+        'Corporate Cards: View, track transactions',
+        'Limit Rules: Create, edit, delete, evaluate',
+        'Approver Limits: Create, manage',
+        'Expense Reports: Summary, by category, by employee, trends',
+        'Expense-to-GL posting',
+      ]}]
+    },
+    {
+      title: 'Cross-Module Integrations',
+      short: 'Integrations',
+      desc: 'Data flow between modules via posting adapters',
+      icon: '⇄', iconBg: '#dbeafe', iconColor: '#1d4ed8',
+      subs: [{ label: '', items: [
+        'AR → Inventory: Goods delivery tracking',
+        'AP → Inventory: Goods receipt from PO',
+        'Procurement → AP: Generate invoice from contract',
+        'Expense → GL: Approved expense posting',
+        'Fixed Assets → GL: Depreciation posting',
+        'Inventory → GL: Transaction posting',
+        'Payroll → GL: Salary posting',
+        'Tax → GL: Tax transaction posting',
+        'Lease → GL: Lease accounting posting',
+        'Project → Expense: Project expense tracking',
+        'Discipline → Payroll: Unpaid suspension',
+        'Discipline → Leave: Block leave during investigation',
+      ]}]
+    },
+    {
+      title: 'Authentication & Security',
+      short: 'Auth',
+      desc: 'Login, RBAC, multi-tenancy, session management',
+      icon: '⛨', iconBg: '#fce7f3', iconColor: '#be185d',
+      subs: [{ label: '', items: [
+        'Login page renders and works',
+        'Forgot password flow works',
+        'Password reset with token',
+        'MFA setup and verification',
+        'Session management (list, revoke)',
+        'JWT token refresh (auto-refresh 2min before expiry)',
+        'Rate limiting on auth endpoints (5/min login, 3/min forgot)',
+        'CSRF token on all forms',
+        'API key creation and management',
+        'Role-based access control (RBAC) enforced',
+        'Permission-based gating on routes',
+        'Module access gating (<code>accessible_modules</code>)',
+        'Multi-tenant isolation (RLS enforced)',
+        'Session activity timeout working',
+        'Logout clears session',
+      ]}]
+    },
+    {
+      title: 'UI/UX Quality',
+      short: 'UI/UX',
+      desc: 'Dark mode, responsiveness, transitions, feedback',
+      icon: '◈', iconBg: '#f0fdf4', iconColor: '#15803d',
+      subs: [{ label: '', items: [
+        'Dark mode toggle works across all modules',
+        'Dark mode persists via localStorage',
+        'Responsive layout works on mobile (sidebar collapses)',
+        'Sidebar collapse/expand persists via localStorage',
+        'Toast notifications display for success/error/warning/info',
+        'Command palette (<code>Cmd+K</code> / <code>Ctrl+K</code>) opens and navigates',
+        'Loading states show during HTMX requests',
+        'Empty states display when no data',
+        'Pagination works on list pages',
+        'Form validation errors display properly',
+        'Print styles work for documents/reports',
+        'View transitions animate between pages',
+      ]}]
+    },
+    {
+      title: 'Background Tasks & Notifications',
+      short: 'Tasks',
+      desc: 'Celery workers, scheduled jobs, notification delivery',
+      icon: '⟳', iconBg: '#fef9c3', iconColor: '#a16207',
+      subs: [{ label: '', items: [
+        'Celery worker starts and processes tasks',
+        'Celery beat scheduler runs on schedule',
+        'Fiscal period close reminders sent',
+        'AR overdue invoice notifications',
+        'Bank reconciliation reminders',
+        'Expense approval notifications',
+        'Leave approval notifications',
+        'Payroll run notifications',
+        'Email delivery working (SMTP configured)',
+        'In-app notification bell shows unread count',
+      ]}]
+    },
+    {
+      title: 'Data & Infrastructure',
+      short: 'Infra',
+      desc: 'Database, Redis, static assets, health checks',
+      icon: '⬢', iconBg: '#e0e7ff', iconColor: '#3730a3',
+      subs: [{ label: '', items: [
+        'Database migrations run clean (<code>alembic upgrade head</code>)',
+        'All migrations are idempotent',
+        'Redis connected (for Celery and caching)',
+        'Static assets served correctly (CSS, JS, fonts)',
+        'Tailwind CSS compiled with all dynamic classes included',
+        'PDF generation works (WeasyPrint)',
+        'File uploads work (documents, attachments, avatars)',
+        'Health endpoints respond (<code>/health</code>, <code>/health/live</code>, <code>/health/ready</code>)',
+      ]}]
+    },
+    {
+      title: 'Test Coverage Status',
+      short: 'Tests',
+      desc: 'Automated test coverage by module',
+      icon: '⊘', iconBg: '#fae8ff', iconColor: '#a21caf',
+      subs: [],
+      coverage: [
+        { name: 'Finance (AR/AP/GL/Banking/Tax/FA/Inv)', tests: '70+', good: true },
+        { name: 'Payroll', tests: '12', good: true },
+        { name: 'Auth / RBAC / Audit', tests: '24', good: true },
+        { name: 'E2E Browser Tests', tests: '32', good: true },
+        { name: 'HR Module', tests: '0', good: false },
+        { name: 'Recruitment', tests: '0', good: false },
+        { name: 'Leave / Training / Perf', tests: '0', good: false },
+        { name: 'Procurement', tests: '0', good: false },
+        { name: 'Support', tests: '0', good: false },
+        { name: 'Fleet', tests: '0', good: false },
+        { name: 'Projects', tests: '0', good: false },
+        { name: 'IPSAS', tests: '0', good: false },
+        { name: 'Automation', tests: '0', good: false },
+      ]
+    }
+  ];
+
+  // Build flat index for checkbox state
+  let itemIndex = [];
+  sections.forEach((sec, si) => {
+    sec.subs.forEach((sub, subi) => {
+      sub.items.forEach((_, ii) => {
+        itemIndex.push(`${si}-${subi}-${ii}`);
+      });
+    });
+  });
+
+  // Load state
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch(e) {}
+
+  return {
+    sections,
+    openSections: sections.map(() => false),
+    checked: saved,
+    toast: '',
+    darkMode: localStorage.getItem('cl-dark') === 'true',
+
+    isChecked(si, subi, ii) { return !!this.checked[`${si}-${subi}-${ii}`]; },
+    toggle(si, subi, ii) {
+      const key = `${si}-${subi}-${ii}`;
+      this.checked[key] = !this.checked[key];
+      if (!this.checked[key]) delete this.checked[key];
+      this.save();
+    },
+
+    save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(this.checked)); },
+
+    sectionTotal(si) {
+      return this.sections[si].subs.reduce((t, s) => t + s.items.length, 0);
+    },
+    sectionChecked(si) {
+      let c = 0;
+      this.sections[si].subs.forEach((sub, subi) => {
+        sub.items.forEach((_, ii) => {
+          if (this.checked[`${si}-${subi}-${ii}`]) c++;
+        });
+      });
+      return c;
+    },
+    sectionPct(si) {
+      const t = this.sectionTotal(si);
+      return t ? Math.round(this.sectionChecked(si) / t * 100) : 0;
+    },
+
+    get totalItems() {
+      return this.sections.reduce((t, _, si) => t + this.sectionTotal(si), 0);
+    },
+    get totalChecked() {
+      return Object.keys(this.checked).filter(k => this.checked[k]).length;
+    },
+    get overallPct() {
+      return this.totalItems ? Math.round(this.totalChecked / this.totalItems * 100) : 0;
+    },
+
+    expandAll() { this.openSections = this.sections.map(() => true); },
+    collapseAll() { this.openSections = this.sections.map(() => false); },
+    resetAll() {
+      this.checked = {};
+      this.save();
+      this.toast = 'All items reset';
+    },
+  };
+}
+</script>
+</body>
+</html>

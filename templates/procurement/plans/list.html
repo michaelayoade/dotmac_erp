@@ -1,4 +1,4 @@
-{% extends "modules/base_modules.html" %}
+{% extends "procurement/base_procurement.html" %}
 
 {% block page_title %}Procurement Plans{% endblock %}
 
@@ -11,6 +11,18 @@
 {% endblock %}
 
 {% block header_actions %}
+<button type="button" class="btn btn-secondary" onclick="document.getElementById('proc-plan-import-modal').classList.remove('hidden')">
+    <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1M12 12l4-4m-4 4l-4-4m4 4V4"/>
+    </svg>
+    Import
+</button>
+<button type="button" class="btn btn-secondary" onclick="document.getElementById('proc-plan-export-modal').classList.remove('hidden')">
+    <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1M12 12l4 4m-4-4l-4 4m4-4V4"/>
+    </svg>
+    Export
+</button>
 <a href="/procurement/plans/new" class="btn btn-primary">
     <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
     New Plan
@@ -19,12 +31,23 @@
 
 {% block content %}
 <div class="space-y-4 stagger-in">
+    {% if success %}
+    <div class="card border border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900/40 dark:bg-emerald-900/20 dark:text-emerald-100 p-4 text-sm">
+        {{ success }}
+    </div>
+    {% endif %}
+    {% if error %}
+    <div class="card border border-rose-200 bg-rose-50 text-rose-900 dark:border-rose-900/40 dark:bg-rose-900/20 dark:text-rose-100 p-4 text-sm">
+        {{ error }}
+    </div>
+    {% endif %}
+
     <!-- Filters -->
     <div class="card p-4">
         <form method="get" class="flex flex-wrap gap-3 items-end">
             <div>
                 <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Status</label>
-                <select name="status" class="input-field text-sm">
+                <select name="status" class="form-select text-sm">
                     <option value="">All</option>
                     {% for s in plan_statuses %}
                     <option value="{{ s.value }}" {% if filter_status == s.value %}selected{% endif %}>{{ s.value }}</option>
@@ -56,12 +79,36 @@
                         <td class="px-4 py-3 text-slate-600 dark:text-slate-400">{{ plan.fiscal_year }}</td>
                         <td class="px-4 py-3 text-right font-medium text-slate-900 dark:text-white">{{ "{:,.2f}".format(plan.total_estimated_value) }}</td>
                         <td class="px-4 py-3">
-                            {% set label, color = status_labels.get(plan.status, ("Unknown", "slate")) %}
-                            <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-{{ color }}-100 text-{{ color }}-700 dark:bg-{{ color }}-900/30 dark:text-{{ color }}-400">{{ label }}</span>
+                            {% set label, classes = status_labels.get(plan.status, ("Unknown", "bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-400")) %}
+                            <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium {{ classes }}">{{ label }}</span>
                         </td>
                     </tr>
                     {% else %}
-                    <tr><td colspan="5" class="px-4 py-8 text-center text-slate-500 dark:text-slate-400">No procurement plans found.</td></tr>
+                    <tr>
+                        <td colspan="5" class="py-12">
+                            <div class="text-center">
+                                <svg class="mx-auto h-12 w-12 text-slate-300 dark:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                                </svg>
+                                <p class="mt-2 text-sm font-medium text-slate-900 dark:text-white">No procurement plans found</p>
+                                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                                    {% if filter_status %}
+                                    Try adjusting your filter criteria
+                                    {% else %}
+                                    Create your first procurement plan to organize purchasing
+                                    {% endif %}
+                                </p>
+                                {% if not filter_status %}
+                                <a href="/procurement/plans/new" class="mt-4 inline-flex items-center btn btn-primary text-sm">
+                                    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                                    </svg>
+                                    New Plan
+                                </a>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
                     {% endfor %}
                 </tbody>
             </table>
@@ -74,6 +121,104 @@
                 {% if offset + limit < total %}<a href="?offset={{ offset + limit }}&limit={{ limit }}{% if filter_status %}&status={{ filter_status }}{% endif %}" class="btn btn-secondary text-xs">Next</a>{% endif %}
             </div>
         </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Import Modal -->
+<div id="proc-plan-import-modal" class="hidden fixed inset-0 z-50 overflow-y-auto" aria-modal="true" role="dialog">
+    <div class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm" onclick="document.getElementById('proc-plan-import-modal').classList.add('hidden')"></div>
+    <div class="relative mx-auto my-10 w-full max-w-2xl bg-white dark:bg-slate-800 rounded-xl shadow-2xl p-6">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Import Procurement Plans</h3>
+            <button type="button" class="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300" onclick="document.getElementById('proc-plan-import-modal').classList.add('hidden')">
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+        </div>
+        <p class="text-sm text-slate-600 dark:text-slate-400 mb-6">
+            Upload a CSV or XLSX file. Required columns: plan_number, fiscal_year, title, line_number, description, estimated_value, planned_quarter.
+        </p>
+        <form method="post" action="/procurement/plans/import" enctype="multipart/form-data" class="space-y-4">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                    <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Format</label>
+                    <select name="format" id="proc-plan-import-format" class="form-select text-sm" onchange="document.getElementById('proc-plan-template-link').href = '/procurement/plans/template?format=' + this.value;">
+                        <option value="csv">CSV</option>
+                        {% if xlsx_available %}
+                        <option value="xlsx">XLSX</option>
+                        {% endif %}
+                    </select>
+                </div>
+                <div class="flex items-end">
+                    <a id="proc-plan-template-link" href="/procurement/plans/template?format=csv" class="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300">
+                        Download template
+                    </a>
+                </div>
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">File</label>
+                <input type="file" name="file" accept=".csv{% if xlsx_available %},.xlsx{% endif %}" class="form-input text-sm" required>
+            </div>
+            <div class="flex items-center justify-end gap-2">
+                <button type="button" class="btn btn-secondary" onclick="document.getElementById('proc-plan-import-modal').classList.add('hidden')">Cancel</button>
+                <button type="submit" class="btn btn-primary">Import Plans</button>
+            </div>
+        </form>
+        <div class="mt-4 text-xs text-slate-500 dark:text-slate-400">
+            Optional columns: currency_code, budget_line_code, budget_id, procurement_method, category.
+            {% if not xlsx_available %}
+            <div class="mt-2 text-amber-700 dark:text-amber-300">XLSX import is unavailable (openpyxl not installed).</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Export Modal -->
+<div id="proc-plan-export-modal" class="hidden fixed inset-0 z-50 overflow-y-auto" aria-modal="true" role="dialog">
+    <div class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm" onclick="document.getElementById('proc-plan-export-modal').classList.add('hidden')"></div>
+    <div class="relative mx-auto my-10 w-full max-w-xl bg-white dark:bg-slate-800 rounded-xl shadow-2xl p-6">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Export Procurement Plans</h3>
+            <button type="button" class="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300" onclick="document.getElementById('proc-plan-export-modal').classList.add('hidden')">
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+        </div>
+        <p class="text-sm text-slate-600 dark:text-slate-400 mb-6">
+            Export the current list (including filters) as CSV or XLSX.
+        </p>
+        <form method="get" action="/procurement/plans/export" class="space-y-4">
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                    <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Format</label>
+                    <select name="format" class="form-select text-sm">
+                        <option value="csv">CSV</option>
+                        {% if xlsx_available %}
+                        <option value="xlsx">XLSX</option>
+                        {% endif %}
+                    </select>
+                </div>
+                <div class="flex items-end text-xs text-slate-500 dark:text-slate-400">
+                    Includes plan items (one row per line item).
+                </div>
+            </div>
+            {% if filter_status %}
+            <input type="hidden" name="status" value="{{ filter_status }}">
+            {% endif %}
+            {% if filter_fiscal_year %}
+            <input type="hidden" name="fiscal_year" value="{{ filter_fiscal_year }}">
+            {% endif %}
+            <div class="flex items-center justify-end gap-2">
+                <button type="button" class="btn btn-secondary" onclick="document.getElementById('proc-plan-export-modal').classList.add('hidden')">Cancel</button>
+                <button type="submit" class="btn btn-primary">Export</button>
+            </div>
+        </form>
+        {% if not xlsx_available %}
+        <div class="mt-3 text-xs text-amber-700 dark:text-amber-300">XLSX export is unavailable (openpyxl not installed).</div>
         {% endif %}
     </div>
 </div>

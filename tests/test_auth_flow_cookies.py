@@ -72,9 +72,9 @@ class TestRefreshCookieSettings:
             assert _refresh_cookie_secure(None) is False
 
     def test_cookie_secure_default(self, monkeypatch):
-        """Test default secure=false."""
+        """Test default secure=true (production default)."""
         monkeypatch.delenv("REFRESH_COOKIE_SECURE", raising=False)
-        assert _refresh_cookie_secure(None) is False
+        assert _refresh_cookie_secure(None) is True
 
     def test_cookie_secure_from_db(self, db_session, monkeypatch):
         """Test secure setting from database."""
@@ -88,9 +88,9 @@ class TestRefreshCookieSettings:
         assert _refresh_cookie_samesite(None) == "strict"
 
     def test_cookie_samesite_default(self, monkeypatch):
-        """Test default samesite=lax."""
+        """Test default samesite=strict (production default)."""
         monkeypatch.delenv("REFRESH_COOKIE_SAMESITE", raising=False)
-        assert _refresh_cookie_samesite(None) == "lax"
+        assert _refresh_cookie_samesite(None) == "strict"
 
     def test_cookie_samesite_none(self, monkeypatch):
         """Test samesite=none configuration."""
@@ -157,8 +157,8 @@ class TestRefreshCookieSettingsDict:
 
         assert settings["key"] == "refresh_token"
         assert settings["httponly"] is True
-        assert settings["secure"] is False
-        assert settings["samesite"] == "lax"
+        assert settings["secure"] is True
+        assert settings["samesite"] == "strict"
         assert settings["domain"] is None
         assert settings["path"] == "/"
         assert settings["max_age"] == 30 * 24 * 60 * 60  # 30 days default

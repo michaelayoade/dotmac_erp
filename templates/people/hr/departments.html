@@ -33,10 +33,18 @@
                         <svg class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
                         </svg>
-                        <input type="text" name="search" id="search" value="{{ search | default('') }}"
+                        <input type="text" name="search" id="search" value="{{ search | default('', true) }}"
                             placeholder="Search departments..."
                             class="form-input w-full pl-10">
                     </div>
+                </div>
+                <div class="w-44">
+                    <label for="is_active" class="form-label">Status</label>
+                    <select name="is_active" id="is_active" class="form-select w-full">
+                        <option value="" {% if is_active == "" %}selected{% endif %}>All</option>
+                        <option value="true" {% if is_active == "true" %}selected{% endif %}>Active</option>
+                        <option value="false" {% if is_active == "false" %}selected{% endif %}>Inactive</option>
+                    </select>
                 </div>
                 <button type="submit" class="btn btn-secondary h-10">Search</button>
             </div>
@@ -118,7 +126,7 @@
         </div>
         <div class="flex gap-2">
             {% if has_prev %}
-            <a href="?page={{ page - 1 }}&search={{ search | default('') }}" class="btn btn-secondary btn-sm">
+            <a href="?page={{ page - 1 }}&search={{ search | default('', true) }}&is_active={{ is_active | default('', true) }}" class="btn btn-secondary btn-sm">
                 <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
                 </svg>
@@ -126,7 +134,7 @@
             </a>
             {% endif %}
             {% if has_next %}
-            <a href="?page={{ page + 1 }}&search={{ search | default('') }}" class="btn btn-secondary btn-sm">
+            <a href="?page={{ page + 1 }}&search={{ search | default('', true) }}&is_active={{ is_active | default('', true) }}" class="btn btn-secondary btn-sm">
                 Next
                 <svg class="h-4 w-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>

@@ -1,4 +1,4 @@
-{% extends "modules/base_modules.html" %}
+{% extends "inventory/base_inventory.html" %}
 {% from "components/macros.html" import pagination %}
 
 {% block page_title %}Stock on Hand Report{% endblock %}
@@ -154,7 +154,13 @@
     </div>
 
     {% if stock_data | default([]) | length > 0 %}
-    {{ pagination(page, total_pages, '/inventory/reports/stock-on-hand') }}
+    {{ pagination(
+        page=page,
+        total_pages=total_pages,
+        total_count=total_count,
+        limit=limit,
+        filters={"warehouse": warehouse, "category": category, "show_zero": "1" if show_zero else ""}
+    ) }}
     {% endif %}
 </div>
 {% endblock %}
