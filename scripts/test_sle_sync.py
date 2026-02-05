@@ -24,7 +24,7 @@ from app.services.erpnext.sync.orchestrator import (
 )
 
 ORG_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
-USER_ID = uuid.UUID("e1d3ecff-80aa-420d-91b2-a79c1450705c")
+USER_ID = uuid.UUID("c8e5f2ee-4f9f-46d0-a6c7-22e4f717a58b")
 
 
 def get_erpnext_config(db):
@@ -51,9 +51,9 @@ def decrypt_value(encrypted: str) -> str:
     """Decrypt an encrypted config value."""
     if not encrypted or not encrypted.startswith("enc:"):
         return encrypted or ""
-    from app.services.encryption import decrypt_field
+    from app.services.integration_config import decrypt_credential
 
-    return decrypt_field(encrypted)
+    return decrypt_credential(encrypted) or ""
 
 
 def main():
@@ -64,12 +64,22 @@ def main():
     db = SessionLocal()
 
     try:
-        # 1. Get config
-        config_row = get_erpnext_config(db)
-        base_url = config_row[0]
-        api_key = decrypt_value(config_row[1])
-        api_secret = decrypt_value(config_row[2])
-        company = config_row[3]
+        # 1. Get config — try env vars first (encrypted DB values may be
+        #    stale after a DB reset), fall back to integration_config table.
+        import os
+        base_url = os.environ.get("ERPNEXT_URL", "")
+        api_key = os.environ.get("ERPNEXT_API_KEY", "")
+        api_secret = os.environ.get("ERPNEXT_API_SECRET", "")
+
+        if base_url and api_key and api_secret:
+            config_row = get_erpnext_config(db)
+            company = config_row[3] if config_row else ""
+        else:
+            config_row = get_erpnext_config(db)
+            base_url = config_row[0]
+            api_key = decrypt_value(config_row[1])
+            api_secret = decrypt_value(config_row[2])
+            company = config_row[3]
 
         print(f"\nERPNext URL: {base_url}")
         print(f"Company: {company}")

@@ -246,7 +246,7 @@ class BaseSyncService(ABC, Generic[T]):
             since,
         )
 
-        batch: list[T] = []
+        batch_count = 0
 
         try:
             for record in self.fetch_records(client, since):
@@ -254,14 +254,22 @@ class BaseSyncService(ABC, Generic[T]):
                 source_name = self.get_unique_key(record)
 
                 try:
-                    entity = self._sync_single_record(record, result)
-                    if entity:
-                        batch.append(entity)
+                    # Use a savepoint so a single-record error doesn't
+                    # roll back the entire batch / session.
+                    savepoint = self.db.begin_nested()
+                    try:
+                        entity = self._sync_single_record(record, result)
+                        if entity:
+                            batch_count += 1
+                        savepoint.commit()
+                    except Exception:
+                        savepoint.rollback()
+                        raise
 
-                    # Commit batch
-                    if len(batch) >= batch_size:
-                        self.db.flush()
-                        batch = []
+                    # Commit batch to DB periodically
+                    if batch_count >= batch_size:
+                        self.db.commit()
+                        batch_count = 0
 
                 except Exception as e:
                     logger.exception(
@@ -272,11 +280,7 @@ class BaseSyncService(ABC, Generic[T]):
                     )
                     result.add_error(source_name, str(e))
 
-                    # Rollback to clear the transaction state
-                    self.db.rollback()
-                    batch = []  # Clear the batch since it was rolled back
-
-                    # Create new sync entity with error (in new transaction)
+                    # Record the error as a sync entity
                     try:
                         sync_entity = SyncEntity(
                             organization_id=self.organization_id,
@@ -291,11 +295,11 @@ class BaseSyncService(ABC, Generic[T]):
                         self.db.add(sync_entity)
                         self.db.flush()
                     except Exception:
-                        self.db.rollback()  # Skip if we can't record the error
+                        self.db.rollback()
 
-            # Final flush
-            if batch:
-                self.db.flush()
+            # Final commit
+            if batch_count:
+                self.db.commit()
 
         except Exception as e:
             logger.exception("Sync failed for %s: %s", self.source_doctype, str(e))
