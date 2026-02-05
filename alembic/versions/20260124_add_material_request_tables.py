@@ -12,7 +12,7 @@ from alembic import op
 from app.alembic_utils import ensure_enum
 
 revision = "20260124_material_request"
-down_revision = "799a0ecebdd4"  # Fixed: connect to initial schema
+down_revision = "create_support_schema"  # Fixed: connect to initial schema
 branch_labels = None
 depends_on = None
 

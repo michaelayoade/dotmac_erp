@@ -16,7 +16,7 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision = "20260128_enhance_onboarding"
-down_revision = "799a0ecebdd4"  # Fixed: connect to initial schema
+down_revision = "20250212_add_hr_lifecycle_tables"  # Fixed: connect to initial schema
 branch_labels = None
 depends_on = None
 

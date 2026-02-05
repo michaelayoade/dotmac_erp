@@ -9,7 +9,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = "add_expense_claim_action_seq"
-down_revision = "add_expense_cost_allocation"
+down_revision = "create_expense_tables"
 branch_labels = None
 depends_on = None
 

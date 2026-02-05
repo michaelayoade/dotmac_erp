@@ -13,7 +13,7 @@ from sqlalchemy.dialects.postgresql import UUID
 
 # revision identifiers, used by Alembic.
 revision = "20260124_expense_gl"
-down_revision = "799a0ecebdd4"  # Fixed: connect to initial schema
+down_revision = "create_expense_tables"  # Fixed: connect to initial schema
 branch_labels = None
 depends_on = None
 

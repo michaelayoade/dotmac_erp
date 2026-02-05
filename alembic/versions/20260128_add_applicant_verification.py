@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = "20260128_add_applicant_verification"
-down_revision = "20260128_add_organization_slug"
+down_revision = "create_recruit_training"
 branch_labels = None
 depends_on = None
 

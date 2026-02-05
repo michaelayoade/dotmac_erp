@@ -12,42 +12,39 @@ from sqlalchemy.dialects.postgresql import UUID, JSONB
 
 # revision identifiers
 revision = "20260128_extend_doc_templates"
-down_revision = "799a0ecebdd4"  # Fixed: connect to initial schema
+down_revision = "add_automation_schema"  # Fixed: connect to initial schema
 branch_labels = None
 depends_on = None
 
 
 def upgrade() -> None:
-    # Add new values to document_template_type enum
-    # PostgreSQL allows adding values to existing enums
-    # Note: The enum is in public schema, not automation
-    op.execute("""
-        ALTER TYPE public.document_template_type ADD VALUE IF NOT EXISTS 'OFFER_LETTER';
-        ALTER TYPE public.document_template_type ADD VALUE IF NOT EXISTS 'EMPLOYMENT_CONTRACT';
-        ALTER TYPE public.document_template_type ADD VALUE IF NOT EXISTS 'APPOINTMENT_LETTER';
-        ALTER TYPE public.document_template_type ADD VALUE IF NOT EXISTS 'CONFIRMATION_LETTER';
-        ALTER TYPE public.document_template_type ADD VALUE IF NOT EXISTS 'PROMOTION_LETTER';
-        ALTER TYPE public.document_template_type ADD VALUE IF NOT EXISTS 'TRANSFER_LETTER';
-        ALTER TYPE public.document_template_type ADD VALUE IF NOT EXISTS 'TERMINATION_LETTER';
-        ALTER TYPE public.document_template_type ADD VALUE IF NOT EXISTS 'RESIGNATION_ACCEPTANCE';
-        ALTER TYPE public.document_template_type ADD VALUE IF NOT EXISTS 'EXPERIENCE_LETTER';
-        ALTER TYPE public.document_template_type ADD VALUE IF NOT EXISTS 'RELIEVING_LETTER';
-        ALTER TYPE public.document_template_type ADD VALUE IF NOT EXISTS 'WARNING_LETTER';
-        ALTER TYPE public.document_template_type ADD VALUE IF NOT EXISTS 'SHOW_CAUSE_NOTICE';
-        ALTER TYPE public.document_template_type ADD VALUE IF NOT EXISTS 'SALARY_REVISION_LETTER';
-        ALTER TYPE public.document_template_type ADD VALUE IF NOT EXISTS 'BONUS_LETTER';
-        ALTER TYPE public.document_template_type ADD VALUE IF NOT EXISTS 'EMAIL_OFFER';
-        ALTER TYPE public.document_template_type ADD VALUE IF NOT EXISTS 'EMAIL_ONBOARDING';
-        ALTER TYPE public.document_template_type ADD VALUE IF NOT EXISTS 'EMAIL_INTERVIEW_INVITE';
-        ALTER TYPE public.document_template_type ADD VALUE IF NOT EXISTS 'EMAIL_APPLICATION_RECEIVED';
-        ALTER TYPE public.document_template_type ADD VALUE IF NOT EXISTS 'EMAIL_APPLICATION_STATUS';
-        ALTER TYPE public.document_template_type ADD VALUE IF NOT EXISTS 'EMAIL_REJECTION';
-        ALTER TYPE public.document_template_type ADD VALUE IF NOT EXISTS 'PAYSLIP';
-        ALTER TYPE public.document_template_type ADD VALUE IF NOT EXISTS 'TAX_CERTIFICATE';
-        ALTER TYPE public.document_template_type ADD VALUE IF NOT EXISTS 'BANK_LETTER';
-        ALTER TYPE public.document_template_type ADD VALUE IF NOT EXISTS 'PROJECT_PROPOSAL';
-        ALTER TYPE public.document_template_type ADD VALUE IF NOT EXISTS 'PROJECT_REPORT';
-    """)
+    # Add new HR document types to the document_template_type enum
+    # (enum is created by add_automation_schema, which runs before this migration)
+    op.execute("ALTER TYPE public.document_template_type ADD VALUE IF NOT EXISTS 'OFFER_LETTER'")
+    op.execute("ALTER TYPE public.document_template_type ADD VALUE IF NOT EXISTS 'EMPLOYMENT_CONTRACT'")
+    op.execute("ALTER TYPE public.document_template_type ADD VALUE IF NOT EXISTS 'APPOINTMENT_LETTER'")
+    op.execute("ALTER TYPE public.document_template_type ADD VALUE IF NOT EXISTS 'CONFIRMATION_LETTER'")
+    op.execute("ALTER TYPE public.document_template_type ADD VALUE IF NOT EXISTS 'PROMOTION_LETTER'")
+    op.execute("ALTER TYPE public.document_template_type ADD VALUE IF NOT EXISTS 'TRANSFER_LETTER'")
+    op.execute("ALTER TYPE public.document_template_type ADD VALUE IF NOT EXISTS 'TERMINATION_LETTER'")
+    op.execute("ALTER TYPE public.document_template_type ADD VALUE IF NOT EXISTS 'RESIGNATION_ACCEPTANCE'")
+    op.execute("ALTER TYPE public.document_template_type ADD VALUE IF NOT EXISTS 'EXPERIENCE_LETTER'")
+    op.execute("ALTER TYPE public.document_template_type ADD VALUE IF NOT EXISTS 'RELIEVING_LETTER'")
+    op.execute("ALTER TYPE public.document_template_type ADD VALUE IF NOT EXISTS 'WARNING_LETTER'")
+    op.execute("ALTER TYPE public.document_template_type ADD VALUE IF NOT EXISTS 'SHOW_CAUSE_NOTICE'")
+    op.execute("ALTER TYPE public.document_template_type ADD VALUE IF NOT EXISTS 'SALARY_REVISION_LETTER'")
+    op.execute("ALTER TYPE public.document_template_type ADD VALUE IF NOT EXISTS 'BONUS_LETTER'")
+    op.execute("ALTER TYPE public.document_template_type ADD VALUE IF NOT EXISTS 'EMAIL_OFFER'")
+    op.execute("ALTER TYPE public.document_template_type ADD VALUE IF NOT EXISTS 'EMAIL_ONBOARDING'")
+    op.execute("ALTER TYPE public.document_template_type ADD VALUE IF NOT EXISTS 'EMAIL_INTERVIEW_INVITE'")
+    op.execute("ALTER TYPE public.document_template_type ADD VALUE IF NOT EXISTS 'EMAIL_APPLICATION_RECEIVED'")
+    op.execute("ALTER TYPE public.document_template_type ADD VALUE IF NOT EXISTS 'EMAIL_APPLICATION_STATUS'")
+    op.execute("ALTER TYPE public.document_template_type ADD VALUE IF NOT EXISTS 'EMAIL_REJECTION'")
+    op.execute("ALTER TYPE public.document_template_type ADD VALUE IF NOT EXISTS 'PAYSLIP'")
+    op.execute("ALTER TYPE public.document_template_type ADD VALUE IF NOT EXISTS 'TAX_CERTIFICATE'")
+    op.execute("ALTER TYPE public.document_template_type ADD VALUE IF NOT EXISTS 'BANK_LETTER'")
+    op.execute("ALTER TYPE public.document_template_type ADD VALUE IF NOT EXISTS 'PROJECT_PROPOSAL'")
+    op.execute("ALTER TYPE public.document_template_type ADD VALUE IF NOT EXISTS 'PROJECT_REPORT'")
 
     # Create generated_document table
     # Note: Enums are created automatically by SQLAlchemy when the table is created

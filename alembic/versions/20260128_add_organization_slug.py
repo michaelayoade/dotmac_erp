@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = "20260128_add_organization_slug"
-down_revision = "799a0ecebdd4"  # Fixed: connect to initial schema
+down_revision = "create_ifrs_schemas"  # Fixed: connect to initial schema
 branch_labels = None
 depends_on = None
 
