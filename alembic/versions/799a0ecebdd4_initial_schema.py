@@ -16,6 +16,9 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # Enable pgcrypto for gen_random_uuid()
+    op.execute("CREATE EXTENSION IF NOT EXISTS pgcrypto")
+
     # Core people + auth tables
     op.create_table(
         "people",

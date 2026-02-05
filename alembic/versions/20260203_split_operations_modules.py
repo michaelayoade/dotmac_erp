@@ -107,9 +107,39 @@ def upgrade() -> None:
         )
 
     # Rename inventory permissions from inv:* to inventory:*
+    # Step 1: Ensure inventory:* permissions exist for every inv:* permission
     op.execute(
-        "UPDATE permissions SET key = REPLACE(key, 'inv:', 'inventory:') WHERE key LIKE 'inv:%'"
+        """
+        INSERT INTO permissions (id, key, description, is_active, created_at, updated_at)
+        SELECT gen_random_uuid(),
+               REPLACE(p.key, 'inv:', 'inventory:'),
+               p.description,
+               p.is_active,
+               NOW(),
+               NOW()
+        FROM permissions p
+        WHERE p.key LIKE 'inv:%%'
+          AND NOT EXISTS (
+              SELECT 1 FROM permissions p2
+              WHERE p2.key = REPLACE(p.key, 'inv:', 'inventory:')
+          )
+        """
     )
+
+    # Step 2: Repoint role_permissions from inv:* to inventory:*
+    op.execute(
+        """
+        UPDATE role_permissions rp
+        SET permission_id = p_new.id
+        FROM permissions p_old, permissions p_new
+        WHERE rp.permission_id = p_old.id
+          AND p_old.key LIKE 'inv:%%'
+          AND p_new.key = REPLACE(p_old.key, 'inv:', 'inventory:')
+        """
+    )
+
+    # Step 3: Delete old inv:* permissions (now orphaned)
+    op.execute("DELETE FROM permissions WHERE key LIKE 'inv:%%'")
 
     # Ensure module access permissions exist
     module_permissions = [

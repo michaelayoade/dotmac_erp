@@ -13,7 +13,6 @@ from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
-from app.config import settings
 
 # revision identifiers, used by Alembic.
 revision = "make_person_org_required"
@@ -24,11 +23,21 @@ depends_on = None
 
 # Default organization UUID for migrating orphaned users
 DEFAULT_ORG_ID = "00000000-0000-0000-0000-000000000001"
-DEFAULT_FUNCTIONAL_CURRENCY_CODE = settings.default_functional_currency_code
-DEFAULT_PRESENTATION_CURRENCY_CODE = settings.default_presentation_currency_code
+
 
 
 def upgrade() -> None:
+    # Determine currency from existing organizations, fallback to USD
+    bind = op.get_bind()
+    row = bind.execute(
+        sa.text(
+            "SELECT functional_currency_code, presentation_currency_code "
+            "FROM core_org.organization LIMIT 1"
+        )
+    ).first()
+    functional_currency = row[0] if row else "USD"
+    presentation_currency = row[1] if row else "USD"
+
     # First, ensure the default organization exists
     # This is idempotent - it won't fail if org already exists
     op.execute(
@@ -48,8 +57,8 @@ def upgrade() -> None:
             '{DEFAULT_ORG_ID}'::uuid,
             'DEFAULT',
             'Default Organization',
-            '{DEFAULT_FUNCTIONAL_CURRENCY_CODE}',
-            '{DEFAULT_PRESENTATION_CURRENCY_CODE}',
+            '{functional_currency}',
+            '{presentation_currency}',
             12,
             31,
             true,
