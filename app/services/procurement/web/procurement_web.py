@@ -231,6 +231,7 @@ class ProcurementWebService:
         self,
         organization_id: UUID,
         status: Optional[str] = None,
+        urgency: Optional[str] = None,
         offset: int = 0,
         limit: int = 25,
     ) -> Dict[str, Any]:
@@ -239,6 +240,7 @@ class ProcurementWebService:
         requisitions, total = service.list_requisitions(
             organization_id,
             status=status,
+            urgency=urgency,
             offset=offset,
             limit=limit,
         )
@@ -248,8 +250,10 @@ class ProcurementWebService:
             "offset": offset,
             "limit": limit,
             "filter_status": status,
+            "filter_urgency": urgency,
             "status_labels": REQUISITION_STATUS_LABELS,
             "req_statuses": list(RequisitionStatus),
+            "urgency_levels": list(UrgencyLevel),
         }
 
     def requisition_detail_context(

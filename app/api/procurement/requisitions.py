@@ -33,6 +33,7 @@ def get_db():
 def list_requisitions(
     organization_id: UUID = Depends(require_organization_id),
     status_filter: Optional[str] = Query(None, alias="status"),
+    urgency_filter: Optional[str] = Query(None, alias="urgency"),
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -42,6 +43,7 @@ def list_requisitions(
     reqs, _ = service.list_requisitions(
         organization_id,
         status=status_filter,
+        urgency=urgency_filter,
         offset=offset,
         limit=limit,
     )

@@ -29,6 +29,26 @@ def get_db():
         db.close()
 
 
+@router.get("", response_model=List[PrequalificationResponse])
+@router.get("/", response_model=List[PrequalificationResponse], include_in_schema=False)
+def list_vendors(
+    organization_id: UUID = Depends(require_organization_id),
+    status_filter: Optional[str] = Query(None, alias="status"),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(25, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    """List vendors (prequalification records)."""
+    service = VendorPrequalificationService(db)
+    preqs, _ = service.list_prequalifications(
+        organization_id,
+        status=status_filter,
+        offset=offset,
+        limit=limit,
+    )
+    return [PrequalificationResponse.model_validate(p) for p in preqs]
+
+
 @router.get("/prequalifications", response_model=List[PrequalificationResponse])
 def list_prequalifications(
     organization_id: UUID = Depends(require_organization_id),

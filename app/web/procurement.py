@@ -6,6 +6,7 @@ Server-rendered HTML routes for procurement management.
 
 import csv
 import math
+from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from io import BytesIO, StringIO
 from typing import Dict, List, Optional, Tuple
@@ -20,13 +21,21 @@ from sqlalchemy import select
 
 from app.services.common import NotFoundError, ValidationError
 from app.services.procurement.procurement_plan import ProcurementPlanService
+from app.services.procurement.requisition import RequisitionService
 from app.services.procurement.web.procurement_web import ProcurementWebService
-from app.models.procurement.enums import ProcurementMethod, ProcurementPlanStatus
+from app.models.procurement.enums import (
+    ProcurementMethod,
+    ProcurementPlanStatus,
+    RequisitionStatus,
+    UrgencyLevel,
+)
 from app.models.procurement.procurement_plan import ProcurementPlan
+from app.models.procurement.purchase_requisition import PurchaseRequisition
 from app.schemas.procurement.procurement_plan import (
     PlanItemCreate,
     ProcurementPlanCreate,
 )
+from app.schemas.procurement.requisition import RequisitionCreate, RequisitionLineCreate
 from app.web.deps import (
     WebAuthContext,
     base_context,
@@ -55,6 +64,33 @@ IMPORT_OPTIONAL_COLUMNS = [
     "category",
 ]
 IMPORT_ALL_COLUMNS = IMPORT_REQUIRED_COLUMNS + IMPORT_OPTIONAL_COLUMNS
+
+
+REQUISITION_REQUIRED_COLUMNS = [
+    "requisition_number",
+    "requisition_date",
+    "requester_id",
+    "line_number",
+    "description",
+    "quantity",
+    "estimated_unit_price",
+    "estimated_amount",
+]
+REQUISITION_OPTIONAL_COLUMNS = [
+    "department_id",
+    "urgency",
+    "justification",
+    "currency_code",
+    "material_request_id",
+    "plan_item_id",
+    "item_id",
+    "uom",
+    "expense_account_id",
+    "cost_center_id",
+    "project_id",
+    "delivery_date",
+]
+REQUISITION_ALL_COLUMNS = REQUISITION_REQUIRED_COLUMNS + REQUISITION_OPTIONAL_COLUMNS
 
 
 def _xlsx_available() -> bool:
@@ -103,6 +139,29 @@ def _parse_int(value: object) -> int:
     if num != num.to_integral_value():
         raise InvalidOperation("Invalid integer value")
     return int(num)
+
+
+def _parse_date(value: object) -> date:
+    if _is_empty(value):
+        raise InvalidOperation("Missing date value")
+    if isinstance(value, date) and not isinstance(value, datetime):
+        return value
+    if isinstance(value, datetime):
+        return value.date()
+    text = str(value).strip()
+    try:
+        return datetime.strptime(text, "%Y-%m-%d").date()
+    except ValueError as exc:
+        raise InvalidOperation("Invalid date format (expected YYYY-MM-DD)") from exc
+
+
+def _parse_uuid(value: object) -> Optional[UUID]:
+    if _is_empty(value):
+        return None
+    try:
+        return UUID(str(value).strip())
+    except (ValueError, TypeError) as exc:
+        raise InvalidOperation("Invalid UUID value") from exc
 
 
 def _load_import_rows(content: bytes, fmt: str) -> Tuple[List[Dict[str, object]], List[str]]:
@@ -635,8 +694,11 @@ async def plan_import(
 def requisition_list(
     request: Request,
     status: Optional[str] = None,
+    urgency: Optional[str] = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
+    success: Optional[str] = None,
+    error: Optional[str] = None,
     auth: WebAuthContext = Depends(require_procurement_access),
     db: Session = Depends(get_db),
 ):
@@ -647,12 +709,534 @@ def requisition_list(
         web_service.requisition_list_context(
             auth.organization_id,
             status=status,
+            urgency=urgency,
             offset=offset,
             limit=limit,
         )
     )
+    context["xlsx_available"] = _xlsx_available()
+    context["success"] = success
+    context["error"] = error
     return templates.TemplateResponse(
         request, "procurement/requisitions/list.html", context
+    )
+
+
+@router.get("/requisitions/template")
+def requisition_import_template(
+    format: str = Query("csv"),
+    auth: WebAuthContext = Depends(require_procurement_access),
+):
+    """Download a requisition import template."""
+    fmt = (format or "csv").lower()
+    if fmt not in {"csv", "xlsx"}:
+        fmt = "csv"
+    if fmt == "xlsx" and not _xlsx_available():
+        fmt = "csv"
+
+    sample = {
+        "requisition_number": ["PR-2026-001"],
+        "requisition_date": ["2026-02-01"],
+        "requester_id": ["00000000-0000-0000-0000-000000000001"],
+        "department_id": [""],
+        "urgency": ["NORMAL"],
+        "justification": ["Replace aging laptops"],
+        "currency_code": ["NGN"],
+        "material_request_id": [""],
+        "plan_item_id": [""],
+        "line_number": [1],
+        "item_id": [""],
+        "description": ["Laptop procurement"],
+        "quantity": [5],
+        "uom": ["pcs"],
+        "estimated_unit_price": [1200],
+        "estimated_amount": [6000],
+        "expense_account_id": [""],
+        "cost_center_id": [""],
+        "project_id": [""],
+        "delivery_date": ["2026-03-01"],
+    }
+
+    if fmt == "csv":
+        output = StringIO()
+        writer = csv.writer(output)
+        writer.writerow(REQUISITION_ALL_COLUMNS)
+        writer.writerow([sample[col][0] for col in REQUISITION_ALL_COLUMNS])
+        return Response(
+            output.getvalue(),
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": "attachment; filename=requisitions_template.csv"
+            },
+        )
+
+    output = BytesIO()
+    try:
+        import openpyxl
+    except ImportError:
+        return Response("XLSX support requires openpyxl", status_code=500)
+    workbook = openpyxl.Workbook()
+    sheet = workbook.active
+    sheet.append(REQUISITION_ALL_COLUMNS)
+    sheet.append([sample[col][0] for col in REQUISITION_ALL_COLUMNS])
+    workbook.save(output)
+    return Response(
+        output.getvalue(),
+        media_type=(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        ),
+        headers={
+            "Content-Disposition": "attachment; filename=requisitions_template.xlsx"
+        },
+    )
+
+
+@router.get("/requisitions/export")
+def requisition_export(
+    format: str = Query("csv"),
+    status: Optional[str] = None,
+    urgency: Optional[str] = None,
+    auth: WebAuthContext = Depends(require_procurement_access),
+    db: Session = Depends(get_db),
+):
+    """Export requisitions to CSV/XLSX."""
+    fmt = (format or "csv").lower()
+    if fmt not in {"csv", "xlsx"}:
+        fmt = "csv"
+    if fmt == "xlsx" and not _xlsx_available():
+        fmt = "csv"
+
+    query = (
+        select(PurchaseRequisition)
+        .where(PurchaseRequisition.organization_id == auth.organization_id)
+        .options(selectinload(PurchaseRequisition.lines))
+        .order_by(PurchaseRequisition.created_at.desc())
+    )
+    if status:
+        try:
+            query = query.where(PurchaseRequisition.status == RequisitionStatus(status))
+        except ValueError:
+            pass
+    if urgency:
+        try:
+            query = query.where(PurchaseRequisition.urgency == UrgencyLevel(urgency))
+        except ValueError:
+            pass
+
+    requisitions = list(db.scalars(query).all())
+    rows: List[List[object]] = []
+    for req in requisitions:
+        header_values = [
+            req.requisition_number,
+            req.requisition_date.isoformat() if req.requisition_date else "",
+            str(req.requester_id),
+            str(req.department_id) if req.department_id else "",
+            req.urgency.value if req.urgency else "",
+            req.justification or "",
+            req.currency_code,
+            str(req.material_request_id) if req.material_request_id else "",
+            str(req.plan_item_id) if req.plan_item_id else "",
+        ]
+        if req.lines:
+            for line in req.lines:
+                rows.append(
+                    header_values
+                    + [
+                        line.line_number,
+                        str(line.item_id) if line.item_id else "",
+                        line.description,
+                        line.quantity,
+                        line.uom or "",
+                        line.estimated_unit_price,
+                        line.estimated_amount,
+                        str(line.expense_account_id)
+                        if line.expense_account_id
+                        else "",
+                        str(line.cost_center_id) if line.cost_center_id else "",
+                        str(line.project_id) if line.project_id else "",
+                        line.delivery_date.isoformat()
+                        if line.delivery_date
+                        else "",
+                    ]
+                )
+        else:
+            rows.append(
+                header_values
+                + ["", "", "", "", "", "", "", "", "", "", ""]
+            )
+
+    filename = "requisitions_export"
+    if fmt == "csv":
+        output = StringIO()
+        writer = csv.writer(output)
+        writer.writerow(REQUISITION_ALL_COLUMNS)
+        writer.writerows(rows)
+        return Response(
+            output.getvalue(),
+            media_type="text/csv",
+            headers={"Content-Disposition": f"attachment; filename={filename}.csv"},
+        )
+
+    output = BytesIO()
+    try:
+        import openpyxl
+    except ImportError:
+        return Response("XLSX support requires openpyxl", status_code=500)
+    workbook = openpyxl.Workbook()
+    sheet = workbook.active
+    sheet.append(REQUISITION_ALL_COLUMNS)
+    for row in rows:
+        sheet.append(row)
+    workbook.save(output)
+    return Response(
+        output.getvalue(),
+        media_type=(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        ),
+        headers={"Content-Disposition": f"attachment; filename={filename}.xlsx"},
+    )
+
+
+@router.post("/requisitions/import")
+async def requisition_import(
+    request: Request,
+    file: UploadFile = File(...),
+    format: Optional[str] = Form(None),
+    auth: WebAuthContext = Depends(require_procurement_access),
+    db: Session = Depends(get_db),
+):
+    """Import requisitions from CSV/XLSX."""
+    if not auth.user_id:
+        return RedirectResponse(
+            url="/procurement/requisitions?error=Missing+user+context", status_code=303
+        )
+
+    if not file or not file.filename:
+        return RedirectResponse(
+            url="/procurement/requisitions?error=No+file+provided", status_code=303
+        )
+
+    fmt = (format or "").lower().strip()
+    if not fmt:
+        fmt = "xlsx" if file.filename.lower().endswith(".xlsx") else "csv"
+    if fmt not in {"csv", "xlsx"}:
+        return RedirectResponse(
+            url="/procurement/requisitions?error=Unsupported+file+format",
+            status_code=303,
+        )
+
+    content = await file.read()
+    if not content:
+        return RedirectResponse(
+            url="/procurement/requisitions?error=Empty+file+uploaded",
+            status_code=303,
+        )
+
+    try:
+        rows, headers = _load_import_rows(content, fmt)
+    except RuntimeError:
+        return RedirectResponse(
+            url="/procurement/requisitions?error=XLSX+support+requires+openpyxl",
+            status_code=303,
+        )
+    except Exception:
+        return RedirectResponse(
+            url="/procurement/requisitions?error=Failed+to+read+file",
+            status_code=303,
+        )
+
+    if not rows:
+        return RedirectResponse(
+            url="/procurement/requisitions?error=No+rows+found+in+file",
+            status_code=303,
+        )
+
+    normalized_headers = [_normalize_column(col) for col in headers]
+    missing = set(REQUISITION_REQUIRED_COLUMNS) - set(normalized_headers)
+    if missing:
+        msg = quote(f"Missing required columns: {', '.join(sorted(missing))}")
+        return RedirectResponse(
+            url=f"/procurement/requisitions?error={msg}", status_code=303
+        )
+
+    rows_normalized: List[Dict[str, object]] = []
+    header_map = {orig: norm for orig, norm in zip(headers, normalized_headers)}
+    for row in rows:
+        normalized_row: Dict[str, object] = {}
+        for key, value in row.items():
+            norm_key = header_map.get(key, _normalize_column(str(key)))
+            normalized_row[norm_key] = value
+        for col in REQUISITION_OPTIONAL_COLUMNS:
+            normalized_row.setdefault(col, None)
+        rows_normalized.append(normalized_row)
+
+    errors: List[str] = []
+    requisitions: Dict[str, Dict[str, object]] = {}
+
+    for idx, row in enumerate(rows_normalized):
+        row_num = idx + 2
+        if all(_is_empty(row.get(col)) for col in REQUISITION_ALL_COLUMNS):
+            continue
+
+        requisition_number = str(row.get("requisition_number", "")).strip()
+        if not requisition_number:
+            errors.append(f"Row {row_num}: requisition_number is required")
+
+        try:
+            requisition_date = _parse_date(row.get("requisition_date"))
+        except InvalidOperation:
+            errors.append(
+                f"Row {row_num}: requisition_date must be YYYY-MM-DD"
+            )
+            requisition_date = date.today()
+
+        try:
+            requester_id = _parse_uuid(row.get("requester_id"))
+            if requester_id is None:
+                raise InvalidOperation("Missing requester_id")
+        except InvalidOperation:
+            errors.append(f"Row {row_num}: requester_id must be a valid UUID")
+            requester_id = None
+
+        department_id = None
+        try:
+            department_id = _parse_uuid(row.get("department_id"))
+        except InvalidOperation:
+            errors.append(f"Row {row_num}: department_id must be a valid UUID")
+
+        urgency_raw = row.get("urgency")
+        urgency_value = (
+            UrgencyLevel.NORMAL
+            if _is_empty(urgency_raw)
+            else str(urgency_raw).strip().upper().replace(" ", "_")
+        )
+        if isinstance(urgency_value, str):
+            if urgency_value not in UrgencyLevel.__members__:
+                errors.append(
+                    f"Row {row_num}: urgency must be one of {', '.join(UrgencyLevel.__members__.keys())}"
+                )
+                urgency_value = UrgencyLevel.NORMAL
+            else:
+                urgency_value = UrgencyLevel[urgency_value]
+
+        justification = (
+            None
+            if _is_empty(row.get("justification"))
+            else str(row.get("justification")).strip()
+        )
+
+        currency_code_raw = row.get("currency_code", "")
+        currency_code = (
+            "NGN" if _is_empty(currency_code_raw) else str(currency_code_raw).strip()
+        )
+        currency_code = currency_code.upper() or "NGN"
+
+        material_request_id = None
+        try:
+            material_request_id = _parse_uuid(row.get("material_request_id"))
+        except InvalidOperation:
+            errors.append(f"Row {row_num}: material_request_id must be a valid UUID")
+
+        plan_item_id = None
+        try:
+            plan_item_id = _parse_uuid(row.get("plan_item_id"))
+        except InvalidOperation:
+            errors.append(f"Row {row_num}: plan_item_id must be a valid UUID")
+
+        try:
+            line_number = _parse_int(row.get("line_number"))
+            if line_number < 1:
+                raise InvalidOperation("line_number must be >= 1")
+        except InvalidOperation:
+            errors.append(f"Row {row_num}: line_number must be a whole number >= 1")
+            line_number = 1
+
+        description = str(row.get("description", "")).strip()
+        if not description:
+            errors.append(f"Row {row_num}: description is required")
+
+        try:
+            quantity = _parse_decimal(row.get("quantity"))
+            if quantity <= 0:
+                raise InvalidOperation("quantity must be > 0")
+        except InvalidOperation:
+            errors.append(f"Row {row_num}: quantity must be a number > 0")
+            quantity = Decimal("1")
+
+        try:
+            estimated_unit_price = _parse_decimal(row.get("estimated_unit_price"))
+            if estimated_unit_price < 0:
+                raise InvalidOperation("estimated_unit_price must be >= 0")
+        except InvalidOperation:
+            errors.append(
+                f"Row {row_num}: estimated_unit_price must be a number >= 0"
+            )
+            estimated_unit_price = Decimal("0")
+
+        try:
+            estimated_amount = _parse_decimal(row.get("estimated_amount"))
+            if estimated_amount < 0:
+                raise InvalidOperation("estimated_amount must be >= 0")
+        except InvalidOperation:
+            errors.append(f"Row {row_num}: estimated_amount must be a number >= 0")
+            estimated_amount = Decimal("0")
+
+        item_id = None
+        try:
+            item_id = _parse_uuid(row.get("item_id"))
+        except InvalidOperation:
+            errors.append(f"Row {row_num}: item_id must be a valid UUID")
+
+        uom = None if _is_empty(row.get("uom")) else str(row.get("uom")).strip()
+
+        expense_account_id = None
+        try:
+            expense_account_id = _parse_uuid(row.get("expense_account_id"))
+        except InvalidOperation:
+            errors.append(f"Row {row_num}: expense_account_id must be a valid UUID")
+
+        cost_center_id = None
+        try:
+            cost_center_id = _parse_uuid(row.get("cost_center_id"))
+        except InvalidOperation:
+            errors.append(f"Row {row_num}: cost_center_id must be a valid UUID")
+
+        project_id = None
+        try:
+            project_id = _parse_uuid(row.get("project_id"))
+        except InvalidOperation:
+            errors.append(f"Row {row_num}: project_id must be a valid UUID")
+
+        delivery_date = None
+        if not _is_empty(row.get("delivery_date")):
+            try:
+                delivery_date = _parse_date(row.get("delivery_date"))
+            except InvalidOperation:
+                errors.append(f"Row {row_num}: delivery_date must be YYYY-MM-DD")
+
+        if requisition_number and requisition_number not in requisitions:
+            requisitions[requisition_number] = {
+                "requisition_number": requisition_number,
+                "requisition_date": requisition_date,
+                "requester_id": requester_id,
+                "department_id": department_id,
+                "urgency": urgency_value,
+                "justification": justification,
+                "currency_code": currency_code,
+                "material_request_id": material_request_id,
+                "plan_item_id": plan_item_id,
+                "lines": [],
+                "line_numbers": set(),
+            }
+        elif requisition_number:
+            req = requisitions[requisition_number]
+            if req["requisition_date"] != requisition_date:
+                errors.append(
+                    f"Row {row_num}: requisition_date mismatch for requisition_number {requisition_number}"
+                )
+            if req["requester_id"] != requester_id:
+                errors.append(
+                    f"Row {row_num}: requester_id mismatch for requisition_number {requisition_number}"
+                )
+            if req["department_id"] != department_id:
+                errors.append(
+                    f"Row {row_num}: department_id mismatch for requisition_number {requisition_number}"
+                )
+            if req["urgency"] != urgency_value:
+                errors.append(
+                    f"Row {row_num}: urgency mismatch for requisition_number {requisition_number}"
+                )
+            if req["currency_code"] != currency_code:
+                errors.append(
+                    f"Row {row_num}: currency_code mismatch for requisition_number {requisition_number}"
+                )
+            if req["material_request_id"] != material_request_id:
+                errors.append(
+                    f"Row {row_num}: material_request_id mismatch for requisition_number {requisition_number}"
+                )
+            if req["plan_item_id"] != plan_item_id:
+                errors.append(
+                    f"Row {row_num}: plan_item_id mismatch for requisition_number {requisition_number}"
+                )
+
+        req = requisitions.get(requisition_number)
+        if req is not None:
+            if line_number in req["line_numbers"]:
+                errors.append(
+                    f"Row {row_num}: duplicate line_number {line_number} for requisition_number {requisition_number}"
+                )
+            req["line_numbers"].add(line_number)
+            req["lines"].append(
+                RequisitionLineCreate(
+                    line_number=line_number,
+                    item_id=item_id,
+                    description=description,
+                    quantity=quantity,
+                    uom=uom,
+                    estimated_unit_price=estimated_unit_price,
+                    estimated_amount=estimated_amount,
+                    expense_account_id=expense_account_id,
+                    cost_center_id=cost_center_id,
+                    project_id=project_id,
+                    delivery_date=delivery_date,
+                )
+            )
+
+    if errors:
+        msg = quote("; ".join(errors[:8]))
+        if len(errors) > 8:
+            msg = quote("; ".join(errors[:8]) + f"; and {len(errors) - 8} more")
+        return RedirectResponse(
+            url=f"/procurement/requisitions?error={msg}", status_code=303
+        )
+
+    existing = set(
+        db.scalars(
+            select(PurchaseRequisition.requisition_number).where(
+                PurchaseRequisition.organization_id == auth.organization_id
+            )
+        ).all()
+    )
+    duplicates = [num for num in requisitions.keys() if num in existing]
+    if duplicates:
+        msg = quote(
+            "Requisition number(s) already exist: " + ", ".join(sorted(duplicates))
+        )
+        return RedirectResponse(
+            url=f"/procurement/requisitions?error={msg}", status_code=303
+        )
+
+    service = RequisitionService(db)
+    created_count = 0
+    try:
+        for req_data in requisitions.values():
+            if req_data["requester_id"] is None:
+                raise ValidationError("Missing requester_id")
+            data = RequisitionCreate(
+                requisition_number=req_data["requisition_number"],
+                requisition_date=req_data["requisition_date"],
+                requester_id=req_data["requester_id"],
+                department_id=req_data["department_id"],
+                urgency=req_data["urgency"],
+                justification=req_data["justification"],
+                currency_code=req_data["currency_code"],
+                material_request_id=req_data["material_request_id"],
+                plan_item_id=req_data["plan_item_id"],
+                lines=req_data["lines"],
+            )
+            service.create(auth.organization_id, data, auth.user_id)
+            created_count += 1
+        db.commit()
+    except (ValidationError, ValueError) as exc:
+        db.rollback()
+        msg = quote(f"Import failed: {str(exc)}")
+        return RedirectResponse(
+            url=f"/procurement/requisitions?error={msg}", status_code=303
+        )
+
+    return RedirectResponse(
+        url=f"/procurement/requisitions?success=Imported+{created_count}+requisitions",
+        status_code=303,
     )
 
 

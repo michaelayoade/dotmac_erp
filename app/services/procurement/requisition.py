@@ -13,7 +13,7 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models.procurement.enums import RequisitionStatus
+from app.models.procurement.enums import RequisitionStatus, UrgencyLevel
 from app.models.procurement.purchase_requisition import PurchaseRequisition
 from app.models.procurement.purchase_requisition_line import PurchaseRequisitionLine
 from app.schemas.procurement.requisition import RequisitionCreate, RequisitionUpdate
@@ -45,6 +45,7 @@ class RequisitionService:
         organization_id: UUID,
         *,
         status: Optional[str] = None,
+        urgency: Optional[str] = None,
         offset: int = 0,
         limit: int = 25,
     ) -> Tuple[List[PurchaseRequisition], int]:
@@ -56,6 +57,15 @@ class RequisitionService:
             base = base.where(
                 PurchaseRequisition.status == RequisitionStatus(status),
             )
+        if urgency:
+            try:
+                urgency_enum = UrgencyLevel(urgency)
+            except ValueError:
+                urgency_enum = None
+            if urgency_enum:
+                base = base.where(
+                    PurchaseRequisition.urgency == urgency_enum,
+                )
 
         total = self.db.scalar(select(func.count()).select_from(base.subquery()))
         items = list(

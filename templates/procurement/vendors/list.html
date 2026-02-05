@@ -76,7 +76,9 @@
                             {% endif %}
                         </td>
                         <td class="px-4 py-3">
+                            {% if vendor.prequalification_id %}
                             <a href="/procurement/vendors/{{ vendor.prequalification_id }}/prequalification" class="text-blue-600 hover:underline dark:text-blue-400 text-xs">View Details</a>
+                            {% endif %}
                         </td>
                     </tr>
                     {% else %}
