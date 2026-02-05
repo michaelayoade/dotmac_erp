@@ -84,6 +84,7 @@ def upgrade() -> None:
             sa.Enum(
                 "PAYROLL", "HR", "EXPENSE", "FINANCE", "SUPPORT", "SYSTEM", "MARKETING",
                 name="email_module",
+                create_type=False,
             ),
             nullable=False,
         ),

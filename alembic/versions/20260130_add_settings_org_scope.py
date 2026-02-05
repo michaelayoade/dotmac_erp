@@ -49,7 +49,7 @@ def upgrade() -> None:
         "domain_settings",
         sa.Column(
             "scope",
-            sa.Enum("GLOBAL", "ORG_SPECIFIC", name="setting_scope"),
+            sa.Enum("GLOBAL", "ORG_SPECIFIC", name="setting_scope", create_type=False),
             nullable=False,
             server_default="GLOBAL",
             comment="GLOBAL for shared settings, ORG_SPECIFIC for per-org overrides",
