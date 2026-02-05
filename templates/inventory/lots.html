@@ -187,7 +187,7 @@
     </div>
 
     {% if lots | default([]) | length > 0 %}
-    {{ pagination(page, total_pages, '/inventory/lots') }}
+    {{ pagination(page=page, total_pages=total_pages, total_count=total_count, limit=50, search=search, filters={"status": status}) }}
     {% endif %}
 </div>
 {% endblock %}
