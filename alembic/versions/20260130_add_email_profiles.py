@@ -25,7 +25,6 @@ def upgrade() -> None:
     email_module_enum = postgresql.ENUM(
         "PAYROLL", "HR", "EXPENSE", "FINANCE", "SUPPORT", "SYSTEM", "MARKETING",
         name="email_module",
-        create_type=False,
     )
     email_module_enum.create(op.get_bind(), checkfirst=True)
 
@@ -81,11 +80,7 @@ def upgrade() -> None:
         ),
         sa.Column(
             "module",
-            sa.Enum(
-                "PAYROLL", "HR", "EXPENSE", "FINANCE", "SUPPORT", "SYSTEM", "MARKETING",
-                name="email_module",
-                create_type=False,
-            ),
+            email_module_enum,
             nullable=False,
         ),
         sa.Column(
