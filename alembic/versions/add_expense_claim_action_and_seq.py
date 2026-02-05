@@ -6,6 +6,7 @@ Create Date: 2026-01-26
 """
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision = "add_expense_claim_action_seq"
