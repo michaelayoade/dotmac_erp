@@ -8,6 +8,7 @@ This migration creates PostgreSQL schemas for the People/HR modules
 that will integrate with the Finance system.
 
 Schemas:
+- people: Top-level People/HR namespace schema
 - hr: Core HR (departments, designations, employees, grades)
 - payroll: Payroll processing (components, structures, slips)
 - leave: Leave management (types, allocations, applications)
@@ -27,6 +28,7 @@ depends_on = None
 
 # People/HR schemas
 PEOPLE_SCHEMAS = [
+    "people",
     "hr",
     "payroll",
     "leave",
