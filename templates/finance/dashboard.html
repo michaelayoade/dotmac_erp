@@ -4,12 +4,13 @@
 {% block page_title %}Dashboard{% endblock %}
 
 {% block content %}
+{% set is_ipsas = organization and organization.accounting_framework in ('IPSAS', 'BOTH') %}
 <div class="dashboard-finance space-y-8 page-enter">
     <!-- Finance Hero Header -->
     <div class="finance-stat-grid stagger-in" style="animation-delay: 0ms;" data-testid="dashboard-stats">
         <div class="flex flex-wrap items-center justify-between gap-4 mb-8">
             <div>
-                <h2 class="text-xl font-semibold text-slate-900 dark:text-white font-display">Financial Overview</h2>
+                <h2 class="text-xl font-semibold text-slate-900 dark:text-white font-display">{% if is_ipsas %}Public Finance Overview{% else %}Financial Overview{% endif %}</h2>
                 <p class="text-sm text-slate-500 dark:text-slate-400">{{ selected_year_label }} performance metrics</p>
             </div>
             <form method="get" class="flex items-center gap-3">
@@ -54,7 +55,7 @@
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/>
                     </svg>
                 </div>
-                <span class="stat-hero-label">Expenses</span>
+                <span class="stat-hero-label">{% if is_ipsas %}Expenditure{% else %}Expenses{% endif %}</span>
                 <span class="stat-hero-value">{{ stats.total_expenses | default(currency_zero) }}</span>
             </div>
 
@@ -65,7 +66,7 @@
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
                     </svg>
                 </div>
-                <span class="stat-hero-label">Net Income</span>
+                <span class="stat-hero-label">{% if is_ipsas %}Surplus/Deficit{% else %}Net Income{% endif %}</span>
                 <span class="stat-hero-value">{{ stats.net_income | default(currency_zero) }}</span>
                 {% if stats.income_trend %}
                 <span class="stat-hero-trend {{ 'stat-hero-trend-up' if stats.income_trend > 0 else 'stat-hero-trend-down' }}">
@@ -99,11 +100,11 @@
         <!-- Secondary Metrics Bar -->
         <div class="mt-8 pt-6 border-t border-teal-100/50 dark:border-teal-800/30 grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div class="text-center">
-                <span class="block text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">COGS</span>
+                <span class="block text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">{% if is_ipsas %}Cost of Services{% else %}COGS{% endif %}</span>
                 <span class="block text-lg font-semibold font-mono text-slate-900 dark:text-white mt-1">{{ stats.cogs_spend | default(currency_zero) }}</span>
             </div>
             <div class="text-center">
-                <span class="block text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">OpEx</span>
+                <span class="block text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">{% if is_ipsas %}Operating Exp.{% else %}OpEx{% endif %}</span>
                 <span class="block text-lg font-semibold font-mono text-slate-900 dark:text-white mt-1">{{ stats.opex_spend | default(currency_zero) }}</span>
             </div>
             <div class="text-center">
@@ -143,7 +144,7 @@
     <div class="stagger-in card p-6" style="animation-delay: 50ms;">
         <div class="flex items-center justify-between mb-6">
             <div>
-                <h3 class="text-base font-semibold text-slate-900 dark:text-white font-display">Revenue vs Expenses</h3>
+                <h3 class="text-base font-semibold text-slate-900 dark:text-white font-display">{% if is_ipsas %}Revenue vs Expenditure{% else %}Revenue vs Expenses{% endif %}</h3>
                 <p class="text-sm text-slate-500 dark:text-slate-400">
                     {% if selected_year %}{{ selected_year }} monthly trend{% else %}12-month trend{% endif %}
                 </p>
@@ -155,7 +156,7 @@
                 </span>
                 <span class="flex items-center gap-1.5">
                     <span class="w-3 h-3 rounded-full bg-rose-500"></span>
-                    <span class="text-slate-600 dark:text-slate-400">Expenses</span>
+                    <span class="text-slate-600 dark:text-slate-400">{% if is_ipsas %}Expenditure{% else %}Expenses{% endif %}</span>
                 </span>
             </div>
         </div>
@@ -214,19 +215,19 @@
         <!-- Profit Margin Gauge -->
         <div class="stagger-in card p-6" style="animation-delay: 125ms;">
             <div class="mb-4">
-                <h3 class="text-base font-semibold text-slate-900 dark:text-white font-display">Profit Margin</h3>
-                <p class="text-sm text-slate-500 dark:text-slate-400">Net income ratio</p>
+                <h3 class="text-base font-semibold text-slate-900 dark:text-white font-display">{% if is_ipsas %}Operating Result{% else %}Profit Margin{% endif %}</h3>
+                <p class="text-sm text-slate-500 dark:text-slate-400">{% if is_ipsas %}Surplus/deficit ratio{% else %}Net income ratio{% endif %}</p>
             </div>
             <div class="h-48 flex items-center justify-center">
                 <canvas id="profitGaugeChart"></canvas>
             </div>
             <div class="mt-4 grid grid-cols-2 gap-4 text-center">
                 <div>
-                    <span class="block text-xs text-slate-500 dark:text-slate-400">Gross Margin</span>
+                    <span class="block text-xs text-slate-500 dark:text-slate-400">{% if is_ipsas %}Gross Result{% else %}Gross Margin{% endif %}</span>
                     <span class="block text-lg font-semibold font-mono text-slate-900 dark:text-white" id="grossMarginValue">--</span>
                 </div>
                 <div>
-                    <span class="block text-xs text-slate-500 dark:text-slate-400">Net Margin</span>
+                    <span class="block text-xs text-slate-500 dark:text-slate-400">{% if is_ipsas %}Net Result{% else %}Net Margin{% endif %}</span>
                     <span class="block text-lg font-semibold font-mono text-teal-600 dark:text-teal-400" id="netMarginValue">--</span>
                 </div>
             </div>
@@ -238,8 +239,8 @@
         <!-- Top Customers -->
         <div class="stagger-in card p-6" style="animation-delay: 150ms;">
             <div class="mb-4">
-                <h3 class="text-base font-semibold text-slate-900 dark:text-white font-display">Top Customers</h3>
-                <p class="text-sm text-slate-500 dark:text-slate-400">By revenue</p>
+                <h3 class="text-base font-semibold text-slate-900 dark:text-white font-display">{% if is_ipsas %}Top Revenue Sources{% else %}Top Customers{% endif %}</h3>
+                <p class="text-sm text-slate-500 dark:text-slate-400">{% if is_ipsas %}By collections{% else %}By revenue{% endif %}</p>
             </div>
             {% if chart_data.top_customers %}
             <div class="h-52">
@@ -257,8 +258,8 @@
         <!-- Top Suppliers -->
         <div class="stagger-in card p-6" style="animation-delay: 175ms;">
             <div class="mb-4">
-                <h3 class="text-base font-semibold text-slate-900 dark:text-white font-display">Top Suppliers</h3>
-                <p class="text-sm text-slate-500 dark:text-slate-400">By spend</p>
+                <h3 class="text-base font-semibold text-slate-900 dark:text-white font-display">{% if is_ipsas %}Top Vendors{% else %}Top Suppliers{% endif %}</h3>
+                <p class="text-sm text-slate-500 dark:text-slate-400">{% if is_ipsas %}By expenditure{% else %}By spend{% endif %}</p>
             </div>
             {% if chart_data.top_suppliers %}
             <div class="h-52">
@@ -308,8 +309,8 @@
         <!-- Working Capital Visual -->
         <div class="stagger-in card p-6" style="animation-delay: 250ms;">
             <div class="mb-6">
-                <h3 class="text-base font-semibold text-slate-900 dark:text-white font-display">Working Capital</h3>
-                <p class="text-sm text-slate-500 dark:text-slate-400">AR - AP Balance</p>
+                <h3 class="text-base font-semibold text-slate-900 dark:text-white font-display">{% if is_ipsas %}Net Current Position{% else %}Working Capital{% endif %}</h3>
+                <p class="text-sm text-slate-500 dark:text-slate-400">{% if is_ipsas %}Receivables - Payables{% else %}AR - AP Balance{% endif %}</p>
             </div>
             <div class="relative">
                 <!-- AR Bar -->
@@ -335,7 +336,7 @@
                 <!-- Net Working Capital -->
                 <div class="pt-4 border-t border-slate-100 dark:border-slate-700">
                     <div class="flex justify-between items-center">
-                        <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Net Working Capital</span>
+                        <span class="text-sm font-medium text-slate-700 dark:text-slate-300">{% if is_ipsas %}Net Current Position{% else %}Net Working Capital{% endif %}</span>
                         <span class="text-xl font-semibold font-mono text-slate-900 dark:text-white">{{ stats.net_ar_ap | default(currency_zero) }}</span>
                     </div>
                 </div>
@@ -447,7 +448,7 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
                         </svg>
                     </div>
-                    <span class="text-sm font-medium text-slate-700 dark:text-slate-300">P&L Statement</span>
+                    <span class="text-sm font-medium text-slate-700 dark:text-slate-300">{% if is_ipsas %}Performance{% else %}P&L Statement{% endif %}</span>
                 </a>
                 <a href="/finance/reports/balance-sheet" class="card card-hover p-4 text-center group">
                     <div class="text-slate-400 dark:text-slate-500 mb-2 group-hover:text-teal-500 transition-colors">
@@ -455,7 +456,7 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
                         </svg>
                     </div>
-                    <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Balance Sheet</span>
+                    <span class="text-sm font-medium text-slate-700 dark:text-slate-300">{% if is_ipsas %}Financial Position{% else %}Balance Sheet{% endif %}</span>
                 </a>
                 <a href="/finance/reports/cash-flow" class="card card-hover p-4 text-center group">
                     <div class="text-slate-400 dark:text-slate-500 mb-2 group-hover:text-teal-500 transition-colors">

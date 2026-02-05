@@ -288,7 +288,7 @@ class EmployeeOnboardingActivity(Base):
     # Assignment
     assignee_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("public.person.person_id"),
+        ForeignKey("people.id"),
         nullable=True,
         comment="Specific person assigned to this task",
     )
@@ -313,7 +313,7 @@ class EmployeeOnboardingActivity(Base):
     # Completion tracking
     completed_by: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("public.person.person_id"),
+        ForeignKey("people.id"),
         nullable=True,
         comment="Person who completed this task",
     )

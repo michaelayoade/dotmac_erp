@@ -24,7 +24,7 @@ services:
     container_name: dotmac_erp_app
     restart: unless-stopped
     ports:
-      - "8002:8002"
+      - "8003:8002"
     env_file:
       - .env
     environment:
@@ -147,7 +147,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-dotmac_erp}
     ports:
-      - "5435:5432"
+      - "5437:5432"
     volumes:
       - dotmac_erp_db_data:/var/lib/postgresql/data
     healthcheck:
@@ -162,7 +162,7 @@ services:
     restart: unless-stopped
     command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:-redis}"]
     ports:
-      - "6380:6379"
+      - "6382:6379"
 
 volumes:
   dotmac_erp_db_data:

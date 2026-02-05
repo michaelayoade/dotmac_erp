@@ -40,7 +40,7 @@ def ifrs_dashboard(
     year: str | None = Query(default=None),
 ):
     """IFRS Dashboard page."""
-    context = base_context(request, auth, "Finance Dashboard", "dashboard")
+    context = base_context(request, auth, "Finance Dashboard", "dashboard", db=db)
     context.update(
         dashboard_web_service.dashboard_context(db, auth.organization_id, year=year)
     )

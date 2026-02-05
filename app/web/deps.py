@@ -566,6 +566,26 @@ def base_context(
         ]
     )
 
+    # Load organization for template conditionals (e.g. IPSAS sidebar)
+    organization = None
+    if auth.organization_id:
+        from app.models.finance.core_org.organization import Organization
+
+        if db:
+            organization = db.get(Organization, auth.organization_id)
+        else:
+            _tmp_db = SessionLocal()
+            try:
+                organization = _tmp_db.get(Organization, auth.organization_id)
+                # Eagerly access attributes before closing session
+                if organization:
+                    _ = organization.fund_accounting_enabled
+                    _ = organization.commitment_control_enabled
+                    _ = organization.accounting_framework
+                    _ = organization.sector_type
+            finally:
+                _tmp_db.close()
+
     context = {
         "request": request,
         "title": page_title,
@@ -575,6 +595,7 @@ def base_context(
         "active_module": active_module,
         "auth": auth,
         "user": auth.user,
+        "organization": organization,
         "accessible_modules": auth.accessible_modules,
         "can_team_leave": can_team_leave,
         "can_team_expenses": can_team_expenses,

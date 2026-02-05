@@ -13,6 +13,7 @@
 {% endblock %}
 
 {% block body %}
+{% set is_ipsas = organization and organization.accounting_framework in ('IPSAS', 'BOTH') %}
 <div class="app-shell"
      style="display: flex !important; flex-direction: row !important;"
      x-data="{
@@ -163,7 +164,7 @@
                     </svg>
                 </button>
                 <div x-show="open && !sidebarCollapsed" x-collapse x-cloak class="ml-8 mt-1 space-y-0.5">
-                    <a href="/finance/ap/suppliers" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Suppliers</a>
+                    <a href="/finance/ap/suppliers" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">{% if is_ipsas %}Creditors{% else %}Suppliers{% endif %}</a>
                     <a href="/finance/ap/purchase-orders" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Purchase Orders</a>
                     <a href="/finance/ap/goods-receipts" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Goods Receipts</a>
                     <a href="/finance/ap/invoices" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Invoices</a>
@@ -187,9 +188,11 @@
                     </svg>
                 </button>
                 <div x-show="open && !sidebarCollapsed" x-collapse x-cloak class="ml-8 mt-1 space-y-0.5">
-                    <a href="/finance/ar/customers" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Customers</a>
+                    <a href="/finance/ar/customers" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">{% if is_ipsas %}Debtors{% else %}Customers{% endif %}</a>
+                    {% if not is_ipsas %}
                     <a href="/finance/quotes" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Quotes</a>
                     <a href="/finance/sales-orders" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Sales Orders</a>
+                    {% endif %}
                     <a href="/finance/ar/invoices" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Invoices</a>
                     <a href="/finance/ar/credit-notes" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Credit Notes</a>
                     <a href="/finance/ar/receipts" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Receipts</a>
@@ -316,7 +319,7 @@
                 <svg class="h-5 w-5 flex-shrink-0 text-pink-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
                 </svg>
-                <span x-show="!sidebarCollapsed" class="flex-1 truncate text-left" x-cloak>Expenses</span>
+                <span x-show="!sidebarCollapsed" class="flex-1 truncate text-left" x-cloak>{% if is_ipsas %}Expenditure Claims{% else %}Expenses{% endif %}</span>
                 <svg x-show="!sidebarCollapsed" class="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" x-cloak>
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
                 </svg>
@@ -398,15 +401,15 @@
                 <div x-show="open && !sidebarCollapsed" x-collapse x-cloak class="ml-8 mt-1 space-y-0.5">
                     <a href="/finance/reports" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">All Reports</a>
                     <a href="/finance/reports/trial-balance" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Trial Balance</a>
-                    <a href="/finance/reports/income-statement" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Statement of Profit or Loss</a>
+                    <a href="/finance/reports/income-statement" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">{% if is_ipsas %}Statement of Financial Performance{% else %}Statement of Profit or Loss{% endif %}</a>
                     <a href="/finance/reports/balance-sheet" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Statement of Financial Position</a>
                     <a href="/finance/reports/general-ledger" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">General Ledger</a>
                     <a href="/finance/reports/ap-aging" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">AP Aging</a>
                     <a href="/finance/reports/ar-aging" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">AR Aging</a>
                     <a href="/finance/reports/tax-summary" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Tax Summary</a>
-                    <a href="/finance/reports/expense-summary" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Expenses</a>
+                    <a href="/finance/reports/expense-summary" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">{% if is_ipsas %}Expenditure{% else %}Expenses{% endif %}</a>
                     <a href="/finance/reports/cash-flow" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Cash Flow</a>
-                    <a href="/finance/reports/changes-in-equity" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Changes in Equity</a>
+                    <a href="/finance/reports/changes-in-equity" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">{% if is_ipsas %}Changes in Net Assets{% else %}Changes in Equity{% endif %}</a>
                     <a href="/finance/reports/budget-vs-actual" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Budget vs Actual</a>
                 </div>
             </div>
